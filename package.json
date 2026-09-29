@@ -1,0 +1,58 @@
+{
+    "name": "@miniextensions/sdk",
+    "version": "0.1.0-alpha.0",
+    "description": "miniExtensions SDK and portable formula evaluation",
+    "private": true,
+    "license": "MIT",
+    "type": "module",
+    "exports": {
+        "./formulas": {
+            "import": {
+                "types": "./dist/esm/formulas/index.d.ts",
+                "default": "./dist/esm/formulas/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/formulas/index.d.ts",
+                "default": "./dist/cjs/formulas/index.js"
+            }
+        }
+    },
+    "files": [
+        "dist/esm",
+        "dist/cjs",
+        "docs/formulas.md",
+        "README.md",
+        "LICENSE",
+        "THIRD_PARTY_NOTICES.md"
+    ],
+    "engines": {
+        "node": ">=22"
+    },
+    "packageManager": "pnpm@10.28.2",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/miniExtensions/sdk.git"
+    },
+    "scripts": {
+        "build": "node scripts/build.mjs",
+        "typecheck": "tsc --project tsconfig.test.json --noEmit",
+        "test": "tsc --project tsconfig.test.json && node --test --test-concurrency=1 dist/test/test/*.test.js",
+        "check:package": "node scripts/check-package.mjs",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm build && pnpm check:package",
+        "prepack": "pnpm build"
+    },
+    "dependencies": {
+        "moment": "2.30.1",
+        "moment-duration-format": "2.3.2",
+        "moment-timezone": "0.5.45"
+    },
+    "devDependencies": {
+        "@types/moment-duration-format": "2.2.6",
+        "@types/node": "22.10.2",
+        "esbuild": "0.25.10",
+        "prettier": "3.6.2",
+        "typescript": "5.9.3"
+    }
+}

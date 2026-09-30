@@ -386,8 +386,9 @@ await client.comments.addToRecord({
 The list returns `{comments, readableVersionOfRecordPrimaryValue,
 disableSending?}`. Each comment includes its text, author, and timestamps.
 `readableVersionOfRecordPrimaryValue` labels the parent visitor using its
-configured `commenterNameField` or first login field; it may be `null`. Read a
-child record's title from that child's Form record and field schema.
+configured `commenterNameField`, the first login field for a login Form or
+Portal, or the parent's Airtable primary field otherwise. It may be `null`.
+Read a child record's title from that child's Form record and field schema.
 Respect `disableSending` in your interface. Adding a comment resolves with no
 value; load the list again if your app wants to refresh it. The server derives
 the actual child record and author from the current visitor and published

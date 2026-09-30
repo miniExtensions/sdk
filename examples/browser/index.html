@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>miniExtensions custom Form and Portal</title>
+        <link rel="stylesheet" href="/styles.css" />
+    </head>
+    <body>
+        <main>
+            <header>
+                <span class="eyebrow">miniExtensions SDK</span>
+                <h1>Your Form. Your Portal. Your interface.</h1>
+                <p>
+                    A working browser application using the installed SDK.
+                    Connect a published extension to see your own fields and
+                    records.
+                </p>
+            </header>
+            <section class="card" aria-labelledby="connection-title">
+                <h2 id="connection-title">Connect an extension</h2>
+                <form id="connection-form">
+                    <div class="connection-grid">
+                        <label>
+                            miniExtensions API origin
+                            <input
+                                id="api-origin"
+                                type="url"
+                                placeholder="https://your-preview-origin.example"
+                                required
+                                autocomplete="off"
+                            />
+                        </label>
+                        <label>
+                            Publishable workspace key
+                            <input
+                                id="publishable-key"
+                                type="password"
+                                required
+                                autocomplete="off"
+                                spellcheck="false"
+                            />
+                        </label>
+                        <label>
+                            Published share ID
+                            <input
+                                id="share-id"
+                                required
+                                autocomplete="off"
+                                spellcheck="false"
+                            />
+                        </label>
+                        <label>
+                            Record ID (optional direct Form edit)
+                            <input
+                                id="record-id"
+                                autocomplete="off"
+                                spellcheck="false"
+                            />
+                        </label>
+                    </div>
+                    <div class="actions">
+                        <button type="submit">Connect and load</button>
+                        <button id="disconnect" type="button" class="secondary">
+                            Disconnect
+                        </button>
+                    </div>
+                </form>
+                <p class="hint">
+                    The key stays in this page's memory. Hosted miniExtensions
+                    cookies are never sent. No data is written until you choose
+                    a write action.
+                </p>
+            </section>
+            <section class="session-bar" aria-label="Visitor sessions">
+                <label>
+                    Visitor
+                    <select id="visitor">
+                        <option value="A">Visitor A</option>
+                        <option value="B">Visitor B</option>
+                    </select>
+                </label>
+                <span id="session-summary">Not connected</span>
+                <button id="reload" type="button" class="secondary">
+                    Reload
+                </button>
+                <button id="logout" type="button" class="secondary">
+                    Clear this visitor's session
+                </button>
+                <button id="cancel" type="button" class="secondary" disabled>
+                    Cancel request
+                </button>
+            </section>
+            <p id="status" role="status" aria-live="polite">
+                Enter the API origin, key, and share ID to begin.
+            </p>
+            <section id="screen" aria-label="Extension"></section>
+            <details class="card">
+                <summary>About this example</summary>
+                <p>
+                    This is a custom application, with a small field renderer
+                    you can replace. miniExtensions validates permissions and
+                    Form rules on the server. Your application owns its layout,
+                    conditional presentation, CAPTCHA integration, and visitor
+                    session storage.
+                </p>
+                <p>
+                    Writes are never retried automatically. If a request is
+                    cancelled or loses its connection, reload and inspect the
+                    records before deciding to submit again.
+                </p>
+            </details>
+        </main>
+        <script type="module" src="/main.js"></script>
+    </body>
+</html>

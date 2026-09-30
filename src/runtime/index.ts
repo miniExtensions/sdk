@@ -4,4 +4,13 @@ export {
     type SDKErrorKind,
 } from './client.js';
 export { withExtensionPassword, withLoginToken } from './session.js';
+export { AirtableFieldType } from '../formulas/types.js';
+export type {
+    AirtableAttachment,
+    AirtableBarcodeValue,
+    AirtableCollaborator,
+    AirtableRecord,
+    AirtableValue,
+    SelectFieldChoice,
+} from '../formulas/types.js';
 export type * from './types.js';

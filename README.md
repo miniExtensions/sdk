@@ -1,9 +1,13 @@
 # miniExtensions SDK
 
-The miniExtensions SDK is under development. It provides the portable formula
-engine and a browser Form/Portal runtime client for loading, authentication,
-and Form saves. The runtime client requires an enabled `/api/sdk` server
-endpoint. Attachment, comment, and automation methods are not included yet.
+Build your own Form and Portal interfaces with miniExtensions' published
+configuration, record permissions, and Airtable connection. The SDK provides
+a typed browser runtime client and a portable formula engine. It is under
+development and requires an enabled `/api/sdk` server endpoint.
+
+The runtime covers loading, visitor authentication, Form saves and deletion,
+linked-table reads and pagination, selectors, child Forms, Grid edits, unlink,
+Kanban category changes, attachment uploads, and child-record comments.
 
 The package has not been published to npm. From a checkout, run:
 
@@ -43,7 +47,7 @@ compatibility details.
 import { createMiniExtensionsClient } from '@miniextensions/sdk';
 
 const client = createMiniExtensionsClient({
-    apiOrigin: 'https://app.miniextensions.com',
+    apiOrigin: 'https://your-api-origin.example',
     publishableKey: 'YOUR_PUBLISHABLE_KEY',
 });
 const extension = await client.loadExtension({
@@ -55,8 +59,14 @@ const extension = await client.loadExtension({
 
 Publishable keys do not replace visitor login or record access. Sessions are
 explicitly owned by your application, and methods preserve the hosted runtime's
-response shapes. See the [runtime guide](docs/runtime.md) for token persistence,
-Form validation, and cancellation.
+response shapes. Keys are created and revoked in workspace Settings; they do
+not expire and cover all supported operations in that workspace.
+
+See the [runtime guide](docs/runtime.md) for authentication, Form validation,
+Portal reads and actions, files, comments, and cancellation. To try a complete
+custom application from the checkout, run the [browser Form and Portal
+example](examples/browser/README.md). It consumes a packed SDK archive from a
+different origin, with separate visitor sessions and no embedded credentials.
 
 ## Environments
 
@@ -67,7 +77,7 @@ Form validation, and cancellation.
 
 ## Development
 
-`pnpm check` runs formatting, application/test typechecking, formula behavior
+`pnpm check` runs formatting, application/test typechecking, SDK behavior
 tests, both builds, and checks a packed archive from independent ESM, CommonJS,
 TypeScript, and browser-bundled consumers. Tests use owned synthetic fixtures
 and make no API calls.

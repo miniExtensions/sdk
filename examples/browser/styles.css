@@ -1,0 +1,234 @@
+:root {
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    color: #172437;
+    background: #f4f7fb;
+    line-height: 1.5;
+    font-synthesis: none;
+}
+* {
+    box-sizing: border-box;
+}
+body {
+    margin: 0;
+}
+main {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 40px 24px;
+}
+header {
+    max-width: 760px;
+    margin-bottom: 28px;
+}
+h1 {
+    font-size: clamp(28px, 4vw, 42px);
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+}
+h2 {
+    margin-top: 0;
+    font-size: 21px;
+}
+h3 {
+    margin-bottom: 8px;
+}
+.eyebrow {
+    color: #3665cc;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+.card {
+    background: white;
+    border: 1px solid #dce3ee;
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 3px 12px #19294205;
+}
+.connection-grid,
+.fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+}
+label {
+    display: grid;
+    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+}
+input,
+select,
+textarea,
+button {
+    font: inherit;
+}
+input:not([type='checkbox']),
+select,
+textarea {
+    border: 1px solid #bbc8d9;
+    background: white;
+    padding: 10px 12px;
+    border-radius: 7px;
+    min-width: 0;
+    width: 100%;
+    color: inherit;
+}
+textarea {
+    min-height: 98px;
+    resize: vertical;
+}
+input:focus,
+select:focus,
+textarea:focus,
+button:focus-visible {
+    outline: 3px solid #aac4ff;
+    outline-offset: 2px;
+}
+button {
+    border: 1px solid #3262c9;
+    border-radius: 7px;
+    padding: 10px 15px;
+    background: #3262c9;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+}
+button.secondary {
+    background: white;
+    color: #24446e;
+    border-color: #c7d3e3;
+}
+button.danger {
+    background: #b42d3b;
+    border-color: #b42d3b;
+}
+button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.actions,
+.toolbar,
+.session-bar {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 18px 0 0;
+}
+.session-bar {
+    align-items: center;
+    padding-bottom: 12px;
+    margin-top: 0;
+}
+.session-bar label {
+    display: flex;
+    align-items: center;
+}
+.session-bar select {
+    width: auto;
+}
+#session-summary {
+    margin-right: auto;
+    font-size: 13px;
+    color: #58697e;
+}
+.hint {
+    color: #61718a;
+    font-size: 13px;
+    font-weight: 400;
+}
+.field-hint {
+    font-size: 11px;
+    color: #74819a;
+    font-weight: 400;
+}
+#status {
+    border-left: 4px solid #86a4e7;
+    padding: 10px 14px;
+    white-space: pre-wrap;
+}
+#status.error {
+    border-color: #c9474c;
+    background: #fff0f0;
+}
+.error-list {
+    color: #a82d3b;
+}
+.toolbar label {
+    min-width: 150px;
+    flex: 1;
+}
+.table-scroll {
+    overflow: auto;
+    margin-top: 18px;
+}
+table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 14px;
+}
+th,
+td {
+    border-bottom: 1px solid #e2e7ef;
+    padding: 12px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+th {
+    color: #596a81;
+    background: #f7f9fc;
+    white-space: nowrap;
+}
+td.record-actions {
+    white-space: nowrap;
+}
+td.record-actions button {
+    margin: 2px;
+    padding: 7px 10px;
+}
+.choice-list {
+    display: grid;
+    gap: 6px;
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid #dce3ee;
+    border-radius: 8px;
+}
+.choice-list label {
+    display: flex;
+    align-items: center;
+    font-weight: 400;
+}
+.comment {
+    padding: 10px 0;
+    border-bottom: 1px solid #e2e7ef;
+    white-space: pre-wrap;
+}
+details summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+pre {
+    overflow: auto;
+    padding: 14px;
+    background: #f4f7fb;
+    font-size: 12px;
+}
+@media (max-width: 680px) {
+    main {
+        padding: 24px 14px;
+    }
+    .card {
+        padding: 18px;
+    }
+    .connection-grid,
+    .fields {
+        grid-template-columns: 1fr;
+    }
+    .session-bar {
+        gap: 8px;
+    }
+}

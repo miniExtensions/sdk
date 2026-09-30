@@ -13,6 +13,10 @@ import type { AirtableValue } from '@miniextensions/sdk/formulas';
 import { button, element, labeled } from './dom.js';
 import { displayValue, fieldControl } from './fields.js';
 import type { ParentFormDraftScope } from './drafts.js';
+import {
+    cancelConfirmation,
+    type ConfirmationOptions,
+} from './confirmation.js';
 
 type Run = (
     description: string,
@@ -107,6 +111,7 @@ export const createPortalView = (options: {
     page: PortalLoadedResult;
     run: Run;
     status(message: string, error?: boolean): void;
+    confirm(options: ConfirmationOptions): Promise<boolean>;
     openChild(
         page: FormLoadedResult,
         context: SaveFormInput['context'],
@@ -186,6 +191,7 @@ export const createPortalView = (options: {
             viewSelect.append(new Option('Legacy default view', ''));
     };
     const reset = (): void => {
+        cancelConfirmation();
         data = null;
         returnedRecordIds = [];
         editor.replaceChildren();
@@ -540,23 +546,33 @@ export const createPortalView = (options: {
                 layoutSetting('allowUsersToUnlinkRecords') === true
             )
                 controls.append(
-                    button('Unlink', () => {
+                    button('Unlink', async () => {
+                        const portalFieldId = fieldSelect.value;
+                        const selectedCustomViewId = viewSelect.value;
                         if (
-                            !window.confirm(
-                                'Unlink this record from this Portal user?'
-                            )
+                            !(await options.confirm({
+                                title: 'Unlink this record?',
+                                message:
+                                    'Remove this record from the current Portal user. The Airtable record itself remains.',
+                                confirmLabel: 'Unlink record',
+                            }))
                         )
                             return;
-                        void run(
+                        if (
+                            fieldSelect.value !== portalFieldId ||
+                            viewSelect.value !== selectedCustomViewId
+                        )
+                            return;
+                        await run(
                             'Unlinking this record…',
                             async ({ client, signal, current }) => {
                                 await client.portals.unlinkRecord(
                                     {
                                         extensionAccessToken:
                                             page.payload.extensionAccessToken,
-                                        portalFieldId: fieldSelect.value,
+                                        portalFieldId,
                                         recordIdToUnlink: recordId,
-                                        selectedCustomViewId: viewSelect.value,
+                                        selectedCustomViewId,
                                     },
                                     { signal }
                                 );

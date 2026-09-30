@@ -109,6 +109,18 @@ button:disabled {
     opacity: 0.5;
     cursor: default;
 }
+.confirmation {
+    width: min(480px, calc(100vw - 32px));
+    border: 1px solid #dce3ee;
+    border-radius: 14px;
+    padding: 24px;
+    color: inherit;
+    background: white;
+    box-shadow: 0 18px 70px #17243740;
+}
+.confirmation::backdrop {
+    background: #17243780;
+}
 .actions,
 .toolbar,
 .session-bar {

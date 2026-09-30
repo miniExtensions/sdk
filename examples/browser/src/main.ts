@@ -27,6 +27,11 @@ import {
 import { displayValue, fieldControl, type FieldControl } from './fields.js';
 import { createPortalView, type PortalView } from './portal.js';
 import { FormDraftStore, type ParentFormDraftScope } from './drafts.js';
+import {
+    cancelConfirmation,
+    requestConfirmation,
+    type ConfirmationOptions,
+} from './confirmation.js';
 
 type Visitor = {
     client: MiniExtensionsClient | null;
@@ -100,6 +105,7 @@ const run = async (
         current(): boolean;
     }) => Promise<void>
 ): Promise<void> => {
+    cancelConfirmation();
     if (request != null) return;
     const visitor = visitors[activeVisitor];
     const client = visitor.client;
@@ -145,7 +151,28 @@ const run = async (
         }
     }
 };
+const confirmCurrent = async (
+    options: ConfirmationOptions
+): Promise<boolean> => {
+    if (request != null) return false;
+    const identity = activeVisitor;
+    const visitor = visitors[identity];
+    const client = visitor.client;
+    const revision = visitor.revision;
+    const screen = visitor.screen;
+    const accepted = await requestConfirmation(options);
+    return (
+        accepted &&
+        request == null &&
+        activeVisitor === identity &&
+        visitors[identity] === visitor &&
+        visitor.client === client &&
+        visitor.revision === revision &&
+        visitor.screen === screen
+    );
+};
 const invalidate = (visitor: Visitor): void => {
+    cancelConfirmation();
     visitor.revision += 1;
     visitor.screen = null;
     visitor.root = null;
@@ -159,6 +186,7 @@ const invalidate = (visitor: Visitor): void => {
     setBusy(false);
 };
 const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
+    cancelConfirmation();
     visitor.client?.setSession(next);
     // A successful explicit login becomes a new owner for future responses.
     visitor.revision += 1;
@@ -170,6 +198,7 @@ const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
 };
 
 const load = (): void => {
+    cancelConfirmation();
     void run(
         'Loading the published extension…',
         async ({ visitor, client, signal, current }) => {
@@ -724,9 +753,17 @@ const renderForm = (page: FormLoadedResult): void => {
         actions.append(
             button(
                 'Delete this record',
-                () => {
-                    if (!window.confirm('Delete this record?')) return;
-                    void run(
+                async () => {
+                    if (
+                        !(await confirmCurrent({
+                            title: 'Delete this record?',
+                            message:
+                                'This deletes the current Form record from Airtable.',
+                            confirmLabel: 'Delete record',
+                        }))
+                    )
+                        return;
+                    await run(
                         'Deleting the current record…',
                         async ({ client, signal, current }) => {
                             await client.forms.deleteCurrentRecord(
@@ -893,6 +930,7 @@ const renderComments = (page: FormLoadedResult): void => {
 };
 
 const render = (): void => {
+    cancelConfirmation();
     screenNode.replaceChildren();
     sessionSummary();
     const visitor = visitors[activeVisitor];
@@ -919,6 +957,7 @@ const render = (): void => {
             page,
             run,
             status,
+            confirm: confirmCurrent,
             openChild: (child, context, scope) => {
                 visitor.screen = child;
                 visitor.formContext = context;
@@ -972,6 +1011,7 @@ connectionForm.addEventListener('submit', (event) => {
 });
 visitorSelect.addEventListener('change', () => {
     if (visitorSelect.value !== 'A' && visitorSelect.value !== 'B') return;
+    cancelConfirmation();
     request?.abort();
     request = null;
     activeVisitor = visitorSelect.value;

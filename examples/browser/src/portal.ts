@@ -12,6 +12,7 @@ import {
 import type { AirtableValue } from '@miniextensions/sdk/formulas';
 import { button, element, labeled } from './dom.js';
 import { displayValue, fieldControl } from './fields.js';
+import type { ParentFormDraftScope } from './drafts.js';
 
 type Run = (
     description: string,
@@ -106,7 +107,11 @@ export const createPortalView = (options: {
     page: PortalLoadedResult;
     run: Run;
     status(message: string, error?: boolean): void;
-    openChild(page: FormLoadedResult, context: SaveFormInput['context']): void;
+    openChild(
+        page: FormLoadedResult,
+        context: SaveFormInput['context'],
+        scope: ParentFormDraftScope
+    ): void;
 }): PortalView => {
     const { page, run, status } = options;
     const card = element('section', undefined, 'card');
@@ -262,7 +267,15 @@ export const createPortalView = (options: {
                     throw new Error(
                         'The child did not return a Form. Reload the Portal and its selected view.'
                     );
-                options.openChild(loaded, { type: 'modal', prefillData });
+                options.openChild(
+                    loaded,
+                    { type: 'modal', prefillData },
+                    {
+                        portalId: page.extensionId,
+                        recordId: page.payload.formRecord.recordId,
+                        portalFieldId: fieldSelect.value,
+                    }
+                );
                 status(
                     creating
                         ? 'Create Form loaded. No record has been created yet.'

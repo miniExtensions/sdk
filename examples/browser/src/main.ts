@@ -26,6 +26,7 @@ import {
 } from './dom.js';
 import { displayValue, fieldControl, type FieldControl } from './fields.js';
 import { createPortalView, type PortalView } from './portal.js';
+import { FormDraftStore, type ParentFormDraftScope } from './drafts.js';
 
 type Visitor = {
     client: MiniExtensionsClient | null;
@@ -34,6 +35,8 @@ type Visitor = {
     portal: PortalView | null;
     revision: number;
     formContext: SaveFormInput['context'];
+    formParentScope: ParentFormDraftScope | null;
+    drafts: FormDraftStore<AirtableValue>;
     verification: { loginPage: LoginPageResult; verificationId: string } | null;
 };
 const newVisitor = (): Visitor => ({
@@ -43,6 +46,8 @@ const newVisitor = (): Visitor => ({
     portal: null,
     revision: 0,
     formContext: { type: 'direct-url' },
+    formParentScope: null,
+    drafts: new FormDraftStore<AirtableValue>(),
     verification: null,
 });
 const visitors = { A: newVisitor(), B: newVisitor() };
@@ -147,6 +152,8 @@ const invalidate = (visitor: Visitor): void => {
     visitor.portal = null;
     visitor.verification = null;
     visitor.formContext = { type: 'direct-url' };
+    visitor.formParentScope = null;
+    visitor.drafts.clear();
     request?.abort();
     request = null;
     setBusy(false);
@@ -158,6 +165,8 @@ const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
     visitor.portal = null;
     visitor.root = null;
     visitor.verification = null;
+    visitor.formParentScope = null;
+    visitor.drafts.clear();
 };
 
 const load = (): void => {
@@ -169,11 +178,14 @@ const load = (): void => {
                 signal,
             });
             if (!current()) return;
+            // Reload replaces this visitor's drafts only after a fresh read.
+            visitor.drafts.clear();
             visitor.screen = result;
             visitor.root =
                 result.extensionScreen === 'portal_loaded' ? result : null;
             visitor.portal = null;
             visitor.formContext = { type: 'direct-url' };
+            visitor.formParentScope = null;
             visitor.verification = null;
             render();
             status(
@@ -397,22 +409,64 @@ const renderForm = (page: FormLoadedResult): void => {
             button('Back to Portal', () => {
                 visitor.screen = visitor.root;
                 visitor.formContext = { type: 'direct-url' };
+                visitor.formParentScope = null;
                 render();
             })
         );
-    const dirty = new Set([
-        ...page.payload.formFieldIdsWithUnsavedChanges,
-        ...(page.payload.urlPrefilledFieldIds ?? []),
-    ]);
+    const draft = visitor.drafts.open(
+        {
+            extensionId: page.extensionId,
+            recordId:
+                page.payload.formRecord.type === 'edit'
+                    ? page.payload.formRecord.recordId
+                    : null,
+            parent: visitor.formParentScope,
+        },
+        page.payload.formRecord.data,
+        [
+            ...page.payload.formFieldIdsWithUnsavedChanges,
+            ...(page.payload.urlPrefilledFieldIds ?? []),
+        ]
+    );
     const controls = new Map<string, FieldControl>();
     const fields = element('div', undefined, 'fields');
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
         if (schema == null) continue;
-        const control = fieldControl(
+        const createdChoices = visitor.drafts.choices(draft, fieldId);
+        const fieldConfig = schema.airtableField.config;
+        if (
+            createdChoices.length !== 0 &&
+            (fieldConfig.type === AirtableFieldType.SINGLE_SELECT ||
+                fieldConfig.type === AirtableFieldType.MULTIPLE_SELECTS)
+        ) {
+            const choices = new Map(
+                (fieldConfig.options?.choices ?? []).map((choice) => [
+                    choice.id,
+                    choice,
+                ])
+            );
+            for (const choice of createdChoices) choices.set(choice.id, choice);
+            fieldConfig.options = {
+                ...fieldConfig.options,
+                choices: [...choices.values()],
+            };
+        }
+        const control: FieldControl = fieldControl(
             schema,
-            page.payload.formRecord.data[fieldId],
-            () => dirty.add(fieldId)
+            visitor.drafts.read(draft, fieldId),
+            () => {
+                try {
+                    visitor.drafts.write(draft, fieldId, control.read());
+                } catch (error) {
+                    status(
+                        error instanceof Error
+                            ? error.message
+                            : 'Invalid field value.',
+                        true
+                    );
+                }
+            }
         );
         controls.set(fieldId, control);
         fields.append(control.node);
@@ -448,6 +502,32 @@ const renderForm = (page: FormLoadedResult): void => {
                                 { signal }
                             );
                             if (!current()) return;
+                            visitor.drafts.addChoice(
+                                draft,
+                                fieldId,
+                                result.newChoice
+                            );
+                            const fieldConfig = schema.airtableField.config;
+                            if (
+                                fieldConfig.type ===
+                                    AirtableFieldType.SINGLE_SELECT ||
+                                fieldConfig.type ===
+                                    AirtableFieldType.MULTIPLE_SELECTS
+                            ) {
+                                fieldConfig.options = {
+                                    ...fieldConfig.options,
+                                    choices: [
+                                        ...(
+                                            fieldConfig.options?.choices ?? []
+                                        ).filter(
+                                            (option) =>
+                                                option.id !==
+                                                result.newChoice.id
+                                        ),
+                                        result.newChoice,
+                                    ],
+                                };
+                            }
                             const select = control.node.querySelector('select');
                             select?.append(
                                 new Option(
@@ -467,7 +547,11 @@ const renderForm = (page: FormLoadedResult): void => {
                                       ]
                                     : result.newChoice.name
                             );
-                            dirty.add(fieldId);
+                            visitor.drafts.write(
+                                draft,
+                                fieldId,
+                                control.read()
+                            );
                             choice.value = '';
                             status(
                                 'Choice created and selected in the draft. Save to update the record.'
@@ -524,7 +608,11 @@ const renderForm = (page: FormLoadedResult): void => {
                                 if (choice.checked) selected.add(record.id);
                                 else selected.delete(record.id);
                                 control.write([...selected]);
-                                dirty.add(fieldId);
+                                visitor.drafts.write(
+                                    draft,
+                                    fieldId,
+                                    control.read()
+                                );
                             });
                             const tableId =
                                 schema.airtableField.config.type ===
@@ -599,7 +687,11 @@ const renderForm = (page: FormLoadedResult): void => {
                                 ...(Array.isArray(existing) ? existing : []),
                                 attachment,
                             ]);
-                            dirty.add(fieldId);
+                            visitor.drafts.write(
+                                draft,
+                                fieldId,
+                                control.read()
+                            );
                             file.value = '';
                             status(
                                 'File uploaded. Choose Save to attach it to the record.'
@@ -618,6 +710,13 @@ const renderForm = (page: FormLoadedResult): void => {
     const submit = element('button', 'Save');
     submit.type = 'submit';
     actions.append(submit);
+    actions.append(
+        button('Discard draft', () => {
+            visitor.drafts.discard(draft);
+            render();
+            status('This Form draft was discarded. No record was saved.');
+        })
+    );
     if (
         page.payload.formRecord.type === 'edit' &&
         settings(page.payload.publicFields).allowDeletingRecords === true
@@ -638,6 +737,8 @@ const renderForm = (page: FormLoadedResult): void => {
                                 { signal }
                             );
                             if (!current()) return;
+                            visitor.drafts.discard(draft);
+                            visitor.formParentScope = null;
                             visitor.screen = visitor.root;
                             render();
                             status(
@@ -654,19 +755,25 @@ const renderForm = (page: FormLoadedResult): void => {
     card.addEventListener('submit', (event) => {
         event.preventDefault();
         void run('Saving the Form…', async ({ client, signal, current }) => {
-            const data = { ...page.payload.formRecord.data };
-            for (const [fieldId, control] of controls)
-                if (dirty.has(fieldId)) data[fieldId] = control.read();
+            // Reject an invalid visible control instead of saving its last
+            // valid draft value (for example, a non-finite numeric input).
+            for (const control of controls.values())
+                if (control.editable) control.read();
+            const snapshot = visitor.drafts.snapshot(draft);
+            if (snapshot == null) return;
             const result = await client.forms.save(
                 {
                     extensionAccessToken: page.payload.extensionAccessToken,
-                    formRecord: { ...page.payload.formRecord, data },
+                    formRecord: {
+                        ...page.payload.formRecord,
+                        data: snapshot.data,
+                    },
                     captchaVal: null,
                     isComputeMode: false,
                     searchQuery: connection?.input.query ?? {},
                     context,
                     conditionalLinkedRecordFieldIdsToFilteringValues: {},
-                    formFieldIdsWithUnsavedChanges: [...dirty],
+                    formFieldIdsWithUnsavedChanges: snapshot.dirtyFieldIds,
                 },
                 { signal }
             );
@@ -700,6 +807,8 @@ const renderForm = (page: FormLoadedResult): void => {
                 );
                 return;
             }
+            visitor.drafts.discard(draft);
+            visitor.formParentScope = null;
             if (visitor.root != null && result.loggedInUserRecord != null) {
                 visitor.root.payload.formRecord.data = {
                     ...result.loggedInUserRecord.fields,
@@ -810,9 +919,10 @@ const render = (): void => {
             page,
             run,
             status,
-            openChild: (child, context) => {
+            openChild: (child, context, scope) => {
                 visitor.screen = child;
                 visitor.formContext = context;
+                visitor.formParentScope = scope;
                 render();
             },
         });

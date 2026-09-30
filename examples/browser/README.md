@@ -59,6 +59,11 @@ are displayed intact rather than converted to text for saving.
 - Choose **Save** to submit. Server validation is shown next to the Form; a
   failed validation keeps your values. A successful standalone create disables
   repeated submission until you choose **Reload**.
+- Unsaved values, selected links, created choices, and completed upload
+  references survive Visitor A/B switching and returning from a child Form to
+  its Portal. Drafts belong to the visitor, Form, record, and parent Portal
+  field. **Discard draft** resets only that Form to its loaded values without
+  saving. It does not undo a completed upload or a created Airtable choice.
 - Linked fields offer an authorized search and paginated selection. Selecting
   choices only edits the local draft; **Save** writes the relationship.
 - Attachment fields let you select and upload a file. Uploading creates a file
@@ -113,6 +118,11 @@ visitors cancels pending UI work; a response from a different visitor or older
 session cannot populate the active visitor's screen or session. Sessions are
 memory-only, so refreshing the page starts them again anonymously. Hosted
 miniExtensions login cookies cannot authenticate either visitor.
+
+A successful **Reload** replaces that visitor's drafts with the freshly loaded
+screen; a failed or cancelled reload retains them. Successful save or deletion
+clears only the affected draft. Logout, authentication changes, reconnecting,
+and disconnecting clear the corresponding visitor's drafts with its session.
 
 The example cancels pending requests when visitors or connections change.
 Cancelling a network request cannot undo an already committed server write.

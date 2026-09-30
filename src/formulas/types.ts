@@ -48,6 +48,30 @@ export type CurrencyFieldConfig = {
     options: { precision: number; symbol: string };
 };
 
+export type SelectFieldChoice = {
+    id: string;
+    name: string;
+    color?: string;
+    newOption?: boolean;
+};
+
+export type SelectFieldConfig = {
+    type:
+        | AirtableFieldType.SINGLE_SELECT
+        | AirtableFieldType.MULTIPLE_SELECTS
+        | AirtableFieldType.EXTERNAL_SYNC_SOURCE;
+    options?: { choices: SelectFieldChoice[] } | null;
+};
+
+export type CollaboratorFieldConfig = {
+    type:
+        | AirtableFieldType.SINGLE_COLLABORATOR
+        | AirtableFieldType.MULTIPLE_COLLABORATORS
+        | AirtableFieldType.CREATED_BY
+        | AirtableFieldType.LAST_MODIFIED_BY;
+    options?: { choices: AirtableCollaborator[] } | null;
+};
+
 export type DurationFormat =
     | 'h:mm'
     | 'h:mm:ss'
@@ -118,6 +142,13 @@ type UnformattedFieldType = Exclude<
     | AirtableFieldType.NUMBER
     | AirtableFieldType.PERCENT
     | AirtableFieldType.CURRENCY
+    | AirtableFieldType.SINGLE_SELECT
+    | AirtableFieldType.MULTIPLE_SELECTS
+    | AirtableFieldType.EXTERNAL_SYNC_SOURCE
+    | AirtableFieldType.SINGLE_COLLABORATOR
+    | AirtableFieldType.MULTIPLE_COLLABORATORS
+    | AirtableFieldType.CREATED_BY
+    | AirtableFieldType.LAST_MODIFIED_BY
     | AirtableFieldType.DURATION
     | AirtableFieldType.DATE
     | AirtableFieldType.DATE_TIME
@@ -135,10 +166,12 @@ export type UnformattedFieldConfig = {
     options?: object | null;
 };
 
-/** Only formatting and conversion options needed by formulas are required. */
+/** Runtime choice metadata is optional for minimal formula-only field inputs. */
 export type AirtableFieldConfig =
     | NumericFieldConfig
     | CurrencyFieldConfig
+    | SelectFieldConfig
+    | CollaboratorFieldConfig
     | DurationFieldConfig
     | DateFieldConfig
     | DateTimeFieldConfig
@@ -171,6 +204,17 @@ export type AirtableAttachment = {
     filename?: string;
     size?: number;
     type?: string;
+    thumbnails?: {
+        small?: AirtableThumbnail;
+        large?: AirtableThumbnail;
+        full?: AirtableThumbnail;
+    };
+};
+
+export type AirtableThumbnail = {
+    url: string;
+    width: number;
+    height: number;
 };
 
 export type AirtableBarcodeValue = { text?: string; type?: string };

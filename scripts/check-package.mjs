@@ -104,12 +104,56 @@ if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formu
     );
     run(process.execPath, ['consumer.cjs']);
 
+    const declarationConsumer =
+        consumer +
+        `
+import type { FormLoadedResult, RuntimeFieldSchema } from '@miniextensions/sdk';
+export function renderChoiceNames(field: RuntimeFieldSchema): string[] {
+    const config = field.airtableField.config;
+    switch (config.type) {
+        case AirtableFieldType.SINGLE_SELECT:
+        case AirtableFieldType.MULTIPLE_SELECTS:
+        case AirtableFieldType.EXTERNAL_SYNC_SOURCE:
+            return config.options?.choices.map((choice) => {
+                const color: string | undefined = choice.color;
+                const newOption: boolean | undefined = choice.newOption;
+                return choice.id + choice.name + (color ?? '') + (newOption ?? false);
+            }) ?? [];
+        case AirtableFieldType.SINGLE_COLLABORATOR:
+        case AirtableFieldType.MULTIPLE_COLLABORATORS:
+        case AirtableFieldType.CREATED_BY:
+        case AirtableFieldType.LAST_MODIFIED_BY:
+            return config.options?.choices.map((choice) => {
+                const avatar: string | undefined = choice.profilePicUrl;
+                return choice.id + choice.name + choice.email + (avatar ?? '');
+            }) ?? [];
+        default:
+            return [];
+    }
+}
+export function renderAttachmentPreview(extension: FormLoadedResult): {
+    url: string | undefined;
+    width: number | undefined;
+    height: number | undefined;
+} {
+    const attachment = extension.payload.persistedAddOnlyAttachmentValuesByFieldId?.fldFiles?.[0];
+    const small = attachment?.thumbnails?.small;
+    const large = attachment?.thumbnails?.large;
+    const full = attachment?.thumbnails?.full;
+    return {
+        url: large?.url ?? small?.url ?? full?.url,
+        width: large?.width,
+        height: large?.height,
+    };
+}
+`;
+
     for (const [filename, module, moduleResolution] of [
         ['consumer.mts', 'NodeNext', 'NodeNext'],
         ['consumer.cts', 'NodeNext', 'NodeNext'],
         ['browser-consumer.ts', 'ESNext', 'Bundler'],
     ]) {
-        writeFileSync(join(temporaryDirectory, filename), consumer);
+        writeFileSync(join(temporaryDirectory, filename), declarationConsumer);
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
             '--noEmit',

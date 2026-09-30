@@ -1,8 +1,9 @@
 # miniExtensions SDK
 
-The miniExtensions SDK is under development. This first version provides the
-portable formula engine. Form, Portal, authentication, attachment, comment, and
-automation API clients will follow; those methods are not available yet.
+The miniExtensions SDK is under development. It provides the portable formula
+engine and a browser Form/Portal runtime client for loading, authentication,
+and Form saves. The runtime client requires an enabled `/api/sdk` server
+endpoint. Attachment, comment, and automation methods are not included yet.
 
 The package has not been published to npm. From a checkout, run:
 
@@ -35,6 +36,27 @@ Formula evaluation runs locally and needs no miniExtensions API key or network
 connection. The `/formulas` suffix is a package import subpath. See the
 [formula guide](docs/formulas.md) for field context, supported functions, and
 compatibility details.
+
+## Runtime client
+
+```ts
+import { createMiniExtensionsClient } from '@miniextensions/sdk';
+
+const client = createMiniExtensionsClient({
+    apiOrigin: 'https://app.miniextensions.com',
+    publishableKey: 'YOUR_PUBLISHABLE_KEY',
+});
+const extension = await client.loadExtension({
+    shareId: 'YOUR_SHARE_ID',
+    recordId: null,
+    context: { type: 'direct-url' },
+});
+```
+
+Publishable keys do not replace visitor login or record access. Sessions are
+explicitly owned by your application, and methods preserve the hosted runtime's
+response shapes. See the [runtime guide](docs/runtime.md) for token persistence,
+Form validation, and cancellation.
 
 ## Environments
 

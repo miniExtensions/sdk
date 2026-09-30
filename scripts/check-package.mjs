@@ -47,6 +47,7 @@ try {
                 path === 'LICENSE' ||
                 path === 'THIRD_PARTY_NOTICES.md' ||
                 path === 'docs/formulas.md' ||
+                path === 'docs/runtime.md' ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/'),
             `Unexpected published file: ${path}`
@@ -67,6 +68,11 @@ try {
 
     const consumer = `
 import { FormulaRunner, AirtableFieldType } from '@miniextensions/sdk/formulas';
+import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
+const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com', publishableKey: 'me_pk_example' });
+client.setSession(withExtensionPassword({}, { extensionId: 'extExample', encryptedExtensionPassword: 'password-token' }));
+client.setSession(withLoginToken(client.getSession(), { extensionId: 'extExample', tableId: 'tblExample', loginFieldNames: ['Email'], encryptedLoginToken: 'login-token' }));
+if (Object.keys(client.getSession()).length !== 2) throw new Error('Session helper failed');
 interface NumericOptions { precision: number; }
 const numericOptions: NumericOptions = { precision: 0 };
 const runner = new FormulaRunner('{Quantity} * 3');
@@ -91,6 +97,8 @@ export const result = runner.run();
     writeFileSync(
         join(temporaryDirectory, 'consumer.cjs'),
         `const { FormulaRunner } = require('@miniextensions/sdk/formulas');
+const { createMiniExtensionsClient } = require('@miniextensions/sdk');
+if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com', publishableKey: 'me_pk_example' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
 `
     );
@@ -127,7 +135,7 @@ if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formu
         write: false,
         logLevel: 'silent',
     });
-    const browserContext = {};
+    const browserContext = { URL, TextEncoder, fetch };
     runInNewContext(bundled.outputFiles[0].text, browserContext, {
         timeout: 10000,
     });

@@ -6,6 +6,16 @@
     "license": "MIT",
     "type": "module",
     "exports": {
+        ".": {
+            "import": {
+                "types": "./dist/esm/runtime/index.d.ts",
+                "default": "./dist/esm/runtime/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/runtime/index.d.ts",
+                "default": "./dist/cjs/runtime/index.js"
+            }
+        },
         "./formulas": {
             "import": {
                 "types": "./dist/esm/formulas/index.d.ts",
@@ -21,6 +31,7 @@
         "dist/esm",
         "dist/cjs",
         "docs/formulas.md",
+        "docs/runtime.md",
         "README.md",
         "LICENSE",
         "THIRD_PARTY_NOTICES.md"

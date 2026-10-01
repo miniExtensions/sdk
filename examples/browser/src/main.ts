@@ -827,7 +827,14 @@ const renderForm = (page: FormLoadedResult): void => {
                 for (const [fieldId, error] of Object.entries(
                     result.formErrors
                 ))
-                    if (error != null)
+                    if (
+                        error != null &&
+                        !result.formValidationErrors.some(
+                            (validationError) =>
+                                validationError.fieldId === fieldId &&
+                                validationError.errorMessage === error
+                        )
+                    )
                         errors.append(
                             element(
                                 'li',

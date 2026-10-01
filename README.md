@@ -63,10 +63,10 @@ response shapes. Keys are created and revoked in workspace Settings; they do
 not expire and cover all supported operations in that workspace.
 
 See the [runtime guide](docs/runtime.md) for authentication, Form validation,
-Portal reads and actions, files, comments, and cancellation. To try a complete
-custom application from the checkout, run the [browser Form and Portal
-example](examples/browser/README.md). It consumes a packed SDK archive from a
-different origin, with separate visitor sessions and no embedded credentials.
+Portal reads and actions, files, comments, and cancellation. Its
+[packaged Form quickstart](docs/runtime.md#packaged-form-quickstart) includes
+archive installation, typed field values, and a complete load-and-save flow.
+It is included in the archive and needs no access to this private repository.
 
 ## Environments
 
@@ -80,7 +80,8 @@ different origin, with separate visitor sessions and no embedded credentials.
 `pnpm check` runs formatting, application/test typechecking, SDK behavior
 tests, both builds, and checks a packed archive from independent ESM, CommonJS,
 TypeScript, and browser-bundled consumers. Tests use owned synthetic fixtures
-and make no API calls.
+and make no API calls. The full browser Form and Portal example is also
+typechecked and built from a clean copy using that newly packed archive.
 
 The package remains marked private to prevent npm publication during
 development. Publishing and compatibility with the hosted runtime API are

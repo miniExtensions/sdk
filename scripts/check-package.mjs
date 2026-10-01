@@ -1,20 +1,33 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import {
+    cpSync,
     mkdtempSync,
     readFileSync,
     readdirSync,
+    realpathSync,
     rmSync,
     writeFileSync,
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { build } from 'esbuild';
+import {
+    assertBrowserInputs,
+    assertInstalledArchive,
+    assertPackedDocLinks,
+} from './package-checks.mjs';
 
 const require = createRequire(import.meta.url);
-const temporaryDirectory = mkdtempSync(join(tmpdir(), 'miniextensions-sdk-'));
+const temporaryDirectory = realpathSync(
+    mkdtempSync(join(tmpdir(), 'miniextensions-sdk-'))
+);
+// A sibling temp root has no generic consumer node_modules in its ancestry.
+const browserDirectory = realpathSync(
+    mkdtempSync(join(tmpdir(), 'miniextensions-browser-'))
+);
 const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
 
 function run(command, args, cwd = temporaryDirectory) {
@@ -22,11 +35,17 @@ function run(command, args, cwd = temporaryDirectory) {
         cwd,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+            ...process.env,
+            npm_config_cache: join(temporaryDirectory, 'npm-cache'),
+        },
         timeout: 120000,
     });
 }
 
 try {
+    // check:package also works alone; never pack leftover build output.
+    run(process.execPath, ['scripts/build.mjs'], process.cwd());
     const packed = JSON.parse(
         run(
             'npm',
@@ -50,7 +69,7 @@ try {
                 path === 'docs/runtime.md' ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/'),
-            `Unexpected published file: ${path}`
+            `Unexpected packed file: ${path}`
         );
     }
     writeFileSync(
@@ -64,6 +83,42 @@ try {
         '--no-fund',
         '--package-lock=false',
         join(temporaryDirectory, packed.filename),
+    ]);
+    const installedPackage = join(
+        temporaryDirectory,
+        'node_modules/@miniextensions/sdk'
+    );
+    await assertPackedDocLinks(
+        installedPackage,
+        packed.files.map(({ path }) => path)
+    );
+
+    // Compile the actual shipped quickstart against installed declarations.
+    const runtimeGuide = readFileSync(
+        join(installedPackage, 'docs/runtime.md'),
+        'utf8'
+    );
+    const quickstart = runtimeGuide
+        .split('## Packaged Form quickstart\n')[1]
+        ?.match(/```ts\n([\s\S]*?)\n```/)?.[1];
+    assert(quickstart, 'Missing packaged Form quickstart');
+    const guideExamples = [...runtimeGuide.matchAll(/```ts\n([\s\S]*?)\n```/g)]
+        .map(([, code]) => code)
+        .join('\n');
+    writeFileSync(join(temporaryDirectory, 'runtime-guide.ts'), guideExamples);
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--skipLibCheck',
+        'false',
+        '--target',
+        'ES2022',
+        '--module',
+        'ESNext',
+        '--moduleResolution',
+        'Bundler',
+        'runtime-guide.ts',
     ]);
 
     const consumer = `
@@ -185,6 +240,93 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
     });
     assert.equal(browserContext.miniExtensionsFormulaExample.result, 12);
 
+    cpSync('examples/browser', browserDirectory, {
+        recursive: true,
+        filter: (path) =>
+            !/(?:^|[/\\])(?:node_modules|\.generated)(?:[/\\]|$)/.test(path),
+    });
+    const archivePath = join(temporaryDirectory, packed.filename);
+    const archiveSpec = `file:${archivePath}`;
+    const browserManifestPath = join(browserDirectory, 'package.json');
+    const browserLockPath = join(browserDirectory, 'package-lock.json');
+    const browserManifest = JSON.parse(
+        readFileSync(browserManifestPath, 'utf8')
+    );
+    const browserLock = JSON.parse(readFileSync(browserLockPath, 'utf8'));
+    // Preserve the committed registry resolutions; replace only the SDK pin.
+    browserManifest.dependencies[packageMetadata.name] = archiveSpec;
+    browserLock.packages[''].dependencies[packageMetadata.name] = archiveSpec;
+    browserLock.packages[`node_modules/${packageMetadata.name}`] = {
+        version: packageMetadata.version,
+        resolved: archiveSpec,
+        integrity: packed.integrity,
+        license: packageMetadata.license,
+        dependencies: packageMetadata.dependencies,
+        engines: packageMetadata.engines,
+    };
+    for (const [name, spec] of Object.entries({
+        ...browserManifest.dependencies,
+        ...browserManifest.devDependencies,
+    })) {
+        assert(
+            name === packageMetadata.name || /^\d+\.\d+\.\d+$/.test(spec),
+            `Browser dependency must be pinned to the registry: ${name}`
+        );
+    }
+    writeFileSync(browserManifestPath, JSON.stringify(browserManifest));
+    writeFileSync(browserLockPath, JSON.stringify(browserLock));
+    run(
+        'npm',
+        ['ci', '--ignore-scripts', '--no-audit', '--no-fund'],
+        browserDirectory
+    );
+    await assertInstalledArchive(browserDirectory, archivePath, packed);
+    const compiled = new Set(
+        run('npm', ['run', 'typecheck', '--', '--listFiles'], browserDirectory)
+            .split(/\r?\n/)
+            .map((path) => resolve(path))
+    );
+    await assertBrowserInputs(
+        {
+            inputs: Object.fromEntries(
+                [...compiled]
+                    .filter((path) => path.endsWith('.ts'))
+                    .map((path) => [path, {}])
+            ),
+        },
+        browserDirectory
+    );
+    function checkExampleSources(directory) {
+        for (const entry of readdirSync(directory, { withFileTypes: true })) {
+            const path = join(directory, entry.name);
+            if (entry.isDirectory()) checkExampleSources(path);
+            else if (path.endsWith('.ts')) {
+                assert(
+                    compiled.has(path),
+                    `Example source not compiled: ${path}`
+                );
+            }
+        }
+    }
+    checkExampleSources(join(browserDirectory, 'src'));
+    run('npm', ['run', 'build'], browserDirectory);
+    await assertBrowserInputs(
+        JSON.parse(
+            readFileSync(
+                join(browserDirectory, '.generated/metafile.json'),
+                'utf8'
+            )
+        ),
+        browserDirectory
+    );
+    for (const filename of ['main.js', 'index.html', 'styles.css']) {
+        assert(
+            readFileSync(join(browserDirectory, '.generated', filename))
+                .length > 0,
+            `Missing browser build output: ${filename}`
+        );
+    }
+
     function checkPortableOutput(directory) {
         for (const entry of readdirSync(directory, { withFileTypes: true })) {
             const path = join(directory, entry.name);
@@ -206,8 +348,9 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
         join(temporaryDirectory, 'node_modules/@miniextensions/sdk/dist')
     );
     console.log(
-        `${packageMetadata.name}: packed ESM/CommonJS, TypeScript declarations, and browser bundle passed`
+        `${packageMetadata.name}: packed ESM/CommonJS, declarations, doc links/quickstart, and full browser example typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
+    rmSync(browserDirectory, { recursive: true, force: true });
 }

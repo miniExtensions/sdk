@@ -5,16 +5,45 @@ Availability of that endpoint depends on the server deployment. The SDK is a
 headless client: your app renders the interface while miniExtensions enforces
 the published Form/Portal's visitor, record, field, and action permissions.
 
-For a runnable application, see the [custom Form and Portal example](../examples/browser/README.md)
-in the SDK checkout. It uses an installed packed archive and a separate browser
-origin.
+## Packaged Form quickstart
+
+This guide ships in the SDK archive, so you can follow it without access to the
+private repository. The package has **not been published to npm**. Install the
+archive supplied to you in your own application; replace the path with its
+actual location:
+
+```sh
+npm install /path/to/miniextensions-sdk-0.1.0-alpha.0.tgz
+```
+
+The package name in imports is still `@miniextensions/sdk`. Installing it by
+name from npm would be a separate, future publication step; it is not an
+available installation method for this version. Use an ES2022-capable browser
+bundler or Node.js 22+ with ESM. Direct script-tag/CDN imports are not supplied.
+
+Save the following as `quickstart.mts` in your application. Replace the API
+origin, workspace publishable key, published Form share ID, and three field-ID
+placeholders. Choose editable single-line text, number, and checkbox fields
+that are present in that Form. The code checks their loaded schemas before
+sending a save; a field being present does not itself grant permission.
+
+This example loads a standalone create Form and saves once when run. It keeps
+all loaded data, including hidden prefills, and adds three typed edits. Use a
+Form without CAPTCHA or dynamic linked filtering for this first run: `null`
+and `{}` below do not disable those rules. For a Form that requires them,
+supply the configured CAPTCHA widget's token and current filtering values,
+and preserve any query/device fingerprint consistently in load and save.
+Password/login screens and redirects must be handled before saving, as shown
+later in this guide. In your application, call the save function from the
+visitor's deliberate Save action and keep the draft after validation failure.
 
 ```ts
 import {
+    AirtableFieldType,
     createMiniExtensionsClient,
-    SDKError,
-    withExtensionPassword,
-    withLoginToken,
+    type AirtableValue,
+    type LoadExtensionInput,
+    type SaveFormInput,
 } from '@miniextensions/sdk';
 
 const client = createMiniExtensionsClient({
@@ -22,13 +51,133 @@ const client = createMiniExtensionsClient({
     publishableKey: 'YOUR_PUBLISHABLE_KEY',
 });
 
-const input = {
+const input: LoadExtensionInput = {
     shareId: 'YOUR_SHARE_ID',
     recordId: null,
-    context: { type: 'direct-url' as const },
+    context: { type: 'direct-url' },
+    query: {},
 };
-const extension = await client.loadExtension(input);
+const controller = new AbortController();
+const extension = await client.loadExtension(input, {
+    signal: controller.signal,
+});
+
+async function saveLoadedForm(): Promise<void> {
+    if (extension.extensionScreen !== 'form_loaded') {
+        if (extension.extensionScreen === undefined) {
+            console.info('Follow the returned redirect:', extension.url);
+        } else {
+            console.info(
+                'Handle this screen first:',
+                extension.extensionScreen
+            );
+        }
+        return;
+    }
+
+    const fieldIds = {
+        title: 'YOUR_TEXT_FIELD_ID',
+        quantity: 'YOUR_NUMBER_FIELD_ID',
+        approved: 'YOUR_CHECKBOX_FIELD_ID',
+    };
+    const expectedTypes = {
+        [fieldIds.title]: AirtableFieldType.SINGLE_LINE_TEXT,
+        [fieldIds.quantity]: AirtableFieldType.NUMBER,
+        [fieldIds.approved]: AirtableFieldType.CHECKBOX,
+    };
+    for (const [fieldId, fieldType] of Object.entries(expectedTypes)) {
+        const schema = extension.payload.fieldIdsToSchemas[fieldId];
+        if (
+            !extension.payload.fieldIdsInForm.includes(fieldId) ||
+            schema?.fieldType !== fieldType ||
+            schema.airtableField.isComputed === true ||
+            schema.miniExtConfig?.readOnly === true
+        ) {
+            throw new Error(
+                `Choose an editable ${fieldType} field: ${fieldId}`
+            );
+        }
+    }
+
+    const edits: Record<string, AirtableValue> = {
+        [fieldIds.title]: 'Example request',
+        [fieldIds.quantity]: 2,
+        [fieldIds.approved]: false,
+    };
+    const saveInput: SaveFormInput = {
+        extensionAccessToken: extension.payload.extensionAccessToken,
+        formRecord: {
+            ...extension.payload.formRecord,
+            data: { ...extension.payload.formRecord.data, ...edits },
+        },
+        captchaVal: null,
+        isComputeMode: false,
+        searchQuery: input.query ?? {},
+        context: { type: 'direct-url' },
+        conditionalLinkedRecordFieldIdsToFilteringValues: {},
+        formFieldIdsWithUnsavedChanges: [
+            ...new Set([
+                ...extension.payload.formFieldIdsWithUnsavedChanges,
+                ...(extension.payload.urlPrefilledFieldIds ?? []),
+                ...Object.keys(edits),
+            ]),
+        ],
+    };
+    const result = await client.forms.save(saveInput, {
+        signal: controller.signal,
+    });
+    if (result.type === 'error') {
+        const shown = new Set<string>();
+        const showFieldError = (fieldId: string, message: string): void => {
+            const key = JSON.stringify([fieldId, message]);
+            if (shown.has(key)) return;
+            shown.add(key);
+            const title =
+                extension.payload.fieldIdsToSchemas[fieldId]?.airtableField
+                    .name ?? fieldId;
+            console.error(title, message);
+        };
+        for (const error of result.formValidationErrors) {
+            showFieldError(error.fieldId, error.errorMessage);
+        }
+        for (const [fieldId, message] of Object.entries(result.formErrors)) {
+            if (message != null) showFieldError(fieldId, message);
+        }
+        if (result.concurrentEditErrorMessage != null) {
+            console.error(result.concurrentEditErrorMessage);
+        }
+        return; // Keep the draft; a validation result is not a successful save.
+    }
+
+    console.info('Saved record:', result.record.id);
+    for (const warning of result.postSubmissionWarnings ?? []) {
+        console.warn('Post-submission warning:', warning.type);
+    }
+    for (const notification of result.postSubmissionNotifications ?? []) {
+        console.info('Post-submission notification:', notification.type);
+    }
+}
+
+await saveLoadedForm();
 ```
+
+The values above are native `AirtableValue` values: a string for text, a number
+for number, and a boolean for checkbox. Use field IDs rather than field names.
+To edit an authorized existing record, supply its `recordId` when loading and
+keep the returned `formRecord` discriminator, record ID, and table ID when
+constructing the save input, as this code does.
+
+With TypeScript installed in your application, you can check this module with:
+
+```sh
+npx tsc --noEmit --strict --target ES2022 --module NodeNext --moduleResolution NodeNext quickstart.mts
+```
+
+The remaining examples are focused excerpts using the quickstart's `client`,
+`input`, and loaded `extension`. Form/Portal helper functions take their
+loaded screen and application-supplied context explicitly. A browser app
+should render record text through safe text APIs rather than inserting it as
+HTML, and must discard late responses after a visitor/session change.
 
 Use your publishable workspace key in browser applications. A key does not
 replace the visitor's extension password, login, record access, captcha, or
@@ -54,6 +203,8 @@ password attempt, missing login record, or verification message is a normal
 result that your UI can handle.
 
 ```ts
+import { withExtensionPassword } from '@miniextensions/sdk';
+
 if (extension.extensionScreen === 'password') {
     const verification = await client.auth.verifyExtensionPassword({
         extensionId: extension.extensionId,
@@ -77,6 +228,8 @@ login token. Credentials submitted to `auth.login` and `auth.signUp` are keyed
 by login field name.
 
 ```ts
+import { withLoginToken } from '@miniextensions/sdk';
+
 if (extension.extensionScreen === 'login_page') {
     const login = await client.auth.login({
         extensionId: extension.extensionId,
@@ -140,17 +293,12 @@ Airtable field IDs. Preserve the loaded dirty/prefilled field IDs when adding
 your own changes, and provide the applicable captcha, device fingerprint,
 conditional linked filtering values, query, and child context.
 
-```ts
-const result = await client.forms.save(saveInput, {
-    signal: controller.signal,
-});
-if (result.type === 'error') {
-    // Use formValidationErrors for the summary and formErrors for inline errors.
-    // Also display an optional result.concurrentEditErrorMessage.
-} else {
-    // Handle result.record and any post-submission warnings/notifications.
-}
-```
+The quickstart constructs every required `SaveFormInput` property from a loaded
+Form and its typed edits, then handles both `error` and `saved` results. It
+passes `controller.signal` to load and save. Call `controller.abort()` when
+cancelling that request; create a new controller for a subsequent operation.
+Cancellation cannot undo an already committed write. Inspect the record after
+cancellation or a network failure before submitting again.
 
 The same field error can appear in both collections. If your interface combines
 them into one list, show each matching field ID and error message only once.
@@ -256,26 +404,36 @@ child, the actual Portal field ID, and a record ID returned by the permitted
 read:
 
 ```ts
-const child = await client.loadExtension({
-    childExtensionAccessData: {
-        parentExtensionAccessToken: portal.payload.extensionAccessToken,
-        fieldIdUsedToAccessExtension: portalFieldId,
-    },
-    childExtensionInfo: {
-        childExtensionId: configuredEditChildId,
-        accessType: {
-            type: 'edit',
-            childExtensionRecordId: permittedRecordId,
-            childExtensionFieldId: null,
+import type { PortalLoadedResult } from '@miniextensions/sdk';
+
+async function loadEditChild(
+    portal: PortalLoadedResult,
+    portalFieldId: string,
+    configuredEditChildId: string,
+    permittedRecordId: string,
+    linkedTableId: string
+) {
+    return client.loadExtension({
+        childExtensionAccessData: {
+            parentExtensionAccessToken: portal.payload.extensionAccessToken,
+            fieldIdUsedToAccessExtension: portalFieldId,
         },
-    },
-    context: {
-        type: 'modal',
-        linkedTableIdOfLinkedRecordField: linkedTableId,
-        prefillDataForLinkedRecordsForm: null,
-    },
-    query: {},
-});
+        childExtensionInfo: {
+            childExtensionId: configuredEditChildId,
+            accessType: {
+                type: 'edit',
+                childExtensionRecordId: permittedRecordId,
+                childExtensionFieldId: null,
+            },
+        },
+        context: {
+            type: 'modal',
+            linkedTableIdOfLinkedRecordField: linkedTableId,
+            prefillDataForLinkedRecordsForm: null,
+        },
+        query: {},
+    });
+}
 ```
 
 For creation, use `accessType: {type: 'create'}` and the configured create
@@ -316,13 +474,17 @@ choices allowed by the published configuration; choosing an option in your
 interface does not save it.
 
 ```ts
-const choices = await client.linkedRecords.listFormOptions({
-    extensionAccessToken: form.payload.extensionAccessToken,
-    linkedRecordFieldId: 'YOUR_LINKED_FIELD_ID',
-    filter: { viewType: 'list', searchTerm: 'search words' },
-    offset: null,
-    conditionalLinkedRecordFilteringValues: {},
-});
+import type { FormLoadedResult } from '@miniextensions/sdk';
+
+async function listFormChoices(form: FormLoadedResult) {
+    return client.linkedRecords.listFormOptions({
+        extensionAccessToken: form.payload.extensionAccessToken,
+        linkedRecordFieldId: 'YOUR_LINKED_FIELD_ID',
+        filter: { viewType: 'list', searchTerm: 'search words' },
+        offset: null,
+        conditionalLinkedRecordFilteringValues: {},
+    });
+}
 ```
 
 Use `filter: {viewType: 'calendar', month: 'YYYY-MM', clientUtcOffset}` for a
@@ -346,15 +508,21 @@ Form to write the record's selection.
 filename, the loaded Form's token, and its attachment field ID:
 
 ```ts
-const attachment = await client.attachments.uploadFile(
-    {
-        file,
-        filename: file.name,
-        extensionAccessToken: form.payload.extensionAccessToken,
-        fieldId: 'YOUR_ATTACHMENT_FIELD_ID',
-    },
-    { signal: controller.signal }
-);
+async function uploadFormAttachment(
+    form: FormLoadedResult,
+    file: File,
+    signal: AbortSignal
+) {
+    return client.attachments.uploadFile(
+        {
+            file,
+            filename: file.name,
+            extensionAccessToken: form.payload.extensionAccessToken,
+            fieldId: 'YOUR_ATTACHMENT_FIELD_ID',
+        },
+        { signal }
+    );
+}
 ```
 
 The helper requests a URL authorized for that Form field, uploads the bytes
@@ -377,13 +545,19 @@ rules. No helper retries an upload or replays a failed save.
 Comments use the loaded child Form's token, not the Portal root token:
 
 ```ts
-const comments = await client.comments.listForRecord({
-    childExtensionAccessToken: child.payload.extensionAccessToken,
-});
-await client.comments.addToRecord({
-    childExtensionAccessToken: child.payload.extensionAccessToken,
-    comment: 'The entered comment',
-});
+async function readAndAddChildComment(
+    child: FormLoadedResult,
+    comment: string
+) {
+    const comments = await client.comments.listForRecord({
+        childExtensionAccessToken: child.payload.extensionAccessToken,
+    });
+    if (comments.disableSending === true) return;
+    await client.comments.addToRecord({
+        childExtensionAccessToken: child.payload.extensionAccessToken,
+        comment,
+    });
+}
 ```
 
 The list returns `{comments, readableVersionOfRecordPrimaryValue,

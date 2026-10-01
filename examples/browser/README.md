@@ -15,6 +15,7 @@ pnpm pack
 cd examples/browser
 npm install
 npm run typecheck
+npm run build
 npm run dev
 ```
 
@@ -33,6 +34,13 @@ npm install ../../miniextensions-sdk-0.1.0-alpha.0.tgz
 
 The development server watches the example's TypeScript files. Reload the
 browser after a change; it does not automatically replay requests.
+
+`npm run build` produces the browser bundle and static assets in `.generated`
+and exits. It starts no server or watch loop. From the SDK repository root,
+`pnpm check` also installs the newly packed SDK archive in an isolated temporary
+copy of this full example, then typechecks and builds it. That check does not
+reuse an existing installation. It retains the committed registry dependency
+resolutions and replaces the SDK pin only in the temporary lockfile.
 
 ## Connect
 

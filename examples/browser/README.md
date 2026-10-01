@@ -81,6 +81,10 @@ CAPTCHA-enabled Form, integrate the configured widget and supply its token in
 `captchaVal`; this example supplies `null`. It does not disable the Form's
 configuration.
 
+Custom static and dynamic Form headers also belong to your app. Render them
+from the published settings and record metadata when needed. This example uses
+`extensionName`, falling back to “Custom Form”.
+
 ## Portal workflow
 
 Choose a configured linked table and view, then **Load records**. The actual

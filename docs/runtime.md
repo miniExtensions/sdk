@@ -145,12 +145,15 @@ const result = await client.forms.save(saveInput, {
     signal: controller.signal,
 });
 if (result.type === 'error') {
-    // Display result.formValidationErrors, result.formErrors, and an optional
-    // result.concurrentEditErrorMessage.
+    // Use formValidationErrors for the summary and formErrors for inline errors.
+    // Also display an optional result.concurrentEditErrorMessage.
 } else {
     // Handle result.record and any post-submission warnings/notifications.
 }
 ```
+
+The same field error can appear in both collections. If your interface combines
+them into one list, show each matching field ID and error message only once.
 
 `isComputeMode` follows hosted Form behavior and can create or update records.
 The client does not retry requests automatically. Every method accepts an

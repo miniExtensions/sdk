@@ -28,7 +28,12 @@ type Run = (
 ) => Promise<void>;
 export type PortalView = { node: HTMLElement; refreshRequired(): void };
 type CustomView = { id: string; config: JsonObject | null };
-type DetailField = { fieldId: string; title: string | null };
+type DetailField = {
+    fieldId: string;
+    title: string | null;
+    miniExtConfig?: JsonObject;
+    inlineEditable: boolean;
+};
 
 const isObject = (value: unknown): value is JsonObject =>
     typeof value === 'object' && value != null && !Array.isArray(value);
@@ -73,21 +78,36 @@ const configuredChildId = (
 };
 const detailFields = (value: unknown): DetailField[] => {
     if (!Array.isArray(value)) return [];
-    return value.flatMap((field): DetailField[] =>
-        isObject(field) &&
-        typeof field.fieldId === 'string' &&
-        field.isHidden !== true
-            ? [
-                  {
-                      fieldId: field.fieldId,
-                      title:
-                          typeof field.titleOverride === 'string'
-                              ? field.titleOverride
-                              : null,
-                  },
-              ]
-            : []
-    );
+    return value.flatMap((field): DetailField[] => {
+        if (
+            !isObject(field) ||
+            typeof field.fieldId !== 'string' ||
+            field.isHidden === true
+        )
+            return [];
+        const childField = isObject(field.childFormField)
+            ? field.childFormField
+            : null;
+        const childConfig = isObject(childField?.config)
+            ? childField.config
+            : null;
+        // Inline authorization uses the child Form config when present,
+        // including its defaults, and otherwise the published detail config.
+        const config =
+            childConfig != null ? childConfig.config : field.miniExtConfig;
+        const miniExtConfig = isObject(config) ? config : undefined;
+        return [
+            {
+                fieldId: field.fieldId,
+                title:
+                    typeof field.titleOverride === 'string'
+                        ? field.titleOverride
+                        : null,
+                miniExtConfig,
+                inlineEditable: miniExtConfig?.readOnly !== true,
+            },
+        ];
+    });
 };
 const gridValue = (value: AirtableValue): RuntimeGridCellValue => {
     if (value == null) return null;
@@ -294,12 +314,17 @@ export const createPortalView = (options: {
     const editCell = (
         recordId: string,
         recordField: RuntimeAirtableField,
-        value: AirtableValue
+        value: AirtableValue,
+        miniExtConfig: JsonObject | undefined
     ): void => {
         editor.replaceChildren();
         const form = element('form', undefined, 'card');
         const control = fieldControl(
-            { fieldType: recordField.config.type, airtableField: recordField },
+            {
+                fieldType: recordField.config.type,
+                airtableField: recordField,
+                miniExtConfig,
+            },
             value,
             () => {}
         );
@@ -483,7 +508,13 @@ export const createPortalView = (options: {
                 state.airtableFields.find((column) => column.isPrimaryField) ??
                 state.airtableFields[0];
             if (primary != null)
-                columns = [{ fieldId: primary.id, title: null }];
+                columns = [
+                    {
+                        fieldId: primary.id,
+                        title: null,
+                        inlineEditable: false,
+                    },
+                ];
         }
         const table = element('table');
         const head = element('tr');
@@ -522,6 +553,7 @@ export const createPortalView = (options: {
                 if (
                     gridMode &&
                     allowEditing &&
+                    column.inlineEditable &&
                     recordField != null &&
                     !recordField.isComputed &&
                     layoutSetting('disableInlineEdit') !== true
@@ -531,7 +563,8 @@ export const createPortalView = (options: {
                             editCell(
                                 recordId,
                                 recordField,
-                                record.fields[column.fieldId]
+                                record.fields[column.fieldId],
+                                column.miniExtConfig
                             )
                         )
                     );

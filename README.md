@@ -94,6 +94,14 @@ visitor work. Use the shipped [Portal helpers guide](docs/portals.md) for
 criteria cleanup, application acceptance, and child Form context. Rendering,
 saving, unlinking, and explicit reloads remain application-owned.
 
+## Optional authentication flow
+
+`@miniextensions/sdk/auth` binds password and login attempts, OTP challenges,
+and explicit session application to one loaded auth screen and visitor revision.
+It reuses the runtime client; the backend remains authoritative. Your application
+owns rendering, persistence, draft cleanup and reload. See the shipped
+[authentication guide](docs/auth.md) for manual actions and cancellation recovery.
+
 ## Environments
 
 - Node.js 22 or newer, with ESM or CommonJS imports.

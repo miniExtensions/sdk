@@ -23,6 +23,7 @@ import {
 import { checkUiRecipes } from './ui-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
+import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryDirectory = realpathSync(
@@ -77,6 +78,7 @@ try {
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
                 path === 'docs/portals.md' ||
+                path === 'docs/auth.md' ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/'),
             `Unexpected packed file: ${path}`
@@ -266,7 +268,7 @@ if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formu
     );
     run(process.execPath, ['consumer.cjs']);
 
-    for (const dependency of ['react', 'vue', 'happy-dom']) {
+    for (const dependency of ['react', 'react-dom', 'vue', 'happy-dom']) {
         assert(
             !existsSync(join(temporaryDirectory, 'node_modules', dependency)),
             `UI/test dependency leaked into package consumers: ${dependency}`
@@ -336,6 +338,51 @@ if ([createPortalCollection, PortalCollectionError].some(value => typeof value !
     );
     run(process.execPath, ['portals-consumer.cjs']);
 
+    const authPage = {
+        extensionScreen: 'password',
+        extensionId: 'extension_example',
+        language: 'en',
+        themeColor: 'blue',
+        enableCommentsOnChildForms: false,
+        workspaceId: 'workspace_example',
+        extensionOwnerUID: 'owner_example',
+        faviconUrl: null,
+        googleAnalyticsMeasurementId: null,
+        isStarterExtension: false,
+        payload: {
+            baseId: 'base_example',
+            loggedInUserCanEditExtension: false,
+            showMiniExtensionsBranding: true,
+            onFreePlan: true,
+            trialExpiresAtUnixEpoch: null,
+        },
+    };
+    const authConsumerBody = `
+const flow = createAuthFlow({
+    client: createMiniExtensionsClient({apiOrigin:'https://api.example.com',publishableKey:'me_pk_example'}),
+    page: ${JSON.stringify(authPage)},
+    getScope: () => ({ownerId:'visitor_example',revision:0})
+});
+if (!flow.isCurrent() || flow.screen !== 'password') throw new Error('Packed auth flow failed');
+flow.destroy();
+export const disposed = !flow.isCurrent();
+if (!disposed) throw new Error('Packed auth flow did not dispose');
+`;
+    writeFileSync(
+        join(temporaryDirectory, 'auth-consumer.mjs'),
+        `import { createAuthFlow } from '@miniextensions/sdk/auth';
+import { createMiniExtensionsClient } from '@miniextensions/sdk';
+${authConsumerBody}`
+    );
+    run(process.execPath, ['auth-consumer.mjs']);
+    writeFileSync(
+        join(temporaryDirectory, 'auth-consumer.cjs'),
+        `const { createAuthFlow } = require('@miniextensions/sdk/auth');
+const { createMiniExtensionsClient } = require('@miniextensions/sdk');
+${authConsumerBody.replace('export const disposed', 'const disposed')}`
+    );
+    run(process.execPath, ['auth-consumer.cjs']);
+
     const declarationConsumer =
         consumer +
         `
@@ -379,6 +426,29 @@ export async function checkPortalHelpers(portal: PortalLoadedResult, client: Min
     }
     await collection.readNext(options);
     collection.destroy();
+}
+import { createAuthFlow, type AuthOwnerScope } from '@miniextensions/sdk/auth';
+import type { PasswordRequiredResult, LoginPageResult } from '@miniextensions/sdk';
+export async function checkAuthTypes(page: PasswordRequiredResult | LoginPageResult, client: MiniExtensionsClient, getScope: () => AuthOwnerScope) {
+    const flow = createAuthFlow({client, page, getScope});
+    try {
+        if (flow.screen === 'password') {
+            const result = await flow.verifyPassword({extensionPassword:'Entered password'});
+            if (result.type === 'correct' && flow.isCurrent()) flow.applySession(result.grant);
+        } else {
+            const result = await flow.login({loginCredentials:{Email:'person@example.test'},loginRecordId:'recExample',fallbackPhoneVerificationNumber:'+15555550100'});
+            if (result.type === 'found-record' && flow.isCurrent()) flow.applySession(result.grant);
+            if (result.type === 'verification-message-sent' && flow.isCurrent()) {
+                const grant = await flow.confirmVerificationCode({challenge:result.challenge,verificationCode:'123456'});
+                if (flow.isCurrent()) flow.applySession(grant);
+            }
+        }
+    } finally { flow.destroy(); }
+}
+export async function checkSignupTypes(page: LoginPageResult, client: MiniExtensionsClient, getScope: () => AuthOwnerScope) {
+    const flow = createAuthFlow({client,page,getScope});
+    try { const result = await flow.signUp({signUpCredentials:{Email:'person@example.test'}}); return result.ok; }
+    finally { flow.destroy(); }
 }
 export function renderChoiceNames(field: RuntimeFieldSchema): string[] {
     const config = field.airtableField.config;
@@ -454,9 +524,9 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
     });
     assert(
         !Object.keys(bundled.metafile.inputs).some((path) =>
-            /\/sdk\/dist\/esm\/(?:ui|forms|portals)\//.test(path)
+            /\/sdk\/dist\/esm\/(?:ui|forms|portals|auth)\//.test(path)
         ),
-        'Core consumer unexpectedly bundled optional UI/Form/Portal helpers'
+        'Core consumer unexpectedly bundled optional UI/Form/Portal/Auth helpers'
     );
     const browserContext = { URL, TextEncoder, fetch };
     runInNewContext(bundled.outputFiles[0].text, browserContext, {
@@ -496,7 +566,9 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
         '--no-fund',
         '--package-lock=false',
         'react@19.2.0',
+        'react-dom@19.2.0',
         '@types/react@19.2.2',
+        '@types/react-dom@19.2.2',
     ]);
     const reactSources = reactRecipes.map(([, code], index) => {
         const filename = `ui-react-${index}.tsx`;
@@ -517,6 +589,62 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
         'react-jsx',
         ...reactSources,
     ]);
+
+    const authGuide = readFileSync(
+        join(installedPackage, 'docs/auth.md'),
+        'utf8'
+    );
+    const authGuideSources = [
+        ...authGuide.matchAll(/```(ts|tsx)\n([\s\S]*?)\n```/g),
+    ].map(([, language, code], index) => {
+        const filename = `auth-guide-${index}.${language}`;
+        writeFileSync(join(temporaryDirectory, filename), code);
+        return filename;
+    });
+    assert(authGuideSources.length > 0, 'Missing copyable auth recipes');
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--target',
+        'ES2022',
+        '--module',
+        'ESNext',
+        '--moduleResolution',
+        'Bundler',
+        '--jsx',
+        'react-jsx',
+        ...authGuideSources,
+    ]);
+    const authRecipeChecks = await checkAuthRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: authGuideSources,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    const authBundled = await build({
+        absWorkingDir: temporaryDirectory,
+        entryPoints: [join(temporaryDirectory, 'auth-consumer.mjs')],
+        bundle: true,
+        platform: 'browser',
+        format: 'iife',
+        globalName: 'miniExtensionsAuthExample',
+        write: false,
+        logLevel: 'silent',
+        metafile: true,
+    });
+    await assertBrowserInputs(authBundled.metafile, temporaryDirectory);
+    const authBrowserContext = {
+        URL,
+        TextEncoder,
+        fetch,
+        AbortController,
+        DOMException,
+        structuredClone,
+    };
+    runInNewContext(authBundled.outputFiles[0].text, authBrowserContext, {
+        timeout: 10000,
+    });
+    assert.equal(authBrowserContext.miniExtensionsAuthExample.disposed, true);
 
     for (const [example, directory] of [
         ['browser', browserDirectory],
@@ -636,7 +764,7 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
         join(temporaryDirectory, 'node_modules/@miniextensions/sdk/dist')
     );
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal ESM/CommonJS, declarations, doc links/recipes (6 UI lifecycle, 4 Form and ${portalRecipe.checks} Portal recipe cases), and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (6 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

@@ -85,6 +85,14 @@ hidden prefills, collects server validation, and guards stale visitor work.
 See the shipped [Form helpers guide](docs/forms.md) for draft ownership and
 fresh-load requirements after success or an uncertain save outcome.
 
+## Optional authentication flow
+
+`@miniextensions/sdk/auth` binds password and login attempts, OTP challenges,
+and explicit session application to one loaded auth screen and visitor revision.
+It reuses the runtime client; the backend remains authoritative. Your application
+owns rendering, persistence, draft cleanup and reload. See the shipped
+[authentication guide](docs/auth.md) for manual actions and cancellation recovery.
+
 ## Environments
 
 - Node.js 22 or newer, with ESM or CommonJS imports.

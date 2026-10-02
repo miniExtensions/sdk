@@ -1,0 +1,548 @@
+# Optional authentication flow
+
+`@miniextensions/sdk/auth` binds the existing password, login, verification-code
+and sign-up operations to a loaded authentication screen. It adds no backend
+operation or authorization layer. Importing it requires no DOM or React;
+importing the core client does not import it. Install the supplied private
+archive as shown in the [runtime quickstart](runtime.md#packaged-form-quickstart).
+The package has not been published to npm.
+
+The application owns loading, rendering, visitor identity and credential
+persistence. A successful helper returns an opaque grant, not a public session
+token. Apply that grant explicitly, advance your application scope, clear old
+drafts/authentication UI, then let the visitor explicitly Reload. Applying a
+session does not automatically load a Form or Portal.
+
+## React client panel
+
+This uses your application's React 19 installation; the SDK has no React peer
+dependency. Pass the `ownerScope` captured with this particular loaded `page`,
+plus the owner's live `getScope` function. `onSessionApplied` must synchronously
+advance the revision and clear the old page/drafts. `onReload` is an app-owned
+manual action; also keep a Reload control outside this panel because applying
+a session removes the old authentication page. The next recipe supplies those
+owner and load boundaries.
+
+`signUpFieldNames` is explicit application input for your configured sign-up
+form. Omit it if sign-up is unavailable. The backend enforces the published
+rules; never infer navigation URLs from untyped `publicFields`.
+
+```tsx
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import {
+    SDKError,
+    type LoginPageResult,
+    type MiniExtensionsClient,
+    type PasswordRequiredResult,
+} from '@miniextensions/sdk';
+import {
+    createAuthFlow,
+    type AuthOwnerScope as Scope,
+    type AuthFlow as Flow,
+    type AuthCredentialGrant as Grant,
+    type AuthVerificationChallenge as Challenge,
+} from '@miniextensions/sdk/auth';
+type Props = {
+    client: MiniExtensionsClient;
+    page: PasswordRequiredResult | LoginPageResult;
+    ownerScope: Scope;
+    getScope: () => Scope;
+    onSessionApplied: () => void;
+    onReload: () => void;
+    signUpFieldNames?: readonly string[];
+};
+type Entry = {
+    flow: Flow;
+    page: Props['page'];
+    client: MiniExtensionsClient;
+    scope: Scope;
+    generation: number;
+    disposed: boolean;
+    busy: boolean;
+    grant: Grant | null;
+    challenge: Challenge | null;
+};
+const initial = {
+    ready: false,
+    busy: false,
+    message: '',
+    canApply: false,
+    canConfirm: false,
+    recovery: false,
+};
+
+export function AuthPanel(props: Props) {
+    const latest = useRef(props);
+    latest.current = props;
+    const entry = useRef<Entry | null>(null);
+    const inputs = useRef<Record<string, HTMLInputElement | null>>({});
+    const password = useRef<HTMLInputElement>(null);
+    const code = useRef<HTMLInputElement>(null);
+    const [view, setView] = useState(initial);
+    const notice = (message: string, patch: Partial<typeof initial> = {}) =>
+        setView((state) => ({ ...state, ...patch, message }));
+    const clearInputs = () => {
+        for (const input of Object.values(inputs.current))
+            if (input) input.value = '';
+        if (password.current) password.current.value = '';
+        if (code.current) code.current.value = '';
+    };
+    const owns = (e: Entry, generation = e.generation): boolean => {
+        const p = latest.current;
+        if (
+            entry.current !== e ||
+            e.disposed ||
+            e.generation !== generation ||
+            p.page !== e.page ||
+            p.client !== e.client ||
+            p.ownerScope.ownerId !== e.scope.ownerId ||
+            p.ownerScope.revision !== e.scope.revision
+        )
+            return false;
+        try {
+            const scope = p.getScope();
+            return (
+                scope.ownerId === e.scope.ownerId &&
+                scope.revision === e.scope.revision &&
+                entry.current === e &&
+                !e.disposed &&
+                e.generation === generation
+            );
+        } catch {
+            return false;
+        }
+    };
+    const current = (e: Entry, generation = e.generation) =>
+        owns(e, generation) && e.flow.isCurrent();
+    useEffect(() => {
+        const scope = props.getScope();
+        if (
+            scope.ownerId !== props.ownerScope.ownerId ||
+            scope.revision !== props.ownerScope.revision
+        )
+            return;
+        const e: Entry = {
+            flow: createAuthFlow({
+                client: props.client,
+                page: props.page,
+                getScope: () => latest.current.getScope(),
+            }),
+            page: props.page,
+            client: props.client,
+            scope: { ...props.ownerScope },
+            generation: 0,
+            disposed: false,
+            busy: false,
+            grant: null,
+            challenge: null,
+        };
+        entry.current = e;
+        clearInputs();
+        setView({ ...initial, ready: true });
+        return () => {
+            e.disposed = true;
+            e.generation++;
+            e.grant = null;
+            e.challenge = null;
+            e.flow.destroy();
+            if (entry.current === e) entry.current = null;
+        };
+    }, [
+        props.client,
+        props.page,
+        props.ownerScope.ownerId,
+        props.ownerScope.revision,
+    ]);
+
+    const run = async (
+        operation: 'password' | 'login' | 'code' | 'signup',
+        action: (e: Entry, active: () => boolean) => Promise<void>
+    ) => {
+        const e = entry.current;
+        if (!e || !current(e) || e.busy || view.recovery) return;
+        e.busy = true;
+        const generation = ++e.generation;
+        const active = () => current(e, generation);
+        e.grant = null;
+        if (operation !== 'code') e.challenge = null;
+        setView({ ...initial, ready: true, busy: true, message: 'Working…' });
+        try {
+            await action(e, active);
+            if (!active()) return;
+        } catch (cause) {
+            if (!owns(e, generation)) return;
+            const rejectedCode =
+                operation === 'code' &&
+                cause instanceof SDKError &&
+                cause.kind === 'api' &&
+                e.flow.isCurrent();
+            notice(
+                rejectedCode
+                    ? 'Code was not accepted. Enter it again or Reload.'
+                    : 'Action did not complete. Check its outcome, then Reload.',
+                {
+                    canConfirm: rejectedCode && e.challenge != null,
+                    recovery: !rejectedCode,
+                }
+            );
+        } finally {
+            if (owns(e, generation)) {
+                e.busy = false;
+                setView((state) => ({ ...state, busy: false }));
+            }
+        }
+    };
+    const credentials = (prefix: string, names: readonly string[]) => {
+        const values = Object.fromEntries(
+            names.map((name) => [
+                name,
+                inputs.current[`${prefix}:${name}`]?.value ?? '',
+            ])
+        );
+        clearInputs();
+        return values;
+    };
+    const verify = () =>
+        void run('password', async (e, active) => {
+            if (e.flow.screen !== 'password') return;
+            const extensionPassword = password.current?.value ?? '';
+            clearInputs();
+            const result = await e.flow.verifyPassword({ extensionPassword });
+            if (!active()) return;
+            if (result.type === 'correct') e.grant = result.grant;
+            notice(
+                {
+                    correct: 'Password verified. Apply session to continue.',
+                    wrong: 'Password was not accepted.',
+                    blocked: 'Password attempts are blocked.',
+                }[result.type],
+                { canApply: result.type === 'correct' }
+            );
+        });
+    const login = () =>
+        void run('login', async (e, active) => {
+            if (
+                e.flow.screen !== 'login_page' ||
+                e.page.extensionScreen !== 'login_page'
+            )
+                return;
+            const result = await e.flow.login({
+                loginCredentials: credentials(
+                    'login',
+                    e.page.payload.loginFieldNames
+                ),
+            });
+            if (!active()) return;
+            if (result.type === 'found-record') {
+                e.grant = result.grant;
+                notice('Login accepted. Apply session to continue.', {
+                    canApply: true,
+                });
+            } else if (result.type === 'no-record')
+                notice('No login record found.');
+            else {
+                e.challenge = result.challenge;
+                notice(`Enter the code sent to ${result.emailOrPhoneNumber}.`, {
+                    canConfirm: true,
+                });
+            }
+        });
+    const confirm = () =>
+        void run('code', async (e, active) => {
+            if (e.flow.screen !== 'login_page' || !e.challenge) return;
+            const verificationCode = code.current?.value ?? '';
+            clearInputs();
+            const grant = await e.flow.confirmVerificationCode({
+                challenge: e.challenge,
+                verificationCode,
+            });
+            if (!active()) return;
+            e.grant = grant;
+            e.challenge = null;
+            notice('Code accepted. Apply session to continue.', {
+                canApply: true,
+            });
+        });
+    const signup = () =>
+        void run('signup', async (e, active) => {
+            if (e.flow.screen !== 'login_page') return;
+            const result = await e.flow.signUp({
+                signUpCredentials: credentials(
+                    'signup',
+                    latest.current.signUpFieldNames ?? []
+                ),
+            });
+            if (!active()) return;
+            notice(
+                result.ok
+                    ? 'Sign-up accepted; this does not log you in. Follow your app’s next step, then Reload.'
+                    : 'Sign-up did not complete. Check your account before another attempt.',
+                { recovery: true }
+            );
+        });
+    const apply = () => {
+        const e = entry.current;
+        if (!e || !current(e) || !e.grant || e.busy) return;
+        try {
+            e.flow.applySession(e.grant); // Never expose the returned session.
+            const owned = owns(e);
+            e.grant = null;
+            e.challenge = null;
+            e.disposed = true;
+            e.generation++;
+            if (owned) latest.current.onSessionApplied(); // Advance + clear; no reload.
+        } catch {
+            if (owns(e))
+                notice(
+                    'Session application did not complete. Reload explicitly.',
+                    {
+                        busy: false,
+                        canApply: false,
+                        canConfirm: false,
+                        recovery: true,
+                    }
+                );
+        }
+    };
+    const cancel = () => {
+        const e = entry.current;
+        if (!e || !current(e)) return;
+        e.generation++;
+        e.busy = false;
+        e.grant = null;
+        e.challenge = null;
+        clearInputs();
+        e.flow.cancel();
+        if (owns(e))
+            notice(
+                'Cancelled. Check any delivery/sign-up outcome, then Reload.',
+                {
+                    busy: false,
+                    canApply: false,
+                    canConfirm: false,
+                    recovery: true,
+                }
+            );
+    };
+    const visible =
+        entry.current?.page === props.page &&
+        entry.current.client === props.client &&
+        !entry.current.disposed &&
+        entry.current.scope.ownerId === props.ownerScope.ownerId &&
+        entry.current.scope.revision === props.ownerScope.revision
+            ? view
+            : initial;
+    const blocked = !visible.ready || visible.busy || visible.recovery;
+    const fields = (prefix: string, names: readonly string[]) =>
+        names.map((name) => (
+            <label key={`${props.ownerScope.revision}:${prefix}:${name}`}>
+                {name}
+                <input
+                    type={
+                        props.page.extensionScreen === 'login_page' &&
+                        props.page.payload.fieldNamesToSchemas[name]
+                            ?.miniExtConfig?.obscurePassword === true
+                            ? 'password'
+                            : 'text'
+                    }
+                    ref={(node) => {
+                        inputs.current[`${prefix}:${name}`] = node;
+                    }}
+                    autoComplete="off"
+                />
+            </label>
+        ));
+    return (
+        <section
+            key={`${props.ownerScope.ownerId}:${props.ownerScope.revision}`}
+            aria-label="Authentication"
+        >
+            <p role="status">{visible.message}</p>
+            {props.page.extensionScreen === 'password' ? (
+                <fieldset disabled={blocked}>
+                    <label>
+                        Extension password
+                        <input
+                            type="password"
+                            ref={password}
+                            autoComplete="off"
+                        />
+                    </label>
+                    <button type="button" onClick={verify}>
+                        Verify password
+                    </button>
+                </fieldset>
+            ) : (
+                <>
+                    <fieldset disabled={blocked}>
+                        <legend>Login</legend>
+                        {fields('login', props.page.payload.loginFieldNames)}
+                        <button type="button" onClick={login}>
+                            Log in
+                        </button>
+                    </fieldset>
+                    {props.signUpFieldNames?.length ? (
+                        <fieldset disabled={blocked}>
+                            <legend>Sign up</legend>
+                            {fields('signup', props.signUpFieldNames)}
+                            <button type="button" onClick={signup}>
+                                Sign up
+                            </button>
+                        </fieldset>
+                    ) : null}
+                    {visible.canConfirm ? (
+                        <fieldset disabled={blocked}>
+                            <label>
+                                Verification code
+                                <input
+                                    ref={code}
+                                    autoComplete="one-time-code"
+                                />
+                            </label>
+                            <button type="button" onClick={confirm}>
+                                Confirm code
+                            </button>
+                        </fieldset>
+                    ) : null}
+                </>
+            )}
+            <button
+                type="button"
+                disabled={blocked || !visible.canApply}
+                onClick={apply}
+            >
+                Apply session
+            </button>
+            <button type="button" disabled={!visible.ready} onClick={cancel}>
+                Cancel
+            </button>
+            <button type="button" onClick={() => latest.current.onReload()}>
+                Reload
+            </button>
+        </section>
+    );
+}
+```
+
+Raw inputs are cleared after a manual action. Opaque grants/challenges stay in a
+local ref, never React state, logs, storage or DOM attributes. Every awaited
+result is checked for current flow, page, owner/revision and operation generation
+before displaying a destination/status or retaining a grant. Wrong codes reject
+with `SDKError`; there is no invented “wrong-code” success-result tag. A
+successful `{ok}` sign-up response is not authentication.
+
+## App-owned load and revision
+
+Use this owner outside React, or keep it in an application ref. `onLoaded`
+receives the actual guarded result and its captured scope; render an
+`AuthPanel` only for `password`/`login_page`, and route other results in your app.
+`clearVisitorState` must remove the previous page/drafts and clear their stores.
+Bind `owner.sessionApplied` to `onSessionApplied`, and a deliberate Reload
+button to `owner.load(input)` with your app's error handling.
+
+```ts
+import type {
+    LoadExtensionInput,
+    LoadExtensionResult,
+    MiniExtensionsClient,
+} from '@miniextensions/sdk';
+
+export function makeAuthScreenOwner(
+    client: MiniExtensionsClient,
+    options: {
+        initialOwnerId: string;
+        clearVisitorState: () => void;
+        onLoaded: (
+            page: LoadExtensionResult,
+            scope: { ownerId: string; revision: number }
+        ) => void;
+    }
+) {
+    let scope = { ownerId: options.initialOwnerId, revision: 0 };
+    let generation = 0;
+    let active: AbortController | null = null;
+    let disposed = false;
+    const invalidate = (ownerId = scope.ownerId) => {
+        if (disposed) throw new Error('Owner disposed');
+        const previous = active;
+        active = null;
+        scope = { ownerId, revision: scope.revision + 1 };
+        const version = ++generation;
+        try {
+            options.clearVisitorState();
+        } finally {
+            previous?.abort();
+        }
+        return version;
+    };
+    return {
+        getScope: () => ({ ...scope }),
+        // A → B → A gets increasing revisions even if final credentials match.
+        // Also call for same-owner connection/session/token/context changes.
+        changeOwner: invalidate,
+        sessionApplied: () => invalidate(), // Explicit apply callback; no reload.
+        async load(input: LoadExtensionInput) {
+            const version = invalidate(); // Explicit Reload retires the old page.
+            if (disposed || generation !== version || active !== null)
+                throw new Error('A newer load owns this screen.');
+            const controller = new AbortController();
+            active = controller;
+            const captured = { ...scope };
+            const session = { ...client.getSession() };
+            controller.signal.throwIfAborted();
+            if (disposed || active !== controller || generation !== version)
+                throw new Error('A newer load owns this screen.');
+            const page = await client.loadExtension(input, {
+                session,
+                signal: controller.signal,
+            });
+            controller.signal.throwIfAborted();
+            const now = client.getSession();
+            if (
+                disposed ||
+                active !== controller ||
+                generation !== version ||
+                scope.ownerId !== captured.ownerId ||
+                scope.revision !== captured.revision ||
+                Object.keys(now).length !== Object.keys(session).length ||
+                !Object.keys(session).every(
+                    (key) =>
+                        Object.hasOwn(now, key) && now[key] === session[key]
+                )
+            ) {
+                throw new Error('Visitor/context changed; discard this load.');
+            }
+            controller.signal.throwIfAborted();
+            options.onLoaded(page, captured); // Only this guarded result renders.
+        },
+        destroy() {
+            if (disposed) return;
+            disposed = true;
+            scope = { ...scope, revision: scope.revision + 1 };
+            generation++;
+            const previous = active;
+            active = null;
+            try {
+                options.clearVisitorState();
+            } finally {
+                previous?.abort();
+            }
+        },
+    };
+}
+```
+
+Advance the revision on every visitor, connection, session, token or context
+transition, including anonymous visitors and A → B → A. Dispose the old flow
+and create a fresh one for the next loaded screen. Credential equality alone
+cannot identify those transitions.
+
+Cancellation does not roll back verification delivery or sign-up. After an
+uncertain result, inspect the account/delivery outcome and explicitly Reload
+before deciding on another manual action. Neither helper nor recipe retries,
+resends, signs up, applies credentials or reloads automatically. The backend
+remains authoritative for published passwords, login/sign-up rules, verification
+policy, visitor permissions and all subsequent Form/Portal actions. Local
+recipe tests do not establish staging compatibility.

@@ -106,13 +106,18 @@ export async function mountFormSelects(
         throw error;
     }
     host.replaceChildren(...controls.map((control) => control.element));
+    let destroyed = false;
     return {
         form,
         getDraft: () => ({ ...form.payload.formRecord, data: { ...data } }),
         getChangedFieldIds: () => [...changed],
         destroy() {
-            for (const control of controls) control.destroy();
-            host.replaceChildren();
+            if (destroyed) return;
+            destroyed = true;
+            for (const control of controls) {
+                control.destroy();
+                control.element.remove();
+            }
         },
     };
 }
@@ -241,15 +246,30 @@ export async function mountFormLinkedField(
         description: 'Search the records available to this visitor.',
     });
     host.replaceChildren(control.element);
+    let destroyed = false;
     const destroy = (): void => {
+        if (destroyed) return;
+        destroyed = true;
+        signal.removeEventListener('abort', destroy);
         control.destroy();
         model.destroy();
-        host.replaceChildren();
-        signal.removeEventListener('abort', destroy);
+        control.element.remove();
     };
     signal.addEventListener('abort', destroy, { once: true });
-    await model.reload(); // Mounting alone does not fetch.
-    return { model, getDraftValue: () => [...draftValue], destroy };
+    try {
+        signal.throwIfAborted();
+        await model.reload(); // Mounting alone does not fetch.
+        signal.throwIfAborted();
+        if (loadOptions.isCurrent?.() === false) {
+            throw new Error(
+                'Visitor changed; recreate the field for the new scope.'
+            );
+        }
+        return { model, getDraftValue: () => [...draftValue], destroy };
+    } catch (error) {
+        destroy();
+        throw error;
+    }
 }
 ```
 

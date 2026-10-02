@@ -20,6 +20,7 @@ import {
     assertInstalledArchive,
     assertPackedDocLinks,
 } from './package-checks.mjs';
+import { checkUiRecipes } from './ui-recipe-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryDirectory = realpathSync(
@@ -146,6 +147,11 @@ try {
         'Bundler',
         ...uiGuideSources,
     ]);
+    await checkUiRecipes({
+        consumerDirectory: temporaryDirectory,
+        guideSources: uiGuideSources,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
 
     const consumer = `
 import { FormulaRunner, AirtableFieldType } from '@miniextensions/sdk/formulas';
@@ -464,7 +470,7 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
         join(temporaryDirectory, 'node_modules/@miniextensions/sdk/dist')
     );
     console.log(
-        `${packageMetadata.name}: packed core/UI ESM/CommonJS, declarations, doc links/quickstart, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI ESM/CommonJS, declarations, doc links/quickstart, UI recipe lifecycles, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

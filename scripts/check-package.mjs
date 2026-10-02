@@ -21,6 +21,7 @@ import {
     assertPackedDocLinks,
 } from './package-checks.mjs';
 import { checkUiRecipes } from './ui-recipe-checks.mjs';
+import { checkFormRecipe } from './form-recipe-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryDirectory = realpathSync(
@@ -73,6 +74,7 @@ try {
                 path === 'docs/formulas.md' ||
                 path === 'docs/runtime.md' ||
                 path === 'docs/ui.md' ||
+                path === 'docs/forms.md' ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/'),
             `Unexpected packed file: ${path}`
@@ -147,9 +149,43 @@ try {
         'Bundler',
         ...uiGuideSources,
     ]);
+
     await checkUiRecipes({
         consumerDirectory: temporaryDirectory,
         guideSources: uiGuideSources,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+
+    const formsGuide = readFileSync(
+        join(installedPackage, 'docs/forms.md'),
+        'utf8'
+    );
+    const formsGuideSources = [
+        ...formsGuide.matchAll(/```ts\n([\s\S]*?)\n```/g),
+    ].map(([, code], index) => {
+        const filename = `forms-guide-${index}.ts`;
+        writeFileSync(join(temporaryDirectory, filename), code);
+        return filename;
+    });
+    assert(
+        formsGuideSources.length > 0,
+        'Missing complete Form helper recipes'
+    );
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--target',
+        'ES2022',
+        '--module',
+        'ESNext',
+        '--moduleResolution',
+        'Bundler',
+        ...formsGuideSources,
+    ]);
+    await checkFormRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: formsGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
     });
 
@@ -218,6 +254,32 @@ selection.destroy();\n`
     );
     run(process.execPath, ['ui-consumer.cjs']);
 
+    const formsConsumer = `
+import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController } from '@miniextensions/sdk/forms';
+if ([openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController].some(value => typeof value !== 'function')) throw new Error('Missing Form helper export');
+const store = new FormDraftStore();
+const draft = store.open({extensionId:'extExample',recordId:null,parent:null},{fldExample:['Design']},[]);
+store.write(draft,'fldExample',['Design','Support']);
+if (store.snapshot(draft)?.data.fldExample.join(',') !== 'Design,Support') throw new Error('Packed Form draft failed');
+store.clear();
+if (store.snapshot(draft) !== null) throw new Error('Packed Form draft did not expire');
+`;
+    writeFileSync(
+        join(temporaryDirectory, 'forms-consumer.mjs'),
+        formsConsumer
+    );
+    run(process.execPath, ['forms-consumer.mjs']);
+    writeFileSync(
+        join(temporaryDirectory, 'forms-consumer.cjs'),
+        `const { FormDraftStore, createFormController } = require('@miniextensions/sdk/forms');
+if (typeof createFormController !== 'function') throw new Error('Missing CommonJS Form controller export');
+const store = new FormDraftStore();
+const draft = store.open({extensionId:'extExample',recordId:null,parent:null},{fldExample:'Draft'},[]);
+if (store.snapshot(draft)?.data.fldExample !== 'Draft') throw new Error('CommonJS Form draft failed');
+store.clear();\n`
+    );
+    run(process.execPath, ['forms-consumer.cjs']);
+
     const declarationConsumer =
         consumer +
         `
@@ -235,6 +297,20 @@ export function checkUiTypes(field: RuntimeFieldSchema, host: HTMLElement, clien
     linked.destroy(); model.destroy(); native.destroy();
 }
 import type { FormLoadedResult, RuntimeFieldSchema } from '@miniextensions/sdk';
+import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController, type FormSaveOptions, type FormOwnerScope } from '@miniextensions/sdk/forms';
+export function checkFormHelpers(loaded: FormLoadedResult, client: MiniExtensionsClient, options: FormSaveOptions, getScope: () => FormOwnerScope) {
+    const store = new FormDraftStore<AirtableValue>();
+    const draft = openLoadedFormDraft({store, loaded});
+    const snapshot = store.snapshot(draft);
+    if (snapshot !== null) createFormSaveInput({loaded, draft: snapshot, options});
+    const descriptors = describeLoadedFormFields(loaded);
+    const controller = createFormController({client, loaded, saveOptions: options, getScope, store});
+    controller.subscribe(state => void state.validationErrors);
+    controller.write(descriptors[0]?.fieldId ?? 'fldExample', ['Design']);
+    controller.save().then(result => normalizeFormSaveResult(result.raw, loaded));
+    controller.destroy();
+}
+import type { AirtableValue } from '@miniextensions/sdk';
 export function renderChoiceNames(field: RuntimeFieldSchema): string[] {
     const config = field.airtableField.config;
     switch (config.type) {
@@ -309,9 +385,9 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
     });
     assert(
         !Object.keys(bundled.metafile.inputs).some((path) =>
-            path.includes('/sdk/dist/esm/ui/')
+            /\/sdk\/dist\/esm\/(?:ui|forms)\//.test(path)
         ),
-        'Core consumer unexpectedly bundled UI'
+        'Core consumer unexpectedly bundled optional UI/Form helpers'
     );
     const browserContext = { URL, TextEncoder, fetch };
     runInNewContext(bundled.outputFiles[0].text, browserContext, {
@@ -470,7 +546,7 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
         join(temporaryDirectory, 'node_modules/@miniextensions/sdk/dist')
     );
     console.log(
-        `${packageMetadata.name}: packed core/UI ESM/CommonJS, declarations, doc links/quickstart, UI recipe lifecycles, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form ESM/CommonJS, declarations, doc links/recipes (6 UI lifecycle and 4 Form recipe cases), and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

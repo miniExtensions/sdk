@@ -64,6 +64,10 @@ dates, checkbox, and select inputs. DateTime inputs retain an explicit ISO
 string; there is no implicit timezone conversion. Complex and computed values
 are displayed intact rather than converted to text for saving.
 
+The example imports its draft store and load/save helpers from
+`@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
+revisions, requests, cancellation, and when to discard drafts.
+
 - Choose **Save** to submit. Server validation is shown next to the Form; a
   failed validation keeps your values. A successful standalone create disables
   repeated submission until you choose **Reload**.

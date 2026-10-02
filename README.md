@@ -77,6 +77,14 @@ to the core client. Use the [UI guide](docs/ui.md) for field values, custom
 styling, React/Next integration, and visitor/context cleanup. Choices edit your
 application's draft; saving and server permissions remain with the runtime.
 
+## Headless Form helpers
+
+`@miniextensions/sdk/forms` supplies optional headless Form drafts, ordered
+field descriptors and explicit save orchestration. It keeps native values and
+hidden prefills, collects server validation, and guards stale visitor work.
+See the shipped [Form helpers guide](docs/forms.md) for draft ownership and
+fresh-load requirements after success or an uncertain save outcome.
+
 ## Environments
 
 - Node.js 22 or newer, with ESM or CommonJS imports.

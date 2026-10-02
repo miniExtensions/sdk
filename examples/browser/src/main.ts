@@ -17,6 +17,11 @@ import {
     type AirtableValue,
 } from '@miniextensions/sdk/formulas';
 import {
+    createFormSaveInput,
+    normalizeFormSaveResult,
+    openLoadedFormDraft,
+} from '@miniextensions/sdk/forms';
+import {
     button,
     element,
     inputById,
@@ -442,21 +447,11 @@ const renderForm = (page: FormLoadedResult): void => {
                 render();
             })
         );
-    const draft = visitor.drafts.open(
-        {
-            extensionId: page.extensionId,
-            recordId:
-                page.payload.formRecord.type === 'edit'
-                    ? page.payload.formRecord.recordId
-                    : null,
-            parent: visitor.formParentScope,
-        },
-        page.payload.formRecord.data,
-        [
-            ...page.payload.formFieldIdsWithUnsavedChanges,
-            ...(page.payload.urlPrefilledFieldIds ?? []),
-        ]
-    );
+    const draft = openLoadedFormDraft({
+        store: visitor.drafts,
+        loaded: page,
+        parent: visitor.formParentScope,
+    });
     const controls = new Map<string, FieldControl>();
     const fields = element('div', undefined, 'fields');
     for (const fieldId of page.payload.fieldIdsInForm) {
@@ -798,52 +793,34 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (control.editable) control.read();
             const snapshot = visitor.drafts.snapshot(draft);
             if (snapshot == null) return;
-            const result = await client.forms.save(
-                {
-                    extensionAccessToken: page.payload.extensionAccessToken,
-                    formRecord: {
-                        ...page.payload.formRecord,
-                        data: snapshot.data,
+            const rawResult = await client.forms.save(
+                createFormSaveInput({
+                    loaded: page,
+                    draft: snapshot,
+                    options: {
+                        captchaVal: null,
+                        isComputeMode: false,
+                        searchQuery: connection?.input.query ?? {},
+                        context,
+                        conditionalLinkedRecordFieldIdsToFilteringValues: {},
                     },
-                    captchaVal: null,
-                    isComputeMode: false,
-                    searchQuery: connection?.input.query ?? {},
-                    context,
-                    conditionalLinkedRecordFieldIdsToFilteringValues: {},
-                    formFieldIdsWithUnsavedChanges: snapshot.dirtyFieldIds,
-                },
+                }),
                 { signal }
             );
             if (!current()) return;
+            const normalized = normalizeFormSaveResult(rawResult, page);
             errors.replaceChildren();
-            if (result.type === 'error') {
-                for (const error of result.formValidationErrors)
+            if (normalized.type === 'error') {
+                for (const error of normalized.validationErrors)
                     errors.append(
                         element(
                             'li',
                             `${error.fieldTitle}: ${error.errorMessage}`
                         )
                     );
-                for (const [fieldId, error] of Object.entries(
-                    result.formErrors
-                ))
-                    if (
-                        error != null &&
-                        !result.formValidationErrors.some(
-                            (validationError) =>
-                                validationError.fieldId === fieldId &&
-                                validationError.errorMessage === error
-                        )
-                    )
-                        errors.append(
-                            element(
-                                'li',
-                                `${page.payload.fieldIdsToSchemas[fieldId]?.airtableField.name ?? fieldId}: ${error}`
-                            )
-                        );
-                if (result.concurrentEditErrorMessage != null)
+                if (normalized.concurrentEditErrorMessage != null)
                     errors.append(
-                        element('li', result.concurrentEditErrorMessage)
+                        element('li', normalized.concurrentEditErrorMessage)
                     );
                 status(
                     'The Form was not saved. Review the validation errors.',
@@ -851,6 +828,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 );
                 return;
             }
+            const result = normalized.raw;
             visitor.drafts.discard(draft);
             visitor.formParentScope = null;
             if (visitor.root != null && result.loggedInUserRecord != null) {

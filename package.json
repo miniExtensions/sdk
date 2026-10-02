@@ -26,6 +26,16 @@
                 "default": "./dist/cjs/ui/index.js"
             }
         },
+        "./forms": {
+            "import": {
+                "types": "./dist/esm/forms/index.d.ts",
+                "default": "./dist/esm/forms/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/forms/index.d.ts",
+                "default": "./dist/cjs/forms/index.js"
+            }
+        },
         "./formulas": {
             "import": {
                 "types": "./dist/esm/formulas/index.d.ts",
@@ -43,6 +53,7 @@
         "docs/formulas.md",
         "docs/runtime.md",
         "docs/ui.md",
+        "docs/forms.md",
         "README.md",
         "LICENSE",
         "THIRD_PARTY_NOTICES.md"

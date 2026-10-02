@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import {
-    FormDraftStore,
-    type FormDraftScope,
-} from '../examples/browser/src/drafts.js';
+import { FormDraftStore, type FormDraftScope } from '../src/forms/drafts.js';
 
 type Attachment = { url: string; filename: string; size: number };
 type Value = string | null | Attachment[];

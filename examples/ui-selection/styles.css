@@ -1,0 +1,252 @@
+:root {
+    color-scheme: light;
+    font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    color: #172c2a;
+    background: #f3f5ef;
+    line-height: 1.5;
+}
+* {
+    box-sizing: border-box;
+}
+body {
+    margin: 0;
+}
+main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 48px 28px;
+}
+header {
+    max-width: 760px;
+    margin-bottom: 30px;
+}
+.eyebrow {
+    margin: 0 0 10px;
+    color: #477062;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+h1 {
+    font-size: clamp(2.5rem, 5vw, 4rem);
+    line-height: 1.08;
+    letter-spacing: -0.04em;
+    margin: 0 0 20px;
+}
+h2 {
+    font-size: 1.35rem;
+    line-height: 1.25;
+    margin: 0 0 16px;
+}
+h3 {
+    font-size: 0.9rem;
+    margin: 24px 0 8px;
+}
+.intro {
+    font-size: 1.1rem;
+    color: #4b615b;
+}
+.scope {
+    border: 1px solid #c9d8ce;
+    border-left: 4px solid #487d63;
+    padding: 20px 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    background: #e8efe5;
+}
+.scope h2 {
+    margin-bottom: 8px;
+}
+.scope p {
+    margin: 0 0 12px;
+}
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+.card {
+    background: #fff;
+    border: 1px solid #d8e1d8;
+    border-radius: 14px;
+    padding: 26px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px #173b2b04;
+}
+label {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+select,
+input[type='search'],
+input[type='number'] {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    padding: 10px 12px;
+    font: inherit;
+    color: inherit;
+    background: #fff;
+    border: 1px solid #9bafa4;
+    border-radius: 6px;
+    margin-top: 6px;
+}
+select[multiple] {
+    min-height: 115px;
+}
+button {
+    background: #e9f2ec;
+    color: #244e3b;
+    border: 1px solid #aec6b7;
+    border-radius: 6px;
+    padding: 7px 11px;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+button:hover:enabled {
+    background: #d8e9df;
+}
+button:disabled,
+input:disabled,
+select:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+:focus-visible {
+    outline: 3px solid #2168b7;
+    outline-offset: 3px;
+}
+.hint {
+    color: #5c6c64;
+    font-size: 0.8rem;
+}
+.switches {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.switches label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 400;
+    font-size: 0.85rem;
+}
+.actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+pre {
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    background: #f4f7f3;
+    border: 1px solid #e1e7df;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    line-height: 1.6;
+    min-height: 48px;
+}
+.formula {
+    font-family: ui-monospace, monospace;
+    font-size: 1.15rem;
+}
+.formula output {
+    color: #285d46;
+    font-weight: 700;
+}
+footer {
+    color: #5c6c64;
+    font-size: 0.85rem;
+}
+#harness-error {
+    color: #a13024;
+}
+#scope-status {
+    display: inline-block;
+    margin-top: 10px;
+    color: #315640;
+    font-size: 0.85rem;
+}
+[data-ui='select-control'] {
+    margin-bottom: 20px;
+}
+[data-ui='selection-control'] {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+[data-ui='choices'] {
+    border: 1px solid #d8e1d8;
+    border-radius: 8px;
+    padding: 12px;
+}
+[data-ui='choices'] legend {
+    padding: 0 5px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+[data-ui='choice-options'] {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+[data-ui='choice'] {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 400;
+    padding: 8px;
+    background: #f5f8f4;
+    border-radius: 6px;
+}
+[data-ui='selected'] {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+[data-ui='selected-options'] {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+[data-ui='selected-option'] {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 8px;
+    background: #e9f2ec;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+[data-ui='remove'] {
+    padding: 2px 7px;
+}
+[data-ui='error'] {
+    color: #a13024;
+}
+[data-ui='status'],
+[data-ui='description'] {
+    font-size: 0.85rem;
+    color: #5c6c64;
+}
+@media (max-width: 740px) {
+    main {
+        padding: 32px 18px;
+    }
+    .grid {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+    .card {
+        padding: 20px;
+    }
+}
+[hidden] {
+    display: none !important;
+}

@@ -16,6 +16,16 @@
                 "default": "./dist/cjs/runtime/index.js"
             }
         },
+        "./ui": {
+            "import": {
+                "types": "./dist/esm/ui/index.d.ts",
+                "default": "./dist/esm/ui/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/ui/index.d.ts",
+                "default": "./dist/cjs/ui/index.js"
+            }
+        },
         "./formulas": {
             "import": {
                 "types": "./dist/esm/formulas/index.d.ts",
@@ -32,6 +42,7 @@
         "dist/cjs",
         "docs/formulas.md",
         "docs/runtime.md",
+        "docs/ui.md",
         "README.md",
         "LICENSE",
         "THIRD_PARTY_NOTICES.md"
@@ -61,8 +72,9 @@
     },
     "devDependencies": {
         "@types/moment-duration-format": "2.2.6",
-        "@types/node": "22.10.2",
+        "@types/node": "22.20.5",
         "esbuild": "0.25.10",
+        "happy-dom": "20.0.11",
         "prettier": "3.6.2",
         "typescript": "5.9.3"
     }

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>miniExtensions SDK · Optional selection UI</title>
+        <link rel="stylesheet" href="/styles.css" />
+        <script type="module" src="/main.js"></script>
+    </head>
+    <body>
+        <main>
+            <header>
+                <p class="eyebrow">miniExtensions SDK / UI example</p>
+                <h1>Your interface.<br />Reusable field behavior.</h1>
+                <p class="intro">
+                    Native single and multi-selects, searchable linked choices,
+                    and a local formula preview. This sandbox uses synthetic
+                    data; it makes no API or Airtable requests.
+                </p>
+            </header>
+            <section class="scope" aria-labelledby="scope-heading">
+                <h2 id="scope-heading">Visitor scope</h2>
+                <p>
+                    Changing visitor clears selections and cached labels before
+                    loading the new visitor's choices.
+                </p>
+                <label for="visitor">Synthetic visitor</label>
+                <select id="visitor">
+                    <option value="Alice">Alice</option>
+                    <option value="Bob">Bob</option>
+                </select>
+                <span id="scope-status" role="status"></span>
+            </section>
+            <div class="grid">
+                <section class="card" aria-labelledby="native-heading">
+                    <p class="eyebrow">Canonical field choices</p>
+                    <h2 id="native-heading">Conventional selects</h2>
+                    <div id="single-host"></div>
+                    <div id="multi-host"></div>
+                    <p class="hint">
+                        Native multi-select: use Command on Mac or Control on
+                        Windows to toggle choices; use Shift for a range.
+                    </p>
+                    <h3>Native draft values</h3>
+                    <pre id="native-state"></pre>
+                </section>
+                <section class="card" aria-labelledby="linked-heading">
+                    <p class="eyebrow">Async options / headless model</p>
+                    <h2 id="linked-heading">Linked-record selector</h2>
+                    <div id="linked-host"></div>
+                    <h3>Interaction scenarios</h3>
+                    <div class="switches">
+                        <label
+                            ><input
+                                id="disabled"
+                                type="checkbox"
+                            />Disabled</label
+                        >
+                        <label
+                            ><input
+                                id="read-only"
+                                type="checkbox"
+                            />Read-only</label
+                        >
+                        <label
+                            ><input id="linked-single" type="checkbox" />Single
+                            linked selection</label
+                        >
+                        <label
+                            ><input id="empty" type="checkbox" />Empty
+                            results</label
+                        >
+                    </div>
+                    <div class="actions">
+                        <button id="error-once" type="button">
+                            Fail next request
+                        </button>
+                        <button id="race" type="button">
+                            Slow then fast search
+                        </button>
+                        <button id="reset-search" type="button">
+                            Reset search
+                        </button>
+                        <button id="restore-id" type="button">
+                            Restore saved ID only
+                        </button>
+                        <button id="hydrate-label" type="button">
+                            Hydrate saved label
+                        </button>
+                    </div>
+                    <p class="hint">
+                        Normal pages contain two records; the second page
+                        repeats one record to exercise de-duplication. The race
+                        scenario intentionally ignores cancellation in the slow
+                        loader.
+                    </p>
+                </section>
+            </div>
+            <section class="card" aria-labelledby="formula-heading">
+                <p class="eyebrow">Existing /formulas subpath</p>
+                <h2 id="formula-heading">Local estimate</h2>
+                <label for="quantity">Quantity</label>
+                <input id="quantity" type="number" min="0" step="1" value="2" />
+                <p class="formula">
+                    {Quantity} * 3 =
+                    <output id="formula-result" for="quantity"></output>
+                </p>
+                <p class="hint">
+                    Uses the existing FormulaRunner subset locally; it does not
+                    save or calculate canonical Airtable values.
+                </p>
+            </section>
+            <section class="grid evidence" aria-label="Visible test evidence">
+                <div class="card">
+                    <h2>Linked state</h2>
+                    <pre id="linked-state"></pre>
+                </div>
+                <div class="card">
+                    <h2>Synthetic request log</h2>
+                    <pre id="request-log"></pre>
+                </div>
+            </section>
+            <footer>
+                <p>
+                    Only explicit field interactions update this local draft. No
+                    save request runs automatically.
+                </p>
+                <p id="harness-error" role="alert"></p>
+            </footer>
+        </main>
+    </body>
+</html>

@@ -68,6 +68,15 @@ Portal reads and actions, files, comments, and cancellation. Its
 archive installation, typed field values, and a complete load-and-save flow.
 It is included in the archive and needs no access to this private repository.
 
+## Optional selection controls
+
+Import `@miniextensions/sdk/ui` for native single-select/multi-select controls,
+searchable authorized linked-record selectors, or their headless selection
+model. The optional subpath adds no browser UI framework or runtime dependency
+to the core client. Use the [UI guide](docs/ui.md) for field values, custom
+styling, React/Next integration, and visitor/context cleanup. Choices edit your
+application's draft; saving and server permissions remain with the runtime.
+
 ## Environments
 
 - Node.js 22 or newer, with ESM or CommonJS imports.
@@ -81,7 +90,8 @@ It is included in the archive and needs no access to this private repository.
 tests, both builds, and checks a packed archive from independent ESM, CommonJS,
 TypeScript, and browser-bundled consumers. Tests use owned synthetic fixtures
 and make no API calls. The full browser Form and Portal example is also
-typechecked and built from a clean copy using that newly packed archive.
+typechecked and built from a clean copy using that newly packed archive. The
+optional UI selection example receives the same full packed-consumer checks.
 
 The package remains marked private to prevent npm publication during
 development. Publishing and compatibility with the hosted runtime API are

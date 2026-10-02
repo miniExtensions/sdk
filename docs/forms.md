@@ -542,7 +542,8 @@ appropriate saved/edit/create context before deciding what to submit. There
 is no automatic retry, mutation cancellation rollback or automatic reset from
 a response. A signal already aborted before dispatch rejects without sending.
 
-Increment `getScope().revision` whenever visitor, connection, credentials,
+Advance the application-owned revision returned by `getScope` whenever visitor,
+connection, credentials,
 loaded token, record, field/filter configuration or parent context changes.
 Use a stable application owner identity, not a publishable key as an identity.
 Anonymous visitors need distinct ownership/revisions too. Increment for every

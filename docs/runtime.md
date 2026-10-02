@@ -348,7 +348,7 @@ if (extension.extensionScreen === 'portal_loaded') {
         filtersByEndUser: null,
     });
 
-    // Records are keyed by field ID in the linked table's state.
+    // Records are keyed by record ID; their field values use field IDs.
     // Display page.recordIds in order; nested records may also be returned.
     const table = page.tableIdsToLinkedTableStates['YOUR_LINKED_TABLE_ID'];
     for (const recordId of page.recordIds) {
@@ -573,7 +573,9 @@ parent configuration.
 
 ## Designing your custom interface
 
-The SDK supplies data and authorized operations rather than UI components.
+The core runtime client supplies data and authorized operations. Optional
+[selection controls](ui.md), [Form drafts and controllers](forms.md), and
+[Portal collections](portals.md) help wire those capabilities to your interface.
 Your application controls layout, conditional presentation, multi-page drafts,
 local validation hints, field formatting, CAPTCHA widgets, filtering controls,
 and visitor session persistence. The server retains its own validation and

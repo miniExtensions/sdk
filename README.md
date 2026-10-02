@@ -85,6 +85,15 @@ hidden prefills, collects server validation, and guards stale visitor work.
 See the shipped [Form helpers guide](docs/forms.md) for draft ownership and
 fresh-load requirements after success or an uncertain save outcome.
 
+## Headless Portal collections
+
+`@miniextensions/sdk/portals` supplies optional headless Portal collections,
+returned detail metadata, explicit first/next reads, and configured child Form requests.
+It keeps returned records and view detail settings intact, and guards stale
+visitor work. Use the shipped [Portal helpers guide](docs/portals.md) for
+criteria cleanup, application acceptance, and child Form context. Rendering,
+saving, unlinking, and explicit reloads remain application-owned.
+
 ## Environments
 
 - Node.js 22 or newer, with ESM or CommonJS imports.

@@ -22,6 +22,7 @@ import {
 } from './package-checks.mjs';
 import { checkUiRecipes } from './ui-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
+import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryDirectory = realpathSync(
@@ -75,6 +76,7 @@ try {
                 path === 'docs/runtime.md' ||
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
+                path === 'docs/portals.md' ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/'),
             `Unexpected packed file: ${path}`
@@ -89,12 +91,16 @@ try {
         '--ignore-scripts',
         '--no-audit',
         '--no-fund',
-        '--package-lock=false',
         join(temporaryDirectory, packed.filename),
     ]);
     const installedPackage = join(
         temporaryDirectory,
         'node_modules/@miniextensions/sdk'
+    );
+    await assertInstalledArchive(
+        temporaryDirectory,
+        join(temporaryDirectory, packed.filename),
+        packed
     );
     await assertPackedDocLinks(
         installedPackage,
@@ -189,6 +195,39 @@ try {
         happyDomModulePath: require.resolve('happy-dom'),
     });
 
+    const portalsGuide = readFileSync(
+        join(installedPackage, 'docs/portals.md'),
+        'utf8'
+    );
+    const portalsGuideSources = [
+        ...portalsGuide.matchAll(/```ts\n([\s\S]*?)\n```/g),
+    ].map(([, code], index) => {
+        const filename = code.includes(
+            'export function createPortalScreenOwner('
+        )
+            ? 'portal-owner.ts'
+            : `portals-guide-${index}.ts`;
+        writeFileSync(join(temporaryDirectory, filename), code);
+        return filename;
+    });
+    assert(portalsGuideSources.length > 0, 'Missing complete Portal recipes');
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--target',
+        'ES2022',
+        '--module',
+        'ESNext',
+        '--moduleResolution',
+        'Bundler',
+        ...portalsGuideSources,
+    ]);
+    const portalRecipe = await checkPortalRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: portalsGuideSources,
+    });
+
     const consumer = `
 import { FormulaRunner, AirtableFieldType } from '@miniextensions/sdk/formulas';
 import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
@@ -280,6 +319,23 @@ store.clear();\n`
     );
     run(process.execPath, ['forms-consumer.cjs']);
 
+    const portalsConsumer = `
+import { createPortalCollection, PortalCollectionError } from '@miniextensions/sdk/portals';
+if ([createPortalCollection, PortalCollectionError].some(value => typeof value !== 'function')) throw new Error('Missing Portal collection export');
+export const helperType = typeof createPortalCollection;
+`;
+    writeFileSync(
+        join(temporaryDirectory, 'portals-consumer.mjs'),
+        portalsConsumer
+    );
+    run(process.execPath, ['portals-consumer.mjs']);
+    writeFileSync(
+        join(temporaryDirectory, 'portals-consumer.cjs'),
+        `const { createPortalCollection, PortalCollectionError } = require('@miniextensions/sdk/portals');
+if ([createPortalCollection, PortalCollectionError].some(value => typeof value !== 'function')) throw new Error('Missing CommonJS Portal collection export');\n`
+    );
+    run(process.execPath, ['portals-consumer.cjs']);
+
     const declarationConsumer =
         consumer +
         `
@@ -311,6 +367,19 @@ export function checkFormHelpers(loaded: FormLoadedResult, client: MiniExtension
     controller.destroy();
 }
 import type { AirtableValue } from '@miniextensions/sdk';
+import type { PortalLoadedResult } from '@miniextensions/sdk';
+import { createPortalCollection, type PortalCollectionCriteria, type PortalOwnerScope, type PortalReadOptions, type PortalChildFormRequest, type PortalCollectionSnapshot } from '@miniextensions/sdk/portals';
+export async function checkPortalHelpers(portal: PortalLoadedResult, client: MiniExtensionsClient, criteria: PortalCollectionCriteria, getScope: () => PortalOwnerScope, options: PortalReadOptions) {
+    const collection = createPortalCollection({client, portal, portalFieldId: 'fldExample', criteria, getScope});
+    const outcome = await collection.readFirst(options);
+    if (outcome.type === 'loaded' && collection.isCurrent()) {
+        const snapshot: PortalCollectionSnapshot = outcome.snapshot;
+        const child: PortalChildFormRequest = collection.childFormRequest({access: {type: 'edit', recordId: snapshot.recordIds[0] ?? 'recExample'}, configuredChildExtensionId: 'childExample', query: {}, clientTimeZone: 'UTC', deviceFingerprint: {version: 1, visitorId: null}});
+        if (child.isCurrent()) void child.saveContext;
+    }
+    await collection.readNext(options);
+    collection.destroy();
+}
 export function renderChoiceNames(field: RuntimeFieldSchema): string[] {
     const config = field.airtableField.config;
     switch (config.type) {
@@ -385,15 +454,36 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
     });
     assert(
         !Object.keys(bundled.metafile.inputs).some((path) =>
-            /\/sdk\/dist\/esm\/(?:ui|forms)\//.test(path)
+            /\/sdk\/dist\/esm\/(?:ui|forms|portals)\//.test(path)
         ),
-        'Core consumer unexpectedly bundled optional UI/Form helpers'
+        'Core consumer unexpectedly bundled optional UI/Form/Portal helpers'
     );
     const browserContext = { URL, TextEncoder, fetch };
     runInNewContext(bundled.outputFiles[0].text, browserContext, {
         timeout: 10000,
     });
     assert.equal(browserContext.miniExtensionsFormulaExample.result, 12);
+
+    const portalBundle = await build({
+        absWorkingDir: temporaryDirectory,
+        entryPoints: ['portals-consumer.mjs'],
+        bundle: true,
+        platform: 'browser',
+        format: 'iife',
+        globalName: 'miniExtensionsPortalExample',
+        write: false,
+        logLevel: 'silent',
+        metafile: true,
+    });
+    await assertBrowserInputs(portalBundle.metafile, temporaryDirectory);
+    const portalBrowserContext = { URL, TextEncoder, fetch };
+    runInNewContext(portalBundle.outputFiles[0].text, portalBrowserContext, {
+        timeout: 10000,
+    });
+    assert.equal(
+        portalBrowserContext.miniExtensionsPortalExample.helperType,
+        'function'
+    );
 
     // React is an optional host framework, never an SDK dependency. Check the
     // actual documented recipe only after proving dependency-free UI imports.
@@ -546,7 +636,7 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
         join(temporaryDirectory, 'node_modules/@miniextensions/sdk/dist')
     );
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form ESM/CommonJS, declarations, doc links/recipes (6 UI lifecycle and 4 Form recipe cases), and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal ESM/CommonJS, declarations, doc links/recipes (6 UI lifecycle, 4 Form and ${portalRecipe.checks} Portal recipe cases), and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

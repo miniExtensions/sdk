@@ -36,6 +36,16 @@
                 "default": "./dist/cjs/forms/index.js"
             }
         },
+        "./portals": {
+            "import": {
+                "types": "./dist/esm/portals/index.d.ts",
+                "default": "./dist/esm/portals/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/portals/index.d.ts",
+                "default": "./dist/cjs/portals/index.js"
+            }
+        },
         "./formulas": {
             "import": {
                 "types": "./dist/esm/formulas/index.d.ts",
@@ -54,6 +64,7 @@
         "docs/runtime.md",
         "docs/ui.md",
         "docs/forms.md",
+        "docs/portals.md",
         "README.md",
         "LICENSE",
         "THIRD_PARTY_NOTICES.md"

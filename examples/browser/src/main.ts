@@ -27,7 +27,7 @@ import {
     nodeById,
     settings,
 } from './dom.js';
-import { displayValue, fieldControl, type FieldControl } from './fields.js';
+import { displayValue, formFieldControl, type FieldControl } from './fields.js';
 import { createPortalView, type PortalView } from './portal.js';
 import { FormDraftStore, type ParentFormDraftScope } from './drafts.js';
 import {
@@ -65,6 +65,7 @@ let connection: {
     input: LoadExtensionInput;
 } | null = null;
 let request: AbortController | null = null;
+let disposeFormControls = (): void => {};
 const screenNode = nodeById('screen');
 const statusNode = nodeById('status');
 const connectionForm = nodeById('connection-form');
@@ -175,6 +176,7 @@ const confirmCurrent = async (
 };
 const invalidate = (visitor: Visitor): void => {
     cancelConfirmation();
+    visitor.portal?.closeEditor();
     visitor.revision += 1;
     visitor.screen = null;
     visitor.root = null;
@@ -189,6 +191,7 @@ const invalidate = (visitor: Visitor): void => {
 };
 const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
     cancelConfirmation();
+    visitor.portal?.closeEditor();
     visitor.client?.setSession(next);
     // A successful explicit login becomes a new owner for future responses.
     visitor.revision += 1;
@@ -211,6 +214,7 @@ const load = (): void => {
             if (!current()) return;
             // Reload replaces this visitor's drafts only after a fresh read.
             visitor.drafts.clear();
+            visitor.portal?.closeEditor();
             visitor.screen = result;
             visitor.root =
                 result.extensionScreen === 'portal_loaded' ? result : null;
@@ -453,6 +457,10 @@ const renderForm = (page: FormLoadedResult): void => {
         parent: visitor.formParentScope,
     });
     const controls = new Map<string, FieldControl>();
+    disposeFormControls = () => {
+        for (const control of controls.values()) control.destroy();
+        controls.clear();
+    };
     const fields = element('div', undefined, 'fields');
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
@@ -476,9 +484,8 @@ const renderForm = (page: FormLoadedResult): void => {
                 choices: [...choices.values()],
             };
         }
-        const control: FieldControl = fieldControl(
-            schema.airtableField,
-            schema.miniExtConfig,
+        const control: FieldControl = formFieldControl(
+            schema,
             visitor.drafts.read(draft, fieldId),
             () => {
                 try {
@@ -557,14 +564,10 @@ const renderForm = (page: FormLoadedResult): void => {
                                         result.newChoice,
                                     ],
                                 };
+                                control.updateSelectChoices?.(
+                                    fieldConfig.options.choices
+                                );
                             }
-                            const select = control.node.querySelector('select');
-                            select?.append(
-                                new Option(
-                                    result.newChoice.name,
-                                    result.newChoice.name
-                                )
-                            );
                             const previous = control.read();
                             control.write(
                                 schema.fieldType ===
@@ -922,6 +925,8 @@ const renderComments = (page: FormLoadedResult): void => {
 
 const render = (): void => {
     cancelConfirmation();
+    disposeFormControls();
+    disposeFormControls = () => {};
     screenNode.replaceChildren();
     sessionSummary();
     const visitor = visitors[activeVisitor];

@@ -12,7 +12,7 @@ import {
     type SaveFormInput,
 } from '@miniextensions/sdk';
 import { button, element, labeled } from './dom.js';
-import { displayValue, fieldControl } from './fields.js';
+import { displayValue, fieldControl, type FieldControl } from './fields.js';
 import type { ParentFormDraftScope } from './drafts.js';
 import {
     cancelConfirmation,
@@ -27,7 +27,11 @@ type Run = (
         current(): boolean;
     }) => Promise<void>
 ) => Promise<void>;
-export type PortalView = { node: HTMLElement; refreshRequired(): void };
+export type PortalView = {
+    node: HTMLElement;
+    refreshRequired(): void;
+    closeEditor(): void;
+};
 type PortalFieldConfig = NonNullable<
     Extract<
         NonNullable<
@@ -190,6 +194,12 @@ export const createPortalView = (options: {
     const actions = element('div', undefined, 'actions');
     const results = element('div', undefined, 'table-scroll');
     const editor = element('section');
+    let editorControl: FieldControl | null = null;
+    const closeEditor = (): void => {
+        editorControl?.destroy();
+        editorControl = null;
+        editor.replaceChildren();
+    };
     card.append(actions, results, editor);
     let data: ListPortalLinkedRecordsResult | null = null;
     let needsRefresh = false;
@@ -238,7 +248,7 @@ export const createPortalView = (options: {
         cancelConfirmation();
         data = null;
         returnedRecordIds = [];
-        editor.replaceChildren();
+        closeEditor();
         results.replaceChildren(
             element('p', 'Choose Load records to fetch this view.', 'hint')
         );
@@ -341,7 +351,7 @@ export const createPortalView = (options: {
         value: AirtableValue,
         miniExtConfig: RuntimeFieldSchema['miniExtConfig']
     ): void => {
-        editor.replaceChildren();
+        closeEditor();
         const form = element('form', undefined, 'card');
         const control = fieldControl(
             recordField,
@@ -349,6 +359,7 @@ export const createPortalView = (options: {
             value,
             () => {}
         );
+        editorControl = control;
         form.append(element('h3', `Edit ${recordField.name}`), control.node);
         if (
             recordField.config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
@@ -447,10 +458,7 @@ export const createPortalView = (options: {
         const save = element('button', 'Save cell');
         save.type = 'submit';
         const buttons = element('div', undefined, 'actions');
-        buttons.append(
-            save,
-            button('Cancel', () => editor.replaceChildren())
-        );
+        buttons.append(save, button('Cancel', closeEditor));
         form.append(buttons);
         form.addEventListener('submit', (event) => {
             event.preventDefault();
@@ -497,7 +505,7 @@ export const createPortalView = (options: {
                     if (!current()) return;
                     if (user != null)
                         page.payload.formRecord.data = { ...user.fields };
-                    editor.replaceChildren();
+                    closeEditor();
                     renderRecords();
                     status('Cell saved and Portal user refreshed.');
                 }
@@ -777,7 +785,7 @@ export const createPortalView = (options: {
                     ];
                 } else returnedRecordIds = [...result.recordIds];
                 data = result;
-                editor.replaceChildren();
+                closeEditor();
                 renderRecords();
                 status(
                     `Loaded ${result.recordIds.length} records. This read grants only the selected view's permitted actions.`
@@ -815,6 +823,7 @@ export const createPortalView = (options: {
         status('This Portal has no configured linked-record tables.', true);
     return {
         node: card,
+        closeEditor,
         refreshRequired: () => {
             needsRefresh = false;
             reset();

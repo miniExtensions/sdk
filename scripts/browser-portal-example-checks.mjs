@@ -46,6 +46,26 @@ const editablePortal = () => {
     ];
     return portal;
 };
+const kanbanPortal = () => {
+    const portal = editablePortal();
+    const config = portal.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
+    config.layout = 'kanban';
+    config.kanbanCategoryField = 'fld_quantity';
+    return portal;
+};
+const kanbanPage = (offset = null) => {
+    const result = page([record('rec_one', 'Current', 'Todo')], offset);
+    result.tableIdsToLinkedTableStates.tbl_children.airtableFields[1].config = {
+        type: 'singleSelect',
+        options: {
+            choices: [
+                { id: 'sel_todo', name: 'Todo' },
+                { id: 'sel_done', name: 'Done' },
+            ],
+        },
+    };
+    return result;
+};
 
 /** Run the copied browser sources with only the installed archive as their SDK. */
 export async function checkBrowserPortalExample({
@@ -1043,6 +1063,372 @@ export async function checkBrowserPortalExample({
                     button(document, 'Disconnect').click();
                     await close();
                 }
+            }
+        );
+
+        await check(
+            'actual main uncertain Kanban moves preserve choices and require Portal Reload without replay',
+            async () => {
+                for (const mode of ['cancel', 'rejected', 'no-login']) {
+                    const portal = kanbanPortal();
+                    const lateMove = deferred();
+                    const calls = [];
+                    let moves = 0;
+                    let serverPrefill = 'prefill_Title=Example';
+                    const fetch = async (input, init) => {
+                        const url = new URL(String(input));
+                        const route =
+                            url.searchParams.get('route') ?? url.pathname;
+                        const body = JSON.parse(String(init?.body ?? '{}'));
+                        calls.push({ route, body });
+                        if (route === 'fetchExtensionForEndUser') {
+                            if (body.childExtensionInfo)
+                                return new Response(
+                                    JSON.stringify(makeForm(body))
+                                );
+                            const fresh = structuredClone(portal);
+                            fresh.payload.formRecord.data.fld_prefill =
+                                serverPrefill;
+                            return new Response(JSON.stringify(fresh));
+                        }
+                        if (route === 'fetchRecordsForLinkedTableOnPortal')
+                            return new Response(
+                                JSON.stringify(kanbanPage('offset_one'))
+                            );
+                        if (
+                            route ===
+                            '/api/trpc/airtable.updateRecordKanbanCategory'
+                        ) {
+                            moves += 1;
+                            serverPrefill = 'prefill_Title=Committed';
+                            if (mode === 'cancel') return lateMove.promise;
+                            if (mode === 'no-login')
+                                return new Response(
+                                    JSON.stringify({
+                                        result: { data: { type: 'no-login' } },
+                                    })
+                                );
+                            throw new Error(
+                                'Synthetic move response lost after server commit.'
+                            );
+                        }
+                        throw new Error(
+                            `Unexpected packed Kanban recovery route: ${route}`
+                        );
+                    };
+                    const { window, close } = await environment(fetch);
+                    await loadExample('main');
+                    const document = window.document;
+                    document.getElementById('api-origin').value =
+                        'https://sdk.example.test';
+                    document.getElementById('share-id').value = 'share_example';
+                    submit(window, document.getElementById('connection-form'));
+                    await waitFor(
+                        () => buttons(document, 'Load records').length === 1
+                    );
+                    assert.equal(moves, 0);
+                    button(document, 'Load records').click();
+                    await waitFor(
+                        () => buttons(document, 'Move category').length === 1
+                    );
+                    const category = document.querySelector(
+                        'select[aria-label="Category for rec_one"]'
+                    );
+                    assert(category);
+                    category.value = 'Done';
+                    change(window, category);
+                    assert.equal(
+                        moves,
+                        0,
+                        'Choosing a category is only a local draft.'
+                    );
+                    button(document, 'Move category').click();
+                    await waitFor(() => moves === 1);
+                    if (mode === 'cancel') {
+                        assert.equal(
+                            document.getElementById('screen').inert,
+                            true
+                        );
+                        assert.equal(
+                            document.getElementById('cancel').disabled,
+                            false
+                        );
+                        document.getElementById('cancel').click();
+                    }
+                    await waitFor(
+                        () => document.getElementById('screen').inert === false
+                    );
+                    assert.equal(
+                        document.querySelector(
+                            'select[aria-label="Category for rec_one"]'
+                        ),
+                        category
+                    );
+                    assert.equal(category.value, 'Done');
+                    assert.equal(button(document, 'Next page').disabled, true);
+                    assert.equal(
+                        button(document, 'Create record').disabled,
+                        true
+                    );
+                    const before = calls.length;
+                    button(document, 'Move category').click();
+                    button(document, 'Open Form').click();
+                    button(document, 'Load records').click();
+                    await new Promise((resolve) => setImmediate(resolve));
+                    assert.equal(
+                        calls.length,
+                        before,
+                        'An uncertain move cannot dispatch a second Move, child, or collection read.'
+                    );
+                    assert.equal(moves, 1);
+                    const visitor = document.getElementById('visitor');
+                    visitor.value = 'B';
+                    change(window, visitor);
+                    visitor.value = 'A';
+                    change(window, visitor);
+                    assert.equal(
+                        document.querySelector(
+                            'select[aria-label="Category for rec_one"]'
+                        ),
+                        category
+                    );
+                    assert.equal(category.value, 'Done');
+                    button(document, 'Move category').click();
+                    await new Promise((resolve) => setImmediate(resolve));
+                    assert.equal(
+                        calls.length,
+                        before,
+                        'Visitor switches cannot lift uncertain-write recovery.'
+                    );
+                    if (mode === 'cancel') {
+                        lateMove.resolve(
+                            new Response(
+                                JSON.stringify({
+                                    result: {
+                                        data: {
+                                            type: 'logged-in',
+                                            loggedInUserRecord: {
+                                                id: 'rec_user',
+                                                fields: {
+                                                    fld_prefill: serverPrefill,
+                                                },
+                                            },
+                                        },
+                                    },
+                                })
+                            )
+                        );
+                        await new Promise((resolve) => setImmediate(resolve));
+                        assert.equal(calls.length, before);
+                        assert.equal(
+                            button(document, 'Create record').disabled,
+                            true
+                        );
+                    }
+                    document.getElementById('reload').click();
+                    await waitFor(
+                        () =>
+                            document.querySelector(
+                                'select[aria-label="Category for rec_one"]'
+                            ) === null &&
+                            document.getElementById('screen').inert === false
+                    );
+                    assert.equal(
+                        calls.filter(
+                            (call) =>
+                                call.route === 'fetchExtensionForEndUser' &&
+                                !call.body.childExtensionInfo
+                        ).length,
+                        2
+                    );
+                    assert.equal(
+                        moves,
+                        1,
+                        'Reload never replays a category move.'
+                    );
+                    button(document, 'Create record').click();
+                    await waitFor(
+                        () => buttons(document, 'Back to Portal').length === 1
+                    );
+                    const child = calls.findLast(
+                        (call) =>
+                            call.route === 'fetchExtensionForEndUser' &&
+                            call.body.childExtensionInfo
+                    );
+                    assert.equal(
+                        child.body.context.prefillDataForLinkedRecordsForm
+                            .prefillQueryForChildExtension,
+                        'prefill_Title=Committed'
+                    );
+                    assert.equal(
+                        calls.filter(
+                            (call) =>
+                                call.route ===
+                                '/api/trpc/airtable.getUserRecord'
+                        ).length,
+                        0
+                    );
+                    button(document, 'Disconnect').click();
+                    await close();
+                }
+            }
+        );
+
+        await check(
+            'actual main accepted Kanban moves retain cached choices and refresh child prefills without automatic reads',
+            async () => {
+                const portal = kanbanPortal();
+                const calls = [];
+                const fetch = async (input, init) => {
+                    const url = new URL(String(input));
+                    const route = url.searchParams.get('route') ?? url.pathname;
+                    const body = JSON.parse(String(init?.body ?? '{}'));
+                    calls.push({ route, body });
+                    if (route === 'fetchExtensionForEndUser')
+                        return new Response(
+                            JSON.stringify(
+                                body.childExtensionInfo
+                                    ? makeForm(body)
+                                    : portal
+                            )
+                        );
+                    if (route === 'fetchRecordsForLinkedTableOnPortal')
+                        return new Response(
+                            JSON.stringify(kanbanPage('offset_one'))
+                        );
+                    if (
+                        route ===
+                        '/api/trpc/airtable.updateRecordKanbanCategory'
+                    )
+                        return new Response(
+                            JSON.stringify({
+                                result: {
+                                    data: {
+                                        type: 'logged-in',
+                                        loggedInUserRecord: {
+                                            id: 'rec_user',
+                                            fields: {
+                                                fld_prefill:
+                                                    'prefill_Title=Updated',
+                                            },
+                                        },
+                                    },
+                                },
+                            })
+                        );
+                    throw new Error(
+                        `Unexpected accepted Kanban route: ${route}`
+                    );
+                };
+                const { window, close } = await environment(fetch);
+                await loadExample('main');
+                const document = window.document;
+                document.getElementById('api-origin').value =
+                    'https://sdk.example.test';
+                document.getElementById('share-id').value = 'share_example';
+                submit(window, document.getElementById('connection-form'));
+                await waitFor(
+                    () => buttons(document, 'Load records').length === 1
+                );
+                button(document, 'Load records').click();
+                await waitFor(
+                    () => buttons(document, 'Move category').length === 1
+                );
+                const category = document.querySelector(
+                    'select[aria-label="Category for rec_one"]'
+                );
+                category.value = 'Done';
+                change(window, category);
+                const before = calls.length;
+                const visitor = document.getElementById('visitor');
+                visitor.value = 'B';
+                change(window, visitor);
+                visitor.value = 'A';
+                change(window, visitor);
+                assert.equal(
+                    document.querySelector(
+                        'select[aria-label="Category for rec_one"]'
+                    ),
+                    category
+                );
+                assert.equal(category.value, 'Done');
+                assert.equal(
+                    calls.length,
+                    before,
+                    'Cached category choices never write during visitor switches.'
+                );
+                button(document, 'Move category').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).length === 0 &&
+                        document.getElementById('screen').inert === false
+                );
+                const move = calls.find(
+                    (call) =>
+                        call.route ===
+                        '/api/trpc/airtable.updateRecordKanbanCategory'
+                );
+                assert(move);
+                assert.deepEqual(move.body, {
+                    extensionAccessToken: 'portal_access_example',
+                    portalFieldId: 'fld_children',
+                    recordId: 'rec_one',
+                    categoryFieldValue: 'Done',
+                    selectedCustomViewId: 'view_example',
+                });
+                assert.equal(
+                    calls.filter(
+                        (call) =>
+                            call.route === 'fetchRecordsForLinkedTableOnPortal'
+                    ).length,
+                    1
+                );
+                assert.equal(button(document, 'Next page').disabled, true);
+                assert.equal(button(document, 'Create record').disabled, false);
+                button(document, 'Create record').click();
+                await waitFor(
+                    () => buttons(document, 'Back to Portal').length === 1
+                );
+                const child = calls.findLast(
+                    (call) =>
+                        call.route === 'fetchExtensionForEndUser' &&
+                        call.body.childExtensionInfo
+                );
+                assert.equal(
+                    child.body.context.prefillDataForLinkedRecordsForm
+                        .prefillQueryForChildExtension,
+                    'prefill_Title=Updated'
+                );
+                assert.equal(
+                    calls.filter(
+                        (call) =>
+                            call.route === 'fetchExtensionForEndUser' &&
+                            !call.body.childExtensionInfo
+                    ).length,
+                    1
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () => buttons(document, 'Move category').length === 1
+                );
+                assert.equal(
+                    calls.filter(
+                        (call) =>
+                            call.route === 'fetchRecordsForLinkedTableOnPortal'
+                    ).length,
+                    2
+                );
+                assert.equal(
+                    calls.filter(
+                        (call) =>
+                            call.route ===
+                            '/api/trpc/airtable.updateRecordKanbanCategory'
+                    ).length,
+                    1
+                );
+                button(document, 'Disconnect').click();
+                await close();
             }
         );
 

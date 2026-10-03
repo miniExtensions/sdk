@@ -708,26 +708,42 @@ export const createPortalView = (options: {
                         void run(
                             'Moving the record category…',
                             async ({ client, signal, current }) => {
+                                if (needsRefresh)
+                                    throw new Error(
+                                        'Reload the Portal before moving another category.'
+                                    );
+                                const input = {
+                                    extensionAccessToken:
+                                        page.payload.extensionAccessToken,
+                                    portalFieldId: fieldSelect.value,
+                                    recordId,
+                                    categoryFieldValue:
+                                        categorySelect.value || null,
+                                    selectedCustomViewId: viewSelect.value,
+                                };
+                                signal.throwIfAborted();
+                                // A lost response can hide a committed move
+                                // and changed parent prefills. Keep the selected
+                                // category, but retire its read/child context.
+                                retireCollection();
+                                needsRefresh = true;
                                 const result =
                                     await client.portals.setKanbanCategory(
-                                        {
-                                            extensionAccessToken:
-                                                page.payload
-                                                    .extensionAccessToken,
-                                            portalFieldId: fieldSelect.value,
-                                            recordId,
-                                            categoryFieldValue:
-                                                categorySelect.value || null,
-                                            selectedCustomViewId:
-                                                viewSelect.value,
-                                        },
+                                        input,
                                         { signal }
                                     );
                                 if (!current()) return;
-                                if (result.type === 'logged-in')
-                                    page.payload.formRecord.data = {
-                                        ...result.loggedInUserRecord.fields,
-                                    };
+                                if (result.type === 'no-login') {
+                                    status(
+                                        'Category moved, but the Portal user was not refreshed. Choose Reload before taking another action.',
+                                        true
+                                    );
+                                    return;
+                                }
+                                page.payload.formRecord.data = {
+                                    ...result.loggedInUserRecord.fields,
+                                };
+                                needsRefresh = false;
                                 reset();
                                 status(
                                     'Category moved. Load records to refresh this view.'

@@ -1,12 +1,10 @@
 import { AirtableFieldType } from '../formulas/types.js';
 import type {
-    JsonObject,
     LinkedRecordPrefill,
     ListPortalLinkedRecordsResult,
     PortalLoadedResult,
     RuntimeLinkedRecordDetailField,
     RuntimeSession,
-    RuntimeTableStates,
 } from '../runtime/types.js';
 import type {
     PortalCollectionCriteria,
@@ -161,8 +159,17 @@ export const captureReadOptions = (
 };
 
 /** The existing browser example's bounded child-ID rules; no new config evaluator. */
+type PortalLinkedFieldConfig = NonNullable<
+    Extract<
+        NonNullable<
+            PortalLoadedResult['payload']['publicFields']['state']['portalFields']
+        >[number]['config'],
+        { type: 'multipleRecordLinks' }
+    >['config']
+>;
+
 const configuredChildId = (
-    config: JsonObject | undefined,
+    config: PortalLinkedFieldConfig | undefined,
     creating: boolean
 ): string | null => {
     if (config == null) return null;
@@ -178,7 +185,7 @@ const configuredChildId = (
         config.allowCreatingRecords === true &&
         (config.formsForEditingAndCreating == null ||
             config.formsForEditingAndCreating === 'same-form') &&
-        config.layout !== 'form';
+        (!creating || config.layout !== 'form');
     const value = sameForm
         ? config.extensionIdForCreatingAndEditing
         : creating
@@ -253,7 +260,7 @@ export const capturePortalMetadata = (
                   link.inverseLinkFieldId,
                   'Inverse linked field ID'
               );
-    const config = schema.miniExtConfig;
+    const config: PortalLinkedFieldConfig | undefined = schema.miniExtConfig;
     if (config !== undefined && !isObject(config))
         throw new TypeError('The Portal field configuration is malformed.');
     if (config?.customViews !== undefined && !Array.isArray(config.customViews))
@@ -266,9 +273,7 @@ export const capturePortalMetadata = (
             ? [
                   {
                       id: value.id,
-                      config: isObject(value.config)
-                          ? (value.config as JsonObject)
-                          : null,
+                      config: isObject(value.config) ? value.config : null,
                   },
               ]
             : []
@@ -401,9 +406,10 @@ export const mergePage = (
 ): ListPortalLinkedRecordsResult => {
     if (previous === null)
         return { ...incoming, recordIds: [...new Set(incoming.recordIds)] };
-    const tables: RuntimeTableStates = {
-        ...previous.tableIdsToLinkedTableStates,
-    };
+    const tables: ListPortalLinkedRecordsResult['tableIdsToLinkedTableStates'] =
+        {
+            ...previous.tableIdsToLinkedTableStates,
+        };
     for (const [id, table] of Object.entries(
         incoming.tableIdsToLinkedTableStates
     )) {

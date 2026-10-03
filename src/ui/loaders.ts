@@ -1,11 +1,10 @@
-import type { AirtableRecord } from '../formulas/types.js';
 import type {
+    AirtableRecord,
     ListFormLinkedRecordOptionsInput,
     ListLinkedRecordOptionsResult,
     ListPortalLinkedRecordOptionsInput,
     MiniExtensionsClient,
     RuntimeSession,
-    RuntimeTableState,
 } from '../runtime/types.js';
 import type { SelectionLoader, SelectionOption } from './types.js';
 
@@ -19,8 +18,11 @@ export class SelectionScopeChangedError extends Error {
 
 type RecordLabelFormatter = (
     record: AirtableRecord,
-    table: RuntimeTableState | undefined
+    table: SelectorTableState | undefined
 ) => string;
+
+type SelectorTableState =
+    ListLinkedRecordOptionsResult['tableIdsToLinkedTableStates'][string];
 
 type LoaderOptions<Input> = {
     client: MiniExtensionsClient;
@@ -45,7 +47,7 @@ const validateRecord = (record: AirtableRecord): void => {
     requireIdentifier(record.id, 'Linked record ID');
 };
 
-const validateTable = (table: RuntimeTableState | undefined): void => {
+const validateTable = (table: SelectorTableState | undefined): void => {
     if (table === undefined) return;
     if (
         !isObject(table) ||
@@ -116,7 +118,7 @@ const jsonLabel = (value: unknown, ancestors = new Set<object>()): unknown => {
 
 const defaultRecordLabel = (
     record: AirtableRecord,
-    table: RuntimeTableState | undefined
+    table: SelectorTableState | undefined
 ): string => {
     const primary = table?.airtableFields.find(
         (field) => field.isPrimaryField === true
@@ -140,7 +142,7 @@ const defaultRecordLabel = (
 /** Also maps records returned by linkedRecords.loadSelectedRecords. */
 export const selectionOptionsFromRecords = (
     records: readonly AirtableRecord[],
-    table: RuntimeTableState | undefined,
+    table: SelectorTableState | undefined,
     formatRecordLabel?: RecordLabelFormatter
 ): SelectionOption[] => {
     if (!Array.isArray(records)) {

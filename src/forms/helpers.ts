@@ -1,5 +1,6 @@
-import { AirtableFieldType, type AirtableValue } from '../formulas/types.js';
+import { AirtableFieldType } from '../formulas/types.js';
 import type {
+    AirtableValue,
     FormLoadedResult,
     RuntimeFieldSchema,
     RuntimeFormErrors,
@@ -63,7 +64,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
 const fieldTypes = new Set<string>(Object.values(AirtableFieldType));
-const computedFieldTypes = new Set<AirtableFieldType>([
+const computedFieldTypes = new Set<string>([
     AirtableFieldType.FORMULA,
     AirtableFieldType.ROLLUP,
     AirtableFieldType.COUNT,
@@ -164,7 +165,9 @@ export const describeLoadedFormFields = (
                 typeof schema.airtableField.isComputed !== 'boolean') ||
             (schema.miniExtConfig !== undefined &&
                 !isObject(schema.miniExtConfig)) ||
-            (schema.miniExtConfig?.readOnly !== undefined &&
+            (schema.miniExtConfig !== undefined &&
+                'readOnly' in schema.miniExtConfig &&
+                schema.miniExtConfig.readOnly !== undefined &&
                 typeof schema.miniExtConfig.readOnly !== 'boolean')
         ) {
             throw new TypeError(`The Form schema is malformed: ${fieldId}`);
@@ -178,7 +181,11 @@ export const describeLoadedFormFields = (
             title: fieldTitle(fieldId, loaded),
             fieldType: schema.fieldType,
             isComputed,
-            readOnly: isComputed || schema.miniExtConfig?.readOnly === true,
+            readOnly:
+                isComputed ||
+                (schema.miniExtConfig !== undefined &&
+                    'readOnly' in schema.miniExtConfig &&
+                    schema.miniExtConfig.readOnly === true),
             schema: structuredClone(schema),
         });
     }

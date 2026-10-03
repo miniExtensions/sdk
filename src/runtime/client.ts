@@ -1,4 +1,5 @@
 import type {
+    CanonicalOperationTransports,
     CreateUploadUrlResult,
     MiniExtensionsClient,
     MiniExtensionsClientOptions,
@@ -7,6 +8,9 @@ import type {
     UploadFileInput,
     UploadFileResult,
 } from './types.js';
+import { createTRPCUntypedClient, httpLink } from '@trpc/client';
+import type { AnyRouter } from '@trpc/server';
+import { copyVisitorSession } from './session.js';
 
 export type SDKErrorKind = 'network' | 'http' | 'api' | 'protocol';
 
@@ -37,15 +41,77 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
     value != null && typeof value === 'object' && !Array.isArray(value);
 
 const rethrowCancellation = (error: unknown, signal?: AbortSignal): void => {
-    if (signal?.aborted) throw signal.reason ?? error;
+    if (signal?.aborted) throw signal.reason;
     if (error instanceof Error && error.name === 'AbortError') throw error;
 };
 
-const voidResponseOperations: ReadonlySet<RuntimeOperation> = new Set([
-    'forms.deleteCurrentRecord',
-    'portals.unlinkRecord',
-    'comments.addToRecord',
-]);
+const v1Routes = {
+    loadExtension: 'fetchExtensionForEndUser',
+    'auth.verifyExtensionPassword': 'verifyExtensionPassword',
+    'auth.login': 'loginIntoExtensionUsingLoginPageExtension',
+    'auth.confirmVerificationCode': 'confirmVerificationCodeForLogin',
+    'auth.signUp': 'signUpForLoginPageExtension',
+    'forms.save': 'saveForm',
+    'portals.listLinkedRecords': 'fetchRecordsForLinkedTableOnPortal',
+    'linkedRecords.listFormOptions': 'fetchRecordsForFormLinkedRecordsSelector',
+    'linkedRecords.listPortalOptions':
+        'fetchRecordsForPortalLinkedRecordsSelector',
+} as const satisfies {
+    [Operation in RuntimeOperation as CanonicalOperationTransports[Operation]['transport'] extends 'v1'
+        ? Operation
+        : never]: CanonicalOperationTransports[Operation]['route'];
+};
+
+const trpcRoutes = {
+    'forms.deleteCurrentRecord': ['mutation', 'airtable.deleteRecord'],
+    'forms.addSelectOption': [
+        'mutation',
+        'airtable.addNewAirtableOptionForFormField',
+    ],
+    'portals.getUserRecord': ['query', 'airtable.getUserRecord'],
+    'portals.updateGridCell': ['mutation', 'airtable.updatePortalRecord'],
+    'portals.unlinkRecord': ['mutation', 'airtable.unlinkPortalRecord'],
+    'portals.setKanbanCategory': [
+        'mutation',
+        'airtable.updateRecordKanbanCategory',
+    ],
+    'linkedRecords.loadSelectedRecords': [
+        'query',
+        'publicExtensions.fetchInitialTableIdsToLinkedTableStates',
+    ],
+    'attachments.createUploadUrl': [
+        'mutation',
+        'publicExtensions.createPublicUploadLink',
+    ],
+    'comments.listForRecord': [
+        'query',
+        'airtable.getAirtableCommentsForRecord',
+    ],
+    'comments.addToRecord': [
+        'mutation',
+        'airtable.addAirtableCommentForRecord',
+    ],
+} as const satisfies {
+    [Operation in RuntimeOperation as CanonicalOperationTransports[Operation]['transport'] extends 'trpc'
+        ? Operation
+        : never]: readonly [
+        CanonicalOperationTransports[Operation]['kind'],
+        CanonicalOperationTransports[Operation]['route'],
+    ];
+};
+
+const assertVisitorInput = (input: object): void => {
+    if (
+        !isObject(input) ||
+        'miniExtSession' in input ||
+        'miniExtStorageV4' in input ||
+        typeof input.toJSON === 'function'
+    ) {
+        throw new TypeError(
+            'Runtime input cannot override transport-owned visitor credentials.'
+        );
+    }
+};
 
 export const createMiniExtensionsClient = (
     options: MiniExtensionsClientOptions
@@ -66,16 +132,6 @@ export const createMiniExtensionsClient = (
     ) {
         throw new TypeError('apiOrigin must be an HTTP(S) origin.');
     }
-    if (
-        typeof options.publishableKey !== 'string' ||
-        options.publishableKey.trim() === '' ||
-        /[\r\n]/.test(options.publishableKey)
-    ) {
-        throw new TypeError('publishableKey must be a nonempty string.');
-    }
-
-    const endpoint = new URL('/api/sdk', origin).href;
-    const publishableKey = options.publishableKey.trim();
     const fetchImpl =
         options.fetch ??
         (typeof globalThis.fetch === 'function'
@@ -83,7 +139,7 @@ export const createMiniExtensionsClient = (
             : null);
     if (fetchImpl == null)
         throw new TypeError('A fetch implementation is required.');
-    let session = { ...options.session };
+    let session = copyVisitorSession(options.session);
 
     const request = async <Result>(
         operation: RuntimeOperation,
@@ -92,8 +148,71 @@ export const createMiniExtensionsClient = (
     ): Promise<Result> => {
         const signal = requestOptions.signal;
         signal?.throwIfAborted();
-        const snapshot = { ...(requestOptions.session ?? session) };
-        const body = JSON.stringify({ operation, input, session: snapshot });
+        assertVisitorInput(input);
+        const inputSnapshot = { ...input };
+        assertVisitorInput(inputSnapshot);
+        const snapshot = copyVisitorSession(
+            requestOptions.session === undefined
+                ? session
+                : requestOptions.session
+        );
+
+        if (operation in trpcRoutes) {
+            const [method, path] =
+                trpcRoutes[operation as keyof typeof trpcRoutes];
+            // Keep the official protocol, plain JSON transformer, and native
+            // query GET / mutation POST behavior. Each call owns its session
+            // snapshot; no cookies, retry link, or mutable shared context.
+            const client = createTRPCUntypedClient<AnyRouter>({
+                links: [
+                    httpLink({
+                        url: new URL('/api/trpc', origin).href,
+                        headers: {
+                            'miniext-context': JSON.stringify({
+                                miniExtStorageV4: snapshot,
+                            }),
+                        },
+                        fetch: (url, init) => {
+                            signal?.throwIfAborted();
+                            return fetchImpl(url, {
+                                // Match the canonical HTTP adapter: this JSON
+                                // link supplies a string body, while the pinned
+                                // fetch type also permits binary ArrayBufferLike.
+                                ...(init as RequestInit | undefined),
+                                credentials: 'omit',
+                                cache: 'no-store',
+                                signal:
+                                    signal == null
+                                        ? init?.signal
+                                        : init?.signal == null
+                                          ? signal
+                                          : AbortSignal.any([
+                                                signal,
+                                                init.signal,
+                                            ]),
+                            });
+                        },
+                    }),
+                ],
+            });
+            try {
+                const result = await client[method](path, inputSnapshot);
+                signal?.throwIfAborted();
+                return result as Result;
+            } catch (error) {
+                rethrowCancellation(error, signal);
+                // Preserve native tRPC errors, including their shape and data.
+                throw error;
+            }
+        }
+
+        const route = v1Routes[operation as keyof typeof v1Routes];
+        const endpoint = new URL('/api/v1', origin);
+        endpoint.searchParams.set('route', route);
+        const body = JSON.stringify({
+            ...inputSnapshot,
+            miniExtStorageV4: snapshot,
+        });
 
         let response: Response;
         try {
@@ -101,9 +220,9 @@ export const createMiniExtensionsClient = (
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    Authorization: `Bearer ${publishableKey}`,
                 },
                 credentials: 'omit',
+                cache: 'no-store',
                 body,
                 signal,
             });
@@ -150,14 +269,7 @@ export const createMiniExtensionsClient = (
                 }
             );
         }
-        if (voidResponseOperations.has(operation)) {
-            if (data === null) return undefined as Result;
-        } else if (
-            isObject(data) ||
-            (operation === 'portals.getUserRecord' && data === null)
-        ) {
-            return data as Result;
-        }
+        if (isObject(data)) return data as Result;
         throw new SDKError('The server returned an invalid response.', {
             kind: 'protocol',
             status: response.status,
@@ -185,6 +297,7 @@ export const createMiniExtensionsClient = (
             requestOptions
         );
         if (
+            !isObject(upload) ||
             typeof upload.signedUrl !== 'string' ||
             upload.signedUrl.length === 0 ||
             typeof upload.publicUrl !== 'string' ||
@@ -230,7 +343,7 @@ export const createMiniExtensionsClient = (
     return {
         getSession: () => ({ ...session }),
         setSession: (next) => {
-            session = { ...next };
+            session = copyVisitorSession(next);
         },
         loadExtension: (input, requestOptions) =>
             request('loadExtension', input, requestOptions),

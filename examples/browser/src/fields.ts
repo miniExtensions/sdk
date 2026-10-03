@@ -1,9 +1,9 @@
 import {
     AirtableFieldType,
     type AirtableValue,
-    type AirtableField,
-} from '@miniextensions/sdk/formulas';
-import type { RuntimeFieldSchema } from '@miniextensions/sdk';
+    type RuntimeAirtableField,
+    type RuntimeFieldSchema,
+} from '@miniextensions/sdk';
 import { element, labeled } from './dom.js';
 
 export type FieldControl = {
@@ -13,14 +13,14 @@ export type FieldControl = {
     editable: boolean;
 };
 
-const numericTypes = new Set([
+const numericTypes = new Set<string>([
     AirtableFieldType.NUMBER,
     AirtableFieldType.CURRENCY,
     AirtableFieldType.PERCENT,
     AirtableFieldType.DURATION,
     AirtableFieldType.RATING,
 ]);
-const textTypes = new Set([
+const textTypes = new Set<string>([
     AirtableFieldType.SINGLE_LINE_TEXT,
     AirtableFieldType.EMAIL,
     AirtableFieldType.URL,
@@ -32,7 +32,7 @@ const textTypes = new Set([
 ]);
 
 /** Keep native values intact; custom presentation belongs to the application. */
-export const displayValue = (value: AirtableValue): string => {
+export const displayValue = (value: AirtableValue | undefined): string => {
     if (value == null) return '';
     if (typeof value === 'string') return value;
     if (typeof value === 'number' || typeof value === 'boolean') {
@@ -42,7 +42,7 @@ export const displayValue = (value: AirtableValue): string => {
 };
 
 export const recordTitle = (
-    fields: AirtableField[],
+    fields: RuntimeAirtableField[],
     values: Record<string, AirtableValue>,
     fallback: string
 ): string => {
@@ -53,20 +53,23 @@ export const recordTitle = (
 };
 
 export const fieldControl = (
-    schema: RuntimeFieldSchema,
-    initialValue: AirtableValue,
+    field: RuntimeAirtableField,
+    config: RuntimeFieldSchema['miniExtConfig'],
+    initialValue: AirtableValue | undefined,
     onChange: () => void,
     forceReadOnly = false
 ): FieldControl => {
-    const field = schema.airtableField;
-    const config = schema.miniExtConfig;
     const title =
         typeof config?.title === 'string' && config.title.trim() !== ''
             ? config.title
             : field.name;
     const readOnly =
-        forceReadOnly || config?.readOnly === true || field.isComputed === true;
-    let value = initialValue;
+        forceReadOnly ||
+        (config !== undefined &&
+            'readOnly' in config &&
+            config.readOnly === true) ||
+        field.isComputed === true;
+    let value: AirtableValue = initialValue ?? null;
     let control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
     let read: () => AirtableValue;
     let write: (next: AirtableValue) => void;
@@ -127,7 +130,9 @@ export const fieldControl = (
                 : element('input');
         if (input instanceof HTMLInputElement) {
             input.type =
-                config?.obscurePassword === true
+                config !== undefined &&
+                'obscurePassword' in config &&
+                config.obscurePassword === true
                     ? 'password'
                     : field.config.type === AirtableFieldType.EMAIL
                       ? 'email'
@@ -138,7 +143,11 @@ export const fieldControl = (
                           : 'text';
         }
         input.value = displayValue(value);
-        if (typeof config?.placeholderText === 'string')
+        if (
+            config !== undefined &&
+            'placeholderText' in config &&
+            typeof config.placeholderText === 'string'
+        )
             input.placeholder = config.placeholderText;
         control = input;
         read = () => input.value || null;

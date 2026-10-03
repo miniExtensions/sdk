@@ -22,6 +22,9 @@ const priorityField: RuntimeFieldSchema = {
     airtableField: {
         id: 'fldSyntheticPriority',
         name: 'Priority',
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
         config: {
             type: AirtableFieldType.SINGLE_SELECT,
             options: {
@@ -39,6 +42,9 @@ const tagsField: RuntimeFieldSchema = {
     airtableField: {
         id: 'fldSyntheticTags',
         name: 'Request tags',
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
         config: {
             type: AirtableFieldType.MULTIPLE_SELECTS,
             options: {

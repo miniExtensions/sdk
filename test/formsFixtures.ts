@@ -40,11 +40,20 @@ export const loadedForm = (): FormLoadedResult => {
             airtableField: {
                 id: 'fld_title',
                 name: 'Title',
-                config: { type: AirtableFieldType.SINGLE_LINE_TEXT },
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: {
+                    type: AirtableFieldType.SINGLE_LINE_TEXT,
+                    options: null,
+                },
             },
             miniExtConfig: {
                 title: 'Request title',
-                futureSetting: { preserve: true },
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [],
+                },
             },
         },
         fld_computed: {
@@ -52,11 +61,17 @@ export const loadedForm = (): FormLoadedResult => {
             airtableField: {
                 id: 'fld_computed',
                 name: 'Computed',
+                description: null,
+                isComputed: true,
+                isPrimaryField: false,
                 config: {
                     type: AirtableFieldType.FORMULA,
                     options: {
                         isValid: true,
-                        result: { type: AirtableFieldType.SINGLE_LINE_TEXT },
+                        result: {
+                            type: AirtableFieldType.SINGLE_LINE_TEXT,
+                            options: null,
+                        },
                     },
                 },
             },
@@ -66,7 +81,13 @@ export const loadedForm = (): FormLoadedResult => {
             airtableField: {
                 id: 'fld_readonly',
                 name: 'Read only',
-                config: { type: AirtableFieldType.SINGLE_LINE_TEXT },
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: {
+                    type: AirtableFieldType.SINGLE_LINE_TEXT,
+                    options: null,
+                },
             },
             miniExtConfig: { readOnly: true },
         },
@@ -75,7 +96,13 @@ export const loadedForm = (): FormLoadedResult => {
             airtableField: {
                 id: 'fld_files',
                 name: 'Files',
-                config: { type: AirtableFieldType.MULTIPLE_ATTACHMENTS },
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: {
+                    type: AirtableFieldType.MULTIPLE_ATTACHMENTS,
+                    options: { isReversed: false },
+                },
             },
         },
     };

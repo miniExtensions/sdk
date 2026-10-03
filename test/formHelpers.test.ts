@@ -128,9 +128,17 @@ describe('loaded Form draft and save helpers', () => {
         assert.equal(descriptors[1].isComputed, true);
         assert.equal(descriptors[1].readOnly, true);
         assert.equal(descriptors[2].readOnly, true);
-        assert.deepEqual(descriptors[0].schema.miniExtConfig?.futureSetting, {
-            preserve: true,
+        const configuration = descriptors[0].schema.miniExtConfig;
+        assert.ok(configuration && 'conditionalFields' in configuration);
+        assert.deepEqual(configuration.conditionalFields, {
+            logicalOperator: 'and',
+            conditions: [],
         });
+        configuration.conditionalFields!.logicalOperator = 'or';
+        const original =
+            loaded.payload.fieldIdsToSchemas.fld_title.miniExtConfig;
+        assert.ok(original && 'conditionalFields' in original);
+        assert.equal(original.conditionalFields?.logicalOperator, 'and');
         assert.equal(Object.hasOwn(descriptors[0], 'hidden'), false);
         descriptors[0].schema.airtableField.name = 'Changed by renderer';
         assert.equal(
@@ -150,9 +158,11 @@ describe('loaded Form draft and save helpers', () => {
                     'invented' as never;
             },
             (loaded: FormLoadedResult) => {
-                loaded.payload.fieldIdsToSchemas.fld_title.miniExtConfig = {
-                    readOnly: 'yes',
-                };
+                Object.defineProperty(
+                    loaded.payload.fieldIdsToSchemas.fld_title,
+                    'miniExtConfig',
+                    { value: { readOnly: 'yes' } }
+                );
             },
         ]) {
             const loaded = loadedForm();

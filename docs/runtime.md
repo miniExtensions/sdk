@@ -1,9 +1,10 @@
 # Runtime client
 
-The runtime client calls the miniExtensions SDK endpoint at `/api/sdk`.
-Availability of that endpoint depends on the server deployment. The SDK is a
-headless client: your app renders the interface while miniExtensions enforces
-the published Form/Portal's visitor, record, field, and action permissions.
+The runtime client calls the existing miniExtensions APIs: v1 handlers at
+`/api/v1?route=…` and public procedures at `/api/trpc`. The SDK is a headless
+client: your app renders the interface while the existing handlers enforce
+the Form/Portal's visitor, record, field, and action permissions. Public tRPC
+requests use the official `@trpc/client` HTTP link and its plain JSON protocol.
 
 ## Packaged Form quickstart
 
@@ -22,8 +23,8 @@ available installation method for this version. Use an ES2022-capable browser
 bundler or Node.js 22+ with ESM. Direct script-tag/CDN imports are not supplied.
 
 Save the following as `quickstart.mts` in your application. Replace the API
-origin, workspace publishable key, published Form share ID, and three field-ID
-placeholders. Choose editable single-line text, number, and checkbox fields
+origin, published Form share ID, and three field-ID placeholders. Choose
+editable single-line text, number, and checkbox fields
 that are present in that Form. The code checks their loaded schemas before
 sending a save; a field being present does not itself grant permission.
 
@@ -48,7 +49,6 @@ import {
 
 const client = createMiniExtensionsClient({
     apiOrigin: 'https://your-api-origin.example',
-    publishableKey: 'YOUR_PUBLISHABLE_KEY',
 });
 
 const input: LoadExtensionInput = {
@@ -91,7 +91,9 @@ async function saveLoadedForm(): Promise<void> {
             !extension.payload.fieldIdsInForm.includes(fieldId) ||
             schema?.fieldType !== fieldType ||
             schema.airtableField.isComputed === true ||
-            schema.miniExtConfig?.readOnly === true
+            (schema.miniExtConfig != null &&
+                'readOnly' in schema.miniExtConfig &&
+                schema.miniExtConfig.readOnly === true)
         ) {
             throw new Error(
                 `Choose an editable ${fieldType} field: ${fieldId}`
@@ -179,22 +181,21 @@ loaded screen and application-supplied context explicitly. A browser app
 should render record text through safe text APIs rather than inserting it as
 HTML, and must discard late responses after a visitor/session change.
 
-Use your publishable workspace key in browser applications. A key does not
-replace the visitor's extension password, login, record access, captcha, or
-other Form rules. Runtime requests use published extensions. The client sends
-the key in the Authorization header and omits browser cookies.
+Supply the visitor's extension password or login session when required by the
+published Form/Portal. Existing record access, CAPTCHA and other runtime rules
+still apply. Requests omit browser cookies; the client does not create a
+workspace or administrator session.
 
-Workspace owners and active admins create keys in Settings under **Publishable
-SDK keys**. Copy the key when it is created; later visits show only its label
-and status. Keys cover all supported SDK operations in that workspace, do not
-expire, and can be revoked from the same card. Revocation rejects subsequent
-SDK requests; it does not cancel an in-flight save or disable hosted Forms and
-Portals. Removing the key's creator does not revoke the workspace-owned key.
+Cross-origin browser applications need an API deployment that permits the
+public tRPC routes and the `miniext-context` header. The v1 endpoint already
+supports cross-origin requests. Node.js consumers use the same API contracts
+without browser CORS enforcement.
 
 `apiOrigin` must be an HTTP(S) origin without a path, query, fragment, or URL
 credentials. Node.js 22+ and browsers with native `fetch`, `TextEncoder`, and
-`AbortSignal` are supported. Supply `fetch` in the constructor to use another
-compatible network implementation.
+`AbortSignal.any` and `AbortSignal.prototype.throwIfAborted` are supported.
+Supply `fetch` in the constructor to use another compatible network
+implementation.
 
 ## Password and login
 
@@ -268,6 +269,11 @@ A session is a flat map of stored credential keys to opaque token strings.
 with a copy. `setSession({})` clears it. The token helpers return a new map and
 never persist it themselves.
 
+Supply only visitor credentials. Firebase website sessions (`miniExtSession`)
+are rejected. Each request captures its own session copy: v1 receives it in
+`miniExtStorageV4`, and tRPC receives the same map in the `miniext-context`
+header. No session is attached to an anonymous signed upload.
+
 Auth methods do not change session. Persist a successful token explicitly only
 while its response still belongs to the active visitor. Replacing session while
 a request is pending does not affect that request or let its late response
@@ -307,25 +313,41 @@ them into one list, show each matching field ID and error message only once.
 The client does not retry requests automatically. Every method accepts an
 optional `AbortSignal`; cancellation propagates without becoming an SDK error.
 
-Network, HTTP, invalid-response, and endpoint failures throw `SDKError`, with
-`kind`, optional `status`, optional `code`, and an optional `cause`. Endpoint
-`{error:true,message}` responses throw even when their HTTP status is 200. Form
-validation results with `type:'error'` are returned normally.
+For v1 calls and signed uploads, network, HTTP, invalid-response, and endpoint
+failures throw `SDKError`, with `kind`, optional `status`, optional server
+`code`, and an optional `cause`. A v1 `{error:true,message}` response throws
+with `kind:'api'` even when its HTTP status is 200. Form validation results with
+`type:'error'` are returned normally.
+
+tRPC-backed calls preserve the official client's native `TRPCClientError`,
+including its server error shape and data; they are not converted to
+`SDKError`. The client adds no retry link or automatic mutation replay.
 
 ## Response types
 
 Loading returns a redirect or the `password`, `login_page`, `form_loaded`, or
 `portal_loaded` screen. Stable metadata, records, field schemas, and save
-results have portable TypeScript types. Generated public settings and field
-configuration are represented as JSON objects. Responses retain all wire
+results use portable types generated from the canonical v1 contracts and tRPC
+procedure inputs and outputs. Responses retain all wire
 properties, including configuration properties beyond those documented here;
 the client does not convert field names, dates, or record values.
 
 `publicFields.state` contains the published extension's settings.
 `fieldIdsToSchemas[fieldId]` contains the Airtable field and its
-`miniExtConfig`. These settings remain JSON objects so the SDK can retain new
-server configuration without duplicating the entire builder schema. Narrow
-JSON values before using them in your UI.
+`miniExtConfig`. Settings and field configurations use their canonical types;
+the client does not validate them with another runtime schema.
+
+The checked-in declaration snapshot is generated from monorepo revision
+`fc1f8b05eff9658741cb797428d50ffe384b89e0`. To verify it against an authorized
+checkout of that source, run:
+
+```sh
+node scripts/generate-runtime-contracts.mjs --monorepo /path/to/monorepo --check
+```
+
+The generator checks the source revision and file hashes. Regenerate the
+snapshot when adopting API contract changes; no monorepo source or credentials
+are needed by an installed SDK consumer.
 
 ## Portal tables, search, and pagination
 
@@ -528,10 +550,9 @@ async function uploadFormAttachment(
 The helper requests a URL authorized for that Form field, uploads the bytes
 with an anonymous `PUT`, and returns `{id: null, url, filename, size, type}`.
 It uses the same fetch implementation and abort signal as other methods. The
-workspace key and visitor session are sent only to the SDK endpoint; they are
-never attached to the upload request. Add the returned value to the field's
-draft array and mark that field dirty before saving the Form. Uploading does
-not save the record.
+visitor session is sent only to the miniExtensions API; it is never attached
+to the upload request. Add the returned value to the field's draft array and
+mark that field dirty before saving the Form. Uploading does not save the record.
 
 For a custom upload implementation, call
 `attachments.createUploadUrl({fileType, filename, fileSize, authority: {type:

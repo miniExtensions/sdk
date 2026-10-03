@@ -12,7 +12,7 @@ import {
     type VerifyExtensionPasswordInput,
     type VerifyExtensionPasswordResult,
 } from '../src/runtime/index.js';
-import { formResult } from './runtimeFixtures.js';
+import { formResult, publicFormFields } from './runtimeFixtures.js';
 
 export const passwordPage = (): PasswordRequiredResult => ({
     ...structuredClone(formResult),
@@ -31,7 +31,13 @@ export const loginPage = (): LoginPageResult => ({
     language: 'fr',
     payload: {
         ...passwordPage().payload,
-        publicFields: { ifRecordDoesNotExist: 'signUp' },
+        publicFields: {
+            ...publicFormFields(),
+            state: {
+                ...publicFormFields().state,
+                ifRecordDoesNotExist: 'signUp',
+            },
+        },
         hasParentExtension: false,
         shareId: 'share_example',
         loginFieldNames: ['Émail', 'Password'],
@@ -83,7 +89,6 @@ export const authFixture = (handlers: AuthHandlers = {}) => {
     let loads = 0;
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
-        publishableKey: 'publishable_example',
         session: { previous: 'encrypted_previous' },
         fetch: async () => {
             throw new Error('Unexpected fixture network request.');

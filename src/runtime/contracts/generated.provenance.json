@@ -1,0 +1,392 @@
+{
+    "sourceRepository": "miniExtensions/monorepo",
+    "sourceRevision": "fc1f8b05eff9658741cb797428d50ffe384b89e0",
+    "compilerVersion": "5.9.3",
+    "generatorSha256": "051b4e7d60b637c7cf0b51c82a9fa744dddeaf8c256471415ff7a8b448e127a4",
+    "transport": "plain JSON; canonical enum literals; no runtime code or imports",
+    "operations": [
+        {
+            "operation": "loadExtension",
+            "input": "V1Input0",
+            "output": "V1Output0",
+            "module": "types/api/types/fetchExtensionForEndUser.ts",
+            "route": "fetchExtensionForEndUser",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "auth.verifyExtensionPassword",
+            "input": "V1Input1",
+            "output": "V1Output1",
+            "module": "types/api/types/verifyExtensionPassword.ts",
+            "route": "verifyExtensionPassword",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "auth.login",
+            "input": "V1Input2",
+            "output": "V1Output2",
+            "module": "types/api/types/loginIntoExtensionUsingLoginPageExtension.ts",
+            "route": "loginIntoExtensionUsingLoginPageExtension",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "auth.confirmVerificationCode",
+            "input": "V1Input3",
+            "output": "V1Output3",
+            "module": "types/api/types/confirmVerificationCodeForLogin.ts",
+            "route": "confirmVerificationCodeForLogin",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "auth.signUp",
+            "input": "V1Input4",
+            "output": "V1Output4",
+            "module": "types/api/types/signUpForLoginPageExtension.ts",
+            "route": "signUpForLoginPageExtension",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "forms.save",
+            "input": "V1Input5",
+            "output": "V1Output5",
+            "module": "types/api/types/saveForm.ts",
+            "route": "saveForm",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "portals.listLinkedRecords",
+            "input": "V1Input6",
+            "output": "V1Output6",
+            "module": "types/api/types/fetchRecordsForLinkedTableOnPortal.ts",
+            "route": "fetchRecordsForLinkedTableOnPortal",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "linkedRecords.listFormOptions",
+            "input": "V1Input7",
+            "output": "V1Output7",
+            "module": "types/api/types/fetchRecordsForLinkedRecordsSelector.ts",
+            "route": "fetchRecordsForFormLinkedRecordsSelector",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "linkedRecords.listPortalOptions",
+            "input": "V1Input8",
+            "output": "V1Output8",
+            "module": "types/api/types/fetchRecordsForLinkedRecordsSelector.ts",
+            "route": "fetchRecordsForPortalLinkedRecordsSelector",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
+            "operation": "forms.deleteCurrentRecord",
+            "input": "TrpcInput0",
+            "output": "TrpcOutput0",
+            "route": "airtable.deleteRecord",
+            "kind": "mutation",
+            "transport": "trpc"
+        },
+        {
+            "operation": "forms.addSelectOption",
+            "input": "TrpcInput1",
+            "output": "TrpcOutput1",
+            "route": "airtable.addNewAirtableOptionForFormField",
+            "kind": "mutation",
+            "transport": "trpc"
+        },
+        {
+            "operation": "portals.getUserRecord",
+            "input": "TrpcInput2",
+            "output": "TrpcOutput2",
+            "route": "airtable.getUserRecord",
+            "kind": "query",
+            "transport": "trpc"
+        },
+        {
+            "operation": "portals.updateGridCell",
+            "input": "TrpcInput3",
+            "output": "TrpcOutput3",
+            "route": "airtable.updatePortalRecord",
+            "kind": "mutation",
+            "transport": "trpc"
+        },
+        {
+            "operation": "portals.unlinkRecord",
+            "input": "TrpcInput4",
+            "output": "TrpcOutput4",
+            "route": "airtable.unlinkPortalRecord",
+            "kind": "mutation",
+            "transport": "trpc"
+        },
+        {
+            "operation": "portals.setKanbanCategory",
+            "input": "TrpcInput5",
+            "output": "TrpcOutput5",
+            "route": "airtable.updateRecordKanbanCategory",
+            "kind": "mutation",
+            "transport": "trpc"
+        },
+        {
+            "operation": "linkedRecords.loadSelectedRecords",
+            "input": "TrpcInput6",
+            "output": "TrpcOutput6",
+            "route": "publicExtensions.fetchInitialTableIdsToLinkedTableStates",
+            "kind": "query",
+            "transport": "trpc"
+        },
+        {
+            "operation": "attachments.createUploadUrl",
+            "input": "TrpcInput7",
+            "output": "TrpcOutput7",
+            "route": "publicExtensions.createPublicUploadLink",
+            "kind": "mutation",
+            "transport": "trpc"
+        },
+        {
+            "operation": "comments.listForRecord",
+            "input": "TrpcInput8",
+            "output": "TrpcOutput8",
+            "route": "airtable.getAirtableCommentsForRecord",
+            "kind": "query",
+            "transport": "trpc"
+        },
+        {
+            "operation": "comments.addToRecord",
+            "input": "TrpcInput9",
+            "output": "TrpcOutput9",
+            "route": "airtable.addAirtableCommentForRecord",
+            "kind": "mutation",
+            "transport": "trpc"
+        }
+    ],
+    "sources": [
+        {
+            "path": "backend-src/trpc/airtable/addAirtableCommentForRecord/index.ts",
+            "sha256": "fed7e65781c54047baffab05e2a44ab87fc1e2d786db887cddf48bb39404055b"
+        },
+        {
+            "path": "backend-src/trpc/airtable/addAirtableCommentForRecord/validators.ts",
+            "sha256": "db53fccfcb2798f063d28e873586c8922bfcf9b32ca30f7b9d98cb460e217273"
+        },
+        {
+            "path": "backend-src/trpc/airtable/addNewAirtableOptionForFormField/index.ts",
+            "sha256": "a3bb5d4c4fdc295f69b228e3d7bd8c29a6241f999c83888cc9da432c68e88f76"
+        },
+        {
+            "path": "backend-src/trpc/airtable/addNewAirtableOptionForFormField/validators.ts",
+            "sha256": "1e3a3d397fbb16702cbf8e19b76868d073234784d2b66a75f0a2f9d64af1b69e"
+        },
+        {
+            "path": "backend-src/trpc/airtable/deleteRecord/index.ts",
+            "sha256": "94fa43f5673c88e69b446c113d5fc20547de1ad9a110949955c4fdc9bb73abd1"
+        },
+        {
+            "path": "backend-src/trpc/airtable/deleteRecord/validators.ts",
+            "sha256": "c2d020f4a9de2d6a8ea2641839fcd4bd9c97c654a22210cbbc3f7a382687aa9d"
+        },
+        {
+            "path": "backend-src/trpc/airtable/getAirtableCommentsForRecord/index.ts",
+            "sha256": "a33e018abf10445599e84748844dfc19dc86a4d41ca82fffb74517264a68f6f0"
+        },
+        {
+            "path": "backend-src/trpc/airtable/getAirtableCommentsForRecord/validators.ts",
+            "sha256": "c58eecf55e1ec252e9e6000a81ba65ef8f1813e6f27eeeb97606785a743e2a4e"
+        },
+        {
+            "path": "backend-src/trpc/airtable/getUserRecord.ts",
+            "sha256": "49163a9c3c536d6896db2ae10c48d2e3e1f9cf86049f738fefe2e7e808ff82c5"
+        },
+        {
+            "path": "backend-src/trpc/airtable/trpcRoute.ts",
+            "sha256": "64f4252f37102b41d76f10b863fc3bd4cc6543db9363964613c05f28378b72e7"
+        },
+        {
+            "path": "backend-src/trpc/airtable/unlinkPortalRecord/index.ts",
+            "sha256": "d89f500969941627346046d85cbfdc107c2c9ebf46fcdae2131c607271cb7f96"
+        },
+        {
+            "path": "backend-src/trpc/airtable/updatePortalRecord/index.ts",
+            "sha256": "e39ceeaec51b7e95613f85d22943c505d7cafd093fa41a7a22b9917462297f78"
+        },
+        {
+            "path": "backend-src/trpc/airtable/updatePortalRecord/validator.ts",
+            "sha256": "d7034ed906d670f48e87f45f9a9c934a1d0dce6858fc2351ad67ea004e02d2cd"
+        },
+        {
+            "path": "backend-src/trpc/airtable/updateRecordKanbanCategory/index.ts",
+            "sha256": "ac6d528602b21f5ba8958594b9c820eed37a7f0fa18750794d3c379c8f796f44"
+        },
+        {
+            "path": "backend-src/trpc/airtable/updateRecordKanbanCategory/validators.ts",
+            "sha256": "5f5d6814c26cc85bb572e3cc36e034608fc2c2dff14a4fcbe5bfd6bf91b98034"
+        },
+        {
+            "path": "backend-src/trpc/index.ts",
+            "sha256": "8151529192bcb318c50ab0c3c73669e638d22724a25923a7fbf89c7f343ff4d2"
+        },
+        {
+            "path": "backend-src/trpc/publicExtensions/createUploadLink.ts",
+            "sha256": "11dcf891fd65268c7a7509710080b30f4cf6aafd8a80b41a9e2278e93927f950"
+        },
+        {
+            "path": "backend-src/trpc/publicExtensions/fetchInitialTableIdsToLinkedTableStates/index.ts",
+            "sha256": "d6892a270cc2828ffe77c8cf674a1d569b36895f33c165a479ae40a70c2820c3"
+        },
+        {
+            "path": "backend-src/trpc/publicExtensions/trpcRoute.ts",
+            "sha256": "0678a571c0431438959f0db66615845da8f38a31d87dbdf35c18ef21d4f1cf91"
+        },
+        {
+            "path": "backend-src/trpc/routers.ts",
+            "sha256": "1ac55e307868a240739658da8097adf1de5d8b53b864fc0b5d9dfb9f6781aeb4"
+        },
+        {
+            "path": "components/PublicExtension/redux/types.ts",
+            "sha256": "503e43171038264aac426b3f3e5b30fdcffb695b5603914091814642ba7633f2"
+        },
+        {
+            "path": "types/airtable/linked-record-detail-fields-types.ts",
+            "sha256": "57165fb1c8f65a7298a135f0016e227f4b50b52f543c0da2e718303ed8f84dad"
+        },
+        {
+            "path": "types/airtable/types.ts",
+            "sha256": "6426f0039a1dd4876c8dda07fd93e919c763b1418e3b2c4c75e1628c8d0726a4"
+        },
+        {
+            "path": "types/airtable/viewHelpers.ts",
+            "sha256": "8b0a386000e38418818915495d23406d54d22da30006127ddba16cb549d4be87"
+        },
+        {
+            "path": "types/api/prefillDataForLinkedRecordsForm.ts",
+            "sha256": "dbabdd57d7ebf2f1380e82aebd7638f5cec94e13e9aacaf2bd797ecf2c5ea918"
+        },
+        {
+            "path": "types/api/routes.ts",
+            "sha256": "3afe7bd97255691c63b311d111583d38e42c335365a41db171c7bf72abe98c44"
+        },
+        {
+            "path": "types/api/types/confirmVerificationCodeForLogin.ts",
+            "sha256": "1974674b2f3547de7d938994306c0cfeba01f8d586efe3d6fdac57b8a4a0bdc1"
+        },
+        {
+            "path": "types/api/types/fetchExtensionForEndUser.ts",
+            "sha256": "9d07826b68d2a041d588149e25df934899665596aabc43cf7b9ed5612d6754ef"
+        },
+        {
+            "path": "types/api/types/fetchInitialTableIdsToLinkedTableStates.ts",
+            "sha256": "38cfc2796e7cb16f4ffb1f4f0e3ab6380715f94352eab88e7b738b363981736b"
+        },
+        {
+            "path": "types/api/types/fetchPrimaryValuesForConditionalLinkedRecordFilterField.ts",
+            "sha256": "416f94523a561730cbab748095cb05057319fe276baa4c554bf39a7582c59cbd"
+        },
+        {
+            "path": "types/api/types/fetchRecordsForLinkedRecordsSelector.ts",
+            "sha256": "d3122e2570199262705057ff4412278822968d7deae0f871c7b5a4ae1688aac7"
+        },
+        {
+            "path": "types/api/types/fetchRecordsForLinkedTableOnPortal.ts",
+            "sha256": "9e030688cb33d19c7a75eabc7a40083d81216ebbf107e089bfdcd49297fb0e84"
+        },
+        {
+            "path": "types/api/types/loadExtension.ts",
+            "sha256": "f08904fc9b54c6b26d240d0fdf6ed233816d6cd081893c9c27a9885429c322bf"
+        },
+        {
+            "path": "types/api/types/loginIntoExtensionUsingLoginPageExtension.ts",
+            "sha256": "c32d90f6998f446040f4582ee5420d3924a691d8923f2609d3a51bf38f177191"
+        },
+        {
+            "path": "types/api/types/publicFormDeviceFingerprint.ts",
+            "sha256": "b81c16897fb94a72cc6c3ca62606416bcbc058467d78a55ea0d278eafdaef5ce"
+        },
+        {
+            "path": "types/api/types/saveForm.ts",
+            "sha256": "f94b499b61e3a3aeb187ad592e2bc7f98c844d4536027b1658f5fe0dfb8d64b5"
+        },
+        {
+            "path": "types/api/types/signUpForLoginPageExtension.ts",
+            "sha256": "c8cdbacaed0739587afe2be9b13b3c413257d74be393b0d35eedd391ae7224a5"
+        },
+        {
+            "path": "types/api/types/verifyExtensionPassword.ts",
+            "sha256": "386142fc8e010d7160880ea3308cb8e4a8e3c94faca9502ff2065b18bb5c0149"
+        },
+        {
+            "path": "types/constants/extensionType.ts",
+            "sha256": "870b3693cbdce4decbdc58aeed9b37bae0947ff4e7723e2994d368fd59d5fb09"
+        },
+        {
+            "path": "types/extensions/PublicExtensionContext.ts",
+            "sha256": "692534111f4334e908f369d99f2615e9467e42e8bf28640d3ed57a8a713e4a22"
+        },
+        {
+            "path": "types/extensions/conditions/types.ts",
+            "sha256": "8845cdd88ad2b9b10b1313935ec2a2fee93588e8dfdecb0ba9374935770dd8e9"
+        },
+        {
+            "path": "types/extensions/types.ts",
+            "sha256": "64821a981a1b1d61cc9c0a53c8ac1baafc181ee87333f52b9942e14c8ab1386a"
+        },
+        {
+            "path": "types/generated/extension-versions/all/v105/index.ts",
+            "sha256": "5d6e8648f736149398cdbcd786bba22357afae052e355cae39d5f44c82f1863c"
+        },
+        {
+            "path": "types/generated/extension-versions/current/PublicFields.ts",
+            "sha256": "6652d8fa45ed4206bf8fa68cf631431ae413cf05bb6d52415eecc2f493e18232"
+        },
+        {
+            "path": "types/helpers/EditOrCreateRecords.ts",
+            "sha256": "9c1bf3d41a5ec93f57a5b770e4cd713a04c10c1ece706a558756051ede033cb8"
+        },
+        {
+            "path": "types/i18n/strings.ts",
+            "sha256": "f4e3343928d50e3b4ead3cdd7d709ce514ef54dae220a04b72fdaa64ad44b47e"
+        },
+        {
+            "path": "types/types/airtableFieldSchema.ts",
+            "sha256": "74aad6c9ba879a2c5e4e164c30a0a5199cc63bd1e60b2838757edb42603395f1"
+        },
+        {
+            "path": "types/types/linkedRecordsIdsToPrimaryValues.ts",
+            "sha256": "c4c52e5c27892fb16ca580bfa9ce45b6bad6f596f11b9dbb5a88eb5bae6ccd0b"
+        }
+    ],
+    "dependencies": [
+        {
+            "path": "@trpc/server/dist/unstable-core-do-not-import/types.d.ts",
+            "sha256": "f9f954bebef858e63b5d1b6dc6102f62dc3f061d548e8eca5e035840e99b3840"
+        },
+        {
+            "path": "airtable/lib/collaborator.d.ts",
+            "sha256": "0c6d393b5882ea0121b7703a498650c9cbab2fb55c9661ec3add78e347f85d1d"
+        },
+        {
+            "path": "airtable/lib/thumbnail.d.ts",
+            "sha256": "2e447a9ea3e97683ad6d1c7feb06e95b41bb85064b1e968408db49c754e96d15"
+        },
+        {
+            "path": "zod/v3/helpers/util.d.cts",
+            "sha256": "293eadad9dead44c6fd1db6de552663c33f215c55a1bfa2802a1bceed88ff0ec"
+        },
+        {
+            "path": "@types/node/compatibility/indexable.d.ts",
+            "sha256": "ab41ef1f2cdafb8df48be20cd969d875602483859dc194e9c97c8a576892c052"
+        },
+        {
+            "path": "@types/node/globals.d.ts",
+            "sha256": "808069bba06b6768b62fd22429b53362e7af342da4a236ed2d2e1c89fcca3b4a"
+        }
+    ],
+    "declarationCount": 1581,
+    "generatedSha256": "7ed922d83f49e5d0c0a762f9b767c62dfae9d121612914b4a07f81f214487828"
+}

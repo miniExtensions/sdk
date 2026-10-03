@@ -233,7 +233,7 @@ try {
     const consumer = `
 import { FormulaRunner, AirtableFieldType } from '@miniextensions/sdk/formulas';
 import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
-const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com', publishableKey: 'me_pk_example' });
+const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' });
 client.setSession(withExtensionPassword({}, { extensionId: 'extExample', encryptedExtensionPassword: 'password-token' }));
 client.setSession(withLoginToken(client.getSession(), { extensionId: 'extExample', tableId: 'tblExample', loginFieldNames: ['Email'], encryptedLoginToken: 'login-token' }));
 if (Object.keys(client.getSession()).length !== 2) throw new Error('Session helper failed');
@@ -262,7 +262,7 @@ export const result = runner.run();
         join(temporaryDirectory, 'consumer.cjs'),
         `const { FormulaRunner } = require('@miniextensions/sdk/formulas');
 const { createMiniExtensionsClient } = require('@miniextensions/sdk');
-if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com', publishableKey: 'me_pk_example' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
+if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
 `
     );
@@ -359,7 +359,7 @@ if ([createPortalCollection, PortalCollectionError].some(value => typeof value !
     };
     const authConsumerBody = `
 const flow = createAuthFlow({
-    client: createMiniExtensionsClient({apiOrigin:'https://api.example.com',publishableKey:'me_pk_example'}),
+    client: createMiniExtensionsClient({apiOrigin:'https://api.example.com'}),
     page: ${JSON.stringify(authPage)},
     getScope: () => ({ownerId:'visitor_example',revision:0})
 });

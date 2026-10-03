@@ -236,7 +236,9 @@ export async function mountFormLinkedField(
         loadOptions,
         readOnly:
             field.airtableField.isComputed === true ||
-            field.miniExtConfig?.readOnly === true,
+            (field.miniExtConfig != null &&
+                'readOnly' in field.miniExtConfig &&
+                field.miniExtConfig.readOnly === true),
         onChange(ids) {
             draftValue = [...ids];
         },
@@ -545,5 +547,5 @@ archive; this guide contains the customer-facing integration recipes.
 
 Deterministic tests and that local browser sandbox prove UI interaction and
 package boundaries. They do not prove a particular staging deployment accepts
-your published extension or key. Server compatibility remains a separate
+your published extension. Server compatibility remains a separate
 validation step with its own authorized environment and fixtures.

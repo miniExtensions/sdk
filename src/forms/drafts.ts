@@ -1,3 +1,5 @@
+import type { SelectFieldChoice } from '../runtime/types.js';
+
 /** Each visitor owns one store; session and connection changes clear it. */
 export type ParentFormDraftScope = {
     portalId: string;
@@ -14,12 +16,7 @@ export type FormDraftSnapshot<Value> = {
     data: Record<string, Value>;
     dirtyFieldIds: string[];
 };
-export type DraftSelectChoice = {
-    id: string;
-    name: string;
-    color?: string;
-    newOption?: boolean;
-};
+export type DraftSelectChoice = SelectFieldChoice;
 type Draft<Value> = {
     handle: FormDraftHandle;
     data: Record<string, Value>;

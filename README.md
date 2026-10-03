@@ -3,7 +3,7 @@
 Build your own Form and Portal interfaces with miniExtensions' published
 configuration, record permissions, and Airtable connection. The SDK provides
 a typed browser runtime client and a portable formula engine. It is under
-development and requires an enabled `/api/sdk` server endpoint.
+development and uses the existing miniExtensions v1 and public tRPC APIs.
 
 The runtime covers loading, visitor authentication, Form saves and deletion,
 linked-table reads and pagination, selectors, child Forms, Grid edits, unlink,
@@ -48,19 +48,20 @@ import { createMiniExtensionsClient } from '@miniextensions/sdk';
 
 const client = createMiniExtensionsClient({
     apiOrigin: 'https://your-api-origin.example',
-    publishableKey: 'YOUR_PUBLISHABLE_KEY',
 });
 const extension = await client.loadExtension({
     shareId: 'YOUR_SHARE_ID',
     recordId: null,
+    query: {},
     context: { type: 'direct-url' },
 });
 ```
 
-Publishable keys do not replace visitor login or record access. Sessions are
-explicitly owned by your application, and methods preserve the hosted runtime's
-response shapes. Keys are created and revoked in workspace Settings; they do
-not expire and cover all supported operations in that workspace.
+Sessions are explicitly owned by your application, and methods preserve the
+hosted runtime's response shapes. Existing visitor login, record access and
+published Form/Portal rules remain authoritative. Requests omit browser cookies
+and never retry automatically. Cross-origin browser use requires the API
+deployment to allow the public tRPC requests from your application.
 
 See the [runtime guide](docs/runtime.md) for authentication, Form validation,
 Portal reads and actions, files, comments, and cancellation. Its

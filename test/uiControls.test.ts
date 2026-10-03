@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
-import {
-    AirtableFieldType,
-    type AirtableValue,
-} from '../src/formulas/types.js';
-import type { RuntimeFieldSchema } from '../src/runtime/types.js';
+import { AirtableFieldType } from '../src/formulas/types.js';
+import type {
+    AirtableValue,
+    RuntimeFieldSchema,
+} from '../src/runtime/types.js';
 import {
     createSelectControl,
     mountSelectionControl,
@@ -27,26 +27,40 @@ const environment = (test: TestContext) => {
     return { document, dispatch };
 };
 
-const field = (multiple = false): RuntimeFieldSchema => {
-    const type = multiple
-        ? AirtableFieldType.MULTIPLE_SELECTS
-        : AirtableFieldType.SINGLE_SELECT;
-    return {
-        fieldType: type,
-        airtableField: {
-            id: 'fld_choices',
-            name: 'Colors',
-            config: {
-                type,
-                options: {
-                    choices: [
-                        { id: 'sel_red', name: 'Red' },
-                        { id: 'sel_blue', name: 'Blue' },
-                    ],
-                },
-            },
-        },
+type SelectFieldSchema = Extract<
+    RuntimeFieldSchema,
+    { fieldType: 'singleSelect' | 'multipleSelects' }
+>;
+
+const field = (multiple = false): SelectFieldSchema => {
+    const metadata = {
+        id: 'fld_choices',
+        name: 'Colors',
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
     };
+    const options = {
+        choices: [
+            { id: 'sel_red', name: 'Red' },
+            { id: 'sel_blue', name: 'Blue' },
+        ],
+    };
+    return multiple
+        ? {
+              fieldType: AirtableFieldType.MULTIPLE_SELECTS,
+              airtableField: {
+                  ...metadata,
+                  config: { type: AirtableFieldType.MULTIPLE_SELECTS, options },
+              },
+          }
+        : {
+              fieldType: AirtableFieldType.SINGLE_SELECT,
+              airtableField: {
+                  ...metadata,
+                  config: { type: AirtableFieldType.SINGLE_SELECT, options },
+              },
+          };
 };
 
 const part = <Element extends HTMLElement>(

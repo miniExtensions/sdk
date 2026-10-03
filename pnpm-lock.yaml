@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@trpc/client':
+        specifier: 11.0.0-rc.382
+        version: 11.0.0-rc.382(@trpc/server@11.0.0-rc.382)
+      '@trpc/server':
+        specifier: 11.0.0-rc.382
+        version: 11.0.0-rc.382
       moment:
         specifier: 2.31.0
         version: 2.31.0
@@ -195,6 +201,14 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@trpc/client@11.0.0-rc.382':
+    resolution: {integrity: sha512-O+MSRed5r8AJJ+j3peZkd/b7WINEkhKaFilRuPH8VQsrlMZToxUzQl9aShPIgnOhhQGxvWqdh2lXwUvrFCea/A==}
+    peerDependencies:
+      '@trpc/server': 11.0.0-rc.382+94f198fec
+
+  '@trpc/server@11.0.0-rc.382':
+    resolution: {integrity: sha512-a3A0osTgFhbClRjE+fZ3nA3TEjupnWM23L4hidjecg3xN+QghwYTjwXJcYXPsdKyT6PhFtzWBKJxShmsZRElZw==}
+
   '@types/moment-duration-format@2.2.6':
     resolution: {integrity: sha512-Qw+6ys3sQCatqukjoIBsL1UJq6S7ep4ixrNvDkdViSgzw2ZG3neArXNu3ww7mEG8kwP32ZDoON/esWb7OUckRQ==}
 
@@ -321,6 +335,12 @@ snapshots:
 
   '@esbuild/win32-x64@0.25.10':
     optional: true
+
+  '@trpc/client@11.0.0-rc.382(@trpc/server@11.0.0-rc.382)':
+    dependencies:
+      '@trpc/server': 11.0.0-rc.382
+
+  '@trpc/server@11.0.0-rc.382': {}
 
   '@types/moment-duration-format@2.2.6':
     dependencies:

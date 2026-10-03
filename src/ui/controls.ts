@@ -1,5 +1,5 @@
-import { AirtableFieldType, type AirtableValue } from '../formulas/types.js';
-import type { RuntimeFieldSchema } from '../runtime/types.js';
+import { AirtableFieldType } from '../formulas/types.js';
+import type { AirtableValue, RuntimeFieldSchema } from '../runtime/types.js';
 import { createSelectionModel } from './model.js';
 import type {
     SelectionModel,
@@ -98,7 +98,10 @@ const orderChildren = (
     }
 };
 
-const selectValues = (value: AirtableValue, multiple: boolean): string[] => {
+const selectValues = (
+    value: SelectControlOptions['value'],
+    multiple: boolean
+): string[] => {
     if (value == null) return [];
     if (multiple) {
         const entries = Array.isArray(value) ? Array.from(value) : null;
@@ -134,7 +137,11 @@ export const createSelectControl = (
         );
     }
     const field = options.field.airtableField;
-    const readOnly = options.field.miniExtConfig?.readOnly;
+    const miniExtConfig = options.field.miniExtConfig;
+    const readOnly =
+        miniExtConfig !== undefined && 'readOnly' in miniExtConfig
+            ? miniExtConfig.readOnly
+            : undefined;
     if (
         typeof field.id !== 'string' ||
         field.id === '' ||

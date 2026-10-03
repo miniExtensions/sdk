@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 
@@ -23,3 +23,10 @@ for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
 
 mkdirSync('dist/cjs', { recursive: true });
 writeFileSync('dist/cjs/package.json', '{"type":"commonjs"}\n');
+
+for (const format of ['esm', 'cjs']) {
+    copyFileSync(
+        'src/runtime/contracts/generated.provenance.json',
+        `dist/${format}/runtime/contracts/generated.provenance.json`
+    );
+}

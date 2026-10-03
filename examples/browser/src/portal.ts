@@ -1,15 +1,16 @@
 import {
     AirtableFieldType,
+    type AirtableValue,
     type FormLoadedResult,
-    type JsonObject,
     type ListPortalLinkedRecordsResult,
     type MiniExtensionsClient,
     type PortalLoadedResult,
     type RuntimeAirtableField,
     type RuntimeGridCellValue,
+    type RuntimeLinkedRecordDetailField,
+    type RuntimeFieldSchema,
     type SaveFormInput,
 } from '@miniextensions/sdk';
-import type { AirtableValue } from '@miniextensions/sdk/formulas';
 import { button, element, labeled } from './dom.js';
 import { displayValue, fieldControl } from './fields.js';
 import type { ParentFormDraftScope } from './drafts.js';
@@ -27,18 +28,32 @@ type Run = (
     }) => Promise<void>
 ) => Promise<void>;
 export type PortalView = { node: HTMLElement; refreshRequired(): void };
-type CustomView = { id: string; config: JsonObject | null };
+type PortalFieldConfig = NonNullable<
+    Extract<
+        NonNullable<
+            PortalLoadedResult['payload']['publicFields']['state']['portalFields']
+        >[number]['config'],
+        { type: 'multipleRecordLinks' }
+    >['config']
+>;
+type CanonicalCustomView = NonNullable<
+    PortalFieldConfig['customViews']
+>[number];
+type CustomView = {
+    id: string;
+    config: CanonicalCustomView['config'] | null;
+};
 type DetailField = {
     fieldId: string;
     title: string | null;
-    miniExtConfig?: JsonObject;
+    miniExtConfig?: RuntimeFieldSchema['miniExtConfig'];
     inlineEditable: boolean;
 };
 
-const isObject = (value: unknown): value is JsonObject =>
+const isObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value != null && !Array.isArray(value);
 
-const customViews = (config: JsonObject | undefined): CustomView[] => {
+const customViews = (config: PortalFieldConfig | undefined): CustomView[] => {
     if (!Array.isArray(config?.customViews)) return [];
     return config.customViews.flatMap((view): CustomView[] =>
         isObject(view) && typeof view.id === 'string'
@@ -52,7 +67,7 @@ const customViews = (config: JsonObject | undefined): CustomView[] => {
     );
 };
 const configuredChildId = (
-    config: JsonObject | undefined,
+    config: PortalFieldConfig | undefined,
     creating: boolean
 ): string | null => {
     if (config == null) return null;
@@ -68,7 +83,7 @@ const configuredChildId = (
         config.allowCreatingRecords === true &&
         (config.formsForEditingAndCreating == null ||
             config.formsForEditingAndCreating === 'same-form') &&
-        config.layout !== 'form';
+        (!creating || config.layout !== 'form');
     const value = sameForm
         ? config.extensionIdForCreatingAndEditing
         : creating
@@ -76,7 +91,9 @@ const configuredChildId = (
           : config.extensionIdForEditing;
     return typeof value === 'string' && value !== '' ? value : null;
 };
-const detailFields = (value: unknown): DetailField[] => {
+const detailFields = (
+    value: RuntimeLinkedRecordDetailField[] | undefined
+): DetailField[] => {
     if (!Array.isArray(value)) return [];
     return value.flatMap((field): DetailField[] => {
         if (
@@ -85,16 +102,12 @@ const detailFields = (value: unknown): DetailField[] => {
             field.isHidden === true
         )
             return [];
-        const childField = isObject(field.childFormField)
-            ? field.childFormField
-            : null;
-        const childConfig = isObject(childField?.config)
-            ? childField.config
-            : null;
         // Inline authorization uses the child Form config when present,
         // including its defaults, and otherwise the published detail config.
         const config =
-            childConfig != null ? childConfig.config : field.miniExtConfig;
+            field.childFormField != null
+                ? field.childFormField.config.config
+                : field.miniExtConfig;
         const miniExtConfig = isObject(config) ? config : undefined;
         return [
             {
@@ -104,7 +117,10 @@ const detailFields = (value: unknown): DetailField[] => {
                         ? field.titleOverride
                         : null,
                 miniExtConfig,
-                inlineEditable: miniExtConfig?.readOnly !== true,
+                inlineEditable:
+                    miniExtConfig === undefined ||
+                    !('readOnly' in miniExtConfig) ||
+                    miniExtConfig.readOnly !== true,
             },
         ];
     });
@@ -180,7 +196,7 @@ export const createPortalView = (options: {
     let returnedRecordIds: string[] = [];
 
     const schema = () => page.payload.fieldIdsToSchemas[fieldSelect.value];
-    const config = () => schema()?.miniExtConfig;
+    const config = (): PortalFieldConfig | undefined => schema()?.miniExtConfig;
     const field = () => schema()?.airtableField;
     const tableId = (): string | null => {
         const selected = field();
@@ -191,7 +207,15 @@ export const createPortalView = (options: {
     const selectedView = () =>
         customViews(config()).find((view) => view.id === viewSelect.value);
     // Custom views replace these layout settings, including omitted values.
-    const layoutSetting = (key: string) =>
+    const layoutSetting = (
+        key: keyof Pick<
+            PortalFieldConfig,
+            | 'layout'
+            | 'disableInlineEdit'
+            | 'allowUsersToUnlinkRecords'
+            | 'kanbanCategoryField'
+        >
+    ) =>
         selectedView()?.config?.viewBehavior === 'custom'
             ? selectedView()?.config?.[key]
             : config()?.[key];
@@ -315,16 +339,13 @@ export const createPortalView = (options: {
         recordId: string,
         recordField: RuntimeAirtableField,
         value: AirtableValue,
-        miniExtConfig: JsonObject | undefined
+        miniExtConfig: RuntimeFieldSchema['miniExtConfig']
     ): void => {
         editor.replaceChildren();
         const form = element('form', undefined, 'card');
         const control = fieldControl(
-            {
-                fieldType: recordField.config.type,
-                airtableField: recordField,
-                miniExtConfig,
-            },
+            recordField,
+            miniExtConfig,
             value,
             () => {}
         );

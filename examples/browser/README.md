@@ -45,16 +45,15 @@ resolutions and replaces the SDK pin only in the temporary lockfile.
 ## Connect
 
 1. Publish a Form or Portal in miniExtensions.
-2. Create a publishable key in that workspace's Settings. Keep the key for this
-   browser session; the Settings card reveals it once.
-3. Enter the exact origin that serves the SDK endpoint, the key, and the
+2. Enter the exact origin that serves the miniExtensions APIs and the
    extension's published share ID. For a preview, use its preview origin.
-4. Choose **Connect and load**. An optional record ID opens a direct Form edit
+3. Choose **Connect and load**. An optional record ID opens a direct Form edit
    if that Form permits it.
 
-The key stays in page memory and is not stored in a URL, log, cookie, or browser
-storage. **Disconnect** clears the key and both visitor sessions. The SDK sends
-cross-origin requests with `credentials: 'omit'`.
+**Disconnect** clears both visitor sessions. The SDK sends cross-origin
+requests with `credentials: 'omit'` and explicit visitor credentials. The API
+deployment must allow its public tRPC routes and `miniext-context` header from
+this example's origin; the client uses the existing v1 and tRPC endpoints.
 
 ## Form workflow
 
@@ -157,5 +156,5 @@ again.
 
 Use the [runtime guide](../../docs/runtime.md) for full method contracts and
 production application session ownership. Use normal published extension
-configuration to change access; a publishable key covers the workspace's
-supported operations but never replaces visitor permissions.
+configuration to change access; the existing server handlers retain visitor
+permissions and all record, field and action checks.

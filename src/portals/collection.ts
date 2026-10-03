@@ -378,9 +378,7 @@ export const createPortalCollection = (
                         prefillDataForLinkedRecordsForm:
                             structuredClone(prefillData),
                     },
-                    ...(childOptions.query === undefined
-                        ? {}
-                        : { query: childOptions.query }),
+                    query: childOptions.query ?? {},
                     ...(childOptions.clientTimeZone === undefined
                         ? {}
                         : { clientTimeZone: childOptions.clientTimeZone }),

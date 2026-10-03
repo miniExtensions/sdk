@@ -1,5 +1,6 @@
 import {
     createMiniExtensionsClient,
+    AirtableFieldType,
     SDKError,
     withExtensionPassword,
     withLoginToken,
@@ -11,11 +12,8 @@ import {
     type PortalLoadedResult,
     type RuntimeSession,
     type SaveFormInput,
-} from '@miniextensions/sdk';
-import {
-    AirtableFieldType,
     type AirtableValue,
-} from '@miniextensions/sdk/formulas';
+} from '@miniextensions/sdk';
 import {
     createFormSaveInput,
     normalizeFormSaveResult,
@@ -64,7 +62,6 @@ const visitors = { A: newVisitor(), B: newVisitor() };
 let activeVisitor: keyof typeof visitors = 'A';
 let connection: {
     apiOrigin: string;
-    publishableKey: string;
     input: LoadExtensionInput;
 } | null = null;
 let request: AbortController | null = null;
@@ -317,10 +314,13 @@ const renderLogin = (page: LoginPageResult): void => {
     for (const name of page.payload.loginFieldNames) {
         const input = element('input');
         const schema = page.payload.fieldNamesToSchemas[name];
+        const config = schema?.miniExtConfig;
         input.type =
             schema?.fieldType === AirtableFieldType.EMAIL
                 ? 'email'
-                : schema?.miniExtConfig?.obscurePassword === true
+                : config !== undefined &&
+                    'obscurePassword' in config &&
+                    config.obscurePassword === true
                   ? 'password'
                   : 'text';
         input.autocomplete =
@@ -477,7 +477,8 @@ const renderForm = (page: FormLoadedResult): void => {
             };
         }
         const control: FieldControl = fieldControl(
-            schema,
+            schema.airtableField,
+            schema.miniExtConfig,
             visitor.drafts.read(draft, fieldId),
             () => {
                 try {
@@ -494,15 +495,20 @@ const renderForm = (page: FormLoadedResult): void => {
         );
         controls.set(fieldId, control);
         fields.append(control.node);
+        const config = schema.miniExtConfig;
         if (
-            schema.miniExtConfig?.readOnly === true ||
+            (config !== undefined &&
+                'readOnly' in config &&
+                config.readOnly === true) ||
             schema.airtableField.isComputed === true
         )
             continue;
         if (
             (schema.fieldType === AirtableFieldType.SINGLE_SELECT ||
                 schema.fieldType === AirtableFieldType.MULTIPLE_SELECTS) &&
-            schema.miniExtConfig?.allowAddingNewOptions === true
+            config !== undefined &&
+            'allowAddingNewOptions' in config &&
+            config.allowAddingNewOptions === true
         ) {
             const choice = element('input');
             choice.placeholder = 'New choice name';
@@ -959,18 +965,15 @@ connectionForm.addEventListener('submit', (event) => {
     for (const visitor of Object.values(visitors)) invalidate(visitor);
     try {
         const apiOrigin = inputById('api-origin').value.trim();
-        const publishableKey = inputById('publishable-key').value;
         const shareId = inputById('share-id').value.trim();
         const recordId = inputById('record-id').value.trim() || null;
         if (shareId === '') throw new Error('Enter the published share ID.');
         for (const visitor of Object.values(visitors))
             visitor.client = createMiniExtensionsClient({
                 apiOrigin,
-                publishableKey,
             });
         connection = {
             apiOrigin,
-            publishableKey,
             input: {
                 shareId,
                 recordId,
@@ -1028,11 +1031,8 @@ nodeById('disconnect').addEventListener('click', () => {
         visitor.client = null;
     }
     connection = null;
-    inputById('publishable-key').value = '';
     render();
-    status(
-        'Disconnected. Both visitor sessions and the key have been cleared.'
-    );
+    status('Disconnected. Both visitor sessions have been cleared.');
     setBusy(false);
 });
 setBusy(false);

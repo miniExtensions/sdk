@@ -518,7 +518,7 @@ reinterpreted. Preserve undisplayed native values in the draft.
 native values. It returns `false` for unavailable fields, expired drafts and
 stale/disposed controllers. It does not replace backend field validation or
 inspect every `AirtableValue` against the field's value schema. The server still
-enforces the published extension, key, password/login, record/field/action,
+enforces the published extension, password/login, record/field/action,
 CAPTCHA and other existing rules.
 
 The controller prevents simultaneous saves. `ready` and `validation-error`
@@ -545,7 +545,7 @@ a response. A signal already aborted before dispatch rejects without sending.
 Advance the application-owned revision returned by `getScope` whenever visitor,
 connection, credentials,
 loaded token, record, field/filter configuration or parent context changes.
-Use a stable application owner identity, not a publishable key as an identity.
+Use a stable application owner identity for each visitor.
 Anonymous visitors need distinct ownership/revisions too. Increment for every
 transition, including A → B → A: identical final credentials cannot prove the
 old context remains current.
@@ -568,4 +568,4 @@ owner remains responsible for clearing a supplied visitor store.
 
 This module is client-side presentation and draft management. Local tests and
 packed-consumer checks prove these helper contracts; they do not prove a
-specific staging deployment, extension/key or backend compatibility.
+specific staging deployment, extension or backend compatibility.

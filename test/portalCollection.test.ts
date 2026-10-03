@@ -58,8 +58,10 @@ const readOptions = { pagesToFetch: 1, refreshLoggedInPortalRecord: true };
 const titleField: RuntimeAirtableField = {
     id: 'fld_title',
     name: 'Title',
+    description: null,
+    isComputed: false,
     isPrimaryField: true,
-    config: { type: AirtableFieldType.SINGLE_LINE_TEXT },
+    config: { type: AirtableFieldType.SINGLE_LINE_TEXT, options: null },
 };
 const detail = (fieldId = 'fld_title'): RuntimeLinkedRecordDetailField => ({
     fieldId,
@@ -68,6 +70,7 @@ const detail = (fieldId = 'fld_title'): RuntimeLinkedRecordDetailField => ({
     isHidden: false,
     fieldIsInEditingChildForm: true,
     childFormField: null,
+    miniExtConfig: {},
 });
 const rows = (
     recordIds = ['record_first'],
@@ -630,6 +633,47 @@ describe('optional Portal collections', () => {
         );
     });
 
+    it('uses the shared editing child in form layout while creation keeps its separate child', async () => {
+        const s = setup(async () => rows(), {
+            portal: portalPage({
+                layout: 'form',
+                allowCreatingRecords: true,
+                allowEditingRecords: true,
+                formsForEditingAndCreating: 'same-form',
+                extensionIdForCreatingAndEditing: 'extension_shared_child',
+                extensionIdForEditing: 'extension_legacy_edit_child',
+                extensionIdForCreating: 'extension_create_child',
+            }),
+        });
+        await s.collection.readFirst(readOptions);
+        assert.equal(
+            s.collection.childFormRequest({
+                access: { type: 'edit', recordId: 'record_first' },
+                configuredChildExtensionId: 'extension_shared_child',
+            }).input.childExtensionInfo.childExtensionId,
+            'extension_shared_child'
+        );
+        const create = s.collection.childFormRequest({
+            access: { type: 'create' },
+            configuredChildExtensionId: 'extension_create_child',
+        });
+        assert.equal(
+            create.input.childExtensionInfo.childExtensionId,
+            'extension_create_child'
+        );
+        assert.deepEqual(create.input.query, {});
+        assert.throws(
+            () =>
+                s.collection.childFormRequest({
+                    access: { type: 'edit', recordId: 'record_first' },
+                    configuredChildExtensionId: 'extension_legacy_edit_child',
+                }),
+            PortalCollectionError
+        );
+        assert.equal(s.calls.length, 1);
+        assert.equal(s.fixture.mutations, 0);
+    });
+
     it('preserves missing inverse links and ignores non-string configured prefill values', () => {
         const page = portalPage();
         const config =
@@ -718,7 +762,7 @@ describe('optional Portal collections', () => {
         );
         const separate = setup(async () => rows(), {
             portal: portalPage({
-                formsForEditingAndCreating: 'separate-forms',
+                formsForEditingAndCreating: 'different-forms',
                 extensionIdForCreating: 'extension_create',
                 extensionIdForEditing: 'extension_edit',
             }),

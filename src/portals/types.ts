@@ -58,9 +58,8 @@ export type PortalReadOutcome =
           raw: ListPortalLinkedRecordsResult;
       };
 
-export type PortalChildRequestOptions = Pick<
-    LoadExtensionInput,
-    'query' | 'clientTimeZone' | 'deviceFingerprint'
+export type PortalChildRequestOptions = Partial<
+    Pick<LoadExtensionInput, 'query' | 'clientTimeZone' | 'deviceFingerprint'>
 > & {
     access: { type: 'create' } | { type: 'edit'; recordId: string };
     /** Exact configured create/edit child ID; this does not grant access. */

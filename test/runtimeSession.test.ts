@@ -3,6 +3,31 @@ import { describe, it } from 'node:test';
 import { withExtensionPassword, withLoginToken } from '../src/runtime/index.js';
 
 describe('runtime credential helpers', () => {
+    it('rejects a hosted Firebase principal instead of copying it into visitor credentials', () => {
+        const session = { miniExtSession: 'hosted_firebase_principal' };
+        assert.throws(
+            () =>
+                withExtensionPassword(session, {
+                    extensionId: 'extension_example',
+                    encryptedExtensionPassword: 'password_token',
+                }),
+            TypeError
+        );
+        assert.throws(
+            () =>
+                withLoginToken(session, {
+                    extensionId: 'extension_example',
+                    tableId: 'table_example',
+                    loginFieldNames: ['Email'],
+                    encryptedLoginToken: 'login_token',
+                }),
+            TypeError
+        );
+        assert.deepEqual(session, {
+            miniExtSession: 'hosted_firebase_principal',
+        });
+    });
+
     it('adds an extension-bound password credential to a new session', () => {
         const session = { existing: 'existing_token' };
         const next = withExtensionPassword(session, {

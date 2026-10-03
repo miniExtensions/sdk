@@ -289,7 +289,7 @@ describe('optional auth flow contracts', () => {
         it(`returns actual signup ok=${ok} without login, token or reload`, async () => {
             const fixture = authFixture({ signup: async () => ({ ok }) });
             const page = loginPage();
-            page.payload.publicFields = {};
+            page.payload.publicFields.state.ifRecordDoesNotExist = null;
             const flow = createAuthFlow({
                 client: fixture.client,
                 page,

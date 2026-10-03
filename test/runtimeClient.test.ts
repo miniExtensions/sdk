@@ -11,9 +11,8 @@ import {
 import { formResult, loadInput, saveInput } from './runtimeFixtures.js';
 
 type RequestBody = {
-    operation: string;
-    input: unknown;
-    session: RuntimeSession;
+    miniExtStorageV4: RuntimeSession;
+    [key: string]: unknown;
 };
 type CapturedRequest = { url: string; init: RequestInit; body: RequestBody };
 
@@ -43,11 +42,10 @@ const externalFetch = (
 
 const configuration = {
     apiOrigin: 'https://sdk.example.test',
-    publishableKey: 'publishable_example',
 };
 
 describe('runtime client transport', () => {
-    it('requires an HTTP(S) origin and a nonempty publishable key', () => {
+    it('requires an HTTP(S) origin', () => {
         for (const apiOrigin of [
             'relative',
             'file:///example',
@@ -61,34 +59,24 @@ describe('runtime client transport', () => {
                 TypeError
             );
         }
-        for (const publishableKey of ['', '  ', 'key\nother']) {
-            assert.throws(
-                () =>
-                    createMiniExtensionsClient({
-                        ...configuration,
-                        publishableKey,
-                    }),
-                TypeError
-            );
-        }
     });
 
-    it('maps all six methods to one authenticated POST without changing input or output', async () => {
+    it('maps six methods to existing v1 POST routes without changing input or output', async () => {
         const responses: Record<string, unknown> = {
-            loadExtension: formResult,
-            'auth.verifyExtensionPassword': {
+            fetchExtensionForEndUser: formResult,
+            verifyExtensionPassword: {
                 type: 'correct',
                 encryptedExtensionPassword: 'password_token',
             },
-            'auth.login': {
+            loginIntoExtensionUsingLoginPageExtension: {
                 type: 'found-record',
                 encryptedLoginToken: 'login_token',
             },
-            'auth.confirmVerificationCode': {
+            confirmVerificationCodeForLogin: {
                 encryptedLoginToken: 'confirmed_token',
             },
-            'auth.signUp': { ok: true },
-            'forms.save': {
+            signUpForLoginPageExtension: { ok: true },
+            saveForm: {
                 type: 'saved',
                 record: {
                     id: 'rec00000000000001',
@@ -99,8 +87,8 @@ describe('runtime client transport', () => {
                 tableId: 'table_example',
             },
         };
-        const boundary = externalFetch(({ body }) =>
-            jsonResponse(responses[body.operation])
+        const boundary = externalFetch(({ url }) =>
+            jsonResponse(responses[new URL(url).searchParams.get('route')!])
         );
         const session = { login: 'session_token' };
         const client = createMiniExtensionsClient({
@@ -131,47 +119,57 @@ describe('runtime client transport', () => {
         };
         const methods = [
             [
-                'loadExtension',
+                'fetchExtensionForEndUser',
                 loadInput,
                 () => client.loadExtension(loadInput, { signal }),
             ],
             [
-                'auth.verifyExtensionPassword',
+                'verifyExtensionPassword',
                 password,
                 () => client.auth.verifyExtensionPassword(password, { signal }),
             ],
-            ['auth.login', login, () => client.auth.login(login, { signal })],
             [
-                'auth.confirmVerificationCode',
+                'loginIntoExtensionUsingLoginPageExtension',
+                login,
+                () => client.auth.login(login, { signal }),
+            ],
+            [
+                'confirmVerificationCodeForLogin',
                 confirm,
                 () => client.auth.confirmVerificationCode(confirm, { signal }),
             ],
             [
-                'auth.signUp',
+                'signUpForLoginPageExtension',
                 signUp,
                 () => client.auth.signUp(signUp, { signal }),
             ],
             [
-                'forms.save',
+                'saveForm',
                 saveInput,
                 () => client.forms.save(saveInput, { signal }),
             ],
         ] as const;
 
-        for (const [operation, input, call] of methods) {
-            assert.deepEqual(await call(), responses[operation]);
+        for (const [route, input, call] of methods) {
+            assert.deepEqual(await call(), responses[route]);
             const request = boundary.requests.at(-1)!;
-            assert.equal(request.url, 'https://sdk.example.test/api/sdk');
+            assert.equal(
+                request.url,
+                `https://sdk.example.test/api/v1?route=${route}`
+            );
             assert.equal(request.init.method, 'POST');
             assert.equal(request.init.credentials, 'omit');
+            assert.equal(request.init.cache, 'no-store');
             assert.equal(request.init.signal, signal);
             const headers = new Headers(request.init.headers);
-            assert.equal(
-                headers.get('authorization'),
-                'Bearer publishable_example'
-            );
+            assert.equal(headers.get('authorization'), null);
+            assert.equal(headers.get('origin'), null);
+            assert.equal(headers.get('miniext-context'), null);
             assert.equal(headers.get('content-type'), 'application/json');
-            assert.deepEqual(request.body, { operation, input, session });
+            assert.deepEqual(request.body, {
+                ...input,
+                miniExtStorageV4: session,
+            });
         }
         assert.equal(boundary.requests.length, methods.length);
     });
@@ -223,7 +221,12 @@ describe('runtime client transport', () => {
         ];
         for (const input of inputs) await client.loadExtension(input);
         assert.deepEqual(
-            boundary.requests.map(({ body }) => body.input),
+            boundary.requests.map(
+                ({ body: { miniExtStorageV4, ...input } }) => {
+                    assert.deepEqual(miniExtStorageV4, {});
+                    return input;
+                }
+            ),
             inputs
         );
     });
@@ -485,9 +488,6 @@ describe('runtime client transport', () => {
                     assert.equal(error.kind, kind);
                     assert.equal(error.status, status);
                     assert.ok(!error.message.includes('<html>'));
-                    assert.ok(
-                        !error.message.includes(configuration.publishableKey)
-                    );
                     return true;
                 }
             );
@@ -597,13 +597,12 @@ describe('runtime client transport', () => {
             assert.deepEqual(await client.loadExtension(loadInput), formResult);
             assert.deepEqual(captured, {
                 method: 'POST',
-                url: '/api/sdk',
-                authorization: 'Bearer publishable_example',
+                url: '/api/v1?route=fetchExtensionForEndUser',
+                authorization: undefined,
                 contentType: 'application/json',
                 body: {
-                    operation: 'loadExtension',
-                    input: loadInput,
-                    session: { login: 'session_token' },
+                    ...loadInput,
+                    miniExtStorageV4: { login: 'session_token' },
                 },
             });
         } finally {
@@ -615,6 +614,158 @@ describe('runtime client transport', () => {
 });
 
 describe('runtime session ownership', () => {
+    it('rejects hosted principals at construction, replacement, and per-call boundaries without sending them', async () => {
+        const boundary = externalFetch();
+        const forbidden = { miniExtSession: 'hosted_firebase_principal' };
+        assert.throws(
+            () =>
+                createMiniExtensionsClient({
+                    ...configuration,
+                    session: forbidden,
+                    fetch: boundary.fetchImpl,
+                }),
+            TypeError
+        );
+        const client = createMiniExtensionsClient({
+            ...configuration,
+            session: { visitor: 'token_A' },
+            fetch: boundary.fetchImpl,
+        });
+        assert.throws(() => client.setSession(forbidden), TypeError);
+        await assert.rejects(
+            client.loadExtension(loadInput, { session: forbidden }),
+            TypeError
+        );
+        await assert.rejects(
+            client.portals.getUserRecord(
+                { extensionAccessToken: 'visitor_access' },
+                { session: forbidden }
+            ),
+            TypeError
+        );
+        assert.equal(boundary.requests.length, 0);
+        assert.deepEqual(client.getSession(), { visitor: 'token_A' });
+    });
+
+    it('rejects top-level credential injection and preserves identically named Airtable fields', async () => {
+        const boundary = externalFetch();
+        const client = createMiniExtensionsClient({
+            ...configuration,
+            fetch: boundary.fetchImpl,
+        });
+        for (const reserved of ['miniExtSession', 'miniExtStorageV4']) {
+            await assert.rejects(
+                client.loadExtension({ ...loadInput, [reserved]: 'injected' }),
+                TypeError
+            );
+            await assert.rejects(
+                client.portals.getUserRecord({
+                    extensionAccessToken: 'visitor_access',
+                    [reserved]: 'injected',
+                }),
+                TypeError
+            );
+        }
+        assert.equal(boundary.requests.length, 0);
+        const input = {
+            ...saveInput,
+            formRecord: {
+                ...saveInput.formRecord,
+                data: {
+                    miniExtSession: 'ordinary field value',
+                    miniExtStorageV4: 'another field value',
+                    toJSON: 'a third field value',
+                },
+            },
+        };
+        await client.forms.save(input);
+        assert.deepEqual(
+            boundary.requests[0].body.formRecord,
+            input.formRecord
+        );
+    });
+
+    it('rejects top-level toJSON replacement before dispatch without invoking it', async () => {
+        const boundary = externalFetch();
+        const client = createMiniExtensionsClient({
+            ...configuration,
+            session: { visitor: 'token_A' },
+            fetch: boundary.fetchImpl,
+        });
+        let serializations = 0;
+        const toJSON = () => {
+            serializations++;
+            return {
+                miniExtSession: 'hosted_firebase_principal',
+                miniExtStorageV4: { visitor: 'injected_session' },
+            };
+        };
+        await assert.rejects(
+            client.loadExtension({
+                ...loadInput,
+                // @ts-expect-error Intentionally invalid serializer tests the JavaScript boundary.
+                toJSON,
+            }),
+            TypeError
+        );
+        await assert.rejects(
+            client.portals.getUserRecord({
+                extensionAccessToken: 'visitor_access',
+                // @ts-expect-error Intentionally invalid serializer tests the JavaScript boundary.
+                toJSON,
+            }),
+            TypeError
+        );
+        let reads = 0;
+        const inputWithGetter = Object.defineProperty(
+            { ...loadInput },
+            'toJSON',
+            {
+                enumerable: true,
+                get() {
+                    reads++;
+                    return reads === 1 ? 'ordinary property' : toJSON;
+                },
+            }
+        );
+        await assert.rejects(client.loadExtension(inputWithGetter), TypeError);
+        assert.equal(reads, 2);
+        assert.equal(serializations, 0);
+        assert.equal(boundary.requests.length, 0);
+        assert.deepEqual(client.getSession(), { visitor: 'token_A' });
+    });
+
+    it('validates the captured visitor session without reading credential getters twice', async () => {
+        const boundary = externalFetch();
+        let reads = 0;
+        const initial = Object.defineProperty(
+            { visitor: 'token_A' },
+            'toJSON',
+            {
+                enumerable: true,
+                get() {
+                    reads++;
+                    return reads === 1
+                        ? 'ordinary visitor metadata'
+                        : () => ({
+                              miniExtSession: 'hosted_firebase_principal',
+                          });
+                },
+            }
+        );
+        const client = createMiniExtensionsClient({
+            ...configuration,
+            session: initial,
+            fetch: boundary.fetchImpl,
+        });
+        await client.loadExtension(loadInput);
+        assert.equal(reads, 1);
+        assert.deepEqual(boundary.requests[0].body.miniExtStorageV4, {
+            visitor: 'token_A',
+            toJSON: 'ordinary visitor metadata',
+        });
+    });
+
     it('clones construction, replacement, and returned sessions and clears by replacement', async () => {
         const boundary = externalFetch();
         const initial = { visitor: 'token_A' };
@@ -636,7 +787,7 @@ describe('runtime session ownership', () => {
         client.setSession({});
         await client.loadExtension(loadInput);
         assert.deepEqual(
-            boundary.requests.map(({ body }) => body.session),
+            boundary.requests.map(({ body }) => body.miniExtStorageV4),
             [{ visitor: 'token_B' }, { visitor: 'token_A' }, {}]
         );
     });
@@ -655,7 +806,7 @@ describe('runtime session ownership', () => {
         await client.loadExtension(loadInput, { session: {} });
         await client.loadExtension(loadInput);
         assert.deepEqual(
-            boundary.requests.map(({ body }) => body.session),
+            boundary.requests.map(({ body }) => body.miniExtStorageV4),
             [
                 { other: 'token_B' },
                 {},
@@ -670,8 +821,9 @@ describe('runtime session ownership', () => {
 
     it('keeps a pending auth request under A from changing replacement session B', async () => {
         let finishLogin!: (response: Response) => void;
-        const boundary = externalFetch(({ body }) =>
-            body.operation === 'auth.login'
+        const boundary = externalFetch(({ url }) =>
+            new URL(url).searchParams.get('route') ===
+            'loginIntoExtensionUsingLoginPageExtension'
                 ? new Promise<Response>((resolve) => {
                       finishLogin = resolve;
                   })
@@ -699,7 +851,7 @@ describe('runtime session ownership', () => {
             encryptedLoginToken: 'late_token_A',
         });
         assert.deepEqual(
-            boundary.requests.map(({ body }) => body.session),
+            boundary.requests.map(({ body }) => body.miniExtStorageV4),
             [{ visitor: 'token_A' }, { visitor: 'token_B' }]
         );
         assert.deepEqual(client.getSession(), { visitor: 'token_B' });
@@ -714,7 +866,6 @@ describe('runtime session ownership', () => {
         });
         const second = createMiniExtensionsClient({
             ...configuration,
-            publishableKey: 'publishable_other',
             session: { visitor: 'token_B' },
             fetch: boundary.fetchImpl,
         });
@@ -723,14 +874,14 @@ describe('runtime session ownership', () => {
             second.loadExtension(loadInput),
         ]);
         assert.deepEqual(
-            boundary.requests.map(({ body }) => body.session),
+            boundary.requests.map(({ body }) => body.miniExtStorageV4),
             [{ visitor: 'token_A' }, { visitor: 'token_B' }]
         );
         assert.deepEqual(
             boundary.requests.map(({ init }) =>
                 new Headers(init.headers).get('authorization')
             ),
-            ['Bearer publishable_example', 'Bearer publishable_other']
+            [null, null]
         );
         first.setSession(
             withLoginToken(first.getSession(), {
@@ -747,7 +898,7 @@ describe('runtime session ownership', () => {
         });
         await restored.loadExtension(loadInput);
         assert.deepEqual(
-            boundary.requests.at(-1)!.body.session,
+            boundary.requests.at(-1)!.body.miniExtStorageV4,
             first.getSession()
         );
         assert.deepEqual(second.getSession(), { visitor: 'token_B' });

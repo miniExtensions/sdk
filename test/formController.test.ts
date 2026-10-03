@@ -33,7 +33,6 @@ const fixture = (
     const calls: Call[] = [];
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
-        publishableKey: 'publishable_example',
         session: { visitor: 'visitor_A' },
         fetch: async () => {
             throw new Error('Only the existing save method is expected.');

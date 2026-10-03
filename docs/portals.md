@@ -4,8 +4,8 @@
 child Form metadata. It has no DOM, React, renderer, storage, or runtime
 dependency of its own. Install the supplied private archive using the
 [runtime quickstart](runtime.md#packaged-form-quickstart); this package has not
-been published to npm. The core client still requires an enabled SDK endpoint,
-a publishable workspace key and the visitor's current session.
+been published to npm. The core client uses the existing miniExtensions APIs
+and the visitor's current session; the server retains authorization.
 
 A collection binds one loaded `portal_loaded` result, configured linked field,
 custom view, criteria and application owner/revision. It does not grant access,
@@ -337,7 +337,6 @@ import type { PortalCollectionCriteria } from '@miniextensions/sdk/portals';
 
 const client = createMiniExtensionsClient({
     apiOrigin: 'https://your-api-origin.example',
-    publishableKey: 'YOUR_PUBLISHABLE_KEY',
 });
 const owner = createPortalScreenOwner({
     client,

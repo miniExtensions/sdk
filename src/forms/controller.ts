@@ -1,5 +1,5 @@
-import type { AirtableValue } from '../formulas/types.js';
 import type {
+    AirtableValue,
     FormLoadedResult,
     MiniExtensionsClient,
     RuntimeSession,

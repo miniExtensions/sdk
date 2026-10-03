@@ -12,5 +12,5 @@ export type {
     AirtableRecord,
     AirtableValue,
     SelectFieldChoice,
-} from '../formulas/types.js';
+} from './types.js';
 export type * from './types.js';

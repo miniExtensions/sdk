@@ -336,24 +336,29 @@ export function AuthPanel(props: Props) {
             : initial;
     const blocked = !visible.ready || visible.busy || visible.recovery;
     const fields = (prefix: string, names: readonly string[]) =>
-        names.map((name) => (
-            <label key={`${props.ownerScope.revision}:${prefix}:${name}`}>
-                {name}
-                <input
-                    type={
-                        props.page.extensionScreen === 'login_page' &&
-                        props.page.payload.fieldNamesToSchemas[name]
-                            ?.miniExtConfig?.obscurePassword === true
-                            ? 'password'
-                            : 'text'
-                    }
-                    ref={(node) => {
-                        inputs.current[`${prefix}:${name}`] = node;
-                    }}
-                    autoComplete="off"
-                />
-            </label>
-        ));
+        names.map((name) => {
+            const config =
+                props.page.extensionScreen === 'login_page'
+                    ? props.page.payload.fieldNamesToSchemas[name]
+                          ?.miniExtConfig
+                    : undefined;
+            const obscured =
+                config !== undefined &&
+                'obscurePassword' in config &&
+                config.obscurePassword === true;
+            return (
+                <label key={`${props.ownerScope.revision}:${prefix}:${name}`}>
+                    {name}
+                    <input
+                        type={obscured ? 'password' : 'text'}
+                        ref={(node) => {
+                            inputs.current[`${prefix}:${name}`] = node;
+                        }}
+                        autoComplete="off"
+                    />
+                </label>
+            );
+        });
     return (
         <section
             key={`${props.ownerScope.ownerId}:${props.ownerScope.revision}`}
@@ -429,9 +434,10 @@ export function AuthPanel(props: Props) {
 Raw inputs are cleared after a manual action. Opaque grants/challenges stay in a
 local ref, never React state, logs, storage or DOM attributes. Every awaited
 result is checked for current flow, page, owner/revision and operation generation
-before displaying a destination/status or retaining a grant. Wrong codes reject
-with `SDKError`; there is no invented “wrong-code” success-result tag. A
-successful `{ok}` sign-up response is not authentication.
+before displaying a destination/status or retaining a grant. Wrong codes from
+the existing v1 endpoint reject with `SDKError` (`kind:'api'`), including its
+HTTP 200 error responses; there is no invented “wrong-code” success-result tag.
+A successful `{ok}` sign-up response is not authentication.
 
 ## App-owned load and revision
 

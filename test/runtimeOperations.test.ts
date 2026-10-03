@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { TRPCClientError } from '@trpc/client';
 import {
     AirtableFieldType,
     createMiniExtensionsClient,
@@ -15,7 +16,7 @@ import {
 import { saveInput } from './runtimeFixtures.js';
 
 type WireRequest = {
-    operation: string;
+    path: string;
     input: unknown;
     session: RuntimeSession;
 };
@@ -23,7 +24,6 @@ type CapturedRequest = { url: string; init: RequestInit };
 
 const configuration = {
     apiOrigin: 'https://sdk.example.test',
-    publishableKey: 'publishable_example',
 };
 const tokenInput = { extensionAccessToken: 'visitor_access' };
 const jsonResponse = (body: unknown, status = 200) =>
@@ -31,8 +31,46 @@ const jsonResponse = (body: unknown, status = 200) =>
         status,
         headers: { 'Content-Type': 'application/json' },
     });
-const wireBody = (request: CapturedRequest): WireRequest =>
-    JSON.parse(String(request.init.body)) as WireRequest;
+const wireBody = (request: CapturedRequest): WireRequest => {
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1') {
+        const { miniExtStorageV4: session, ...input } = JSON.parse(
+            String(request.init.body)
+        ) as { miniExtStorageV4: RuntimeSession };
+        return { path: url.searchParams.get('route')!, input, session };
+    }
+    const context = JSON.parse(
+        new Headers(request.init.headers).get('miniext-context')!
+    ) as { miniExtStorageV4: RuntimeSession };
+    return {
+        path: url.pathname.slice('/api/trpc/'.length),
+        input: JSON.parse(
+            request.init.method === 'GET'
+                ? url.searchParams.get('input')!
+                : String(request.init.body)
+        ),
+        session: context.miniExtStorageV4,
+    };
+};
+
+const protocolResponse = (
+    request: CapturedRequest,
+    result: unknown
+): Response =>
+    jsonResponse(
+        new URL(request.url).pathname.startsWith('/api/trpc/')
+            ? { result: result === undefined ? {} : { data: result } }
+            : result
+    );
+
+const deniedTRPCResponse = (path: string) =>
+    jsonResponse({
+        error: {
+            message: 'Request denied.',
+            code: -32003,
+            data: { code: 'FORBIDDEN', httpStatus: 403, path },
+        },
+    });
 
 const captureFetch = (
     respond: (request: CapturedRequest) => Response | Promise<Response>
@@ -98,6 +136,9 @@ const tableStates: RuntimeTableStates = {
             {
                 id: 'fld_children',
                 name: 'Children',
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
                 config: {
                     type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
                     options: {
@@ -218,6 +259,8 @@ const commentResult = {
 describe('Form and Portal method contracts', () => {
     const methods: Array<{
         operation: string;
+        path: string;
+        method: 'GET' | 'POST';
         input: object;
         response: unknown;
         expected?: unknown;
@@ -225,18 +268,24 @@ describe('Form and Portal method contracts', () => {
     }> = [
         {
             operation: 'portals.listLinkedRecords',
+            path: 'fetchRecordsForLinkedTableOnPortal',
+            method: 'POST',
             input: listInput,
             response: linkedRecordsResult,
             call: (client) => client.portals.listLinkedRecords(listInput),
         },
         {
             operation: 'portals.getUserRecord',
+            path: 'airtable.getUserRecord',
+            method: 'GET',
             input: tokenInput,
             response: record,
             call: (client) => client.portals.getUserRecord(tokenInput),
         },
         {
             operation: 'portals.updateGridCell',
+            path: 'airtable.updatePortalRecord',
+            method: 'POST',
             input: gridInput,
             response: {
                 record,
@@ -255,26 +304,34 @@ describe('Form and Portal method contracts', () => {
         },
         {
             operation: 'portals.unlinkRecord',
+            path: 'airtable.unlinkPortalRecord',
+            method: 'POST',
             input: unlinkInput,
-            response: null,
+            response: undefined,
             expected: undefined,
             call: (client) => client.portals.unlinkRecord(unlinkInput),
         },
         {
             operation: 'portals.setKanbanCategory',
+            path: 'airtable.updateRecordKanbanCategory',
+            method: 'POST',
             input: kanbanInput,
             response: { type: 'logged-in', loggedInUserRecord: record },
             call: (client) => client.portals.setKanbanCategory(kanbanInput),
         },
         {
             operation: 'forms.deleteCurrentRecord',
+            path: 'airtable.deleteRecord',
+            method: 'POST',
             input: tokenInput,
-            response: null,
+            response: undefined,
             expected: undefined,
             call: (client) => client.forms.deleteCurrentRecord(tokenInput),
         },
         {
             operation: 'forms.addSelectOption',
+            path: 'airtable.addNewAirtableOptionForFormField',
+            method: 'POST',
             input: selectInput,
             response: {
                 newChoice: {
@@ -287,6 +344,8 @@ describe('Form and Portal method contracts', () => {
         },
         {
             operation: 'linkedRecords.listFormOptions',
+            path: 'fetchRecordsForFormLinkedRecordsSelector',
+            method: 'POST',
             input: formOptionsInput,
             response: selectorResult,
             call: (client) =>
@@ -294,6 +353,8 @@ describe('Form and Portal method contracts', () => {
         },
         {
             operation: 'linkedRecords.listPortalOptions',
+            path: 'fetchRecordsForPortalLinkedRecordsSelector',
+            method: 'POST',
             input: portalOptionsInput,
             response: selectorResult,
             call: (client) =>
@@ -301,6 +362,8 @@ describe('Form and Portal method contracts', () => {
         },
         {
             operation: 'linkedRecords.loadSelectedRecords',
+            path: 'publicExtensions.fetchInitialTableIdsToLinkedTableStates',
+            method: 'GET',
             input: tokenInput,
             response: tableStates,
             call: (client) =>
@@ -308,6 +371,8 @@ describe('Form and Portal method contracts', () => {
         },
         {
             operation: 'attachments.createUploadUrl',
+            path: 'publicExtensions.createPublicUploadLink',
+            method: 'POST',
             input: uploadUrlInput,
             response: signedUpload,
             call: (client) =>
@@ -315,14 +380,18 @@ describe('Form and Portal method contracts', () => {
         },
         {
             operation: 'comments.listForRecord',
+            path: 'airtable.getAirtableCommentsForRecord',
+            method: 'GET',
             input: commentInput,
             response: commentResult,
             call: (client) => client.comments.listForRecord(commentInput),
         },
         {
             operation: 'comments.addToRecord',
+            path: 'airtable.addAirtableCommentForRecord',
+            method: 'POST',
             input: { ...commentInput, comment: 'Example comment' },
-            response: null,
+            response: undefined,
             expected: undefined,
             call: (client) =>
                 client.comments.addToRecord({
@@ -334,7 +403,9 @@ describe('Form and Portal method contracts', () => {
 
     for (const method of methods) {
         it(`preserves ${method.operation} authority, input and result`, async () => {
-            const boundary = captureFetch(() => jsonResponse(method.response));
+            const boundary = captureFetch((request) =>
+                protocolResponse(request, method.response)
+            );
             const session = { visitor: 'visitor_A' };
             const client = createMiniExtensionsClient({
                 ...configuration,
@@ -349,17 +420,23 @@ describe('Form and Portal method contracts', () => {
             );
             assert.equal(boundary.requests.length, 1);
             const request = boundary.requests[0];
-            assert.equal(request.url, 'https://sdk.example.test/api/sdk');
-            assert.equal(request.init.method, 'POST');
-            assert.equal(request.init.credentials, 'omit');
-            const headers = new Headers(request.init.headers);
+            const url = new URL(request.url);
+            assert.equal(url.origin, configuration.apiOrigin);
             assert.equal(
-                headers.get('authorization'),
-                'Bearer publishable_example'
+                url.pathname,
+                method.path.includes('.')
+                    ? `/api/trpc/${method.path}`
+                    : '/api/v1'
             );
+            assert.equal(request.init.method, method.method);
+            assert.equal(request.init.credentials, 'omit');
+            assert.equal(request.init.cache, 'no-store');
+            const headers = new Headers(request.init.headers);
+            assert.equal(headers.get('authorization'), null);
+            assert.equal(headers.get('origin'), null);
             assert.equal(headers.get('content-type'), 'application/json');
             assert.deepEqual(wireBody(request), {
-                operation: method.operation,
+                path: method.path,
                 input: inputBefore,
                 session,
             });
@@ -406,10 +483,10 @@ describe('Form and Portal method contracts', () => {
     });
 
     it('preserves a nullable user record and the no-login Kanban result', async () => {
-        const boundary = captureFetch(({ init }) =>
-            jsonResponse(
-                JSON.parse(String(init.body)).operation ===
-                    'portals.getUserRecord'
+        const boundary = captureFetch((request) =>
+            protocolResponse(
+                request,
+                wireBody(request).path === 'airtable.getUserRecord'
                     ? null
                     : { type: 'no-login' }
             )
@@ -425,7 +502,7 @@ describe('Form and Portal method contracts', () => {
         assert.equal(boundary.requests.length, 2);
     });
 
-    it('rejects null ordinary responses and non-null void responses without weakening protocol checks', async () => {
+    it('rejects null v1 responses', async () => {
         for (const [response, call] of [
             [
                 null,
@@ -435,16 +512,6 @@ describe('Form and Portal method contracts', () => {
                 null,
                 (client: MiniExtensionsClient) =>
                     client.portals.listLinkedRecords(listInput),
-            ],
-            [
-                { ok: true },
-                (client: MiniExtensionsClient) =>
-                    client.forms.deleteCurrentRecord(tokenInput),
-            ],
-            [
-                false,
-                (client: MiniExtensionsClient) =>
-                    client.portals.unlinkRecord(unlinkInput),
             ],
         ] as const) {
             const boundary = captureFetch(() => jsonResponse(response));
@@ -461,13 +528,9 @@ describe('Form and Portal method contracts', () => {
         }
     });
 
-    it('throws an HTTP-200 endpoint error before interpreting a void mutation and never replays it', async () => {
+    it('preserves a native tRPC error before interpreting a void mutation and never replays it', async () => {
         const boundary = captureFetch(() =>
-            jsonResponse({
-                error: true,
-                message: 'Comment denied.',
-                code: 'comment.denied',
-            })
+            deniedTRPCResponse('airtable.addAirtableCommentForRecord')
         );
         const client = createMiniExtensionsClient({
             ...configuration,
@@ -480,15 +543,121 @@ describe('Form and Portal method contracts', () => {
                 comment: 'Example',
             }),
             (error: unknown) => {
-                assert.ok(error instanceof SDKError);
-                assert.equal(error.kind, 'api');
-                assert.equal(error.status, 200);
-                assert.equal(error.code, 'comment.denied');
+                assert.ok(error instanceof TRPCClientError);
+                assert.equal(error.message, 'Request denied.');
+                assert.deepEqual(error.data, {
+                    code: 'FORBIDDEN',
+                    httpStatus: 403,
+                    path: 'airtable.addAirtableCommentForRecord',
+                });
+                assert.equal(error.shape?.code, -32003);
                 return true;
             }
         );
         assert.equal(boundary.requests.length, 1);
         assert.deepEqual(client.getSession(), { visitor: 'visitor_A' });
+    });
+
+    it('preserves the official client protocol error for a malformed tRPC envelope', async () => {
+        const boundary = captureFetch(() => jsonResponse({ unexpected: true }));
+        const client = createMiniExtensionsClient({
+            ...configuration,
+            fetch: boundary.fetchImpl,
+        });
+        await assert.rejects(
+            client.portals.getUserRecord(tokenInput),
+            TRPCClientError
+        );
+        assert.equal(boundary.requests.length, 1);
+    });
+
+    it('never replays a tRPC mutation after an uncertain network failure', async () => {
+        const cause = new TypeError('Synthetic mutation network failure');
+        const boundary = captureFetch(() => Promise.reject(cause));
+        const client = createMiniExtensionsClient({
+            ...configuration,
+            fetch: boundary.fetchImpl,
+        });
+        await assert.rejects(
+            client.portals.updateGridCell(gridInput),
+            (error: unknown) =>
+                error instanceof TRPCClientError && error.cause === cause
+        );
+        assert.equal(boundary.requests.length, 1);
+    });
+
+    it('propagates in-flight tRPC cancellation with the caller reason and no replay or session replacement', async () => {
+        let requestStarted!: () => void;
+        const started = new Promise<void>((resolve) => {
+            requestStarted = resolve;
+        });
+        const boundary = captureFetch(
+            ({ init }) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init.signal!.addEventListener(
+                        'abort',
+                        () => reject(init.signal!.reason),
+                        { once: true }
+                    );
+                    requestStarted();
+                })
+        );
+        const client = createMiniExtensionsClient({
+            ...configuration,
+            session: { visitor: 'visitor_A' },
+            fetch: boundary.fetchImpl,
+        });
+        const controller = new AbortController();
+        const pending = client.portals.updateGridCell(gridInput, {
+            signal: controller.signal,
+        });
+        await started;
+        client.setSession({ visitor: 'visitor_B' });
+        const reason = new Error('The visitor left this screen.');
+        controller.abort(reason);
+        await assert.rejects(pending, (error: unknown) => error === reason);
+        assert.equal(boundary.requests.length, 1);
+        assert.deepEqual(wireBody(boundary.requests[0]).session, {
+            visitor: 'visitor_A',
+        });
+        assert.deepEqual(client.getSession(), { visitor: 'visitor_B' });
+    });
+
+    it('keeps overlapping query sessions independent and leaves explicit replacement B in place', async () => {
+        const finish: Array<(response: Response) => void> = [];
+        let queriesStarted!: () => void;
+        const started = new Promise<void>((resolve) => {
+            queriesStarted = resolve;
+        });
+        const boundary = captureFetch(
+            () =>
+                new Promise<Response>((resolve) => {
+                    finish.push(resolve);
+                    if (finish.length === 2) queriesStarted();
+                })
+        );
+        const client = createMiniExtensionsClient({
+            ...configuration,
+            session: { visitor: 'visitor_A' },
+            fetch: boundary.fetchImpl,
+        });
+        const override = { visitor: 'visitor_override' };
+        const first = client.portals.getUserRecord(tokenInput);
+        const second = client.portals.getUserRecord(tokenInput, {
+            session: override,
+        });
+        override.visitor = 'changed_after_call';
+        client.setSession({ visitor: 'visitor_B' });
+        await started;
+        assert.deepEqual(
+            boundary.requests.map((request) => wireBody(request).session),
+            [{ visitor: 'visitor_A' }, { visitor: 'visitor_override' }]
+        );
+        for (const [index, resolve] of finish.entries()) {
+            resolve(protocolResponse(boundary.requests[index], record));
+        }
+        await Promise.all([first, second]);
+        assert.deepEqual(client.getSession(), { visitor: 'visitor_B' });
     });
 });
 
@@ -500,10 +669,10 @@ describe('attachment upload', () => {
         file: new Blob(['Example'], { type: 'text/plain' }),
     };
 
-    it('uploads exact bytes with no SDK key or cookies on the signed PUT and returns unsaved attachment metadata', async () => {
-        const boundary = captureFetch(({ init }) =>
-            init.method === 'POST'
-                ? jsonResponse(signedUpload)
+    it('uploads exact bytes with no session or cookies on the signed PUT and returns unsaved attachment metadata', async () => {
+        const boundary = captureFetch((request) =>
+            request.init.method === 'POST'
+                ? protocolResponse(request, signedUpload)
                 : new Response(null, { status: 204 })
         );
         const client = createMiniExtensionsClient({
@@ -524,7 +693,7 @@ describe('attachment upload', () => {
         );
         assert.equal(boundary.requests.length, 2);
         assert.deepEqual(wireBody(boundary.requests[0]), {
-            operation: 'attachments.createUploadUrl',
+            path: 'publicExtensions.createPublicUploadLink',
             input: uploadUrlInput,
             session: {},
         });
@@ -542,12 +711,17 @@ describe('attachment upload', () => {
         assert.deepEqual(client.getSession(), { visitor: 'visitor_A' });
     });
 
-    it('does not PUT or retry when URL admission fails or returns missing upload metadata', async () => {
-        for (const response of [
-            { error: true, message: 'Upload denied.', code: 'upload.denied' },
-            { signedUrl: signedUpload.signedUrl },
-        ]) {
-            const boundary = captureFetch(() => jsonResponse(response));
+    it('does not PUT or retry when signing fails or returns missing upload metadata', async () => {
+        for (const denied of [true, false]) {
+            const boundary = captureFetch((request) =>
+                denied
+                    ? deniedTRPCResponse(
+                          'publicExtensions.createPublicUploadLink'
+                      )
+                    : protocolResponse(request, {
+                          signedUrl: signedUpload.signedUrl,
+                      })
+            );
             const client = createMiniExtensionsClient({
                 ...configuration,
                 fetch: boundary.fetchImpl,
@@ -555,18 +729,39 @@ describe('attachment upload', () => {
             await assert.rejects(
                 client.attachments.uploadFile(input),
                 (error: unknown) =>
-                    error instanceof SDKError &&
-                    error.kind === ('error' in response ? 'api' : 'protocol')
+                    denied
+                        ? error instanceof TRPCClientError &&
+                          error.data?.code === 'FORBIDDEN'
+                        : error instanceof SDKError && error.kind === 'protocol'
             );
             assert.equal(boundary.requests.length, 1);
         }
     });
 
+    for (const result of [null, undefined, []]) {
+        it(`does not PUT when a signing success has malformed metadata ${JSON.stringify(result)}`, async () => {
+            const boundary = captureFetch((request) =>
+                protocolResponse(request, result)
+            );
+            const client = createMiniExtensionsClient({
+                ...configuration,
+                fetch: boundary.fetchImpl,
+            });
+            await assert.rejects(
+                client.attachments.uploadFile(input),
+                (error: unknown) =>
+                    error instanceof SDKError && error.kind === 'protocol'
+            );
+            assert.equal(boundary.requests.length, 1);
+        });
+    }
+
     it('does not recreate a URL, replay a PUT, or save after an uncertain upload failure', async () => {
         for (const failure of ['http', 'network'] as const) {
             const cause = new TypeError('Synthetic upload network failure');
-            const boundary = captureFetch(({ init }) => {
-                if (init.method === 'POST') return jsonResponse(signedUpload);
+            const boundary = captureFetch((request) => {
+                if (request.init.method === 'POST')
+                    return protocolResponse(request, signedUpload);
                 if (failure === 'network') return Promise.reject(cause);
                 return new Response('Synthetic upload error', { status: 503 });
             });
@@ -599,7 +794,9 @@ describe('attachment upload', () => {
     });
 
     it('sends no request when upload is cancelled before it starts', async () => {
-        const boundary = captureFetch(() => jsonResponse(signedUpload));
+        const boundary = captureFetch((request) =>
+            protocolResponse(request, signedUpload)
+        );
         const client = createMiniExtensionsClient({
             ...configuration,
             fetch: boundary.fetchImpl,
@@ -615,9 +812,9 @@ describe('attachment upload', () => {
 
     it('stops an aborted signing phase before upload and preserves replacement session B', async () => {
         const controller = new AbortController();
-        const boundary = captureFetch(() => {
+        const boundary = captureFetch((request) => {
             controller.abort();
-            return jsonResponse(signedUpload);
+            return protocolResponse(request, signedUpload);
         });
         const client = createMiniExtensionsClient({
             ...configuration,
@@ -644,8 +841,10 @@ describe('attachment upload', () => {
         const started = new Promise<void>((resolve) => {
             putStarted = resolve;
         });
-        const boundary = captureFetch(({ init }) => {
-            if (init.method === 'POST') return jsonResponse(signedUpload);
+        const boundary = captureFetch((request) => {
+            const { init } = request;
+            if (init.method === 'POST')
+                return protocolResponse(request, signedUpload);
             return new Promise<Response>((_resolve, reject) => {
                 init.signal!.addEventListener(
                     'abort',

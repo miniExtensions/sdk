@@ -10,7 +10,6 @@ import {
     type ListPortalLinkedRecordOptionsInput,
     type RuntimeRequestOptions,
     type RuntimeSession,
-    type RuntimeTableState,
 } from '../src/runtime/index.js';
 import {
     createFormLinkedRecordLoader,
@@ -37,13 +36,18 @@ const portalInput: Omit<
     portalTableId: 'table_people',
     portalFieldId: 'field_portal_projects',
 };
-const table: RuntimeTableState = {
+type SelectorTableState =
+    ListLinkedRecordOptionsResult['tableIdsToLinkedTableStates'][string];
+
+const table: SelectorTableState = {
     airtableFields: [
         {
             id: 'field_title',
             name: 'Title',
+            description: null,
+            isComputed: false,
             isPrimaryField: true,
-            config: { type: AirtableFieldType.SINGLE_LINE_TEXT },
+            config: { type: AirtableFieldType.SINGLE_LINE_TEXT, options: null },
         },
     ],
     recordIdsToAirtableRecords: {},
@@ -78,7 +82,6 @@ const fixture = (
     const calls: Call[] = [];
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
-        publishableKey: 'publishable_example',
         session: { visitor: 'visitor_A' },
         fetch: async () => {
             throw new Error(
@@ -441,6 +444,7 @@ describe('linked record option labels and hydration', () => {
                     },
                     {
                         id: 'record_blank_id',
+                        // @ts-expect-error -- An explicit undefined own property is deliberate malformed JavaScript input, absent from canonical JSON.
                         fields: { field_title: undefined, Title: 'Other' },
                     },
                     { id: 'record_name', fields: { Title: 'Name-keyed' } },
@@ -501,7 +505,15 @@ describe('linked record option labels and hydration', () => {
         for (const value of [undefined, null, '', '  ']) {
             assert.deepEqual(
                 selectionOptionsFromRecords(
-                    [{ id: 'record_blank', fields: { field_title: value } }],
+                    [
+                        {
+                            id: 'record_blank',
+                            fields:
+                                value === undefined
+                                    ? {}
+                                    : { field_title: value },
+                        },
+                    ],
                     table
                 ),
                 [{ value: 'record_blank', label: 'record_blank' }]
@@ -580,7 +592,7 @@ describe('linked record option labels and hydration', () => {
                 () =>
                     selectionOptionsFromRecords(
                         records,
-                        metadata as RuntimeTableState
+                        metadata as SelectorTableState
                     ),
                 TypeError
             );

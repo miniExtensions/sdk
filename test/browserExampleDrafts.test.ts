@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { FormDraftStore, type FormDraftScope } from '../src/forms/drafts.js';
+import {
+    FormDraftStore,
+    type FormDraftScope,
+    type DraftSelectChoice,
+} from '../src/forms/drafts.js';
 
 type Attachment = { url: string; filename: string; size: number };
 type Value = string | null | Attachment[];
@@ -110,7 +114,7 @@ describe('browser example Form drafts', () => {
     it('retains newly created select choice metadata and its unsaved selection', () => {
         const visitor = new FormDraftStore<Value>();
         const draft = visitor.open(scope, { category: null }, []);
-        const choice = {
+        const choice: DraftSelectChoice = {
             id: 'choice_example',
             name: 'New choice',
             color: 'blueLight2',

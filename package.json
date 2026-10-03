@@ -99,6 +99,8 @@
         "prepack": "pnpm build"
     },
     "dependencies": {
+        "@trpc/client": "11.0.0-rc.382",
+        "@trpc/server": "11.0.0-rc.382",
         "moment": "2.31.0",
         "moment-duration-format": "2.3.2",
         "moment-timezone": "0.5.45"

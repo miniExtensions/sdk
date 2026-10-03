@@ -1,11 +1,37 @@
 import type { RuntimeSession } from './types.js';
 
+/** The hosted Firebase principal is never part of a public visitor session. */
+export const copyVisitorSession = (
+    session: Readonly<RuntimeSession> = {}
+): RuntimeSession => {
+    if (
+        session == null ||
+        typeof session !== 'object' ||
+        Array.isArray(session) ||
+        'miniExtSession' in session
+    ) {
+        throw new TypeError(
+            'Supply only explicit visitor credentials, without miniExtSession.'
+        );
+    }
+    const snapshot = { ...session };
+    if (
+        'miniExtSession' in snapshot ||
+        Object.values(snapshot).some((value) => typeof value !== 'string')
+    ) {
+        throw new TypeError(
+            'Supply only explicit visitor credentials, without miniExtSession.'
+        );
+    }
+    return snapshot;
+};
+
 /** Return a new session; the caller chooses when and where to persist it. */
 export const withExtensionPassword = (
     session: Readonly<RuntimeSession>,
     credential: { extensionId: string; encryptedExtensionPassword: string }
 ): RuntimeSession => ({
-    ...session,
+    ...copyVisitorSession(session),
     [`miniExtb7BuZl-${credential.extensionId}`]:
         credential.encryptedExtensionPassword,
 });
@@ -49,5 +75,8 @@ export const withLoginToken = (
                 credential.extensionId
         )
     );
-    return { ...session, [key]: credential.encryptedLoginToken };
+    return {
+        ...copyVisitorSession(session),
+        [key]: credential.encryptedLoginToken,
+    };
 };

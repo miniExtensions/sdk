@@ -1,18 +1,29 @@
 import {
     AirtableFieldType,
     createMiniExtensionsClient,
-    type JsonObject,
     type ListPortalLinkedRecordsInput,
     type ListPortalLinkedRecordsResult,
     type PortalLoadedResult,
     type RuntimeAirtableField,
     type RuntimeRequestOptions,
 } from '../src/runtime/index.js';
-import { formResult } from './runtimeFixtures.js';
+import { formResult, publicPortalFields } from './runtimeFixtures.js';
+
+type PortalLinkedFieldConfig = NonNullable<
+    Extract<
+        NonNullable<
+            PortalLoadedResult['payload']['publicFields']['state']['portalFields']
+        >[number]['config'],
+        { type: 'multipleRecordLinks' }
+    >['config']
+>;
 
 export const portalField: RuntimeAirtableField = {
     id: 'fld_children',
     name: 'Children',
+    description: null,
+    isComputed: false,
+    isPrimaryField: false,
     config: {
         type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
         options: {
@@ -24,7 +35,9 @@ export const portalField: RuntimeAirtableField = {
     },
 };
 
-export const portalPage = (config: JsonObject = {}): PortalLoadedResult => ({
+export const portalPage = (
+    config: PortalLinkedFieldConfig = {}
+): PortalLoadedResult => ({
     ...structuredClone(formResult),
     extensionScreen: 'portal_loaded',
     payload: {
@@ -37,7 +50,7 @@ export const portalPage = (config: JsonObject = {}): PortalLoadedResult => ({
         onFreePlan: false,
         trialExpiresAtUnixEpoch: null,
         viewIdsToAirtableViews: {},
-        publicFields: {},
+        publicFields: publicPortalFields(),
         formRecord: {
             type: 'edit',
             tableId: 'table_parents',
@@ -100,7 +113,6 @@ export const portalFixture = (
     let mutations = 0;
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
-        publishableKey: 'publishable_example',
         session: { visitor: 'visitor_A' },
         fetch: async () => {
             throw new Error('Unexpected fixture network request.');

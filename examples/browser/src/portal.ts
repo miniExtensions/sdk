@@ -299,7 +299,9 @@ export const createPortalView = (options: {
         const childId = configuredChildId(config(), creating);
         if (needsRefresh || readRequired) {
             status(
-                'Load a fresh Portal view before opening a child Form.',
+                needsRefresh
+                    ? 'Reload the Portal before opening a child Form.'
+                    : 'Load a fresh Portal view before opening a child Form.',
                 true
             );
             return;
@@ -486,18 +488,24 @@ export const createPortalView = (options: {
                         throw new Error(
                             'Reload the Portal before saving another cell.'
                         );
-                    const result = await client.portals.updateGridCell(
-                        {
-                            portalExtensionAccessToken:
-                                page.payload.extensionAccessToken,
-                            portalFieldId: fieldSelect.value,
-                            recordFieldId: recordField.id,
-                            recordId,
-                            value: gridValue(control.read()),
-                            selectedCustomViewId: viewSelect.value,
-                        },
-                        { signal }
-                    );
+                    const input = {
+                        portalExtensionAccessToken:
+                            page.payload.extensionAccessToken,
+                        portalFieldId: fieldSelect.value,
+                        recordFieldId: recordField.id,
+                        recordId,
+                        value: gridValue(control.read()),
+                        selectedCustomViewId: viewSelect.value,
+                    };
+                    signal.throwIfAborted();
+                    // Once dispatched, even cancellation or a lost response
+                    // can leave changed parent data on the server. Keep the
+                    // inline draft, but retire its captured child/read context.
+                    retireCollection();
+                    needsRefresh = true;
+                    const result = await client.portals.updateGridCell(input, {
+                        signal,
+                    });
                     if (!current()) return;
                     const linkedTableId = tableId();
                     if (
@@ -516,10 +524,6 @@ export const createPortalView = (options: {
                             },
                         };
                     }
-                    // The write can change parent-prefill metadata. Retire
-                    // its captured context before the follow-up read can fail.
-                    retireCollection();
-                    needsRefresh = true;
                     const user = await client.portals.getUserRecord(
                         {
                             extensionAccessToken:

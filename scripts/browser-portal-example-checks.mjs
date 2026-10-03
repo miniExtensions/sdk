@@ -784,6 +784,269 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
+            'local invalid Grid values preserve accepted read/child context without dispatch',
+            async () => {
+                const result = page(
+                    [
+                        {
+                            id: 'rec_one',
+                            fields: {
+                                fld_title: [
+                                    {
+                                        id: 'att_example',
+                                        url: 'https://files.example.test/example',
+                                        filename: 'example.txt',
+                                    },
+                                ],
+                            },
+                        },
+                    ],
+                    'offset_one'
+                );
+                result.tableIdsToLinkedTableStates.tbl_children.airtableFields[0] =
+                    {
+                        id: 'fld_title',
+                        name: 'Attachments',
+                        config: { type: 'multipleAttachments' },
+                    };
+                const h = await mount({ handlers: { list: () => result } });
+                await h.click('Load records');
+                button(h.view.node, 'Edit cell').click();
+                const control = h.view.node.querySelector(
+                    'textarea[data-field-id="fld_title"]'
+                );
+                assert(control);
+                submit(h.window, control.closest('form'));
+                await h.settle();
+                assert.equal(
+                    h.calls.filter((call) => call.operation === 'grid').length,
+                    0
+                );
+                assert.equal(h.failures.length, 1);
+                assert.match(
+                    h.failures[0].message,
+                    /Use the child Form for this complex field type/
+                );
+                assert.equal(
+                    h.view.node.querySelector(
+                        'textarea[data-field-id="fld_title"]'
+                    ),
+                    control
+                );
+                assert.equal(button(h.view.node, 'Next page').disabled, false);
+                assert.equal(
+                    button(h.view.node, 'Create record').disabled,
+                    false
+                );
+                await h.click('Create record');
+                assert.equal(h.handoffs.length, 1);
+                await h.dispose();
+            }
+        );
+
+        await check(
+            'actual main cancelled/rejected Grid writes preserve drafts and require Portal Reload without replay',
+            async () => {
+                for (const cancelled of [true, false]) {
+                    const portal = editablePortal();
+                    const lateGrid = deferred();
+                    const calls = [];
+                    let gridWrites = 0;
+                    let serverPrefill = 'prefill_Title=Example';
+                    const fetch = async (input, init) => {
+                        const url = new URL(String(input));
+                        const route =
+                            url.searchParams.get('route') ?? url.pathname;
+                        const body = JSON.parse(String(init?.body ?? '{}'));
+                        calls.push({ route, body });
+                        if (route === 'fetchExtensionForEndUser') {
+                            if (body.childExtensionInfo)
+                                return new Response(
+                                    JSON.stringify(makeForm(body))
+                                );
+                            const fresh = structuredClone(portal);
+                            fresh.payload.formRecord.data.fld_prefill =
+                                serverPrefill;
+                            return new Response(JSON.stringify(fresh));
+                        }
+                        if (route === 'fetchRecordsForLinkedTableOnPortal')
+                            return new Response(
+                                JSON.stringify(
+                                    page(
+                                        [record('rec_one', 'Current', 1)],
+                                        'offset_one'
+                                    )
+                                )
+                            );
+                        if (route === '/api/trpc/airtable.updatePortalRecord') {
+                            gridWrites += 1;
+                            serverPrefill = 'prefill_Title=Committed';
+                            if (cancelled) return lateGrid.promise;
+                            throw new Error(
+                                'Synthetic connection lost after server commit.'
+                            );
+                        }
+                        throw new Error(
+                            `Unexpected packed Grid recovery route: ${route}`
+                        );
+                    };
+                    const { window, close } = await environment(fetch);
+                    await loadExample('main');
+                    const document = window.document;
+                    document.getElementById('api-origin').value =
+                        'https://sdk.example.test';
+                    document.getElementById('share-id').value = 'share_example';
+                    submit(window, document.getElementById('connection-form'));
+                    await waitFor(
+                        () => buttons(document, 'Load records').length === 1
+                    );
+                    button(document, 'Load records').click();
+                    await waitFor(
+                        () => buttons(document, 'Edit cell').length > 0
+                    );
+                    button(document, 'Edit cell').click();
+                    const control = document.querySelector(
+                        'input[data-field-id="fld_title"]'
+                    );
+                    assert(control);
+                    control.value = 'Saved draft';
+                    change(window, control, 'input');
+                    const editor = control.closest('form');
+                    submit(window, editor);
+                    await waitFor(() => gridWrites === 1);
+                    if (cancelled) {
+                        assert.equal(
+                            document.getElementById('screen').inert,
+                            true
+                        );
+                        assert.equal(
+                            document.getElementById('cancel').disabled,
+                            false
+                        );
+                        document.getElementById('cancel').click();
+                    }
+                    await waitFor(
+                        () => document.getElementById('screen').inert === false
+                    );
+                    assert.equal(
+                        document.querySelector(
+                            'input[data-field-id="fld_title"]'
+                        ),
+                        control
+                    );
+                    assert.equal(control.value, 'Saved draft');
+                    assert.equal(button(document, 'Next page').disabled, true);
+                    assert.equal(
+                        button(document, 'Create record').disabled,
+                        true
+                    );
+                    const before = calls.length;
+                    button(document, 'Open Form').click();
+                    button(document, 'Load records').click();
+                    submit(window, editor);
+                    await new Promise((resolve) => setImmediate(resolve));
+                    assert.equal(
+                        calls.length,
+                        before,
+                        'An uncertain write cannot authorize reads, children, or a repeat Save.'
+                    );
+                    assert.equal(gridWrites, 1);
+                    const visitor = document.getElementById('visitor');
+                    visitor.value = 'B';
+                    change(window, visitor);
+                    visitor.value = 'A';
+                    change(window, visitor);
+                    assert.equal(
+                        document.querySelector(
+                            'input[data-field-id="fld_title"]'
+                        ),
+                        control
+                    );
+                    assert.equal(control.value, 'Saved draft');
+                    assert.equal(
+                        button(document, 'Create record').disabled,
+                        true
+                    );
+                    if (cancelled) {
+                        lateGrid.resolve(
+                            new Response(
+                                JSON.stringify({
+                                    result: {
+                                        data: {
+                                            record: {
+                                                id: 'rec_one',
+                                                fields: {
+                                                    fld_title: 'Saved draft',
+                                                },
+                                            },
+                                            auditTrail: null,
+                                            auditTrails: [],
+                                        },
+                                    },
+                                })
+                            )
+                        );
+                        await new Promise((resolve) => setImmediate(resolve));
+                        assert.equal(
+                            calls.length,
+                            before,
+                            'A late cancelled response cannot refresh or recover the Portal.'
+                        );
+                        assert.equal(
+                            button(document, 'Create record').disabled,
+                            true
+                        );
+                    }
+                    document.getElementById('reload').click();
+                    await waitFor(
+                        () =>
+                            document.querySelector(
+                                'input[data-field-id="fld_title"]'
+                            ) === null &&
+                            document.getElementById('screen').inert === false
+                    );
+                    assert.equal(
+                        calls.filter(
+                            (call) =>
+                                call.route === 'fetchExtensionForEndUser' &&
+                                !call.body.childExtensionInfo
+                        ).length,
+                        2
+                    );
+                    assert.equal(
+                        gridWrites,
+                        1,
+                        'Reload reads; it never replays the Grid write.'
+                    );
+                    button(document, 'Create record').click();
+                    await waitFor(
+                        () => buttons(document, 'Back to Portal').length === 1
+                    );
+                    const child = calls.findLast(
+                        (call) =>
+                            call.route === 'fetchExtensionForEndUser' &&
+                            call.body.childExtensionInfo
+                    );
+                    assert.equal(
+                        child.body.context.prefillDataForLinkedRecordsForm
+                            .prefillQueryForChildExtension,
+                        'prefill_Title=Committed'
+                    );
+                    assert.equal(
+                        calls.filter(
+                            (call) =>
+                                call.route ===
+                                '/api/trpc/airtable.getUserRecord'
+                        ).length,
+                        0
+                    );
+                    button(document, 'Disconnect').click();
+                    await close();
+                }
+            }
+        );
+
+        await check(
             'actual main A→B→A discards delayed reads/children and preserves accepted Form drafts',
             async () => {
                 const portal = editablePortal();

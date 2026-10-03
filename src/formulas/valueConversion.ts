@@ -1,7 +1,7 @@
 import moment from 'moment-timezone';
 import 'moment-duration-format';
 import {
-    AirtableFieldType,
+    AirtableFieldType as EnumAirtableFieldType,
     type AirtableField,
     type AirtableValue,
     type AirtableAttachment,
@@ -13,6 +13,12 @@ import {
     type TableIdsToLinkedTableLoadingStates,
 } from './types.js';
 import { removeMarkdown } from './removeMarkdown.js';
+
+// The same enum object with literal-valued properties lets exhaustive switches
+// narrow both enum-based and canonical JSON metadata without changing values.
+const AirtableFieldType: {
+    [Kind in keyof typeof EnumAirtableFieldType]: `${(typeof EnumAirtableFieldType)[Kind]}`;
+} = EnumAirtableFieldType;
 
 /** Context used when resolving linked-record primary values. */
 export type GetReadableStringSource = {
@@ -93,7 +99,9 @@ const getPrimaryFieldInFields = (args: {
     throw new Error('Could not find a primary field for the table.');
 };
 
-const doesFieldHaveArrayValue = (fieldType: AirtableFieldType): boolean => {
+const doesFieldHaveArrayValue = (
+    fieldType: AirtableField['config']['type']
+): boolean => {
     switch (fieldType) {
         case AirtableFieldType.AUTO_NUMBER:
         case AirtableFieldType.BARCODE:

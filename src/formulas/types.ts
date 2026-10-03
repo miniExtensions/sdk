@@ -38,13 +38,15 @@ export enum AirtableFieldType {
 
 export const AIRTABLE_FORMULA_ERROR_VALUE = '#ERROR!';
 
+// Accept the JSON discriminators returned by loaded Forms and Portals while
+// retaining the enum constants for existing formula consumers.
 export type NumericFieldConfig = {
-    type: AirtableFieldType.NUMBER | AirtableFieldType.PERCENT;
+    type: `${AirtableFieldType.NUMBER | AirtableFieldType.PERCENT}`;
     options: { precision: number };
 };
 
 export type CurrencyFieldConfig = {
-    type: AirtableFieldType.CURRENCY;
+    type: `${AirtableFieldType.CURRENCY}`;
     options: { precision: number; symbol: string };
 };
 
@@ -56,19 +58,19 @@ export type SelectFieldChoice = {
 };
 
 export type SelectFieldConfig = {
-    type:
+    type: `${
         | AirtableFieldType.SINGLE_SELECT
         | AirtableFieldType.MULTIPLE_SELECTS
-        | AirtableFieldType.EXTERNAL_SYNC_SOURCE;
+        | AirtableFieldType.EXTERNAL_SYNC_SOURCE}`;
     options?: { choices: SelectFieldChoice[] } | null;
 };
 
 export type CollaboratorFieldConfig = {
-    type:
+    type: `${
         | AirtableFieldType.SINGLE_COLLABORATOR
         | AirtableFieldType.MULTIPLE_COLLABORATORS
         | AirtableFieldType.CREATED_BY
-        | AirtableFieldType.LAST_MODIFIED_BY;
+        | AirtableFieldType.LAST_MODIFIED_BY}`;
     options?: { choices: AirtableCollaborator[] } | null;
 };
 
@@ -80,19 +82,19 @@ export type DurationFormat =
     | 'h:mm:ss.SSS';
 
 export type DurationFieldConfig = {
-    type: AirtableFieldType.DURATION;
+    type: `${AirtableFieldType.DURATION}`;
     options: { durationFormat: DurationFormat };
 };
 
 export type DateFieldConfig = {
-    type: AirtableFieldType.DATE;
+    type: `${AirtableFieldType.DATE}`;
     options: {
         dateFormat: { format: string };
     };
 };
 
 export type DateTimeFieldConfig = {
-    type: AirtableFieldType.DATE_TIME;
+    type: `${AirtableFieldType.DATE_TIME}`;
     options: {
         dateFormat: { format: string };
         timeFormat: { format: string };
@@ -101,7 +103,7 @@ export type DateTimeFieldConfig = {
 };
 
 export type LinkedRecordFieldConfig = {
-    type: AirtableFieldType.MULTIPLE_RECORD_LINKS;
+    type: `${AirtableFieldType.MULTIPLE_RECORD_LINKS}`;
     options: { linkedTableId: string };
 };
 
@@ -110,22 +112,22 @@ type ComputedFieldOptions =
     | { isValid?: false; result?: AirtableFieldConfig | null };
 
 export type ComputedFieldConfig = {
-    type:
+    type: `${
         | AirtableFieldType.FORMULA
         | AirtableFieldType.ROLLUP
-        | AirtableFieldType.MULTIPLE_LOOKUP_VALUES;
+        | AirtableFieldType.MULTIPLE_LOOKUP_VALUES}`;
     options: ComputedFieldOptions;
 };
 
 export type CreatedTimeFieldConfig = {
-    type: AirtableFieldType.CREATED_TIME;
+    type: `${AirtableFieldType.CREATED_TIME}`;
     options: {
         result: DateFieldConfig | DateTimeFieldConfig;
     };
 };
 
 export type LastModifiedTimeFieldConfig = {
-    type: AirtableFieldType.LAST_MODIFIED_TIME;
+    type: `${AirtableFieldType.LAST_MODIFIED_TIME}`;
     options: {
         isValid: boolean;
         result: DateFieldConfig | DateTimeFieldConfig;
@@ -133,11 +135,11 @@ export type LastModifiedTimeFieldConfig = {
 };
 
 export type CountFieldConfig = {
-    type: AirtableFieldType.COUNT;
+    type: `${AirtableFieldType.COUNT}`;
     options: { isValid: boolean };
 };
 
-type UnformattedFieldType = Exclude<
+type UnformattedFieldType = `${Exclude<
     AirtableFieldType,
     | AirtableFieldType.NUMBER
     | AirtableFieldType.PERCENT
@@ -159,7 +161,7 @@ type UnformattedFieldType = Exclude<
     | AirtableFieldType.CREATED_TIME
     | AirtableFieldType.LAST_MODIFIED_TIME
     | AirtableFieldType.COUNT
->;
+>}`;
 
 export type UnformattedFieldConfig = {
     type: UnformattedFieldType;

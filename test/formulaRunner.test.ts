@@ -5,8 +5,13 @@ import {
     FormulaRunner,
     extractIdentifiersFromExpr,
     extractIdentifiersFromFormula,
+    type InterpreterContext,
 } from '../src/formulas/index.js';
 import { makeContext, numberField, textField } from './fixtures.js';
+import { FormDraftStore, openLoadedFormDraft } from '../src/forms/index.js';
+import type { AirtableValue } from '../src/runtime/index.js';
+import { loadedForm } from './formsFixtures.js';
+import { portalPage } from './portalFixtures.js';
 
 describe('FormulaRunner', () => {
     const arithmetic: [string, string | number][] = [
@@ -124,6 +129,113 @@ describe('FormulaRunner', () => {
         independent.context = makeContext({ [numberField.id]: 20 });
         assert.equal(independent.run(), 21);
         assert.equal(runner.run(), 5);
+    });
+
+    it('uses loaded Form metadata with current native drafts and returned computed values', () => {
+        const form = loadedForm();
+        const store = new FormDraftStore<AirtableValue>();
+        const handle = openLoadedFormDraft({ store, loaded: form });
+        const runner = new FormulaRunner('{Title} & ": " & {Computed}');
+        const refreshContext = () => {
+            const draft = store.snapshot(handle);
+            assert.ok(draft);
+            runner.context = {
+                record: { id: 'unsaved-preview', fields: draft.data },
+                airtableFields: Object.values(
+                    form.payload.fieldIdsToSchemas
+                ).map(({ airtableField }) => airtableField),
+                linkedTableLoadingStates: {},
+            };
+        };
+        refreshContext();
+        assert.equal(runner.run(), 'Initial title: Server formula value');
+        assert.equal(store.write(handle, 'fld_title', 'Current draft'), true);
+        refreshContext();
+        assert.equal(runner.run(), 'Current draft: Server formula value');
+        assert.equal(form.payload.formRecord.data.fld_title, 'Initial title');
+        assert.equal(
+            form.payload.formRecord.data.fld_computed,
+            'Server formula value'
+        );
+    });
+
+    it('uses canonical Portal metadata and loaded linked states without replacing computed result configs', () => {
+        const portal = portalPage();
+        const linkedRecordId = 'rec00000000000001';
+        portal.payload.usersTableFields = [
+            {
+                id: 'fld_amount',
+                name: 'Amount',
+                description: null,
+                isComputed: true,
+                isPrimaryField: false,
+                config: {
+                    type: 'formula',
+                    options: {
+                        isValid: true,
+                        result: {
+                            type: 'currency',
+                            options: { precision: 2, symbol: '$' },
+                        },
+                    },
+                },
+            },
+            {
+                id: 'fld_related',
+                name: 'Related',
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: {
+                    type: 'multipleRecordLinks',
+                    options: {
+                        linkedTableId: 'tbl_related',
+                        isReversed: false,
+                        prefersSingleRecordLink: false,
+                    },
+                },
+            },
+        ];
+        portal.payload.formRecord.data = {
+            fld_amount: [12.5],
+            fld_related: [linkedRecordId],
+        };
+        portal.payload.initialLinkedTableStates = {
+            tbl_related: {
+                airtableFields: [
+                    {
+                        id: 'fld_label',
+                        name: 'Label',
+                        description: null,
+                        isComputed: false,
+                        isPrimaryField: true,
+                        config: { type: 'singleLineText', options: null },
+                    },
+                ],
+                recordIdsToAirtableRecords: {
+                    [linkedRecordId]: {
+                        id: linkedRecordId,
+                        fields: { fld_label: 'Linked label' },
+                    },
+                },
+            },
+        };
+        const linked: InterpreterContext['linkedTableLoadingStates'] = {};
+        for (const [tableId, state] of Object.entries(
+            portal.payload.initialLinkedTableStates
+        )) {
+            linked[tableId] = { type: 'loaded', data: { state } };
+        }
+        const runner = new FormulaRunner('{Amount} & " / " & {Related}');
+        runner.context = {
+            record: {
+                id: portal.payload.formRecord.recordId,
+                fields: portal.payload.formRecord.data,
+            },
+            airtableFields: portal.payload.usersTableFields,
+            linkedTableLoadingStates: linked,
+        };
+        assert.equal(runner.run(), '$12.50 / Linked label');
     });
 
     it('requires context for identifiers and does not swallow unknown fields by default', () => {

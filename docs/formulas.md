@@ -62,6 +62,84 @@ Unknown fields throw by default. `new FormulaRunner(source, true)` instead
 evaluates an unknown field as an empty string. Field references and `RECORD_ID()`
 require a context.
 
+## Loaded Form and Portal metadata
+
+Loaded metadata can be passed directly, using its JSON field discriminators or
+the existing `AirtableFieldType` constants. Keep computed `options.result`
+metadata intact: the runner converts the returned cell value; it does not
+recompute an Airtable formula or write a computed field.
+
+These functions are application recipes. API linked-table states need the
+engine's loaded-state envelope. Use states from the same current visitor and
+loaded context; the runner never fetches missing linked records.
+
+```ts
+import type {
+    AirtableValue,
+    FormLoadedResult,
+    PortalLoadedResult,
+    RuntimeTableStates,
+} from '@miniextensions/sdk';
+import type { FormDraftSnapshot } from '@miniextensions/sdk/forms';
+import type { InterpreterContext } from '@miniextensions/sdk/formulas';
+
+type FormulaLinkedStates =
+    | RuntimeTableStates
+    | PortalLoadedResult['payload']['initialLinkedTableStates'];
+
+function formulaLinkedStates(
+    states: FormulaLinkedStates
+): InterpreterContext['linkedTableLoadingStates'] {
+    const linked: InterpreterContext['linkedTableLoadingStates'] = {};
+    for (const [tableId, state] of Object.entries(states)) {
+        linked[tableId] = { type: 'loaded', data: { state } };
+    }
+    return linked;
+}
+
+function formFormulaContext(
+    form: FormLoadedResult,
+    draft: FormDraftSnapshot<AirtableValue>,
+    linkedStates: FormulaLinkedStates,
+    unsavedRecordId: string
+): InterpreterContext {
+    return {
+        record: {
+            id:
+                form.payload.formRecord.type === 'edit'
+                    ? form.payload.formRecord.recordId
+                    : unsavedRecordId,
+            fields: { ...form.payload.formRecord.data, ...draft.data },
+        },
+        airtableFields: Object.values(form.payload.fieldIdsToSchemas).map(
+            ({ airtableField }) => airtableField
+        ),
+        linkedTableLoadingStates: formulaLinkedStates(linkedStates),
+    };
+}
+
+function portalFormulaContext(
+    portal: PortalLoadedResult,
+    linkedStates: FormulaLinkedStates = portal.payload.initialLinkedTableStates
+): InterpreterContext {
+    return {
+        record: {
+            id: portal.payload.formRecord.recordId,
+            fields: portal.payload.formRecord.data,
+        },
+        airtableFields: portal.payload.usersTableFields,
+        linkedTableLoadingStates: formulaLinkedStates(linkedStates),
+    };
+}
+```
+
+Assign the returned context to `runner.context`. Rebuild it from the current
+`FormDraftStore.snapshot(handle)` or controller `getState().draft` after an
+accepted edit; discard it on visitor/context changes. For an unsaved create,
+choose a stable application identity for `unsavedRecordId`; it is a preview
+identity, not a persisted Airtable record ID. After saving, reload canonical
+computed values before relying on them in a new evaluation.
+
 ## Supported functions
 
 | Category | Functions                                                                            |

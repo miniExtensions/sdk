@@ -230,6 +230,19 @@ try {
         guideSources: portalsGuideSources,
     });
 
+    const formulasGuide = readFileSync(
+        join(installedPackage, 'docs/formulas.md'),
+        'utf8'
+    );
+    const formulasGuideSources = [
+        ...formulasGuide.matchAll(/```ts\n([\s\S]*?)\n```/g),
+    ].map(([, code], index) => {
+        const filename = `formulas-guide-${index}.ts`;
+        writeFileSync(join(temporaryDirectory, filename), code);
+        return filename;
+    });
+    assert(formulasGuideSources.length > 0, 'Missing formula context recipes');
+
     const consumer = `
 import { FormulaRunner, AirtableFieldType } from '@miniextensions/sdk/formulas';
 import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
@@ -488,6 +501,59 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
         height: large?.height,
     };
 }
+import type { RuntimeTableStates } from '@miniextensions/sdk';
+import type { AirtableField as FormulaField, InterpreterContext } from '@miniextensions/sdk/formulas';
+type FormulaLinkedStates = RuntimeTableStates | PortalLoadedResult['payload']['initialLinkedTableStates'];
+function formulaLinkedStates(states: FormulaLinkedStates): InterpreterContext['linkedTableLoadingStates'] {
+    const linked: InterpreterContext['linkedTableLoadingStates'] = {};
+    for (const [tableId, state] of Object.entries(states)) {
+        linked[tableId] = {type: 'loaded', data: {state}};
+    }
+    return linked;
+}
+export function checkLoadedFormFormula(form: FormLoadedResult, linkedStates: RuntimeTableStates) {
+    const airtableFields: InterpreterContext['airtableFields'] =
+        Object.values(form.payload.fieldIdsToSchemas).map(({airtableField}) => airtableField);
+    if (form.payload.formRecord.type !== 'edit') return;
+    const formula = new FormulaRunner('{Quantity} * 3');
+    formula.context = {
+        record: {id: form.payload.formRecord.recordId, fields: form.payload.formRecord.data},
+        airtableFields,
+        linkedTableLoadingStates: formulaLinkedStates(linkedStates),
+    };
+    return formula.run();
+}
+export function checkLoadedPortalFormula(portal: PortalLoadedResult, linkedStates: FormulaLinkedStates = portal.payload.initialLinkedTableStates) {
+    const airtableFields: InterpreterContext['airtableFields'] = portal.payload.usersTableFields;
+    const formula = new FormulaRunner('{Quantity} * 3');
+    formula.context = {
+        record: {id: portal.payload.formRecord.recordId, fields: portal.payload.formRecord.data},
+        airtableFields,
+        linkedTableLoadingStates: formulaLinkedStates(linkedStates),
+    };
+    return formula.run();
+}
+export function narrowFormulaNumber(config: FormulaField['config']): number | null {
+    if (config.type === AirtableFieldType.NUMBER || config.type === AirtableFieldType.PERCENT) {
+        return config.options.precision;
+    }
+    return null;
+}
+const enumFormulaConfig: FormulaField['config'] = {type: AirtableFieldType.NUMBER, options: {precision: 2}};
+const literalFormulaConfig: FormulaField['config'] = {type: 'formula', options: {isValid: true, result: {type: 'currency', options: {precision: 2, symbol: '$'}}}};
+// @ts-expect-error numeric fields require their options; they cannot enter the unformatted fallback
+const missingNumberOptions: FormulaField['config'] = {type: 'number'};
+// @ts-expect-error date fields require a date format
+const missingDateFormat: FormulaField['config'] = {type: 'date', options: {dateFormat: {}}};
+// @ts-expect-error linked-record fields require their linked table ID
+const missingLinkedTable: FormulaField['config'] = {type: 'multipleRecordLinks', options: {}};
+// @ts-expect-error a valid computed field requires its result config
+const missingComputedResult: FormulaField['config'] = {type: 'formula', options: {isValid: true, result: null}};
+// @ts-expect-error nested computed results retain currency's required symbol
+const missingNestedSymbol: FormulaField['config'] = {type: 'rollup', options: {isValid: true, result: {type: 'currency', options: {precision: 2}}}};
+// @ts-expect-error field discriminators remain a finite set
+const unknownFormulaKind: FormulaField['config'] = {type: 'futureField'};
+void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDateFormat, missingLinkedTable, missingComputedResult, missingNestedSymbol, unknownFormulaKind];
 `;
 
     for (const [filename, module, moduleResolution] of [
@@ -509,6 +575,7 @@ export function renderAttachmentPreview(extension: FormLoadedResult): {
             '--moduleResolution',
             moduleResolution,
             filename,
+            ...formulasGuideSources,
         ]);
     }
 

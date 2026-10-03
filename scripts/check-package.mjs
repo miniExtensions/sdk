@@ -24,6 +24,7 @@ import { checkUiRecipes } from './ui-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
+import { checkBrowserPortalExample } from './browser-portal-example-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryDirectory = realpathSync(
@@ -37,6 +38,7 @@ const uiDirectory = realpathSync(
     mkdtempSync(join(tmpdir(), 'miniextensions-ui-'))
 );
 const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
+let browserPortalChecks = 0;
 
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
@@ -808,6 +810,13 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 `Missing browser build output: ${filename}`
             );
         }
+        if (example === 'browser') {
+            const result = await checkBrowserPortalExample({
+                consumerDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
+            browserPortalChecks = result.checks;
+        }
     }
 
     function checkPortableOutput(directory) {
@@ -831,7 +840,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         join(temporaryDirectory, 'node_modules/@miniextensions/sdk/dist')
     );
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (6 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (6 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${browserPortalChecks} actual packed browser Portal cases, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

@@ -299,6 +299,18 @@ function makeClient(handlers = {}) {
     };
 }
 
+// Shared only by repository verification scripts; these are complete synthetic
+// public envelopes, never production fixtures or a replacement renderer.
+export const portalRecipeFixtures = {
+    makePortal,
+    makeForm,
+    page,
+    record,
+    deferred,
+    titleField,
+    quantityField,
+};
+
 /** Execute the actual shipped Portal recipe beside its installed archive. */
 export async function checkPortalRecipe({ consumerDirectory, guideSources }) {
     const consumerRoot = realpathSync(consumerDirectory);

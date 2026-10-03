@@ -2,7 +2,6 @@ import {
     AirtableFieldType,
     type AirtableValue,
     type FormLoadedResult,
-    type ListPortalLinkedRecordsResult,
     type MiniExtensionsClient,
     type PortalLoadedResult,
     type RuntimeAirtableField,
@@ -11,6 +10,12 @@ import {
     type RuntimeFieldSchema,
     type SaveFormInput,
 } from '@miniextensions/sdk';
+import {
+    createPortalCollection,
+    type PortalCollection,
+    type PortalCollectionSnapshot,
+    type PortalOwnerScope,
+} from '@miniextensions/sdk/portals';
 import { button, element, labeled } from './dom.js';
 import { displayValue, fieldControl, type FieldControl } from './fields.js';
 import type { ParentFormDraftScope } from './drafts.js';
@@ -31,6 +36,8 @@ export type PortalView = {
     node: HTMLElement;
     refreshRequired(): void;
     closeEditor(): void;
+    retireCollection(): void;
+    destroy(): void;
 };
 type PortalFieldConfig = NonNullable<
     Extract<
@@ -149,6 +156,8 @@ const gridValue = (value: AirtableValue): RuntimeGridCellValue => {
 
 export const createPortalView = (options: {
     page: PortalLoadedResult;
+    client: MiniExtensionsClient;
+    getScope(): PortalOwnerScope;
     run: Run;
     status(message: string, error?: boolean): void;
     confirm(options: ConfirmationOptions): Promise<boolean>;
@@ -201,9 +210,34 @@ export const createPortalView = (options: {
         editor.replaceChildren();
     };
     card.append(actions, results, editor);
-    let data: ListPortalLinkedRecordsResult | null = null;
+    let data: PortalCollectionSnapshot | null = null;
+    let collection: PortalCollection | null = null;
     let needsRefresh = false;
-    let returnedRecordIds: string[] = [];
+    let readRequired = false;
+    let destroyed = false;
+    const retireCollection = (): void => {
+        collection?.destroy();
+        collection = null;
+        readRequired = true;
+        next.disabled = true;
+        create.disabled = true;
+    };
+    const getCollection = (): PortalCollection => {
+        if (destroyed) throw new Error('This Portal view has been replaced.');
+        return (collection ??= createPortalCollection({
+            client: options.client,
+            portal: page,
+            portalFieldId: fieldSelect.value,
+            criteria: {
+                selectedCustomViewId: viewSelect.value,
+                searchTerm: search.value || null,
+                sortFieldsByEndUser: null,
+                filtersByEndUser: null,
+                searchParamsMap: {},
+            },
+            getScope: options.getScope,
+        }));
+    };
 
     const schema = () => page.payload.fieldIdsToSchemas[fieldSelect.value];
     const config = (): PortalFieldConfig | undefined => schema()?.miniExtConfig;
@@ -226,9 +260,11 @@ export const createPortalView = (options: {
             | 'kanbanCategoryField'
         >
     ) =>
-        selectedView()?.config?.viewBehavior === 'custom'
-            ? selectedView()?.config?.[key]
-            : config()?.[key];
+        data != null
+            ? data.layoutSettings[key]
+            : selectedView()?.config?.viewBehavior === 'custom'
+              ? selectedView()?.config?.[key]
+              : config()?.[key];
     const fillViews = (): void => {
         viewSelect.replaceChildren();
         for (const view of customViews(config())) {
@@ -246,96 +282,77 @@ export const createPortalView = (options: {
     };
     const reset = (): void => {
         cancelConfirmation();
+        retireCollection();
+        readRequired = false;
         data = null;
-        returnedRecordIds = [];
         closeEditor();
         results.replaceChildren(
             element('p', 'Choose Load records to fetch this view.', 'hint')
         );
         next.disabled = true;
-        create.disabled = configuredChildId(config(), true) == null;
+        create.disabled =
+            needsRefresh || configuredChildId(config(), true) == null;
     };
 
     const openChild = (recordId: string | null): void => {
         const creating = recordId == null;
         const childId = configuredChildId(config(), creating);
-        const linkedTableId = tableId();
-        const selected = field();
-        if (childId == null || linkedTableId == null || selected == null) {
+        if (needsRefresh || readRequired) {
+            status(
+                'Load a fresh Portal view before opening a child Form.',
+                true
+            );
+            return;
+        }
+        if (childId == null) {
             status('No child Form is configured for this action.', true);
             return;
         }
-        const inverseId =
-            selected.config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
-                ? selected.config.options.inverseLinkFieldId
-                : null;
-        const prefillField = config()?.prefillFieldForCreatingChildExtension;
-        const prefillValue =
-            typeof prefillField === 'string'
-                ? page.payload.formRecord.data[prefillField]
-                : null;
-        const prefillData = creating
-            ? {
-                  toLinkToParent:
-                      inverseId == null
-                          ? null
-                          : {
-                                reversedFieldIdToPrefill: inverseId,
-                                parentFormRecordId:
-                                    page.payload.formRecord.recordId,
-                            },
-                  prefillQueryForChildExtension:
-                      typeof prefillValue === 'string' ? prefillValue : null,
-              }
-            : null;
         void run(
             creating
                 ? 'Loading the create Form…'
                 : 'Loading the authorized record Form…',
             async ({ client, signal, current }) => {
-                const loaded = await client.loadExtension(
-                    {
-                        childExtensionAccessData: {
-                            parentExtensionAccessToken:
-                                page.payload.extensionAccessToken,
-                            fieldIdUsedToAccessExtension: fieldSelect.value,
-                        },
-                        childExtensionInfo: {
-                            childExtensionId: childId,
-                            accessType:
-                                recordId == null
-                                    ? { type: 'create' }
-                                    : {
-                                          type: 'edit',
-                                          childExtensionRecordId: recordId,
-                                          childExtensionFieldId: null,
-                                      },
-                        },
-                        context: {
-                            type: 'modal',
-                            linkedTableIdOfLinkedRecordField: linkedTableId,
-                            prefillDataForLinkedRecordsForm: prefillData,
-                        },
-                        query: {},
-                        clientTimeZone:
-                            Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    },
-                    { signal }
-                );
-                if (!current()) return;
+                const owner = getCollection();
+                const plan = owner.childFormRequest({
+                    access:
+                        recordId == null
+                            ? { type: 'create' }
+                            : { type: 'edit', recordId },
+                    configuredChildExtensionId: childId,
+                    query: {},
+                    clientTimeZone:
+                        Intl.DateTimeFormat().resolvedOptions().timeZone,
+                });
+                const accepted = () =>
+                    current() && collection === owner && plan.isCurrent();
+                if (!accepted() || client !== options.client) return;
+                const loaded = await client.loadExtension(plan.input, {
+                    signal,
+                });
+                if (!accepted()) return;
                 if (loaded.extensionScreen !== 'form_loaded')
                     throw new Error(
                         'The child did not return a Form. Reload the Portal and its selected view.'
                     );
-                options.openChild(
-                    loaded,
-                    { type: 'modal', prefillData },
-                    {
-                        portalId: page.extensionId,
-                        recordId: page.payload.formRecord.recordId,
-                        portalFieldId: fieldSelect.value,
-                    }
-                );
+                const record = loaded.payload.formRecord;
+                if (
+                    loaded.extensionId !== childId ||
+                    (creating
+                        ? record.type !== 'create'
+                        : record.type !== 'edit' ||
+                          record.recordId !== recordId ||
+                          record.tableId !==
+                              plan.input.context
+                                  .linkedTableIdOfLinkedRecordField)
+                )
+                    throw new Error(
+                        'The child Form does not match this request.'
+                    );
+                if (!accepted()) return;
+                // After this guarded handoff, the existing Form owner keeps
+                // its explicit Save context and cached visitor draft behavior.
+                options.openChild(loaded, plan.saveContext, plan.parent);
                 status(
                     creating
                         ? 'Create Form loaded. No record has been created yet.'
@@ -465,6 +482,10 @@ export const createPortalView = (options: {
             void run(
                 'Saving the grid cell…',
                 async ({ client, signal, current }) => {
+                    if (needsRefresh)
+                        throw new Error(
+                            'Reload the Portal before saving another cell.'
+                        );
                     const result = await client.portals.updateGridCell(
                         {
                             portalExtensionAccessToken:
@@ -495,6 +516,10 @@ export const createPortalView = (options: {
                             },
                         };
                     }
+                    // The write can change parent-prefill metadata. Retire
+                    // its captured context before the follow-up read can fail.
+                    retireCollection();
+                    needsRefresh = true;
                     const user = await client.portals.getUserRecord(
                         {
                             extensionAccessToken:
@@ -505,9 +530,12 @@ export const createPortalView = (options: {
                     if (!current()) return;
                     if (user != null)
                         page.payload.formRecord.data = { ...user.fields };
+                    needsRefresh = false;
                     closeEditor();
                     renderRecords();
-                    status('Cell saved and Portal user refreshed.');
+                    status(
+                        'Cell saved and Portal user refreshed. Load records before paging or opening a child Form.'
+                    );
                 }
             );
         });
@@ -526,25 +554,7 @@ export const createPortalView = (options: {
             results.append(element('p', 'No table data was returned.', 'hint'));
             return;
         }
-        let columns = detailFields(
-            data.customViewDetailFields?.[fieldSelect.value] ??
-                page.payload.linkedRecordFieldIdToDetailFields[
-                    fieldSelect.value
-                ]
-        );
-        if (columns.length === 0) {
-            const primary =
-                state.airtableFields.find((column) => column.isPrimaryField) ??
-                state.airtableFields[0];
-            if (primary != null)
-                columns = [
-                    {
-                        fieldId: primary.id,
-                        title: null,
-                        inlineEditable: false,
-                    },
-                ];
-        }
+        const columns = detailFields(data.detailFields);
         const table = element('table');
         const head = element('tr');
         for (const column of columns)
@@ -565,7 +575,7 @@ export const createPortalView = (options: {
         const tbody = element('tbody');
         const view = selectedView();
         const allowEditing = view?.config?.disableEditingForCustomView !== true;
-        for (const recordId of returnedRecordIds) {
+        for (const recordId of data.recordIds) {
             const record = state.recordIdsToAirtableRecords[recordId];
             if (record == null) continue;
             const row = element('tr');
@@ -609,6 +619,18 @@ export const createPortalView = (options: {
             )
                 controls.append(
                     button('Unlink', async () => {
+                        const owner = collection;
+                        if (
+                            readRequired ||
+                            owner == null ||
+                            !owner.isCurrent()
+                        ) {
+                            status(
+                                'Load a fresh Portal view before unlinking.',
+                                true
+                            );
+                            return;
+                        }
                         const portalFieldId = fieldSelect.value;
                         const selectedCustomViewId = viewSelect.value;
                         if (
@@ -621,6 +643,8 @@ export const createPortalView = (options: {
                         )
                             return;
                         if (
+                            collection !== owner ||
+                            !owner.isCurrent() ||
                             fieldSelect.value !== portalFieldId ||
                             viewSelect.value !== selectedCustomViewId
                         )
@@ -628,6 +652,10 @@ export const createPortalView = (options: {
                         await run(
                             'Unlinking this record…',
                             async ({ client, signal, current }) => {
+                                // Retire before dispatch: even a cancelled or failed unlink
+                                // may have changed the parent token on the server.
+                                needsRefresh = true;
+                                reset();
                                 await client.portals.unlinkRecord(
                                     {
                                         extensionAccessToken:
@@ -639,9 +667,6 @@ export const createPortalView = (options: {
                                     { signal }
                                 );
                                 if (!current()) return;
-                                // Unlink retires the parent token. Reload it before any action.
-                                needsRefresh = true;
-                                reset();
                                 status(
                                     'Record unlinked. Choose Reload to obtain a fresh Portal token.'
                                 );
@@ -715,14 +740,14 @@ export const createPortalView = (options: {
         results.append(
             element(
                 'p',
-                `${returnedRecordIds.length} loaded records${data.airtableOffset == null ? '' : ' · more available'}`,
+                `${data.recordIds.length} loaded records${data.airtableOffset == null ? '' : ' · more available'}`,
                 'hint'
             ),
             table
         );
-        if (returnedRecordIds.length === 0)
+        if (data.recordIds.length === 0)
             results.append(element('p', 'No matching records.', 'hint'));
-        next.disabled = data.airtableOffset == null;
+        next.disabled = readRequired || data.airtableOffset == null;
     };
 
     const fetchRecords = (more: boolean): void => {
@@ -732,64 +757,54 @@ export const createPortalView = (options: {
         }
         void run(
             'Loading the permitted Portal records…',
-            async ({ client, signal, current }) => {
-                const result = await client.portals.listLinkedRecords(
-                    {
-                        extensionAccessToken: page.payload.extensionAccessToken,
-                        portalFieldId: fieldSelect.value,
-                        selectedCustomViewId: viewSelect.value,
-                        alreadyLoadedRecordIds: more ? returnedRecordIds : [],
-                        airtableOffset: more
-                            ? (data?.airtableOffset ?? null)
-                            : null,
-                        pagesToFetch: 1,
-                        searchTerm: search.value || null,
-                        sortFieldsByEndUser: null,
-                        filtersByEndUser: null,
-                        searchParamsMap: {},
+            async ({ signal, current }) => {
+                signal.throwIfAborted();
+                if (!more) reset();
+                const owner = getCollection();
+                readRequired = true;
+                next.disabled = true;
+                create.disabled = true;
+                const accepted = () =>
+                    current() && collection === owner && owner.isCurrent();
+                try {
+                    const readOptions = {
+                        pagesToFetch: 1 as const,
                         refreshLoggedInPortalRecord: !more,
-                    },
-                    { signal }
-                );
-                if (!current()) return;
-                if (
-                    result.endUserFilterCleanup != null ||
-                    result.endUserSortCleanup != null
-                ) {
-                    status(
-                        'Saved filters or sorts need cleanup. This example has no persisted criteria; reload the Portal.',
-                        true
-                    );
-                    return;
-                }
-                if (more && data != null) {
-                    for (const [id, table] of Object.entries(
-                        result.tableIdsToLinkedTableStates
-                    )) {
-                        const previous = data.tableIdsToLinkedTableStates[id];
-                        result.tableIdsToLinkedTableStates[id] = {
-                            airtableFields: table.airtableFields,
-                            recordIdsToAirtableRecords: {
-                                ...previous?.recordIdsToAirtableRecords,
-                                ...table.recordIdsToAirtableRecords,
-                            },
-                        };
-                    }
-                    // Preserve nested tables not included in this page.
-                    result.tableIdsToLinkedTableStates = {
-                        ...data.tableIdsToLinkedTableStates,
-                        ...result.tableIdsToLinkedTableStates,
+                        signal,
                     };
-                    returnedRecordIds = [
-                        ...new Set([...returnedRecordIds, ...result.recordIds]),
-                    ];
-                } else returnedRecordIds = [...result.recordIds];
-                data = result;
-                closeEditor();
-                renderRecords();
-                status(
-                    `Loaded ${result.recordIds.length} records. This read grants only the selected view's permitted actions.`
-                );
+                    const result = more
+                        ? await owner.readNext(readOptions)
+                        : await owner.readFirst(readOptions);
+                    if (!accepted()) return;
+                    if (result?.type === 'criteria-cleanup-required') {
+                        needsRefresh = true;
+                        reset();
+                        status(
+                            'Saved filters or sorts need cleanup. This example has no persisted criteria; reload the Portal.',
+                            true
+                        );
+                        return;
+                    }
+                    if (result != null) data = result.snapshot;
+                    readRequired = false;
+                    create.disabled = configuredChildId(config(), true) == null;
+                    closeEditor();
+                    renderRecords();
+                    status(
+                        result == null
+                            ? 'This view has no more pages.'
+                            : `Loaded ${result.raw.recordIds.length} records. This read grants only the selected view's permitted actions.`
+                    );
+                } catch (error) {
+                    if (collection !== owner || !owner.isCurrent()) return;
+                    // The helper owns failure/cancellation recovery. Keep any
+                    // last accepted next-page rows for display only.
+                    if (collection === owner) {
+                        next.disabled = true;
+                        create.disabled = true;
+                    }
+                    throw error;
+                }
             }
         );
     };
@@ -814,9 +829,7 @@ export const createPortalView = (options: {
             fetchRecords(false);
         }
     });
-    search.addEventListener('input', () => {
-        next.disabled = true;
-    });
+    search.addEventListener('input', reset);
     fillViews();
     reset();
     if (fields.length === 0)
@@ -824,6 +837,12 @@ export const createPortalView = (options: {
     return {
         node: card,
         closeEditor,
+        retireCollection,
+        destroy: () => {
+            destroyed = true;
+            retireCollection();
+            closeEditor();
+        },
         refreshRequired: () => {
             needsRefresh = false;
             reset();

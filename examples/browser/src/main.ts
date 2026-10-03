@@ -176,7 +176,7 @@ const confirmCurrent = async (
 };
 const invalidate = (visitor: Visitor): void => {
     cancelConfirmation();
-    visitor.portal?.closeEditor();
+    visitor.portal?.destroy();
     visitor.revision += 1;
     visitor.screen = null;
     visitor.root = null;
@@ -191,7 +191,7 @@ const invalidate = (visitor: Visitor): void => {
 };
 const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
     cancelConfirmation();
-    visitor.portal?.closeEditor();
+    visitor.portal?.destroy();
     visitor.client?.setSession(next);
     // A successful explicit login becomes a new owner for future responses.
     visitor.revision += 1;
@@ -214,7 +214,7 @@ const load = (): void => {
             if (!current()) return;
             // Reload replaces this visitor's drafts only after a fresh read.
             visitor.drafts.clear();
-            visitor.portal?.closeEditor();
+            visitor.portal?.destroy();
             visitor.screen = result;
             visitor.root =
                 result.extensionScreen === 'portal_loaded' ? result : null;
@@ -949,8 +949,12 @@ const render = (): void => {
     else if (page.extensionScreen === 'login_page') renderLogin(page);
     else if (page.extensionScreen === 'form_loaded') renderForm(page);
     else {
+        const ownerId = activeVisitor;
+        if (visitor.client == null) return;
         visitor.portal ??= createPortalView({
             page,
+            client: visitor.client,
+            getScope: () => ({ ownerId, revision: visitor.revision }),
             run,
             status,
             confirm: confirmCurrent,
@@ -1004,7 +1008,13 @@ connectionForm.addEventListener('submit', (event) => {
 });
 visitorSelect.addEventListener('change', () => {
     if (visitorSelect.value !== 'A' && visitorSelect.value !== 'B') return;
+    if (visitorSelect.value === activeVisitor) return;
     cancelConfirmation();
+    // Advance both owners even for A→B→A with no intervening helper call.
+    for (const identity of [activeVisitor, visitorSelect.value] as const) {
+        visitors[identity].revision += 1;
+        visitors[identity].portal?.retireCollection();
+    }
     request?.abort();
     request = null;
     activeVisitor = visitorSelect.value;

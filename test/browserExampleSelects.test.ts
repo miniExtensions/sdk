@@ -38,6 +38,10 @@ before(async () => {
                         root,
                         'src/forms/index.ts'
                     ),
+                    '@miniextensions/sdk/portals': join(
+                        root,
+                        'src/portals/index.ts'
+                    ),
                     '@miniextensions/sdk': join(root, 'src/runtime/index.ts'),
                 },
                 bundle: true,
@@ -438,6 +442,8 @@ describe(
             let pending = Promise.resolve();
             const view = createPortalView({
                 page,
+                client,
+                getScope: () => ({ ownerId: 'visitor_A', revision: 0 }),
                 run: (
                     _description: string,
                     action: (context: {

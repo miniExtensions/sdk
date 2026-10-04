@@ -151,6 +151,13 @@ entries retain names, not upload URLs, references or file bytes. These values
 are never merged into the fresh draft automatically. Reusing any value requires
 a deliberate new edit after inspection.
 
+Fields configured with `obscurePassword: true` are excluded before reference
+journaling, so recovery does not reveal their masked values. For rendered,
+dirty attachment fields, the reference retains filenames from successful
+uploads even though the native attachment display is noneditable; read-only
+or computed fields remain excluded. No attachment IDs, URLs, references or
+file bytes enter this reference output.
+
 If the user acknowledges that the old attempt may have committed, a separate
 blank draft can start a new local operation. It must not replay the original
 request or remove the original unknown journal entry. This is a deliberate

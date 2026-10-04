@@ -614,24 +614,42 @@ const renderForm = (page: FormLoadedResult): void => {
         attempt.retainedInput = (snapshot?.dirtyFieldIds ?? []).flatMap(
             (fieldId) => {
                 const schema = page.payload.fieldIdsToSchemas[fieldId];
-                if (schema == null || !controls.get(fieldId)?.editable)
+                const control = controls.get(fieldId);
+                if (schema == null || control == null) return [];
+                const config = schema.miniExtConfig;
+                // Masked values must never enter the reference journal.
+                if (
+                    config != null &&
+                    'obscurePassword' in config &&
+                    config.obscurePassword === true
+                )
+                    return [];
+                const attachment =
+                    schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS;
+                if (
+                    attachment
+                        ? schema.airtableField.isComputed === true ||
+                          (config != null &&
+                              'readOnly' in config &&
+                              config.readOnly === true)
+                        : !control.editable
+                )
                     return [];
                 const value = snapshot!.data[fieldId];
-                const text =
-                    schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS
-                        ? Array.isArray(value)
-                            ? value
-                                  .map((item) =>
-                                      typeof item === 'object' &&
-                                      item != null &&
-                                      'filename' in item &&
-                                      typeof item.filename === 'string'
-                                          ? item.filename
-                                          : '[Attachment reference]'
-                                  )
-                                  .join(', ')
-                            : ''
-                        : displayValue(value);
+                const text = attachment
+                    ? Array.isArray(value)
+                        ? value
+                              .map((item) =>
+                                  typeof item === 'object' &&
+                                  item != null &&
+                                  'filename' in item &&
+                                  typeof item.filename === 'string'
+                                      ? item.filename
+                                      : '[Attachment reference]'
+                              )
+                              .join(', ')
+                        : ''
+                    : displayValue(value);
                 return [{ title: schema.airtableField.name, value: text }];
             }
         );

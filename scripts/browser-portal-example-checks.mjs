@@ -247,6 +247,7 @@ export async function checkBrowserPortalExample({
         delayedEdit = null,
         deletable = false,
         failedUpload = false,
+        obscurePassword = false,
     } = {}) => {
         const portal = editablePortal();
         const calls = [];
@@ -289,6 +290,21 @@ export async function checkBrowserPortalExample({
                         state: { allowDeletingRecords: true },
                     };
                     form.enableCommentsOnChildForms = true;
+                }
+                if (obscurePassword) {
+                    const schema = {
+                        fieldType: 'singleLineText',
+                        airtableField: {
+                            id: 'fld_password',
+                            name: 'Private input',
+                            config: { type: 'singleLineText' },
+                        },
+                        miniExtConfig: { obscurePassword: true },
+                    };
+                    form.payload.fieldIdsInForm.push('fld_password');
+                    form.payload.fieldIdsToSchemas.fld_password = schema;
+                    form.payload.fieldNamesToSchemas['Private input'] = schema;
+                    form.payload.formRecord.data.fld_password = '';
                 }
                 if (attachments) {
                     const schema = {
@@ -2294,6 +2310,266 @@ export async function checkBrowserPortalExample({
                 assert.equal(h.count(signRoute), 1);
                 assert.equal(h.count('synthetic-put'), 0);
                 assert.equal(h.count('saveForm'), 0);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main obscured dirty Form input stays masked and never becomes plaintext recovery reference text',
+            async () => {
+                const h = await recoveryMain({ obscurePassword: true });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        document.querySelector(
+                            'input[data-field-id="fld_password"]'
+                        ) != null
+                );
+                const title = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                title.value = 'Safe ordinary input reference';
+                change(window, title, 'input');
+                const password = document.querySelector(
+                    'input[data-field-id="fld_password"]'
+                );
+                const secret = 'SYNTHETIC-PRIVATE-INPUT-DO-NOT-DISPLAY';
+                assert.equal(
+                    password.type,
+                    'password',
+                    'The exact published obscurePassword descriptor masks the native input.'
+                );
+                password.value = secret;
+                change(window, password, 'input');
+                assert.equal(password.type, 'password');
+                assert.equal(
+                    password.value,
+                    secret,
+                    'Masking preserves the native Form input value before dispatch.'
+                );
+                submit(window, password.closest('form'));
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.equal(
+                    h.calls.find((call) => call.route === 'saveForm').body
+                        .formRecord.data.fld_password,
+                    secret,
+                    'The synthetic save uses the native value; this test is about recovery presentation.'
+                );
+                const reference = assertReference(
+                    document,
+                    'Safe ordinary input reference'
+                );
+                assert.equal(password.type, 'password');
+                assert.equal(password.value, secret);
+                assert.equal(
+                    reference.textContent.includes(secret),
+                    false,
+                    'An obscured dirty field must not be rendered in plaintext in the recovery reference.'
+                );
+                assert.equal(
+                    document
+                        .getElementById('screen')
+                        .textContent.includes(secret),
+                    false
+                );
+                h.childTitle('Fresh server title for obscured input');
+                h.latest(
+                    page([
+                        record(
+                            'rec_same_title',
+                            'Fresh server title for obscured input'
+                        ),
+                    ])
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Open Form').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(
+                    document.querySelector(
+                        'input[data-field-id="fld_password"]'
+                    ).type,
+                    'password'
+                );
+                assert.equal(
+                    document.querySelector(
+                        'input[data-field-id="fld_password"]'
+                    ).value,
+                    ''
+                );
+                assert.equal(
+                    assertReference(
+                        document,
+                        'Safe ordinary input reference'
+                    ).textContent.includes(secret),
+                    false
+                );
+                assert.equal(h.count('saveForm'), 1);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main previously uploaded noneditable attachments retain filenames only after uncertain save and fresh inspection without replay',
+            async () => {
+                const h = await recoveryMain({ attachments: true });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Upload selected file').length === 1
+                );
+                const title = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                title.value = 'Retained uploaded-file note';
+                change(window, title, 'input');
+                const originalFile =
+                    document.querySelector('input[type="file"]');
+                Object.defineProperty(originalFile, 'files', {
+                    configurable: true,
+                    value: [
+                        new File(
+                            ['SYNTHETIC-UPLOADED-FILE-BYTES'],
+                            'retained-upload.txt',
+                            { type: 'text/plain' }
+                        ),
+                    ],
+                });
+                const originalUpload = button(document, 'Upload selected file');
+                originalUpload.click();
+                const signRoute =
+                    '/api/trpc/publicExtensions.createPublicUploadLink';
+                await waitFor(
+                    () =>
+                        h.count('synthetic-put') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const originalAttachments = document.querySelector(
+                    'textarea[data-field-id="fld_files"]'
+                );
+                assert.equal(
+                    originalAttachments.readOnly,
+                    true,
+                    'Native attachment refs use the actual example noneditable field control.'
+                );
+                assert.match(originalAttachments.value, /retained-upload\.txt/);
+                submit(window, title.closest('form'));
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const firstSave = h.calls.find(
+                    (call) => call.route === 'saveForm'
+                );
+                assert.equal(
+                    firstSave.body.formRecord.data.fld_files[0].filename,
+                    'retained-upload.txt'
+                );
+                assert.match(
+                    JSON.stringify(firstSave.body.formRecord.data.fld_files),
+                    /https:\/\/files\.example\.test\/old-upload/
+                );
+                h.childTitle('Fresh server title with no uploaded attachment');
+                h.latest(
+                    page([
+                        record(
+                            'rec_same_title',
+                            'Fresh server title with no uploaded attachment'
+                        ),
+                    ])
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Open Form').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]')
+                        .value,
+                    'Fresh server title with no uploaded attachment'
+                );
+                const freshAttachments = document.querySelector(
+                    'textarea[data-field-id="fld_files"]'
+                );
+                assert.equal(freshAttachments.readOnly, true);
+                assert.deepEqual(JSON.parse(freshAttachments.value), []);
+                assert.equal(
+                    document.querySelector('input[type="file"]').files.length,
+                    0
+                );
+                const reference = assertReference(
+                    document,
+                    'retained-upload.txt'
+                );
+                assert.doesNotMatch(
+                    reference.textContent,
+                    /https:\/\/|old-upload|SYNTHETIC-UPLOADED-FILE-BYTES/,
+                    'Retained attachment input exposes its filename, never upload URLs, refs or file bytes.'
+                );
+                assert.equal(h.count('saveForm'), 1);
+                assert.equal(h.count(signRoute), 1);
+                assert.equal(h.count('synthetic-put'), 1);
+                button(document, 'Use this request').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Use this request'
+                ).click();
+                await waitFor(
+                    () => button(document, 'Save').disabled === false
+                );
+                assertReference(document, 'retained-upload.txt');
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'Acknowledgment does not save attachment refs or replay the upload.'
+                );
+                originalUpload.dispatchEvent(new window.Event('click'));
+                button(document, 'Upload selected file').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(h.count(signRoute), 1);
+                assert.equal(h.count('synthetic-put'), 1);
+                submit(window, button(document, 'Save').closest('form'));
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 2 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.deepEqual(
+                    h.calls.filter((call) => call.route === 'saveForm')[1].body
+                        .formRecord.data.fld_files,
+                    [],
+                    'A separate explicit edit starts from the fresh native attachment baseline.'
+                );
+                assert.equal(h.count(signRoute), 1);
+                assert.equal(h.count('synthetic-put'), 1);
                 button(document, 'Disconnect').click();
                 await h.close();
             }

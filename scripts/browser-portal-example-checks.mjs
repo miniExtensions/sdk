@@ -246,6 +246,7 @@ export async function checkBrowserPortalExample({
         attachments = false,
         delayedEdit = null,
         deletable = false,
+        failedUpload = false,
     } = {}) => {
         const portal = editablePortal();
         const calls = [];
@@ -255,6 +256,7 @@ export async function checkBrowserPortalExample({
             'offset_more'
         );
         let delayedEditUsed = false;
+        let childTitle = null;
         const fetch = async (input, init) => {
             const url = new URL(String(input));
             const route = url.searchParams.get('route') ?? url.pathname;
@@ -280,6 +282,8 @@ export async function checkBrowserPortalExample({
                     await delayedEdit.promise;
                 }
                 const form = makeForm(body);
+                if (childTitle != null)
+                    form.payload.formRecord.data.fld_title = childTitle;
                 if (deletable) {
                     form.payload.publicFields = {
                         state: { allowDeletingRecords: true },
@@ -315,7 +319,11 @@ export async function checkBrowserPortalExample({
                         },
                     })
                 );
-            if (route === '/api/trpc/publicExtensions.createPublicUploadLink')
+            if (route === '/api/trpc/publicExtensions.createPublicUploadLink') {
+                if (failedUpload)
+                    throw new Error(
+                        'Synthetic upload signing response lost after request dispatch.'
+                    );
                 return new Response(
                     JSON.stringify({
                         result: {
@@ -328,6 +336,7 @@ export async function checkBrowserPortalExample({
                         },
                     })
                 );
+            }
             if (route === 'saveForm')
                 throw new Error(
                     'Synthetic connection lost after dispatch; outcome is unknown.'
@@ -430,7 +439,27 @@ export async function checkBrowserPortalExample({
             latest: (value) => {
                 latest = value;
             },
+            childTitle: (value) => {
+                childTitle = value;
+            },
         };
+    };
+    const assertReference = (root, retainedText) => {
+        const panel = [
+            ...root.querySelectorAll(
+                'details[aria-label="Earlier local input (reference only)"]'
+            ),
+        ].find((node) => node.textContent.includes(retainedText));
+        assert(
+            panel,
+            `Earlier local input must retain ${retainedText} separately from the active Form.`
+        );
+        assert.equal(
+            panel.querySelector('input, select, textarea'),
+            null,
+            'Earlier input is a read-only reference, never an editable or automatically merged draft.'
+        );
+        return panel;
     };
     const check = async (name, exercise) => {
         try {
@@ -2029,6 +2058,242 @@ export async function checkBrowserPortalExample({
                     document.getElementById('screen').textContent,
                     /Earlier outcome not confirmed/
                 );
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main ordinary reopen of an uncertain edit inspects fresh server values and cannot silently replay the retained dirty draft',
+            async () => {
+                const h = await recoveryMain();
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Back to Portal').length === 1
+                );
+                const oldTitle = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                oldTitle.value = 'Retained dirty edit';
+                change(window, oldTitle, 'input');
+                const oldForm = oldTitle.closest('form');
+                submit(window, oldForm);
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.equal(button(document, 'Save').disabled, true);
+                assert.equal(
+                    h.calls.find((call) => call.route === 'saveForm').body
+                        .formRecord.data.fld_title,
+                    'Retained dirty edit'
+                );
+                // An independent server change must not be mistaken for the failed local draft.
+                h.childTitle('Fresh server title after uncertain edit');
+                h.latest(
+                    page([
+                        record(
+                            'rec_same_title',
+                            'Fresh server title after uncertain edit'
+                        ),
+                    ])
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Open Form').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                // Deliberately use the ordinary path rather than Inspect earlier request.
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(button(document, 'Save').disabled, true);
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'A fresh read must never save automatically.'
+                );
+                const inspectedTitle = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                ).value;
+                assertReference(document, 'Retained dirty edit');
+                button(document, 'Use this request').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Use this request'
+                ).click();
+                await waitFor(
+                    () => button(document, 'Save').disabled === false
+                );
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'Acknowledgment is not a retry or save.'
+                );
+                const acceptedTitle = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                ).value;
+                assertReference(document, 'Retained dirty edit');
+                submit(window, button(document, 'Save').closest('form'));
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 2 &&
+                        document.getElementById('screen').inert === false
+                );
+                const saves = h.calls.filter(
+                    (call) => call.route === 'saveForm'
+                );
+                // Exercise the whole unsafe path before asserting, so the failure receipt
+                // proves both misleading inspection and the resulting silent replay.
+                assert.deepEqual(
+                    {
+                        inspectedTitle,
+                        acceptedTitle,
+                        submittedTitle: saves[1].body.formRecord.data.fld_title,
+                    },
+                    {
+                        inspectedTitle:
+                            'Fresh server title after uncertain edit',
+                        acceptedTitle:
+                            'Fresh server title after uncertain edit',
+                        submittedTitle:
+                            'Fresh server title after uncertain edit',
+                    },
+                    'Fresh inspection/acknowledgment must not unlock the old dirty values as a new edit.'
+                );
+                assert.equal(
+                    saves[1].body.formRecord.recordId,
+                    'rec_same_title'
+                );
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main ordinary reopen after uncertain edit upload uses fresh server values and retains only a file-name reference without replay',
+            async () => {
+                const h = await recoveryMain({
+                    attachments: true,
+                    failedUpload: true,
+                });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Upload selected file').length === 1
+                );
+                const oldTitle = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                oldTitle.value = 'Retained dirty edit before upload';
+                change(window, oldTitle, 'input');
+                const oldFile = document.querySelector('input[type="file"]');
+                Object.defineProperty(oldFile, 'files', {
+                    configurable: true,
+                    value: [
+                        new File(
+                            ['Synthetic uncertain upload bytes'],
+                            'uncertain-upload.txt',
+                            { type: 'text/plain' }
+                        ),
+                    ],
+                });
+                const oldUpload = button(document, 'Upload selected file');
+                oldUpload.click();
+                const signRoute =
+                    '/api/trpc/publicExtensions.createPublicUploadLink';
+                await waitFor(
+                    () =>
+                        h.count(signRoute) === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.equal(button(document, 'Save').disabled, true);
+                assert.equal(
+                    h.count('synthetic-put'),
+                    0,
+                    'The synthetic signing response is lost before any PUT.'
+                );
+                assert.equal(h.count('saveForm'), 0);
+                h.childTitle('Fresh server title after uncertain upload');
+                h.latest(
+                    page([
+                        record(
+                            'rec_same_title',
+                            'Fresh server title after uncertain upload'
+                        ),
+                    ])
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Open Form').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]')
+                        .value,
+                    'Fresh server title after uncertain upload'
+                );
+                assertReference(document, 'Retained dirty edit before upload');
+                const reference = assertReference(
+                    document,
+                    'uncertain-upload.txt'
+                );
+                assert.doesNotMatch(
+                    reference.textContent,
+                    /Synthetic uncertain upload bytes|https:\/\//,
+                    'Attachment reference retains its filename, without bytes or transport capabilities.'
+                );
+                assert.equal(
+                    document.querySelector('input[type="file"]').files.length,
+                    0
+                );
+                assert.doesNotMatch(
+                    document.querySelector(
+                        'textarea[data-field-id="fld_files"]'
+                    ).value,
+                    /uncertain-upload/
+                );
+                button(document, 'Use this request').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Use this request'
+                ).click();
+                await waitFor(
+                    () => button(document, 'Save').disabled === false
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]')
+                        .value,
+                    'Fresh server title after uncertain upload'
+                );
+                assertReference(document, 'Retained dirty edit before upload');
+                assertReference(document, 'uncertain-upload.txt');
+                // Neither a retained old upload action nor a fresh empty picker may replay the file.
+                oldUpload.dispatchEvent(new window.Event('click'));
+                button(document, 'Upload selected file').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(h.count(signRoute), 1);
+                assert.equal(h.count('synthetic-put'), 0);
+                assert.equal(h.count('saveForm'), 0);
                 button(document, 'Disconnect').click();
                 await h.close();
             }

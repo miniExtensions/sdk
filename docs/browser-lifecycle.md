@@ -142,6 +142,15 @@ Zero, multiple or unavailable visible candidates leave the original outcome
 unknown. A standalone Form without a permitted listing needs an authorized
 record context; the app cannot discover inaccessible records.
 
+After an uncertain edit or upload, reopening the same known request through
+the ordinary **Open Form** action also starts inspection from the newly
+returned server values. An older cached dirty draft cannot mask that response
+or become saveable through acknowledgment. The earlier visible dirty input is
+retained separately under **Earlier local input (reference only)**; attachment
+entries retain names, not upload URLs, references or file bytes. These values
+are never merged into the fresh draft automatically. Reusing any value requires
+a deliberate new edit after inspection.
+
 If the user acknowledges that the old attempt may have committed, a separate
 blank draft can start a new local operation. It must not replay the original
 request or remove the original unknown journal entry. This is a deliberate

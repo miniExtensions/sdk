@@ -24,6 +24,7 @@ export type RecoveryAttempt = {
     flight: boolean;
     acknowledgment: 'none' | 'existing-request' | 'new-intent';
     associatedRecordId: string | null;
+    retainedInput: Array<{ title: string; value: string }>;
 };
 export const recoveryOwner = (
     apiOrigin: string,
@@ -85,6 +86,7 @@ export class RecoveryJournal {
             flight: false,
             acknowledgment: 'none',
             associatedRecordId: null,
+            retainedInput: [],
         };
         this.attempts.push(attempt);
         return attempt;

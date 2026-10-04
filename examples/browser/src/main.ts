@@ -565,11 +565,31 @@ const renderForm = (page: FormLoadedResult): void => {
                 render();
             })
         );
-    const draft = openLoadedFormDraft({
+    const inspectionAttempt =
+        candidate?.outcome === 'unknown' && candidate.acknowledgment === 'none'
+            ? candidate
+            : recovery.blocking(scope, recordId);
+    const freshInspection =
+        recordId != null &&
+        inspectionAttempt != null &&
+        loadVersion > inspectionAttempt.loadVersion &&
+        sameRecoveryRelationship(scope, inspectionAttempt.scope) &&
+        (visitor.formAuthority?.() ?? true);
+    let draft = openLoadedFormDraft({
         store: visitor.drafts,
         loaded: page,
         parent: visitor.formParentScope,
     });
+    if (freshInspection) {
+        // The journal already retains the earlier input as reference only.
+        // A newer response is not inspected while an old cached draft masks it.
+        visitor.drafts.discard(draft);
+        draft = openLoadedFormDraft({
+            store: visitor.drafts,
+            loaded: page,
+            parent: visitor.formParentScope,
+        });
+    }
     const ownsForm = (): boolean =>
         card.isConnected &&
         visitors[activeVisitor] === visitor &&
@@ -586,6 +606,41 @@ const renderForm = (page: FormLoadedResult): void => {
         );
     let updateComments = (): void => {};
     const controls = new Map<string, FieldControl>();
+    const retainInput = (
+        attempt: RecoveryAttempt,
+        selectedFile?: { fieldId: string; filename: string }
+    ): void => {
+        const snapshot = visitor.drafts.snapshot(draft);
+        attempt.retainedInput = (snapshot?.dirtyFieldIds ?? []).flatMap(
+            (fieldId) => {
+                const schema = page.payload.fieldIdsToSchemas[fieldId];
+                if (schema == null || !controls.get(fieldId)?.editable)
+                    return [];
+                const value = snapshot!.data[fieldId];
+                const text =
+                    schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS
+                        ? Array.isArray(value)
+                            ? value
+                                  .map((item) =>
+                                      typeof item === 'object' &&
+                                      item != null &&
+                                      'filename' in item &&
+                                      typeof item.filename === 'string'
+                                          ? item.filename
+                                          : '[Attachment reference]'
+                                  )
+                                  .join(', ')
+                            : ''
+                        : displayValue(value);
+                return [{ title: schema.airtableField.name, value: text }];
+            }
+        );
+        if (selectedFile != null)
+            attempt.retainedInput.push({
+                title: `${page.payload.fieldIdsToSchemas[selectedFile.fieldId]?.airtableField.name ?? 'Attachment'} — selected file`,
+                value: selectedFile.filename,
+            });
+    };
     disposeFormControls = () => {
         for (const control of controls.values()) control.destroy();
         controls.clear();
@@ -861,6 +916,10 @@ const renderForm = (page: FormLoadedResult): void => {
                                 loadVersion,
                                 fieldId
                             );
+                            retainInput(attempt, {
+                                fieldId,
+                                filename: selected.name,
+                            });
                             updateRecovery();
                             try {
                                 const attachment =
@@ -1006,6 +1065,38 @@ const renderForm = (page: FormLoadedResult): void => {
                 )
             );
         const attempt = selected ?? pending;
+        for (const earlier of recovery
+            .unknown(scope.owner)
+            .filter(
+                (earlier) =>
+                    sameRecoveryRelationship(scope, earlier.scope) &&
+                    (earlier.recordId === recordId ||
+                        (recordId != null &&
+                            earlier.associatedRecordId === recordId) ||
+                        earlier === candidate)
+            )) {
+            if (earlier.retainedInput.length === 0) continue;
+            const reference = element('details');
+            reference.setAttribute(
+                'aria-label',
+                'Earlier local input (reference only)'
+            );
+            reference.append(
+                element(
+                    'summary',
+                    `${earlier.id}: Earlier local input (reference only)`
+                ),
+                element(
+                    'p',
+                    'These were local values at the earlier dispatch, not the freshly loaded server values. They are never copied back or submitted automatically. Attachment entries retain names only.'
+                )
+            );
+            for (const field of earlier.retainedInput)
+                reference.append(
+                    element('p', `${field.title}: ${field.value}`)
+                );
+            recoveryPanel.append(reference);
+        }
         if (expired)
             recoveryPanel.append(
                 element(
@@ -1050,6 +1141,8 @@ const renderForm = (page: FormLoadedResult): void => {
             );
         const freshKnownRecord =
             !expired &&
+            freshInspection &&
+            inspectionAttempt === attempt &&
             recordId != null &&
             loadVersion > attempt.loadVersion &&
             sameRecoveryRelationship(scope, attempt.scope) &&
@@ -1123,6 +1216,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 null,
                 visitor.preparedAttempt
             );
+            retainInput(attempt);
             visitor.preparedAttempt = null;
             // Retire this scope before dispatch. Only an accepted result or
             // an accepted result or explicit inspected-outcome acknowledgment can unlock a new operation.

@@ -236,10 +236,12 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
             if (this.doNotThrowForUnknownFields) return '';
             else throw new Error(`Field ${node.value} does not exist.`);
 
-        const value =
-            field.name in context.record.fields
-                ? context.record.fields[field.name]
-                : context.record.fields[field.id];
+        const recordFields = context.record.fields;
+        const value = Object.hasOwn(recordFields, field.name)
+            ? recordFields[field.name]
+            : Object.hasOwn(recordFields, field.id)
+              ? recordFields[field.id]
+              : undefined;
         return this.getFieldReferenceValue(field, value);
     }
 

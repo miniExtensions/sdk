@@ -516,10 +516,15 @@ export const createPortalView = (options: {
                         const records =
                             data.tableIdsToLinkedTableStates[linkedTableId]
                                 .recordIdsToAirtableRecords;
+                        const previousFields = {
+                            ...records[recordId]?.fields,
+                        };
+                        // Airtable omits cleared values from this sparse response.
+                        delete previousFields[recordField.id];
                         records[recordId] = {
                             id: recordId,
                             fields: {
-                                ...records[recordId]?.fields,
+                                ...previousFields,
                                 ...result.record.fields,
                             },
                         };
@@ -592,7 +597,7 @@ export const createPortalView = (options: {
                 const recordField = state.airtableFields.find(
                     (entry) => entry.id === column.fieldId
                 );
-                const gridMode = layoutSetting('layout') === 'grid';
+                const gridMode = (layoutSetting('layout') ?? 'grid') === 'grid';
                 if (
                     gridMode &&
                     allowEditing &&

@@ -344,8 +344,8 @@ export function AuthPanel(props: Props) {
                     : undefined;
             const obscured =
                 config !== undefined &&
-                'obscurePassword' in config &&
-                config.obscurePassword === true;
+                'maskPasswordOnLoginScreen' in config &&
+                config.maskPasswordOnLoginScreen === true;
             return (
                 <label key={`${props.ownerScope.revision}:${prefix}:${name}`}>
                     {name}

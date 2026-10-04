@@ -45,6 +45,7 @@ type Visitor = {
     formContext: SaveFormInput['context'];
     formParentScope: ParentFormDraftScope | null;
     drafts: FormDraftStore<AirtableValue>;
+    uncertainFormDraftScopes: Set<string>;
     verification: { loginPage: LoginPageResult; verificationId: string } | null;
 };
 const newVisitor = (): Visitor => ({
@@ -56,6 +57,7 @@ const newVisitor = (): Visitor => ({
     formContext: { type: 'direct-url' },
     formParentScope: null,
     drafts: new FormDraftStore<AirtableValue>(),
+    uncertainFormDraftScopes: new Set(),
     verification: null,
 });
 const visitors = { A: newVisitor(), B: newVisitor() };
@@ -185,6 +187,7 @@ const invalidate = (visitor: Visitor): void => {
     visitor.formContext = { type: 'direct-url' };
     visitor.formParentScope = null;
     visitor.drafts.clear();
+    visitor.uncertainFormDraftScopes.clear();
     request?.abort();
     request = null;
     setBusy(false);
@@ -200,6 +203,7 @@ const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
     visitor.verification = null;
     visitor.formParentScope = null;
     visitor.drafts.clear();
+    visitor.uncertainFormDraftScopes.clear();
 };
 
 const load = (): void => {
@@ -214,6 +218,7 @@ const load = (): void => {
             if (!current()) return;
             // Reload replaces this visitor's drafts only after a fresh read.
             visitor.drafts.clear();
+            visitor.uncertainFormDraftScopes.clear();
             visitor.portal?.destroy();
             visitor.screen = result;
             visitor.root =
@@ -319,14 +324,15 @@ const renderLogin = (page: LoginPageResult): void => {
         const input = element('input');
         const schema = page.payload.fieldNamesToSchemas[name];
         const config = schema?.miniExtConfig;
-        input.type =
-            schema?.fieldType === AirtableFieldType.EMAIL
-                ? 'email'
-                : config !== undefined &&
-                    'obscurePassword' in config &&
-                    config.obscurePassword === true
-                  ? 'password'
-                  : 'text';
+        const masked =
+            config !== undefined &&
+            'maskPasswordOnLoginScreen' in config &&
+            config.maskPasswordOnLoginScreen === true;
+        input.type = masked
+            ? 'password'
+            : schema?.fieldType === AirtableFieldType.EMAIL
+              ? 'email'
+              : 'text';
         input.autocomplete =
             input.type === 'password' ? 'current-password' : 'off';
         input.value = page.payload.prefillFieldNamesToValues[name] ?? '';
@@ -343,16 +349,31 @@ const renderLogin = (page: LoginPageResult): void => {
         Object.fromEntries(
             Array.from(controls, ([name, input]) => [name, input.value])
         );
+    let codeForm: HTMLFormElement | null = null;
+    let codeInput: HTMLInputElement | null = null;
+    const retireVerification = (owner: Visitor): void => {
+        owner.verification = null;
+        if (codeInput != null) codeInput.value = '';
+        codeForm?.remove();
+    };
     if (settings(page.payload.publicFields).ifRecordDoesNotExist === 'signUp') {
         actions.append(
             button('Sign up', () => {
                 void run(
                     'Creating a visitor account…',
-                    async ({ client, signal, current }) => {
+                    async ({ visitor: owner, client, signal, current }) => {
+                        if (
+                            !card.isConnected ||
+                            owner !== visitor ||
+                            owner.screen !== page
+                        )
+                            return;
+                        const signUpCredentials = credentials();
+                        retireVerification(owner);
                         const result = await client.auth.signUp(
                             {
                                 extensionId: page.extensionId,
-                                signUpCredentials: credentials(),
+                                signUpCredentials,
                             },
                             { signal }
                         );
@@ -374,10 +395,18 @@ const renderLogin = (page: LoginPageResult): void => {
         void run(
             'Checking visitor login…',
             async ({ visitor: owner, client, signal, current }) => {
+                if (
+                    !card.isConnected ||
+                    owner !== visitor ||
+                    owner.screen !== page
+                )
+                    return;
+                const loginCredentials = credentials();
+                retireVerification(owner);
                 const result = await client.auth.login(
                     {
                         extensionId: page.extensionId,
-                        loginCredentials: credentials(),
+                        loginCredentials,
                     },
                     { signal }
                 );
@@ -402,8 +431,9 @@ const renderLogin = (page: LoginPageResult): void => {
     screenNode.append(card);
     const verification = visitor.verification;
     if (verification != null) {
-        const codeForm = element('form', undefined, 'card');
+        codeForm = element('form', undefined, 'card');
         const code = element('input');
+        codeInput = code;
         code.autocomplete = 'one-time-code';
         code.required = true;
         codeForm.append(labeled('Verification code', code));
@@ -415,15 +445,28 @@ const renderLogin = (page: LoginPageResult): void => {
             void run(
                 'Confirming verification code…',
                 async ({ visitor: owner, client, signal, current }) => {
+                    if (
+                        !codeForm?.isConnected ||
+                        owner !== visitor ||
+                        owner.screen !== page ||
+                        owner.verification !== verification
+                    )
+                        return;
+                    const verificationCode = code.value;
+                    code.value = '';
                     const result = await client.auth.confirmVerificationCode(
                         {
                             verificationId: verification.verificationId,
-                            verificationCode: code.value,
+                            verificationCode,
                             language: page.language,
                         },
                         { signal }
                     );
-                    if (current())
+                    if (
+                        current() &&
+                        owner.screen === page &&
+                        owner.verification === verification
+                    )
                         applyLogin(
                             owner,
                             verification.loginPage,
@@ -738,18 +781,27 @@ const renderForm = (page: FormLoadedResult): void => {
     card.append(fields);
     const errors = element('ul', undefined, 'error-list');
     errors.setAttribute('role', 'alert');
+    const uncertainSaveMessage =
+        'The save outcome is unknown. Reload and inspect the record before saving again.';
+    if (visitor.uncertainFormDraftScopes.has(draft.scope))
+        errors.append(element('li', uncertainSaveMessage));
     card.append(errors);
     const actions = element('div', undefined, 'actions');
     const submit = element('button', 'Save');
     submit.type = 'submit';
+    submit.disabled = visitor.uncertainFormDraftScopes.has(draft.scope);
     actions.append(submit);
-    actions.append(
-        button('Discard draft', () => {
-            visitor.drafts.discard(draft);
-            render();
-            status('This Form draft was discarded. No record was saved.');
-        })
-    );
+    const discard = button('Discard draft', () => {
+        if (visitor.uncertainFormDraftScopes.has(draft.scope)) {
+            status(uncertainSaveMessage, true);
+            return;
+        }
+        visitor.drafts.discard(draft);
+        render();
+        status('This Form draft was discarded. No record was saved.');
+    });
+    discard.disabled = submit.disabled;
+    actions.append(discard);
     if (
         page.payload.formRecord.type === 'edit' &&
         settings(page.payload.publicFields).allowDeletingRecords === true
@@ -795,6 +847,16 @@ const renderForm = (page: FormLoadedResult): void => {
     card.append(actions);
     card.addEventListener('submit', (event) => {
         event.preventDefault();
+        if (
+            !card.isConnected ||
+            visitors[activeVisitor] !== visitor ||
+            visitor.screen !== page
+        )
+            return;
+        if (visitor.uncertainFormDraftScopes.has(draft.scope)) {
+            status(uncertainSaveMessage, true);
+            return;
+        }
         void run('Saving the Form…', async ({ client, signal, current }) => {
             // Reject an invalid visible control instead of saving its last
             // valid draft value (for example, a non-finite numeric input).
@@ -802,22 +864,36 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (control.editable) control.read();
             const snapshot = visitor.drafts.snapshot(draft);
             if (snapshot == null) return;
-            const rawResult = await client.forms.save(
-                createFormSaveInput({
-                    loaded: page,
-                    draft: snapshot,
-                    options: {
-                        captchaVal: null,
-                        isComputeMode: false,
-                        searchQuery: connection?.input.query ?? {},
-                        context,
-                        conditionalLinkedRecordFieldIdsToFilteringValues: {},
-                    },
-                }),
-                { signal }
-            );
-            if (!current()) return;
-            const normalized = normalizeFormSaveResult(rawResult, page);
+            const input = createFormSaveInput({
+                loaded: page,
+                draft: snapshot,
+                options: {
+                    captchaVal: null,
+                    isComputeMode: false,
+                    searchQuery: connection?.input.query ?? {},
+                    context,
+                    conditionalLinkedRecordFieldIdsToFilteringValues: {},
+                },
+            });
+            signal.throwIfAborted();
+            // Retire this scope before dispatch. Only an accepted result or
+            // explicit fresh load can make it saveable again.
+            visitor.uncertainFormDraftScopes.add(draft.scope);
+            submit.disabled = true;
+            discard.disabled = true;
+            let normalized: ReturnType<typeof normalizeFormSaveResult>;
+            try {
+                const rawResult = await client.forms.save(input, { signal });
+                if (!current()) return;
+                normalized = normalizeFormSaveResult(rawResult, page);
+            } catch (error) {
+                if (current())
+                    errors.replaceChildren(element('li', uncertainSaveMessage));
+                throw error;
+            }
+            visitor.uncertainFormDraftScopes.delete(draft.scope);
+            submit.disabled = false;
+            discard.disabled = false;
             errors.replaceChildren();
             if (normalized.type === 'error') {
                 for (const error of normalized.validationErrors)

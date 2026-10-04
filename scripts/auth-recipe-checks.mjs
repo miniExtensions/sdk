@@ -355,6 +355,30 @@ export async function checkAuthRecipe({
         ...overrides,
     });
 
+    for (const fieldType of ['email', 'singleLineText']) {
+        await check(
+            `Canonical masked ${fieldType} login fields hide entered values`,
+            async ({ render, input }) => {
+                const client = makeClient();
+                const page = screen();
+                for (const schema of [
+                    page.payload.fieldNamesToSchemas.Email,
+                    page.payload.fieldIdsToSchemas.fld_email,
+                ]) {
+                    schema.fieldType = fieldType;
+                    schema.airtableField.config.type = fieldType;
+                    schema.miniExtConfig = {
+                        maskPasswordOnLoginScreen: true,
+                    };
+                }
+                await render(props(client, page));
+                assert.equal(input('Email', 'Login').type, 'password');
+                assert.equal(client.calls.length, 0);
+                assert.equal(client.sessionWrites, 0);
+            }
+        );
+    }
+
     await check(
         'Authentication, confirmation, application and reload require manual actions',
         async ({ render, click, input, status, button, disabled }) => {
@@ -363,10 +387,10 @@ export async function checkAuthRecipe({
             let reloaded = 0;
             const loginPage = screen();
             loginPage.payload.fieldNamesToSchemas.Email.miniExtConfig = {
-                obscurePassword: true,
+                maskPasswordOnLoginScreen: true,
             };
             loginPage.payload.fieldIdsToSchemas.fld_email.miniExtConfig = {
-                obscurePassword: true,
+                maskPasswordOnLoginScreen: true,
             };
             await render(
                 props(client, loginPage, {
@@ -381,7 +405,7 @@ export async function checkAuthRecipe({
             assert.equal(
                 input('Email', 'Login').type,
                 'password',
-                'Canonical obscurePassword login fields must use a masked input'
+                'Canonical maskPasswordOnLoginScreen login fields must use a masked input'
             );
             input('Email', 'Login').value = 'visitor@example.test';
             await click('Log in');

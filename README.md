@@ -9,18 +9,12 @@ The runtime covers loading, visitor authentication, Form saves and deletion,
 linked-table reads and pagination, selectors, child Forms, Grid edits, unlink,
 Kanban category changes, attachment uploads, and child-record comments.
 
-The package has not been published to npm. From a checkout, run:
+The package has not been published to npm. Install the supplied archive in
+your application; no private repository checkout is required. Replace the path
+with the archive's actual absolute path:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm check
-pnpm pack
-```
-
-Install the resulting archive in a separate project to try the formula engine:
-
-```sh
-npm install /path/to/miniextensions-sdk-0.1.0-alpha.0.tgz
+npm install /absolute/path/to/miniextensions-sdk-0.1.0-alpha.0.tgz
 ```
 
 ```ts
@@ -40,6 +34,20 @@ Formula evaluation runs locally and needs no miniExtensions API key or network
 connection. The `/formulas` suffix is a package import subpath. See the
 [formula guide](docs/formulas.md) for field context, supported functions, and
 compatibility details.
+
+## Browser starter
+
+The archive includes the complete `examples/browser` Form and Portal starter.
+Follow the shipped [browser lifecycle guide](docs/browser-lifecycle.md) to
+extract and copy it into your own project, install the exact supplied SDK
+archive, and connect it to your published extension. The
+[starter instructions](examples/browser/README.md) describe its controls and
+supported workflows. Neither route requires this private checkout.
+
+The starter connects the SDK helpers to application-owned rendering, visitor
+revisions, drafts, uploads, pagination, and save recovery. Advanced presentation,
+including conditional visibility, multi-page layouts, and CAPTCHA widgets,
+belongs to your application; the published server rules remain authoritative.
 
 ## Runtime client
 
@@ -111,6 +119,15 @@ owns rendering, persistence, draft cleanup and reload. See the shipped
 - TypeScript declarations are included for both module formats.
 
 ## Development
+
+From a source checkout, install dependencies, verify the package, and create
+an archive with:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm check
+pnpm pack
+```
 
 `pnpm check` runs formatting, application/test typechecking, SDK behavior
 tests, both builds, and checks a packed archive from independent ESM, CommonJS,

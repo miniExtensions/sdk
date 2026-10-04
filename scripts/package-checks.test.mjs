@@ -57,6 +57,41 @@ test('docs reject an existing checkout-only example outside the archive allowlis
     );
 });
 
+test('copied starter and sibling docs resolve without a source checkout', async (t) => {
+    const root = await temporaryRoot(t);
+    await write(
+        root,
+        'examples/browser/README.md',
+        '# Starter\n[Lifecycle](../../docs/browser-lifecycle.md#copy-and-run)\n'
+    );
+    await write(
+        root,
+        'docs/browser-lifecycle.md',
+        '# Lifecycle\n## Copy and run\n[Starter](../examples/browser/README.md)\n' +
+            '[Recovery](../examples/browser/src/recovery.ts)\n'
+    );
+    await write(root, 'examples/browser/src/recovery.ts', 'export {};\n');
+    await assertPackedDocLinks(root, [
+        'examples/browser/README.md',
+        'examples/browser/src/recovery.ts',
+        'docs/browser-lifecycle.md',
+    ]);
+});
+
+test('copied starter rejects omitted sibling documentation', async (t) => {
+    const root = await temporaryRoot(t);
+    await write(
+        root,
+        'examples/browser/README.md',
+        '# Starter\n[Lifecycle](../../docs/browser-lifecycle.md)\n'
+    );
+    await write(root, 'docs/browser-lifecycle.md', '# Lifecycle\n');
+    await assert.rejects(
+        assertPackedDocLinks(root, ['examples/browser/README.md']),
+        /Unshipped doc link/
+    );
+});
+
 test('docs reject missing anchors and undefined references', async (t) => {
     const root = await temporaryRoot(t);
     await write(root, 'README.md', '# SDK\n[Guide](#wrong-heading)');

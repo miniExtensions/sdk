@@ -5,7 +5,26 @@ packed archive installed in its own project, then serves the application at a
 different origin from miniExtensions. It has no React or miniExtensions
 source-code dependency.
 
-## Run
+## Run from the supplied archive
+
+This complete example ships in the SDK archive. Follow the
+[copy and run instructions](../../docs/browser-lifecycle.md#copy-and-run) to
+extract `examples/browser` and `docs` into the same customer project, then run:
+
+```sh
+cd customer-app/examples/browser
+npm install --ignore-scripts --no-audit --no-fund /absolute/path/to/miniextensions-sdk-0.1.0-alpha.0.tgz
+npm run typecheck
+npm run build
+npm run dev
+```
+
+The explicit archive argument replaces the original checkout-relative SDK
+dependency and refreshes its lockfile integrity. The copied project needs no
+private checkout or root SDK source/build output. Keep the copied documentation
+at `customer-app/docs` so this README's relative guide links resolve.
+
+## Run from a source checkout
 
 Use Node.js 22 or newer. From the SDK repository root:
 
@@ -37,10 +56,11 @@ browser after a change; it does not automatically replay requests.
 
 `npm run build` produces the browser bundle and static assets in `.generated`
 and exits. It starts no server or watch loop. From the SDK repository root,
-`pnpm check` also installs the newly packed SDK archive in an isolated temporary
-copy of this full example, then typechecks and builds it. That check does not
-reuse an existing installation. It retains the committed registry dependency
-resolutions and replaces the SDK pin only in the temporary lockfile. It also
+`pnpm check` also copies this example from the installed packed SDK into an
+isolated customer project, installs the exact archive with the customer
+command, then typechecks and builds it. That check does not reuse an existing
+installation or copy checkout source into the customer. It verifies the archive
+pin/integrity, committed registry resolutions and copied documentation links. It also
 executes the actual copied Portal example against that installed archive to
 check pagination, criteria retirement, child context and visitor transitions.
 
@@ -48,7 +68,8 @@ check pagination, criteria retirement, child context and visitor transitions.
 
 1. Publish a Form or Portal in miniExtensions.
 2. Enter the exact origin that serves the miniExtensions APIs and the
-   extension's published share ID. For a preview, use its preview origin.
+   extension's published share ID. Use a durable API origin for a continuing
+   application; a PR preview may be retired after merge.
 3. Choose **Connect and load**. An optional record ID opens a direct Form edit
    if that Form permits it.
 
@@ -153,11 +174,29 @@ A successful **Reload** replaces that visitor's drafts with the freshly loaded
 screen; a failed or cancelled reload retains them. Successful save or deletion
 clears only the affected draft. Logout, authentication changes, reconnecting,
 and disconnecting clear the corresponding visitor's drafts with its session.
+The separate document-local recovery journal keeps unknown create attempts
+nonreplayable across these app actions; clearing a draft/session is not evidence
+that its dispatched create did not commit.
 
 The example cancels pending requests when visitors or connections change.
 Cancelling a network request cannot undo an already committed server write.
 Inspect the records after cancellation or a network failure before submitting
 again.
+
+## Unknown create recovery
+
+After a dispatched create loses its response, inspect current authorized
+records and deliberately select one to load its configured edit Form. Do not
+infer success from a title, QA marker or matching row. Missing, multiple or
+unavailable records leave the original outcome unknown.
+
+The original attempt stays nonreplayable. With an explicit acknowledgement that
+it may already have committed, the user can start a separate blank draft with
+a new operation ID. This does not prove exactly-once creation or automatically
+repeat the old request. The journal is document-local; a page refresh does not
+recover its history. See the
+[integrated recovery flow](../../docs/browser-lifecycle.md#inspect-an-unknown-create)
+before adapting it to a production application.
 
 ## Adapt it
 
@@ -168,6 +207,8 @@ again.
   category changes.
 - `src/fields.ts` is the replaceable field renderer. Values and dirty lists use
   Airtable field IDs; login credentials use the configured field names.
+- `src/recovery.ts` keeps safe document-local operation metadata separate from
+  draft/session clearing. It does not store credentials or signed upload URLs.
 - `dev.mjs` bundles the installed SDK and serves three local static assets.
 
 Use the [runtime guide](../../docs/runtime.md) for full method contracts and

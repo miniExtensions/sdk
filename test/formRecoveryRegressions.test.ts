@@ -379,7 +379,7 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
     });
 
     for (const outcome of ['cancelled', 'lost-response'] as const) {
-        it(`blocks create replay after ${outcome} through remounts until explicit reload`, async (test) => {
+        it(`blocks create replay after ${outcome} through remounts and in-page reload`, async (test) => {
             const loaded = loadedForm();
             loaded.payload.fieldIdsInForm = ['fld_title'];
             const saves: SaveFormInput[] = [];
@@ -480,19 +480,25 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
             assert.ok(fresh);
             const freshSave = fresh.querySelector('button[type="submit"]');
             assert.ok(freshSave instanceof window.HTMLButtonElement);
-            assert.equal(freshSave.disabled, false);
-            submit(window, restored);
-            assert.equal(saves.length, 1);
-            submit(window, fresh);
-            await waitFor(() => saves.length === 2);
-            assert.equal(saves[0].formRecord.type, 'create');
-            assert.deepEqual(saves[1].formRecord, saves[0].formRecord);
-            await waitFor(
-                () =>
-                    window.document
-                        .getElementById('screen')
-                        ?.getAttribute('aria-busy') === 'false'
+            assert.equal(freshSave.disabled, true);
+            assert.match(
+                fresh.textContent ?? '',
+                /Earlier outcome not confirmed/
             );
+            assert.match(fresh.textContent ?? '', /It may have completed/);
+            assert.match(
+                fresh.textContent ?? '',
+                /standalone form has no authorized request list/
+            );
+            submit(window, restored);
+            submit(window, fresh);
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            assert.equal(
+                saves.length,
+                1,
+                'Neither detached nor freshly loaded Forms may replay the uncertain create.'
+            );
+            assert.equal(saves[0].formRecord.type, 'create');
         });
     }
 });

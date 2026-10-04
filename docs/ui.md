@@ -25,6 +25,13 @@ values when building the save input. Save only from the visitor's deliberate
 action; cancellation cannot undo a mutation and the SDK never retries a save
 automatically.
 
+For these controls in a complete Form and Portal application, use the shipped
+[browser lifecycle guide](browser-lifecycle.md) and packaged browser starter.
+You can copy the starter and install the exact supplied SDK archive without a
+private repository checkout. Its application code connects selection drafts
+and labels to visitor changes, save recovery, uploads, and Portal pagination.
+Custom layouts and advanced presentation remain application-owned.
+
 ## Native single and multi-selects
 
 `createSelectControl` renders a labeled native `<select>`. It accepts loaded
@@ -542,8 +549,10 @@ consumer with synthetic metadata, native controls, an async picker, visitor
 reset, error/empty/race/page scenarios and a preview using the existing
 [FormulaRunner](formulas.md#field-references-and-context). It has no credentials
 or network fixtures. Its one-shot build exits; its optional loopback preview
-serves on port 34921. The example source is not bundled into the customer
-archive; this guide contains the customer-facing integration recipes.
+serves on port 34921. This UI-only example source is not bundled into the
+customer archive; this guide contains its customer-facing integration recipes.
+The complete Form and Portal browser starter is included in the archive as
+described in the [browser lifecycle guide](browser-lifecycle.md).
 
 Deterministic tests and that local browser sandbox prove UI interaction and
 package boundaries. They do not prove a particular staging deployment accepts

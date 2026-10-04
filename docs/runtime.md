@@ -6,6 +6,15 @@ client: your app renders the interface while the existing handlers enforce
 the Form/Portal's visitor, record, field, and action permissions. Public tRPC
 requests use the official `@trpc/client` HTTP link and its plain JSON protocol.
 
+For a complete browser application, start with the shipped
+[browser lifecycle guide](browser-lifecycle.md). It explains how to copy the
+packaged Form and Portal starter into your own project, install the exact
+supplied SDK archive, and configure your published extension without a private
+repository checkout. It connects drafts, visitor changes, uploads, pagination,
+and save recovery in one application. The recipes below remain useful for
+integrating individual runtime operations into your own interface; advanced
+presentation remains application-owned.
+
 ## Packaged Form quickstart
 
 This guide ships in the SDK archive, so you can follow it without access to the

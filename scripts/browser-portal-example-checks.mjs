@@ -242,6 +242,241 @@ export async function checkBrowserPortalExample({
     };
     const failures = [];
     let checks = 0;
+    const recoveryMain = async ({
+        attachments = false,
+        delayedEdit = null,
+        deletable = false,
+        failedUpload = false,
+        obscurePassword = false,
+    } = {}) => {
+        const portal = editablePortal();
+        const calls = [];
+        let ownerId = 'rec_user';
+        let latest = page(
+            [record('rec_same_title', 'Same title')],
+            'offset_more'
+        );
+        let delayedEditUsed = false;
+        let childTitle = null;
+        const fetch = async (input, init) => {
+            const url = new URL(String(input));
+            const route = url.searchParams.get('route') ?? url.pathname;
+            if (init?.method === 'PUT') {
+                assert.equal(url.origin, 'https://upload.example.test');
+                calls.push({ route: 'synthetic-put', init });
+                return new Response(null, { status: 204 });
+            }
+            const body = JSON.parse(String(init?.body ?? '{}'));
+            calls.push({ route, body });
+            if (route === 'fetchExtensionForEndUser') {
+                if (!body.childExtensionInfo) {
+                    const fresh = structuredClone(portal);
+                    fresh.payload.formRecord.recordId = ownerId;
+                    return new Response(JSON.stringify(fresh));
+                }
+                if (
+                    body.childExtensionInfo.accessType.type === 'edit' &&
+                    delayedEdit != null &&
+                    !delayedEditUsed
+                ) {
+                    delayedEditUsed = true;
+                    await delayedEdit.promise;
+                }
+                const form = makeForm(body);
+                if (childTitle != null)
+                    form.payload.formRecord.data.fld_title = childTitle;
+                if (deletable) {
+                    form.payload.publicFields = {
+                        state: { allowDeletingRecords: true },
+                    };
+                    form.enableCommentsOnChildForms = true;
+                }
+                if (obscurePassword) {
+                    const schema = {
+                        fieldType: 'singleLineText',
+                        airtableField: {
+                            id: 'fld_password',
+                            name: 'Private input',
+                            config: { type: 'singleLineText' },
+                        },
+                        miniExtConfig: { obscurePassword: true },
+                    };
+                    form.payload.fieldIdsInForm.push('fld_password');
+                    form.payload.fieldIdsToSchemas.fld_password = schema;
+                    form.payload.fieldNamesToSchemas['Private input'] = schema;
+                    form.payload.formRecord.data.fld_password = '';
+                }
+                if (attachments) {
+                    const schema = {
+                        fieldType: 'multipleAttachments',
+                        airtableField: {
+                            id: 'fld_files',
+                            name: 'Files',
+                            config: { type: 'multipleAttachments' },
+                        },
+                    };
+                    form.payload.fieldIdsInForm.push('fld_files');
+                    form.payload.fieldIdsToSchemas.fld_files = schema;
+                    form.payload.fieldNamesToSchemas.Files = schema;
+                    form.payload.formRecord.data.fld_files = [];
+                }
+                return new Response(JSON.stringify(form));
+            }
+            if (route === 'fetchRecordsForLinkedTableOnPortal')
+                return new Response(JSON.stringify(latest));
+            if (route === '/api/trpc/airtable.getUserRecord')
+                return new Response(
+                    JSON.stringify({
+                        result: {
+                            data: {
+                                id: ownerId,
+                                fields: portal.payload.formRecord.data,
+                            },
+                        },
+                    })
+                );
+            if (route === '/api/trpc/publicExtensions.createPublicUploadLink') {
+                if (failedUpload)
+                    throw new Error(
+                        'Synthetic upload signing response lost after request dispatch.'
+                    );
+                return new Response(
+                    JSON.stringify({
+                        result: {
+                            data: {
+                                signedUrl:
+                                    'https://upload.example.test/synthetic-object',
+                                publicUrl:
+                                    'https://files.example.test/old-upload',
+                            },
+                        },
+                    })
+                );
+            }
+            if (route === 'saveForm')
+                throw new Error(
+                    'Synthetic connection lost after dispatch; outcome is unknown.'
+                );
+            throw new Error(`Unexpected packed recovery route: ${route}`);
+        };
+        const { window, close } = await environment(fetch);
+        await loadExample('main');
+        const document = window.document;
+        const count = (route) =>
+            calls.filter((call) => call.route === route).length;
+        const connect = async () => {
+            document.getElementById('api-origin').value =
+                'https://sdk.example.test';
+            document.getElementById('share-id').value = 'share_example';
+            submit(window, document.getElementById('connection-form'));
+            await waitFor(() => buttons(document, 'Load records').length === 1);
+        };
+        const aba = () => {
+            const visitor = document.getElementById('visitor');
+            visitor.value = 'B';
+            change(window, visitor);
+            visitor.value = 'A';
+            change(window, visitor);
+        };
+        const unknownCreate = async () => {
+            button(document, 'Create record').click();
+            await waitFor(
+                () => buttons(document, 'Back to Portal').length === 1
+            );
+            const title = document.querySelector(
+                'input[data-field-id="fld_title"]'
+            );
+            title.value = 'Same title';
+            change(window, title, 'input');
+            if (attachments) {
+                const file = document.querySelector('input[type="file"]');
+                Object.defineProperty(file, 'files', {
+                    configurable: true,
+                    value: [
+                        new File(['old uploaded bytes'], 'old.txt', {
+                            type: 'text/plain',
+                        }),
+                    ],
+                });
+                button(document, 'Upload selected file').click();
+                await waitFor(
+                    () =>
+                        count('synthetic-put') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.match(
+                    document.querySelector(
+                        'textarea[data-field-id="fld_files"]'
+                    ).value,
+                    /old-upload|old\.txt/
+                );
+                assert.equal(
+                    file.value,
+                    '',
+                    'Successful upload dequeues its native file selection.'
+                );
+                Object.defineProperty(file, 'files', {
+                    configurable: true,
+                    value: [
+                        new File(['unsubmitted bytes'], 'never-uploaded.txt', {
+                            type: 'text/plain',
+                        }),
+                    ],
+                });
+            }
+            const form = title.closest('form');
+            submit(window, form);
+            submit(window, form);
+            await waitFor(
+                () =>
+                    count('saveForm') === 1 &&
+                    document.getElementById('screen').inert === false
+            );
+            assert.equal(button(document, 'Save').disabled, true);
+            assert.match(
+                document.getElementById('screen').textContent,
+                /Earlier outcome not confirmed/
+            );
+            return form;
+        };
+        await connect();
+        return {
+            window,
+            document,
+            calls,
+            count,
+            connect,
+            aba,
+            unknownCreate,
+            close,
+            owner: (value) => {
+                ownerId = value;
+            },
+            latest: (value) => {
+                latest = value;
+            },
+            childTitle: (value) => {
+                childTitle = value;
+            },
+        };
+    };
+    const assertReference = (root, retainedText) => {
+        const panel = [
+            ...root.querySelectorAll(
+                'details[aria-label="Earlier local input (reference only)"]'
+            ),
+        ].find((node) => node.textContent.includes(retainedText));
+        assert(
+            panel,
+            `Earlier local input must retain ${retainedText} separately from the active Form.`
+        );
+        assert.equal(
+            panel.querySelector('input, select, textarea'),
+            null,
+            'Earlier input is a read-only reference, never an editable or automatically merged draft.'
+        );
+        return panel;
+    };
     const check = async (name, exercise) => {
         try {
             await exercise();
@@ -1536,6 +1771,966 @@ export async function checkBrowserPortalExample({
                     writes,
                     0,
                     'No transition or read may submit a write.'
+                );
+                button(document, 'Disconnect').click();
+                await close();
+            }
+        );
+        await check(
+            'actual main unknown create survives criteria, owner changes, logout, Reload and new clients without candidate inference',
+            async () => {
+                const h = await recoveryMain();
+                const { document, window } = h;
+                await h.unknownCreate();
+                button(document, 'Back to Portal').click();
+                const unknown = () =>
+                    assert.match(
+                        document.getElementById('screen').textContent,
+                        /Earlier outcome not confirmed/
+                    );
+                unknown();
+                button(document, 'Check latest requests').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                unknown();
+                assert.equal(h.count('saveForm'), 1);
+                assert.equal(
+                    buttons(document, 'Inspect earlier request').length,
+                    1
+                );
+                assert.match(
+                    document.getElementById('screen').textContent,
+                    /more available/i
+                );
+                assert.doesNotMatch(
+                    document.getElementById('status').textContent,
+                    /Saved record/
+                );
+                const view = document.querySelectorAll('.toolbar select')[1];
+                assert(view);
+                view.value = 'view_other';
+                change(window, view);
+                unknown();
+                h.latest(page([]));
+                button(document, 'Check latest requests').click();
+                await waitFor(
+                    () =>
+                        h.count('fetchRecordsForLinkedTableOnPortal') === 2 &&
+                        document.getElementById('screen').inert === false
+                );
+                unknown();
+                assert.deepEqual(rowIds(document), []);
+                assert.equal(button(document, 'Next page').disabled, true);
+                assert.equal(
+                    h.calls.findLast(
+                        (call) =>
+                            call.route === 'fetchRecordsForLinkedTableOnPortal'
+                    ).body.selectedCustomViewId,
+                    'view_other'
+                );
+                h.aba();
+                unknown();
+                const visitor = document.getElementById('visitor');
+                visitor.value = 'B';
+                change(window, visitor);
+                h.owner('rec_other');
+                document.getElementById('reload').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Load records').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.doesNotMatch(
+                    document.getElementById('screen').textContent,
+                    /Earlier outcome not confirmed/
+                );
+                visitor.value = 'A';
+                change(window, visitor);
+                h.owner('rec_user');
+                unknown();
+                document.getElementById('logout').click();
+                document.getElementById('reload').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Load records').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                unknown();
+                await h.connect();
+                unknown();
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'Session, view and client transitions cannot replay the old create.'
+                );
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main separate-request warning cancels without writes and accepted fresh blank drops old draft, files and uploaded references',
+            async () => {
+                const h = await recoveryMain({ attachments: true });
+                const { document, window } = h;
+                const oldForm = await h.unknownCreate();
+                const oldAttemptId = document
+                    .getElementById('screen')
+                    .textContent.match(/attempt-\d+/)?.[0];
+                assert(oldAttemptId);
+                const save = h.calls.find((call) => call.route === 'saveForm');
+                assert.match(JSON.stringify(save.body), /Same title/);
+                assert.match(JSON.stringify(save.body), /old-upload/);
+                button(document, 'Back to Portal').click();
+                const childrenBefore = h.calls.filter(
+                    (call) =>
+                        call.route === 'fetchExtensionForEndUser' &&
+                        call.body.childExtensionInfo
+                ).length;
+                button(document, 'Create record').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                assert.match(
+                    document.querySelector('dialog').textContent,
+                    /duplicate/i
+                );
+                button(document.querySelector('dialog'), 'Cancel').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(h.count('saveForm'), 1);
+                assert.equal(
+                    h.calls.filter(
+                        (call) =>
+                            call.route === 'fetchExtensionForEndUser' &&
+                            call.body.childExtensionInfo
+                    ).length,
+                    childrenBefore
+                );
+                button(document, 'Create record').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                const start = button(
+                    document.querySelector('dialog'),
+                    'Start separate request'
+                );
+                start.click();
+                start.click();
+                await waitFor(
+                    () => buttons(document, 'Back to Portal').length === 1
+                );
+                assert.equal(
+                    h.calls.filter(
+                        (call) =>
+                            call.route === 'fetchExtensionForEndUser' &&
+                            call.body.childExtensionInfo
+                    ).length,
+                    childrenBefore + 1,
+                    'Double activation starts one fresh child load.'
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]')
+                        .value,
+                    'Initial child'
+                );
+                assert.doesNotMatch(
+                    document.querySelector(
+                        'textarea[data-field-id="fld_files"]'
+                    ).value,
+                    /old-upload|old\.txt/
+                );
+                assert.equal(
+                    document.querySelector('input[type="file"]').files.length,
+                    0
+                );
+                assert.equal(button(document, 'Save').disabled, false);
+                const newAttemptId = document
+                    .getElementById('screen')
+                    .textContent.match(/New local attempt: (attempt-\d+)/)?.[1];
+                assert(newAttemptId);
+                assert.notEqual(
+                    newAttemptId,
+                    oldAttemptId,
+                    'A separate request has a distinct local intent ID.'
+                );
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'Acknowledging a new request does not autosave it.'
+                );
+                assert.equal(
+                    h.count(
+                        '/api/trpc/publicExtensions.createPublicUploadLink'
+                    ),
+                    1
+                );
+                assert.equal(h.count('synthetic-put'), 1);
+                submit(window, oldForm);
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'A detached old form cannot replay its save.'
+                );
+                assert.equal(h.count('synthetic-put'), 1);
+                button(document, 'Back to Portal').click();
+                assert.match(
+                    document.getElementById('screen').textContent,
+                    /Earlier outcome not confirmed/
+                );
+                assert(
+                    document
+                        .getElementById('screen')
+                        .textContent.includes(oldAttemptId),
+                    'The original unknown attempt remains in the journal.'
+                );
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main expired recovery candidates cannot open an editor and manual association leaves the original outcome unknown',
+            async () => {
+                const delayedEdit = deferred();
+                const h = await recoveryMain({ delayedEdit, deletable: true });
+                const { document, window } = h;
+                await h.unknownCreate();
+                button(document, 'Back to Portal').click();
+                button(document, 'Check latest requests').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Inspect earlier request').length ===
+                        1
+                );
+                button(document, 'Inspect earlier request').click();
+                await waitFor(() =>
+                    h.calls.some(
+                        (call) =>
+                            call.body?.childExtensionInfo?.accessType?.type ===
+                            'edit'
+                    )
+                );
+                h.aba();
+                delayedEdit.resolve();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    buttons(document, 'Back to Portal').length,
+                    0,
+                    'A child response from an expired collection cannot become an editor.'
+                );
+                assert.equal(h.count('saveForm'), 1);
+                button(document, 'Check latest requests').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Inspect earlier request').length ===
+                            1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Inspect earlier request').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(button(document, 'Save').disabled, true);
+                const candidateDelete = button(document, 'Delete this record');
+                assert.equal(candidateDelete.disabled, true);
+                candidateDelete.dispatchEvent(new window.Event('click'));
+                button(document, 'Load comments').dispatchEvent(
+                    new window.Event('click')
+                );
+                const candidateComment = document.querySelector(
+                    'textarea[placeholder="Write a comment"]'
+                );
+                candidateComment.value = 'Unacknowledged candidate comment';
+                button(document, 'Add comment').dispatchEvent(
+                    new window.Event('click')
+                );
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(document.querySelector('dialog'), null);
+                assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 0);
+                assert.equal(
+                    h.count('/api/trpc/airtable.getAirtableCommentsForRecord'),
+                    0
+                );
+                assert.equal(
+                    h.count('/api/trpc/airtable.addAirtableCommentForRecord'),
+                    0
+                );
+                button(document, 'Use this request').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Use this request'
+                ).click();
+                await waitFor(
+                    () => button(document, 'Save').disabled === false
+                );
+                assert.doesNotMatch(
+                    document.getElementById('status').textContent,
+                    /Saved record/
+                );
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'Choosing an existing request is not a save or proof of the original create.'
+                );
+                button(document, 'Back to Portal').click();
+                assert.match(
+                    document.getElementById('screen').textContent,
+                    /Earlier outcome not confirmed/
+                );
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main ordinary reopen of an uncertain edit inspects fresh server values and cannot silently replay the retained dirty draft',
+            async () => {
+                const h = await recoveryMain();
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Back to Portal').length === 1
+                );
+                const oldTitle = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                oldTitle.value = 'Retained dirty edit';
+                change(window, oldTitle, 'input');
+                const oldForm = oldTitle.closest('form');
+                submit(window, oldForm);
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.equal(button(document, 'Save').disabled, true);
+                assert.equal(
+                    h.calls.find((call) => call.route === 'saveForm').body
+                        .formRecord.data.fld_title,
+                    'Retained dirty edit'
+                );
+                // An independent server change must not be mistaken for the failed local draft.
+                h.childTitle('Fresh server title after uncertain edit');
+                h.latest(
+                    page([
+                        record(
+                            'rec_same_title',
+                            'Fresh server title after uncertain edit'
+                        ),
+                    ])
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Open Form').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                // Deliberately use the ordinary path rather than Inspect earlier request.
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(button(document, 'Save').disabled, true);
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'A fresh read must never save automatically.'
+                );
+                const inspectedTitle = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                ).value;
+                assertReference(document, 'Retained dirty edit');
+                button(document, 'Use this request').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Use this request'
+                ).click();
+                await waitFor(
+                    () => button(document, 'Save').disabled === false
+                );
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'Acknowledgment is not a retry or save.'
+                );
+                const acceptedTitle = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                ).value;
+                assertReference(document, 'Retained dirty edit');
+                submit(window, button(document, 'Save').closest('form'));
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 2 &&
+                        document.getElementById('screen').inert === false
+                );
+                const saves = h.calls.filter(
+                    (call) => call.route === 'saveForm'
+                );
+                // Exercise the whole unsafe path before asserting, so the failure receipt
+                // proves both misleading inspection and the resulting silent replay.
+                assert.deepEqual(
+                    {
+                        inspectedTitle,
+                        acceptedTitle,
+                        submittedTitle: saves[1].body.formRecord.data.fld_title,
+                    },
+                    {
+                        inspectedTitle:
+                            'Fresh server title after uncertain edit',
+                        acceptedTitle:
+                            'Fresh server title after uncertain edit',
+                        submittedTitle:
+                            'Fresh server title after uncertain edit',
+                    },
+                    'Fresh inspection/acknowledgment must not unlock the old dirty values as a new edit.'
+                );
+                assert.equal(
+                    saves[1].body.formRecord.recordId,
+                    'rec_same_title'
+                );
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main ordinary reopen after uncertain edit upload uses fresh server values and retains only a file-name reference without replay',
+            async () => {
+                const h = await recoveryMain({
+                    attachments: true,
+                    failedUpload: true,
+                });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Upload selected file').length === 1
+                );
+                const oldTitle = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                oldTitle.value = 'Retained dirty edit before upload';
+                change(window, oldTitle, 'input');
+                const oldFile = document.querySelector('input[type="file"]');
+                Object.defineProperty(oldFile, 'files', {
+                    configurable: true,
+                    value: [
+                        new File(
+                            ['Synthetic uncertain upload bytes'],
+                            'uncertain-upload.txt',
+                            { type: 'text/plain' }
+                        ),
+                    ],
+                });
+                const oldUpload = button(document, 'Upload selected file');
+                oldUpload.click();
+                const signRoute =
+                    '/api/trpc/publicExtensions.createPublicUploadLink';
+                await waitFor(
+                    () =>
+                        h.count(signRoute) === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.equal(button(document, 'Save').disabled, true);
+                assert.equal(
+                    h.count('synthetic-put'),
+                    0,
+                    'The synthetic signing response is lost before any PUT.'
+                );
+                assert.equal(h.count('saveForm'), 0);
+                h.childTitle('Fresh server title after uncertain upload');
+                h.latest(
+                    page([
+                        record(
+                            'rec_same_title',
+                            'Fresh server title after uncertain upload'
+                        ),
+                    ])
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Open Form').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]')
+                        .value,
+                    'Fresh server title after uncertain upload'
+                );
+                assertReference(document, 'Retained dirty edit before upload');
+                const reference = assertReference(
+                    document,
+                    'uncertain-upload.txt'
+                );
+                assert.doesNotMatch(
+                    reference.textContent,
+                    /Synthetic uncertain upload bytes|https:\/\//,
+                    'Attachment reference retains its filename, without bytes or transport capabilities.'
+                );
+                assert.equal(
+                    document.querySelector('input[type="file"]').files.length,
+                    0
+                );
+                assert.doesNotMatch(
+                    document.querySelector(
+                        'textarea[data-field-id="fld_files"]'
+                    ).value,
+                    /uncertain-upload/
+                );
+                button(document, 'Use this request').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Use this request'
+                ).click();
+                await waitFor(
+                    () => button(document, 'Save').disabled === false
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]')
+                        .value,
+                    'Fresh server title after uncertain upload'
+                );
+                assertReference(document, 'Retained dirty edit before upload');
+                assertReference(document, 'uncertain-upload.txt');
+                // Neither a retained old upload action nor a fresh empty picker may replay the file.
+                oldUpload.dispatchEvent(new window.Event('click'));
+                button(document, 'Upload selected file').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(h.count(signRoute), 1);
+                assert.equal(h.count('synthetic-put'), 0);
+                assert.equal(h.count('saveForm'), 0);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main obscured dirty Form input stays masked and never becomes plaintext recovery reference text',
+            async () => {
+                const h = await recoveryMain({ obscurePassword: true });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        document.querySelector(
+                            'input[data-field-id="fld_password"]'
+                        ) != null
+                );
+                const title = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                title.value = 'Safe ordinary input reference';
+                change(window, title, 'input');
+                const password = document.querySelector(
+                    'input[data-field-id="fld_password"]'
+                );
+                const secret = 'SYNTHETIC-PRIVATE-INPUT-DO-NOT-DISPLAY';
+                assert.equal(
+                    password.type,
+                    'password',
+                    'The exact published obscurePassword descriptor masks the native input.'
+                );
+                password.value = secret;
+                change(window, password, 'input');
+                assert.equal(password.type, 'password');
+                assert.equal(
+                    password.value,
+                    secret,
+                    'Masking preserves the native Form input value before dispatch.'
+                );
+                submit(window, password.closest('form'));
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.equal(
+                    h.calls.find((call) => call.route === 'saveForm').body
+                        .formRecord.data.fld_password,
+                    secret,
+                    'The synthetic save uses the native value; this test is about recovery presentation.'
+                );
+                const reference = assertReference(
+                    document,
+                    'Safe ordinary input reference'
+                );
+                assert.equal(password.type, 'password');
+                assert.equal(password.value, secret);
+                assert.equal(
+                    reference.textContent.includes(secret),
+                    false,
+                    'An obscured dirty field must not be rendered in plaintext in the recovery reference.'
+                );
+                assert.equal(
+                    document
+                        .getElementById('screen')
+                        .textContent.includes(secret),
+                    false
+                );
+                h.childTitle('Fresh server title for obscured input');
+                h.latest(
+                    page([
+                        record(
+                            'rec_same_title',
+                            'Fresh server title for obscured input'
+                        ),
+                    ])
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Open Form').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(
+                    document.querySelector(
+                        'input[data-field-id="fld_password"]'
+                    ).type,
+                    'password'
+                );
+                assert.equal(
+                    document.querySelector(
+                        'input[data-field-id="fld_password"]'
+                    ).value,
+                    ''
+                );
+                assert.equal(
+                    assertReference(
+                        document,
+                        'Safe ordinary input reference'
+                    ).textContent.includes(secret),
+                    false
+                );
+                assert.equal(h.count('saveForm'), 1);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main previously uploaded noneditable attachments retain filenames only after uncertain save and fresh inspection without replay',
+            async () => {
+                const h = await recoveryMain({ attachments: true });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Upload selected file').length === 1
+                );
+                const title = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                title.value = 'Retained uploaded-file note';
+                change(window, title, 'input');
+                const originalFile =
+                    document.querySelector('input[type="file"]');
+                Object.defineProperty(originalFile, 'files', {
+                    configurable: true,
+                    value: [
+                        new File(
+                            ['SYNTHETIC-UPLOADED-FILE-BYTES'],
+                            'retained-upload.txt',
+                            { type: 'text/plain' }
+                        ),
+                    ],
+                });
+                const originalUpload = button(document, 'Upload selected file');
+                originalUpload.click();
+                const signRoute =
+                    '/api/trpc/publicExtensions.createPublicUploadLink';
+                await waitFor(
+                    () =>
+                        h.count('synthetic-put') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const originalAttachments = document.querySelector(
+                    'textarea[data-field-id="fld_files"]'
+                );
+                assert.equal(
+                    originalAttachments.readOnly,
+                    true,
+                    'Native attachment refs use the actual example noneditable field control.'
+                );
+                assert.match(originalAttachments.value, /retained-upload\.txt/);
+                submit(window, title.closest('form'));
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const firstSave = h.calls.find(
+                    (call) => call.route === 'saveForm'
+                );
+                assert.equal(
+                    firstSave.body.formRecord.data.fld_files[0].filename,
+                    'retained-upload.txt'
+                );
+                assert.match(
+                    JSON.stringify(firstSave.body.formRecord.data.fld_files),
+                    /https:\/\/files\.example\.test\/old-upload/
+                );
+                h.childTitle('Fresh server title with no uploaded attachment');
+                h.latest(
+                    page([
+                        record(
+                            'rec_same_title',
+                            'Fresh server title with no uploaded attachment'
+                        ),
+                    ])
+                );
+                button(document, 'Back to Portal').click();
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Open Form').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Use this request').length === 1
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]')
+                        .value,
+                    'Fresh server title with no uploaded attachment'
+                );
+                const freshAttachments = document.querySelector(
+                    'textarea[data-field-id="fld_files"]'
+                );
+                assert.equal(freshAttachments.readOnly, true);
+                assert.deepEqual(JSON.parse(freshAttachments.value), []);
+                assert.equal(
+                    document.querySelector('input[type="file"]').files.length,
+                    0
+                );
+                const reference = assertReference(
+                    document,
+                    'retained-upload.txt'
+                );
+                assert.doesNotMatch(
+                    reference.textContent,
+                    /https:\/\/|old-upload|SYNTHETIC-UPLOADED-FILE-BYTES/,
+                    'Retained attachment input exposes its filename, never upload URLs, refs or file bytes.'
+                );
+                assert.equal(h.count('saveForm'), 1);
+                assert.equal(h.count(signRoute), 1);
+                assert.equal(h.count('synthetic-put'), 1);
+                button(document, 'Use this request').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Use this request'
+                ).click();
+                await waitFor(
+                    () => button(document, 'Save').disabled === false
+                );
+                assertReference(document, 'retained-upload.txt');
+                assert.equal(
+                    h.count('saveForm'),
+                    1,
+                    'Acknowledgment does not save attachment refs or replay the upload.'
+                );
+                originalUpload.dispatchEvent(new window.Event('click'));
+                button(document, 'Upload selected file').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(h.count(signRoute), 1);
+                assert.equal(h.count('synthetic-put'), 1);
+                submit(window, button(document, 'Save').closest('form'));
+                await waitFor(
+                    () =>
+                        h.count('saveForm') === 2 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.deepEqual(
+                    h.calls.filter((call) => call.route === 'saveForm')[1].body
+                        .formRecord.data.fld_files,
+                    [],
+                    'A separate explicit edit starts from the fresh native attachment baseline.'
+                );
+                assert.equal(h.count(signRoute), 1);
+                assert.equal(h.count('synthetic-put'), 1);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main expired edit blocks Delete, comments and retained controls without dispatch',
+            async () => {
+                const h = await recoveryMain({ deletable: true });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(() =>
+                    rowIds(document).includes('rec_same_title')
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () => buttons(document, 'Delete this record').length === 1
+                );
+                const originalDelete = button(document, 'Delete this record');
+                const originalForm = originalDelete.closest('form');
+                const originalLoadComments = button(document, 'Load comments');
+                const originalAddComment = button(document, 'Add comment');
+                document.querySelector(
+                    'textarea[placeholder="Write a comment"]'
+                ).value = 'Retained old comment';
+                assert.equal(originalDelete.disabled, false);
+                originalDelete.click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                const retainedConfirmation = button(
+                    document.querySelector('dialog'),
+                    'Delete record'
+                );
+                assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 0);
+                h.aba();
+                const expiredDelete = button(document, 'Delete this record');
+                assert.equal(expiredDelete.disabled, true);
+                assert.equal(button(document, 'Save').disabled, true);
+                const expiredLoadComments = button(document, 'Load comments');
+                const expiredAddComment = button(document, 'Add comment');
+                assert.equal(expiredLoadComments.disabled, true);
+                assert.equal(expiredAddComment.disabled, true);
+                document.querySelector(
+                    'textarea[placeholder="Write a comment"]'
+                ).value = 'Expired current comment';
+                assert.equal(document.querySelector('dialog'), null);
+                // Programmatic events bypass disabled native-button behavior;
+                // the actual owner/plan gate must still prevent dispatch.
+                retainedConfirmation.dispatchEvent(new window.Event('click'));
+                originalDelete.dispatchEvent(new window.Event('click'));
+                expiredDelete.dispatchEvent(new window.Event('click'));
+                for (const retained of [
+                    originalLoadComments,
+                    originalAddComment,
+                    expiredLoadComments,
+                    expiredAddComment,
+                ])
+                    retained.dispatchEvent(new window.Event('click'));
+                submit(window, originalForm);
+                submit(window, expiredDelete.closest('form'));
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(document.querySelector('dialog'), null);
+                assert.equal(
+                    h.count('/api/trpc/airtable.deleteRecord'),
+                    0,
+                    'An expired edit or retained confirmation cannot authorize Delete.'
+                );
+                assert.equal(h.count('saveForm'), 0);
+                assert.equal(
+                    h.count('/api/trpc/airtable.getAirtableCommentsForRecord'),
+                    0
+                );
+                assert.equal(
+                    h.count('/api/trpc/airtable.addAirtableCommentForRecord'),
+                    0
+                );
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main standalone unknown create keeps its conservative latch across Reload and new clients without inventing a request list',
+            async () => {
+                let saves = 0;
+                let loads = 0;
+                const fetch = async (input) => {
+                    const route = new URL(String(input)).searchParams.get(
+                        'route'
+                    );
+                    if (route === 'fetchExtensionForEndUser') {
+                        loads += 1;
+                        const form = makeForm({
+                            childExtensionInfo: {
+                                accessType: { type: 'create' },
+                            },
+                        });
+                        form.payload.hasParentExtension = false;
+                        return new Response(JSON.stringify(form));
+                    }
+                    if (route === 'saveForm') {
+                        saves += 1;
+                        throw new Error(
+                            'Synthetic standalone response lost after dispatch.'
+                        );
+                    }
+                    throw new Error(
+                        `Unexpected standalone recovery route: ${route}`
+                    );
+                };
+                const { window, close } = await environment(fetch);
+                await loadExample('main');
+                const document = window.document;
+                const connect = async () => {
+                    document.getElementById('api-origin').value =
+                        'https://sdk.example.test';
+                    document.getElementById('share-id').value =
+                        'standalone_share';
+                    submit(window, document.getElementById('connection-form'));
+                    await waitFor(
+                        () =>
+                            buttons(document, 'Save').length === 1 &&
+                            document.getElementById('screen').inert === false
+                    );
+                };
+                const assertBlocked = () => {
+                    assert.equal(button(document, 'Save').disabled, true);
+                    assert.match(
+                        document.getElementById('screen').textContent,
+                        /Earlier outcome not confirmed/
+                    );
+                    assert.match(
+                        document.getElementById('screen').textContent,
+                        /usual request access|form owner/
+                    );
+                    assert.equal(
+                        buttons(document, 'Check latest requests').length,
+                        0
+                    );
+                    assert.equal(buttons(document, 'Create record').length, 0);
+                    submit(window, document.querySelector('#screen form'));
+                };
+                await connect();
+                submit(window, document.querySelector('#screen form'));
+                await waitFor(
+                    () =>
+                        saves === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assertBlocked();
+                document.getElementById('reload').click();
+                await waitFor(
+                    () =>
+                        loads === 2 &&
+                        document.getElementById('screen').inert === false
+                );
+                assertBlocked();
+                await connect();
+                assertBlocked();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    saves,
+                    1,
+                    'The standalone latch cannot be bypassed by Reload or replacing the client.'
                 );
                 button(document, 'Disconnect').click();
                 await close();

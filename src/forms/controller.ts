@@ -129,6 +129,17 @@ type PreparedContext = Omit<Context, 'handle'> & {
     parent: ParentFormDraftScope | null;
 };
 
+const contextKey = (value: unknown): string =>
+    JSON.stringify(value, (_key, entry: unknown) => {
+        if (entry === null || typeof entry !== 'object' || Array.isArray(entry))
+            return entry;
+        return Object.fromEntries(
+            Object.keys(entry)
+                .sort()
+                .map((key) => [key, (entry as Record<string, unknown>)[key]])
+        );
+    });
+
 const prepare = (options: FormControllerOptions): PreparedContext => {
     const loaded = structuredClone(options.loaded);
     const saveOptions = structuredClone(options.saveOptions);
@@ -156,7 +167,7 @@ const prepare = (options: FormControllerOptions): PreparedContext => {
         store,
         fields,
         parent,
-        contextKey: JSON.stringify([
+        contextKey: contextKey([
             loaded.extensionId,
             loaded.payload.extensionAccessToken,
             loaded.payload.formRecord.type,
@@ -464,7 +475,10 @@ export const createFormController = (
                     'The Form controller was disposed.'
                 );
             }
-            const prepared = prepare(nextOptions);
+            const prepared = prepare({
+                ...nextOptions,
+                store: nextOptions.store ?? context.store,
+            });
             const scopeChanged =
                 !sameScope(context.scope, prepared.scope) ||
                 context.client !== prepared.client ||

@@ -253,8 +253,10 @@ export const fieldControl = (
         input.value = initialValue == null ? '' : String(initialValue);
         control = input;
         read = () => {
+            if (input.validity.badInput || !input.checkValidity())
+                throw new Error(`${title} must be a valid number.`);
             if (input.value === '') return null;
-            const numeric = Number(input.value);
+            const numeric = input.valueAsNumber;
             if (!Number.isFinite(numeric))
                 throw new Error(`${title} must be a number.`);
             return numeric;

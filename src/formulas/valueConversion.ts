@@ -468,12 +468,22 @@ export const convertAirtableValueToPrimitive = (args: {
                                   })
                                 : null;
 
-                        // Prefer field IDs, retaining field-name fallback for
-                        // records whose values are keyed by name.
+                        // Prefer own field IDs, retaining nullish field-name
+                        // fallback without reading inherited properties.
                         const primaryValue =
                             primaryField != null && record != null
-                                ? (record.fields[primaryField.id] ??
-                                  record.fields[primaryField.name])
+                                ? ((Object.hasOwn(
+                                      record.fields,
+                                      primaryField.id
+                                  )
+                                      ? record.fields[primaryField.id]
+                                      : undefined) ??
+                                  (Object.hasOwn(
+                                      record.fields,
+                                      primaryField.name
+                                  )
+                                      ? record.fields[primaryField.name]
+                                      : undefined))
                                 : null;
 
                         if (primaryField == null || primaryValue == null) {

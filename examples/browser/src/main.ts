@@ -31,6 +31,13 @@ import { displayValue, formFieldControl, type FieldControl } from './fields.js';
 import { createPortalView, type PortalView } from './portal.js';
 import { FormDraftStore, type ParentFormDraftScope } from './drafts.js';
 import {
+    RecoveryJournal,
+    recoveryOwner,
+    sameRecoveryRelationship,
+    type RecoveryScope,
+    type RecoveryAttempt,
+} from './recovery.js';
+import {
     cancelConfirmation,
     requestConfirmation,
     type ConfirmationOptions,
@@ -42,6 +49,10 @@ type Visitor = {
     root: PortalLoadedResult | null;
     portal: PortalView | null;
     revision: number;
+    formLoadVersion: number;
+    recoveryCandidate: RecoveryAttempt | null;
+    preparedAttempt: RecoveryAttempt | null;
+    formAuthority: (() => boolean) | null;
     formContext: SaveFormInput['context'];
     formParentScope: ParentFormDraftScope | null;
     drafts: FormDraftStore<AirtableValue>;
@@ -54,6 +65,10 @@ const newVisitor = (): Visitor => ({
     root: null,
     portal: null,
     revision: 0,
+    formLoadVersion: 0,
+    recoveryCandidate: null,
+    preparedAttempt: null,
+    formAuthority: null,
     formContext: { type: 'direct-url' },
     formParentScope: null,
     drafts: new FormDraftStore<AirtableValue>(),
@@ -62,9 +77,11 @@ const newVisitor = (): Visitor => ({
 });
 const visitors = { A: newVisitor(), B: newVisitor() };
 let activeVisitor: keyof typeof visitors = 'A';
+const recovery = new RecoveryJournal();
+let formLoadSequence = 0;
 let connection: {
     apiOrigin: string;
-    input: LoadExtensionInput;
+    input: Extract<LoadExtensionInput, { shareId: string }>;
 } | null = null;
 let request: AbortController | null = null;
 let disposeFormControls = (): void => {};
@@ -75,6 +92,43 @@ const visitorSelect = nodeById('visitor');
 if (!(visitorSelect instanceof HTMLSelectElement))
     throw new Error('Missing visitor selector.');
 
+const formRecoveryScope = (
+    visitor: Visitor,
+    page: FormLoadedResult
+): RecoveryScope => {
+    const parentFieldId = visitor.formParentScope?.portalFieldId ?? null;
+    const parentField =
+        parentFieldId == null
+            ? undefined
+            : visitor.root?.payload.fieldIdsToSchemas[parentFieldId]
+                  ?.airtableField;
+    return {
+        owner:
+            visitor.root != null && connection != null
+                ? recoveryOwner(
+                      connection.apiOrigin,
+                      connection.input.shareId,
+                      visitor.root
+                  )
+                : JSON.stringify([
+                      'standalone',
+                      activeVisitor,
+                      connection == null
+                          ? null
+                          : new URL(connection.apiOrigin).origin,
+                      connection?.input.shareId,
+                  ]),
+        parentFieldId,
+        tableId:
+            parentField?.config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
+                ? parentField.config.options.linkedTableId
+                : page.payload.formRecord.type === 'edit'
+                  ? page.payload.formRecord.tableId
+                  : null,
+        childExtensionId: page.extensionId,
+        context: visitor.formContext.type,
+    };
+};
 const status = (message: string, error = false): void => {
     statusNode.textContent = message;
     statusNode.classList.toggle('error', error);
@@ -186,6 +240,9 @@ const invalidate = (visitor: Visitor): void => {
     visitor.verification = null;
     visitor.formContext = { type: 'direct-url' };
     visitor.formParentScope = null;
+    visitor.recoveryCandidate = null;
+    visitor.preparedAttempt = null;
+    visitor.formAuthority = null;
     visitor.drafts.clear();
     visitor.uncertainFormDraftScopes.clear();
     request?.abort();
@@ -202,6 +259,9 @@ const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
     visitor.root = null;
     visitor.verification = null;
     visitor.formParentScope = null;
+    visitor.recoveryCandidate = null;
+    visitor.preparedAttempt = null;
+    visitor.formAuthority = null;
     visitor.drafts.clear();
     visitor.uncertainFormDraftScopes.clear();
 };
@@ -221,6 +281,10 @@ const load = (): void => {
             visitor.uncertainFormDraftScopes.clear();
             visitor.portal?.destroy();
             visitor.screen = result;
+            visitor.formLoadVersion = ++formLoadSequence;
+            visitor.recoveryCandidate = null;
+            visitor.preparedAttempt = null;
+            visitor.formAuthority = null;
             visitor.root =
                 result.extensionScreen === 'portal_loaded' ? result : null;
             visitor.portal = null;
@@ -482,6 +546,13 @@ const renderLogin = (page: LoginPageResult): void => {
 const renderForm = (page: FormLoadedResult): void => {
     const visitor = visitors[activeVisitor];
     const context = visitor.formContext;
+    const scope = formRecoveryScope(visitor, page);
+    const loadVersion = visitor.formLoadVersion;
+    const recordId =
+        page.payload.formRecord.type === 'edit'
+            ? page.payload.formRecord.recordId
+            : null;
+    const candidate = visitor.recoveryCandidate;
     const card = element('form', undefined, 'card');
     card.noValidate = true; // Display the server's complete validation result.
     card.append(element('h2', page.payload.extensionName ?? 'Custom Form'));
@@ -499,6 +570,21 @@ const renderForm = (page: FormLoadedResult): void => {
         loaded: page,
         parent: visitor.formParentScope,
     });
+    const ownsForm = (): boolean =>
+        card.isConnected &&
+        visitors[activeVisitor] === visitor &&
+        visitor.screen === page &&
+        visitor.formLoadVersion === loadVersion &&
+        (visitor.formAuthority?.() ?? true) &&
+        visitor.drafts.snapshot(draft) != null;
+    const mayUseForm = (): boolean =>
+        ownsForm() &&
+        recovery.blocking(scope, recordId) == null &&
+        !(
+            candidate?.outcome === 'unknown' &&
+            candidate.acknowledgment === 'none'
+        );
+    let updateComments = (): void => {};
     const controls = new Map<string, FieldControl>();
     disposeFormControls = () => {
         for (const control of controls.values()) control.destroy();
@@ -531,6 +617,7 @@ const renderForm = (page: FormLoadedResult): void => {
             schema,
             visitor.drafts.read(draft, fieldId),
             () => {
+                if (!mayUseForm()) return;
                 try {
                     visitor.drafts.write(draft, fieldId, control.read());
                 } catch (error) {
@@ -565,6 +652,7 @@ const renderForm = (page: FormLoadedResult): void => {
             control.node.append(
                 labeled('Add a choice', choice),
                 button('Create choice', () => {
+                    if (!mayUseForm()) return;
                     if (choice.value.trim() === '') {
                         status('Enter a new choice name.', true);
                         return;
@@ -572,6 +660,8 @@ const renderForm = (page: FormLoadedResult): void => {
                     void run(
                         'Creating the configured select choice…',
                         async ({ client, signal, current }) => {
+                            if (!mayUseForm()) return;
+                            signal.throwIfAborted();
                             const result = await client.forms.addSelectOption(
                                 {
                                     extensionAccessToken:
@@ -581,7 +671,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 },
                                 { signal }
                             );
-                            if (!current()) return;
+                            if (!current() || !mayUseForm()) return;
                             visitor.drafts.addChoice(
                                 draft,
                                 fieldId,
@@ -643,9 +733,12 @@ const renderForm = (page: FormLoadedResult): void => {
             const choices = element('div', undefined, 'choice-list');
             let offset: string | null = null;
             const fetchOptions = (more: boolean): void => {
+                if (!mayUseForm()) return;
                 void run(
                     'Loading allowed linked records…',
                     async ({ client, signal, current }) => {
+                        if (!mayUseForm()) return;
+                        signal.throwIfAborted();
                         const result =
                             await client.linkedRecords.listFormOptions(
                                 {
@@ -661,7 +754,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 },
                                 { signal }
                             );
-                        if (!current()) return;
+                        if (!current() || !mayUseForm()) return;
                         if (!more) choices.replaceChildren();
                         offset = result.offset;
                         for (const record of result.records) {
@@ -672,6 +765,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 Array.isArray(selectedValue) &&
                                 selectedValue.includes(record.id);
                             choice.addEventListener('change', () => {
+                                if (!mayUseForm()) return;
                                 const value = control.read();
                                 const selected = new Set(
                                     Array.isArray(value)
@@ -738,6 +832,18 @@ const renderForm = (page: FormLoadedResult): void => {
             control.node.append(
                 file,
                 button('Upload selected file', () => {
+                    if (
+                        !ownsForm() ||
+                        recovery.blocking(scope, recordId) != null ||
+                        (candidate?.outcome === 'unknown' &&
+                            candidate.acknowledgment === 'none')
+                    ) {
+                        status(
+                            'Check the earlier attempt before uploading again.',
+                            true
+                        );
+                        return;
+                    }
                     const selected = file.files?.[0];
                     if (selected == null) {
                         status('Choose a file first.', true);
@@ -746,32 +852,51 @@ const renderForm = (page: FormLoadedResult): void => {
                     void run(
                         'Uploading the selected attachment…',
                         async ({ client, signal, current }) => {
-                            const attachment =
-                                await client.attachments.uploadFile(
-                                    {
-                                        file: selected,
-                                        filename: selected.name,
-                                        extensionAccessToken:
-                                            page.payload.extensionAccessToken,
-                                        fieldId,
-                                    },
-                                    { signal }
+                            if (!ownsForm()) return;
+                            signal.throwIfAborted();
+                            const attempt = recovery.begin(
+                                scope,
+                                recordId,
+                                'upload',
+                                loadVersion,
+                                fieldId
+                            );
+                            updateRecovery();
+                            try {
+                                const attachment =
+                                    await client.attachments.uploadFile(
+                                        {
+                                            file: selected,
+                                            filename: selected.name,
+                                            extensionAccessToken:
+                                                page.payload
+                                                    .extensionAccessToken,
+                                            fieldId,
+                                        },
+                                        { signal }
+                                    );
+                                if (!current() || !ownsForm()) return;
+                                const existing = control.read();
+                                control.write([
+                                    ...(Array.isArray(existing)
+                                        ? existing
+                                        : []),
+                                    attachment,
+                                ]);
+                                visitor.drafts.write(
+                                    draft,
+                                    fieldId,
+                                    control.read()
                                 );
-                            if (!current()) return;
-                            const existing = control.read();
-                            control.write([
-                                ...(Array.isArray(existing) ? existing : []),
-                                attachment,
-                            ]);
-                            visitor.drafts.write(
-                                draft,
-                                fieldId,
-                                control.read()
-                            );
-                            file.value = '';
-                            status(
-                                'File uploaded. Choose Save to attach it to the record.'
-                            );
+                                file.value = '';
+                                recovery.accepted(attempt, 'uploaded');
+                                status(
+                                    'File uploaded. Choose Save to attach it to the record.'
+                                );
+                            } finally {
+                                recovery.finishFlight(attempt);
+                                if (ownsForm()) updateRecovery();
+                            }
                         }
                     );
                 })
@@ -782,7 +907,7 @@ const renderForm = (page: FormLoadedResult): void => {
     const errors = element('ul', undefined, 'error-list');
     errors.setAttribute('role', 'alert');
     const uncertainSaveMessage =
-        'The save outcome is unknown. Reload and inspect the record before saving again.';
+        'We could not confirm the earlier attempt. It may have completed. Check the latest requests before taking another action.';
     if (visitor.uncertainFormDraftScopes.has(draft.scope))
         errors.append(element('li', uncertainSaveMessage));
     card.append(errors);
@@ -792,7 +917,12 @@ const renderForm = (page: FormLoadedResult): void => {
     submit.disabled = visitor.uncertainFormDraftScopes.has(draft.scope);
     actions.append(submit);
     const discard = button('Discard draft', () => {
-        if (visitor.uncertainFormDraftScopes.has(draft.scope)) {
+        if (
+            !ownsForm() ||
+            recovery.blocking(scope, recordId) != null ||
+            (candidate?.outcome === 'unknown' &&
+                candidate.acknowledgment === 'none')
+        ) {
             status(uncertainSaveMessage, true);
             return;
         }
@@ -802,49 +932,153 @@ const renderForm = (page: FormLoadedResult): void => {
     });
     discard.disabled = submit.disabled;
     actions.append(discard);
+    let deleteRecord: HTMLButtonElement | null = null;
     if (
         page.payload.formRecord.type === 'edit' &&
         settings(page.payload.publicFields).allowDeletingRecords === true
     ) {
-        actions.append(
-            button(
-                'Delete this record',
-                async () => {
-                    if (
-                        !(await confirmCurrent({
-                            title: 'Delete this record?',
-                            message:
-                                'This deletes the current Form record from Airtable.',
-                            confirmLabel: 'Delete record',
-                        }))
-                    )
-                        return;
-                    await run(
-                        'Deleting the current record…',
-                        async ({ client, signal, current }) => {
-                            await client.forms.deleteCurrentRecord(
-                                {
-                                    extensionAccessToken:
-                                        page.payload.extensionAccessToken,
-                                },
-                                { signal }
-                            );
-                            if (!current()) return;
-                            visitor.drafts.discard(draft);
-                            visitor.formParentScope = null;
-                            visitor.screen = visitor.root;
-                            render();
-                            status(
-                                'Record deleted. Reload to refresh the current records.'
-                            );
-                        }
-                    );
-                },
-                'danger'
-            )
+        deleteRecord = button(
+            'Delete this record',
+            async () => {
+                const mayDelete = mayUseForm;
+                if (!mayDelete()) return;
+                if (
+                    !(await confirmCurrent({
+                        title: 'Delete this record?',
+                        message:
+                            'This deletes the current Form record from Airtable.',
+                        confirmLabel: 'Delete record',
+                    })) ||
+                    !mayDelete()
+                )
+                    return;
+                await run(
+                    'Deleting the current record…',
+                    async ({ client, signal, current }) => {
+                        if (!mayDelete()) return;
+                        signal.throwIfAborted();
+                        await client.forms.deleteCurrentRecord(
+                            {
+                                extensionAccessToken:
+                                    page.payload.extensionAccessToken,
+                            },
+                            { signal }
+                        );
+                        if (!current() || !ownsForm()) return;
+                        visitor.drafts.discard(draft);
+                        visitor.formParentScope = null;
+                        visitor.screen = visitor.root;
+                        render();
+                        status(
+                            'Record deleted. Reload to refresh the current records.'
+                        );
+                    }
+                );
+            },
+            'danger'
         );
+        actions.append(deleteRecord);
     }
     card.append(actions);
+    const recoveryPanel = element('section');
+    recoveryPanel.setAttribute('aria-label', 'Earlier request recovery');
+    recoveryPanel.setAttribute('aria-live', 'polite');
+    card.append(recoveryPanel);
+    const updateRecovery = (): void => {
+        const pending = recovery.blocking(scope, recordId);
+        const selected =
+            candidate?.outcome === 'unknown' &&
+            candidate.acknowledgment === 'none'
+                ? candidate
+                : null;
+        const expired = !(visitor.formAuthority?.() ?? true);
+        submit.disabled = pending != null || selected != null || expired;
+        discard.disabled = submit.disabled;
+        if (deleteRecord != null) deleteRecord.disabled = submit.disabled;
+        updateComments();
+        fields.inert = submit.disabled;
+        recoveryPanel.replaceChildren();
+        if (visitor.preparedAttempt?.outcome === 'not-submitted')
+            recoveryPanel.append(
+                element(
+                    'p',
+                    `New local attempt: ${visitor.preparedAttempt.id}. No Form save has been submitted for this local attempt.`
+                )
+            );
+        const attempt = selected ?? pending;
+        if (expired)
+            recoveryPanel.append(
+                element(
+                    'p',
+                    'This form belongs to an earlier request view. Return to the Portal, load its latest records, and reopen the form before editing.'
+                )
+            );
+        if (attempt == null) return;
+        recoveryPanel.append(
+            element('h3', 'Earlier outcome not confirmed'),
+            element('p', `${attempt.id}: ${uncertainSaveMessage}`)
+        );
+        if (attempt.operation === 'upload')
+            recoveryPanel.append(
+                element(
+                    'p',
+                    'The file may have uploaded without being attached to a request. It will not be uploaded again automatically.'
+                )
+            );
+        if (visitor.root != null)
+            recoveryPanel.append(
+                button('Check latest requests', () => {
+                    if (
+                        !card.isConnected ||
+                        visitors[activeVisitor] !== visitor ||
+                        visitor.screen !== page
+                    )
+                        return;
+                    visitor.screen = visitor.root;
+                    visitor.formParentScope = null;
+                    visitor.recoveryCandidate = null;
+                    render();
+                    visitor.portal?.checkLatestRequests();
+                })
+            );
+        else
+            recoveryPanel.append(
+                element(
+                    'p',
+                    'Inspect the outcome through your usual request access or ask the form owner. This standalone form has no authorized request list to check here.'
+                )
+            );
+        const freshKnownRecord =
+            !expired &&
+            recordId != null &&
+            loadVersion > attempt.loadVersion &&
+            sameRecoveryRelationship(scope, attempt.scope) &&
+            (selected != null || attempt.recordId === recordId);
+        if (freshKnownRecord)
+            recoveryPanel.append(
+                button('Use this request', async () => {
+                    if (
+                        !(await confirmCurrent({
+                            title: 'Use this request?',
+                            message:
+                                'You selected and opened this request. Using it does not prove the earlier attempt saved it. Continue with this request without replaying the earlier attempt?',
+                            confirmLabel: 'Use this request',
+                        })) ||
+                        !ownsForm() ||
+                        !sameRecoveryRelationship(scope, attempt.scope) ||
+                        attempt.flight
+                    )
+                        return;
+                    recovery.acknowledgeExisting(attempt, recordId);
+                    visitor.recoveryCandidate = null;
+                    updateRecovery();
+                    status(
+                        'This request is ready for a separate edit. The earlier outcome remains unconfirmed.'
+                    );
+                })
+            );
+    };
+    updateRecovery();
     card.addEventListener('submit', (event) => {
         event.preventDefault();
         if (
@@ -853,7 +1087,11 @@ const renderForm = (page: FormLoadedResult): void => {
             visitor.screen !== page
         )
             return;
-        if (visitor.uncertainFormDraftScopes.has(draft.scope)) {
+        if (
+            recovery.blocking(scope, recordId) != null ||
+            (candidate?.outcome === 'unknown' &&
+                candidate.acknowledgment === 'none')
+        ) {
             status(uncertainSaveMessage, true);
             return;
         }
@@ -876,20 +1114,47 @@ const renderForm = (page: FormLoadedResult): void => {
                 },
             });
             signal.throwIfAborted();
+            if (!ownsForm()) return;
+            const attempt = recovery.begin(
+                scope,
+                recordId,
+                'save',
+                loadVersion,
+                null,
+                visitor.preparedAttempt
+            );
+            visitor.preparedAttempt = null;
             // Retire this scope before dispatch. Only an accepted result or
-            // explicit fresh load can make it saveable again.
+            // an accepted result or explicit inspected-outcome acknowledgment can unlock a new operation.
             visitor.uncertainFormDraftScopes.add(draft.scope);
             submit.disabled = true;
             discard.disabled = true;
             let normalized: ReturnType<typeof normalizeFormSaveResult>;
             try {
                 const rawResult = await client.forms.save(input, { signal });
-                if (!current()) return;
+                if (!current() || !ownsForm()) return;
                 normalized = normalizeFormSaveResult(rawResult, page);
+                if (
+                    normalized.type !== 'error' &&
+                    (typeof normalized.raw.record.id !== 'string' ||
+                        normalized.raw.record.id === '' ||
+                        (recordId != null &&
+                            normalized.raw.record.id !== recordId))
+                )
+                    throw new Error(
+                        'The save response does not match this request. Check the latest requests.'
+                    );
+                recovery.accepted(
+                    attempt,
+                    normalized.type === 'error' ? 'validation-error' : 'saved'
+                );
             } catch (error) {
                 if (current())
                     errors.replaceChildren(element('li', uncertainSaveMessage));
                 throw error;
+            } finally {
+                recovery.finishFlight(attempt);
+                if (ownsForm()) updateRecovery();
             }
             visitor.uncertainFormDraftScopes.delete(draft.scope);
             submit.disabled = false;
@@ -941,39 +1206,46 @@ const renderForm = (page: FormLoadedResult): void => {
         page.payload.hasParentExtension &&
         page.enableCommentsOnChildForms
     )
-        renderComments(page);
+        updateComments = renderComments(page, mayUseForm);
 };
 
-const renderComments = (page: FormLoadedResult): void => {
+const renderComments = (
+    page: FormLoadedResult,
+    isCurrent: () => boolean
+): (() => void) => {
     const card = element('section', undefined, 'card');
     card.append(element('h2', 'Record comments'));
     const output = element('div');
-    card.append(
-        button('Load comments', () => {
-            void run(
-                'Loading record comments…',
-                async ({ client, signal, current }) => {
-                    const result = await client.comments.listForRecord(
-                        {
-                            childExtensionAccessToken:
-                                page.payload.extensionAccessToken,
-                        },
-                        { signal }
-                    );
-                    if (!current()) return;
-                    output.replaceChildren();
-                    for (const comment of result.comments)
-                        output.append(element('p', comment.text, 'comment'));
-                    add.disabled = result.disableSending === true;
-                    status(`Loaded ${result.comments.length} comments.`);
-                }
-            );
-        }),
-        output
-    );
+    let sendingDisabled = false;
+    const load = button('Load comments', () => {
+        if (!isCurrent()) return;
+        void run(
+            'Loading record comments…',
+            async ({ client, signal, current }) => {
+                if (!isCurrent()) return;
+                signal.throwIfAborted();
+                const result = await client.comments.listForRecord(
+                    {
+                        childExtensionAccessToken:
+                            page.payload.extensionAccessToken,
+                    },
+                    { signal }
+                );
+                if (!current() || !isCurrent()) return;
+                output.replaceChildren();
+                for (const comment of result.comments)
+                    output.append(element('p', comment.text, 'comment'));
+                sendingDisabled = result.disableSending === true;
+                update();
+                status(`Loaded ${result.comments.length} comments.`);
+            }
+        );
+    });
+    card.append(load, output);
     const text = element('textarea');
     text.placeholder = 'Write a comment';
     const add = button('Add comment', () => {
+        if (!isCurrent()) return;
         if (text.value.trim() === '') {
             status('Enter a comment.', true);
             return;
@@ -981,6 +1253,8 @@ const renderComments = (page: FormLoadedResult): void => {
         void run(
             'Adding a record comment…',
             async ({ client, signal, current }) => {
+                if (!isCurrent()) return;
+                signal.throwIfAborted();
                 await client.comments.addToRecord(
                     {
                         childExtensionAccessToken:
@@ -989,7 +1263,7 @@ const renderComments = (page: FormLoadedResult): void => {
                     },
                     { signal }
                 );
-                if (!current()) return;
+                if (!current() || !isCurrent()) return;
                 text.value = '';
                 status('Comment added. Load comments to refresh.');
             }
@@ -997,6 +1271,13 @@ const renderComments = (page: FormLoadedResult): void => {
     });
     card.append(labeled('Comment', text), add);
     screenNode.append(card);
+    const update = (): void => {
+        load.disabled = !isCurrent();
+        add.disabled = sendingDisabled || !isCurrent();
+        text.disabled = !isCurrent();
+    };
+    update();
+    return update;
 };
 
 const render = (): void => {
@@ -1034,13 +1315,37 @@ const render = (): void => {
             run,
             status,
             confirm: confirmCurrent,
-            openChild: (child, context, scope) => {
+            recovery:
+                connection == null
+                    ? undefined
+                    : {
+                          journal: recovery,
+                          owner: recoveryOwner(
+                              connection.apiOrigin,
+                              connection.input.shareId,
+                              page
+                          ),
+                      },
+            openChild: (child, context, scope, recoveryHandoff) => {
+                if (
+                    recoveryHandoff?.newAttempt != null ||
+                    recoveryHandoff?.candidate != null
+                )
+                    visitor.drafts.clear();
+                visitor.formLoadVersion = ++formLoadSequence;
+                visitor.recoveryCandidate = recoveryHandoff?.candidate ?? null;
+                visitor.preparedAttempt = recoveryHandoff?.newAttempt ?? null;
+                visitor.formAuthority = recoveryHandoff?.isCurrent ?? null;
+                if (visitor.preparedAttempt != null)
+                    visitor.preparedAttempt.loadVersion =
+                        visitor.formLoadVersion;
                 visitor.screen = child;
                 visitor.formContext = context;
                 visitor.formParentScope = scope;
                 render();
             },
         });
+        visitor.portal.refreshRecovery();
         screenNode.append(visitor.portal.node);
     }
 };

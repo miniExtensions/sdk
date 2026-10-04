@@ -20,6 +20,12 @@ import { button, element, labeled } from './dom.js';
 import { displayValue, fieldControl, type FieldControl } from './fields.js';
 import type { ParentFormDraftScope } from './drafts.js';
 import {
+    sameRecoveryRelationship,
+    type RecoveryJournal,
+    type RecoveryScope,
+    type RecoveryAttempt,
+} from './recovery.js';
+import {
     cancelConfirmation,
     type ConfirmationOptions,
 } from './confirmation.js';
@@ -34,6 +40,8 @@ type Run = (
 ) => Promise<void>;
 export type PortalView = {
     node: HTMLElement;
+    checkLatestRequests(): void;
+    refreshRecovery(): void;
     refreshRequired(): void;
     closeEditor(): void;
     retireCollection(): void;
@@ -161,10 +169,16 @@ export const createPortalView = (options: {
     run: Run;
     status(message: string, error?: boolean): void;
     confirm(options: ConfirmationOptions): Promise<boolean>;
+    recovery?: { journal: RecoveryJournal; owner: string };
     openChild(
         page: FormLoadedResult,
         context: SaveFormInput['context'],
-        scope: ParentFormDraftScope
+        scope: ParentFormDraftScope,
+        recovery?: {
+            candidate?: RecoveryAttempt;
+            newAttempt?: RecoveryAttempt;
+            isCurrent(): boolean;
+        }
     ): void;
 }): PortalView => {
     const { page, run, status } = options;
@@ -202,6 +216,9 @@ export const createPortalView = (options: {
     card.append(toolbar);
     const actions = element('div', undefined, 'actions');
     const results = element('div', undefined, 'table-scroll');
+    const recoveryPanel = element('section');
+    recoveryPanel.setAttribute('aria-label', 'Earlier request recovery');
+    recoveryPanel.setAttribute('aria-live', 'polite');
     const editor = element('section');
     let editorControl: FieldControl | null = null;
     const closeEditor = (): void => {
@@ -209,7 +226,7 @@ export const createPortalView = (options: {
         editorControl = null;
         editor.replaceChildren();
     };
-    card.append(actions, results, editor);
+    card.append(actions, recoveryPanel, results, editor);
     let data: PortalCollectionSnapshot | null = null;
     let collection: PortalCollection | null = null;
     let needsRefresh = false;
@@ -247,6 +264,55 @@ export const createPortalView = (options: {
         return selected?.config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
             ? selected.config.options.linkedTableId
             : null;
+    };
+    const recoveryScope = (childExtensionId: string): RecoveryScope | null =>
+        options.recovery == null
+            ? null
+            : {
+                  owner: options.recovery.owner,
+                  parentFieldId: fieldSelect.value,
+                  tableId: tableId(),
+                  childExtensionId,
+                  context: 'modal',
+              };
+    const pendingForField = (): RecoveryAttempt[] => {
+        const scope = recoveryScope(configuredChildId(config(), true) ?? '');
+        return scope == null
+            ? []
+            : options
+                  .recovery!.journal.unknown(scope.owner)
+                  .filter(
+                      (attempt) =>
+                          sameRecoveryRelationship(attempt.scope, scope) &&
+                          attempt.acknowledgment === 'none'
+                  );
+    };
+    const renderRecovery = (): void => {
+        recoveryPanel.replaceChildren();
+        const unknown =
+            options.recovery?.journal.unknown(options.recovery.owner) ?? [];
+        if (unknown.length === 0) return;
+        recoveryPanel.append(element('h3', 'Earlier outcome not confirmed'));
+        for (const attempt of unknown)
+            recoveryPanel.append(
+                element(
+                    'p',
+                    `${attempt.id}: the earlier ${attempt.operation} may have completed. Its outcome remains unconfirmed.${
+                        attempt.acknowledgment === 'existing-request'
+                            ? ' You chose to use an existing request; that is not confirmation of the earlier save.'
+                            : attempt.acknowledgment === 'new-intent'
+                              ? ' You chose a separate new request; the earlier attempt will not be replayed.'
+                              : ''
+                    }`
+                )
+            );
+        recoveryPanel.append(
+            element(
+                'p',
+                'Check the latest requests, then open a request you recognize. Matching text or a missing result cannot confirm whether the earlier save completed.'
+            ),
+            button('Check latest requests', () => fetchRecords(false))
+        );
     };
     const selectedView = () =>
         customViews(config()).find((view) => view.id === viewSelect.value);
@@ -292,9 +358,13 @@ export const createPortalView = (options: {
         next.disabled = true;
         create.disabled =
             needsRefresh || configuredChildId(config(), true) == null;
+        renderRecovery();
     };
 
-    const openChild = (recordId: string | null): void => {
+    const openChild = async (
+        recordId: string | null,
+        candidate?: RecoveryAttempt
+    ): Promise<void> => {
         const creating = recordId == null;
         const childId = configuredChildId(config(), creating);
         if (needsRefresh || readRequired) {
@@ -309,6 +379,45 @@ export const createPortalView = (options: {
         if (childId == null) {
             status('No child Form is configured for this action.', true);
             return;
+        }
+        if (destroyed || !card.isConnected) return;
+        const before = getCollection();
+        const prior = creating
+            ? pendingForField().find((attempt) => attempt.recordId == null)
+            : candidate;
+        if (
+            candidate != null &&
+            (!data?.recordIds.includes(recordId!) ||
+                !pendingForField().includes(candidate))
+        )
+            return;
+        if (prior?.flight) {
+            status(
+                'Wait for the browser action to stop, then check the latest requests. The server outcome may still be unknown.',
+                true
+            );
+            return;
+        }
+        if (creating && prior != null) {
+            if (
+                !(await options.confirm({
+                    title: 'Start a separate request?',
+                    message:
+                        'The earlier request may still have saved. Starting another could create a duplicate. This opens a fresh form without copying earlier edits or files and does not retry the earlier attempt.',
+                    confirmLabel: 'Start separate request',
+                }))
+            )
+                return;
+            if (
+                destroyed ||
+                !card.isConnected ||
+                collection !== before ||
+                !before.isCurrent() ||
+                prior.flight ||
+                prior.outcome !== 'unknown' ||
+                prior.acknowledgment !== 'none'
+            )
+                return;
         }
         void run(
             creating
@@ -354,7 +463,36 @@ export const createPortalView = (options: {
                 if (!accepted()) return;
                 // After this guarded handoff, the existing Form owner keeps
                 // its explicit Save context and cached visitor draft behavior.
-                options.openChild(loaded, plan.saveContext, plan.parent);
+                if (
+                    candidate != null &&
+                    (candidate.flight ||
+                        candidate.outcome !== 'unknown' ||
+                        candidate.acknowledgment !== 'none' ||
+                        !pendingForField().includes(candidate))
+                )
+                    return;
+                let newAttempt: RecoveryAttempt | undefined;
+                if (creating && prior != null && options.recovery != null) {
+                    if (
+                        prior.flight ||
+                        prior.outcome !== 'unknown' ||
+                        prior.acknowledgment !== 'none'
+                    )
+                        return;
+                    options.recovery.journal.acknowledgeNewIntent(prior);
+                    const scope = recoveryScope(loaded.extensionId);
+                    if (scope != null)
+                        newAttempt = options.recovery.journal.prepare(
+                            scope,
+                            null,
+                            0
+                        );
+                }
+                options.openChild(loaded, plan.saveContext, plan.parent, {
+                    candidate,
+                    newAttempt,
+                    isCurrent: plan.isCurrent,
+                });
                 status(
                     creating
                         ? 'Create Form loaded. No record has been created yet.'
@@ -621,7 +759,36 @@ export const createPortalView = (options: {
             }
             const controls = element('td', undefined, 'record-actions');
             if (allowEditing && configuredChildId(config(), false) != null)
-                controls.append(button('Open Form', () => openChild(recordId)));
+                controls.append(
+                    button('Open Form', () => {
+                        void openChild(recordId);
+                    })
+                );
+            const pending = pendingForField().find(
+                (attempt) =>
+                    attempt.recordId == null || attempt.recordId === recordId
+            );
+            if (
+                allowEditing &&
+                configuredChildId(config(), false) != null &&
+                pending != null
+            ) {
+                const acceptedOwner = collection;
+                controls.append(
+                    button('Inspect earlier request', () => {
+                        if (
+                            collection !== acceptedOwner ||
+                            acceptedOwner == null ||
+                            !acceptedOwner.isCurrent() ||
+                            readRequired ||
+                            needsRefresh ||
+                            !row.isConnected
+                        )
+                            return;
+                        void openChild(recordId, pending);
+                    })
+                );
+            }
             if (
                 allowEditing &&
                 layoutSetting('allowUsersToUnlinkRecords') === true
@@ -773,6 +940,18 @@ export const createPortalView = (options: {
         if (data.recordIds.length === 0)
             results.append(element('p', 'No matching records.', 'hint'));
         next.disabled = readRequired || data.airtableOffset == null;
+        if (
+            (options.recovery?.journal.unknown(options.recovery.owner).length ??
+                0) > 0
+        )
+            results.append(
+                element(
+                    'p',
+                    `Showing only the selected view (${viewSelect.selectedOptions[0]?.textContent ?? viewSelect.value}) and search (${search.value || 'none'}). ${data.airtableOffset == null ? 'This read reached the end of this view.' : 'More pages remain; this list is incomplete.'} Missing results do not prove an earlier save failed.`,
+                    'hint'
+                )
+            );
+        renderRecovery();
     };
 
     const fetchRecords = (more: boolean): void => {
@@ -840,7 +1019,7 @@ export const createPortalView = (options: {
             status('Reload the Portal before creating a record.', true);
             return;
         }
-        openChild(null);
+        void openChild(null);
     });
     actions.append(first, next, create);
     fieldSelect.addEventListener('change', () => {
@@ -861,6 +1040,8 @@ export const createPortalView = (options: {
         status('This Portal has no configured linked-record tables.', true);
     return {
         node: card,
+        checkLatestRequests: () => fetchRecords(false),
+        refreshRecovery: renderRecovery,
         closeEditor,
         retireCollection,
         destroy: () => {

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import {
     cpSync,
     existsSync,
+    mkdirSync,
     mkdtempSync,
     readFileSync,
     readdirSync,
@@ -12,7 +13,7 @@ import {
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { build } from 'esbuild';
 import {
@@ -31,14 +32,32 @@ const temporaryDirectory = realpathSync(
     mkdtempSync(join(tmpdir(), 'miniextensions-sdk-'))
 );
 // A sibling temp root has no generic consumer node_modules in its ancestry.
-const browserDirectory = realpathSync(
+const browserKitDirectory = realpathSync(
     mkdtempSync(join(tmpdir(), 'miniextensions-browser-'))
 );
+const browserDirectory = join(browserKitDirectory, 'examples/browser');
 const uiDirectory = realpathSync(
     mkdtempSync(join(tmpdir(), 'miniextensions-ui-'))
 );
 const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
 let browserPortalChecks = 0;
+const browserStarterFiles = [
+    'README.md',
+    'package.json',
+    'package-lock.json',
+    'tsconfig.json',
+    'index.html',
+    'styles.css',
+    'build.mjs',
+    'dev.mjs',
+    'src/main.ts',
+    'src/fields.ts',
+    'src/portal.ts',
+    'src/confirmation.ts',
+    'src/dom.ts',
+    'src/drafts.ts',
+    'src/recovery.ts',
+].map((path) => `examples/browser/${path}`);
 
 function run(command, args, cwd = temporaryDirectory) {
     return execFileSync(command, args, {
@@ -81,9 +100,17 @@ try {
                 path === 'docs/forms.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/auth.md' ||
+                path === 'docs/browser-lifecycle.md' ||
+                browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/'),
             `Unexpected packed file: ${path}`
+        );
+    }
+    for (const path of ['docs/browser-lifecycle.md', ...browserStarterFiles]) {
+        assert(
+            packed.files.some((file) => file.path === path),
+            `Missing shipped browser starter file: ${path}`
         );
     }
     writeFileSync(
@@ -719,13 +746,54 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         ['browser', browserDirectory],
         ['ui-selection', uiDirectory],
     ]) {
-        cpSync(`examples/${example}`, directory, {
+        mkdirSync(directory, { recursive: true });
+        const exampleSource = resolve(
+            example === 'browser'
+                ? join(installedPackage, 'examples/browser')
+                : `examples/${example}`
+        );
+        cpSync(exampleSource, directory, {
             recursive: true,
+            // The shipped starter itself lives under the installed package's
+            // node_modules. Exclude generated/dependency paths only within it.
             filter: (path) =>
                 !/(?:^|[/\\])(?:node_modules|\.generated)(?:[/\\]|$)/.test(
-                    path
+                    relative(exampleSource, path)
                 ),
         });
+        if (example === 'browser') {
+            // A customer copies only the shipped starter and documentation,
+            // then installs the supplied TGZ. No checkout source/dist is copied.
+            const copiedDocs = packed.files
+                .map(({ path }) => path)
+                .filter(
+                    (path) =>
+                        path.startsWith('docs/') ||
+                        [
+                            'README.md',
+                            'LICENSE',
+                            'THIRD_PARTY_NOTICES.md',
+                        ].includes(path)
+                );
+            for (const path of copiedDocs) {
+                const destination = join(browserKitDirectory, path);
+                mkdirSync(join(destination, '..'), { recursive: true });
+                cpSync(join(installedPackage, path), destination, {
+                    recursive: true,
+                });
+            }
+            for (const path of browserStarterFiles) {
+                assert.deepEqual(
+                    readFileSync(join(browserKitDirectory, path)),
+                    readFileSync(join(installedPackage, path)),
+                    `Copied starter differs from shipped file: ${path}`
+                );
+            }
+            await assertPackedDocLinks(browserKitDirectory, [
+                ...copiedDocs,
+                ...browserStarterFiles,
+            ]);
+        }
         const archivePath = join(temporaryDirectory, packed.filename);
         const archiveSpec = `file:${archivePath}`;
         const browserManifestPath = join(directory, 'package.json');
@@ -734,18 +802,6 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             readFileSync(browserManifestPath, 'utf8')
         );
         const browserLock = JSON.parse(readFileSync(browserLockPath, 'utf8'));
-        // Preserve the committed registry resolutions; replace only the SDK pin.
-        browserManifest.dependencies[packageMetadata.name] = archiveSpec;
-        browserLock.packages[''].dependencies[packageMetadata.name] =
-            archiveSpec;
-        browserLock.packages[`node_modules/${packageMetadata.name}`] = {
-            version: packageMetadata.version,
-            resolved: archiveSpec,
-            integrity: packed.integrity,
-            license: packageMetadata.license,
-            dependencies: packageMetadata.dependencies,
-            engines: packageMetadata.engines,
-        };
         for (const [name, spec] of Object.entries({
             ...browserManifest.dependencies,
             ...browserManifest.devDependencies,
@@ -755,13 +811,61 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 `Browser dependency must be pinned to the registry: ${name}`
             );
         }
-        writeFileSync(browserManifestPath, JSON.stringify(browserManifest));
-        writeFileSync(browserLockPath, JSON.stringify(browserLock));
-        run(
-            'npm',
-            ['ci', '--ignore-scripts', '--no-audit', '--no-fund'],
-            directory
-        );
+        if (example === 'browser') {
+            // Execute the customer command, including npm's replacement of the
+            // stale same-version SDK file pin and integrity in the shipped lock.
+            const registryPins = (lock) =>
+                Object.fromEntries(
+                    Object.entries(lock.packages)
+                        .filter(([, entry]) =>
+                            /^https?:/.test(entry.resolved ?? '')
+                        )
+                        .map(([path, entry]) => [
+                            path,
+                            {
+                                version: entry.version,
+                                resolved: entry.resolved,
+                                integrity: entry.integrity,
+                            },
+                        ])
+                );
+            run(
+                'npm',
+                [
+                    'install',
+                    '--ignore-scripts',
+                    '--no-audit',
+                    '--no-fund',
+                    archivePath,
+                ],
+                directory
+            );
+            assert.deepEqual(
+                registryPins(JSON.parse(readFileSync(browserLockPath, 'utf8'))),
+                registryPins(browserLock),
+                'Customer install changed committed registry resolutions'
+            );
+        } else {
+            // The unshipped UI sandbox keeps its existing frozen-lock route.
+            browserManifest.dependencies[packageMetadata.name] = archiveSpec;
+            browserLock.packages[''].dependencies[packageMetadata.name] =
+                archiveSpec;
+            browserLock.packages[`node_modules/${packageMetadata.name}`] = {
+                version: packageMetadata.version,
+                resolved: archiveSpec,
+                integrity: packed.integrity,
+                license: packageMetadata.license,
+                dependencies: packageMetadata.dependencies,
+                engines: packageMetadata.engines,
+            };
+            writeFileSync(browserManifestPath, JSON.stringify(browserManifest));
+            writeFileSync(browserLockPath, JSON.stringify(browserLock));
+            run(
+                'npm',
+                ['ci', '--ignore-scripts', '--no-audit', '--no-fund'],
+                directory
+            );
+        }
         await assertInstalledArchive(directory, archivePath, packed);
         const compiled = new Set(
             run('npm', ['run', 'typecheck', '--', '--listFiles'], directory)
@@ -844,6 +948,6 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });
-    rmSync(browserDirectory, { recursive: true, force: true });
+    rmSync(browserKitDirectory, { recursive: true, force: true });
     rmSync(uiDirectory, { recursive: true, force: true });
 }

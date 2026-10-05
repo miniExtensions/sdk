@@ -86,6 +86,13 @@ dates, checkbox, and select inputs. DateTime inputs retain an explicit ISO
 string; there is no implicit timezone conversion. Complex and computed values
 are displayed intact rather than converted to text for saving.
 
+Select controls use the published choice-ID allowlist and numeric maximum,
+retain existing unavailable choice names for removal, and keep custom labels
+separate from saved native names. A nonempty allowlist disables **Add a choice**
+even when a retained `allowAddingNewOptions` flag is true. Conditional option
+visibility still requires an application evaluator; this starter does not
+evaluate option conditions.
+
 The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
 revisions, requests, cancellation, and when to discard drafts.
@@ -108,7 +115,7 @@ revisions, requests, cancellation, and when to discard drafts.
   permits comments.
 
 The custom renderer deliberately leaves advanced presentation to your app:
-conditional field visibility, multi-page navigation, signatures, calendar
+conditional field or select-option visibility, multi-page navigation, signatures, calendar
 pickers, dynamic linked-filter values, custom validation presentation, and
 CAPTCHA widgets. The server still enforces those extension rules. To use a
 CAPTCHA-enabled Form, integrate the configured widget and supply its token in

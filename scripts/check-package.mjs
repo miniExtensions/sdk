@@ -26,6 +26,7 @@ import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 import { checkBrowserPortalExample } from './browser-portal-example-checks.mjs';
+import { checkBrowserSelectExample } from './browser-select-example-checks.mjs';
 import { createHash } from 'node:crypto';
 import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
@@ -44,6 +45,7 @@ const uiDirectory = realpathSync(
 );
 const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
 let browserPortalChecks = 0;
+let browserSelectChecks = 0;
 const browserStarterFiles = [
     'README.md',
     'package.json',
@@ -923,6 +925,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 happyDomModulePath: require.resolve('happy-dom'),
             });
             browserPortalChecks = result.checks;
+            const selectResult = await checkBrowserSelectExample({
+                consumerDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
+            browserSelectChecks = selectResult.checks;
         }
     }
 
@@ -1003,7 +1010,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         }
     }
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (6 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${browserPortalChecks} actual packed browser Portal cases, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

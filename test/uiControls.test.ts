@@ -13,6 +13,7 @@ import {
     type SelectControl,
 } from '../src/ui/controls.js';
 import { createSelectionModel } from '../src/ui/model.js';
+import { getSelectFieldPolicy } from '../src/ui/selectPolicy.js';
 import type { SelectionLoader, SelectionPage } from '../src/ui/types.js';
 
 const environment = (test: TestContext) => {
@@ -83,6 +84,223 @@ const deferred = () => {
 };
 
 describe('native select controls', () => {
+    it('limits new choices by metadata ID while retaining and removing native baseline names', (test) => {
+        const { document, dispatch } = environment(test);
+        for (const multiple of [false, true]) {
+            const schema = field(multiple);
+            schema.miniExtConfig = {
+                singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+                allowAddingNewOptions: true,
+            };
+            const changes: AirtableValue[] = [];
+            const control = createSelectControl({
+                field: schema,
+                value: multiple ? ['Legacy', 'Red'] : 'Red',
+                document,
+                onChange: (value) => changes.push(value),
+            });
+            test.after(() => control.destroy());
+            const select = part<HTMLSelectElement>(control.element, 'select');
+            assert.equal(
+                getSelectFieldPolicy(schema).allowAddingNewOptions,
+                false
+            );
+            assert.deepEqual(
+                control.model.getState().options.map((option) => option.value),
+                ['Blue']
+            );
+            assert.deepEqual(
+                new Set(
+                    Array.from(select.selectedOptions, (option) => option.value)
+                ),
+                new Set(multiple ? ['Legacy', 'Red'] : ['Red'])
+            );
+            dispatch(select, 'change');
+            assert.deepEqual(changes, []);
+            control.model.clear();
+            control.model.setOptions([
+                { value: 'Red', label: 'Forbidden' },
+                { value: 'Blue', label: 'Allowed' },
+            ]);
+            control.model.choose(['Red']);
+            assert.deepEqual(control.model.getState().value, []);
+            control.model.choose(['sel_blue']);
+            assert.deepEqual(control.model.getState().value, []);
+            control.model.choose(['Blue']);
+            assert.deepEqual(control.model.getState().value, ['Blue']);
+            assert.deepEqual(changes, [
+                multiple ? [] : null,
+                multiple ? ['Blue'] : 'Blue',
+            ]);
+            control.model.reset({
+                value: ['Red'],
+                options: [{ value: 'Red', label: 'Owner baseline' }],
+            });
+            assert.deepEqual(control.model.getState().value, ['Red']);
+            assert.equal(changes.length, 2);
+            control.model.clear();
+            control.model.toggle('Red');
+            assert.deepEqual(control.model.getState().value, []);
+            const count = changes.length;
+            control.destroy();
+            select.value = 'Blue';
+            dispatch(select, 'change');
+            control.model.choose(['Blue']);
+            assert.equal(changes.length, count);
+        }
+        for (const limits of [undefined, []]) {
+            const schema = field();
+            schema.miniExtConfig = {
+                allowAddingNewOptions: true,
+                singleOrMultiSelectLimitSelectionOptions: limits,
+            };
+            assert.equal(
+                getSelectFieldPolicy(schema).allowAddingNewOptions,
+                true
+            );
+        }
+        const schema = field();
+        schema.miniExtConfig = {
+            singleOrMultiSelectLimitSelectionOptions: ['Blue'],
+        };
+        const control = createSelectControl({ field: schema, document });
+        test.after(() => control.destroy());
+        assert.deepEqual(control.model.getState().options, []);
+    });
+
+    it('keeps over-limit baselines, permits removal, and blocks additions across every user entrypoint', async (test) => {
+        const { document, dispatch } = environment(test);
+        const schema = field(true);
+        schema.airtableField.config.options.choices.push({
+            id: 'sel_green',
+            name: 'Green',
+        });
+        schema.miniExtConfig = { maxNumberOfSelections: 2 };
+        const changes: AirtableValue[] = [];
+        const control = createSelectControl({
+            field: schema,
+            value: ['Legacy', 'Red', 'Blue'],
+            document,
+            onChange: (value) => changes.push(value),
+        });
+        test.after(() => control.destroy());
+        const select = part<HTMLSelectElement>(control.element, 'select');
+        assert.deepEqual(control.model.getState().value, [
+            'Legacy',
+            'Red',
+            'Blue',
+        ]);
+        control.model.toggle('Green');
+        control.model.choose(['Legacy', 'Red', 'Blue', 'Green']);
+        const green = Array.from(select.options).find(
+            (option) => option.value === 'Green'
+        );
+        assert.ok(green);
+        assert.equal(green.disabled, true);
+        green.selected = true;
+        dispatch(select, 'change');
+        assert.deepEqual(changes, []);
+        assert.equal(green.selected, false);
+        control.model.toggle('Legacy');
+        control.model.toggle('Red');
+        control.model.toggle('Green');
+        assert.deepEqual(control.model.getState().value, ['Blue', 'Green']);
+        assert.deepEqual(changes, [
+            ['Red', 'Blue'],
+            ['Blue'],
+            ['Blue', 'Green'],
+        ]);
+        control.model.reset({ value: ['Legacy', 'Red', 'Blue'] });
+        assert.deepEqual(control.model.getState().value, [
+            'Legacy',
+            'Red',
+            'Blue',
+        ]);
+        assert.equal(changes.length, 3);
+        control.model.choose(['Legacy', 'Red']);
+        assert.deepEqual(control.model.getState().value, ['Legacy', 'Red']);
+        control.model.toggle('Green');
+        assert.equal(changes.length, 4);
+        control.model.setValue(['Red', 'Blue']);
+        await control.model.setSearchTerm('no-match');
+        assert.deepEqual(control.model.getState().options, []);
+        control.model.choose(['Red', 'Blue', 'Green']);
+        control.model.toggle('Green');
+        assert.deepEqual(control.model.getState().value, ['Red', 'Blue']);
+        assert.equal(changes.length, 4);
+    });
+
+    it('renders configured labels safely and saves only canonical names', (test) => {
+        const { document, dispatch } = environment(test);
+        const schema = field(true);
+        schema.miniExtConfig = {
+            enableConditionalOptions: true,
+            conditionsForOptions: [
+                {
+                    id: 'label_red',
+                    config: {
+                        optionForConditions: 'sel_red',
+                        name: ' Color ',
+                        conditionsForOption: {
+                            logicalOperator: 'and',
+                            conditions: [],
+                        },
+                    },
+                },
+                {
+                    id: 'label_blue',
+                    config: {
+                        optionForConditions: 'sel_blue',
+                        name: 'Color',
+                        conditionsForOption: {
+                            logicalOperator: 'and',
+                            conditions: [],
+                        },
+                    },
+                },
+            ],
+        };
+        const changes: AirtableValue[] = [];
+        const control = createSelectControl({
+            field: schema,
+            value: ['Red'],
+            document,
+            onChange: (value) => changes.push(value),
+        });
+        test.after(() => control.destroy());
+        const select = part<HTMLSelectElement>(control.element, 'select');
+        assert.deepEqual(
+            Array.from(select.options, (option) => [
+                option.value,
+                option.textContent,
+            ]),
+            [
+                ['Red', 'Color (Red)'],
+                ['Blue', 'Color (Blue)'],
+            ]
+        );
+        select.options[1]!.selected = true;
+        dispatch(select, 'change');
+        assert.deepEqual(changes, [['Red', 'Blue']]);
+        control.model.setOptions([{ value: 'Blue', label: 'Replaced by app' }]);
+        assert.equal(select.selectedOptions[0]?.textContent, 'Color (Blue)');
+        schema.miniExtConfig.conditionsForOptions![0]!.config!.name =
+            '<img src=x onerror=alert(1)>';
+        schema.miniExtConfig.conditionsForOptions![1]!.config!.name = '   ';
+        const safe = createSelectControl({ field: schema, document });
+        test.after(() => safe.destroy());
+        assert.equal(safe.element.querySelector('img'), null);
+        assert.deepEqual(
+            getSelectFieldPolicy(schema).options.map((option) => option.label),
+            ['<img src=x onerror=alert(1)>', 'Blue']
+        );
+        schema.miniExtConfig.enableConditionalOptions = false;
+        assert.deepEqual(
+            getSelectFieldPolicy(schema).options.map((option) => option.label),
+            ['Red', 'Blue']
+        );
+    });
+
     it('uses choice names, emits one user change, and updates silently from the model', (test) => {
         const { document, dispatch } = environment(test);
         const changes: AirtableValue[] = [];
@@ -221,6 +439,23 @@ describe('native select controls', () => {
                 },
             },
             { ...field(), miniExtConfig: { readOnly: 'false' } },
+            {
+                ...field(),
+                miniExtConfig: {
+                    singleOrMultiSelectLimitSelectionOptions: [''],
+                },
+            },
+            {
+                ...field(),
+                miniExtConfig: {
+                    singleOrMultiSelectLimitSelectionOptions: 'sel_blue',
+                },
+            },
+            { ...field(true), miniExtConfig: { maxNumberOfSelections: -1 } },
+            {
+                ...field(true),
+                miniExtConfig: { maxNumberOfSelections: Number.NaN },
+            },
             {
                 ...field(),
                 airtableField: {

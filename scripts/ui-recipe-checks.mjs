@@ -397,11 +397,73 @@ export async function checkUiRecipes({
             assert.deepEqual(handle.getChangedFieldIds(), []);
         }
     );
+    await check(
+        'Installed native policy retains names and caps hidden choose/toggle options',
+        async ({ window, host }) => {
+            const { createSelectControl, getSelectFieldPolicy } =
+                consumerRequire('@miniextensions/sdk/ui');
+            const form = makeForm();
+            const field = form.payload.fieldIdsToSchemas.fld_multiple;
+            field.airtableField.config.options.choices.push({
+                id: 'sel_third',
+                name: 'Third',
+            });
+            field.miniExtConfig = {
+                allowAddingNewOptions: true,
+                singleOrMultiSelectLimitSelectionOptions: [
+                    'sel_first',
+                    'sel_second',
+                    'sel_third',
+                ],
+                maxNumberOfSelections: 2,
+            };
+            assert.equal(
+                getSelectFieldPolicy(field).allowAddingNewOptions,
+                false
+            );
+            const changes = [];
+            const control = createSelectControl({
+                field,
+                value: ['First', 'Second'],
+                onChange: (value) => changes.push(value),
+            });
+            host.append(control.element);
+            await control.model.setSearchTerm('no-match');
+            assert.deepEqual(control.model.getState().options, []);
+            control.model.choose(['First', 'Second', 'Third']);
+            control.model.toggle('Third');
+            assert.deepEqual(control.model.getState().value, [
+                'First',
+                'Second',
+            ]);
+            assert.deepEqual(changes, []);
+            control.model.setOptions([
+                { value: 'Third', label: 'Third' },
+                { value: 'Forbidden', label: 'Forbidden' },
+            ]);
+            control.model.toggle('First');
+            control.model.toggle('Third');
+            assert.deepEqual(changes, [['Second'], ['Second', 'Third']]);
+            control.model.reset({ value: ['Legacy', 'First', 'Second'] });
+            assert.deepEqual(control.model.getState().value, [
+                'Legacy',
+                'First',
+                'Second',
+            ]);
+            control.model.toggle('Third');
+            assert.equal(changes.length, 2);
+            const select = host.querySelector('select');
+            control.destroy();
+            select.dispatchEvent(new window.Event('change', { bubbles: true }));
+            control.model.choose(['First']);
+            assert.equal(changes.length, 2);
+        }
+    );
     if (failures.length) {
         throw new AggregateError(
             failures,
             'Shipped UI recipe lifecycle checks failed'
         );
     }
-    return { checks: 6 };
+    return { checks: 7 };
 }

@@ -1,5 +1,7 @@
 export { createSelectionModel } from './model.js';
 export { createSelectControl, mountSelectionControl } from './controls.js';
+export { getSelectFieldPolicy } from './selectPolicy.js';
+export type { SelectFieldPolicy } from './selectPolicy.js';
 export type {
     SelectControlOptions,
     SelectControl,

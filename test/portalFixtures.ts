@@ -59,6 +59,20 @@ export const portalPage = (
         },
         fieldNamesToSchemas: {},
         fieldIdsToSchemas: {
+            fld_prefill: {
+                fieldType: AirtableFieldType.SINGLE_LINE_TEXT,
+                airtableField: {
+                    id: 'fld_prefill',
+                    name: 'Parent Prefill Query',
+                    description: null,
+                    isComputed: false,
+                    isPrimaryField: false,
+                    config: {
+                        type: AirtableFieldType.SINGLE_LINE_TEXT,
+                        options: null,
+                    },
+                },
+            },
             fld_children: {
                 fieldType: AirtableFieldType.MULTIPLE_RECORD_LINKS,
                 airtableField: structuredClone(portalField),
@@ -68,6 +82,7 @@ export const portalPage = (
                     allowEditingRecords: true,
                     formsForEditingAndCreating: 'same-form',
                     extensionIdForCreatingAndEditing: 'extension_child',
+                    prefillChildFormForCreatingRecords: true,
                     prefillFieldForCreatingChildExtension: 'fld_prefill',
                     customViews: [
                         {

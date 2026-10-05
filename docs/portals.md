@@ -432,6 +432,11 @@ request automatically.
 `openChild` validates the exact configured child ID and edit membership; cached
 nested records alone cannot open an edit Form. The request captures the parent
 Portal token, field, linked table, inverse-link/create prefills and read epoch.
+The configured parent query is carried only when
+`prefillChildFormForCreatingRecords` is explicitly `true` and the source value
+is a nonblank string. Disabled or absent configuration does not carry the
+query. Its bytes stay unchanged; inverse linking remains independent of this
+toggle.
 Every later dispatched read invalidates the plan even if criteria are equal.
 Check the returned child's `isCurrent()` immediately before displaying it,
 editing its draft or creating a save input. A late child response cannot be

@@ -3,6 +3,8 @@ import type {
     LinkedRecordPrefill,
     ListPortalLinkedRecordsResult,
     PortalLoadedResult,
+    RuntimeAirtableField,
+    RuntimeLinkedRecordFieldConfig,
     RuntimeLinkedRecordDetailField,
     RuntimeSession,
 } from '../runtime/types.js';
@@ -12,6 +14,33 @@ import type {
     PortalOwnerScope,
     PortalReadOptions,
 } from './types.js';
+
+/** Resolve only direct links or valid lookup results that are linked records. */
+export const getPortalLinkedRecordFieldConfig = (
+    field: RuntimeAirtableField | undefined
+): RuntimeLinkedRecordFieldConfig | null => {
+    if (!isObject(field) || !isObject(field.config)) return null;
+    const config = field.config;
+    const linked =
+        config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
+            ? config
+            : config.type === AirtableFieldType.MULTIPLE_LOOKUP_VALUES &&
+                isObject(config.options) &&
+                config.options.isValid === true &&
+                isObject(config.options.result) &&
+                config.options.result.type ===
+                    AirtableFieldType.MULTIPLE_RECORD_LINKS
+              ? config.options.result
+              : null;
+    if (
+        linked === null ||
+        !isObject(linked.options) ||
+        typeof linked.options.linkedTableId !== 'string' ||
+        linked.options.linkedTableId.trim() === ''
+    )
+        return null;
+    return linked;
+};
 
 export const isObject = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -164,7 +193,7 @@ type PortalLinkedFieldConfig = NonNullable<
         NonNullable<
             PortalLoadedResult['payload']['publicFields']['state']['portalFields']
         >[number]['config'],
-        { type: 'multipleRecordLinks' }
+        { type: 'multipleRecordLinks' | 'multipleLookupValues' }
     >['config']
 >;
 
@@ -240,14 +269,19 @@ export const capturePortalMetadata = (
     const schema = portal.payload.fieldIdsToSchemas[portalFieldId];
     if (
         !isObject(schema) ||
-        schema.fieldType !== AirtableFieldType.MULTIPLE_RECORD_LINKS ||
         !isObject(schema.airtableField) ||
         schema.airtableField.id !== portalFieldId ||
-        schema.airtableField.config?.type !==
-            AirtableFieldType.MULTIPLE_RECORD_LINKS
+        schema.fieldType !== schema.airtableField.config?.type
     )
         throw new TypeError('The Portal field must be a linked-record field.');
-    const link = schema.airtableField.config.options;
+    const linkedConfig = getPortalLinkedRecordFieldConfig(schema.airtableField);
+    if (linkedConfig === null)
+        throw new TypeError(
+            'The Portal field must be a direct link or a valid linked-record lookup.'
+        );
+    const link = linkedConfig.options;
+    const lookup =
+        schema.fieldType === AirtableFieldType.MULTIPLE_LOOKUP_VALUES;
     requireIdentifier(portalFieldId, 'Portal field ID');
     const linkedTableId = requireIdentifier(
         link.linkedTableId,
@@ -315,7 +349,8 @@ export const capturePortalMetadata = (
         parentRecordId,
         portalFieldId,
         linkedTableId,
-        createChildId: configuredChildId(config, true),
+        // Lookup result links do not make the outer computed field creatable.
+        createChildId: lookup ? null : configuredChildId(config, true),
         editChildId: configuredChildId(config, false),
         viewAllowsEditing: viewConfig?.disableEditingForCustomView !== true,
         prefill: {

@@ -18,10 +18,13 @@ those transitions.
 
 Save this as `portal-owner.ts` in your application. Call its methods from
 deliberate application actions. Callbacks receive actual SDK results; render
-text with safe text APIs and keep access tokens/session credentials out of
-logs, storage and DOM attributes. `clearVisitorState` must clear old displayed
-rows, child Forms and their draft stores. Each owner belongs to one client and
-visitor; replace it when switching clients.
+text with safe text APIs. Keep captured collection capabilities and credentials
+out of logs, DOM attributes and shared or diagnostic storage. This recipe keeps
+them in memory. If your application restores a client session, use its chosen
+visitor-scoped store as described in [session ownership](runtime.md#session-ownership);
+the SDK supplies no persistent-storage adapter. `clearVisitorState` must clear
+old displayed rows, child Forms and their draft stores. Each owner belongs to
+one client and visitor; replace it when switching clients.
 
 ```ts
 import type {

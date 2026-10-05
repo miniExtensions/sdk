@@ -385,13 +385,17 @@ their corresponding returned table state to `selectionOptionsFromRecords`,
 then pass those options to `model.setValue(ids, labels)`. Do not use Form-only
 `loadSelectedRecords` as a general Portal or arbitrary-record lookup.
 
-**Cascading/dynamic filter-option discovery is unsupported by this initial UI
-surface.** The SDK accepts known Form conditional filtering values but does not
-expose the hosted filter-option discovery operation. Supply values already
-known to your application and recreate the loader when they change. Do not
-invent options, query Airtable directly or omit values to bypass configured
-filtering. Calendar selectors and creating options/records are separate runtime
-operations; the mounted picker does not provide those workflows.
+**The mounted picker does not provide cascading/dynamic filter controls.**
+Applications can use the typed
+`client.linkedRecords.listConditionalFilterPrimaryValues` runtime operation to
+discover configured Form filter values. See the
+[conditional filter runtime guide](./runtime.md#conditional-linked-filter-primary-values)
+for ordered filter context, returned record/value pairs, URL prefills and
+application-owned cancellation and downstream resets. Supply the selected
+filter values to the Form loader and recreate it when they change. Do not invent
+options, query Airtable directly or omit values to bypass configured filtering.
+Calendar selectors and creating options/records are separate runtime operations;
+the mounted picker does not provide those workflows.
 
 ## Headless model and lifecycle
 

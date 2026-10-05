@@ -2,7 +2,7 @@
     "sourceRepository": "miniExtensions/monorepo",
     "sourceRevision": "fc1f8b05eff9658741cb797428d50ffe384b89e0",
     "compilerVersion": "5.9.3",
-    "generatorSha256": "051b4e7d60b637c7cf0b51c82a9fa744dddeaf8c256471415ff7a8b448e127a4",
+    "generatorSha256": "818b8954293f501f7fb4e80d1357c0f5fb10f83eca246d77d9f6bb5c1241179e",
     "transport": "plain JSON; canonical enum literals; no runtime code or imports",
     "operations": [
         {
@@ -87,6 +87,15 @@
             "transport": "v1"
         },
         {
+            "operation": "linkedRecords.listConditionalFilterPrimaryValues",
+            "input": "V1Input9",
+            "output": "V1Output9",
+            "module": "types/api/types/fetchPrimaryValuesForConditionalLinkedRecordFilterField.ts",
+            "route": "fetchPrimaryValuesForConditionalLinkedRecordFilterField",
+            "kind": "POST",
+            "transport": "v1"
+        },
+        {
             "operation": "forms.deleteCurrentRecord",
             "input": "TrpcInput0",
             "output": "TrpcOutput0",
@@ -165,6 +174,30 @@
             "route": "airtable.addAirtableCommentForRecord",
             "kind": "mutation",
             "transport": "trpc"
+        },
+        {
+            "operation": "addresses.listPredictions",
+            "input": "TrpcInput10",
+            "output": "TrpcOutput10",
+            "route": "publicExtensions.autoCompleteAddressField",
+            "kind": "query",
+            "transport": "trpc"
+        },
+        {
+            "operation": "addresses.getFormattedAddress",
+            "input": "TrpcInput11",
+            "output": "TrpcOutput11",
+            "route": "publicExtensions.getFormattedAddressFromPlaceId",
+            "kind": "query",
+            "transport": "trpc"
+        },
+        {
+            "operation": "buttons.triggerWebhook",
+            "input": "TrpcInput12",
+            "output": "TrpcOutput12",
+            "route": "publicExtensions.triggerWebhook",
+            "kind": "mutation",
+            "transport": "trpc"
         }
     ],
     "sources": [
@@ -233,12 +266,28 @@
             "sha256": "8151529192bcb318c50ab0c3c73669e638d22724a25923a7fbf89c7f343ff4d2"
         },
         {
+            "path": "backend-src/trpc/publicExtensions/autoCompleteAddressField/index.ts",
+            "sha256": "82dbcf2df047bce217d4ed0aa55efd2e0bd64e96f2e812bff6b893043ec5c289"
+        },
+        {
+            "path": "backend-src/trpc/publicExtensions/autoCompleteAddressField/validators.ts",
+            "sha256": "c0e7e8c9549775aa7ebd10bec54735e32bc5f07b7989eda074f472bbe4201883"
+        },
+        {
             "path": "backend-src/trpc/publicExtensions/createUploadLink.ts",
             "sha256": "11dcf891fd65268c7a7509710080b30f4cf6aafd8a80b41a9e2278e93927f950"
         },
         {
             "path": "backend-src/trpc/publicExtensions/fetchInitialTableIdsToLinkedTableStates/index.ts",
             "sha256": "d6892a270cc2828ffe77c8cf674a1d569b36895f33c165a479ae40a70c2820c3"
+        },
+        {
+            "path": "backend-src/trpc/publicExtensions/triggerWebhook/index.ts",
+            "sha256": "003b87a41632a325c5b6b6f605567aea44255a31ca1baa656ac45d454ba34989"
+        },
+        {
+            "path": "backend-src/trpc/publicExtensions/triggerWebhook/validators.ts",
+            "sha256": "1543aa4f40aa2cbe250202510db7e86ed6f399e980e8dcbb452da72f36439a1e"
         },
         {
             "path": "backend-src/trpc/publicExtensions/trpcRoute.ts",
@@ -387,6 +436,6 @@
             "sha256": "808069bba06b6768b62fd22429b53362e7af342da4a236ed2d2e1c89fcca3b4a"
         }
     ],
-    "declarationCount": 1581,
-    "generatedSha256": "7ed922d83f49e5d0c0a762f9b767c62dfae9d121612914b4a07f81f214487828"
+    "declarationCount": 1595,
+    "generatedSha256": "1c3d56c0f18cc362bf6207198c8afbd612444dcd6e63060af44403d173f28855"
 }

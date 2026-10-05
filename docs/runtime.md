@@ -347,7 +347,7 @@ the client does not convert field names, dates, or record values.
 the client does not validate them with another runtime schema.
 
 The packaged declaration snapshot has SHA256
-`dfe4d557f480d5c9dff466c916c21801dbd3cb538c40fb8afdaf49735fe9c293`.
+`e011d3f20568d29f6909a96e10bcc8b3378adf95b90b8ef34a71bdeb0a02afe0`.
 Both module formats ship the same `runtime/contracts/generated.d.ts` bytes;
 their public provenance includes this `contractDeclarationsSha256` for direct
 verification. Its `generatedSha256` separately identifies the generator's
@@ -539,6 +539,163 @@ When a Form allows adding select choices,
 returns `{newChoice}`. Creating a choice mutates the allowed Airtable field's
 options. Add that choice to your local schema and draft value, then save the
 Form to write the record's selection.
+
+## Conditional linked-filter primary values
+
+`linkedRecords.listConditionalFilterPrimaryValues` reads the choices for one
+configured conditional filter on a Form's linked-record selector. Use the
+current Form token, the selector's outer `mainTableLinkedRecordsFieldId`, and
+the exact configured `linkedRecordsFilterFieldId` in its linked table. The
+result is `{primaryValues, prefillValue}`; each value contains `recordId` and
+`stringValue`. This reads candidate primary values, rather than primary-field
+schema metadata. It grants no record mutation permission.
+
+```ts
+import type {
+    ListConditionalFilterPrimaryValuesInput,
+    ConditionalFilterPrimaryValue,
+    ConditionalLinkedRecordFilteringValues,
+} from '@miniextensions/sdk';
+
+async function readConditionalFilterValues(
+    request: ListConditionalFilterPrimaryValuesInput,
+    signal: AbortSignal
+) {
+    return client.linkedRecords.listConditionalFilterPrimaryValues(request, {
+        signal,
+    });
+}
+
+function retainConditionalFilterChoice(
+    values: ConditionalLinkedRecordFilteringValues,
+    filterFieldId: string,
+    selected: ConditionalFilterPrimaryValue | null
+): ConditionalLinkedRecordFilteringValues {
+    return { ...values, [filterFieldId]: selected };
+}
+```
+
+Supply `searchTerm` and `urlSearchValue` explicitly, using `null` for an absent
+URL prefill. For the first filter, pass `filterData: null`. For a later filter,
+pass `{previousFilterFieldId, previousFilterPrimaryValue}` from the immediately
+preceding configured selection; `previousFilterPrimaryValue` is its
+`stringValue`, while the selected pair retains `recordId` as its identity.
+Duplicate readable labels can belong to different records. Accept only the
+server's returned `prefillValue` as a resolved URL prefill. The endpoint returns
+up to 100 primary values and supplies no page offset; refine `searchTerm` to
+find another value.
+
+Your application renders the filter controls in configured order, clears
+downstream selections when an earlier selection changes, and cancels or
+discards responses after a search, prior choice, visitor, record, or loaded
+configuration change. Pass the selected pair/null map to
+`linkedRecords.listFormOptions` as `conditionalLinkedRecordFilteringValues`
+and to the Form save as `conditionalLinkedRecordFieldIdsToFilteringValues`.
+The SDK does not supply a conditional-filter control or a general condition
+evaluator; the published handler enforces its configured filter rules.
+
+## Address predictions and place formatting
+
+For a single-line text field configured with `enableAddressAutocomplete:
+true`, `addresses.listPredictions` accepts `{extensionAccessToken, fieldId,
+addressFieldValue}` and returns `{description, placeId}[]`.
+`addresses.getFormattedAddress` accepts `{extensionAccessToken, fieldId,
+placeId}` and returns the formatted address as a string. Use the current
+Form's token and exact address field ID for both calls. The handler rejects
+fields without autocomplete enabled, read-only fields, and password-obscured
+fields. The API deployment must have its address provider configured; provider
+failures and server rate limits remain possible. Browser consumers also need
+the public tRPC CORS/header support described above. Provider credentials stay
+on the server.
+
+```ts
+import type {
+    ListAddressPredictionsInput,
+    GetFormattedAddressInput,
+} from '@miniextensions/sdk';
+
+async function readAddressPredictions(
+    request: ListAddressPredictionsInput,
+    signal: AbortSignal
+) {
+    return client.addresses.listPredictions(request, { signal });
+}
+
+async function readSelectedPlaceAddress(
+    request: GetFormattedAddressInput,
+    signal: AbortSignal
+): Promise<string> {
+    return client.addresses.getFormattedAddress(request, { signal });
+}
+```
+
+These are thin reads. Your application renders suggestions as text, debounces
+nonblank input, and keeps a separate generation for typing/predictions and
+accepted-place intent. Cancel prior requests on typing, a new choice, field or
+visitor changes, and disposal; verify the current owner and accepted place
+after each await before applying a result. An abort signal does not replace
+that application check. The native renderer waits 800 ms before requesting
+predictions, accepts a selected description immediately, and applies place
+formatting only while that same selection is current. On a details failure,
+retain the draft and allow an explicit retry. Write the accepted string into
+your Form draft, mark that field dirty, and save through the normal Form
+operation. These methods supply no autocomplete presenter and never write or
+save the field themselves.
+
+## Configured Button webhooks
+
+`buttons.triggerWebhook` calls the configured Button's existing webhook
+action. It accepts `{extensionAccessToken, fieldId, source}` and returns
+`{success: boolean}`. The server derives the Button's URL, GET/POST mode,
+visibility conditions, record scope, and current action permission; the input
+has no URL or HTTP method. `success: false` is a normal action result. Native
+tRPC errors remain exceptions.
+
+```ts
+import type {
+    TriggerConfiguredButtonWebhookInput,
+    TriggerConfiguredButtonWebhookResult,
+} from '@miniextensions/sdk';
+
+// Call from a deliberate click after your app checks its current owner/action.
+async function invokeConfiguredButton(
+    request: TriggerConfiguredButtonWebhookInput,
+    signal: AbortSignal
+): Promise<TriggerConfiguredButtonWebhookResult> {
+    return client.buttons.triggerWebhook(request, { signal });
+}
+```
+
+The `source` union is exact:
+
+- `{type: 'current-record', recordId}` uses the current authorized Form or
+  Portal record and its token.
+- `{type: 'linked-record', linkedRecordId, linkedTableId,
+parentLinkedRecordFieldId, selectedCustomViewId?}` uses the clicked linked
+  record, resolved linked table, and the parent selector's outer field ID.
+  Here `fieldId` is the Button in the linked record, rather than that outer
+  field. A Portal action needs the current configured view/action capability
+  from its current server list; preserve its `selectedCustomViewId`. A Form
+  linked action can omit the view or use `null` when no view applies.
+
+Use the exact current token and configured Button field. Render webhook
+actions only for the configured GET/POST mode and a usable current Button URL,
+with one pending click at a time. A Button being computed is normal; editable
+cell checks on computed/read-only values do not decide action authority. An
+unbound create draft has no current-record action; after Save & Continue,
+use the authorized saved-record context returned by the runtime. The server
+rechecks the configured parent membership, selected view, conditions, and
+current record proof, including strict expiry of its short-lived record cache.
+Cached display values alone grant no action permission.
+
+Your app owns loading state, duplicate-click suppression, configured success
+and failure messages, and whether to refresh after completion. Before dispatch
+and after awaiting the result, compare the visitor, record, field, loaded
+configuration, selected view, and owner generation. Cancel and invalidate that
+owner on navigation or disposal. A failed or aborted request can leave the
+remote side effect uncertain; require an explicit decision before another
+attempt. The client makes one request and supplies no automatic retry, Button
+renderer, or workflow controller.
 
 ## Attachments
 

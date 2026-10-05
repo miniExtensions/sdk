@@ -45,6 +45,12 @@ const v1 = [
         'fetchRecordsForLinkedRecordsSelector',
         'FetchRecordsForPortalLinkedRecordsSelector',
     ],
+    [
+        'linkedRecords.listConditionalFilterPrimaryValues',
+        'fetchPrimaryValuesForConditionalLinkedRecordFilterField',
+        'FetchValuesForConditionalLinkedRecordFilterField',
+        'fetchPrimaryValuesForConditionalLinkedRecordFilterField',
+    ],
 ];
 const trpc = [
     ['forms.deleteCurrentRecord', 'airtable', 'deleteRecord', 'mutation'],
@@ -87,6 +93,24 @@ const trpc = [
         'addAirtableCommentForRecord',
         'mutation',
     ],
+    [
+        'addresses.listPredictions',
+        'publicExtensions',
+        'autoCompleteAddressField',
+        'query',
+    ],
+    [
+        'addresses.getFormattedAddress',
+        'publicExtensions',
+        'getFormattedAddressFromPlaceId',
+        'query',
+    ],
+    [
+        'buttons.triggerWebhook',
+        'publicExtensions',
+        'triggerWebhook',
+        'mutation',
+    ],
 ];
 const sdkRoot = path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -126,8 +150,8 @@ const entryLines = [
     'type RouterOutputs = inferRouterOutputs<AppTRPCRouter>;',
 ];
 const operationAliases = [];
-for (const [index, [operation, module, type]] of v1.entries()) {
-    const route = type[0].toLowerCase() + type.slice(1);
+for (const [index, [operation, module, type, routeOverride]] of v1.entries()) {
+    const route = routeOverride ?? type[0].toLowerCase() + type.slice(1);
     entryLines.push(
         `import type { ${type}Input, ${type}Output } from './types/api/types/${module}';`
     );

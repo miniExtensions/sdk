@@ -696,6 +696,93 @@ describe('optional Portal collections', () => {
         );
     });
 
+    for (const scenario of [
+        'disabled',
+        'absent',
+        'stale source',
+        'missing source',
+        'invalid value',
+        'missing value',
+        'empty value',
+        'blank value',
+    ]) {
+        it(`preserves native child-create context without query prefill for ${scenario}`, () => {
+            const page = portalPage();
+            const schema = page.payload.fieldIdsToSchemas.fld_children;
+            if (schema.fieldType !== AirtableFieldType.MULTIPLE_RECORD_LINKS)
+                throw new Error('Fixture link required.');
+            const config = schema.miniExtConfig;
+            assert.ok(config);
+            assert.ok(
+                'prefillChildFormForCreatingRecords' in config &&
+                    'prefillFieldForCreatingChildExtension' in config
+            );
+            if (scenario === 'disabled')
+                config.prefillChildFormForCreatingRecords = false;
+            else if (scenario === 'absent')
+                delete config.prefillChildFormForCreatingRecords;
+            else if (scenario === 'stale source')
+                config.prefillFieldForCreatingChildExtension = 'fld_removed';
+            else if (scenario === 'missing source')
+                delete config.prefillFieldForCreatingChildExtension;
+            else if (scenario === 'invalid value')
+                page.payload.formRecord.data.fld_prefill = ['not-a-query'];
+            else if (scenario === 'missing value')
+                delete page.payload.formRecord.data.fld_prefill;
+            else
+                page.payload.formRecord.data.fld_prefill =
+                    scenario === 'empty value' ? '' : ' \t\n ';
+            const s = setup(undefined, { portal: page });
+            const plan = s.collection.childFormRequest(createRequest);
+            const prefill = {
+                toLinkToParent: {
+                    reversedFieldIdToPrefill: 'fld_parent',
+                    parentFormRecordId: 'record_parent',
+                },
+                prefillQueryForChildExtension: null,
+            };
+            assert.deepEqual(plan.input.childExtensionAccessData, {
+                parentExtensionAccessToken: 'portal_access_example',
+                fieldIdUsedToAccessExtension: 'fld_children',
+            });
+            assert.deepEqual(plan.input.childExtensionInfo, {
+                childExtensionId: 'extension_child',
+                accessType: { type: 'create' },
+            });
+            assert.deepEqual(plan.input.context, {
+                type: 'modal',
+                linkedTableIdOfLinkedRecordField: 'table_children',
+                prefillDataForLinkedRecordsForm: prefill,
+            });
+            assert.deepEqual(plan.saveContext, {
+                type: 'modal',
+                prefillData: prefill,
+            });
+            assert.equal(plan.isCurrent(), true);
+            assert.equal(s.calls.length, 0);
+            assert.equal(s.fixture.mutations, 0);
+        });
+    }
+
+    it('preserves the exact enabled query bytes in both child-create contexts', () => {
+        const page = portalPage();
+        page.payload.formRecord.data.fld_prefill =
+            ' ?prefill_Parent%20Name=Exact%20Case&hide_Parent%20Name=true ';
+        const s = setup(undefined, { portal: page });
+        const plan = s.collection.childFormRequest(createRequest);
+        assert.equal(
+            plan.input.context.prefillDataForLinkedRecordsForm
+                ?.prefillQueryForChildExtension,
+            ' ?prefill_Parent%20Name=Exact%20Case&hide_Parent%20Name=true '
+        );
+        assert.deepEqual(
+            plan.saveContext.prefillData,
+            plan.input.context.prefillDataForLinkedRecordsForm
+        );
+        assert.equal(s.calls.length, 0);
+        assert.equal(s.fixture.mutations, 0);
+    });
+
     it('checks child edit main-read membership rather than initial or nested label records', async () => {
         const page = portalPage();
         page.payload.initialLinkedTableStates = rows([

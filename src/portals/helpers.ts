@@ -291,6 +291,7 @@ export const capturePortalMetadata = (
         viewConfig?.viewBehavior === 'custom' ? viewConfig : config;
     const prefillKey = config?.prefillFieldForCreatingChildExtension;
     const prefillValue =
+        config?.prefillChildFormForCreatingRecords === true &&
         typeof prefillKey === 'string' &&
         Object.hasOwn(portal.payload.formRecord.data, prefillKey)
             ? portal.payload.formRecord.data[prefillKey]
@@ -327,7 +328,10 @@ export const capturePortalMetadata = (
                           parentFormRecordId: parentRecordId,
                       },
             prefillQueryForChildExtension:
-                typeof prefillValue === 'string' ? prefillValue : null,
+                typeof prefillValue === 'string' &&
+                prefillValue.trim().length > 0
+                    ? prefillValue
+                    : null,
         },
         legacyDetails,
         layoutSettings: structuredClone({

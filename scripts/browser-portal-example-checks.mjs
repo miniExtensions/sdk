@@ -847,6 +847,80 @@ export async function checkBrowserPortalExample({
             }
         );
 
+        for (const scenario of [
+            'disabled',
+            'absent',
+            'stale source',
+            'missing source',
+            'invalid value',
+            'missing value',
+            'empty value',
+            'blank value',
+        ]) {
+            await check(
+                `actual packed create child omits query prefill for ${scenario}`,
+                async () => {
+                    const portal = editablePortal();
+                    const config =
+                        portal.payload.fieldIdsToSchemas.fld_children
+                            .miniExtConfig;
+                    if (scenario === 'disabled')
+                        config.prefillChildFormForCreatingRecords = false;
+                    else if (scenario === 'absent')
+                        delete config.prefillChildFormForCreatingRecords;
+                    else if (scenario === 'stale source')
+                        config.prefillFieldForCreatingChildExtension =
+                            'fld_removed';
+                    else if (scenario === 'missing source')
+                        delete config.prefillFieldForCreatingChildExtension;
+                    else if (scenario === 'invalid value')
+                        portal.payload.formRecord.data.fld_prefill = [
+                            'not-a-query',
+                        ];
+                    else if (scenario === 'missing value')
+                        delete portal.payload.formRecord.data.fld_prefill;
+                    else
+                        portal.payload.formRecord.data.fld_prefill =
+                            scenario === 'empty value' ? '' : ' \t\n ';
+                    const h = await mount({ portal });
+                    await h.click('Create record');
+                    assert.deepEqual(
+                        h.calls.map((call) => call.operation),
+                        ['child'],
+                        'Opening the child loads once and never writes.'
+                    );
+                    assert.equal(h.failures.length, 0);
+                    const create = h.calls[0].input;
+                    assert.deepEqual(create.childExtensionAccessData, {
+                        parentExtensionAccessToken: 'portal_access_example',
+                        fieldIdUsedToAccessExtension: 'fld_children',
+                    });
+                    assert.deepEqual(create.childExtensionInfo, {
+                        childExtensionId: 'child_example',
+                        accessType: { type: 'create' },
+                    });
+                    const prefill = {
+                        toLinkToParent: {
+                            reversedFieldIdToPrefill: 'fld_parent',
+                            parentFormRecordId: 'rec_user',
+                        },
+                        prefillQueryForChildExtension: null,
+                    };
+                    assert.deepEqual(create.context, {
+                        type: 'modal',
+                        linkedTableIdOfLinkedRecordField: 'tbl_children',
+                        prefillDataForLinkedRecordsForm: prefill,
+                    });
+                    assert.equal(h.handoffs.length, 1);
+                    assert.deepEqual(h.handoffs[0][1], {
+                        type: 'modal',
+                        prefillData: prefill,
+                    });
+                    await h.dispose();
+                }
+            );
+        }
+
         await check(
             'create/edit canonical plans and only current main-view records can edit',
             async () => {

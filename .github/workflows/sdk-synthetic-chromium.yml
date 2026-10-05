@@ -15,9 +15,6 @@ jobs:
         runs-on: ubuntu-24.04
         timeout-minutes: 15
         env:
-            SDK_PACKAGE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/package
-            SDK_FIXTURE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/fixture
-            SDK_BROWSER_RESULTS_DIR: ${{ runner.temp }}/sdk-chromium-results
             SDK_CHROME_BINARY: /opt/google/chrome/chrome
             SDK_CHROMEDRIVER_BINARY: /usr/local/share/chromedriver-linux64/chromedriver
         steps:
@@ -34,7 +31,7 @@ jobs:
                   run-id: 37341389181
                   artifact-ids: 11357789263
                   github-token: ${{ github.token }}
-                  path: ${{ env.SDK_PACKAGE_ZIP_DIR }}
+                  path: ${{ runner.temp }}/sdk-chromium-inputs/package
                   skip-decompress: true
                   digest-mismatch: error
             - name: Download exact synthetic fixture ZIP
@@ -44,7 +41,7 @@ jobs:
                   run-id: 37341389181
                   artifact-ids: 11357639404
                   github-token: ${{ github.token }}
-                  path: ${{ env.SDK_FIXTURE_ZIP_DIR }}
+                  path: ${{ runner.temp }}/sdk-chromium-inputs/fixture
                   skip-decompress: true
                   digest-mismatch: error
             - name: Install isolated WebDriver client
@@ -52,11 +49,16 @@ jobs:
               run: npm ci --ignore-scripts --no-audit --no-fund
             - name: Exercise immutable synthetic UI in system Chrome
               working-directory: test/browser-ci
+              env:
+                  SDK_PACKAGE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/package
+                  SDK_FIXTURE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/fixture
+                  SDK_BROWSER_RESULTS_DIR: ${{ runner.temp }}/sdk-chromium-results
               run: node privacy-proof.mjs
             - name: Preserve failures before harness startup
               if: always()
               env:
                   JOB_STATUS: ${{ job.status }}
+                  SDK_BROWSER_RESULTS_DIR: ${{ runner.temp }}/sdk-chromium-results
               run: |
                   node --input-type=module -e "import fs from 'node:fs'; import path from 'node:path'; const directory = process.env.SDK_BROWSER_RESULTS_DIR; fs.mkdirSync(directory, { recursive: true }); const receipt = path.join(directory, 'run.json'); if (!fs.existsSync(receipt)) fs.writeFileSync(receipt, JSON.stringify({ status: 'not-executed', jobStatus: process.env.JOB_STATUS, harnessHead: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID, reason: 'A preceding download/install/startup step failed. Native job logs own the failure; no browser assertion credit.' }, null, 2) + '\n');"
             - name: Retain browser results and failure evidence
@@ -64,7 +66,7 @@ jobs:
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
               with:
                   name: sdk-synthetic-chromium-${{ github.run_id }}-attempt-${{ github.run_attempt }}
-                  path: ${{ env.SDK_BROWSER_RESULTS_DIR }}/
+                  path: ${{ runner.temp }}/sdk-chromium-results/
                   if-no-files-found: warn
                   retention-days: 7
                   compression-level: 0
@@ -73,5 +75,9 @@ jobs:
                   include-hidden-files: false
             - name: Remove owned downloads, results and isolated dependencies
               if: always()
+              env:
+                  SDK_PACKAGE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/package
+                  SDK_FIXTURE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/fixture
+                  SDK_BROWSER_RESULTS_DIR: ${{ runner.temp }}/sdk-chromium-results
               run: |
                   node --input-type=module -e "import fs from 'node:fs'; for (const path of [process.env.SDK_PACKAGE_ZIP_DIR, process.env.SDK_FIXTURE_ZIP_DIR, process.env.SDK_BROWSER_RESULTS_DIR, 'test/browser-ci/node_modules']) { fs.rmSync(path, { recursive: true, force: true }); if (fs.existsSync(path)) throw new Error('Owned cleanup failed: ' + path); } console.log('Owned Chromium inputs, results and isolated dependencies removed');"

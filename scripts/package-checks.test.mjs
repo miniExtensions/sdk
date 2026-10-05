@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+    mkdtemp,
+    mkdir,
+    readFile,
+    readdir,
+    rm,
+    symlink,
+    writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -9,6 +18,7 @@ import {
     assertInstalledArchive,
     assertPackedDocLinks,
 } from './package-checks.mjs';
+import { retainCheckedPackage } from './retain-checked-package.mjs';
 
 async function temporaryRoot(t) {
     const root = await mkdtemp(join(tmpdir(), 'sdk-package-guard-'));
@@ -21,6 +31,175 @@ async function write(root, path, content) {
     await mkdir(join(target, '..'), { recursive: true });
     await writeFile(target, content);
 }
+
+async function deliveryFixture(t) {
+    const root = await temporaryRoot(t);
+    const outputParent = await temporaryRoot(t);
+    const installedPackage = join(root, 'node_modules/@miniextensions/sdk');
+    const filename = 'miniextensions-sdk-0.1.0-alpha.0.tgz';
+    const archivePath = join(root, filename);
+    const guide = '# Browser starter\nUse the supplied archive.\n';
+    await write(installedPackage, 'docs/browser-lifecycle.md', guide);
+    await write(root, 'package/docs/browser-lifecycle.md', guide);
+    execFileSync('tar', ['-czf', archivePath, '-C', root, 'package']);
+    const archive = await readFile(archivePath);
+    await write(installedPackage, '.private-fixture', 'must not be retained');
+    return {
+        archivePath,
+        installedPackage,
+        outputDirectory: join(outputParent, 'delivery'),
+        packed: {
+            name: '@miniextensions/sdk',
+            version: '0.1.0-alpha.0',
+            filename,
+            integrity: `sha512-${createHash('sha512').update(archive).digest('base64')}`,
+            files: [
+                {
+                    path: 'docs/browser-lifecycle.md',
+                    size: Buffer.byteLength(guide),
+                },
+            ],
+        },
+        source: { commit: 'a'.repeat(40), tree: 'b'.repeat(40) },
+        ci: {
+            repository: 'miniExtensions/sdk',
+            event: 'pull_request',
+            runId: '123',
+            runAttempt: '2',
+            workflowSha: 'a'.repeat(40),
+            pullRequestHeadSha: 'c'.repeat(40),
+            token: 'never-upload-this-secret',
+        },
+        browserPortalChecks: 21,
+    };
+}
+
+test('delivery preserves tested archive bytes and limits retained files and provenance', async (t) => {
+    const fixture = await deliveryFixture(t);
+    retainCheckedPackage(fixture);
+    assert.deepEqual(
+        (await readdir(fixture.outputDirectory)).sort(),
+        [
+            'SHA256SUMS',
+            'artifact-receipt.json',
+            fixture.packed.filename,
+            'miniExtensions-SDK-INSTALL.md',
+        ].sort()
+    );
+    const archive = await readFile(fixture.archivePath);
+    assert.deepEqual(
+        await readFile(join(fixture.outputDirectory, fixture.packed.filename)),
+        archive
+    );
+    assert.deepEqual(
+        await readFile(
+            join(fixture.outputDirectory, 'miniExtensions-SDK-INSTALL.md')
+        ),
+        await readFile(
+            join(fixture.installedPackage, 'docs/browser-lifecycle.md')
+        )
+    );
+    const text = await readFile(
+        join(fixture.outputDirectory, 'artifact-receipt.json'),
+        'utf8'
+    );
+    const receipt = JSON.parse(text);
+    assert.equal(
+        receipt.package.sha256,
+        createHash('sha256').update(archive).digest('hex')
+    );
+    assert.equal(receipt.package.integrity, fixture.packed.integrity);
+    assert.equal(receipt.source.commit, fixture.source.commit);
+    assert.equal(receipt.ci.pullRequestHeadSha, fixture.ci.pullRequestHeadSha);
+    assert.notEqual(receipt.source.commit, receipt.ci.pullRequestHeadSha);
+    assert.doesNotMatch(text, /never-upload-this-secret|private-fixture/);
+    const sums = await readFile(
+        join(fixture.outputDirectory, 'SHA256SUMS'),
+        'utf8'
+    );
+    assert.equal(
+        sums,
+        `${receipt.package.sha256}  ${fixture.packed.filename}\n${receipt.guide.sha256}  miniExtensions-SDK-INSTALL.md\n`
+    );
+});
+
+test('delivery rejects changed archive bytes before creating output', async (t) => {
+    const fixture = await deliveryFixture(t);
+    await writeFile(fixture.archivePath, 'a different archive');
+    assert.throws(
+        () => retainCheckedPackage(fixture),
+        /Tested archive bytes changed/
+    );
+    await assert.rejects(readdir(fixture.outputDirectory), { code: 'ENOENT' });
+});
+
+test('delivery rejects same-length installed guide drift', async (t) => {
+    const fixture = await deliveryFixture(t);
+    const guidePath = join(
+        fixture.installedPackage,
+        'docs/browser-lifecycle.md'
+    );
+    const guide = await readFile(guidePath, 'utf8');
+    await writeFile(guidePath, guide.replace('supplied', 'modified'));
+    assert.throws(
+        () => retainCheckedPackage(fixture),
+        /Installed guide bytes differ from the tested archive/
+    );
+    await assert.rejects(readdir(fixture.outputDirectory), { code: 'ENOENT' });
+});
+
+test('delivery rejects symlinked input and output lost during consumer cleanup', async (t) => {
+    const fixture = await deliveryFixture(t);
+    const alias = join(await temporaryRoot(t), fixture.packed.filename);
+    await symlink(fixture.archivePath, alias);
+    assert.throws(
+        () => retainCheckedPackage({ ...fixture, archivePath: alias }),
+        /Archive must be a regular file/
+    );
+    assert.throws(
+        () =>
+            retainCheckedPackage({
+                ...fixture,
+                outputDirectory: join(fixture.archivePath, '..', 'delivery'),
+            }),
+        /survive consumer cleanup/
+    );
+    const guide = join(fixture.installedPackage, 'docs/browser-lifecycle.md');
+    const original = join(fixture.installedPackage, 'guide.md');
+    await writeFile(original, await readFile(guide));
+    await rm(guide);
+    await symlink(original, guide);
+    assert.throws(
+        () => retainCheckedPackage(fixture),
+        /Guide must be a regular file/
+    );
+});
+
+test('delivery refuses existing outputs and a mislabeled checkout commit', async (t) => {
+    const fixture = await deliveryFixture(t);
+    assert.throws(
+        () =>
+            retainCheckedPackage({
+                ...fixture,
+                ci: {
+                    ...fixture.ci,
+                    workflowSha: fixture.ci.pullRequestHeadSha,
+                },
+            }),
+        /strictly equal/
+    );
+    await mkdir(fixture.outputDirectory);
+    await writeFile(
+        join(fixture.outputDirectory, 'keep.txt'),
+        'existing output'
+    );
+    assert.throws(() => retainCheckedPackage(fixture), { code: 'EEXIST' });
+    assert.equal(
+        await readFile(join(fixture.outputDirectory, 'keep.txt'), 'utf8'),
+        'existing output'
+    );
+    assert.deepEqual(await readdir(fixture.outputDirectory), ['keep.txt']);
+});
 
 test('shipped docs support local paths, heading anchors, and references', async (t) => {
     const root = await temporaryRoot(t);

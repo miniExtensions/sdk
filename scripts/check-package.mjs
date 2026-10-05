@@ -29,6 +29,7 @@ import { checkBrowserPortalExample } from './browser-portal-example-checks.mjs';
 import { createHash } from 'node:crypto';
 import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
+import { assertPublicDistribution } from './distribution-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryDirectory = realpathSync(
@@ -135,6 +136,16 @@ try {
         temporaryDirectory,
         join(temporaryDirectory, packed.filename),
         packed
+    );
+    await assertPublicDistribution(
+        installedPackage,
+        packed.files.map(({ path }) => path),
+        JSON.parse(
+            readFileSync(
+                'src/runtime/contracts/generated.provenance.json',
+                'utf8'
+            )
+        )
     );
     await assertPackedDocLinks(
         installedPackage,

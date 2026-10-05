@@ -1,6 +1,7 @@
 import { AirtableFieldType } from '../formulas/types.js';
 import type { AirtableValue, RuntimeFieldSchema } from '../runtime/types.js';
 import { createSelectionModel } from './model.js';
+import { getSelectFieldPolicy } from './selectPolicy.js';
 import type {
     SelectionModel,
     SelectionOption,
@@ -125,63 +126,41 @@ const selectValues = (
 export const createSelectControl = (
     options: SelectControlOptions
 ): SelectControl => {
-    const config = options.field?.airtableField?.config;
-    if (
-        config == null ||
-        (config.type !== AirtableFieldType.SINGLE_SELECT &&
-            config.type !== AirtableFieldType.MULTIPLE_SELECTS) ||
-        options.field.fieldType !== config.type
-    ) {
-        throw new TypeError(
-            'Expected a canonical singleSelect or multipleSelects field.'
-        );
-    }
-    const field = options.field.airtableField;
-    const miniExtConfig = options.field.miniExtConfig;
-    const readOnly =
-        miniExtConfig !== undefined && 'readOnly' in miniExtConfig
-            ? miniExtConfig.readOnly
-            : undefined;
-    if (
-        typeof field.id !== 'string' ||
-        field.id === '' ||
-        typeof field.name !== 'string' ||
-        field.name === '' ||
-        (field.isComputed !== undefined &&
-            typeof field.isComputed !== 'boolean') ||
-        (readOnly !== undefined && typeof readOnly !== 'boolean')
-    ) {
-        throw new TypeError(
-            'Select field identity and permission flags are malformed.'
-        );
-    }
-    const choices = config.options == null ? [] : config.options.choices;
-    if (!Array.isArray(choices)) {
-        throw new TypeError('Select field choices must be an array.');
-    }
-    const names = new Set<string>();
-    const ids = new Set<string>();
-    const modelOptions: SelectionOption[] = [];
-    for (const choice of choices) {
-        if (
-            choice == null ||
-            typeof choice.id !== 'string' ||
-            choice.id === '' ||
-            typeof choice.name !== 'string' ||
-            choice.name === '' ||
-            ids.has(choice.id) ||
-            names.has(choice.name)
-        ) {
-            throw new TypeError(
-                'Select field choices must have unique IDs and names.'
-            );
-        }
-        ids.add(choice.id);
-        names.add(choice.name);
-        modelOptions.push({ value: choice.name, label: choice.name });
-    }
-    const multiple = config.type === AirtableFieldType.MULTIPLE_SELECTS;
-    const canonicalReadOnly = field.isComputed === true || readOnly === true;
+    const policy = getSelectFieldPolicy(options.field);
+    const multiple =
+        options.field.fieldType === AirtableFieldType.MULTIPLE_SELECTS;
+    const canonicalReadOnly = policy.readOnly;
+    const allOptions = policy.options.map(({ value, label }) => ({
+        value,
+        label,
+    }));
+    const configuredLabels = new Map(
+        allOptions
+            .filter((option) => option.label !== option.value)
+            .map((option) => [option.value, option.label])
+    );
+    const allowedNames = new Set(
+        policy.options
+            .filter(
+                (option) =>
+                    policy.allowedOptionIds === null ||
+                    policy.allowedOptionIds.includes(option.id)
+            )
+            .map((option) => option.value)
+    );
+    const filterOptions = (
+        next: readonly SelectionOption[]
+    ): readonly SelectionOption[] =>
+        (canonicalReadOnly || policy.allowedOptionIds === null
+            ? next
+            : next.filter((option) => allowedNames.has(option.value))
+        ).map((option) => ({
+            ...option,
+            label: configuredLabels.get(option.value) ?? option.label,
+        }));
+    const modelOptions = filterOptions(allOptions);
+    // Search filters the public snapshot, not the model's selectable options.
+    let currentOptions = modelOptions.map((option) => ({ ...option }));
     const document = resolveDocument(options.document);
     const id = `me-sdk-select-${++nextControlId}`;
     const element = node(document, 'div', 'select-control');
@@ -206,13 +185,55 @@ export const createSelectControl = (
     const model = createSelectionModel({
         multiple,
         options: modelOptions,
+        selectedOptions: allOptions,
         value: selectValues(options.value, multiple),
         disabled: options.disabled,
         readOnly: options.readOnly === true || canonicalReadOnly,
         onChange,
     });
     const reset = model.reset;
+    const setOptions = model.setOptions;
     const setReadOnly = model.setReadOnly;
+    const choose = model.choose;
+    model.choose = (next): void => {
+        const state = model.getState();
+        const available = new Map(
+            currentOptions.map((option) => [option.value, option])
+        );
+        const accepted = [
+            ...new Set(
+                next.filter(
+                    (value) =>
+                        state.value.includes(value) ||
+                        (available.has(value) &&
+                            available.get(value)?.disabled !== true)
+                )
+            ),
+        ];
+        if (
+            multiple &&
+            policy.maxSelections !== null &&
+            accepted.length > policy.maxSelections &&
+            accepted.some((value) => !state.value.includes(value))
+        )
+            return;
+        choose(next);
+    };
+    model.toggle = (value): void => {
+        const state = model.getState();
+        model.choose(
+            state.value.includes(value)
+                ? state.value.filter((selected) => selected !== value)
+                : multiple
+                  ? [...state.value, value]
+                  : [value]
+        );
+    };
+    model.setOptions = (next): void => {
+        if (destroyed) return;
+        currentOptions = filterOptions(next).map((option) => ({ ...option }));
+        setOptions(currentOptions);
+    };
     model.setReadOnly = (next): void => setReadOnly(canonicalReadOnly || next);
     model.reset = (next): void => {
         if (destroyed) return;
@@ -226,10 +247,14 @@ export const createSelectControl = (
                 'Use mountSelectionControl for an async selection model.'
             );
         }
+        currentOptions = filterOptions(next.options ?? modelOptions).map(
+            (option) => ({ ...option })
+        );
         reset({
             ...next,
             multiple,
-            options: next.options ?? modelOptions,
+            options: currentOptions,
+            selectedOptions: next.selectedOptions ?? allOptions,
             readOnly: canonicalReadOnly || next.readOnly === true,
             onChange,
         });
@@ -257,7 +282,12 @@ export const createSelectControl = (
                 optionNodes.set(option.value, optionNode);
             }
             optionNode.textContent = option.label;
-            optionNode.disabled = option.disabled === true;
+            optionNode.disabled =
+                option.disabled === true ||
+                (multiple &&
+                    policy.maxSelections !== null &&
+                    state.value.length >= policy.maxSelections &&
+                    !state.value.includes(option.value));
             children.push(optionNode);
         }
         orderChildren(select, children);

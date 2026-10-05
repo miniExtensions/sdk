@@ -234,6 +234,7 @@ export async function checkAuthRecipe({
     let createRoot;
     let AuthPanel;
     const failures = [];
+    let checks = 0;
     const check = async (name, exercise) => {
         const window = new Window({ url: 'https://example.test/' });
         const restoreGlobals = installGlobals(window);
@@ -327,6 +328,7 @@ export async function checkAuthRecipe({
                 0,
                 'React rendering must complete without errors'
             );
+            checks += 1;
         } catch (error) {
             failures.push(new Error(name, { cause: error }));
         } finally {
@@ -872,5 +874,5 @@ export async function checkAuthRecipe({
             'Shipped React auth recipe checks failed'
         );
     }
-    return { checks: 5 };
+    return { checks };
 }

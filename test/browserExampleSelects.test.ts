@@ -33,6 +33,7 @@ before(async () => {
             build({
                 entryPoints: [join(root, 'examples/browser/src', `${name}.ts`)],
                 alias: {
+                    '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),
                     '@miniextensions/sdk/ui': join(root, 'src/ui/index.ts'),
                     '@miniextensions/sdk/forms': join(
                         root,

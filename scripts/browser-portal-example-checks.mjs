@@ -493,6 +493,143 @@ export async function checkBrowserPortalExample({
     };
     try {
         await check(
+            'resolved child password config masks cells before and after native Grid saves',
+            async () => {
+                const portal = editablePortal();
+                const detail =
+                    portal.payload.linkedRecordFieldIdToDetailFields
+                        .fld_children[0];
+                detail.miniExtConfig = { obscurePassword: false };
+                detail.childFormField = {
+                    idOrName: { type: 'id', id: 'fld_title' },
+                    config: {
+                        type: 'singleLineText',
+                        config: { obscurePassword: true },
+                    },
+                };
+                const original = 'Case-Sensitive Original';
+                const saved = 'Different-length Saved Value';
+                const h = await mount({
+                    portal,
+                    handlers: {
+                        list: () => page([record('rec_one', original, 4)]),
+                        grid: ({ input }) => ({
+                            record: record(input.recordId, input.value, 4),
+                            auditTrail: null,
+                            auditTrails: [],
+                        }),
+                    },
+                });
+                await h.click('Load records');
+                const cell = () => h.view.node.querySelector('tbody td');
+                assert.equal(cell().textContent, '••••••••Edit cell');
+                assert.equal(cell().title, '');
+                assert.equal(h.view.node.textContent.includes(original), false);
+                await h.click('Edit cell');
+                let input = h.view.node.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                assert.equal(input.type, 'password');
+                assert.equal(input.value, original);
+                input.value = saved;
+                change(h.window, input, 'input');
+                submit(h.window, input.closest('form'));
+                await h.settle();
+                assert.equal(cell().textContent, '••••••••Edit cell');
+                assert.equal(h.view.node.textContent.includes(saved), false);
+                assert.deepEqual(
+                    h.calls
+                        .filter(({ operation }) => operation === 'grid')
+                        .map(({ input }) => input.value),
+                    [saved]
+                );
+                await h.click('Edit cell');
+                input = h.view.node.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                assert.equal(input.type, 'password');
+                assert.equal(input.value, saved);
+                assert.deepEqual(h.failures, []);
+                await h.dispose();
+            }
+        );
+
+        await check(
+            'published detail password config masks nonempty cells while empty values stay empty',
+            async () => {
+                const portal = editablePortal();
+                portal.payload.linkedRecordFieldIdToDetailFields.fld_children[0].miniExtConfig =
+                    { obscurePassword: true };
+                const h = await mount({
+                    portal,
+                    handlers: {
+                        list: () =>
+                            page([
+                                record('rec_secret', 'Private content'),
+                                record('rec_empty', ''),
+                                record('rec_null', null),
+                            ]),
+                    },
+                });
+                await h.click('Load records');
+                assert.deepEqual(
+                    [...h.view.node.querySelectorAll('tbody tr')].map(
+                        (row) => row.querySelector('td').textContent
+                    ),
+                    ['••••••••Edit cell', 'Edit cell', 'Edit cell']
+                );
+                assert.equal(
+                    h.view.node.textContent.includes('Private content'),
+                    false
+                );
+                assert.equal(
+                    h.calls.filter(({ operation }) => operation === 'grid')
+                        .length,
+                    0
+                );
+                await h.dispose();
+            }
+        );
+
+        await check(
+            'ordinary cells and authoritative nonmasked child config preserve their display values',
+            async () => {
+                const portal = editablePortal();
+                const detail =
+                    portal.payload.linkedRecordFieldIdToDetailFields
+                        .fld_children[0];
+                detail.miniExtConfig = { obscurePassword: true };
+                detail.childFormField = {
+                    idOrName: { type: 'id', id: 'fld_title' },
+                    config: {
+                        type: 'singleLineText',
+                        config: { obscurePassword: false },
+                    },
+                };
+                const h = await mount({
+                    portal,
+                    handlers: {
+                        list: () =>
+                            page([record('rec_one', 'Ordinary title', 42)]),
+                    },
+                });
+                await h.click('Load records');
+                assert.deepEqual(
+                    [...h.view.node.querySelectorAll('tbody td')]
+                        .slice(0, 2)
+                        .map((cell) => cell.textContent),
+                    ['Ordinary titleEdit cell', '42Edit cell']
+                );
+                assert.equal(
+                    h.calls.filter(({ operation }) => operation === 'grid')
+                        .length,
+                    0
+                );
+                await h.dispose();
+            }
+        );
+
+        await check(
             'explicit first/next pages and immutable fixed criteria',
             async () => {
                 const first = page(

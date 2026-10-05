@@ -29,6 +29,7 @@ before(async () => {
     await build({
         entryPoints: [join(root, 'examples/browser/src/main.ts')],
         alias: {
+            '@miniextensions/sdk/auth': entry('auth'),
             '@miniextensions/sdk/ui': entry('ui'),
             '@miniextensions/sdk/forms': entry('forms'),
             '@miniextensions/sdk/portals': entry('portals'),
@@ -168,6 +169,149 @@ describe(
     'deep review browser authentication ownership',
     { concurrency: false },
     () => {
+        for (const [title, expected] of [
+            ['Portal PIN', 'password'],
+            ['Account password', 'password'],
+            ['Shipping email', 'email'],
+            ['Spinning class', 'email'],
+        ] as const) {
+            it(`uses the canonical visible login title ${title}`, async (test) => {
+                const page = browserLoginPage();
+                page.payload.fieldNamesToSchemas.Email.miniExtConfig = {
+                    title,
+                };
+                const logins: Record<string, string>[] = [];
+                const window = await environment(test, async (url, init) => {
+                    const route = new URL(String(url)).searchParams.get(
+                        'route'
+                    );
+                    if (route === 'fetchExtensionForEndUser')
+                        return jsonResponse(page);
+                    assert.equal(
+                        route,
+                        'loginIntoExtensionUsingLoginPageExtension'
+                    );
+                    const body = JSON.parse(String(init?.body));
+                    logins.push(body.loginCredentials);
+                    return jsonResponse({ type: 'no-record' });
+                });
+                await connectBrowser(window, page);
+                const input = findButton(window, 'Log in and use session')
+                    ?.closest('form')
+                    ?.querySelector('input');
+                assert.ok(input instanceof window.HTMLInputElement);
+                assert.equal(input.type, expected);
+                input.value = 'Exact Case-Sensitive Credential';
+                submitForm(window, 'Log in and use session');
+                await waitFor(() => browserIdle(window));
+                assert.deepEqual(logins, [
+                    { Email: 'Exact Case-Sensitive Credential' },
+                ]);
+            });
+        }
+
+        for (const verificationType of ['email', 'phoneNumber'] as const) {
+            it(`masks the configured ${verificationType} verification destination and still confirms`, async (test) => {
+                const page = browserLoginPage();
+                const name = verificationType === 'email' ? 'Email' : 'Phone';
+                if (verificationType === 'phoneNumber') {
+                    const schema: LoginPageResult['payload']['fieldNamesToSchemas'][string] =
+                        {
+                            fieldType: AirtableFieldType.PHONE_NUMBER,
+                            airtableField: {
+                                id: 'fld_phone',
+                                name,
+                                description: null,
+                                isComputed: false,
+                                isPrimaryField: true,
+                                config: {
+                                    type: AirtableFieldType.PHONE_NUMBER,
+                                    options: null,
+                                },
+                            },
+                        };
+                    page.payload.loginFieldNames = [name];
+                    page.payload.loginFieldIds = ['fld_phone'];
+                    page.payload.fieldNamesToSchemas = { [name]: schema };
+                    page.payload.fieldIdsToSchemas = { fld_phone: schema };
+                }
+                page.payload.fieldNamesToSchemas[name].miniExtConfig = {
+                    maskPasswordOnLoginScreen: true,
+                    ...(verificationType === 'email'
+                        ? { requireEmailVerificationToLogin: true }
+                        : { requirePhoneNumberVerificationToLogin: true }),
+                };
+                const destination =
+                    verificationType === 'email'
+                        ? 'private@example.test'
+                        : '+15550102030';
+                const calls: {
+                    route: string;
+                    body: Record<string, unknown>;
+                }[] = [];
+                const window = await environment(test, async (url, init) => {
+                    const route = new URL(String(url)).searchParams.get(
+                        'route'
+                    )!;
+                    const body = JSON.parse(String(init?.body));
+                    calls.push({ route, body });
+                    if (route === 'fetchExtensionForEndUser')
+                        return jsonResponse(page);
+                    if (route === 'loginIntoExtensionUsingLoginPageExtension')
+                        return jsonResponse({
+                            ...verificationSent(),
+                            verificationType,
+                            emailOrPhoneNumber: destination,
+                        });
+                    assert.equal(route, 'confirmVerificationCodeForLogin');
+                    return jsonResponse({
+                        encryptedLoginToken: 'synthetic_confirmed_token',
+                    });
+                });
+                await connectBrowser(window, page);
+                enterEmail(window, 'Exact Credential');
+                submitForm(window, 'Log in and use session');
+                await waitFor(
+                    () =>
+                        findButton(window, 'Confirm and use session') !==
+                            undefined && browserIdle(window)
+                );
+                assert.match(
+                    window.document.getElementById('status')!.textContent!,
+                    /••••••••/
+                );
+                assert.equal(
+                    window.document.body.textContent!.includes(destination),
+                    false
+                );
+                const { form, code } = codeControl(window);
+                code.value = '123456';
+                form.dispatchEvent(
+                    new window.Event('submit', {
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+                await waitFor(() => browserIdle(window));
+                assert.deepEqual(
+                    calls.map(({ route }) => route),
+                    [
+                        'fetchExtensionForEndUser',
+                        'loginIntoExtensionUsingLoginPageExtension',
+                        'confirmVerificationCodeForLogin',
+                    ]
+                );
+                assert.deepEqual(calls[1].body.loginCredentials, {
+                    [name]: 'Exact Credential',
+                });
+                assert.equal(
+                    calls[2].body.verificationId,
+                    'verification_example'
+                );
+                assert.equal(calls[2].body.verificationCode, '123456');
+            });
+        }
+
         for (const fieldType of [
             AirtableFieldType.EMAIL,
             AirtableFieldType.SINGLE_LINE_TEXT,
@@ -252,7 +396,10 @@ describe(
                     'password',
                     'Canonical maskPasswordOnLoginScreen must take priority over the Airtable field type.'
                 );
-                schema.miniExtConfig = { maskPasswordOnLoginScreen: false };
+                schema.miniExtConfig = {
+                    maskPasswordOnLoginScreen: false,
+                    title: 'Visitor credential',
+                };
                 const reload = window.document.getElementById('reload');
                 assert.ok(reload instanceof window.HTMLButtonElement);
                 reload.click();

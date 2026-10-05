@@ -34,6 +34,7 @@ before(async () => {
     await build({
         entryPoints: [join(root, 'examples/browser/src/main.ts')],
         alias: {
+            '@miniextensions/sdk/auth': sdkEntry('auth'),
             '@miniextensions/sdk/ui': sdkEntry('ui'),
             '@miniextensions/sdk/forms': sdkEntry('forms'),
             '@miniextensions/sdk/portals': sdkEntry('portals'),

@@ -203,6 +203,225 @@ describe(
     'actual browser example select controls',
     { concurrency: false },
     () => {
+        it('enforces a published ID allowlist at the actual Form and Add Choice sink', async (test) => {
+            const form = selectForm();
+            const schema = selectSchema();
+            schema.miniExtConfig = {
+                allowAddingNewOptions: true,
+                singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+                enableConditionalOptions: true,
+                conditionsForOptions: [
+                    {
+                        id: 'display_blue',
+                        config: {
+                            optionForConditions: 'sel_blue',
+                            name: '  Azure  ',
+                            conditionsForOption: {
+                                logicalOperator: 'and',
+                                conditions: [],
+                            },
+                        },
+                    },
+                ],
+            };
+            form.payload.fieldIdsToSchemas.fld_colors = schema;
+            const saves: SaveFormInput[] = [];
+            let choiceCalls = 0;
+            const window = await environment(test, async (input, init) => {
+                const url = new URL(String(input));
+                if (
+                    url.searchParams.get('route') === 'fetchExtensionForEndUser'
+                )
+                    return new Response(JSON.stringify(form));
+                if (url.searchParams.get('route') === 'saveForm') {
+                    saves.push(JSON.parse(String(init?.body)));
+                    return new Response(
+                        JSON.stringify({
+                            type: 'error',
+                            formValidationErrors: [],
+                            formErrors: {},
+                        })
+                    );
+                }
+                choiceCalls++;
+                throw new Error(
+                    'A restricted choice must not dispatch a mutation.'
+                );
+            });
+            await example('main');
+            const origin = window.document.getElementById('api-origin');
+            const share = window.document.getElementById('share-id');
+            const connection =
+                window.document.getElementById('connection-form');
+            assert.ok(origin instanceof window.HTMLInputElement);
+            assert.ok(share instanceof window.HTMLInputElement);
+            assert.ok(connection);
+            origin.value = 'https://sdk.example.test';
+            share.value = 'share_example';
+            submit(window, connection);
+            await waitFor(
+                () =>
+                    window.document.querySelector(
+                        'select[data-field-id="fld_colors"]'
+                    ) !== null
+            );
+            assert.equal(
+                window.document.querySelector(
+                    'input[placeholder="New choice name"]'
+                ),
+                null
+            );
+            assert.equal(
+                Array.from(window.document.querySelectorAll('button')).some(
+                    (node) => node.textContent === 'Create choice'
+                ),
+                false
+            );
+            const select = colorSelect(window);
+            assert.equal(
+                Array.from(select.options).find(
+                    (option) => option.value === 'Blue'
+                )?.textContent,
+                'Azure'
+            );
+            assert.deepEqual(
+                new Set(selected(select)),
+                new Set(['Legacy', 'Red'])
+            );
+            chooseBlue(window, select);
+            const card = select.closest('form');
+            assert.ok(card);
+            submit(window, card);
+            await waitFor(
+                () =>
+                    saves.length === 1 &&
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            assert.deepEqual(saves[0].formRecord.data.fld_colors, [
+                'Legacy',
+                'Red',
+                'Blue',
+            ]);
+            assert.equal(
+                saves[0].formFieldIdsWithUnsavedChanges.filter(
+                    (id) => id === 'fld_colors'
+                ).length,
+                1
+            );
+            assert.equal(choiceCalls, 0);
+        });
+
+        it('blocks Add Choice at the maximum and selects a confirmed choice only after removal', async (test) => {
+            const form = selectForm();
+            const schema = selectSchema();
+            schema.miniExtConfig = {
+                allowAddingNewOptions: true,
+                singleOrMultiSelectLimitSelectionOptions: [],
+                maxNumberOfSelections: 2,
+            };
+            form.payload.fieldIdsToSchemas.fld_colors = schema;
+            const saves: SaveFormInput[] = [];
+            let choiceCalls = 0;
+            const window = await environment(test, async (input, init) => {
+                const url = new URL(String(input));
+                if (
+                    url.searchParams.get('route') === 'fetchExtensionForEndUser'
+                )
+                    return new Response(JSON.stringify(form));
+                if (url.searchParams.get('route') === 'saveForm') {
+                    saves.push(JSON.parse(String(init?.body)));
+                    return new Response(
+                        JSON.stringify({
+                            type: 'error',
+                            formValidationErrors: [],
+                            formErrors: {},
+                        })
+                    );
+                }
+                if (
+                    url.pathname ===
+                    '/api/trpc/airtable.addNewAirtableOptionForFormField'
+                ) {
+                    choiceCalls++;
+                    return new Response(
+                        JSON.stringify({
+                            result: {
+                                data: {
+                                    newChoice: {
+                                        id: 'sel_green',
+                                        name: 'Green',
+                                        color: 'greenLight2',
+                                    },
+                                },
+                            },
+                        })
+                    );
+                }
+                throw new Error('Unexpected select fixture dispatch.');
+            });
+            await example('main');
+            const origin = window.document.getElementById('api-origin');
+            const share = window.document.getElementById('share-id');
+            const connection =
+                window.document.getElementById('connection-form');
+            assert.ok(origin instanceof window.HTMLInputElement);
+            assert.ok(share instanceof window.HTMLInputElement);
+            assert.ok(connection);
+            origin.value = 'https://sdk.example.test';
+            share.value = 'share_example';
+            submit(window, connection);
+            await waitFor(
+                () =>
+                    window.document.querySelector(
+                        'input[placeholder="New choice name"]'
+                    ) !== null
+            );
+            const choice = window.document.querySelector(
+                'input[placeholder="New choice name"]'
+            );
+            assert.ok(choice instanceof window.HTMLInputElement);
+            choice.value = 'Green';
+            button(window, 'Create choice').click();
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            assert.equal(choiceCalls, 0);
+            const select = colorSelect(window);
+            const legacy = Array.from(select.options).find(
+                (option) => option.value === 'Legacy'
+            );
+            assert.ok(legacy);
+            legacy.selected = false;
+            change(window, select);
+            button(window, 'Create choice').click();
+            await waitFor(
+                () =>
+                    choiceCalls === 1 &&
+                    selected(colorSelect(window)).includes('Green')
+            );
+            const card = colorSelect(window).closest('form');
+            assert.ok(card);
+            submit(window, card);
+            await waitFor(
+                () =>
+                    saves.length === 1 &&
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            assert.deepEqual(saves[0].formRecord.data.fld_colors, [
+                'Red',
+                'Green',
+            ]);
+            assert.equal(
+                saves[0].formFieldIdsWithUnsavedChanges.filter(
+                    (id) => id === 'fld_colors'
+                ).length,
+                1
+            );
+            assert.equal(choiceCalls, 1);
+        });
+
         it('preserves unavailable Form selections, dirties only on a real change, and emits once', async (test) => {
             const window = await environment(test);
             const { formFieldControl } = await example('fields');

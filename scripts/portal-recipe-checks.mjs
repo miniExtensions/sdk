@@ -42,6 +42,7 @@ const linkSchema = {
         allowEditingRecords: true,
         formsForEditingAndCreating: 'same-form',
         extensionIdForCreatingAndEditing: 'child_example',
+        prefillChildFormForCreatingRecords: true,
         prefillFieldForCreatingChildExtension: 'fld_prefill',
         layout: 'grid',
         disableInlineEdit: true,

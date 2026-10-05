@@ -23,6 +23,7 @@ import {
     normalizeFormSaveResult,
     openLoadedFormDraft,
 } from '@miniextensions/sdk/forms';
+import { getSelectFieldPolicy } from '@miniextensions/sdk/ui';
 import {
     button,
     element,
@@ -716,16 +717,33 @@ const renderForm = (page: FormLoadedResult): void => {
         if (
             (schema.fieldType === AirtableFieldType.SINGLE_SELECT ||
                 schema.fieldType === AirtableFieldType.MULTIPLE_SELECTS) &&
-            config !== undefined &&
-            'allowAddingNewOptions' in config &&
-            config.allowAddingNewOptions === true
+            getSelectFieldPolicy(schema).allowAddingNewOptions
         ) {
             const choice = element('input');
             choice.placeholder = 'New choice name';
             control.node.append(
                 labeled('Add a choice', choice),
                 button('Create choice', () => {
-                    if (!mayUseForm()) return;
+                    if (
+                        !mayUseForm() ||
+                        !getSelectFieldPolicy(schema).allowAddingNewOptions
+                    )
+                        return;
+                    const policy = getSelectFieldPolicy(schema);
+                    const currentValue = control.read();
+                    if (
+                        schema.fieldType ===
+                            AirtableFieldType.MULTIPLE_SELECTS &&
+                        policy.maxSelections !== null &&
+                        Array.isArray(currentValue) &&
+                        currentValue.length >= policy.maxSelections
+                    ) {
+                        status(
+                            'Remove a selected choice before adding another.',
+                            true
+                        );
+                        return;
+                    }
                     if (choice.value.trim() === '') {
                         status('Enter a new choice name.', true);
                         return;
@@ -733,7 +751,23 @@ const renderForm = (page: FormLoadedResult): void => {
                     void run(
                         'Creating the configured select choice…',
                         async ({ client, signal, current }) => {
-                            if (!mayUseForm()) return;
+                            if (
+                                !mayUseForm() ||
+                                !getSelectFieldPolicy(schema)
+                                    .allowAddingNewOptions
+                            )
+                                return;
+                            const dispatchPolicy = getSelectFieldPolicy(schema);
+                            const dispatchValue = control.read();
+                            if (
+                                schema.fieldType ===
+                                    AirtableFieldType.MULTIPLE_SELECTS &&
+                                dispatchPolicy.maxSelections !== null &&
+                                Array.isArray(dispatchValue) &&
+                                dispatchValue.length >=
+                                    dispatchPolicy.maxSelections
+                            )
+                                return;
                             signal.throwIfAborted();
                             const result = await client.forms.addSelectOption(
                                 {
@@ -775,6 +809,21 @@ const renderForm = (page: FormLoadedResult): void => {
                                 );
                             }
                             const previous = control.read();
+                            const maximum =
+                                getSelectFieldPolicy(schema).maxSelections;
+                            if (
+                                schema.fieldType ===
+                                    AirtableFieldType.MULTIPLE_SELECTS &&
+                                maximum !== null &&
+                                Array.isArray(previous) &&
+                                previous.length >= maximum
+                            ) {
+                                choice.value = '';
+                                status(
+                                    'Choice created. Remove a selected choice before selecting it.'
+                                );
+                                return;
+                            }
                             control.write(
                                 schema.fieldType ===
                                     AirtableFieldType.MULTIPLE_SELECTS

@@ -1,4 +1,5 @@
 export { createPortalCollection, PortalCollectionError } from './collection.js';
+export { getPortalLinkedRecordFieldConfig } from './helpers.js';
 export type {
     PortalOwnerScope,
     PortalCollectionCriteria,

@@ -346,17 +346,24 @@ the client does not convert field names, dates, or record values.
 `miniExtConfig`. Settings and field configurations use their canonical types;
 the client does not validate them with another runtime schema.
 
-The checked-in declaration snapshot is generated from monorepo revision
-`fc1f8b05eff9658741cb797428d50ffe384b89e0`. To verify it against an authorized
-checkout of that source, run:
+The packaged declaration snapshot has SHA256
+`dfe4d557f480d5c9dff466c916c21801dbd3cb538c40fb8afdaf49735fe9c293`.
+Both module formats ship the same `runtime/contracts/generated.d.ts` bytes;
+their public provenance includes this `contractDeclarationsSha256` for direct
+verification. Its `generatedSha256` separately identifies the generator's
+recorded TypeScript source, which is not the emitted declaration file.
+
+Maintainers with authorized internal source access can verify the checked-in
+snapshot against the detailed internal manifest:
 
 ```sh
 node scripts/generate-runtime-contracts.mjs --monorepo /path/to/monorepo --check
 ```
 
-The generator checks the source revision and file hashes. Regenerate the
-snapshot when adopting API contract changes; no monorepo source or credentials
-are needed by an installed SDK consumer.
+The generator checks the recorded source revision and input file hashes.
+Regenerate the snapshot and update the packaged declaration digest when
+adopting API contract changes. Installed consumers need no internal source,
+generator or credentials.
 
 ## Portal tables, search, and pagination
 

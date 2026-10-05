@@ -14,7 +14,7 @@ type PortalLinkedFieldConfig = NonNullable<
         NonNullable<
             PortalLoadedResult['payload']['publicFields']['state']['portalFields']
         >[number]['config'],
-        { type: 'multipleRecordLinks' }
+        { type: 'multipleRecordLinks' | 'multipleLookupValues' }
     >['config']
 >;
 
@@ -112,6 +112,42 @@ export const portalListPage = (
     customViewDetailFields: null,
     ...structuredClone(value),
 });
+
+/** Outer lookup identity differs from both its driver and looked-up field. */
+export const lookupPortalPage = (
+    config: PortalLinkedFieldConfig = {}
+): PortalLoadedResult => {
+    const page = portalPage(config);
+    const direct = page.payload.fieldIdsToSchemas.fld_children;
+    if (direct.fieldType !== AirtableFieldType.MULTIPLE_RECORD_LINKS)
+        throw new Error('The synthetic source field must be a direct link.');
+    page.payload.fieldIdsToSchemas.fld_children = {
+        fieldType: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+        airtableField: {
+            ...structuredClone(portalField),
+            isComputed: true,
+            config: {
+                type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                options: {
+                    isValid: true,
+                    recordLinkFieldId: 'fld_lookup_driver',
+                    fieldIdInLinkedTable: 'fld_lookup_source',
+                    result: {
+                        type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+                        options: {
+                            linkedTableId: 'table_children',
+                            inverseLinkFieldId: 'fld_result_inverse',
+                            isReversed: false,
+                            prefersSingleRecordLink: false,
+                        },
+                    },
+                },
+            },
+        },
+        miniExtConfig: direct.miniExtConfig,
+    };
+    return page;
+};
 
 export type PortalReadCall = {
     input: ListPortalLinkedRecordsInput;

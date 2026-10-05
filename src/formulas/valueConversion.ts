@@ -24,6 +24,8 @@ const AirtableFieldType: {
 export type GetReadableStringSource = {
     type: 'airtableMock';
     linkedTableStates: TableIdsToLinkedTableLoadingStates;
+    /** UTC preserves formula behavior; local matches browser readable dates. */
+    dateParsing?: 'local' | 'utc';
     doNotReturnRecordIdsForLinkedRecords?: boolean;
     unavailableLinkedRecordPlaceholder?: string;
 };
@@ -226,7 +228,9 @@ export const convertAirtableValueToPrimitive = (args: {
                     actualType: typeof validValue,
                 });
             }
-            return moment.utc(validValue).toDate();
+            return args.source.dateParsing === 'local'
+                ? moment(validValue).toDate()
+                : moment.utc(validValue).toDate();
 
         case AirtableFieldType.DATE_TIME:
             if (typeof validValue !== 'string') {
@@ -236,7 +240,9 @@ export const convertAirtableValueToPrimitive = (args: {
                     actualType: typeof validValue,
                 });
             }
-            return moment.utc(validValue).toDate();
+            return args.source.dateParsing === 'local'
+                ? moment(validValue).toDate()
+                : moment.utc(validValue).toDate();
 
         case AirtableFieldType.CHECKBOX: {
             if (typeof validValue !== 'boolean') {

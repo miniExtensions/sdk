@@ -1004,6 +1004,8 @@ export async function checkBrowserPortalExample({
             'absent',
             'stale source',
             'missing source',
+            'missing source schema',
+            'non-readable source schema',
             'invalid value',
             'missing value',
             'empty value',
@@ -1025,7 +1027,17 @@ export async function checkBrowserPortalExample({
                             'fld_removed';
                     else if (scenario === 'missing source')
                         delete config.prefillFieldForCreatingChildExtension;
-                    else if (scenario === 'invalid value')
+                    else if (scenario === 'missing source schema')
+                        delete portal.payload.fieldIdsToSchemas.fld_prefill;
+                    else if (scenario === 'non-readable source schema') {
+                        const schema =
+                            portal.payload.fieldIdsToSchemas.fld_prefill;
+                        schema.fieldType = 'number';
+                        schema.airtableField.config = {
+                            type: 'number',
+                            options: { precision: 0 },
+                        };
+                    } else if (scenario === 'invalid value')
                         portal.payload.formRecord.data.fld_prefill = [
                             'not-a-query',
                         ];
@@ -1072,6 +1084,54 @@ export async function checkBrowserPortalExample({
                 }
             );
         }
+
+        await check(
+            'actual packed child query formats barcode and rich-text sources with native load/save context',
+            async () => {
+                for (const [config, value, expected] of [
+                    [
+                        { type: 'barcode', options: null },
+                        { text: ' ?prefill_Title=Barcode%20Value ' },
+                        ' ?prefill_Title=Barcode%20Value ',
+                    ],
+                    [
+                        { type: 'richText', options: null },
+                        '**prefill_Title**=Readable',
+                        'prefill_Title=Readable',
+                    ],
+                ]) {
+                    const portal = editablePortal();
+                    const schema = portal.payload.fieldIdsToSchemas.fld_prefill;
+                    schema.fieldType = config.type;
+                    schema.airtableField.config = config;
+                    portal.payload.formRecord.data.fld_prefill = value;
+                    const h = await mount({ portal });
+                    await h.click('Create record');
+                    assert.deepEqual(
+                        h.calls.map((call) => call.operation),
+                        ['child']
+                    );
+                    assert.equal(h.failures.length, 0);
+                    const prefill = {
+                        toLinkToParent: {
+                            reversedFieldIdToPrefill: 'fld_parent',
+                            parentFormRecordId: 'rec_user',
+                        },
+                        prefillQueryForChildExtension: expected,
+                    };
+                    assert.deepEqual(h.calls[0].input.context, {
+                        type: 'modal',
+                        linkedTableIdOfLinkedRecordField: 'tbl_children',
+                        prefillDataForLinkedRecordsForm: prefill,
+                    });
+                    assert.deepEqual(h.handoffs[0][1], {
+                        type: 'modal',
+                        prefillData: prefill,
+                    });
+                    await h.dispose();
+                }
+            }
+        );
 
         await check(
             'create/edit canonical plans and only current main-view records can edit',

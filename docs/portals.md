@@ -450,10 +450,28 @@ request automatically.
 nested records alone cannot open an edit Form. The request captures the parent
 Portal token, field, linked table, inverse-link/create prefills and read epoch.
 The configured parent query is carried only when
-`prefillChildFormForCreatingRecords` is explicitly `true` and the source value
-is a nonblank string. Disabled or absent configuration does not carry the
-query. Its bytes stay unchanged; inverse linking remains independent of this
-toggle.
+`prefillChildFormForCreatingRecords` is explicitly `true`, the selected field
+has current ID-keyed source metadata and an own record value, and its canonical
+readable type is string. The helper formats that value with
+`getReadableStringFromAirtableValue`, using browser-local date parsing and the
+source field's date/time format and timezone. Text, rich text, URL, email,
+phone, barcode, single select, date/dateTime, created/modified timestamps and
+created/modified-by fields are supported; formula and lookup sources follow
+their readable result metadata. Rollups, numbers, checkboxes, linked records,
+multi-selects and single/multiple collaborator fields are not query sources. A missing computed
+result has canonical string classification, but ordinary invalid computed
+values format as blank.
+
+Missing metadata, disabled configuration, blank formatted text or a thrown
+formatter error produces a null query. Nonblank canonical error-sentinel text
+and `Invalid date` remain readable text; this helper does not validate query
+syntax. Formatting removes rich-text Markdown and joins lookup values with
+`, `. The formatted bytes stay unchanged, including whitespace and URL
+escapes; raw text is not decoded or normalized. Inverse linking remains
+independent, edit plans carry no create prefill, and lookup-backed collections
+remain unable to create children. Local date parsing uses the execution
+environment's timezone; it does not infer a visitor timezone from the child
+request's `clientTimeZone`.
 Every later dispatched read invalidates the plan even if criteria are equal.
 Check the returned child's `isCurrent()` immediately before displaying it,
 editing its draft or creating a save input. A late child response cannot be

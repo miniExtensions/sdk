@@ -1003,6 +1003,8 @@ describe('optional Portal collections', () => {
         'absent',
         'stale source',
         'missing source',
+        'missing source schema',
+        'non-readable source schema',
         'invalid value',
         'missing value',
         'empty value',
@@ -1027,6 +1029,20 @@ describe('optional Portal collections', () => {
                 config.prefillFieldForCreatingChildExtension = 'fld_removed';
             else if (scenario === 'missing source')
                 delete config.prefillFieldForCreatingChildExtension;
+            else if (scenario === 'missing source schema')
+                delete page.payload.fieldIdsToSchemas.fld_prefill;
+            else if (scenario === 'non-readable source schema')
+                page.payload.fieldIdsToSchemas.fld_prefill = {
+                    fieldType: AirtableFieldType.NUMBER,
+                    airtableField: {
+                        ...titleField,
+                        id: 'fld_prefill',
+                        config: {
+                            type: AirtableFieldType.NUMBER,
+                            options: { precision: 0 },
+                        },
+                    },
+                };
             else if (scenario === 'invalid value')
                 page.payload.formRecord.data.fld_prefill = ['not-a-query'];
             else if (scenario === 'missing value')

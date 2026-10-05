@@ -132,6 +132,12 @@ view and search criteria; changing them retires its reads and child plans.
 Only records in its accepted main list can open an edit child. Nested labels
 and cached records do not grant that access.
 
+The table selector also accepts a valid lookup whose result is linked records.
+It uses that result's target table while keeping the outer Portal field ID for
+reads and configured existing-child edits. Lookup tables do not offer create or
+parent unlink actions in this starter. Invalid or non-linked lookup results
+are omitted; this does not convert a computed lookup into a writable link.
+
 - **Search** loads page one. **Next page** appends the next opaque offset and
   merges the returned table data without duplicating rows. After a failed or
   cancelled page request, choose **Load records** before paging or opening a

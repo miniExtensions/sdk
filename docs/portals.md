@@ -14,6 +14,23 @@ on every visitor, connection, session, token or context transition, including
 anonymous visitors and A → B → A. Credential equality alone cannot identify
 those transitions.
 
+Collections accept direct linked-record fields and valid lookup fields whose
+returned `options.isValid` is `true` and whose `options.result.type` is
+`multipleRecordLinks`. `getPortalLinkedRecordFieldConfig` resolves that direct
+or lookup-result config for application table discovery. Its target table comes
+from the result's linked-record options; every Portal read and child request
+keeps the outer published Portal field ID. The lookup's `recordLinkFieldId`
+and `fieldIdInLinkedTable` identify its source and are not replacement Portal
+field or target-table IDs.
+
+A lookup collection can page, project returned details, and plan the exact
+configured edit child for a record in its accepted main list and editable
+selected view. Its computed parent field does not deny that separate child edit.
+Lookup create plans are disabled, including retained create flags or Form
+layout settings. Reading a lookup grants no parent linking or unlinking rights;
+the starter exposes parent unlink controls only for direct linked fields.
+The canonical server still validates each requested action and current scope.
+
 ## Executable application boundary
 
 Save this as `portal-owner.ts` in your application. Call its methods from

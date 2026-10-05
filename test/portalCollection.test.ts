@@ -17,6 +17,7 @@ import {
 } from '../src/portals/index.js';
 import {
     deferredPortal,
+    lookupPortalPage,
     portalFixture,
     portalListPage,
     portalPage,
@@ -129,6 +130,307 @@ const editRequest = (recordId: string) => ({
 });
 
 describe('optional Portal collections', () => {
+    it('pages a computed linked-result lookup by its outer field and opens only the configured existing child', async () => {
+        const portal = lookupPortalPage({
+            allowCreatingRecords: false,
+            extensionIdForEditing: 'extension_lookup_edit',
+        });
+        let reads = 0;
+        const s = setup(
+            async () => {
+                const result =
+                    ++reads === 1
+                        ? rows(['record_first'], 'lookup_cursor')
+                        : rows(['record_first', 'record_second']);
+                result.customViewDetailFields = { fld_children: [detail()] };
+                return result;
+            },
+            { portal }
+        );
+        const first = loaded(await s.collection.readFirst(readOptions));
+        assert.deepEqual(first.recordIds, ['record_first']);
+        assert.deepEqual(first.detailFields, [detail()]);
+        const second = loaded(await s.collection.readNext(readOptions));
+        assert.deepEqual(second.recordIds, ['record_first', 'record_second']);
+        assert.equal(second.airtableOffset, null);
+        assert.equal(s.calls.length, 2);
+        for (const call of s.calls) {
+            assert.equal(call.input.portalFieldId, 'fld_children');
+            assert.equal(
+                call.input.extensionAccessToken,
+                'portal_access_example'
+            );
+            assert.equal(call.input.selectedCustomViewId, 'view_example');
+            assert.equal(call.options?.session?.visitor, 'visitor_A');
+        }
+        assert.deepEqual(s.calls[0].input.alreadyLoadedRecordIds, []);
+        assert.deepEqual(s.calls[1].input.alreadyLoadedRecordIds, [
+            'record_first',
+        ]);
+        assert.equal(s.calls[1].input.airtableOffset, 'lookup_cursor');
+        const plan = s.collection.childFormRequest({
+            access: { type: 'edit', recordId: 'record_second' },
+            configuredChildExtensionId: 'extension_lookup_edit',
+        });
+        assert.deepEqual(plan.input.childExtensionAccessData, {
+            parentExtensionAccessToken: 'portal_access_example',
+            fieldIdUsedToAccessExtension: 'fld_children',
+        });
+        assert.deepEqual(plan.input.childExtensionInfo, {
+            childExtensionId: 'extension_lookup_edit',
+            accessType: {
+                type: 'edit',
+                childExtensionRecordId: 'record_second',
+                childExtensionFieldId: null,
+            },
+        });
+        assert.deepEqual(plan.input.context, {
+            type: 'modal',
+            linkedTableIdOfLinkedRecordField: 'table_children',
+            prefillDataForLinkedRecordsForm: null,
+        });
+        assert.deepEqual(plan.saveContext, {
+            type: 'modal',
+            prefillData: null,
+        });
+        assert.equal(plan.isCurrent(), true);
+        assert.equal(s.fixture.mutations, 0);
+    });
+
+    it('rejects invalid, non-link and malformed lookup targets before any read', () => {
+        const linkedResult = {
+            type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+            options: { linkedTableId: 'table_children' },
+        };
+        for (const config of [
+            {
+                type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                options: { isValid: false, result: linkedResult },
+            },
+            {
+                type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                options: { isValid: true, result: null },
+            },
+            {
+                type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                options: { result: linkedResult },
+            },
+            {
+                type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                options: {
+                    isValid: true,
+                    result: {
+                        type: AirtableFieldType.NUMBER,
+                        options: { precision: 0 },
+                    },
+                },
+            },
+            {
+                type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                options: {
+                    isValid: true,
+                    result: {
+                        type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+                        options: {},
+                    },
+                },
+            },
+            {
+                type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                options: {
+                    isValid: true,
+                    result: {
+                        type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+                        options: { linkedTableId: ' ' },
+                    },
+                },
+            },
+            {
+                type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                options: {
+                    isValid: true,
+                    result: {
+                        type: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+                        options: null,
+                    },
+                },
+            },
+            {
+                type: AirtableFieldType.FORMULA,
+                options: { result: linkedResult },
+            },
+            {
+                type: AirtableFieldType.ROLLUP,
+                options: { result: linkedResult },
+            },
+        ]) {
+            const portal = lookupPortalPage();
+            Object.assign(
+                portal.payload.fieldIdsToSchemas.fld_children.airtableField,
+                { config }
+            );
+            const fixture = portalFixture();
+            assert.throws(
+                () =>
+                    createPortalCollection({
+                        client: fixture.client,
+                        portal,
+                        portalFieldId: 'fld_children',
+                        criteria: criteria(),
+                        getScope: () => ({ ownerId: 'visitor_A', revision: 1 }),
+                    }),
+                TypeError
+            );
+            assert.equal(fixture.calls.length, 0);
+            assert.equal(fixture.mutations, 0);
+        }
+        for (const mismatch of ['id', 'kind']) {
+            const portal = lookupPortalPage();
+            const schema = portal.payload.fieldIdsToSchemas.fld_children;
+            if (mismatch === 'id')
+                schema.airtableField.id = 'fld_lookup_source';
+            else
+                Object.assign(schema, {
+                    fieldType: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+                });
+            const fixture = portalFixture();
+            assert.throws(
+                () =>
+                    createPortalCollection({
+                        client: fixture.client,
+                        portal,
+                        portalFieldId: 'fld_children',
+                        criteria: criteria(),
+                        getScope: () => ({ ownerId: 'visitor_A', revision: 1 }),
+                    }),
+                TypeError
+            );
+            assert.equal(fixture.calls.length, 0);
+        }
+    });
+
+    for (const layout of ['grid', 'form'] as const) {
+        it(`does not grant lookup creation from retained ${layout} create settings`, async () => {
+            const s = setup(async () => rows(), {
+                portal: lookupPortalPage({
+                    layout,
+                    allowCreatingRecords: true,
+                }),
+            });
+            assert.throws(
+                () => s.collection.childFormRequest(createRequest),
+                (error) =>
+                    error instanceof PortalCollectionError &&
+                    error.code === 'child-not-configured'
+            );
+            await s.collection.readFirst(readOptions);
+            assert.throws(
+                () => s.collection.childFormRequest(createRequest),
+                (error) =>
+                    error instanceof PortalCollectionError &&
+                    error.code === 'child-not-configured'
+            );
+            // Canonical edit child selection still honors the retained same-form config.
+            assert.equal(
+                s.collection.childFormRequest(editRequest('record_first')).input
+                    .childExtensionInfo.childExtensionId,
+                'extension_child'
+            );
+            assert.equal(s.calls.length, 1);
+            assert.equal(s.fixture.mutations, 0);
+        });
+    }
+
+    it('keeps lookup membership, configured child ID and selected-view edit denials', async () => {
+        const response = rows(['record_listed']);
+        response.tableIdsToLinkedTableStates.table_children.recordIdsToAirtableRecords.record_cached =
+            { id: 'record_cached', fields: {} };
+        response.tableIdsToLinkedTableStates.table_nested = {
+            airtableFields: [],
+            recordIdsToAirtableRecords: {
+                record_nested: { id: 'record_nested', fields: {} },
+            },
+        };
+        const s = setup(async () => response, { portal: lookupPortalPage() });
+        await s.collection.readFirst(readOptions);
+        for (const id of ['record_cached', 'record_nested', 'record_unlisted'])
+            assert.throws(
+                () => s.collection.childFormRequest(editRequest(id)),
+                (error) =>
+                    error instanceof PortalCollectionError &&
+                    error.code === 'record-not-listed'
+            );
+        assert.throws(
+            () =>
+                s.collection.childFormRequest({
+                    ...editRequest('record_listed'),
+                    configuredChildExtensionId: 'foreign_child',
+                }),
+            (error) =>
+                error instanceof PortalCollectionError &&
+                error.code === 'child-not-configured'
+        );
+        for (const portal of [
+            lookupPortalPage({ allowEditingRecords: false }),
+            lookupPortalPage({
+                customViews: [
+                    {
+                        id: 'view_example',
+                        config: { disableEditingForCustomView: true },
+                    },
+                ],
+            }),
+        ]) {
+            const denied = setup(async () => response, { portal });
+            await denied.collection.readFirst(readOptions);
+            assert.throws(
+                () =>
+                    denied.collection.childFormRequest(
+                        editRequest('record_listed')
+                    ),
+                (error) =>
+                    error instanceof PortalCollectionError &&
+                    error.code === 'child-not-configured'
+            );
+            assert.equal(denied.fixture.mutations, 0);
+        }
+        assert.equal(s.fixture.mutations, 0);
+    });
+
+    it('retires lookup plans and ignores a late page after owner A→B→A', async () => {
+        const pending = deferredPortal<ListPortalLinkedRecordsResult>();
+        let reads = 0;
+        const s = setup(
+            async () =>
+                ++reads === 1
+                    ? rows(['record_first'], 'cursor')
+                    : pending.promise,
+            { portal: lookupPortalPage() }
+        );
+        await s.collection.readFirst(readOptions);
+        const plan = s.collection.childFormRequest(editRequest('record_first'));
+        const next = s.collection.readNext(readOptions);
+        s.scope.ownerId = 'visitor_B';
+        s.scope.revision += 1;
+        s.scope.ownerId = 'visitor_A';
+        s.scope.revision += 1;
+        pending.resolve(rows(['record_late']));
+        await assert.rejects(
+            next,
+            (error) =>
+                error instanceof PortalCollectionError &&
+                error.code === 'scope-changed'
+        );
+        assert.equal(plan.isCurrent(), false);
+        assert.equal(s.collection.getSnapshot(), null);
+        s.collection.destroy();
+        assert.throws(
+            () => s.collection.childFormRequest(editRequest('record_first')),
+            PortalCollectionError
+        );
+        assert.equal(s.fixture.mutations, 0);
+    });
+
     it('rejects mismatched returned field/view metadata and credentials in criteria before dispatch', () => {
         const fixture = portalFixture();
         const options = {

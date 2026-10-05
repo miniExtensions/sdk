@@ -46,6 +46,23 @@ const editablePortal = () => {
     ];
     return portal;
 };
+const lookupPortal = () => {
+    const portal = editablePortal();
+    const schema = portal.payload.fieldIdsToSchemas.fld_children;
+    const result = structuredClone(schema.airtableField.config);
+    schema.fieldType = 'multipleLookupValues';
+    schema.airtableField.isComputed = true;
+    schema.airtableField.config = {
+        type: 'multipleLookupValues',
+        options: {
+            isValid: true,
+            recordLinkFieldId: 'fld_lookup_driver',
+            fieldIdInLinkedTable: 'fld_lookup_source',
+            result,
+        },
+    };
+    return portal;
+};
 const kanbanPortal = () => {
     const portal = editablePortal();
     const config = portal.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
@@ -492,6 +509,141 @@ export async function checkBrowserPortalExample({
         }
     };
     try {
+        await check(
+            'lookup tables retain the outer field across paging and existing-child edits without create or parent unlink controls',
+            async () => {
+                let reads = 0;
+                const h = await mount({
+                    portal: lookupPortal(),
+                    handlers: {
+                        list: () =>
+                            ++reads === 1
+                                ? page(
+                                      [record('rec_one', 'Lookup first')],
+                                      'lookup_cursor'
+                                  )
+                                : page([
+                                      record(
+                                          'rec_one',
+                                          'Lookup first refreshed'
+                                      ),
+                                      record('rec_two', 'Lookup second'),
+                                  ]),
+                    },
+                });
+                const table = h.view.node.querySelector('select');
+                assert.deepEqual(
+                    [...table.options].map((option) => option.value),
+                    ['fld_children']
+                );
+                assert.equal(
+                    button(h.view.node, 'Create record').disabled,
+                    true
+                );
+                await h.click('Create record');
+                assert.equal(h.calls.length, 0);
+                await h.click('Load records');
+                assert.deepEqual(rowIds(h.view.node), ['rec_one']);
+                assert.match(h.view.node.textContent, /Lookup first/);
+                await h.click('Next page');
+                assert.deepEqual(rowIds(h.view.node), ['rec_one', 'rec_two']);
+                const listCalls = h.calls.filter(
+                    (call) => call.operation === 'list'
+                );
+                assert.equal(listCalls.length, 2);
+                for (const call of listCalls) {
+                    assert.equal(call.input.portalFieldId, 'fld_children');
+                    assert.equal(
+                        call.input.extensionAccessToken,
+                        'portal_access_example'
+                    );
+                    assert.equal(
+                        call.input.selectedCustomViewId,
+                        'view_example'
+                    );
+                }
+                assert.equal(
+                    listCalls[1].input.airtableOffset,
+                    'lookup_cursor'
+                );
+                assert.deepEqual(listCalls[1].input.alreadyLoadedRecordIds, [
+                    'rec_one',
+                ]);
+                assert.equal(
+                    button(h.view.node, 'Create record').disabled,
+                    true
+                );
+                assert.equal(buttons(h.view.node, 'Unlink').length, 0);
+                await h.click('Create record');
+                assert.equal(h.calls.length, 2);
+                await h.click('Open Form');
+                const edit = h.calls.findLast(
+                    (call) => call.operation === 'child'
+                ).input;
+                assert.deepEqual(edit.childExtensionAccessData, {
+                    parentExtensionAccessToken: 'portal_access_example',
+                    fieldIdUsedToAccessExtension: 'fld_children',
+                });
+                assert.deepEqual(edit.childExtensionInfo, {
+                    childExtensionId: 'child_example',
+                    accessType: {
+                        type: 'edit',
+                        childExtensionRecordId: 'rec_one',
+                        childExtensionFieldId: null,
+                    },
+                });
+                assert.deepEqual(edit.context, {
+                    type: 'modal',
+                    linkedTableIdOfLinkedRecordField: 'tbl_children',
+                    prefillDataForLinkedRecordsForm: null,
+                });
+                assert.deepEqual(h.handoffs[0][1], {
+                    type: 'modal',
+                    prefillData: null,
+                });
+                assert.equal(h.failures.length, 0);
+                assert.equal(
+                    h.calls.some((call) =>
+                        ['grid', 'unlink', 'save'].includes(call.operation)
+                    ),
+                    false
+                );
+                await h.dispose();
+            }
+        );
+
+        await check(
+            'invalid or non-linked lookup results are absent from the actual table selector and dispatch no read or child load',
+            async () => {
+                for (const result of [
+                    null,
+                    { type: 'number', options: { precision: 0 } },
+                    {
+                        type: 'multipleRecordLinks',
+                        options: { linkedTableId: '' },
+                    },
+                ]) {
+                    const portal = lookupPortal();
+                    portal.payload.fieldIdsToSchemas.fld_children.airtableField.config.options.result =
+                        result;
+                    const h = await mount({ portal });
+                    assert.equal(
+                        h.view.node.querySelector('select').options.length,
+                        0
+                    );
+                    assert.equal(
+                        button(h.view.node, 'Create record').disabled,
+                        true
+                    );
+                    await h.click('Load records');
+                    await h.click('Create record');
+                    assert.equal(h.calls.length, 0);
+                    assert.deepEqual(rowIds(h.view.node), []);
+                    await h.dispose();
+                }
+            }
+        );
+
         await check(
             'resolved child password config masks cells before and after native Grid saves',
             async () => {

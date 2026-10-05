@@ -56,6 +56,8 @@ const v1Routes = {
     'linkedRecords.listFormOptions': 'fetchRecordsForFormLinkedRecordsSelector',
     'linkedRecords.listPortalOptions':
         'fetchRecordsForPortalLinkedRecordsSelector',
+    'linkedRecords.listConditionalFilterPrimaryValues':
+        'fetchPrimaryValuesForConditionalLinkedRecordFilterField',
 } as const satisfies {
     [Operation in RuntimeOperation as CanonicalOperationTransports[Operation]['transport'] extends 'v1'
         ? Operation
@@ -91,6 +93,15 @@ const trpcRoutes = {
         'mutation',
         'airtable.addAirtableCommentForRecord',
     ],
+    'addresses.listPredictions': [
+        'query',
+        'publicExtensions.autoCompleteAddressField',
+    ],
+    'addresses.getFormattedAddress': [
+        'query',
+        'publicExtensions.getFormattedAddressFromPlaceId',
+    ],
+    'buttons.triggerWebhook': ['mutation', 'publicExtensions.triggerWebhook'],
 } as const satisfies {
     [Operation in RuntimeOperation as CanonicalOperationTransports[Operation]['transport'] extends 'trpc'
         ? Operation
@@ -392,6 +403,22 @@ export const createMiniExtensionsClient = (
                     input,
                     requestOptions
                 ),
+            listConditionalFilterPrimaryValues: (input, requestOptions) =>
+                request(
+                    'linkedRecords.listConditionalFilterPrimaryValues',
+                    input,
+                    requestOptions
+                ),
+        },
+        addresses: {
+            listPredictions: (input, requestOptions) =>
+                request('addresses.listPredictions', input, requestOptions),
+            getFormattedAddress: (input, requestOptions) =>
+                request('addresses.getFormattedAddress', input, requestOptions),
+        },
+        buttons: {
+            triggerWebhook: (input, requestOptions) =>
+                request('buttons.triggerWebhook', input, requestOptions),
         },
         attachments: {
             createUploadUrl: (input, requestOptions) =>

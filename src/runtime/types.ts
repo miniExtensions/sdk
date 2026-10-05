@@ -128,6 +128,29 @@ export type LoadSelectedRecordsInput =
     CanonicalOperationInputs['linkedRecords.loadSelectedRecords'];
 export type LoadSelectedRecordsResult =
     CanonicalOperationOutputs['linkedRecords.loadSelectedRecords'];
+export type ListConditionalFilterPrimaryValuesInput =
+    CanonicalOperationInputs['linkedRecords.listConditionalFilterPrimaryValues'];
+export type ListConditionalFilterPrimaryValuesResult =
+    CanonicalOperationOutputs['linkedRecords.listConditionalFilterPrimaryValues'];
+export type ConditionalFilterPrimaryValue =
+    ListConditionalFilterPrimaryValuesResult['primaryValues'][number];
+export type ConditionalFilterData =
+    ListConditionalFilterPrimaryValuesInput['filterData'];
+export type ListAddressPredictionsInput =
+    CanonicalOperationInputs['addresses.listPredictions'];
+export type ListAddressPredictionsResult =
+    CanonicalOperationOutputs['addresses.listPredictions'];
+export type AddressPrediction = ListAddressPredictionsResult[number];
+export type GetFormattedAddressInput =
+    CanonicalOperationInputs['addresses.getFormattedAddress'];
+export type GetFormattedAddressResult =
+    CanonicalOperationOutputs['addresses.getFormattedAddress'];
+export type TriggerConfiguredButtonWebhookInput =
+    CanonicalOperationInputs['buttons.triggerWebhook'];
+export type TriggerConfiguredButtonWebhookResult =
+    CanonicalOperationOutputs['buttons.triggerWebhook'];
+export type ConfiguredButtonWebhookSource =
+    TriggerConfiguredButtonWebhookInput['source'];
 export type CreateUploadUrlInput =
     CanonicalOperationInputs['attachments.createUploadUrl'];
 export type CreateUploadUrlResult =
@@ -268,6 +291,27 @@ export type MiniExtensionsClient = {
             input: LoadSelectedRecordsInput,
             options?: RuntimeRequestOptions
         ): Promise<LoadSelectedRecordsResult>;
+        listConditionalFilterPrimaryValues(
+            input: ListConditionalFilterPrimaryValuesInput,
+            options?: RuntimeRequestOptions
+        ): Promise<ListConditionalFilterPrimaryValuesResult>;
+    };
+    addresses: {
+        listPredictions(
+            input: ListAddressPredictionsInput,
+            options?: RuntimeRequestOptions
+        ): Promise<ListAddressPredictionsResult>;
+        getFormattedAddress(
+            input: GetFormattedAddressInput,
+            options?: RuntimeRequestOptions
+        ): Promise<GetFormattedAddressResult>;
+    };
+    buttons: {
+        /** Runs the configured Button action; the server resolves URL and method. */
+        triggerWebhook(
+            input: TriggerConfiguredButtonWebhookInput,
+            options?: RuntimeRequestOptions
+        ): Promise<TriggerConfiguredButtonWebhookResult>;
     };
     attachments: {
         createUploadUrl(

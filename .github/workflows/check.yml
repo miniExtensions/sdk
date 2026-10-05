@@ -10,9 +10,6 @@ permissions:
 jobs:
     check:
         runs-on: ubuntu-latest
-        env:
-            SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
-            SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         strategy:
             matrix:
                 node: [22, 24]
@@ -24,16 +21,19 @@ jobs:
             - run: npm install --global pnpm@10.28.2
             - run: pnpm install --frozen-lockfile
             - run: pnpm check
+              env:
+                  SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
             - name: Retain tested customer package
               if: success() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: sdk-tested-customer-kit-node-${{ matrix.node }}-attempt-${{ github.run_attempt }}
                   path: |
-                      ${{ env.SDK_CHECKED_ARTIFACT_DIR }}/*.tgz
-                      ${{ env.SDK_CHECKED_ARTIFACT_DIR }}/SHA256SUMS
-                      ${{ env.SDK_CHECKED_ARTIFACT_DIR }}/artifact-receipt.json
-                      ${{ env.SDK_CHECKED_ARTIFACT_DIR }}/miniExtensions-SDK-INSTALL.md
+                      ${{ runner.temp }}/sdk-tested-customer-kit/*.tgz
+                      ${{ runner.temp }}/sdk-tested-customer-kit/SHA256SUMS
+                      ${{ runner.temp }}/sdk-tested-customer-kit/artifact-receipt.json
+                      ${{ runner.temp }}/sdk-tested-customer-kit/miniExtensions-SDK-INSTALL.md
                   if-no-files-found: error
                   retention-days: 7
                   compression-level: 0
@@ -42,5 +42,7 @@ jobs:
                   include-hidden-files: false
             - name: Remove local customer delivery files
               if: always()
+              env:
+                  SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
               run: |
                   node -e "const fs = require('node:fs'); fs.rmSync(process.env.SDK_CHECKED_ARTIFACT_DIR, { recursive: true, force: true }); if (fs.existsSync(process.env.SDK_CHECKED_ARTIFACT_DIR)) process.exit(1); console.log('Customer delivery output removed');"

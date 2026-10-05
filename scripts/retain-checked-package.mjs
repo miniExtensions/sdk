@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     lstatSync,
@@ -44,7 +45,16 @@ export function retainCheckedPackage({
         resolve(guidePath),
         'Guide must not traverse symlinks'
     );
-    const guide = readFileSync(guidePath);
+    const guide = execFileSync(
+        'tar',
+        ['-xzOf', '-', 'package/docs/browser-lifecycle.md'],
+        { input: archive, timeout: 10000, maxBuffer: 1024 * 1024 }
+    );
+    assert.deepEqual(
+        readFileSync(guidePath),
+        guide,
+        'Installed guide bytes differ from the tested archive'
+    );
     const packedGuide = packed.files.find(
         ({ path }) => path === 'docs/browser-lifecycle.md'
     );

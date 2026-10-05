@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     mkdtemp,
@@ -37,10 +38,11 @@ async function deliveryFixture(t) {
     const installedPackage = join(root, 'node_modules/@miniextensions/sdk');
     const filename = 'miniextensions-sdk-0.1.0-alpha.0.tgz';
     const archivePath = join(root, filename);
-    const archive = Buffer.from('the exact archive checked by consumers');
     const guide = '# Browser starter\nUse the supplied archive.\n';
-    await writeFile(archivePath, archive);
     await write(installedPackage, 'docs/browser-lifecycle.md', guide);
+    await write(root, 'package/docs/browser-lifecycle.md', guide);
+    execFileSync('tar', ['-czf', archivePath, '-C', root, 'package']);
+    const archive = await readFile(archivePath);
     await write(installedPackage, '.private-fixture', 'must not be retained');
     return {
         archivePath,
@@ -127,6 +129,21 @@ test('delivery rejects changed archive bytes before creating output', async (t) 
     assert.throws(
         () => retainCheckedPackage(fixture),
         /Tested archive bytes changed/
+    );
+    await assert.rejects(readdir(fixture.outputDirectory), { code: 'ENOENT' });
+});
+
+test('delivery rejects same-length installed guide drift', async (t) => {
+    const fixture = await deliveryFixture(t);
+    const guidePath = join(
+        fixture.installedPackage,
+        'docs/browser-lifecycle.md'
+    );
+    const guide = await readFile(guidePath, 'utf8');
+    await writeFile(guidePath, guide.replace('supplied', 'modified'));
+    assert.throws(
+        () => retainCheckedPackage(fixture),
+        /Installed guide bytes differ from the tested archive/
     );
     await assert.rejects(readdir(fixture.outputDirectory), { code: 'ENOENT' });
 });

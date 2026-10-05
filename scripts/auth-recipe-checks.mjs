@@ -234,6 +234,7 @@ export async function checkAuthRecipe({
     let createRoot;
     let AuthPanel;
     const failures = [];
+    let checks = 0;
     const check = async (name, exercise) => {
         const window = new Window({ url: 'https://example.test/' });
         const restoreGlobals = installGlobals(window);
@@ -327,6 +328,7 @@ export async function checkAuthRecipe({
                 0,
                 'React rendering must complete without errors'
             );
+            checks += 1;
         } catch (error) {
             failures.push(new Error(name, { cause: error }));
         } finally {
@@ -374,6 +376,89 @@ export async function checkAuthRecipe({
                 await render(props(client, page));
                 assert.equal(input('Email', 'Login').type, 'password');
                 assert.equal(client.calls.length, 0);
+                assert.equal(client.sessionWrites, 0);
+            }
+        );
+    }
+
+    await check(
+        'Visible password/PIN titles mask inputs with native credentials unchanged',
+        async ({ render, click, input }) => {
+            const client = makeClient({ login: () => ({ type: 'no-record' }) });
+            const page = screen();
+            page.payload.fieldNamesToSchemas.Email.miniExtConfig = {
+                title: 'Portal PIN',
+            };
+            await render(props(client, page));
+            assert.equal(input('Email', 'Login').type, 'password');
+            input('Email', 'Login').value = 'Exact Case-Sensitive PIN';
+            await click('Log in');
+            assert.deepEqual(
+                client.calls.map(({ operation }) => operation),
+                ['login']
+            );
+            assert.deepEqual(client.calls[0].input.loginCredentials, {
+                Email: 'Exact Case-Sensitive PIN',
+            });
+            assert.equal(client.sessionWrites, 0);
+        }
+    );
+
+    for (const verificationType of ['email', 'phoneNumber']) {
+        await check(
+            `Configured ${verificationType} destinations stay masked through confirmation`,
+            async ({ render, click, input, status }) => {
+                const destination =
+                    verificationType === 'email'
+                        ? 'private@example.test'
+                        : '+15550102030';
+                const client = makeClient({
+                    login: () => ({
+                        ...challenge(),
+                        verificationType,
+                        emailOrPhoneNumber: destination,
+                    }),
+                });
+                const page = screen();
+                const name = verificationType === 'email' ? 'Email' : 'Phone';
+                if (verificationType === 'phoneNumber') {
+                    const schema = {
+                        fieldType: 'phoneNumber',
+                        airtableField: {
+                            id: 'fld_phone',
+                            name,
+                            config: { type: 'phoneNumber' },
+                        },
+                    };
+                    page.payload.loginFieldNames = [name];
+                    page.payload.loginFieldIds = ['fld_phone'];
+                    page.payload.fieldNamesToSchemas = { [name]: schema };
+                    page.payload.fieldIdsToSchemas = { fld_phone: schema };
+                }
+                page.payload.fieldNamesToSchemas[name].miniExtConfig = {
+                    maskPasswordOnLoginScreen: true,
+                    ...(verificationType === 'email'
+                        ? { requireEmailVerificationToLogin: true }
+                        : { requirePhoneNumberVerificationToLogin: true }),
+                };
+                await render(props(client, page));
+                input(name, 'Login').value = 'Exact credential';
+                await click('Log in');
+                assert.equal(status(), 'Enter the code sent to ••••••••.');
+                input('Verification code').value = '123456';
+                await click('Confirm code');
+                assert.deepEqual(
+                    client.calls.map(({ operation }) => operation),
+                    ['login', 'confirmVerificationCode']
+                );
+                assert.deepEqual(client.calls[0].input.loginCredentials, {
+                    [name]: 'Exact credential',
+                });
+                assert.equal(
+                    client.calls[1].input.verificationId,
+                    'verification_example'
+                );
+                assert.equal(client.calls[1].input.verificationCode, '123456');
                 assert.equal(client.sessionWrites, 0);
             }
         );
@@ -789,5 +874,5 @@ export async function checkAuthRecipe({
             'Shipped React auth recipe checks failed'
         );
     }
-    return { checks: 5 };
+    return { checks };
 }

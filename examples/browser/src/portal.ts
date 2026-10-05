@@ -728,12 +728,21 @@ export const createPortalView = (options: {
             const row = element('tr');
             row.dataset.recordId = recordId;
             for (const column of columns) {
-                const cell = element(
-                    'td',
-                    displayValue(record.fields[column.fieldId])
-                );
                 const recordField = state.airtableFields.find(
                     (entry) => entry.id === column.fieldId
+                );
+                const value = record.fields[column.fieldId];
+                const obscured =
+                    recordField?.config.type ===
+                        AirtableFieldType.SINGLE_LINE_TEXT &&
+                    column.miniExtConfig != null &&
+                    'obscurePassword' in column.miniExtConfig &&
+                    column.miniExtConfig.obscurePassword === true &&
+                    typeof value === 'string' &&
+                    value.length > 0;
+                const cell = element(
+                    'td',
+                    obscured ? '••••••••' : displayValue(value)
                 );
                 const gridMode = (layoutSetting('layout') ?? 'grid') === 'grid';
                 if (

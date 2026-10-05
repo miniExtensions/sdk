@@ -14,3 +14,8 @@ export type {
     LoginAuthFlow,
     AuthFlow,
 } from './types.js';
+
+export {
+    shouldMaskLoginFieldInput,
+    getLoginVerificationDestination,
+} from './presentation.js';

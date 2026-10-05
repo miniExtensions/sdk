@@ -15,6 +15,10 @@ import {
     type AirtableValue,
 } from '@miniextensions/sdk';
 import {
+    shouldMaskLoginFieldInput,
+    getLoginVerificationDestination,
+} from '@miniextensions/sdk/auth';
+import {
     createFormSaveInput,
     normalizeFormSaveResult,
     openLoadedFormDraft,
@@ -387,11 +391,7 @@ const renderLogin = (page: LoginPageResult): void => {
     for (const name of page.payload.loginFieldNames) {
         const input = element('input');
         const schema = page.payload.fieldNamesToSchemas[name];
-        const config = schema?.miniExtConfig;
-        const masked =
-            config !== undefined &&
-            'maskPasswordOnLoginScreen' in config &&
-            config.maskPasswordOnLoginScreen === true;
+        const masked = shouldMaskLoginFieldInput(schema);
         input.type = masked
             ? 'password'
             : schema?.fieldType === AirtableFieldType.EMAIL
@@ -486,7 +486,7 @@ const renderLogin = (page: LoginPageResult): void => {
                     };
                     render();
                     status(
-                        `A verification ${result.verificationType === 'email' ? 'email' : 'message'} was sent to ${result.emailOrPhoneNumber}.`
+                        `A verification ${result.verificationType === 'email' ? 'email' : 'message'} was sent to ${getLoginVerificationDestination(page, result)}.`
                     );
                 }
             }

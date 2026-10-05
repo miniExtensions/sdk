@@ -23,6 +23,15 @@ manual action; also keep a Reload control outside this panel because applying
 a session removes the old authentication page. The next recipe supplies those
 owner and load boundaries.
 
+Use `shouldMaskLoginFieldInput` for the hosted input mask rules and
+`getLoginVerificationDestination` for verification notices. Explicitly masked
+fields hide the matching email/phone destination when that verification mode is
+configured. A caller-supplied fallback phone destination stays visible, matching
+the hosted flow; pass the same `fallbackPhoneVerificationNumber` to the helper.
+These helpers affect presentation only: preserve the original credentials,
+challenge, and backend result. Title-inferred password/PIN inputs alone do not
+redact a verification destination.
+
 `signUpFieldNames` is explicit application input for your configured sign-up
 form. Omit it if sign-up is unavailable. The backend enforces the published
 rules; never infer navigation URLs from untyped `publicFields`.
@@ -39,6 +48,8 @@ import {
 } from '@miniextensions/sdk';
 import {
     createAuthFlow,
+    shouldMaskLoginFieldInput,
+    getLoginVerificationDestination,
     type AuthOwnerScope as Scope,
     type AuthFlow as Flow,
     type AuthCredentialGrant as Grant,
@@ -244,9 +255,12 @@ export function AuthPanel(props: Props) {
                 notice('No login record found.');
             else {
                 e.challenge = result.challenge;
-                notice(`Enter the code sent to ${result.emailOrPhoneNumber}.`, {
-                    canConfirm: true,
-                });
+                notice(
+                    `Enter the code sent to ${getLoginVerificationDestination(e.page, result)}.`,
+                    {
+                        canConfirm: true,
+                    }
+                );
             }
         });
     const confirm = () =>
@@ -337,15 +351,11 @@ export function AuthPanel(props: Props) {
     const blocked = !visible.ready || visible.busy || visible.recovery;
     const fields = (prefix: string, names: readonly string[]) =>
         names.map((name) => {
-            const config =
+            const obscured = shouldMaskLoginFieldInput(
                 props.page.extensionScreen === 'login_page'
                     ? props.page.payload.fieldNamesToSchemas[name]
-                          ?.miniExtConfig
-                    : undefined;
-            const obscured =
-                config !== undefined &&
-                'maskPasswordOnLoginScreen' in config &&
-                config.maskPasswordOnLoginScreen === true;
+                    : undefined
+            );
             return (
                 <label key={`${props.ownerScope.revision}:${prefix}:${name}`}>
                     {name}

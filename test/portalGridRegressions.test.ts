@@ -294,6 +294,30 @@ describe(
     'deep review actual Portal browser diagnostics',
     { concurrency: false },
     () => {
+        it('masks the configured Portal password cell while preserving its native edit value', async (test) => {
+            const page = editablePage();
+            page.payload.linkedRecordFieldIdToDetailFields.fld_children[0].miniExtConfig =
+                { obscurePassword: true };
+            const h = await mountPortal(test, page);
+            await h.click('Load records');
+            const cell = h.view.node.querySelector('tbody td');
+            assert.ok(cell);
+            assert.equal(cell.textContent, '••••••••Edit cell');
+            assert.equal(
+                h.view.node.textContent!.includes('Original title'),
+                false
+            );
+            await h.click('Edit cell');
+            const control = h.window.document.querySelector(
+                'input[data-field-id="fld_title"]'
+            );
+            assert.ok(control instanceof h.window.HTMLInputElement);
+            assert.equal(control.type, 'password');
+            assert.equal(control.value, 'Original title');
+            assert.equal(h.updates.length, 0);
+            assert.deepEqual(h.failures, []);
+        });
+
         it('keeps an edited Grid field blank when the wire response omits its value', async (test) => {
             const h = await mountPortal(test);
             await h.click('Load records');

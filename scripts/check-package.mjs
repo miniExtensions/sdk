@@ -26,6 +26,8 @@ import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 import { checkBrowserPortalExample } from './browser-portal-example-checks.mjs';
+import { createHash } from 'node:crypto';
+import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 
 const require = createRequire(import.meta.url);
@@ -944,7 +946,10 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
     checkPortableOutput(
         join(temporaryDirectory, 'node_modules/@miniextensions/sdk/dist')
     );
-    if (process.env.SDK_CHECKED_ARTIFACT_DIR) {
+    if (
+        process.env.SDK_CHECKED_ARTIFACT_DIR ||
+        process.env.SDK_BROWSER_PROOF_ARTIFACT_DIR
+    ) {
         const [commit, tree] = run(
             'git',
             ['rev-parse', 'HEAD', 'HEAD^{tree}'],
@@ -952,22 +957,50 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         )
             .trim()
             .split('\n');
-        retainCheckedPackage({
-            archivePath: join(temporaryDirectory, packed.filename),
-            packed,
-            installedPackage,
-            outputDirectory: process.env.SDK_CHECKED_ARTIFACT_DIR,
-            source: { commit, tree },
-            ci: {
-                repository: process.env.GITHUB_REPOSITORY,
-                event: process.env.GITHUB_EVENT_NAME,
-                runId: process.env.GITHUB_RUN_ID,
-                runAttempt: process.env.GITHUB_RUN_ATTEMPT,
-                workflowSha: process.env.GITHUB_SHA,
-                pullRequestHeadSha: process.env.SDK_PR_HEAD_SHA || undefined,
-            },
-            browserPortalChecks,
-        });
+        const ci = {
+            repository: process.env.GITHUB_REPOSITORY,
+            event: process.env.GITHUB_EVENT_NAME,
+            runId: process.env.GITHUB_RUN_ID,
+            runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+            workflowSha: process.env.GITHUB_SHA,
+            pullRequestHeadSha: process.env.SDK_PR_HEAD_SHA || undefined,
+        };
+        if (process.env.SDK_CHECKED_ARTIFACT_DIR) {
+            retainCheckedPackage({
+                archivePath: join(temporaryDirectory, packed.filename),
+                packed,
+                installedPackage,
+                outputDirectory: process.env.SDK_CHECKED_ARTIFACT_DIR,
+                source: { commit, tree },
+                ci: {
+                    repository: process.env.GITHUB_REPOSITORY,
+                    event: process.env.GITHUB_EVENT_NAME,
+                    runId: process.env.GITHUB_RUN_ID,
+                    runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+                    workflowSha: process.env.GITHUB_SHA,
+                    pullRequestHeadSha:
+                        process.env.SDK_PR_HEAD_SHA || undefined,
+                },
+                browserPortalChecks,
+            });
+        }
+        if (process.env.SDK_BROWSER_PROOF_ARTIFACT_DIR) {
+            const result = await buildPrivacyBrowserProof({
+                browserConsumerDirectory: browserDirectory,
+                authConsumerDirectory: temporaryDirectory,
+                outputDirectory: process.env.SDK_BROWSER_PROOF_ARTIFACT_DIR,
+                source: { commit, tree },
+                ci,
+                packageSha256: createHash('sha256')
+                    .update(
+                        readFileSync(join(temporaryDirectory, packed.filename))
+                    )
+                    .digest('hex'),
+            });
+            console.log(
+                `Synthetic manual browser fixture generated (${result.manifestSha256}); browser execution pending`
+            );
+        }
     }
     console.log(
         `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (6 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${browserPortalChecks} actual packed browser Portal cases, and full browser/UI examples typecheck/build passed (${packed.integrity})`

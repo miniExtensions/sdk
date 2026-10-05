@@ -32,7 +32,10 @@ const linkField = {
 const prefillField = {
     id: 'fld_prefill',
     name: 'Child prefill',
-    config: { type: 'singleLineText' },
+    description: null,
+    isComputed: false,
+    isPrimaryField: false,
+    config: { type: 'singleLineText', options: null },
 };
 const linkSchema = {
     fieldType: 'multipleRecordLinks',
@@ -121,7 +124,13 @@ const makePortal = () =>
                 },
             },
             fieldNamesToSchemas: { Children: linkSchema },
-            fieldIdsToSchemas: { fld_children: linkSchema },
+            fieldIdsToSchemas: {
+                fld_children: linkSchema,
+                fld_prefill: {
+                    fieldType: prefillField.config.type,
+                    airtableField: prefillField,
+                },
+            },
             linkedRecordFieldIdToDetailFields: detailFields,
             linkedRecordFieldIdToFieldsTitles: {
                 fld_children: { fld_title: 'Title', fld_quantity: 'Count' },

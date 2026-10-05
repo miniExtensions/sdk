@@ -173,6 +173,15 @@ literals can use single or double quotes. Function names are case sensitive.
 
 These details are preserved for compatibility.
 
+The public `GetReadableStringSource` context also accepts
+`dateParsing: 'local' | 'utc'` for readable-value conversion. Omitted or `utc`
+keeps the existing UTC parsing; `local` interprets date-only and zoneless
+dateTime strings in the execution environment's timezone before applying the
+field's configured output format/timezone. The option follows timestamp,
+formula and lookup result conversion. Portal child-create query prefills use
+`local` to match canonical browser formatting. FormulaRunner's existing
+context and default date semantics remain unchanged.
+
 ## Inspecting references
 
 ```ts

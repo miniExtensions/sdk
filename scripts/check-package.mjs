@@ -25,10 +25,13 @@ import { checkUiRecipes } from './ui-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
+import { checkAdditionalRuntimeOperations } from './additional-runtime-recipe-checks.mjs';
 import { checkBrowserPortalExample } from './browser-portal-example-checks.mjs';
+import { checkBrowserSelectExample } from './browser-select-example-checks.mjs';
 import { createHash } from 'node:crypto';
 import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
+import { assertPublicDistribution } from './distribution-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryDirectory = realpathSync(
@@ -44,6 +47,7 @@ const uiDirectory = realpathSync(
 );
 const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
 let browserPortalChecks = 0;
+let browserSelectChecks = 0;
 const browserStarterFiles = [
     'README.md',
     'package.json',
@@ -135,6 +139,16 @@ try {
         temporaryDirectory,
         join(temporaryDirectory, packed.filename),
         packed
+    );
+    await assertPublicDistribution(
+        installedPackage,
+        packed.files.map(({ path }) => path),
+        JSON.parse(
+            readFileSync(
+                'src/runtime/contracts/generated.provenance.json',
+                'utf8'
+            )
+        )
     );
     await assertPackedDocLinks(
         installedPackage,
@@ -431,6 +445,30 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
     const declarationConsumer =
         consumer +
         `
+import type { ListConditionalFilterPrimaryValuesInput, ConditionalFilterPrimaryValue, ConditionalFilterData, ListAddressPredictionsInput, AddressPrediction, GetFormattedAddressInput, TriggerConfiguredButtonWebhookInput, ConfiguredButtonWebhookSource, TriggerConfiguredButtonWebhookResult } from '@miniextensions/sdk';
+export async function checkAdditionalRuntimeTypes(client: MiniExtensionsClient, signal: AbortSignal) {
+    const filterData: ConditionalFilterData = {previousFilterFieldId:'fldCountry', previousFilterPrimaryValue:'United States'};
+    const conditional: ListConditionalFilterPrimaryValuesInput = {extensionAccessToken:'formToken',linkedRecordsFilterFieldId:'fldRegion',mainTableLinkedRecordsFieldId:'fldProjects',searchTerm:'North',filterData,urlSearchValue:null};
+    const values = await client.linkedRecords.listConditionalFilterPrimaryValues(conditional, {signal,session:{visitor:'requestVisitor'}});
+    const first: ConditionalFilterPrimaryValue | undefined = values.primaryValues[0];
+    const prefill: ConditionalFilterPrimaryValue | null = values.prefillValue;
+    const address: ListAddressPredictionsInput = {extensionAccessToken:'formToken',fieldId:'fldAddress',addressFieldValue:'12 Main'};
+    const predictions: AddressPrediction[] = await client.addresses.listPredictions(address, {signal});
+    const place: GetFormattedAddressInput = {extensionAccessToken:'formToken',fieldId:'fldAddress',placeId:predictions[0]?.placeId ?? 'placeExample'};
+    const formatted: string = await client.addresses.getFormattedAddress(place, {signal});
+    const current: ConfiguredButtonWebhookSource = {type:'current-record',recordId:'recCurrent'};
+    const linked: ConfiguredButtonWebhookSource = {type:'linked-record',linkedRecordId:'recChild',linkedTableId:'tblChildren',parentLinkedRecordFieldId:'fldChildren',selectedCustomViewId:null};
+    const button: TriggerConfiguredButtonWebhookInput = {extensionAccessToken:'formToken',fieldId:'fldButton',source:current};
+    const result: TriggerConfiguredButtonWebhookResult = await client.buttons.triggerWebhook(button, {signal});
+    await client.buttons.triggerWebhook({...button,source:linked}, {signal});
+    // @ts-expect-error only configured current-record and linked-record sources are supported
+    const arbitrary: ConfiguredButtonWebhookSource = {type:'url',url:'https://other.example'};
+    // @ts-expect-error linked source requires the configured outer parent field ID
+    const missingParent: ConfiguredButtonWebhookSource = {type:'linked-record',linkedRecordId:'recChild',linkedTableId:'tblChildren'};
+    // @ts-expect-error callers do not supply a webhook URL or HTTP method
+    const redirected: TriggerConfiguredButtonWebhookInput = {extensionAccessToken:'formToken',fieldId:'fldButton',source:current,url:'https://other.example',method:'POST'};
+    return [first?.recordId,prefill?.stringValue,formatted,result.success,arbitrary,missingParent,redirected];
+}
 import { createSelectControl, mountSelectionControl, createSelectionModel, createFormLinkedRecordLoader, createPortalLinkedRecordLoader, type SelectionLoader } from '@miniextensions/sdk/ui';
 import type { MiniExtensionsClient, ListFormLinkedRecordOptionsInput, ListPortalLinkedRecordOptionsInput } from '@miniextensions/sdk';
 export function checkUiTypes(field: RuntimeFieldSchema, host: HTMLElement, client: MiniExtensionsClient, form: Omit<ListFormLinkedRecordOptionsInput, 'filter'|'offset'>, portal: Omit<ListPortalLinkedRecordOptionsInput, 'filter'|'offset'>) {
@@ -923,6 +961,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 happyDomModulePath: require.resolve('happy-dom'),
             });
             browserPortalChecks = result.checks;
+            const selectResult = await checkBrowserSelectExample({
+                consumerDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
+            browserSelectChecks = selectResult.checks;
         }
     }
 
@@ -1002,8 +1045,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             );
         }
     }
+    const additionalRuntimeChecks = await checkAdditionalRuntimeOperations({
+        consumerDirectory: temporaryDirectory,
+    });
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (6 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${browserPortalChecks} actual packed browser Portal cases, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

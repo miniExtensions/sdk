@@ -86,6 +86,13 @@ dates, checkbox, and select inputs. DateTime inputs retain an explicit ISO
 string; there is no implicit timezone conversion. Complex and computed values
 are displayed intact rather than converted to text for saving.
 
+Select controls use the published choice-ID allowlist and numeric maximum,
+retain existing unavailable choice names for removal, and keep custom labels
+separate from saved native names. A nonempty allowlist disables **Add a choice**
+even when a retained `allowAddingNewOptions` flag is true. Conditional option
+visibility still requires an application evaluator; this starter does not
+evaluate option conditions.
+
 The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
 revisions, requests, cancellation, and when to discard drafts.
@@ -108,7 +115,7 @@ revisions, requests, cancellation, and when to discard drafts.
   permits comments.
 
 The custom renderer deliberately leaves advanced presentation to your app:
-conditional field visibility, multi-page navigation, signatures, calendar
+conditional field or select-option visibility, multi-page navigation, signatures, calendar
 pickers, dynamic linked-filter values, custom validation presentation, and
 CAPTCHA widgets. The server still enforces those extension rules. To use a
 CAPTCHA-enabled Form, integrate the configured widget and supply its token in
@@ -131,6 +138,12 @@ The example imports its collection and child-request helpers from
 view and search criteria; changing them retires its reads and child plans.
 Only records in its accepted main list can open an edit child. Nested labels
 and cached records do not grant that access.
+
+The table selector also accepts a valid lookup whose result is linked records.
+It uses that result's target table while keeping the outer Portal field ID for
+reads and configured existing-child edits. Lookup tables do not offer create or
+parent unlink actions in this starter. Invalid or non-linked lookup results
+are omitted; this does not convert a computed lookup into a writable link.
 
 - **Search** loads page one. **Next page** appends the next opaque offset and
   merges the returned table data without duplicating rows. After a failed or

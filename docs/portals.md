@@ -14,6 +14,23 @@ on every visitor, connection, session, token or context transition, including
 anonymous visitors and A → B → A. Credential equality alone cannot identify
 those transitions.
 
+Collections accept direct linked-record fields and valid lookup fields whose
+returned `options.isValid` is `true` and whose `options.result.type` is
+`multipleRecordLinks`. `getPortalLinkedRecordFieldConfig` resolves that direct
+or lookup-result config for application table discovery. Its target table comes
+from the result's linked-record options; every Portal read and child request
+keeps the outer published Portal field ID. The lookup's `recordLinkFieldId`
+and `fieldIdInLinkedTable` identify its source and are not replacement Portal
+field or target-table IDs.
+
+A lookup collection can page, project returned details, and plan the exact
+configured edit child for a record in its accepted main list and editable
+selected view. Its computed parent field does not deny that separate child edit.
+Lookup create plans are disabled, including retained create flags or Form
+layout settings. Reading a lookup grants no parent linking or unlinking rights;
+the starter exposes parent unlink controls only for direct linked fields.
+The canonical server still validates each requested action and current scope.
+
 ## Executable application boundary
 
 Save this as `portal-owner.ts` in your application. Call its methods from
@@ -435,6 +452,29 @@ request automatically.
 `openChild` validates the exact configured child ID and edit membership; cached
 nested records alone cannot open an edit Form. The request captures the parent
 Portal token, field, linked table, inverse-link/create prefills and read epoch.
+The configured parent query is carried only when
+`prefillChildFormForCreatingRecords` is explicitly `true`, the selected field
+has current ID-keyed source metadata and an own record value, and its canonical
+readable type is string. The helper formats that value with
+`getReadableStringFromAirtableValue`, using browser-local date parsing and the
+source field's date/time format and timezone. Text, rich text, URL, email,
+phone, barcode, single select, date/dateTime, created/modified timestamps and
+created/modified-by fields are supported; formula and lookup sources follow
+their readable result metadata. Rollups, numbers, checkboxes, linked records,
+multi-selects and single/multiple collaborator fields are not query sources. A missing computed
+result has canonical string classification, but ordinary invalid computed
+values format as blank.
+
+Missing metadata, disabled configuration, blank formatted text or a thrown
+formatter error produces a null query. Nonblank canonical error-sentinel text
+and `Invalid date` remain readable text; this helper does not validate query
+syntax. Formatting removes rich-text Markdown and joins lookup values with
+`, `. The formatted bytes stay unchanged, including whitespace and URL
+escapes; raw text is not decoded or normalized. Inverse linking remains
+independent, edit plans carry no create prefill, and lookup-backed collections
+remain unable to create children. Local date parsing uses the execution
+environment's timezone; it does not infer a visitor timezone from the child
+request's `clientTimeZone`.
 Every later dispatched read invalidates the plan even if criteria are equal.
 Check the returned child's `isCurrent()` immediately before displaying it,
 editing its draft or creating a save input. A late child response cannot be

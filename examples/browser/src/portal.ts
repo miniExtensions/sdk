@@ -12,6 +12,7 @@ import {
 } from '@miniextensions/sdk';
 import {
     createPortalCollection,
+    getPortalLinkedRecordFieldConfig,
     type PortalCollection,
     type PortalCollectionSnapshot,
     type PortalOwnerScope,
@@ -52,7 +53,7 @@ type PortalFieldConfig = NonNullable<
         NonNullable<
             PortalLoadedResult['payload']['publicFields']['state']['portalFields']
         >[number]['config'],
-        { type: 'multipleRecordLinks' }
+        { type: 'multipleRecordLinks' | 'multipleLookupValues' }
     >['config']
 >;
 type CanonicalCustomView = NonNullable<
@@ -191,11 +192,14 @@ export const createPortalView = (options: {
             'hint'
         )
     );
-    const fields = page.payload.fieldIdsInPortal.filter(
-        (fieldId) =>
-            page.payload.fieldIdsToSchemas[fieldId]?.fieldType ===
-            AirtableFieldType.MULTIPLE_RECORD_LINKS
-    );
+    const fields = page.payload.fieldIdsInPortal.filter((fieldId) => {
+        const schema = page.payload.fieldIdsToSchemas[fieldId];
+        return (
+            schema?.airtableField.id === fieldId &&
+            schema.fieldType === schema.airtableField.config.type &&
+            getPortalLinkedRecordFieldConfig(schema.airtableField) !== null
+        );
+    });
     const fieldSelect = element('select');
     const viewSelect = element('select');
     const search = element('input');
@@ -259,12 +263,13 @@ export const createPortalView = (options: {
     const schema = () => page.payload.fieldIdsToSchemas[fieldSelect.value];
     const config = (): PortalFieldConfig | undefined => schema()?.miniExtConfig;
     const field = () => schema()?.airtableField;
-    const tableId = (): string | null => {
-        const selected = field();
-        return selected?.config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
-            ? selected.config.options.linkedTableId
-            : null;
-    };
+    const tableId = (): string | null =>
+        getPortalLinkedRecordFieldConfig(field())?.options.linkedTableId ??
+        null;
+    const directRelationship = (): boolean =>
+        schema()?.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS;
+    const creatingChildId = (): string | null =>
+        directRelationship() ? configuredChildId(config(), true) : null;
     const recoveryScope = (childExtensionId: string): RecoveryScope | null =>
         options.recovery == null
             ? null
@@ -276,7 +281,7 @@ export const createPortalView = (options: {
                   context: 'modal',
               };
     const pendingForField = (): RecoveryAttempt[] => {
-        const scope = recoveryScope(configuredChildId(config(), true) ?? '');
+        const scope = recoveryScope(creatingChildId() ?? '');
         return scope == null
             ? []
             : options
@@ -356,8 +361,7 @@ export const createPortalView = (options: {
             element('p', 'Choose Load records to fetch this view.', 'hint')
         );
         next.disabled = true;
-        create.disabled =
-            needsRefresh || configuredChildId(config(), true) == null;
+        create.disabled = needsRefresh || creatingChildId() == null;
         renderRecovery();
     };
 
@@ -366,7 +370,9 @@ export const createPortalView = (options: {
         candidate?: RecoveryAttempt
     ): Promise<void> => {
         const creating = recordId == null;
-        const childId = configuredChildId(config(), creating);
+        const childId = creating
+            ? creatingChildId()
+            : configuredChildId(config(), false);
         if (needsRefresh || readRequired) {
             status(
                 needsRefresh
@@ -799,6 +805,7 @@ export const createPortalView = (options: {
                 );
             }
             if (
+                directRelationship() &&
                 allowEditing &&
                 layoutSetting('allowUsersToUnlinkRecords') === true
             )
@@ -1000,7 +1007,7 @@ export const createPortalView = (options: {
                     }
                     if (result != null) data = result.snapshot;
                     readRequired = false;
-                    create.disabled = configuredChildId(config(), true) == null;
+                    create.disabled = creatingChildId() == null;
                     closeEditor();
                     renderRecords();
                     status(

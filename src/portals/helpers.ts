@@ -1,8 +1,15 @@
-import { AirtableFieldType } from '../formulas/types.js';
+import {
+    AirtableFieldType,
+    type AirtableFieldConfig as ReadableFieldConfig,
+    type AirtableValue as ReadableAirtableValue,
+} from '../formulas/types.js';
+import { getReadableStringFromAirtableValue } from '../formulas/valueConversion.js';
 import type {
     LinkedRecordPrefill,
     ListPortalLinkedRecordsResult,
     PortalLoadedResult,
+    RuntimeAirtableField,
+    RuntimeLinkedRecordFieldConfig,
     RuntimeLinkedRecordDetailField,
     RuntimeSession,
 } from '../runtime/types.js';
@@ -13,8 +20,120 @@ import type {
     PortalReadOptions,
 } from './types.js';
 
+/** Resolve only direct links or valid lookup results that are linked records. */
+export const getPortalLinkedRecordFieldConfig = (
+    field: RuntimeAirtableField | undefined
+): RuntimeLinkedRecordFieldConfig | null => {
+    if (!isObject(field) || !isObject(field.config)) return null;
+    const config = field.config;
+    const linked =
+        config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
+            ? config
+            : config.type === AirtableFieldType.MULTIPLE_LOOKUP_VALUES &&
+                isObject(config.options) &&
+                config.options.isValid === true &&
+                isObject(config.options.result) &&
+                config.options.result.type ===
+                    AirtableFieldType.MULTIPLE_RECORD_LINKS
+              ? config.options.result
+              : null;
+    if (
+        linked === null ||
+        !isObject(linked.options) ||
+        typeof linked.options.linkedTableId !== 'string' ||
+        linked.options.linkedTableId.trim() === ''
+    )
+        return null;
+    return linked;
+};
+
 export const isObject = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// The canonical child-create source picker admits readable string fields,
+// not every field whose current cell happens to contain a string.
+const isReadableStringConfig = (
+    config: unknown,
+    ancestors = new Set<object>()
+): boolean => {
+    if (!isObject(config) || ancestors.has(config)) return false;
+    switch (config.type) {
+        case AirtableFieldType.FORMULA:
+        case AirtableFieldType.MULTIPLE_LOOKUP_VALUES: {
+            const result = isObject(config.options)
+                ? config.options.result
+                : undefined;
+            if (result == null) return true;
+            ancestors.add(config);
+            try {
+                return isReadableStringConfig(result, ancestors);
+            } finally {
+                ancestors.delete(config);
+            }
+        }
+        case AirtableFieldType.SINGLE_LINE_TEXT:
+        case AirtableFieldType.MULTILINE_TEXT:
+        case AirtableFieldType.RICH_TEXT:
+        case AirtableFieldType.URL:
+        case AirtableFieldType.EMAIL:
+        case AirtableFieldType.PHONE_NUMBER:
+        case AirtableFieldType.BARCODE:
+        case AirtableFieldType.SINGLE_SELECT:
+        case AirtableFieldType.DATE:
+        case AirtableFieldType.DATE_TIME:
+        case AirtableFieldType.CREATED_TIME:
+        case AirtableFieldType.LAST_MODIFIED_TIME:
+        case AirtableFieldType.CREATED_BY:
+        case AirtableFieldType.LAST_MODIFIED_BY:
+            return true;
+        default:
+            return false;
+    }
+};
+
+const childPrefillQuery = (
+    portal: PortalLoadedResult,
+    config: PortalLinkedFieldConfig | undefined
+): string | null => {
+    const key = config?.prefillFieldForCreatingChildExtension;
+    if (
+        config?.prefillChildFormForCreatingRecords !== true ||
+        typeof key !== 'string' ||
+        !Object.hasOwn(portal.payload.fieldIdsToSchemas, key) ||
+        !Object.hasOwn(portal.payload.formRecord.data, key)
+    )
+        return null;
+    const schema = portal.payload.fieldIdsToSchemas[key];
+    if (
+        !isObject(schema) ||
+        !isObject(schema.airtableField) ||
+        schema.airtableField.id !== key ||
+        typeof schema.airtableField.name !== 'string' ||
+        !isObject(schema.airtableField.config) ||
+        schema.fieldType !== schema.airtableField.config.type ||
+        !isReadableStringConfig(schema.airtableField.config)
+    )
+        return null;
+    try {
+        const query = getReadableStringFromAirtableValue({
+            // Bridge generated API types to the portable formatter without
+            // rewriting returned JSON. The readable-type gate selects the
+            // schema; the formatter validates the current cell.
+            value: portal.payload.formRecord.data[key] as ReadableAirtableValue,
+            airtableFieldConfig: schema.airtableField
+                .config as ReadableFieldConfig,
+            fieldName: schema.airtableField.name,
+            source: {
+                type: 'airtableMock',
+                linkedTableStates: {},
+                dateParsing: 'local',
+            },
+        });
+        return query.trim().length > 0 ? query : null;
+    } catch {
+        return null;
+    }
+};
 export const requireIdentifier = (
     value: unknown,
     description: string
@@ -164,7 +283,7 @@ type PortalLinkedFieldConfig = NonNullable<
         NonNullable<
             PortalLoadedResult['payload']['publicFields']['state']['portalFields']
         >[number]['config'],
-        { type: 'multipleRecordLinks' }
+        { type: 'multipleRecordLinks' | 'multipleLookupValues' }
     >['config']
 >;
 
@@ -240,14 +359,19 @@ export const capturePortalMetadata = (
     const schema = portal.payload.fieldIdsToSchemas[portalFieldId];
     if (
         !isObject(schema) ||
-        schema.fieldType !== AirtableFieldType.MULTIPLE_RECORD_LINKS ||
         !isObject(schema.airtableField) ||
         schema.airtableField.id !== portalFieldId ||
-        schema.airtableField.config?.type !==
-            AirtableFieldType.MULTIPLE_RECORD_LINKS
+        schema.fieldType !== schema.airtableField.config?.type
     )
         throw new TypeError('The Portal field must be a linked-record field.');
-    const link = schema.airtableField.config.options;
+    const linkedConfig = getPortalLinkedRecordFieldConfig(schema.airtableField);
+    if (linkedConfig === null)
+        throw new TypeError(
+            'The Portal field must be a direct link or a valid linked-record lookup.'
+        );
+    const link = linkedConfig.options;
+    const lookup =
+        schema.fieldType === AirtableFieldType.MULTIPLE_LOOKUP_VALUES;
     requireIdentifier(portalFieldId, 'Portal field ID');
     const linkedTableId = requireIdentifier(
         link.linkedTableId,
@@ -289,12 +413,6 @@ export const capturePortalMetadata = (
     const viewConfig = matches[0]?.config;
     const layoutConfig =
         viewConfig?.viewBehavior === 'custom' ? viewConfig : config;
-    const prefillKey = config?.prefillFieldForCreatingChildExtension;
-    const prefillValue =
-        typeof prefillKey === 'string' &&
-        Object.hasOwn(portal.payload.formRecord.data, prefillKey)
-            ? portal.payload.formRecord.data[prefillKey]
-            : null;
     const legacyDetails = Object.hasOwn(
         portal.payload.linkedRecordFieldIdToDetailFields,
         portalFieldId
@@ -315,7 +433,8 @@ export const capturePortalMetadata = (
         parentRecordId,
         portalFieldId,
         linkedTableId,
-        createChildId: configuredChildId(config, true),
+        // Lookup result links do not make the outer computed field creatable.
+        createChildId: lookup ? null : configuredChildId(config, true),
         editChildId: configuredChildId(config, false),
         viewAllowsEditing: viewConfig?.disableEditingForCustomView !== true,
         prefill: {
@@ -326,8 +445,7 @@ export const capturePortalMetadata = (
                           reversedFieldIdToPrefill: inverseId,
                           parentFormRecordId: parentRecordId,
                       },
-            prefillQueryForChildExtension:
-                typeof prefillValue === 'string' ? prefillValue : null,
+            prefillQueryForChildExtension: childPrefillQuery(portal, config),
         },
         legacyDetails,
         layoutSettings: structuredClone({

@@ -197,6 +197,14 @@ archive and intended deployment separately.
   row is not a commit receipt; an explicit new blank attempt does not prove
   exactly-once creation. Follow [recovery](docs/browser-lifecycle.md#inspect-an-unknown-create).
 
+Eligible Portal inline selects reuse Form static selection policy, preserving
+canonical choice names and allowing removal of loaded values outside current
+limits. Child Form field policy takes precedence over detail policy. Nonempty
+conditional fields/options and active linked filters block inline editing; no
+inline Add Choice or conditional evaluator is provided. Stale or disposed
+editors cannot dispatch saves. See
+[selection policy](docs/ui.md#native-single-and-multi-selects).
+
 The shipped [application source map](examples/browser/README.md#adapt-it)
 identifies `main.ts` for visitor/Form ownership, `portal.ts` for collections and
 actions, `fields.ts` for rendering and `recovery.ts` for operation metadata.

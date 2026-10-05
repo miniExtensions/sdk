@@ -55,7 +55,23 @@ and for every nonempty choice-ID allowlist, even if `allowAddingNewOptions`
 is true. The browser starter applies it again at the Add Choice action.
 Configured option names are trimmed display labels only when
 `enableConditionalOptions` is true; duplicate labels include the canonical
-name. Values sent to a Form remain canonical choice names.
+name. Values sent to a Form or Portal remain canonical choice names.
+
+The browser starter uses this same control for Form selects and Portal inline
+select edits. The Portal uses the configured child Form field policy when
+present, otherwise the returned detail-field policy. It preserves the native
+baseline order on unchanged saves, retains unavailable or over-limit values
+for removal, and rejects injected native selections outside static policy.
+Portal inline editors have no Add Choice action. Their explicit Save remains
+bound to the current visitor revision, field and view; replace a stale editor
+through a fresh Portal read. This does not evaluate conditional visibility.
+
+The canonical Portal route denies inline editing when the effective field
+config has nonempty conditional fields/options or active linked-record filters.
+The starter omits that inline action, including when an option entry supplies
+only a display label or `enableConditionalOptions` is false. Use the eligible
+configured child Form when that workflow is required; its select control can
+display those labels. Static limits alone do not add inline write authority.
 
 **Conditional option visibility remains application-owned.** These controls
 do not evaluate `conditionsForOption` or implement the native conditional

@@ -73,6 +73,24 @@ type DetailField = {
 const isObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value != null && !Array.isArray(value);
 
+// The canonical grid route denies conditional fields/options and active linked
+// filters, even when an option entry only supplies a display label. Static UI
+// policy must not present those configurations as eligible inline writes.
+const hasInlineBlockingConfig = (
+    config: RuntimeFieldSchema['miniExtConfig']
+): boolean =>
+    config != null &&
+    (('conditionalFields' in config &&
+        config.conditionalFields != null &&
+        config.conditionalFields.conditions.length !== 0) ||
+        ('conditionsForOptions' in config &&
+            config.conditionsForOptions != null &&
+            config.conditionsForOptions.length !== 0) ||
+        ('filterLinkedRecordsConditionFields' in config &&
+            (!('filterLinkedRecordsToggle' in config) ||
+                config.filterLinkedRecordsToggle !== false) &&
+            config.filterLinkedRecordsConditionFields != null));
+
 const customViews = (config: PortalFieldConfig | undefined): CustomView[] => {
     if (!Array.isArray(config?.customViews)) return [];
     return config.customViews.flatMap((view): CustomView[] =>
@@ -138,9 +156,10 @@ const detailFields = (
                         : null,
                 miniExtConfig,
                 inlineEditable:
-                    miniExtConfig === undefined ||
-                    !('readOnly' in miniExtConfig) ||
-                    miniExtConfig.readOnly !== true,
+                    (miniExtConfig === undefined ||
+                        !('readOnly' in miniExtConfig) ||
+                        miniExtConfig.readOnly !== true) &&
+                    !hasInlineBlockingConfig(miniExtConfig),
             },
         ];
     });
@@ -232,6 +251,7 @@ export const createPortalView = (options: {
     };
     card.append(actions, recoveryPanel, results, editor);
     let data: PortalCollectionSnapshot | null = null;
+    let dataScope: PortalOwnerScope | null = null;
     let collection: PortalCollection | null = null;
     let needsRefresh = false;
     let readRequired = false;
@@ -356,6 +376,7 @@ export const createPortalView = (options: {
         retireCollection();
         readRequired = false;
         data = null;
+        dataScope = null;
         closeEditor();
         results.replaceChildren(
             element('p', 'Choose Load records to fetch this view.', 'hint')
@@ -514,6 +535,26 @@ export const createPortalView = (options: {
         value: AirtableValue,
         miniExtConfig: RuntimeFieldSchema['miniExtConfig']
     ): void => {
+        const owner = { ...options.getScope() };
+        const sameOwner = (): boolean => {
+            const current = options.getScope();
+            return (
+                current.ownerId === owner.ownerId &&
+                current.revision === owner.revision &&
+                dataScope?.ownerId === owner.ownerId &&
+                dataScope.revision === owner.revision
+            );
+        };
+        if (
+            destroyed ||
+            !card.isConnected ||
+            !sameOwner() ||
+            data == null ||
+            !data.recordIds.includes(recordId)
+        ) {
+            status('Load a fresh Portal view before editing a cell.', true);
+            return;
+        }
         closeEditor();
         const form = element('form', undefined, 'card');
         const control = fieldControl(
@@ -523,6 +564,17 @@ export const createPortalView = (options: {
             () => {}
         );
         editorControl = control;
+        const acceptedData = data;
+        const portalFieldId = fieldSelect.value;
+        const selectedCustomViewId = viewSelect.value;
+        const editorIsCurrent = (): boolean =>
+            !destroyed &&
+            form.isConnected &&
+            editorControl === control &&
+            sameOwner() &&
+            data === acceptedData &&
+            fieldSelect.value === portalFieldId &&
+            viewSelect.value === selectedCustomViewId;
         form.append(element('h3', `Edit ${recordField.name}`), control.node);
         if (
             recordField.config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
@@ -625,9 +677,19 @@ export const createPortalView = (options: {
         form.append(buttons);
         form.addEventListener('submit', (event) => {
             event.preventDefault();
+            // Cached Portal drafts may survive a visitor switch, but their
+            // old owner revision and disposed controls cannot dispatch writes.
+            if (!editorIsCurrent()) {
+                status(
+                    'Load a fresh Portal view before saving this cell.',
+                    true
+                );
+                return;
+            }
             void run(
                 'Saving the grid cell…',
                 async ({ client, signal, current }) => {
+                    if (!current() || !editorIsCurrent()) return;
                     if (needsRefresh)
                         throw new Error(
                             'Reload the Portal before saving another cell.'
@@ -635,11 +697,11 @@ export const createPortalView = (options: {
                     const input = {
                         portalExtensionAccessToken:
                             page.payload.extensionAccessToken,
-                        portalFieldId: fieldSelect.value,
+                        portalFieldId,
                         recordFieldId: recordField.id,
                         recordId,
                         value: gridValue(control.read()),
-                        selectedCustomViewId: viewSelect.value,
+                        selectedCustomViewId,
                     };
                     signal.throwIfAborted();
                     // Once dispatched, even cancellation or a lost response
@@ -1005,7 +1067,10 @@ export const createPortalView = (options: {
                         );
                         return;
                     }
-                    if (result != null) data = result.snapshot;
+                    if (result != null) {
+                        data = result.snapshot;
+                        dataScope = { ...options.getScope() };
+                    }
                     readRequired = false;
                     create.disabled = creatingChildId() == null;
                     closeEditor();

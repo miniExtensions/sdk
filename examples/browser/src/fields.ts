@@ -61,6 +61,15 @@ export const formFieldControl = (
             onChange,
             forceReadOnly
         );
+    return selectFieldControl(schema, initialValue, onChange, forceReadOnly);
+};
+
+const selectFieldControl = (
+    schema: RuntimeFieldSchema,
+    initialValue: AirtableValue | undefined,
+    onChange: () => void,
+    forceReadOnly = false
+): FieldControl => {
     const config = schema.miniExtConfig;
     const title =
         typeof config?.title === 'string' && config.title.trim() !== ''
@@ -163,6 +172,20 @@ export const fieldControl = (
     onChange: () => void,
     forceReadOnly = false
 ): FieldControl => {
+    if (
+        field.config.type === AirtableFieldType.SINGLE_SELECT ||
+        field.config.type === AirtableFieldType.MULTIPLE_SELECTS
+    )
+        return selectFieldControl(
+            {
+                fieldType: field.config.type,
+                airtableField: { ...field, config: field.config },
+                miniExtConfig: config,
+            },
+            initialValue,
+            onChange,
+            forceReadOnly
+        );
     const title =
         typeof config?.title === 'string' && config.title.trim() !== ''
             ? config.title
@@ -179,7 +202,6 @@ export const fieldControl = (
     let write: (next: AirtableValue) => void;
     let editable = !readOnly;
     let destroyed = false;
-    let reconcileSelect: (() => void) | undefined;
 
     if (field.config.type === AirtableFieldType.CHECKBOX) {
         const checkbox = element('input');
@@ -190,62 +212,6 @@ export const fieldControl = (
         write = (next) => {
             checkbox.checked = next === true;
         };
-    } else if (
-        field.config.type === AirtableFieldType.SINGLE_SELECT ||
-        field.config.type === AirtableFieldType.MULTIPLE_SELECTS
-    ) {
-        const select = element('select');
-        select.multiple =
-            field.config.type === AirtableFieldType.MULTIPLE_SELECTS;
-        if (!select.multiple) select.append(new Option('—', ''));
-        for (const choice of field.config.options?.choices ?? []) {
-            select.append(new Option(choice.name, choice.name));
-        }
-        control = select;
-        read = () => {
-            if (!select.multiple) return select.value || null;
-            const remaining = new Set(
-                Array.from(select.options)
-                    .filter((option) => option.selected)
-                    .map((option) => option.value)
-            );
-            // Keep returned/native order when saving an unchanged cell, then
-            // append any newly selected names in their displayed order.
-            const retained = selectNames(value, true).filter((name) =>
-                remaining.delete(name)
-            );
-            return [...retained, ...remaining];
-        };
-        write = (next) => {
-            const selected = new Set(selectNames(next, select.multiple));
-            value = next;
-            // Persisted names missing from current metadata remain visible and
-            // selected. They are removed once deliberately deselected.
-            for (const name of selected) {
-                if (
-                    !Array.from(select.options).some(
-                        (option) => option.value === name
-                    )
-                ) {
-                    const option = new Option(name, name);
-                    option.dataset.persistedChoice = 'true';
-                    select.append(option);
-                }
-            }
-            for (const option of select.options)
-                option.selected = selected.has(option.value);
-            for (const option of Array.from(select.options))
-                if (
-                    option.dataset.persistedChoice === 'true' &&
-                    !option.selected
-                )
-                    option.remove();
-        };
-        reconcileSelect = () => {
-            if (readOnly) write(value);
-            else write(read());
-        };
-        write(value);
     } else if (numericTypes.has(field.config.type)) {
         const input = element('input');
         input.type = 'number';
@@ -314,7 +280,6 @@ export const fieldControl = (
     control.dataset.fieldId = field.id;
     const notify = (): void => {
         if (destroyed) return;
-        reconcileSelect?.();
         if (!readOnly) onChange();
     };
     if (!(control instanceof HTMLSelectElement))

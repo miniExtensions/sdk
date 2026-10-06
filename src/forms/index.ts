@@ -46,3 +46,12 @@ export {
     type CreateFlatScalarFormRecordProjectionInput,
     type FlatScalarFormRecordProjection,
 } from './projection.js';
+export {
+    getFormAttachmentPolicy,
+    checkFormAttachmentFiles,
+    type AttachmentFileDescriptor,
+    type AttachmentTypeGroup,
+    type FormAttachmentPolicyInput,
+    type FormAttachmentPolicy,
+    type FormAttachmentFileCheck,
+} from './attachments.js';

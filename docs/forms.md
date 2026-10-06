@@ -19,6 +19,142 @@ published extension loading, passwords/login, query/context and visitor rules.
 These helpers require a real `FormLoadedResult`; first handle any other loaded
 screen or returned redirect. Use Node.js 22+ or your ES2022 browser bundler.
 
+## Attachment presentation and file admission
+
+`getFormAttachmentPolicy` and `checkFormAttachmentFiles` are opt-in, pure
+helpers for a returned Form attachment field and its complete current native
+draft value. Existing controls and `client.attachments.uploadFile` are unchanged.
+They perform no requests, uploads, folder/readability checks or byte inspection.
+The backend remains authoritative at upload and Save.
+
+Effective writable add-only fields classify persisted rows using the loaded
+`persistedAddOnlyAttachmentValuesByFieldId` map and original native URLs, before
+any presentation URL rewriting. A non-null ID alone does not identify a stored
+value: prefills can also carry IDs. Remounting never turns the draft into a new
+persisted baseline. Recompute from a fresh loaded result after saving/reloading.
+Rows retain every attachment's metadata, duplicates, order and native index.
+
+When the whole persisted map is absent, effective writable add-only returns
+`unavailable`. This intentionally declines legitimate legacy/rolling-deploy
+payloads rather than guessing provenance. It is not silently substituted into
+existing controls. A present map without this field means an empty baseline.
+Readonly or non-add-only fields do not require the map.
+
+`visible` is presentation only. Configured hiding and
+`hidePersistedAddOnlyValues: true` never delete values, alter capacity or prune
+Save data. Persisted add-only rows cannot be removed; unsaved rows can. Readonly
+and computed fields cannot add/remove. `openAllowed` and `downloadAllowed` are
+independent configuration permissions, not promises of URL access, rendering,
+download capability or confidential file delivery. Your renderer still owns
+format support and safe links.
+
+The default producer mode is `upload-file`; URL, signature and annotation modes
+report `unsupported-mode` for this ordinary-file helper. Missing/empty type
+restrictions are unrestricted. Restricted MIME values are compared after case,
+whitespace and parameter normalization; document groups accept PDF/Word and
+compressed groups accept exact ZIP MIME essences. Empty MIME is permitted only
+without restrictions; it does not prove that a selection is readable or a file.
+
+Count includes the full native array, even invisible rows, plus the next valid
+batch. A valid batch exceeding the cap is rejected atomically, retaining
+per-file errors; even an empty valid batch reports count overflow when the
+existing value is already over the cap. Count fractions floor; zero, negative
+and non-finite caps become zero. Missing count is unrestricted. Size uses MiB
+(`1048576` bytes): positive fractions work, missing/zero is unrestricted, and
+negative/non-finite values become a zero-byte cap. Exact size boundaries pass.
+The structural file descriptor requires a string `type` and finite nonnegative
+`size`; these are declared metadata, not evidence about uploaded bytes.
+
+This complete recipe uses the existing store's handle identity and revision
+guard. Supply `isCurrent` from your actual visitor/loaded-Form owner. Recompute
+before each deliberate action; a row index from an older render is not enough.
+
+```ts
+import type { AirtableValue, FormLoadedResult } from '@miniextensions/sdk';
+import {
+    getFormAttachmentPolicy,
+    checkFormAttachmentFiles,
+    FormDraftStore,
+    type FormDraftHandle,
+    type AttachmentFileDescriptor,
+} from '@miniextensions/sdk/forms';
+
+export function createFormAttachmentActions(args: {
+    loaded: FormLoadedResult;
+    store: FormDraftStore<AirtableValue>;
+    handle: FormDraftHandle;
+    fieldId: string;
+    isCurrent: () => boolean;
+}) {
+    const { loaded, store, handle, fieldId } = args;
+    function view() {
+        if (!args.isCurrent()) return null;
+        const snapshot = store.snapshot(handle);
+        const revision = store.revision(handle);
+        if (snapshot === null || revision === null) return null;
+        return {
+            revision,
+            policy: getFormAttachmentPolicy({
+                loaded,
+                fieldId,
+                value: snapshot.data[fieldId],
+                hidePersistedAddOnlyValues: true,
+            }),
+        };
+    }
+    function remove(renderedRevision: number, nativeIndex: number): boolean {
+        const fresh = view();
+        if (
+            fresh === null ||
+            fresh.revision !== renderedRevision ||
+            fresh.policy.status !== 'ready' ||
+            !Number.isInteger(nativeIndex) ||
+            nativeIndex < 0 ||
+            fresh.policy.rows[nativeIndex]?.removeAllowed !== true
+        )
+            return false;
+        const value = store.read(handle, fieldId);
+        if (
+            !Array.isArray(value) ||
+            !args.isCurrent() ||
+            store.revision(handle) !== renderedRevision
+        )
+            return false;
+        return store.write(
+            handle,
+            fieldId,
+            value.filter((_, index) => index !== nativeIndex)
+        );
+    }
+    function checkFiles(files: readonly AttachmentFileDescriptor[]) {
+        if (!args.isCurrent()) return null;
+        const snapshot = store.snapshot(handle);
+        if (snapshot === null) return null;
+        return checkFormAttachmentFiles({
+            loaded,
+            fieldId,
+            value: snapshot.data[fieldId],
+            files,
+        });
+    }
+    return { view, remove, checkFiles };
+}
+```
+
+Render visible rows and retain `view.revision` with their `nativeIndex`. Remove
+only through the fresh checked action. Save through `createFormSaveInput` with
+the complete store snapshot; do not serialize the visible rows.
+
+For a deliberate upload, check the freshly selected descriptors, then call the
+existing `client.attachments.uploadFile` with the current Form token and an
+owned `AbortController`. After awaiting, recheck the visitor/handle and current
+capacity before appending to the complete native array. Pending cancellation
+always remains possible, even if readonly, capacity or ownership changes; never
+gate `controller.abort()` on this policy. Cancellation cannot undo bytes already
+uploaded. The helper neither cancels nor cleans remote objects. Do not retry
+mutations or replay uncertain uploads automatically. No mutation occurs from
+describing, checking files, cancelling a local selection or rendering a row.
+
 ## Compile scalar runtime conditions
 
 `compileRuntimeConditions` translates the existing `RuntimeConditionsDefinition`

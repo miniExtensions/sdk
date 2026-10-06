@@ -30,17 +30,17 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11391623783',
+    packageArtifactId: '11393505768',
     packageZipSha256:
-        '43ed78b1ddea42047dee4c0ec12077d75ec5241eef68f0f91412edaf5497e1c2',
+        '0d971c4660b6dd836faf740e1f73128e7b6336ea9225ca7436cdab2448ef8035',
     packageSha256:
-        '8c92567216dbf64df89b5662cd637d475cf7d971692784d04a74901aac1ead61',
-    packageBytes: 275848,
+        'd01b3350b0618e2baa500162373295ecd465c5fb59ac50a266c53c84d2abd20b',
+    packageBytes: 275955,
     packageFiles: 192,
     packageZipMembers: 4,
-    fixtureArtifactId: '11391603719',
+    fixtureArtifactId: '11393690337',
     fixtureZipSha256:
-        '72c227d5dba543b9c22ae405c38071c9f54df75d332de69c9f46cc2052046279',
+        '5d447dfe28e576b91c0462b088eaecbe8723c672d12da261000ef15b74270b41',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
@@ -48,11 +48,13 @@ const expected = {
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: 'bdd662ca4ed84f96752273069a41b0c667b9ceb0',
-        tree: '149eb70bd11ff0e227214cd2b19ce884df3e6ada',
+        commit: '366fdd6ada76f5c7e62f74b97742150cde9f71f5',
+        tree: 'd9e98ca47638d902e0ec41340acc6098899e0b49',
     },
-    runId: '37418887500',
+    runId: '37421581451',
     runAttempt: '1',
+    reviewSourceSha256:
+        'e99c026e70e8423b10e8d2f8d6a23e547c11cdfe619dc370e95b5795552296b0',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const within = (root, path) => {
@@ -198,6 +200,8 @@ assert len(source_map['sources'])==len(source_map['sourcesContent'])
 review_sources=[content for name,content in zip(source_map['sources'],source_map['sourcesContent']) if name.replace('\\','/').endswith('/src/review.ts')]
 assert len(review_sources)==1
 assert review_sources[0].encode()==files['package/examples/browser/src/review.ts']
+assert re.fullmatch(r'[a-f0-9]{64}',expected.get('reviewSourceSha256','')), 'HOLD: bind the source digest extracted from the final accepted Review package'
+assert sha(review_sources[0].encode())==expected['reviewSourceSha256']
 print(json.dumps({'source':manifest['source'],'ci':manifest['ci'],'package':manifest['package'],
  'manifestSha256':sha((fixture/'manifest.json').read_bytes()),'fixtureFiles':len(fixture_names),
  'checksums':expected['fixtureChecksums'],'outputs':expected['fixtureOutputs'],'sources':expected['fixtureSources'],'sdkBundleInputs':sdk_counts}))
@@ -232,6 +236,7 @@ const receipt = {
         'Review cases cover one-page manual scalar rows and explicit current Confirm only; synthetic returned validation and uncertainty handling prove no backend rule evaluation or persistence.',
         'Native modal inertness is preserved. Pending draft/owner/configuration invalidation is separately a packed real-starter event oracle, not an ordinary background native gesture claim.',
         'Empty-hiding cases cover explicit edit mode on twelve direct scalar types including richText and blocked section recovery; returned hidden-required errors are synthetic, without hosted backend validation, hidden-write authority or persistence credit. Create-mode polarity is a separate installed/packed oracle.',
+        'Combined empty-hiding/Review covers eleven hidden whitespace scalar answers plus one nonblank malformed barcode rejection, preserving complete native Save/dirty IDs; final Review archive source binding is required. Blank rich/computed support is explicitly denied in installed proofs.',
     ],
 };
 const writeJson = (path, data) =>
@@ -4087,7 +4092,170 @@ try {
             ]);
         }
     );
-    assert.equal(receipt.cases.length, 32);
+    await exercise(
+        'starter-hidden-whitespace-review-current-confirm',
+        async (result) => {
+            const loadCombined = async (scenario) => {
+                await driver.get(
+                    `${origin}/starter/index.html?scenario=${scenario}`
+                );
+                await clickText('Connect and load');
+                return waitReady(
+                    (value) =>
+                        value.review?.controls.length === 13 &&
+                        value.status === 'Loaded form loaded.',
+                    'Actual edit empty-hiding plus Review Form load.'
+                );
+            };
+            await loadCombined('hide-empty-review');
+            let state = await capture(
+                result,
+                'eleven-canonical-whitespace-targets-hidden'
+            );
+            assert.equal(state.expected.blankFieldIds.length, 11);
+            for (const id of state.expected.blankFieldIds) {
+                assert.equal(state.expected.initial[id], ' \t\n ');
+                assert(visibilityControl(state, id).hidden);
+            }
+            await assertNativeVisibility(state.expected.blankFieldIds, false);
+            await assertNativeVisibility(
+                ['fld_empty_locked', 'fld_empty_tail'],
+                true
+            );
+            assert(visibilityAlert(state).hidden);
+            await assertNativeVisibilityAlert(false);
+            assert.equal(saves(state).length, 0);
+            assertCalls(state, ['fetchExtensionForEndUser']);
+            await replaceInput(
+                await find('#screen input[data-field-id="fld_empty_tail"]'),
+                'Accepted combined sibling',
+                'text'
+            );
+            await openReview();
+            state = await capture(
+                result,
+                'semantic-review-omits-all-hidden-whitespace',
+                await reviewDialog()
+            );
+            assert.deepEqual(
+                state.review.dialogs[0].rows.map(
+                    ({ fieldId, title, value, hideTitle }) => ({
+                        fieldId,
+                        title,
+                        value,
+                        hideTitle,
+                    })
+                ),
+                [
+                    {
+                        fieldId: 'fld_empty_locked',
+                        title: 'Empty locked',
+                        value: 'Retained readonly native answer',
+                        hideTitle: false,
+                    },
+                    {
+                        fieldId: 'fld_empty_tail',
+                        title: 'Empty tail',
+                        value: 'Accepted combined sibling',
+                        hideTitle: false,
+                    },
+                ]
+            );
+            const values = await (
+                await reviewDialog()
+            ).findElements(By.css('dd'));
+            assert.deepEqual(
+                await Promise.all(values.map((value) => value.getText())),
+                ['Retained readonly native answer', 'Accepted combined sibling']
+            );
+            assert.equal(saves(state).length, 0);
+            await clickText('Edit', await reviewDialog());
+            await waitReviewClosed();
+            assert.equal(saves(await snapshot()).length, 0);
+            await openReview();
+            await (await reviewDialog()).sendKeys(Key.ESCAPE);
+            await waitReviewClosed();
+            state = await capture(result, 'edit-and-native-escape-zero-save');
+            assert.equal(
+                emptyControl(state, 'tail').value,
+                'Accepted combined sibling'
+            );
+            assertCalls(state, ['fetchExtensionForEndUser']);
+            await openReview();
+            await clickText('Confirm', await reviewDialog());
+            await waitReady(
+                (value) =>
+                    saves(value).length === 1 &&
+                    value.status?.includes('validation errors') &&
+                    value.visibility.errors.some(
+                        (text) =>
+                            text ===
+                            `Hidden required answer: ${value.expected.validationMessage}`
+                    ),
+                'Current Confirm dispatches the complete whitespace draft and presents synthetic validation.'
+            );
+            state = await capture(
+                result,
+                'single-confirm-preserves-full-whitespace-native-save'
+            );
+            assertEmptySave(
+                state,
+                {
+                    ...state.expected.initial,
+                    fld_empty_tail: 'Accepted combined sibling',
+                },
+                [...state.expected.blankFieldIds, 'fld_empty_tail']
+            );
+            assert.equal(state.review.dialogs.length, 0);
+            assert(
+                (await (await find('#screen .error-list')).getText()).includes(
+                    `Hidden required answer: ${state.expected.validationMessage}`
+                )
+            );
+            assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+            await loadCombined('hide-empty-review-malformed');
+            state = await snapshot();
+            assert(!emptyControl(state, 'barcode').hidden);
+            assert(visibilityAlert(state).hidden);
+            await assertNativeVisibility(['fld_empty_barcode'], true);
+            await assertNativeVisibilityAlert(false);
+            await replaceInput(
+                await find('#screen input[data-field-id="fld_empty_tail"]'),
+                'Accepted combined sibling',
+                'text'
+            );
+            await clickText('Save');
+            await waitReady(
+                (value) =>
+                    value.status?.includes('Review is unavailable') &&
+                    value.review.dialogs.length === 0 &&
+                    !value.review.fieldsInert &&
+                    saves(value).length === 0,
+                'Nonblank malformed barcode reaches Review with ordinary visibility available and blocks Save.'
+            );
+            state = await capture(
+                result,
+                'malformed-nonblank-review-zero-dialog-zero-save'
+            );
+            assert(!emptyControl(state, 'barcode').hidden);
+            assert(visibilityAlert(state).hidden);
+            assert.equal(
+                await (
+                    await find(
+                        '#screen textarea[data-field-id="fld_empty_barcode"]'
+                    )
+                ).getAttribute('value'),
+                'PrivateCombinedMalformedBarcode'
+            );
+            assert.equal(
+                emptyControl(state, 'tail').value,
+                'Accepted combined sibling'
+            );
+            assert(!state.status.includes('PrivateCombinedMalformed'));
+            assertCalls(state, ['fetchExtensionForEndUser']);
+        }
+    );
+    assert.equal(receipt.cases.length, 33);
     assert(
         receipt.cases.every((v) => v.status === 'passed'),
         'Every exact synthetic case must pass; failed cases are retained without retry.'

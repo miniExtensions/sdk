@@ -30,17 +30,17 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11391712638',
+    packageArtifactId: '11392579649',
     packageZipSha256:
-        '5cf2fb9f2098bf56b633df126b065467f625a26a3013140d572eb58f4cd8ad91',
+        'b2c3fcc74710ba5343788c059d7d795cbf2f16e68c2be16d470cccb0de94552a',
     packageSha256:
-        '6942d5b46f768cf6c91ff83ed24b152d5e3ebea3273f043766769916fc951a27',
-    packageBytes: 274531,
+        '1f08dad1c2666e3f7265cf9965c7ea19a78aafb8c33de61526c9538d111aeda1',
+    packageBytes: 274649,
     packageFiles: 192,
     packageZipMembers: 4,
-    fixtureArtifactId: '11391387743',
+    fixtureArtifactId: '11393525144',
     fixtureZipSha256:
-        '76eb51fa787aa500689d768f92d18e293a356a0e7017761789360d2c5b9c27b2',
+        '0181e622e7c30cddfe19c5ca8f4ff4c9fb60fc1aa36a24d7ad7df356cc8a9dfe',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
@@ -48,10 +48,10 @@ const expected = {
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: '25392413c4e22c9df76981d9f5f2e238b090eaec',
-        tree: '9a7791e1376438e9053221a80e8f8ceaa5edfec0',
+        commit: 'd9704f4c552cc0f3197b2bf3615130acacece9b3',
+        tree: 'ec0f1dc263ad773f83785b47a798cc5d5df87b85',
     },
-    runId: '37418032257',
+    runId: '37421216507',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');

@@ -28,9 +28,9 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  # Immutable reviewed PR20 push producer at native head 25392413.
-                  run-id: 37418032257
-                  artifact-ids: 11391712638
+                  # Immutable reviewed PR20 push producer at corrected native head d9704f4c.
+                  run-id: 37421216507
+                  artifact-ids: 11392579649
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/package
                   skip-decompress: true
@@ -39,8 +39,8 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  run-id: 37418032257
-                  artifact-ids: 11391387743
+                  run-id: 37421216507
+                  artifact-ids: 11393525144
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/fixture
                   skip-decompress: true

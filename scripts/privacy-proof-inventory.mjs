@@ -29,6 +29,10 @@ export const privacyScenarioInventory = Object.freeze([
     'address-ime',
     'teardown-logout',
     'teardown-disconnect',
+    'review-answers',
+    'review-address',
+    'review-validation',
+    'review-unknown',
 ]);
 
 export const privacyAuthScenarioInventory = Object.freeze([

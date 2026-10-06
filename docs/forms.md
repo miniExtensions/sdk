@@ -19,6 +19,252 @@ published extension loading, passwords/login, query/context and visitor rules.
 These helpers require a real `FormLoadedResult`; first handle any other loaded
 screen or returned redirect. Use Node.js 22+ or your ES2022 browser bundler.
 
+## Headless conditional linked-filter cascades
+
+`createFormLinkedFilterModel` provides one network-free cascade per returned
+outer Form linked field. It copies canonical configuration, query, authorized
+metadata, pairs and snapshots. Ordered unique ID descriptors are supported;
+unsupported configuration or metadata returns explicit unavailable diagnostics.
+Unavailable presentation preserves otherwise unrestricted ordinary linked reads
+and independent add/remove flags. Missing/null/empty primary values are empty;
+an ID alone does not satisfy an empty-driver restriction. Readonly, visitor and
+backend permission checks remain outside this presentation model.
+
+Tickets bind the model instance, driver, generation and monotonic request.
+Accepting a response consumes its ticket; overlapping same-search reads,
+replayed/foreign tickets and disposed instances cannot accept stale data.
+Malformed or duplicate response identities and mismatched prefills are rejected
+atomically. Duplicate labels remain distinct record-ID choices. Search changes
+retain selected pairs while clearing candidates and invalidating option paging;
+a driver change also clears downstream selections/search/candidates. Neither
+operation changes the native linked-record draft. Child reads use only the
+immediately preceding selected pair's string value. There is no driver paging.
+
+Hidden affects rendering only. Explicit initial prefill reads use current
+metadata names and server-returned matching pairs; repeated configured URL
+values return an unavailable read. Successful resolution (including a valid null
+result) is not replayed, and user edits prevent later URL-prefill replay. Failed,
+cancelled or invalid reads allow an explicit retry only; ordered loading stops
+at the interruption and retains accepted upstream pairs. No retry is automatic. Retire the model on every visitor/session/token/loaded-Form transition.
+
+This complete custom-renderer adapter uses a caller-owned monotonic scope
+revision, including A → B → A. It recreates the existing linked-option loader
+from each new snapshot and resets paging while retaining native selected IDs.
+It composes a fresh filter map at deliberate Save; mutating a previously supplied
+`createFormController` save-options object would not update its captured copy.
+The selection model below supplies reads/paging only: the renderer separately
+checks `canChange`, readonly and current ownership before deliberate native link
+edits. No selection callback writes drafts automatically.
+
+```ts
+import type {
+    AirtableValue,
+    FormLoadedResult,
+    MiniExtensionsClient,
+    RuntimeQuery,
+    RuntimeTableStates,
+} from '@miniextensions/sdk';
+import {
+    createFormLinkedFilterModel,
+    createFormSaveInput,
+    describeLoadedFormFields,
+    openLoadedFormDraft,
+    FormDraftStore,
+    type FormOwnerScope,
+    type FormSaveOptions,
+} from '@miniextensions/sdk/forms';
+import {
+    createFormLinkedRecordLoader,
+    createSelectionModel,
+} from '@miniextensions/sdk/ui';
+
+export function createConfiguredCascadeAdapter(args: {
+    client: MiniExtensionsClient;
+    loaded: FormLoadedResult;
+    fieldId: string;
+    metadata: RuntimeTableStates;
+    query: RuntimeQuery;
+    store: FormDraftStore<AirtableValue>;
+    getScope(): FormOwnerScope;
+    getSaveOptions(): FormSaveOptions;
+}) {
+    const { client, fieldId, store } = args;
+    const loaded = structuredClone(args.loaded);
+    const query = structuredClone(args.query);
+    const descriptor = describeLoadedFormFields(loaded).find(
+        (field) => field.fieldId === fieldId
+    );
+    if (descriptor?.schema.fieldType !== 'multipleRecordLinks')
+        throw new Error('Expected a returned linked field.');
+    const schema = descriptor.schema;
+    const scope = { ...args.getScope() };
+    const session = client.getSession();
+    const sessionKey = () =>
+        JSON.stringify(
+            Object.entries(client.getSession()).sort(([a], [b]) =>
+                a.localeCompare(b)
+            )
+        );
+    const capturedSession = sessionKey();
+    let disposed = false;
+    let saveAttempted = false;
+    const handle = openLoadedFormDraft({ store, loaded });
+    const owned = () => {
+        const now = args.getScope();
+        return (
+            !disposed &&
+            now.ownerId === scope.ownerId &&
+            now.revision === scope.revision &&
+            sessionKey() === capturedSession &&
+            store.revision(handle) !== null
+        );
+    };
+    const cascade = createFormLinkedFilterModel({ schema, query });
+    cascade.initialize(args.metadata);
+    const selection = createSelectionModel({ multiple: true });
+    const resetOptions = () => {
+        const native = store.read(handle, fieldId);
+        if (
+            !Array.isArray(native) ||
+            !native.every((value) => typeof value === 'string')
+        )
+            throw new Error('Expected native linked IDs.');
+        const loader = createFormLinkedRecordLoader({
+            client,
+            linkedTableId: schema.airtableField.config.options.linkedTableId,
+            input: {
+                extensionAccessToken: loaded.payload.extensionAccessToken,
+                linkedRecordFieldId: fieldId,
+                conditionalLinkedRecordFilteringValues: cascade.snapshot(),
+            },
+        });
+        const generation = cascade.state().generation;
+        selection.reset({
+            multiple: true,
+            value: native,
+            selectedOptions: native.map((value) => ({ value, label: value })),
+            readOnly: descriptor.readOnly,
+            loadOptions: async (request) => {
+                if (!owned() || generation !== cascade.state().generation)
+                    throw new Error('Retired option read.');
+                const result = await loader(request);
+                if (!owned() || generation !== cascade.state().generation)
+                    throw new Error('Retired option result.');
+                return result;
+            },
+        });
+    };
+    resetOptions();
+    async function readDriver(
+        id: string,
+        usePrefill = false,
+        signal?: AbortSignal
+    ) {
+        if (!owned() || signal?.aborted) return { status: 'stale' as const };
+        const plan = cascade.prepareRead(id, { usePrefill });
+        if (plan.status !== 'ready') return plan;
+        try {
+            const response =
+                await client.linkedRecords.listConditionalFilterPrimaryValues(
+                    {
+                        extensionAccessToken:
+                            loaded.payload.extensionAccessToken,
+                        ...plan.input,
+                    },
+                    { signal, session }
+                );
+            if (!owned() || signal?.aborted)
+                return { status: 'stale' as const };
+            const accepted = cascade.accept(plan.ticket, response);
+            if (accepted.status === 'accepted' && accepted.changed)
+                resetOptions();
+            return accepted;
+        } catch (error) {
+            if (owned() && !signal?.aborted && cascade.isCurrent(plan.ticket))
+                throw error;
+            return { status: 'stale' as const };
+        } finally {
+            cascade.discard(plan.ticket);
+        }
+    }
+    return {
+        state: () => cascade.state(),
+        snapshot: () => cascade.snapshot(),
+        selection,
+        canChange: (adding: boolean) =>
+            owned() && !descriptor.readOnly && cascade.canChange(adding),
+        readDriver,
+        // Call explicitly again after interruption; successful/null outcomes are skipped.
+        async loadPrefills(signal?: AbortSignal) {
+            for (const filter of cascade.state().filters) {
+                if (!owned()) return;
+                if (query[`prefill_${filter.name}`] != null) {
+                    const accepted = await readDriver(filter.id, true, signal);
+                    if (
+                        accepted.status !== 'accepted' &&
+                        accepted.status !== 'resolved'
+                    )
+                        return accepted;
+                }
+            }
+        },
+        searchDriver(id: string, value: string) {
+            if (!owned()) return false;
+            const changed = cascade.search(id, value);
+            if (changed) resetOptions();
+            return changed;
+        },
+        chooseDriver(id: string, recordId: string | null) {
+            if (!owned()) return false;
+            const generation = cascade.state().generation;
+            const accepted = cascade.choose(id, recordId);
+            if (generation !== cascade.state().generation) resetOptions();
+            return accepted;
+        },
+        async saveOnce(signal?: AbortSignal) {
+            if (!owned() || saveAttempted) return null;
+            const draft = store.snapshot(handle);
+            if (!draft) return null;
+            const revision = store.revision(handle);
+            const generation = cascade.state().generation;
+            const options = args.getSaveOptions();
+            const input = createFormSaveInput({
+                loaded,
+                draft,
+                options: {
+                    ...options,
+                    conditionalLinkedRecordFieldIdsToFilteringValues: {
+                        ...options.conditionalLinkedRecordFieldIdsToFilteringValues,
+                        [fieldId]: cascade.snapshot(),
+                    },
+                },
+            });
+            if (
+                !owned() ||
+                store.revision(handle) !== revision ||
+                cascade.state().generation !== generation
+            )
+                return null;
+            saveAttempted = true;
+            const result = await client.forms.save(input, { signal, session });
+            return owned() ? result : null;
+        },
+        dispose() {
+            disposed = true;
+            cascade.dispose();
+            selection.destroy();
+        },
+    };
+}
+```
+
+Rendering, labels, AbortControllers, status/subscriptions, fresh metadata reads,
+option paging and native draft ownership remain adapter-owned. The recipe's
+single Save attempt has no mutation retry, including unknown outcomes. Backend
+validation and uncertainty recovery still require the existing application
+workflow. This does not provide Portal-child URL-prefill propagation, name-based
+descriptor resolution, a general dependency graph or additional routes.
+
 ## Attachment presentation and file admission
 
 `getFormAttachmentPolicy` and `checkFormAttachmentFiles` are opt-in, pure

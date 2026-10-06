@@ -30,28 +30,28 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11386557517',
+    packageArtifactId: '11387853990',
     packageZipSha256:
-        'bef536febc36716b61c840c1ecb9ebb46411bc6818542d71ff82c3271d9d9dfd',
+        'de15a529e408ce3a09f22b0724f55085859dabaf82d3063133df55a9d65064e9',
     packageSha256:
-        'c650c42798a99aa5e1ad4a3894998376d163e1a4ce20beb1eed163aadb5d3355',
-    packageBytes: 256676,
-    packageFiles: 183,
+        'e376ab9da69376ad93b5742b2c12508df4a680819c5afbbf09a66defcc1381c0',
+    packageBytes: 267441,
+    packageFiles: 187,
     packageZipMembers: 4,
-    fixtureArtifactId: '11386542568',
+    fixtureArtifactId: '11388497203',
     fixtureZipSha256:
-        '6be8e952eac36c4af72e430e906a4e11d4a7fbb100dcfcb8fd66466e0c8b2802',
+        '3baa9bd6edd8e76f414eb0c35c1d824739aa48a9384560efd5f788190e3f6705',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
     fixtureSources: 13,
-    starterSdkInputs: 31,
+    starterSdkInputs: 32,
     authSdkInputs: 7,
     source: {
-        commit: '41f809e5ec34e4a270b378f6355ed3979fa128c2',
-        tree: 'bf5217ba83d166736100e11552e46fd3d3a063c8',
+        commit: '35348352f4f6b0f50703a54c5ab32f39655a18e4',
+        tree: '0c4e150d4bda8354ac0fe363fa191b67408f1f58',
     },
-    runId: '37404068752',
+    runId: '37409650974',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -177,6 +177,7 @@ for entry in manifest['sources']:
     check(entry,data)
 sdk_counts={}
 assert any(e['origin']=='installed-sdk-archive' and e['path']=='node_modules/@miniextensions/sdk/dist/esm/forms/visibility.js' for e in manifest['bundleInputs']['starter'])
+assert any(e['origin']=='installed-sdk-archive' and e['path']=='node_modules/@miniextensions/sdk/dist/esm/ui/addressAutocomplete.js' for e in manifest['bundleInputs']['starter'])
 for kind,count in [('starter',expected['starterSdkInputs']),('auth',expected['authSdkInputs'])]:
     entries=[e for e in manifest['bundleInputs'][kind] if e['origin']=='installed-sdk-archive']
     assert len(entries)==count
@@ -218,6 +219,8 @@ const receipt = {
         'Configured choices cover a flat Form with a visible direct scalar driver; no general hidden/linked projection credit.',
         'Visibility cases cover their declared one-page checkbox/unsupported condition and section configurations; no multipage or general hosted parity credit.',
         'Interaction Save assertions prove native dispatch with validation responses, not durable persistence.',
+        'Address cases cover editable unmasked singleLineText, a valid character cap and one optional one-page checkbox predicate; no provider/backend/general configuration credit.',
+        'Address stale responses exercise combined installed SDK and starter/presenter cancellation, without independently isolating presenter generations.',
     ],
 };
 const writeJson = (path, data) =>
@@ -295,7 +298,7 @@ const assertCalls = (state, routes) => {
     );
     assert(state.calls.every((v) => v.credentialsMode === 'omit'));
 };
-const capture = async (caseResult, name) => {
+const capture = async (caseResult, name, target = driver) => {
     let state;
     try {
         state = await snapshot();
@@ -309,7 +312,7 @@ const capture = async (caseResult, name) => {
     const filename = `${caseResult.id}-${name}.png`;
     writeFileSync(
         join(output, filename),
-        Buffer.from(await driver.takeScreenshot(), 'base64')
+        Buffer.from(await target.takeScreenshot(), 'base64')
     );
     caseResult.screenshots.push(filename);
     return state;
@@ -1891,7 +1894,1031 @@ try {
         );
         assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
     });
-    assert.equal(receipt.cases.length, 20);
+    const addressFieldId = 'fld_address_synthetic';
+    const addressSelector = `#screen input[data-field-id="${addressFieldId}"]`;
+    const addressPresenterSelector = '#screen [data-ui="address-autocomplete"]';
+    const predictionRoute =
+        '/api/trpc/publicExtensions.autoCompleteAddressField';
+    const detailRoute =
+        '/api/trpc/publicExtensions.getFormattedAddressFromPlaceId';
+    const addressReads = (state, route) =>
+        state.calls.filter((call) => call.route === route);
+    const addressControl = (state) => {
+        const control = state.address?.controls.find(
+            (entry) => entry.fieldId === addressFieldId
+        );
+        assert(control, 'Actual native address input must exist.');
+        return control;
+    };
+    const addressPresenter = (state) => {
+        assert.equal(state.address?.presenters.length, 1);
+        return state.address.presenters[0];
+    };
+    const capped = (state, value) =>
+        value.slice(0, state.expected.characterLimit);
+    const addressPending = (state, kind) =>
+        state.pending.find((entry) => entry.kind === kind);
+    const addressSettled = (state, id) =>
+        state.events.find(
+            (event) =>
+                event.type === 'address-response-settled' && event.id === id
+        );
+    const assertAddressQuiet = (state, value) => {
+        assert.equal(addressControl(state).value, value);
+        const presenter = addressPresenter(state);
+        assert.deepEqual(presenter.options, []);
+        assert.equal(presenter.expanded, 'false');
+        assert.equal(presenter.activeDescendant, null);
+        assert.equal(presenter.status, '');
+        assert.equal(presenter.statusRole, 'status');
+        assert.equal(presenter.retryHidden, true);
+    };
+    const assertAddressPopupClosed = async (result, name) => {
+        const current = await find(addressPresenterSelector);
+        const suggestions = await current.findElements(
+            By.css('[data-address-suggestions]')
+        );
+        const attributions = await current.findElements(
+            By.css('[data-address-attribution]')
+        );
+        const logos = await current.findElements(
+            By.css('img[alt="Google Maps"]')
+        );
+        assert.equal(suggestions.length, 1);
+        assert.equal(attributions.length, 1);
+        assert.equal(logos.length, 1);
+        const listbox = await suggestions[0].findElement(
+            By.css('[role="listbox"]')
+        );
+        const visible = {
+            suggestions: await suggestions[0].isDisplayed(),
+            listbox: await listbox.isDisplayed(),
+            attribution: await attributions[0].isDisplayed(),
+            logo: await logos[0].isDisplayed(),
+        };
+        const expanded = await (
+            await find(addressSelector)
+        ).getAttribute('aria-expanded');
+        result.observations.push({
+            stage: `${name}-native-popup-closed`,
+            fieldId: addressFieldId,
+            expanded,
+            visible,
+        });
+        assert.equal(expanded, 'false');
+        assert.deepEqual(visible, {
+            suggestions: false,
+            listbox: false,
+            attribution: false,
+            logo: false,
+        });
+    };
+    const assertAddressSave = (call, state, data, dirtyFieldIds) => {
+        assert.equal(call.method, 'POST');
+        assert.equal(
+            call.input.extensionAccessToken,
+            'FAKE_SYNTHETIC_ADDRESS_TOKEN'
+        );
+        assert.deepEqual(call.input.formRecord, {
+            type: 'edit',
+            tableId: state.expected.tableId,
+            recordId: state.expected.recordId,
+            data,
+        });
+        assert.deepEqual(
+            [...call.input.formFieldIdsWithUnsavedChanges].sort(),
+            [...dirtyFieldIds].sort()
+        );
+        assert.deepEqual(call.input.context, { type: 'direct-url' });
+        assert.deepEqual(
+            call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
+            {}
+        );
+    };
+    const assertAddressReadInputs = (state, queries, places) => {
+        assert.deepEqual(
+            addressReads(state, predictionRoute).map((call) => ({
+                method: call.method,
+                input: call.input,
+            })),
+            queries.map((addressFieldValue) => ({
+                method: 'GET',
+                input: {
+                    extensionAccessToken: 'FAKE_SYNTHETIC_ADDRESS_TOKEN',
+                    fieldId: addressFieldId,
+                    addressFieldValue,
+                },
+            }))
+        );
+        assert.deepEqual(
+            addressReads(state, detailRoute).map((call) => ({
+                method: call.method,
+                input: call.input,
+            })),
+            places.map((placeId) => ({
+                method: 'GET',
+                input: {
+                    extensionAccessToken: 'FAKE_SYNTHETIC_ADDRESS_TOKEN',
+                    fieldId: addressFieldId,
+                    placeId,
+                },
+            }))
+        );
+    };
+    const observeAddressCalls = async (routes) => {
+        // Cross the presenter's 800ms debounce window while repeatedly reading
+        // the real trace. This catches blank queries and automatic retries.
+        const until = Date.now() + 900;
+        return driver.wait(
+            async () => {
+                const state = await snapshot();
+                assertCalls(state, routes);
+                return Date.now() >= until ? state : false;
+            },
+            2500,
+            'Bounded address trace remains exact across the debounce window.',
+            100
+        );
+    };
+    const loadAddress = async (scenario) => {
+        await driver.get(`${origin}/starter/index.html?scenario=${scenario}`);
+        await clickText('Connect and load');
+        await waitReady(
+            (state) =>
+                state.address?.presenters.length === 1 &&
+                state.status === 'Loaded form loaded.' &&
+                !addressControl(state).disabled,
+            'Actual packed configured address Form load.'
+        );
+        const input = await find(addressSelector);
+        assert.equal(await input.getAttribute('type'), 'text');
+        assert.equal(await input.getAttribute('role'), 'combobox');
+        assert.equal(await input.getAttribute('autocomplete'), 'off');
+        return input;
+    };
+    const typeAddress = async (input, value) => {
+        assert(await input.isDisplayed());
+        assert(await input.isEnabled());
+        await input.clear();
+        await input.sendKeys(value);
+        const state = await snapshot();
+        assert.equal(await input.getAttribute('value'), capped(state, value));
+        assert.equal(addressControl(state).value, capped(state, value));
+    };
+    const waitAddressPending = (kind) =>
+        waitSnapshot(
+            (state) => addressPending(state, kind),
+            `Actual synthetic address ${kind} request has started.`
+        );
+    const settleAddress = async (kind, id, failure = false) => {
+        await clickText(`${failure ? 'Fail' : 'Release'} address ${kind}`);
+        const state = await waitSnapshot(
+            (value) => addressSettled(value, id),
+            `Already-started synthetic address ${kind} response settled.`
+        );
+        assert.equal(
+            addressSettled(state, id).outcome,
+            failure ? 'failure' : 'success'
+        );
+        if (failure)
+            await waitReady(
+                (value) =>
+                    addressPresenter(value).statusRole === 'alert' &&
+                    !addressPresenter(value).retryHidden,
+                'The actual failed address read exposes its local retry.'
+            );
+        return state;
+    };
+    const assertNativeColor = (actual, hex, channels, alpha = 1) => {
+        const expectedColors = [
+            hex,
+            `rgba(${channels.join(', ')}, ${alpha})`,
+            ...(alpha === 1 ? [`rgb(${channels.join(', ')})`] : []),
+        ];
+        assert(
+            expectedColors.includes(actual.toLowerCase()),
+            `Unexpected native computed color ${actual}; expected ${hex}.`
+        );
+    };
+    const addressOptions = async (result) => {
+        const state = await waitReady(
+            (value) => addressPresenter(value).options.length === 2,
+            'Actual prediction options rendered without making Form busy.'
+        );
+        assert.deepEqual(
+            addressPresenter(state).options.map((option) => option.label),
+            state.expected.predictions.map(
+                (prediction) => prediction.description
+            )
+        );
+        assert(
+            addressPresenter(state).options.every(
+                (option) => !option.hidden && !option.disabled
+            )
+        );
+        assert.equal(addressPresenter(state).expanded, 'true');
+        const options = await driver.findElements(
+            By.css(`${addressPresenterSelector} [role="option"]`)
+        );
+        assert.equal(options.length, 2);
+        for (const option of options) {
+            assert(await option.isDisplayed());
+            assert(await option.isEnabled());
+            assert.equal((await option.findElements(By.css('*'))).length, 0);
+        }
+        const suggestions = await find(
+            `${addressPresenterSelector} [data-address-suggestions]`
+        );
+        const listbox = await suggestions.findElement(
+            By.css('[role="listbox"]')
+        );
+        const attributions = await suggestions.findElements(
+            By.css('[data-address-attribution]')
+        );
+        assert.equal(attributions.length, 1);
+        const attribution = attributions[0];
+        const logos = await attribution.findElements(
+            By.css('img[alt="Google Maps"]')
+        );
+        assert.equal(logos.length, 1);
+        const logo = logos[0];
+        assert(await suggestions.isDisplayed());
+        assert(await listbox.isDisplayed());
+        assert(await attribution.isDisplayed());
+        assert(await logo.isDisplayed());
+        assert.equal((await listbox.findElements(By.css('img'))).length, 0);
+        assert.equal(
+            await (await listbox.findElement(By.xpath('..'))).getId(),
+            await suggestions.getId(),
+            'Predictions must share the same visible attribution container.'
+        );
+        assert.equal(
+            await (await attribution.findElement(By.xpath('..'))).getId(),
+            await suggestions.getId(),
+            'Attribution must be a sibling of the actual listbox.'
+        );
+        assert.equal(await logo.getAttribute('alt'), 'Google Maps');
+        assert.equal(await logo.getAttribute('translate'), 'no');
+        assert.equal(await attribution.getAttribute('translate'), 'no');
+        await driver.wait(
+            async () => (await logo.getProperty('complete')) === true,
+            5000,
+            'The actual embedded provider attribution image completes.'
+        );
+        const intrinsic = {
+            width: Number(await logo.getProperty('naturalWidth')),
+            height: Number(await logo.getProperty('naturalHeight')),
+        };
+        assert.deepEqual(intrinsic, { width: 196, height: 36 });
+        const src = await logo.getAttribute('src');
+        const prefix = 'data:image/png;base64,';
+        assert(src.startsWith(prefix));
+        const png = Buffer.from(src.slice(prefix.length), 'base64');
+        assert.equal(png.length, 2600);
+        const logoSha256 = sha256(png);
+        assert.equal(
+            logoSha256,
+            'f542cdc1844d0e1a848455dffdc46a5cd618528576a4dba47bc4a096bfa4f60c'
+        );
+        const logoRect = await logo.getRect();
+        const attributionRect = await attribution.getRect();
+        assert(Math.abs(logoRect.width - 98) <= 0.1);
+        assert(Math.abs(logoRect.height - 18) <= 0.1);
+        assert.equal(await logo.getCssValue('width'), '98px');
+        assert.equal(await logo.getCssValue('height'), '18px');
+        const padding = {};
+        for (const [side, pixels] of [
+            ['top', 10],
+            ['right', 10],
+            ['bottom', 5],
+            ['left', 10],
+        ]) {
+            padding[side] = await attribution.getCssValue(`padding-${side}`);
+            assert.equal(padding[side], `${pixels}px`);
+        }
+        const clearspace = {
+            top: logoRect.y - attributionRect.y,
+            right:
+                attributionRect.x +
+                attributionRect.width -
+                (logoRect.x + logoRect.width),
+            bottom:
+                attributionRect.y +
+                attributionRect.height -
+                (logoRect.y + logoRect.height),
+            left: logoRect.x - attributionRect.x,
+        };
+        for (const [side, minimum] of [
+            ['top', 10],
+            ['right', 10],
+            ['bottom', 5],
+            ['left', 10],
+        ])
+            assert(
+                clearspace[side] >= minimum - 0.1,
+                `Actual provider logo ${side} clearspace must be at least ${minimum}px.`
+            );
+        const suggestionsBackground =
+            await suggestions.getCssValue('background-color');
+        const attributionBackground =
+            await attribution.getCssValue('background-color');
+        assertNativeColor(suggestionsBackground, '#ffffff', [255, 255, 255]);
+        assertNativeColor(attributionBackground, '#ffffff', [255, 255, 255]);
+        const border = {};
+        for (const side of ['top', 'right', 'bottom', 'left']) {
+            border[side] = {
+                width: await suggestions.getCssValue(`border-${side}-width`),
+                style: await suggestions.getCssValue(`border-${side}-style`),
+                color: await suggestions.getCssValue(`border-${side}-color`),
+            };
+            assert(parseFloat(border[side].width) > 0);
+            assert.equal(border[side].style, 'solid');
+            assertNativeColor(border[side].color, '#6b7280', [107, 114, 128]);
+        }
+        result.observations.push({
+            stage: 'native-provider-attribution',
+            alt: await logo.getAttribute('alt'),
+            complete: await logo.getProperty('complete'),
+            logoBytes: png.length,
+            logoSha256,
+            intrinsic,
+            logoRect,
+            attributionRect,
+            padding,
+            clearspace,
+            suggestionsBackground,
+            attributionBackground,
+            border,
+        });
+        return options;
+    };
+    const assertNativeAddressHighlight = async (
+        result,
+        input,
+        options,
+        highlighted,
+        query,
+        name
+    ) => {
+        const paints = [];
+        for (const option of options) {
+            const paint = {
+                id: await option.getAttribute('id'),
+                selected: await option.getAttribute('aria-selected'),
+                background: await option.getCssValue('background-color'),
+                color: await option.getCssValue('color'),
+                outlineColor: await option.getCssValue('outline-color'),
+                outlineStyle: await option.getCssValue('outline-style'),
+                outlineWidth: await option.getCssValue('outline-width'),
+                outlineOffset: await option.getCssValue('outline-offset'),
+                rect: await option.getRect(),
+                displayed: await option.isDisplayed(),
+            };
+            paints.push(paint);
+        }
+        const activeElement = await driver.switchTo().activeElement();
+        const nativeActiveInputId = await activeElement.getAttribute('id');
+        const targetSelector = `${addressPresenterSelector} [data-address-suggestions]`;
+        const suggestions = await find(targetSelector);
+        const observation = {
+            stage: `${name}-native-computed-paint`,
+            nativeActiveInputId,
+            paints,
+            screenshot: {
+                mode: 'w3c-element',
+                targetSelector,
+                targetElementId: await suggestions.getId(),
+                targetRect: await suggestions.getRect(),
+            },
+        };
+        result.observations.push(observation);
+        await capture(result, name, suggestions);
+        const state = await snapshot();
+        const activeAfterScreenshot = await driver.switchTo().activeElement();
+        observation.afterScreenshot = {
+            snapshot: state,
+            nativeActiveInputId: await activeAfterScreenshot.getAttribute('id'),
+        };
+        assert.equal(await activeElement.getId(), await input.getId());
+        assert.equal(nativeActiveInputId, await input.getAttribute('id'));
+        assert.equal(await activeAfterScreenshot.getId(), await input.getId());
+        assert.equal(
+            observation.afterScreenshot.nativeActiveInputId,
+            await input.getAttribute('id')
+        );
+        assert(addressControl(state).focused);
+        assert.equal(addressControl(state).value, query);
+        assert.equal(addressPresenter(state).expanded, 'true');
+        assert.equal(
+            addressPresenter(state).activeDescendant,
+            paints[highlighted].id
+        );
+        assert.deepEqual(
+            addressPresenter(state).options.map((option) => option.selected),
+            paints.map((_, index) => index === highlighted)
+        );
+        for (let index = 0; index < paints.length; index += 1) {
+            const paint = paints[index];
+            const selected = index === highlighted;
+            assert.equal(paint.selected, String(selected));
+            assert(paint.displayed && paint.rect.height > 0);
+            assertNativeColor(
+                paint.background,
+                selected ? '#1d4ed8' : '#ffffff',
+                selected ? [29, 78, 216] : [255, 255, 255]
+            );
+            assertNativeColor(
+                paint.color,
+                selected ? '#ffffff' : '#1f2937',
+                selected ? [255, 255, 255] : [31, 41, 55]
+            );
+            assertNativeColor(
+                paint.outlineColor,
+                selected ? '#111827' : 'transparent',
+                selected ? [17, 24, 39] : [0, 0, 0],
+                selected ? 1 : 0
+            );
+            assert.equal(paint.outlineStyle, 'solid');
+            assert.equal(paint.outlineWidth, '2px');
+            assert.equal(paint.outlineOffset, '-2px');
+        }
+        assert.equal(saves(state).length, 0);
+        assertAddressReadInputs(state, [query], []);
+        assertCalls(state, ['fetchExtensionForEndUser', predictionRoute]);
+    };
+    const assertAddressFailure = async (state, value) => {
+        assert.equal(addressControl(state).value, value);
+        const presenter = addressPresenter(state);
+        assert.deepEqual(presenter.options, []);
+        assert.equal(presenter.expanded, 'false');
+        assert.equal(presenter.statusRole, 'alert');
+        assert.equal(
+            presenter.status,
+            'Address suggestions could not be loaded. You can keep typing manually or try again.'
+        );
+        assert.equal(presenter.retryHidden, false);
+        assert.equal(presenter.retryDisabled, false);
+        assert(
+            !(await (await applicationText('starter')).getText()).includes(
+                'Synthetic unavailable'
+            )
+        );
+        const retry = await find(
+            `${addressPresenterSelector} > button:last-child`
+        );
+        assert(await retry.isDisplayed());
+        assert(await retry.isEnabled());
+    };
+    await exercise('starter-address-acceptance', async (result) => {
+        const input = await loadAddress('address-acceptance');
+        let state = await capture(result, 'loaded-native-address');
+        assertAddressQuiet(state, state.expected.initial[addressFieldId]);
+        assertCalls(state, ['fetchExtensionForEndUser']);
+        const manual = 'Manual native address exceeds cap';
+        await typeAddress(input, manual);
+        state = await waitAddressPending('predictions');
+        const predictionId = addressPending(state, 'predictions').id;
+        state = await capture(result, 'native-capped-manual-debounced-query');
+        assert.equal(addressControl(state).value, capped(state, manual));
+        assert(addressControl(state).focused);
+        assert.equal(state.busy, false);
+        assert.equal(state.address.screenInert, false);
+        assert.equal(saves(state).length, 0);
+        assertAddressReadInputs(state, [capped(state, manual)], []);
+        await settleAddress('predictions', predictionId);
+        const options = await addressOptions(result);
+        await input.sendKeys(Key.ARROW_DOWN);
+        await assertNativeAddressHighlight(
+            result,
+            input,
+            options,
+            0,
+            capped(state, manual),
+            'keyboard-first-option-visible-highlight'
+        );
+        await input.sendKeys(Key.ARROW_DOWN);
+        await assertNativeAddressHighlight(
+            result,
+            input,
+            options,
+            1,
+            capped(state, manual),
+            'keyboard-second-option-resets-first-highlight'
+        );
+        await input.sendKeys(Key.ARROW_UP);
+        await assertNativeAddressHighlight(
+            result,
+            input,
+            options,
+            0,
+            capped(state, manual),
+            'keyboard-up-restores-first-resets-second-highlight'
+        );
+        await input.sendKeys(Key.ENTER);
+        state = await waitAddressPending('details');
+        const detailId = addressPending(state, 'details').id;
+        const selected = capped(
+            state,
+            state.expected.predictions[0].description
+        );
+        state = await capture(
+            result,
+            'keyboard-selected-description-immediate'
+        );
+        assert.equal(addressControl(state).value, selected);
+        assert(addressControl(state).focused);
+        assert.deepEqual(addressPresenter(state).options, []);
+        assert.equal(addressPresenter(state).expanded, 'false');
+        await assertAddressPopupClosed(result, 'accepted-description');
+        assert.equal(
+            addressPresenter(state).status,
+            'Loading selected address…'
+        );
+        assert.equal(saves(state).length, 0);
+        await settleAddress('details', detailId);
+        const formatted = capped(state, state.expected.formatted);
+        await waitReady(
+            (value) => addressControl(value).value === formatted,
+            'Current formatted native address accepted with the same cap.'
+        );
+        state = await capture(result, 'accepted-capped-format-no-autosave');
+        assertAddressQuiet(state, formatted);
+        assert.equal(saves(state).length, 0);
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 1 &&
+                value.status?.includes('The Form was not saved.'),
+            'Deliberate formatted native Save validation.'
+        );
+        state = await capture(result, 'complete-formatted-native-save');
+        assertAddressSave(
+            saves(state)[0],
+            state,
+            {
+                ...state.expected.initial,
+                [addressFieldId]: formatted,
+            },
+            [addressFieldId]
+        );
+        await clickText('Clear address', await find(addressPresenterSelector));
+        await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            detailRoute,
+            'saveForm',
+        ]);
+        state = await capture(result, 'native-clear-null-no-blank-query');
+        assertAddressQuiet(state, '');
+        await assertAddressPopupClosed(result, 'cleared-address');
+        assert(addressControl(state).focused);
+        assert.equal(saves(state).length, 1);
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 2 &&
+                value.status?.includes('The Form was not saved.'),
+            'Deliberate cleared native Save validation.'
+        );
+        state = await capture(result, 'complete-null-native-save');
+        assertAddressSave(
+            saves(state)[1],
+            state,
+            {
+                ...state.expected.initial,
+                [addressFieldId]: null,
+            },
+            [addressFieldId]
+        );
+        assertAddressReadInputs(
+            state,
+            [capped(state, manual)],
+            ['place_address_one']
+        );
+        assertCalls(state, [
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            detailRoute,
+            'saveForm',
+            'saveForm',
+        ]);
+        assert.deepEqual(state.pending, []);
+        assert.deepEqual(state.address.abortCounts, {
+            predictions: 0,
+            details: 0,
+            save: 0,
+        });
+    });
+    await exercise('starter-address-failure-retry', async (result) => {
+        const input = await loadAddress('address-failure');
+        const manual = 'Manual fallback';
+        await typeAddress(input, manual);
+        let state = await waitAddressPending('predictions');
+        await settleAddress(
+            'predictions',
+            addressPending(state, 'predictions').id,
+            true
+        );
+        await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+        ]);
+        state = await capture(result, 'failed-prediction-retains-manual-draft');
+        await assertAddressFailure(state, manual);
+        await assertAddressPopupClosed(result, 'prediction-failure');
+        assert.equal(saves(state).length, 0);
+        assertAddressReadInputs(state, [manual], []);
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 1 &&
+                value.status?.includes('The Form was not saved.'),
+            'Explicit manual fallback can dispatch native Save.'
+        );
+        state = await capture(result, 'manual-fallback-native-save');
+        assertAddressSave(
+            saves(state)[0],
+            state,
+            {
+                ...state.expected.initial,
+                [addressFieldId]: manual,
+            },
+            [addressFieldId]
+        );
+        const retryManual = 'Retry manual';
+        await typeAddress(input, retryManual);
+        state = await waitAddressPending('predictions');
+        await settleAddress(
+            'predictions',
+            addressPending(state, 'predictions').id,
+            true
+        );
+        await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            'saveForm',
+            predictionRoute,
+        ]);
+        state = await capture(
+            result,
+            'new-prediction-failure-awaits-explicit-retry'
+        );
+        await assertAddressFailure(state, retryManual);
+        await assertAddressPopupClosed(result, 'retry-prediction-failure');
+        assertAddressReadInputs(state, [manual, retryManual], []);
+        assert.equal(saves(state).length, 1);
+        await clickText('Try again', await find(addressPresenterSelector));
+        state = await waitAddressPending('predictions');
+        assertAddressReadInputs(state, [manual, retryManual, retryManual], []);
+        await settleAddress(
+            'predictions',
+            addressPending(state, 'predictions').id
+        );
+        const options = await addressOptions(result);
+        await options[0].click();
+        state = await waitAddressPending('details');
+        const selected = capped(
+            state,
+            state.expected.predictions[0].description
+        );
+        assert.equal(addressControl(state).value, selected);
+        assert(addressControl(state).focused);
+        await settleAddress(
+            'details',
+            addressPending(state, 'details').id,
+            true
+        );
+        await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            'saveForm',
+            predictionRoute,
+            predictionRoute,
+            detailRoute,
+        ]);
+        state = await capture(
+            result,
+            'failed-detail-retains-selected-native-draft'
+        );
+        await assertAddressFailure(state, selected);
+        await assertAddressPopupClosed(result, 'detail-failure');
+        assert.equal(saves(state).length, 1);
+        assertAddressReadInputs(
+            state,
+            [manual, retryManual, retryManual],
+            ['place_address_one']
+        );
+        await clickText('Try again', await find(addressPresenterSelector));
+        state = await waitAddressPending('details');
+        assertAddressReadInputs(
+            state,
+            [manual, retryManual, retryManual],
+            ['place_address_one', 'place_address_one']
+        );
+        await settleAddress('details', addressPending(state, 'details').id);
+        const formatted = capped(state, state.expected.formatted);
+        await waitReady(
+            (value) => addressControl(value).value === formatted,
+            'Explicit same-place detail retry accepts current formatting.'
+        );
+        state = await capture(result, 'retry-formatted-value-no-autosave');
+        assertAddressQuiet(state, formatted);
+        assert.equal(saves(state).length, 1);
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 2 &&
+                value.status?.includes('The Form was not saved.'),
+            'Explicit post-retry native Save validation.'
+        );
+        state = await capture(result, 'complete-post-retry-native-save');
+        assertAddressSave(
+            saves(state)[1],
+            state,
+            {
+                ...state.expected.initial,
+                [addressFieldId]: formatted,
+            },
+            [addressFieldId]
+        );
+        assertCalls(state, [
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            'saveForm',
+            predictionRoute,
+            predictionRoute,
+            detailRoute,
+            detailRoute,
+            'saveForm',
+        ]);
+        assert.deepEqual(state.pending, []);
+        assert.deepEqual(state.address.abortCounts, {
+            predictions: 0,
+            details: 0,
+            save: 0,
+        });
+    });
+    await exercise('starter-address-hide-save-interruption', async (result) => {
+        const input = await loadAddress('address-lifecycle');
+        const originalId = await input.getAttribute('id');
+        const hiddenDraft = 'Pending hidden address';
+        await typeAddress(input, hiddenDraft);
+        let state = await waitAddressPending('predictions');
+        const oldPrediction = addressPending(state, 'predictions').id;
+        const toggle = await find(
+            '#screen input[data-field-id="fld_address_driver"]'
+        );
+        assert(await toggle.isSelected());
+        await toggle.sendKeys(Key.SPACE, Key.TAB);
+        state = await capture(result, 'native-hide-disables-and-skips-address');
+        assert(addressControl(state).hidden);
+        assert(addressControl(state).disabled);
+        assert.equal(await input.isDisplayed(), false);
+        assert.equal(await input.isEnabled(), false);
+        await assertAddressPopupClosed(result, 'hidden-address');
+        assert.equal(state.address.activeFieldId, 'fld_address_tail');
+        assert.equal(state.address.abortCounts.predictions, 1);
+        assert.equal(saves(state).length, 0);
+        await toggle.sendKeys(Key.SPACE, Key.TAB);
+        state = await capture(result, 'native-reveal-retains-same-control');
+        assert.equal(addressControl(state).id, originalId);
+        assert(!addressControl(state).hidden);
+        assert(!addressControl(state).disabled);
+        assert.equal(await input.isDisplayed(), true);
+        assert.equal(await input.isEnabled(), true);
+        assert.equal(state.address.activeFieldId, addressFieldId);
+        assertAddressQuiet(state, hiddenDraft);
+        await assertAddressPopupClosed(result, 'revealed-retained-address');
+        await settleAddress('predictions', oldPrediction);
+        await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+        ]);
+        state = await capture(
+            result,
+            'late-prediction-after-reveal-zero-effects'
+        );
+        assert.equal(addressSettled(state, oldPrediction).aborted, true);
+        assertAddressQuiet(state, hiddenDraft);
+        await assertAddressPopupClosed(result, 'late-prediction-after-reveal');
+        assertAddressReadInputs(state, [hiddenDraft], []);
+        assert.equal(saves(state).length, 0);
+        const saveDraft = 'Save pending address';
+        await typeAddress(input, saveDraft);
+        state = await waitAddressPending('predictions');
+        await settleAddress(
+            'predictions',
+            addressPending(state, 'predictions').id
+        );
+        await addressOptions(result);
+        await input.sendKeys(Key.ARROW_DOWN, Key.ENTER);
+        state = await waitAddressPending('details');
+        const oldDetail = addressPending(state, 'details').id;
+        const selected = capped(
+            state,
+            state.expected.predictions[0].description
+        );
+        assert.equal(addressControl(state).value, selected);
+        assert.equal(saves(state).length, 0);
+        await clickText('Save');
+        state = await waitAddressPending('save');
+        const saveId = addressPending(state, 'save').id;
+        state = await capture(
+            result,
+            'native-save-inert-with-selected-description'
+        );
+        assert.equal(saves(state).length, 1);
+        assertAddressSave(
+            saves(state)[0],
+            state,
+            {
+                ...state.expected.initial,
+                [addressFieldId]: selected,
+            },
+            [addressFieldId, 'fld_address_driver']
+        );
+        assert.equal(state.busy, true);
+        assert.equal(state.address.screenInert, true);
+        assert.equal(addressControl(state).disabled, true);
+        assert.equal(await input.isEnabled(), false);
+        await assertAddressPopupClosed(result, 'inert-native-save');
+        assert.equal(state.address.abortCounts.details, 1);
+        await settleAddress('details', oldDetail);
+        state = await capture(
+            result,
+            'late-detail-during-native-save-zero-effects'
+        );
+        assert.equal(addressSettled(state, oldDetail).aborted, true);
+        assertAddressQuiet(state, selected);
+        await assertAddressPopupClosed(result, 'late-detail-during-save');
+        assert.equal(state.busy, true);
+        assert.equal(saves(state).length, 1);
+        await clickText('Release address Save validation');
+        await waitReady(
+            (value) =>
+                addressSettled(value, saveId) &&
+                value.status?.includes('The Form was not saved.') &&
+                !addressControl(value).disabled,
+            'Held normal Save validation re-enables the native address.'
+        );
+        await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            predictionRoute,
+            detailRoute,
+            'saveForm',
+        ]);
+        state = await capture(
+            result,
+            'validation-reenable-retains-selected-draft'
+        );
+        assertAddressQuiet(state, selected);
+        await assertAddressPopupClosed(result, 'validation-reenabled-address');
+        assert.equal(state.address.screenInert, false);
+        assert.equal(await input.isEnabled(), true);
+        assert.equal(saves(state).length, 1);
+        assertAddressReadInputs(
+            state,
+            [hiddenDraft, saveDraft],
+            ['place_address_one']
+        );
+        assertCalls(state, [
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            predictionRoute,
+            detailRoute,
+            'saveForm',
+        ]);
+        assert.deepEqual(state.pending, []);
+        assert.deepEqual(state.address.abortCounts, {
+            predictions: 1,
+            details: 1,
+            save: 0,
+        });
+    });
+    await exercise('starter-address-aba-discard-remount', async (result) => {
+        let input = await loadAddress('address-remount');
+        const originalId = await input.getAttribute('id');
+        const retained = 'Old visitor prediction';
+        await typeAddress(input, retained);
+        let state = await waitAddressPending('predictions');
+        const oldPrediction = addressPending(state, 'predictions').id;
+        await nativeChoice('#visitor', 'B');
+        state = await capture(result, 'native-visitor-b-retires-address-owner');
+        assert.equal(state.address.presenters.length, 0);
+        assert.equal(state.address.controls.length, 0);
+        assert.equal(state.address.abortCounts.predictions, 1);
+        assert.equal(saves(state).length, 0);
+        await nativeChoice('#visitor', 'A');
+        await waitReady(
+            (value) =>
+                value.address.presenters.length === 1 &&
+                addressControl(value).id !== originalId &&
+                !addressControl(value).disabled,
+            'Actual A-B-A remount supplies a new enabled address owner.'
+        );
+        input = await find(addressSelector);
+        const remountedId = await input.getAttribute('id');
+        state = await capture(
+            result,
+            'native-aba-remount-retains-draft-no-query'
+        );
+        assertAddressQuiet(state, retained);
+        assertAddressReadInputs(state, [retained], []);
+        await settleAddress('predictions', oldPrediction);
+        await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+        ]);
+        state = await capture(
+            result,
+            'held-old-prediction-after-aba-zero-effects'
+        );
+        assert.equal(addressSettled(state, oldPrediction).aborted, true);
+        assertAddressQuiet(state, retained);
+        assert.equal(addressControl(state).id, remountedId);
+        assert.equal(saves(state).length, 0);
+        const discarded = 'Discard detail request';
+        await typeAddress(input, discarded);
+        state = await waitAddressPending('predictions');
+        await settleAddress(
+            'predictions',
+            addressPending(state, 'predictions').id
+        );
+        const options = await addressOptions(result);
+        await options[0].click();
+        state = await waitAddressPending('details');
+        const oldDetail = addressPending(state, 'details').id;
+        assert.equal(
+            addressControl(state).value,
+            capped(state, state.expected.predictions[0].description)
+        );
+        assert.equal(saves(state).length, 0);
+        await clickText('Discard draft');
+        await waitReady(
+            (value) =>
+                addressControl(value).id !== remountedId &&
+                !addressControl(value).disabled &&
+                value.status ===
+                    'This Form draft was discarded. No record was saved.',
+            'Native Discard replaces the owner and restores loaded native data.'
+        );
+        input = await find(addressSelector);
+        const discardedId = await input.getAttribute('id');
+        state = await capture(
+            result,
+            'native-discard-remount-restores-loaded-data'
+        );
+        assertAddressQuiet(state, state.expected.initial[addressFieldId]);
+        assert.equal(state.address.abortCounts.details, 1);
+        await settleAddress('details', oldDetail);
+        await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            predictionRoute,
+            detailRoute,
+        ]);
+        state = await capture(
+            result,
+            'held-old-detail-after-discard-zero-effects'
+        );
+        assert.equal(addressSettled(state, oldDetail).aborted, true);
+        assert.equal(addressControl(state).id, discardedId);
+        assertAddressQuiet(state, state.expected.initial[addressFieldId]);
+        assert.equal(saves(state).length, 0);
+        assertAddressReadInputs(
+            state,
+            [retained, discarded],
+            ['place_address_one']
+        );
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 1 &&
+                value.status?.includes('The Form was not saved.'),
+            'Deliberate restored native Save has no discarded address dirty ID.'
+        );
+        state = await capture(
+            result,
+            'complete-restored-native-save-no-dirty-id'
+        );
+        assertAddressSave(saves(state)[0], state, state.expected.initial, []);
+        assertAddressQuiet(state, state.expected.initial[addressFieldId]);
+        assertCalls(state, [
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            predictionRoute,
+            detailRoute,
+            'saveForm',
+        ]);
+        assert.deepEqual(state.pending, []);
+        assert.deepEqual(state.address.abortCounts, {
+            predictions: 1,
+            details: 1,
+            save: 0,
+        });
+    });
+    assert.equal(receipt.cases.length, 24);
     assert(
         receipt.cases.every((v) => v.status === 'passed'),
         'Every exact synthetic case must pass; failed cases are retained without retry.'

@@ -211,7 +211,13 @@ export const createPortalView = (options: {
     ): void;
 }): PortalView => {
     const { run, status } = options;
+    // Configuration stays detached; accepted parent data advances after a
+    // successful child Save without changing this view's identity or settings.
     const page = structuredClone(options.page);
+    const acceptParentData = (data: typeof page.payload.formRecord.data) => {
+        page.payload.formRecord.data = structuredClone(data);
+        options.page.payload.formRecord.data = structuredClone(data);
+    };
     const card = element('section', undefined, 'card');
     card.append(element('h2', page.payload.extensionName ?? 'Custom Portal'));
     card.append(
@@ -950,8 +956,7 @@ export const createPortalView = (options: {
                         { signal }
                     );
                     if (!current()) return;
-                    if (user != null)
-                        page.payload.formRecord.data = { ...user.fields };
+                    if (user != null) acceptParentData(user.fields);
                     needsRefresh = false;
                     closeEditor();
                     renderRecords();
@@ -1197,9 +1202,9 @@ export const createPortalView = (options: {
                                     );
                                     return;
                                 }
-                                page.payload.formRecord.data = {
-                                    ...result.loggedInUserRecord.fields,
-                                };
+                                acceptParentData(
+                                    result.loggedInUserRecord.fields
+                                );
                                 needsRefresh = false;
                                 reset();
                                 status(
@@ -1373,6 +1378,7 @@ export const createPortalView = (options: {
             closeEditor();
         },
         refreshRequired: () => {
+            acceptParentData(options.page.payload.formRecord.data);
             needsRefresh = false;
             reset();
         },

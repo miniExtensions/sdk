@@ -509,6 +509,9 @@ export async function checkPortalSortCases({
                 'computed-type',
                 'restriction',
                 'view-shape',
+                'view-config-array',
+                'view-config-number',
+                'view-config-string',
             ]) {
                 const p = editablePortal();
                 const snapshot = {
@@ -534,6 +537,13 @@ export async function checkPortalSortCases({
                 if (mode === 'view-shape')
                     p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.customViews =
                         [null];
+                if (mode.startsWith('view-config-'))
+                    p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.customViews[0].config =
+                        mode === 'view-config-array'
+                            ? []
+                            : mode === 'view-config-number'
+                              ? 123
+                              : 'custom';
                 const result = mountPortalSortEditor({
                     portal: p,
                     portalFieldId: 'fld_children',
@@ -543,6 +553,29 @@ export async function checkPortalSortCases({
                     onApply: () => assert.fail('No malformed apply'),
                 });
                 assert.equal(result.type, 'unavailable', mode);
+                if (mode.startsWith('view-config-')) {
+                    const h = await mount({
+                        portal: p,
+                        initialCriteria: criteria(),
+                        handlers: {
+                            list: () =>
+                                f.page([f.record('rec_one', 'Ordinary read')]),
+                        },
+                    });
+                    await h.click('Load records');
+                    assert.deepEqual(ids(h.view.node), ['rec_one']);
+                    assert.equal(
+                        h.view.node.querySelector(
+                            '[aria-label="Portal sorting"]'
+                        ),
+                        null
+                    );
+                    assert.equal(
+                        h.calls.filter((x) => x.operation === 'list').length,
+                        1
+                    );
+                    await h.dispose();
+                }
             }
             assert(window.document);
         }

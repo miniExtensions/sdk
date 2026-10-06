@@ -54,6 +54,7 @@ export async function checkBrowserChildQueryExample({
     await assertBrowserInputs(built.metafile, consumer);
     const scenarios = [
         'two-children',
+        'successful-parent-refresh',
         'toggle-false',
         'edit-empty',
         'dynamic-duplicates-overridden',
@@ -147,6 +148,7 @@ export async function checkBrowserChildQueryExample({
             if (scenario === 'static-duplicates-refused')
                 staticText = `${country}=North%2C%20East&${country}=South`;
             if (scenario === 'malformed-static') staticText = 123;
+            if (scenario === 'successful-parent-refresh') staticText = null;
             if (scenario === 'toggle-false')
                 staticText = `${country}=North%2C%20East&${region}=Duplicate%20label&${city}=City%20%3D%20%22One%22`;
             child.payload.publicFields = {
@@ -230,6 +232,28 @@ export async function checkBrowserChildQueryExample({
             }
             if (route === 'saveForm') {
                 saves.push(data);
+                if (scenario === 'successful-parent-refresh')
+                    return new Response(
+                        JSON.stringify({
+                            type: 'saved',
+                            record: {
+                                id: 'rec_created',
+                                fields: data.formRecord.data,
+                            },
+                            tableId: 'tbl_children',
+                            context: {
+                                type: 'modal',
+                                newTableIdsToLinkedTableStates: {},
+                            },
+                            loggedInUserRecord: {
+                                id: 'rec_user',
+                                fields: {
+                                    ...portal.payload.formRecord.data,
+                                    fld_prefill: `${country}=North%2C%20East&${region}=Duplicate%20label&${city}=City%20%3D%20%22One%22`,
+                                },
+                            },
+                        })
+                    );
                 return new Response(
                     JSON.stringify({
                         type: 'error',
@@ -353,6 +377,72 @@ export async function checkBrowserChildQueryExample({
             assert.equal(metadata.length, 0);
             assert.equal(filters.length, 0);
             assert.equal(saves.length, 0);
+            if (scenario === 'successful-parent-refresh') {
+                await load();
+                assert.equal(filters[0].urlSearchValue, 'South');
+                await save();
+                assert.equal(saves.length, 1);
+                const firstBaseline = makeChild(children[0]).payload.formRecord;
+                assert.deepEqual(saves[0].formRecord, {
+                    ...firstBaseline,
+                    data: {
+                        ...firstBaseline.data,
+                        fld_title: 'Deliberate unrelated edit',
+                    },
+                });
+                assert.deepEqual(saves[0].formFieldIdsWithUnsavedChanges, [
+                    'fld_title',
+                ]);
+                assert.deepEqual(saves[0].context, {
+                    type: 'modal',
+                    prefillData:
+                        children[0].context.prefillDataForLinkedRecordsForm,
+                });
+                assert.equal(
+                    saves[0].context.prefillData.toLinkToParent
+                        .parentFormRecordId,
+                    'rec_user'
+                );
+                // Accepted data advances; caller mutation cannot replace captured settings.
+                portal.payload.fieldIdsToSchemas.fld_children.miniExtConfig.prefillChildFormForCreatingRecords = false;
+                await waitFor(
+                    () =>
+                        [...w.document.querySelectorAll('button')].some(
+                            (x) => x.textContent === 'Create record'
+                        ) && idle()
+                );
+                assert.equal(children.length, 1);
+                assert.equal(metadata.length, 1);
+                assert.equal(filters.length, 3);
+                button(w.document, 'Load records').click();
+                await waitFor(idle);
+                await open();
+                assert.equal(children.length, 2);
+                assert.equal(
+                    children[1].context.prefillDataForLinkedRecordsForm
+                        .prefillQueryForChildExtension,
+                    `${country}=North%2C%20East&${region}=Duplicate%20label&${city}=City%20%3D%20%22One%22`
+                );
+                await load();
+                assert.equal(metadata.length, 2);
+                assert.equal(filters.length, 6);
+                assert.equal(filters[3].urlSearchValue, 'North, East');
+                assert.equal(
+                    filters[4].filterData.previousFilterPrimaryValue,
+                    'North, East'
+                );
+                assert.deepEqual(
+                    JSON.parse(
+                        w.document.querySelector(
+                            'textarea[data-field-id="fld_projects"]'
+                        ).value
+                    ),
+                    ['rec_retained']
+                );
+                assert.equal(saves.length, 1);
+                console.log(`Packed child-query case: ${scenario} passed`);
+                continue;
+            }
             // A parent/configuration mutation after handoff cannot replace snapshots.
             returnedChildren.at(
                 -1

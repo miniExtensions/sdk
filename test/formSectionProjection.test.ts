@@ -166,10 +166,91 @@ describe('canonical ordered scalar section projection', () => {
             blocked(changed, 'invalid-metadata');
         }
     });
+    it('refuses malformed metadata containers on the section path', () => {
+        const input = fresh();
+        const schema = structuredClone(input.fieldIdsToSchemas.gate!);
+        Object.assign(schema.airtableField, { id: '0' });
+        const arrayMap = {
+            ...input,
+            fieldIds: ['0'],
+            fieldIdsToSchemas: [
+                schema,
+            ] as unknown as typeof input.fieldIdsToSchemas,
+            airtableFields: [structuredClone(schema.airtableField)],
+        };
+        blocked(JSON.parse(JSON.stringify(arrayMap)), 'invalid-metadata');
+        assert.equal(
+            createFlatScalarFormRecordProjection(arrayMap).type,
+            'available'
+        );
+        for (const map of [null, 'schemas', 1])
+            blocked(
+                {
+                    ...input,
+                    fieldIdsToSchemas:
+                        map as unknown as typeof input.fieldIdsToSchemas,
+                },
+                'invalid-metadata'
+            );
+        for (const fields of [null, {}, 'fields'])
+            blocked(
+                {
+                    ...input,
+                    airtableFields:
+                        fields as unknown as typeof input.airtableFields,
+                },
+                'invalid-metadata'
+            );
+        for (const field of [null, 'field', 1, []])
+            blocked(
+                {
+                    ...input,
+                    airtableFields: [
+                        field,
+                    ] as unknown as typeof input.airtableFields,
+                },
+                'invalid-metadata'
+            );
+        for (const config of [null, 'config', 1, []]) {
+            const changed = fresh();
+            Object.assign(
+                changed.airtableFields.find((f) => f.id === 'gate')!,
+                { config }
+            );
+            Object.assign(changed.fieldIdsToSchemas.gate!.airtableField, {
+                config,
+            });
+            blocked(changed, 'invalid-metadata');
+        }
+    });
+    it('accepts omitted and explicitly undefined optional computed flags', () => {
+        for (const explicit of [false, true]) {
+            const input = fresh();
+            const physical = input.airtableFields.find((f) => f.id === 'gate')!;
+            const schemaField = input.fieldIdsToSchemas.gate!.airtableField;
+            for (const field of [physical, schemaField]) {
+                if (explicit) Object.assign(field, { isComputed: undefined });
+                else Reflect.deleteProperty(field, 'isComputed');
+            }
+            const result = createScalarFormRecordProjection(input);
+            assert.equal(result.type, 'available');
+            if (result.type === 'available') {
+                assert.deepEqual(
+                    result.record,
+                    fixture.cases[0]!.expected.record
+                );
+                assert.deepEqual(
+                    result.hiddenFieldIds,
+                    fixture.cases[0]!.expected.hiddenFieldIds
+                );
+            }
+        }
+    });
     it('refuses equally malformed schema and physical primitives', () => {
         for (const patch of [
             { isComputed: 'true' },
-            { isComputed: undefined },
+            { isComputed: null },
+            { isComputed: 1 },
             { name: 123 },
             { id: 123 },
             { config: { type: 'not-a-canonical-type' } },

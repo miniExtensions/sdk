@@ -107,13 +107,28 @@ function project(
                     code: 'invalid-field-order',
                     diagnostics,
                 };
+            if (
+                input.fieldIdsToSchemas == null ||
+                typeof input.fieldIdsToSchemas !== 'object' ||
+                Array.isArray(input.fieldIdsToSchemas) ||
+                !Array.isArray(input.airtableFields)
+            )
+                return {
+                    type: 'blocked',
+                    code: 'invalid-metadata',
+                    diagnostics,
+                };
             const validPhysical = (field: RuntimeAirtableField): boolean =>
                 field != null &&
+                typeof field === 'object' &&
+                !Array.isArray(field) &&
                 typeof field.id === 'string' &&
                 typeof field.name === 'string' &&
-                (!('isComputed' in field) ||
+                (field.isComputed === undefined ||
                     typeof field.isComputed === 'boolean') &&
                 field.config != null &&
+                typeof field.config === 'object' &&
+                !Array.isArray(field.config) &&
                 Object.values(AirtableFieldType).some(
                     (type) => type === field.config.type
                 );

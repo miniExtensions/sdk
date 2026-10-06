@@ -239,8 +239,9 @@ uses its current linked-table field name. Only a scalar string is supported,
 and only the returned `prefillValue` resolves a selection. Repeated values are
 reported as unsupported. Click **Load conditional filters** before reading
 options or saving a hidden-prefill Form; the button remains visible in hidden
-mode. Portal child URL-prefill propagation remains outside this example's
-integration. There is no automatic metadata retry, discovery paging cursor,
+mode. Portal child cascades use captured configured child-context prefills
+and accepted child static overrides, as described below. Raw root/browser URL
+keys remain outside child authority. There is no automatic metadata retry, discovery paging cursor,
 new schema read, or additional mutation permission.
 
 Custom static and dynamic Form headers also belong to your app. Render them

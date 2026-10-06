@@ -22,6 +22,7 @@ import {
     relative,
     resolve,
 } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { By, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 
@@ -30,17 +31,17 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11393462851',
+    packageArtifactId: '11395218756',
     packageZipSha256:
-        '81a09d609b3bba1c3d2f5606e1fcca4d8f7ab9a147518f95809482cd26c7481f',
+        'cc4bc2fd686ea796d4a68e40a788e215f42c4ee27c720e5a17c49b70e19b4258',
     packageSha256:
         '00e36dd0ff8f52bd138cb94f1f490c9e4ce59f34759b4d5f7cf6b4bbeb5f8b00',
     packageBytes: 270331,
     packageFiles: 191,
     packageZipMembers: 4,
-    fixtureArtifactId: '11393842376',
+    fixtureArtifactId: '11394829604',
     fixtureZipSha256:
-        '6a69045147e804eaca428f4827012063811fdcca6dc2c89055fd72ec576d8e57',
+        '4b4992b7dcd6acab7bd7fffa9e9280186b4443042e976b6c167512c8ec05c356',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
@@ -48,10 +49,10 @@ const expected = {
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: '5e03ba02e7a076bc3b0798288ab50d2918d70e54',
-        tree: 'bdd8186f3aa5e726764c7eaed253ecb03bd51430',
+        commit: 'bf1093e894e1e2d25d4d7d3da0431321dc09cccc',
+        tree: 'f395b98d52769546556e80d05b97a3340234c67f',
     },
-    runId: '37422851373',
+    runId: '37426596991',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -137,6 +138,26 @@ assert set(sums(fixture,fixture_names,expected['fixtureChecksums']))==set(fixtur
 sums(package,package_names,2)
 receipt=json.loads((package/'artifact-receipt.json').read_text())
 manifest=json.loads((fixture/'manifest.json').read_text())
+starter_scenarios=[
+ 'pin','password','word','email','phone','portal',
+ 'choice-single','choice-multiple','choice-add-single','choice-add-multiple',
+ 'projection-single','projection-multiple','linked-filters','linked-filter-deferred',
+ 'visibility-draft','visibility-unavailable','visibility-section',
+ 'address-acceptance','address-failure','address-lifecycle','address-remount',
+ 'teardown-logout','teardown-disconnect']
+auth_scenarios=['pin','password','word','email','phone']
+def exact_inventory(actual,declared,label):
+    assert isinstance(actual,list) and all(isinstance(value,str) for value in actual), label+' inventory type'
+    assert len(actual)==len(set(actual))==len(declared), label+' duplicate/missing routes'
+    assert set(actual)==set(declared), label+' unexpected scenario routes'
+exact_inventory(manifest['scenarios'],starter_scenarios,'Manifest starter')
+menu_routes=re.findall(r'href="(starter|auth)/index\.html\?scenario=([^"]+)"',(fixture/'index.html').read_text())
+readme_routes=re.findall(r'\[[^\]]+\]\((starter|auth)/index\.html\?scenario=([^)]+)\)',(fixture/'README.md').read_text())
+for label,routes in [('Menu',menu_routes),('README',readme_routes)]:
+    assert len(routes)==28 and len(set(routes))==28, label+' exact distinct28 surface/scenario routes'
+    exact_inventory([scenario for surface,scenario in routes if surface=='starter'],starter_scenarios,label+' starter')
+    exact_inventory([scenario for surface,scenario in routes if surface=='auth'],auth_scenarios,label+' AuthPanel')
+assert set(menu_routes)==set(readme_routes), 'Menu/README scenario joins differ'
 for value in [receipt,manifest]:
     assert value['source']==expected['source']
     ci=value['ci']; assert ci['repository']=='miniExtensions/sdk' and ci['event']=='push'
@@ -194,7 +215,8 @@ assert manifest['provenance']['sdkSourceAliases'] is False
 assert manifest['provenance']['packageRepacked'] is False
 print(json.dumps({'source':manifest['source'],'ci':manifest['ci'],'package':manifest['package'],
  'manifestSha256':sha((fixture/'manifest.json').read_bytes()),'fixtureFiles':len(fixture_names),
- 'checksums':expected['fixtureChecksums'],'outputs':expected['fixtureOutputs'],'sources':expected['fixtureSources'],'sdkBundleInputs':sdk_counts}))
+ 'checksums':expected['fixtureChecksums'],'outputs':expected['fixtureOutputs'],'sources':expected['fixtureSources'],'sdkBundleInputs':sdk_counts,
+ 'scenarioInventory':{'starter':starter_scenarios,'auth':auth_scenarios,'menuRoutes':len(menu_routes),'readmeRoutes':len(readme_routes)}}))
 `;
 
 const output = requiredPath('SDK_BROWSER_RESULTS_DIR');
@@ -319,12 +341,47 @@ const capture = async (caseResult, name, target = driver) => {
     caseResult.screenshots.push(filename);
     return state;
 };
+const scenarioCaseAliases = {
+    'starter-linked-filter-paging': 'linked-filters',
+    'starter-linked-filter-interruption': 'linked-filter-deferred',
+    'starter-address-failure-retry': 'address-failure',
+    'starter-address-hide-save-interruption': 'address-lifecycle',
+    'starter-address-aba-discard-remount': 'address-remount',
+    'starter-private-reference-logout': 'teardown-logout',
+    'starter-private-reference-disconnect': 'teardown-disconnect',
+};
+const scenarioRouteForCase = (id) => {
+    const surface = id.startsWith('starter-')
+        ? 'starter'
+        : id.startsWith('auth-')
+          ? 'auth'
+          : null;
+    assert(surface, `Unknown native case surface: ${id}`);
+    const scenario = scenarioCaseAliases[id] ?? id.slice(surface.length + 1);
+    assert(
+        receipt.artifactVerification.scenarioInventory[surface].includes(
+            scenario
+        ),
+        `Native case ${id} must join a declared ${surface} scenario.`
+    );
+    return { surface, scenario };
+};
 const exercise = async (id, body) => {
     const result = { id, status: 'running', observations: [], screenshots: [] };
     receipt.cases.push(result);
     try {
+        const route = scenarioRouteForCase(id);
         await body(result);
-        assert.deepEqual((await snapshot()).unexpected, []);
+        const finalState = await snapshot();
+        assert.deepEqual(finalState.unexpected, []);
+        assert.equal(finalState.scenario, route.scenario);
+        const currentURL = new URL(await driver.getCurrentUrl());
+        assert.equal(currentURL.origin, origin);
+        assert.equal(currentURL.pathname, `/${route.surface}/index.html`);
+        assert.deepEqual(currentURL.searchParams.getAll('scenario'), [
+            route.scenario,
+        ]);
+        result.scenarioRoute = { ...route, url: currentURL.href };
         result.status = 'passed';
     } catch (error) {
         result.status = 'failed';
@@ -458,6 +515,29 @@ try {
             JSON.stringify(expected),
         ])
     );
+    const fixture = join(work, 'fixture');
+    const { createPrivacyFixture } = await import(
+        pathToFileURL(join(fixture, 'fixture.js')).href
+    );
+    assert.equal(typeof createPrivacyFixture, 'function');
+    const constructedScenarios = [];
+    for (const scenario of receipt.artifactVerification.scenarioInventory
+        .starter) {
+        const constructed = createPrivacyFixture(scenario);
+        assert.equal(typeof constructed.fetch, 'function');
+        assert.equal(constructed.state.scenario, scenario);
+        assert.equal(constructed.state.synthetic, true);
+        assert.equal(constructed.state.realNetworkEnabled, false);
+        assert.deepEqual(constructed.state.calls, []);
+        assert.deepEqual(constructed.state.unexpected, []);
+        constructedScenarios.push(scenario);
+    }
+    receipt.fixtureInventoryConstruction = {
+        beforeServerAndBrowserStartup: true,
+        scenarios: constructedScenarios,
+        recordedTransportCalls: 0,
+        unexpectedCalls: 0,
+    };
     const binary = requiredPath('SDK_CHROME_BINARY');
     const driverBinary = requiredPath('SDK_CHROMEDRIVER_BINARY');
     browserBinary = binary;
@@ -485,7 +565,6 @@ try {
         sandbox: 'default, unchanged',
         certificateVerification: 'default, unchanged',
     };
-    const fixture = join(work, 'fixture');
     const mime = {
         '.html': 'text/html',
         '.js': 'text/javascript',
@@ -3499,6 +3578,20 @@ try {
         );
     }
     assert.equal(receipt.cases.length, 28);
+    const actualScenarioRoutes = receipt.cases.map(
+        ({ scenarioRoute }) =>
+            `${scenarioRoute.surface}/${scenarioRoute.scenario}`
+    );
+    const declaredScenarioRoutes = ['starter', 'auth'].flatMap((surface) =>
+        receipt.artifactVerification.scenarioInventory[surface].map(
+            (scenario) => `${surface}/${scenario}`
+        )
+    );
+    assert.equal(new Set(actualScenarioRoutes).size, 28);
+    assert.deepEqual(
+        actualScenarioRoutes.sort(),
+        declaredScenarioRoutes.sort()
+    );
     assert(
         receipt.cases.every((v) => v.status === 'passed'),
         'Every exact synthetic case must pass; failed cases are retained without retry.'

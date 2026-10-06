@@ -103,7 +103,7 @@ describe('canonical ordered scalar section projection', () => {
         assert.deepEqual(input, before);
     });
     it('refuses duplicate, nonstring and sparse order only on the additive path', () => {
-        for (const ids of [['header', 'header'], [0], new Array(1)])
+        for (const ids of [['header', 'header'], [0], new Array(1), 'a'])
             blocked(
                 { ...fresh(), fieldIds: ids as string[] },
                 'invalid-field-order'
@@ -111,6 +111,27 @@ describe('canonical ordered scalar section projection', () => {
         // Completeness cannot be inferred: callers must pass fieldIdsInForm verbatim.
         assert.equal(
             createScalarFormRecordProjection({ ...fresh(), fieldIds: [] }).type,
+            'available'
+        );
+    });
+    it('rejects a string order even when its indexed ID resolves', () => {
+        const input = fresh();
+        const schema = structuredClone(input.fieldIdsToSchemas.gate!);
+        Object.assign(schema.airtableField, { id: 'a' });
+        input.fieldIds = 'a' as unknown as string[];
+        input.fieldIdsToSchemas = { a: schema };
+        input.airtableFields = [structuredClone(schema.airtableField)];
+        blocked(input, 'invalid-field-order');
+        assert.equal(
+            createFlatScalarFormRecordProjection(input).type,
+            'available'
+        );
+        input.fieldIds = ['a'];
+        Object.assign(schema.airtableField, { isComputed: 'true' });
+        Object.assign(input.airtableFields[0]!, { isComputed: 'true' });
+        blocked(input, 'invalid-metadata');
+        assert.equal(
+            createFlatScalarFormRecordProjection(input).type,
             'available'
         );
     });
@@ -143,6 +164,25 @@ describe('canonical ordered scalar section projection', () => {
                     { name: 'Contradiction' }
                 );
             blocked(changed, 'invalid-metadata');
+        }
+    });
+    it('refuses equally malformed schema and physical primitives', () => {
+        for (const patch of [
+            { isComputed: 'true' },
+            { isComputed: undefined },
+            { name: 123 },
+            { id: 123 },
+            { config: { type: 'not-a-canonical-type' } },
+        ]) {
+            const input = fresh();
+            const physical = input.airtableFields.find((f) => f.id === 'gate')!;
+            Object.assign(input.fieldIdsToSchemas.gate!.airtableField, patch);
+            Object.assign(physical, patch);
+            if (patch.config != null)
+                Object.assign(input.fieldIdsToSchemas.gate!, {
+                    fieldType: patch.config.type,
+                });
+            blocked(input, 'invalid-metadata');
         }
     });
     it('refuses malformed section metadata instead of guessing boundaries', () => {

@@ -1,3 +1,4 @@
+import { AirtableFieldType } from '../formulas/types.js';
 import type {
     AirtableRecord,
     AirtableValue,
@@ -100,6 +101,22 @@ function project(
     const diagnostics: FormVisibilityDiagnostic[] = [];
     try {
         if (mode === 'sections') {
+            if (!Array.isArray(input.fieldIds))
+                return {
+                    type: 'blocked',
+                    code: 'invalid-field-order',
+                    diagnostics,
+                };
+            const validPhysical = (field: RuntimeAirtableField): boolean =>
+                field != null &&
+                typeof field.id === 'string' &&
+                typeof field.name === 'string' &&
+                (!('isComputed' in field) ||
+                    typeof field.isComputed === 'boolean') &&
+                field.config != null &&
+                Object.values(AirtableFieldType).some(
+                    (type) => type === field.config.type
+                );
             const seen = new Set<string>();
             for (let index = 0; index < input.fieldIds.length; index++) {
                 const id = input.fieldIds[index];
@@ -117,7 +134,7 @@ function project(
             }
             const physicalIds = new Set<string>();
             for (const field of input.airtableFields) {
-                if (typeof field.id !== 'string' || physicalIds.has(field.id))
+                if (!validPhysical(field) || physicalIds.has(field.id))
                     return {
                         type: 'blocked',
                         code: 'invalid-metadata',
@@ -131,6 +148,7 @@ function project(
                     (candidate) => candidate.id === id
                 );
                 if (
+                    !validPhysical(field.airtableField) ||
                     field.airtableField.id !== id ||
                     field.fieldType !== field.airtableField.config.type ||
                     physical == null ||

@@ -31,17 +31,17 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11406296517',
+    packageArtifactId: '11410589403',
     packageZipSha256:
-        '5678af1214ee94532486fb4c1f8b263682b5e82db5d536724a3d2cb3199fe722',
+        '62bcf2baf069235ac21c09f4b0cdce40f378217483f72f5e515fb8e3650f99ac',
     packageSha256:
-        '1e24d840aaaea2a81cc02761eed38bfea5168d4a4eb5d0a25b04f8a28223083c',
-    packageBytes: 275500,
+        '9ec270020588409d6a8575a7e5353e36cbaa3ba331ca482305faa27fcbaed909',
+    packageBytes: 276844,
     packageFiles: 192,
     packageZipMembers: 4,
-    fixtureArtifactId: '11406781260',
+    fixtureArtifactId: '11410889200',
     fixtureZipSha256:
-        '6584c72127453e40be6d6c3952040989d02c6e665841bdd68a9655ffdb1c90ee',
+        '82dc4670528de8237f66a50ebf1f91205b0922bf695a2fb847a101e7b072d639',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
@@ -49,10 +49,10 @@ const expected = {
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: 'bfc72376d724f5fe61eec57da2f042280f36260d',
-        tree: 'f7c6d3bcd06a145880bbaac493a2db6247d75425',
+        commit: '9b6808d37180a7e13eacadab8c2cf2718dfdc1b9',
+        tree: '4eb61d640f8e67ac03269896a717eb654ee3b304',
     },
-    runId: '37450216536',
+    runId: '37459603447',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -145,7 +145,9 @@ starter_scenarios=[
  'visibility-draft','visibility-unavailable','visibility-section',
  'address-acceptance','address-failure','address-lifecycle','address-remount','address-ime',
  'teardown-logout','teardown-disconnect',
- 'review-answers','review-address','review-validation','review-unknown']
+ 'review-answers','review-address','review-validation','review-unknown',
+ 'hide-empty-edit','hide-empty-create','hide-empty-unavailable',
+ 'hide-empty-review','hide-empty-review-malformed']
 auth_scenarios=['pin','password','word','email','phone']
 def exact_inventory(actual,declared,label):
     assert isinstance(actual,list) and all(isinstance(value,str) for value in actual), label+' inventory type'
@@ -155,7 +157,7 @@ exact_inventory(manifest['scenarios'],starter_scenarios,'Manifest starter')
 menu_routes=re.findall(r'href="(starter|auth)/index\.html\?scenario=([^"]+)"',(fixture/'index.html').read_text())
 readme_routes=re.findall(r'\[[^\]]+\]\((starter|auth)/index\.html\?scenario=([^)]+)\)',(fixture/'README.md').read_text())
 for label,routes in [('Menu',menu_routes),('README',readme_routes)]:
-    assert len(routes)==33 and len(set(routes))==33, label+' exact distinct33 surface/scenario routes'
+    assert len(routes)==38 and len(set(routes))==38, label+' exact distinct38 surface/scenario routes'
     exact_inventory([scenario for surface,scenario in routes if surface=='starter'],starter_scenarios,label+' starter')
     exact_inventory([scenario for surface,scenario in routes if surface=='auth'],auth_scenarios,label+' AuthPanel')
 assert set(menu_routes)==set(readme_routes), 'Menu/README scenario joins differ'
@@ -4428,7 +4430,314 @@ try {
             }
         }
     );
-    assert.equal(receipt.cases.length, 33);
+    const emptyControl = (id) =>
+        find(`#screen [data-field-id="fld_empty_${id}"]`);
+    const loadEmpty = async (scenario, count) => {
+        await driver.get(`${origin}/starter/index.html?scenario=${scenario}`);
+        await clickText('Connect and load');
+        return waitReady(
+            (state) => state.visibility?.controls.length === count,
+            'Actual archive-copied empty-hiding Form load.'
+        );
+    };
+    const assertEmptySave = (state, data, dirty, type = 'edit') => {
+        assert.equal(saves(state).length, 1);
+        const call = saves(state)[0];
+        assert.equal(call.method, 'POST');
+        assert.equal(
+            call.input.extensionAccessToken,
+            'FAKE_SYNTHETIC_HIDE_EMPTY_TOKEN'
+        );
+        assert.equal(call.input.formRecord.type, type);
+        assert.equal(call.input.formRecord.tableId, state.expected.tableId);
+        if (type === 'edit')
+            assert.equal(
+                call.input.formRecord.recordId,
+                state.expected.recordId
+            );
+        assert.deepEqual(call.input.formRecord.data, data);
+        assert.deepEqual(call.input.formFieldIdsWithUnsavedChanges, dirty);
+        assert.deepEqual(call.input.context, { type: 'direct-url' });
+        assert.equal(call.input.isComputeMode, false);
+        assert.deepEqual(
+            call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
+            {}
+        );
+        assert(state.calls.every((call) => call.credentialsMode === 'omit'));
+    };
+    for (const scenario of [
+        'hide-empty-edit',
+        'hide-empty-create',
+        'hide-empty-unavailable',
+    ]) {
+        await exercise(`starter-${scenario}`, async (result) => {
+            let state = await loadEmpty(scenario, 14);
+            const initial = structuredClone(state.expected.initial);
+            await capture(result, 'native-initial-controls');
+            assert.equal(
+                await (await emptyControl('email')).isEnabled(),
+                false
+            );
+            assert.equal(
+                await (await emptyControl('locked')).isEnabled(),
+                false
+            );
+            if (scenario === 'hide-empty-create') {
+                await assertNativeVisibility(
+                    state.expected.controlFieldIds,
+                    true
+                );
+            } else if (scenario === 'hide-empty-edit') {
+                await assertNativeVisibility(
+                    [
+                        'email',
+                        'url',
+                        'multiline',
+                        'phone',
+                        'rich',
+                        'rating',
+                        'checkbox',
+                        'barcode',
+                    ].map((id) => `fld_empty_${id}`),
+                    false
+                );
+                await assertNativeVisibility(
+                    [
+                        'title',
+                        'number',
+                        'currency',
+                        'percent',
+                        'locked',
+                        'tail',
+                    ].map((id) => `fld_empty_${id}`),
+                    true
+                );
+                // One native replacement event hides the control; no DOM mutation.
+                await (
+                    await emptyControl('title')
+                ).sendKeys(Key.chord(Key.CONTROL, 'a'), ' ');
+                await assertNativeVisibility(['fld_empty_title'], false);
+            } else {
+                await assertNativeVisibility(['fld_empty_title'], false);
+                await assertNativeVisibilityAlert(true);
+                await replaceInput(
+                    await emptyControl('tail'),
+                    'Accepted blocked sibling',
+                    'text'
+                );
+                await clickText('Save');
+                state = await waitSnapshot(
+                    (value) =>
+                        value.status ===
+                        'Review the unavailable fields before saving this Form.',
+                    'Unavailable scope blocks native Save.'
+                );
+                assert.equal(saves(state).length, 0);
+                await nativeChoice('#visitor', 'B');
+                await nativeChoice('#visitor', 'A');
+                state = await capture(result, 'blocked-draft-survives-aba');
+                assert.equal(
+                    visibilityControl(state, 'fld_empty_tail').value,
+                    'Accepted blocked sibling'
+                );
+                assert.equal(state.calls.length, 1);
+                await clickText('Reload');
+                state = await waitReady(
+                    (value) =>
+                        value.calls.length === 2 &&
+                        !visibilityControl(value, 'fld_empty_title').hidden,
+                    'Fresh supported Form recovers unavailable scope.'
+                );
+                assert.equal(
+                    visibilityControl(state, 'fld_empty_tail').value,
+                    initial.fld_empty_tail
+                );
+                await assertNativeVisibilityAlert(false);
+            }
+            const tail =
+                scenario === 'hide-empty-create'
+                    ? 'Accepted create sibling'
+                    : scenario === 'hide-empty-edit'
+                      ? 'Accepted empty-hiding sibling'
+                      : 'Accepted recovered sibling';
+            await replaceInput(await emptyControl('tail'), tail, 'text');
+            await clickText('Save');
+            state = await waitReady(
+                (value) =>
+                    saves(value).length === 1 &&
+                    value.status?.includes('validation errors'),
+                'One native Save returns synthetic validation.'
+            );
+            state = await capture(result, 'complete-native-save');
+            const data = { ...initial, fld_empty_tail: tail };
+            if (scenario === 'hide-empty-edit') data.fld_empty_title = ' ';
+            assertEmptySave(
+                state,
+                data,
+                ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail'],
+                scenario === 'hide-empty-create' ? 'create' : 'edit'
+            );
+            if (scenario === 'hide-empty-edit') {
+                assert(
+                    (await (await find('.error-list')).getText()).includes(
+                        `Hidden required answer: ${state.expected.validationMessage}`
+                    )
+                );
+                await nativeChoice('#visitor', 'B');
+                await nativeChoice('#visitor', 'A');
+                state = await capture(
+                    result,
+                    'hidden-native-draft-survives-aba'
+                );
+                assert.equal(
+                    visibilityControl(state, 'fld_empty_title').value,
+                    ' '
+                );
+                assert.equal(
+                    visibilityControl(state, 'fld_empty_tail').value,
+                    tail
+                );
+                assert.equal(state.calls.length, 2);
+                await clickText('Discard draft');
+                state = await capture(
+                    result,
+                    'discard-restores-native-baseline'
+                );
+                assert.equal(
+                    visibilityControl(state, 'fld_empty_title').value,
+                    initial.fld_empty_title
+                );
+                assert.equal(
+                    visibilityControl(state, 'fld_empty_tail').value,
+                    initial.fld_empty_tail
+                );
+            }
+            assert.equal(saves(state).length, 1);
+            assert.deepEqual(state.expected.initial, initial);
+            assertCalls(
+                state,
+                scenario === 'hide-empty-unavailable'
+                    ? [
+                          'fetchExtensionForEndUser',
+                          'fetchExtensionForEndUser',
+                          'saveForm',
+                      ]
+                    : ['fetchExtensionForEndUser', 'saveForm']
+            );
+        });
+    }
+    for (const scenario of [
+        'hide-empty-review',
+        'hide-empty-review-malformed',
+    ]) {
+        await exercise(`starter-${scenario}`, async (result) => {
+            let state = await loadEmpty(scenario, 13);
+            const initial = structuredClone(state.expected.initial);
+            for (const id of state.expected.blankFieldIds)
+                await assertNativeVisibility(
+                    [id],
+                    scenario.endsWith('malformed') && id === 'fld_empty_barcode'
+                );
+            assert.equal(
+                await (await emptyControl('locked')).isEnabled(),
+                false
+            );
+            await assertNativeVisibilityAlert(false);
+            await replaceInput(
+                await emptyControl('tail'),
+                'Accepted combined sibling',
+                'text'
+            );
+            await capture(
+                result,
+                'accepted-visible-sibling-hidden-native-baseline'
+            );
+            if (scenario.endsWith('malformed')) {
+                await clickText('Save');
+                state = await waitSnapshot(
+                    (value) => value.status?.includes('Review is unavailable'),
+                    'Malformed native value blocks Review and Save.'
+                );
+                state = await capture(
+                    result,
+                    'malformed-review-blocks-without-save'
+                );
+                assert.equal(state.review.dialogs.length, 0);
+                assert.equal(state.review.fieldsInert, false);
+                assert.equal(
+                    visibilityControl(state, 'fld_empty_barcode').value,
+                    initial.fld_empty_barcode
+                );
+                assert.equal(
+                    visibilityControl(state, 'fld_empty_tail').value,
+                    'Accepted combined sibling'
+                );
+                assert(!state.status.includes('PrivateCombinedMalformed'));
+                assert.equal(saves(state).length, 0);
+                assertCalls(state, ['fetchExtensionForEndUser']);
+            } else {
+                const checkRows = (value) => {
+                    assert.deepEqual(
+                        value.review.dialogs[0].rows.map((row) => row.fieldId),
+                        ['fld_empty_locked', 'fld_empty_tail']
+                    );
+                    assert.deepEqual(
+                        value.review.dialogs[0].rows.map((row) => row.value),
+                        [
+                            'Retained readonly native answer',
+                            'Accepted combined sibling',
+                        ]
+                    );
+                    assert.equal(saves(value).length, 0);
+                };
+                state = await openReview();
+                checkRows(state);
+                await capture(
+                    result,
+                    'canonical-blank-review-edit',
+                    await reviewDialog()
+                );
+                await clickText('Edit', await reviewDialog());
+                await waitReviewClosed();
+                state = await openReview();
+                checkRows(state);
+                await driver.actions().sendKeys(Key.ESCAPE).perform();
+                await waitReviewClosed();
+                state = await openReview();
+                checkRows(state);
+                await capture(
+                    result,
+                    'canonical-blank-review-current-confirm',
+                    await reviewDialog()
+                );
+                await clickText('Confirm', await reviewDialog());
+                state = await waitReady(
+                    (value) =>
+                        saves(value).length === 1 &&
+                        value.status?.includes('validation errors'),
+                    'One confirmed native Save retains exact whitespace.'
+                );
+                state = await capture(
+                    result,
+                    'confirmed-full-native-whitespace-save'
+                );
+                assertEmptySave(
+                    state,
+                    { ...initial, fld_empty_tail: 'Accepted combined sibling' },
+                    [...state.expected.blankFieldIds, 'fld_empty_tail']
+                );
+                assert(
+                    (await (await find('.error-list')).getText()).includes(
+                        `Hidden required answer: ${state.expected.validationMessage}`
+                    )
+                );
+                assert.equal(state.review.dialogs.length, 0);
+                assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+            }
+            assert.deepEqual(state.expected.initial, initial);
+        });
+    }
+    assert.equal(receipt.cases.length, 38);
     const actualScenarioRoutes = receipt.cases.map(
         ({ scenarioRoute }) =>
             `${scenarioRoute.surface}/${scenarioRoute.scenario}`
@@ -4438,7 +4747,7 @@ try {
             (scenario) => `${surface}/${scenario}`
         )
     );
-    assert.equal(new Set(actualScenarioRoutes).size, 33);
+    assert.equal(new Set(actualScenarioRoutes).size, 38);
     assert.deepEqual(
         actualScenarioRoutes.sort(),
         declaredScenarioRoutes.sort()

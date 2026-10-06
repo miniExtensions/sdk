@@ -120,6 +120,7 @@ export const createAddressAutocompleteControl = (
     input.value = value;
     let active = true;
     let destroyed = false;
+    let composing = false;
     let predictionGeneration = 0;
     let intentGeneration = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -226,7 +227,7 @@ export const createAddressAutocompleteControl = (
     };
     const choose = (index: number): void => {
         const prediction = predictions[index];
-        if (!current() || prediction == null) return;
+        if (!current() || composing || prediction == null) return;
         predictionGeneration += 1;
         if (timer !== undefined) clearTimeout(timer);
         timer = undefined;
@@ -314,12 +315,23 @@ export const createAddressAutocompleteControl = (
             if (predictionRequest === controller) predictionRequest = undefined;
         }
     };
-    const typed = (): void => {
+    const startComposition = (): void => {
+        if (!current()) return;
+        composing = true;
+        retire();
+    };
+    const typed = (event?: Event): void => {
         if (!current()) {
+            composing = false;
             input.value = value;
             retire();
             return;
         }
+        if ((event as InputEvent | undefined)?.isComposing) {
+            startComposition();
+            return;
+        }
+        if (composing) return;
         const next = input.value;
         retire();
         if (!accept(next) || !current() || value.trim() === '') return;
@@ -330,8 +342,19 @@ export const createAddressAutocompleteControl = (
             void readPredictions(query, generation);
         }, 800);
     };
+    const endComposition = (): void => {
+        if (!composing) return;
+        composing = false;
+        typed();
+    };
     const keydown = (event: KeyboardEvent): void => {
-        if (!current()) return;
+        if (
+            !current() ||
+            composing ||
+            event.isComposing ||
+            event.keyCode === 229
+        )
+            return;
         if (event.key === 'Escape') {
             event.preventDefault();
             retire();
@@ -359,12 +382,13 @@ export const createAddressAutocompleteControl = (
     };
     const clearValue = (): void => {
         if (!current()) return;
+        composing = false;
         input.value = '';
         typed();
         input.focus();
     };
     const retryRead = (): void => {
-        if (!current()) return;
+        if (!current() || composing) return;
         if (failed === 'details' && selectedPlace != null) {
             void readDetails(selectedPlace, ++intentGeneration);
         } else if (failed === 'predictions' && value.trim() !== '') {
@@ -372,6 +396,8 @@ export const createAddressAutocompleteControl = (
         }
     };
     input.addEventListener('input', typed);
+    input.addEventListener('compositionstart', startComposition);
+    input.addEventListener('compositionend', endComposition);
     input.addEventListener('keydown', keydown);
     clear.addEventListener('click', clearValue);
     retry.addEventListener('click', retryRead);
@@ -381,6 +407,7 @@ export const createAddressAutocompleteControl = (
         getValue: () => value,
         setValue: (next) => {
             if (destroyed) return;
+            composing = false;
             retire();
             value = next ?? '';
             input.value = value;
@@ -388,7 +415,11 @@ export const createAddressAutocompleteControl = (
         setActive: (next) => {
             if (destroyed || active === next) return;
             active = next;
-            if (!active) retire();
+            if (!active) {
+                if (composing) input.value = value;
+                composing = false;
+                retire();
+            }
             input.disabled = !active;
             clear.disabled = !active;
             retry.disabled = !active;
@@ -396,8 +427,11 @@ export const createAddressAutocompleteControl = (
         destroy: () => {
             if (destroyed) return;
             destroyed = true;
+            composing = false;
             retire();
             input.removeEventListener('input', typed);
+            input.removeEventListener('compositionstart', startComposition);
+            input.removeEventListener('compositionend', endComposition);
             input.removeEventListener('keydown', keydown);
             clear.removeEventListener('click', clearValue);
             retry.removeEventListener('click', retryRead);

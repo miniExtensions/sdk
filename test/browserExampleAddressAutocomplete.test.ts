@@ -52,7 +52,8 @@ const mount = async (
     test: TestContext,
     form: FormLoadedResult,
     reads: ListAddressPredictionsInput[],
-    saves: SaveFormInput[]
+    saves: SaveFormInput[],
+    details: string[] = []
 ) => {
     const window = new Window({
         url: 'https://app.example.test',
@@ -113,6 +114,17 @@ const mount = async (
                     })
                 );
             }
+            if (
+                route ===
+                '/api/trpc/publicExtensions.getFormattedAddressFromPlaceId'
+            ) {
+                details.push(
+                    JSON.parse(url.searchParams.get('input') ?? '{}').placeId
+                );
+                return new Response(
+                    JSON.stringify({ result: { data: '東京都千代田区' } })
+                );
+            }
             throw new Error('Unexpected address fixture request.');
         },
     };
@@ -147,6 +159,104 @@ const mount = async (
 };
 
 describe('actual browser starter address autocomplete', () => {
+    it('preserves unfinished Japanese input without reads or keyboard acceptance and resumes after compositionend', async (test) => {
+        const form = loadedForm();
+        const field = form.payload.fieldIdsToSchemas.fld_title;
+        assert.ok(field);
+        field.miniExtConfig = {
+            title: 'Address',
+            enableAddressAutocomplete: true,
+        };
+        form.payload.fieldIdsInForm = ['fld_title'];
+        form.payload.formRecord = {
+            type: 'create',
+            data: {
+                fld_title: null,
+                fld_adjacent: 'Retained adjacent native value',
+            },
+        };
+        form.payload.formFieldIdsWithUnsavedChanges = [];
+        form.payload.urlPrefilledFieldIds = [];
+        const reads: ListAddressPredictionsInput[] = [];
+        const saves: SaveFormInput[] = [];
+        const details: string[] = [];
+        const window = await mount(test, form, reads, saves, details);
+        await waitFor(
+            () =>
+                window.document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                ) !== null
+        );
+        const input = window.document.querySelector(
+            'input[data-field-id="fld_title"]'
+        );
+        assert.ok(input instanceof window.HTMLInputElement);
+        input.dispatchEvent(new window.CompositionEvent('compositionstart'));
+        input.value = '東京未完';
+        input.dispatchEvent(
+            new window.InputEvent('input', { bubbles: true, isComposing: true })
+        );
+        await new Promise((done) => setTimeout(done, 850));
+        assert.equal(reads.length, 0);
+        assert.equal(saves.length, 0);
+        for (const name of ['ArrowDown', 'Enter']) {
+            const event = new window.KeyboardEvent('keydown', {
+                key: name,
+                bubbles: true,
+                cancelable: true,
+            });
+            input.dispatchEvent(event);
+            assert.equal(event.defaultPrevented, false);
+        }
+        assert.equal(input.value, '東京未完');
+        assert.deepEqual(details, []);
+        input.value = '東京';
+        input.dispatchEvent(new window.CompositionEvent('compositionend'));
+        input.dispatchEvent(
+            new window.InputEvent('input', {
+                bubbles: true,
+                isComposing: false,
+            })
+        );
+        await new Promise((done) => setTimeout(done, 850));
+        await waitFor(
+            () => window.document.querySelector('[role="option"]') !== null
+        );
+        assert.deepEqual(
+            reads.map((request) => request.addressFieldValue),
+            ['東京']
+        );
+        for (const name of ['ArrowDown', 'Enter']) {
+            const event = new window.KeyboardEvent('keydown', {
+                key: name,
+                bubbles: true,
+                cancelable: true,
+            });
+            input.dispatchEvent(event);
+            assert.equal(event.defaultPrevented, true);
+        }
+        await waitFor(() => input.value === '東京都千代田区');
+        assert.deepEqual(details, ['place_main']);
+        assert.equal(saves.length, 0);
+        const card = input.closest('form');
+        assert.ok(card);
+        card.dispatchEvent(
+            new window.Event('submit', { bubbles: true, cancelable: true })
+        );
+        await waitFor(() => saves.length === 1);
+        assert.equal(saves[0]?.formRecord.data.fld_title, '東京都千代田区');
+        assert.equal(
+            saves[0]?.formRecord.data.fld_adjacent,
+            'Retained adjacent native value'
+        );
+        await waitFor(
+            () =>
+                window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+    });
+
     it('keeps a typed native draft and reads configured suggestions after the canonical debounce', async (test) => {
         const form = loadedForm();
         const field = form.payload.fieldIdsToSchemas.fld_title;

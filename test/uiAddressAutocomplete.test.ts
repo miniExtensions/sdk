@@ -53,17 +53,24 @@ const fixture = (
         test.mock.timers.reset();
         await window.happyDOM.close();
     });
-    const type = (next: string) => {
+    const type = (next: string, isComposing = false) => {
         control.input.value = next;
         control.input.dispatchEvent(
-            new window.Event('input', { bubbles: true }) as unknown as Event
+            new window.InputEvent('input', {
+                bubbles: true,
+                isComposing,
+            }) as unknown as Event
         );
     };
-    const key = (name: string) => {
+    const key = (
+        name: string,
+        options: Pick<KeyboardEventInit, 'isComposing' | 'keyCode'> = {}
+    ) => {
         const event = new window.KeyboardEvent('keydown', {
             key: name,
             bubbles: true,
             cancelable: true,
+            ...options,
         });
         control.input.dispatchEvent(event as unknown as KeyboardEvent);
         return event;
@@ -96,6 +103,295 @@ const fixture = (
 };
 
 describe('address autocomplete native control', { concurrency: false }, () => {
+    it('ignores captured old option and Retry clicks while composition owns the input', async (test) => {
+        const queries: string[] = [];
+        const places: string[] = [];
+        const h = fixture(test, {
+            listPredictions: async (request) => {
+                queries.push(request.addressFieldValue);
+                if (queries.length === 1)
+                    throw new Error('Synthetic unavailable');
+                return [{ description: 'Returned address', placeId: 'tokyo' }];
+            },
+            getFormattedAddress: async (request) => {
+                places.push(request.placeId);
+                return 'Unexpected replacement';
+            },
+        });
+        h.type('Failed query');
+        test.mock.timers.tick(800);
+        await settle();
+        const retry = Array.from(
+            h.control.element.querySelectorAll('button')
+        ).find((button) => button.textContent === 'Try again');
+        assert.ok(retry);
+        assert.equal(retry.hidden, false);
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent(
+                'compositionstart'
+            ) as unknown as Event
+        );
+        h.type('未確定の入力', true);
+        retry.click();
+        test.mock.timers.tick(800);
+        await settle();
+        assert.deepEqual(queries, ['Failed query']);
+        assert.deepEqual(places, []);
+        assert.deepEqual(h.changes, ['Failed query']);
+        assert.equal(h.control.input.value, '未確定の入力');
+        h.control.input.value = '東京';
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent('compositionend') as unknown as Event
+        );
+        test.mock.timers.tick(800);
+        await settle();
+        assert.deepEqual(queries, ['Failed query', '東京']);
+        const oldOption =
+            h.control.element.querySelector<HTMLButtonElement>(
+                '[role="option"]'
+            );
+        assert.ok(oldOption);
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent(
+                'compositionstart'
+            ) as unknown as Event
+        );
+        h.type('続く未確定の入力', true);
+        oldOption.click();
+        await settle();
+        assert.deepEqual(places, []);
+        assert.deepEqual(h.changes, ['Failed query', '東京']);
+        assert.equal(h.control.getValue(), '東京');
+        assert.equal(h.control.input.value, '続く未確定の入力');
+    });
+
+    it('defers composition input and its character cap until compositionend, then permits ordinary keyboard selection', async (test) => {
+        const queries: string[] = [];
+        const places: string[] = [];
+        const h = fixture(
+            test,
+            {
+                listPredictions: async (request) => {
+                    queries.push(request.addressFieldValue);
+                    return [
+                        { description: 'Selected address', placeId: 'tokyo' },
+                    ];
+                },
+                getFormattedAddress: async (request) => {
+                    places.push(request.placeId);
+                    return 'Formatted address';
+                },
+            },
+            5,
+            'Loaded value'
+        );
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent(
+                'compositionstart'
+            ) as unknown as Event
+        );
+        h.type('東京都千代田区', true);
+        test.mock.timers.tick(1600);
+        await settle();
+        assert.deepEqual(queries, []);
+        assert.equal(h.control.input.value, '東京都千代田区');
+        assert.equal(h.control.getValue(), 'Loaded value');
+        assert.deepEqual(h.changes, []);
+        for (const name of ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'])
+            assert.equal(h.key(name).defaultPrevented, false);
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent('compositionend') as unknown as Event
+        );
+        assert.equal(h.control.getValue(), '東京都千代');
+        assert.equal(h.control.input.value, '東京都千代');
+        test.mock.timers.tick(799);
+        assert.deepEqual(queries, []);
+        test.mock.timers.tick(1);
+        await settle();
+        assert.deepEqual(queries, ['東京都千代']);
+        h.choose();
+        await settle();
+        assert.deepEqual(places, ['tokyo']);
+        assert.equal(h.control.getValue(), 'Forma');
+        assert.deepEqual(h.changes, ['東京都千代', 'Selec', 'Forma']);
+    });
+
+    it('recognizes a composing input without compositionstart and debounces the final input only once', async (test) => {
+        const queries: string[] = [];
+        const h = fixture(test, {
+            listPredictions: async (request) => {
+                queries.push(request.addressFieldValue);
+                return [];
+            },
+            getFormattedAddress: async () => 'Unused',
+        });
+        h.type('とうきょう', true);
+        test.mock.timers.tick(800);
+        await settle();
+        assert.deepEqual(queries, []);
+        assert.deepEqual(h.changes, []);
+        h.control.input.value = '東京';
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent('compositionend') as unknown as Event
+        );
+        h.type('東京');
+        test.mock.timers.tick(800);
+        await settle();
+        assert.deepEqual(queries, ['東京']);
+        assert.equal(h.control.getValue(), '東京');
+    });
+
+    it('leaves composing and keyCode 229 keyboard events to the input even with existing suggestions', async (test) => {
+        const places: string[] = [];
+        const h = fixture(test, {
+            listPredictions: async () => [
+                { description: 'Existing suggestion', placeId: 'existing' },
+            ],
+            getFormattedAddress: async (request) => {
+                places.push(request.placeId);
+                return 'Formatted existing';
+            },
+        });
+        h.type('Existing query');
+        test.mock.timers.tick(800);
+        await settle();
+        assert.equal(h.key('ArrowDown').defaultPrevented, true);
+        const selected = h.control.input.getAttribute('aria-activedescendant');
+        assert.ok(selected);
+        for (const options of [{ isComposing: true }, { keyCode: 229 }]) {
+            for (const name of ['ArrowDown', 'ArrowUp', 'Enter', 'Escape']) {
+                assert.equal(h.key(name, options).defaultPrevented, false);
+                assert.equal(
+                    h.control.input.getAttribute('aria-activedescendant'),
+                    selected
+                );
+                assert.equal(h.control.getValue(), 'Existing query');
+                assert.deepEqual(places, []);
+            }
+        }
+        assert.equal(h.key('Enter').defaultPrevented, true);
+        await settle();
+        assert.deepEqual(places, ['existing']);
+        assert.equal(h.control.getValue(), 'Formatted existing');
+    });
+
+    it('retires old timers and ignored-abort prediction replies when composition starts', async (test) => {
+        const pending = deferred<AddressPrediction[]>();
+        const queries: string[] = [];
+        const h = fixture(test, {
+            listPredictions: async (request) => {
+                queries.push(request.addressFieldValue);
+                return pending.promise;
+            },
+            getFormattedAddress: async () => 'Unused',
+        });
+        h.type('Old timer');
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent(
+                'compositionstart'
+            ) as unknown as Event
+        );
+        test.mock.timers.tick(800);
+        assert.deepEqual(queries, []);
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent('compositionend') as unknown as Event
+        );
+        test.mock.timers.tick(800);
+        assert.deepEqual(queries, ['Old timer']);
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent(
+                'compositionstart'
+            ) as unknown as Event
+        );
+        h.type('東京未完', true);
+        pending.resolve([
+            { description: 'Late old suggestion', placeId: 'old' },
+        ]);
+        await settle();
+        assert.equal(h.control.element.querySelector('[role="option"]'), null);
+        assert.equal(h.control.input.value, '東京未完');
+        assert.equal(h.control.getValue(), 'Old timer');
+    });
+
+    it('retires ignored-abort formatted details before they can replace composing text', async (test) => {
+        const pending = deferred<string>();
+        const h = fixture(test, {
+            listPredictions: async () => [
+                { description: 'Selected before composition', placeId: 'old' },
+            ],
+            getFormattedAddress: async () => pending.promise,
+        });
+        h.type('Old query');
+        test.mock.timers.tick(800);
+        await settle();
+        h.choose();
+        h.control.input.dispatchEvent(
+            new h.window.CompositionEvent(
+                'compositionstart'
+            ) as unknown as Event
+        );
+        h.type('東京未完', true);
+        pending.resolve('Late formatted replacement');
+        await settle();
+        assert.equal(h.control.input.value, '東京未完');
+        assert.equal(h.control.getValue(), 'Selected before composition');
+        assert.equal(h.changes.includes('Late formatted replacement'), false);
+    });
+
+    it('retires composition across supplied replacement and suspend/reveal, while explicit Clear still works', async (test) => {
+        const queries: string[] = [];
+        const h = fixture(
+            test,
+            {
+                listPredictions: async (request) => {
+                    queries.push(request.addressFieldValue);
+                    return [];
+                },
+                getFormattedAddress: async () => 'Unused',
+            },
+            null,
+            'Loaded value'
+        );
+        const start = () =>
+            h.control.input.dispatchEvent(
+                new h.window.CompositionEvent(
+                    'compositionstart'
+                ) as unknown as Event
+            );
+        const end = () =>
+            h.control.input.dispatchEvent(
+                new h.window.CompositionEvent(
+                    'compositionend'
+                ) as unknown as Event
+            );
+        start();
+        h.type('未完の入力', true);
+        h.control.setValue('Replacement value');
+        end();
+        test.mock.timers.tick(800);
+        assert.deepEqual(queries, []);
+        assert.deepEqual(h.changes, []);
+        assert.equal(h.control.input.value, 'Replacement value');
+        start();
+        h.type('隠す前の未完', true);
+        h.control.setActive(false);
+        h.control.setActive(true);
+        end();
+        test.mock.timers.tick(800);
+        assert.deepEqual(queries, []);
+        assert.deepEqual(h.changes, []);
+        assert.equal(h.control.input.value, 'Replacement value');
+        start();
+        h.type('消去前の未完', true);
+        h.button('Clear address');
+        end();
+        test.mock.timers.tick(800);
+        assert.deepEqual(queries, []);
+        assert.deepEqual(h.changes, ['']);
+        assert.equal(h.control.getValue(), '');
+        assert.equal(h.control.input.value, '');
+    });
+
     it('debounces final input, renders labels as text and accepts keyboard selection before details', async (test) => {
         const queries: string[] = [];
         const places: string[] = [];

@@ -28,14 +28,29 @@ const input = (window, node, value) => {
     node.value = value;
     node.dispatchEvent(new window.Event('input', { bubbles: true }));
 };
-const key = (window, node, name) => {
+const key = (window, node, name, flags = {}) => {
     const event = new window.KeyboardEvent('keydown', {
         key: name,
         bubbles: true,
         cancelable: true,
+        ...flags,
     });
     node.dispatchEvent(event);
     return event;
+};
+
+const composingKeyboard = (window, node) => {
+    const selected = node.getAttribute('aria-activedescendant');
+    const value = node.value;
+    for (const flags of [{ isComposing: true }, { keyCode: 229 }])
+        for (const name of ['ArrowDown', 'ArrowUp', 'Enter', 'Escape']) {
+            const event = key(window, node, name, flags);
+            assert.equal(event.isComposing, flags.isComposing ?? false);
+            assert.equal(event.keyCode, flags.keyCode ?? 0);
+            assert.equal(event.defaultPrevented, false);
+            assert.equal(node.value, value);
+            assert.equal(node.getAttribute('aria-activedescendant'), selected);
+        }
 };
 const click = (node, label) => {
     const button = [...node.querySelectorAll('button')].find(
@@ -251,6 +266,109 @@ export async function checkAddressAutocompleteRecipe({
         mounted.dispose();
         assert.equal(host.children.length, 0);
         return { checks: 6 };
+    } finally {
+        mounted?.dispose();
+        await window.happyDOM.close();
+    }
+}
+
+/** Actual installed guide control; synthetic DOM markers, not an OS IME. */
+export async function checkAddressCompositionRecipe({
+    consumerDirectory,
+    guideSources,
+    happyDomModulePath,
+}) {
+    const consumer = realpathSync(consumerDirectory);
+    const matches = guideSources
+        .map((name) => join(consumer, name))
+        .filter((path) =>
+            readFileSync(path, 'utf8').includes(
+                'export function mountAddressAutocomplete('
+            )
+        );
+    assert.equal(matches.length, 1);
+    const { code } = await transform(readFileSync(matches[0], 'utf8'), {
+        loader: 'ts',
+        format: 'esm',
+        target: 'es2022',
+    });
+    const compiled = `${matches[0]}.address-composition.mjs`;
+    writeFileSync(compiled, code);
+    const { mountAddressAutocomplete } = await import(
+        pathToFileURL(compiled).href
+    );
+    const { Window } = await import(pathToFileURL(happyDomModulePath).href);
+    const window = new Window({ url: 'https://address.example.test' });
+    let mounted;
+    const queries = [];
+    const places = [];
+    const changes = [];
+    try {
+        const host = window.document.createElement('div');
+        window.document.body.append(host);
+        mounted = mountAddressAutocomplete(host, {
+            label: 'Address',
+            value: 'Loaded unchanged',
+            characterLimit: 5,
+            input: {
+                extensionAccessToken: 'access_composition_recipe',
+                fieldId: 'fld_address',
+            },
+            isCurrent: () => true,
+            onChange: (value) => changes.push(value),
+            reads: {
+                listPredictions: async (request) => {
+                    queries.push(request.addressFieldValue);
+                    return [
+                        { description: 'Selected address', placeId: 'tokyo' },
+                    ];
+                },
+                getFormattedAddress: async (request) => {
+                    places.push(request.placeId);
+                    return 'Formatted address';
+                },
+            },
+        });
+        const control = mounted.control;
+        control.input.dispatchEvent(
+            new window.CompositionEvent('compositionstart')
+        );
+        control.input.value = '東京都千代田区';
+        control.input.dispatchEvent(
+            new window.InputEvent('input', { bubbles: true, isComposing: true })
+        );
+        await debounce();
+        assert.deepEqual(queries, []);
+        assert.equal(control.input.value, '東京都千代田区');
+        assert.equal(control.getValue(), 'Loaded unchanged');
+        assert.deepEqual(changes, []);
+        composingKeyboard(window, control.input);
+        assert.deepEqual(places, []);
+        control.input.dispatchEvent(
+            new window.CompositionEvent('compositionend')
+        );
+        assert.equal(control.input.value, '東京都千代');
+        assert.equal(control.getValue(), '東京都千代');
+        await debounce();
+        await waitFor(() => host.querySelector('[role="option"]') !== null);
+        assert.deepEqual(queries, ['東京都千代']);
+        assert.equal(
+            key(window, control.input, 'ArrowDown').defaultPrevented,
+            true
+        );
+        composingKeyboard(window, control.input);
+        assert.deepEqual(places, []);
+        assert.equal(
+            key(window, control.input, 'Enter').defaultPrevented,
+            true
+        );
+        await waitFor(() => control.getValue() === 'Forma');
+        assert.deepEqual(places, ['tokyo']);
+        assert.deepEqual(changes, ['東京都千代', 'Selec', 'Forma']);
+        return {
+            checks: 4,
+            proofScope: 'synthetic DOM composition events; no OS IME proof',
+        };
     } finally {
         mounted?.dispose();
         await window.happyDOM.close();
@@ -511,6 +629,195 @@ export async function checkBrowserAddressExample({
         for (const pending of predictions) pending.resolve(response([]));
         for (const pending of details) pending.resolve(response('Late'));
         save.resolve(saveError());
+        await settle();
+        for (const [name, descriptor] of previous) {
+            if (descriptor === undefined)
+                Reflect.deleteProperty(globalThis, name);
+            else Object.defineProperty(globalThis, name, descriptor);
+        }
+        await window.happyDOM.close();
+    }
+}
+
+/** Actual copied starter and installed UI; explicit DOM composition markers. */
+export async function checkBrowserAddressCompositionExample({
+    consumerDirectory,
+    happyDomModulePath,
+}) {
+    const consumer = realpathSync(consumerDirectory);
+    const require = createRequire(import.meta.url);
+    const { Window } = require(happyDomModulePath);
+    const outfile = join(
+        consumer,
+        '.generated/address-composition-main-checks.mjs'
+    );
+    const bundled = await build({
+        absWorkingDir: consumer,
+        entryPoints: [join(consumer, 'src/main.ts')],
+        bundle: true,
+        platform: 'browser',
+        format: 'esm',
+        outfile,
+        logLevel: 'silent',
+        metafile: true,
+    });
+    await assertBrowserInputs(bundled.metafile, consumer);
+    const form = portalRecipeFixtures.makeForm({
+        childExtensionInfo: { accessType: { type: 'create' } },
+    });
+    const title = form.payload.fieldIdsToSchemas.fld_title;
+    title.miniExtConfig = {
+        enableAddressAutocomplete: true,
+        characterLimit: 5,
+    };
+    form.payload.fieldIdsInForm = ['fld_title'];
+    form.payload.fieldIdsToSchemas = { fld_title: title };
+    form.payload.hasParentExtension = false;
+    form.payload.formRecord = {
+        type: 'create',
+        data: { fld_title: null, fld_adjacent: ['Retained adjacent native'] },
+    };
+    form.payload.formFieldIdsWithUnsavedChanges = [];
+    form.payload.urlPrefilledFieldIds = [];
+    const queries = [];
+    const places = [];
+    const saves = [];
+    const window = new Window({
+        url: 'https://address.example.test',
+        settings: {
+            disableCSSFileLoading: true,
+            disableJavaScriptFileLoading: true,
+        },
+    });
+    window.document.write(
+        readFileSync(join(consumer, 'index.html'), 'utf8').replace(
+            /<script\b[^>]*>[\s\S]*?<\/script>/g,
+            ''
+        )
+    );
+    const globals = {
+        document: window.document,
+        location: window.location,
+        HTMLElement: window.HTMLElement,
+        HTMLInputElement: window.HTMLInputElement,
+        HTMLSelectElement: window.HTMLSelectElement,
+        HTMLButtonElement: window.HTMLButtonElement,
+        fetch: async (request, init) => {
+            const url = new URL(String(request));
+            const route = url.searchParams.get('route') ?? url.pathname;
+            if (route === 'fetchExtensionForEndUser')
+                return new Response(JSON.stringify(form));
+            if (
+                route === '/api/trpc/publicExtensions.autoCompleteAddressField'
+            ) {
+                const value = JSON.parse(url.searchParams.get('input') ?? '{}');
+                assert.equal(value.fieldId, 'fld_title');
+                queries.push(value.addressFieldValue);
+                return response([
+                    { description: 'Tokyo selected', placeId: 'tokyo' },
+                ]);
+            }
+            if (
+                route ===
+                '/api/trpc/publicExtensions.getFormattedAddressFromPlaceId'
+            ) {
+                const value = JSON.parse(url.searchParams.get('input') ?? '{}');
+                assert.equal(value.fieldId, 'fld_title');
+                places.push(value.placeId);
+                return response('東京都千代');
+            }
+            if (route === 'saveForm') {
+                saves.push(JSON.parse(String(init?.body)));
+                return saveError();
+            }
+            throw new Error(
+                'Unexpected packed address composition request; no real fetch fallback.'
+            );
+        },
+    };
+    const previous = Object.keys(globals).map((name) => [
+        name,
+        Object.getOwnPropertyDescriptor(globalThis, name),
+    ]);
+    Object.assign(globalThis, globals);
+    try {
+        await import(pathToFileURL(outfile).href);
+        const document = window.document;
+        document.getElementById('api-origin').value =
+            'https://sdk.example.test';
+        document.getElementById('share-id').value = 'share_example';
+        document
+            .getElementById('connection-form')
+            .dispatchEvent(
+                new window.Event('submit', { bubbles: true, cancelable: true })
+            );
+        const address = () =>
+            document.querySelector('input[data-field-id="fld_title"]');
+        await waitFor(
+            () =>
+                address() !== null &&
+                document.getElementById('screen').inert === false
+        );
+        address().dispatchEvent(
+            new window.CompositionEvent('compositionstart')
+        );
+        address().value = '東京都千代田区';
+        address().dispatchEvent(
+            new window.InputEvent('input', { bubbles: true, isComposing: true })
+        );
+        await debounce();
+        assert.deepEqual(queries, []);
+        assert.equal(address().value, '東京都千代田区');
+        composingKeyboard(window, address());
+        assert.deepEqual(places, []);
+        assert.deepEqual(saves, []);
+        address().dispatchEvent(new window.CompositionEvent('compositionend'));
+        address().dispatchEvent(
+            new window.InputEvent('input', {
+                bubbles: true,
+                isComposing: false,
+            })
+        );
+        assert.equal(address().value, '東京都千代');
+        await debounce();
+        await waitFor(() => document.querySelector('[role="option"]') !== null);
+        assert.deepEqual(queries, ['東京都千代']);
+        address().focus();
+        assert.equal(
+            key(window, address(), 'ArrowDown').defaultPrevented,
+            true
+        );
+        composingKeyboard(window, address());
+        assert.deepEqual(places, []);
+        assert.equal(key(window, address(), 'Enter').defaultPrevented, true);
+        await waitFor(
+            () => places.length === 1 && address().value === '東京都千代'
+        );
+        assert.deepEqual(places, ['tokyo']);
+        assert.deepEqual(saves, []);
+        address()
+            .closest('form')
+            .dispatchEvent(
+                new window.Event('submit', { bubbles: true, cancelable: true })
+            );
+        await waitFor(
+            () =>
+                saves.length === 1 &&
+                document.getElementById('screen').getAttribute('aria-busy') ===
+                    'false'
+        );
+        assert.equal(saves[0].formRecord.data.fld_title, '東京都千代');
+        assert.deepEqual(saves[0].formRecord.data.fld_adjacent, [
+            'Retained adjacent native',
+        ]);
+        assert.deepEqual(saves[0].formFieldIdsWithUnsavedChanges, [
+            'fld_title',
+        ]);
+        return {
+            checks: 3,
+            proofScope: 'synthetic DOM composition events; no OS IME proof',
+        };
+    } finally {
         await settle();
         for (const [name, descriptor] of previous) {
             if (descriptor === undefined)

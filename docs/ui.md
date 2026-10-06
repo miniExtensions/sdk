@@ -81,6 +81,14 @@ background/text and an outline without requiring an application stylesheet.
 Enter accepts the highlighted suggestion without submitting the Form, Escape
 dismisses pending suggestions, and Clear preserves focus on the input.
 
+During text composition, the control retires existing suggestions and preserves
+the unfinished input buffer without applying the character cap, accepting a
+draft edit, or starting a lookup. `compositionend` commits the final text and
+starts the normal debounce. Composing keyboard events, including the legacy
+key code 229 marker, remain available to the input rather than selecting or
+dismissing an address. Replacing or suspending the control retires that
+composition intent; a late end event does not restart it.
+
 The `reads` adapter must supply the existing Google-backed address results.
 The control attributes those results to Google Maps using the unchanged
 official logo inside the bordered suggestions container, outside its selectable

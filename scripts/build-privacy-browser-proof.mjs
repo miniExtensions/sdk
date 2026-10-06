@@ -56,6 +56,7 @@ const regular = (path) => {
 
 /** This function is serialized into the static kit; it imports no SDK source. */
 function createPrivacyFixture(scenario) {
+    if (scenario === 'address-ime') return createAddressCompositionFixture();
     if (['projection-single', 'projection-multiple'].includes(scenario))
         return createProjectionFixture(scenario);
     if (
@@ -1770,6 +1771,140 @@ function createAddressFixture(scenario) {
     };
 }
 
+/** Explicit synthetic DOM composition markers, never an OS IME driver. */
+function createAddressCompositionFixture() {
+    const fixture = createAddressFixture('address-acceptance');
+    fixture.state.scenario = 'address-ime';
+    fixture.state.expected.composition = {
+        proofScope: 'synthetic DOM composition events; no OS IME proof',
+        composingValue: '東京都千代田区丸の内一丁目二番地の未確定入力を保持',
+        committedValue: '東京都千代田区',
+        keyNames: ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'],
+    };
+    const getInput = () => {
+        const input = document.querySelector(
+            '#screen input[data-field-id="fld_address_synthetic"]'
+        );
+        if (!(input instanceof HTMLInputElement) || input.disabled)
+            throw new Error(
+                'Synthetic composition requires the active address input.'
+            );
+        return input;
+    };
+    const marker = (input, event, supplied) => {
+        const before = {
+            value: input.value,
+            activeDescendant: input.getAttribute('aria-activedescendant'),
+        };
+        const dispatchReturned = input.dispatchEvent(event);
+        fixture.state.events.push({
+            type: 'synthetic-dom-composition-marker',
+            supplied,
+            observed: {
+                type: event.type,
+                isTrusted: event.isTrusted,
+                isComposing: event.isComposing ?? null,
+                key: event.key ?? null,
+                keyCode: event.keyCode ?? null,
+                defaultPrevented: event.defaultPrevented,
+                dispatchReturned,
+            },
+            before,
+            after: {
+                value: input.value,
+                activeDescendant: input.getAttribute('aria-activedescendant'),
+            },
+        });
+    };
+    fixture.compositionControls = [
+        [
+            'Start synthetic DOM composition',
+            () => {
+                const input = getInput();
+                marker(
+                    input,
+                    new CompositionEvent('compositionstart', { bubbles: true }),
+                    { type: 'compositionstart' }
+                );
+            },
+        ],
+        [
+            'Update synthetic composing Japanese input',
+            () => {
+                const input = getInput();
+                input.value = fixture.state.expected.composition.composingValue;
+                marker(
+                    input,
+                    new InputEvent('input', {
+                        bubbles: true,
+                        isComposing: true,
+                        inputType: 'insertCompositionText',
+                        data: input.value,
+                    }),
+                    {
+                        type: 'input',
+                        isComposing: true,
+                        inputType: 'insertCompositionText',
+                        value: input.value,
+                    }
+                );
+            },
+        ],
+        [
+            'Dispatch synthetic composing keyboard markers',
+            () => {
+                const input = getInput();
+                for (const flags of [{ isComposing: true }, { keyCode: 229 }])
+                    for (const key of fixture.state.expected.composition
+                        .keyNames) {
+                        const supplied = { type: 'keydown', key, ...flags };
+                        marker(
+                            input,
+                            new KeyboardEvent('keydown', {
+                                key,
+                                ...flags,
+                                bubbles: true,
+                                cancelable: true,
+                            }),
+                            supplied
+                        );
+                    }
+            },
+        ],
+        [
+            'Commit synthetic DOM composition',
+            () => {
+                const input = getInput();
+                input.value = fixture.state.expected.composition.committedValue;
+                marker(
+                    input,
+                    new CompositionEvent('compositionend', {
+                        bubbles: true,
+                        data: input.value,
+                    }),
+                    { type: 'compositionend', value: input.value }
+                );
+                marker(
+                    input,
+                    new InputEvent('input', {
+                        bubbles: true,
+                        isComposing: false,
+                        inputType: 'insertText',
+                        data: input.value,
+                    }),
+                    {
+                        type: 'input',
+                        isComposing: false,
+                        inputType: 'insertText',
+                        value: input.value,
+                    }
+                );
+            },
+        ],
+    ];
+    return fixture;
+}
+
 /** Read-only snapshots plus an explicit native synthetic-read release button. */
 function installProofInspection(fixture, kind) {
     const banner = document.createElement('section');
@@ -1952,6 +2087,15 @@ function installProofInspection(fixture, kind) {
             control.textContent = text;
             control.dataset.proofControl = 'address-response';
             control.addEventListener('click', settle);
+            banner.append(control);
+        }
+    if (fixture.compositionControls)
+        for (const [text, dispatch] of fixture.compositionControls) {
+            const control = document.createElement('button');
+            control.type = 'button';
+            control.textContent = text;
+            control.dataset.proofControl = 'synthetic-dom-composition';
+            control.addEventListener('click', dispatch);
             banner.append(control);
         }
     if (fixture.releaseDeferred) {
@@ -2226,7 +2370,7 @@ export async function buildPrivacyBrowserProof({
         write('starter/index.html', starterHtml);
         write(
             'fixture.js',
-            `const createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
+            `const createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nconst createAddressCompositionFixture = ${createAddressCompositionFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
         );
         write(
             'starter/bootstrap.js',
@@ -2343,6 +2487,7 @@ renderPanel();
             'address-failure',
             'address-lifecycle',
             'address-remount',
+            'address-ime',
         ]
             .map(
                 (name) =>
@@ -2421,6 +2566,12 @@ address-lifecycle: start predictions, hide then reveal Address using native SPAC
 
 address-remount: hold predictions, switch the actual Visitor selector A to B to A, and inspect a new input ID retaining the accepted draft with no automatic query. Release the old response after remount; it must add no options/status/retry, writes or detail read. Type afresh, release predictions, select an actual option and hold details. Choose Discard draft, inspect another new input ID and original loaded native data, then release old details after remount. The restored control and complete draft must stay unchanged. Deliberate Save must carry the loaded native data with no discarded dirty ID.
 
+### Explicit synthetic DOM composition scenario
+
+address-ime reuses the same bounded address transport and adds separately labelled visible fixture controls. It proves SDK/starter handling of supplied untrusted DOM events, not OS IME behavior. First type an ordinary query with the real keyboard, release predictions and highlight the first option using native ArrowDown. Dispatch synthetic composing keyboard markers: each ArrowDown/ArrowUp/Enter/Escape with isComposing:true and again keyCode:229 must leave the value/highlight unchanged, defaultPrevented:false, dispatchReturned:true, and issue no details or Save. Marker logs bind exact supplied and observed flags, before/after value and active descendant.
+
+Start synthetic DOM composition; the existing popup and pending intents must retire. Update synthetic composing Japanese input: its fixed unfinished buffer exceeds the 24-character cap and must remain untouched for more than 800 ms, without a prediction, formatted details or Save. Dispatch the markers again while composition is active. Commit synthetic DOM composition: the actual compositionend plus final non-composing input commits the fixed final Japanese string and creates exactly one debounced prediction. Release it, focus the real input and use native ArrowDown/Enter; the ordinary highlight/selection/details behavior must still work. Release details, then explicitly Save and inspect full native record values and the address dirty ID. These composition controls intentionally dispatch app input markers only in this named scenario; existing four address response controls still settle transport only, and snapshot hooks remain read-only.
+
 ## CI generation and remaining verification
 
 CI generated this static kit only after the existing exact archive consumer checks passed. It did not launch a browser or perform these manual interactions. This bounded fixture does not expose every configured title/destination variant; deterministic helper tests cover hidden/blank titles and fallback-destination semantics separately. Record any additional manual exploration separately, and do not claim those variants were exercised from the positive scenarios alone. The manifest binds the source/CI identity, exact SDK package digest, complete recipe and bundle inputs, and static outputs. Preserve the original tested SDK TGZ and receipt alongside this fixture; browser evidence must name both digests.
@@ -2498,6 +2649,7 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'address-failure',
                 'address-lifecycle',
                 'address-remount',
+                'address-ime',
             ],
             limits: [
                 'Synthetic transport only; real network fallback disabled.',
@@ -2509,6 +2661,7 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'Interaction Save cases prove explicit native dispatch with validation responses, not durable persistence.',
                 'Address scenarios cover only editable unmasked singleLineText, a valid cap and one optional one-page checkbox predicate; no provider, backend, hosted parity or other field/configuration credit.',
                 'Address stale-response cases cover combined installed SDK and starter/presenter cancellation; they do not independently isolate presenter generations.',
+                'The address-ime scenario supplies explicit untrusted DOM composition and keyboard event markers through visible synthetic fixture controls; it does not prove an OS IME, platform composition integration or native Japanese text entry.',
                 'Generated successful output is not a manual browser pass.',
             ],
         };

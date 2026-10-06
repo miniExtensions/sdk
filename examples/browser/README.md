@@ -103,6 +103,12 @@ entry and offer an explicit retry. Hiding an address field or suspending the
 Form retires its pending address reads without clearing accepted values or
 submitting a Save.
 
+Unfinished composing text stays in the address input without a character cap
+or suggestion request until composition ends. Arrow keys, Enter and Escape
+remain available to the composition; ordinary keyboard selection resumes
+after the final text commits. The synthetic DOM-event proof does not establish
+OS IME integration.
+
 Arrow keys show a contrasting highlight while input focus stays in place;
 Enter accepts that highlighted suggestion without submitting the Form.
 The existing Google-backed results display the official Google Maps logo

@@ -239,8 +239,9 @@ uses its current linked-table field name. Only a scalar string is supported,
 and only the returned `prefillValue` resolves a selection. Repeated values are
 reported as unsupported. Click **Load conditional filters** before reading
 options or saving a hidden-prefill Form; the button remains visible in hidden
-mode. Portal child URL-prefill propagation remains outside this example's
-integration. There is no automatic metadata retry, discovery paging cursor,
+mode. Portal child cascades use captured configured child-context prefills
+and accepted child static overrides, as described below. Raw root/browser URL
+keys remain outside child authority. There is no automatic metadata retry, discovery paging cursor,
 new schema read, or additional mutation permission.
 
 Custom static and dynamic Form headers also belong to your app. Render them
@@ -274,6 +275,21 @@ are omitted; this does not convert a computed lookup into a writable link.
 - **Open Form** loads the configured edit child for a returned record.
   **Create record** loads the configured create child and preserves the inverse
   link to the Portal user. Loading either Form makes no write.
+
+Child filter-prefill snapshots belong to the dispatched plan and accepted Form
+load. Create cascades use configured dynamic prefills plus static child overrides;
+the parent prefill toggle suppresses only the dynamic source. Edit children use
+an empty query. Parent browser/root queries and raw request-query keys never enter
+child cascades or Save. Save sends dynamic-only values with the last duplicate
+winning, preserving the modal parent context and full native draft; the backend
+uses token-bound load provenance. Cascade duplicate arrays are a conservative
+refusal, not canonical last-value parity. Static keys replace whole dynamic values.
+
+Reopening, owner replacement, returning to the Portal, or successful Save/delete
+retires those snapshots. Reads require explicit Load/Search; failed prefills permit
+explicit Load retry, while user edits prevent old prefill replay. Malformed settings
+show a diagnostic without pruning native data or denying otherwise-allowed edits.
+
 - Editable Grid views expose **Edit cell** and an explicit **Save cell**. Linked
   cells use the Portal's authorized selector. After saving, the current Portal
   user's record is refreshed. Choose **Load records** before paging or opening

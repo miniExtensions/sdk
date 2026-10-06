@@ -1,3 +1,4 @@
+import type { ChildQuerySnapshots } from './childQueries.js';
 import {
     createMiniExtensionsClient,
     AirtableFieldType,
@@ -78,6 +79,12 @@ type Visitor = {
     formAuthority: (() => boolean) | null;
     formContext: SaveFormInput['context'];
     formParentScope: ParentFormDraftScope | null;
+    formQueries:
+        | (ChildQuerySnapshots & {
+              page: FormLoadedResult;
+              loadVersion: number;
+          })
+        | null;
     drafts: FormDraftStore<AirtableValue>;
     uncertainFormDraftScopes: Set<string>;
     verification: { loginPage: LoginPageResult; verificationId: string } | null;
@@ -94,6 +101,7 @@ const newVisitor = (): Visitor => ({
     formAuthority: null,
     formContext: { type: 'direct-url' },
     formParentScope: null,
+    formQueries: null,
     drafts: new FormDraftStore<AirtableValue>(),
     uncertainFormDraftScopes: new Set(),
     verification: null,
@@ -285,6 +293,7 @@ const invalidate = (visitor: Visitor): void => {
     visitor.verification = null;
     visitor.formContext = { type: 'direct-url' };
     visitor.formParentScope = null;
+    visitor.formQueries = null;
     visitor.recoveryCandidate = null;
     visitor.preparedAttempt = null;
     visitor.formAuthority = null;
@@ -304,6 +313,7 @@ const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
     visitor.root = null;
     visitor.verification = null;
     visitor.formParentScope = null;
+    visitor.formQueries = null;
     visitor.recoveryCandidate = null;
     visitor.preparedAttempt = null;
     visitor.formAuthority = null;
@@ -317,6 +327,7 @@ const load = (): void => {
         'Loading the published extension…',
         async ({ visitor, client, signal, current }) => {
             if (connection == null) return;
+            const query = structuredClone(connection.input.query ?? {});
             const result = await client.loadExtension(connection.input, {
                 signal,
             });
@@ -335,7 +346,17 @@ const load = (): void => {
             visitor.portal = null;
             visitor.formContext = { type: 'direct-url' };
             visitor.formParentScope = null;
+            visitor.formQueries = null;
             visitor.verification = null;
+            if (result.extensionScreen === 'form_loaded') {
+                visitor.formQueries = {
+                    page: result,
+                    loadVersion: visitor.formLoadVersion,
+                    cascade: query,
+                    save: structuredClone(query),
+                    diagnostic: null,
+                };
+            }
             render();
             status(
                 result.extensionScreen == null
@@ -589,12 +610,23 @@ const renderForm = (page: FormLoadedResult): void => {
     const context = visitor.formContext;
     const scope = formRecoveryScope(visitor, page);
     const loadVersion = visitor.formLoadVersion;
+    const formQueries =
+        visitor.formQueries?.page === page &&
+        visitor.formQueries.loadVersion === loadVersion
+            ? visitor.formQueries
+            : null;
+    const cascadeQuery = structuredClone(formQueries?.cascade ?? {});
+    const saveQuery = structuredClone(formQueries?.save ?? {});
     const recordId =
         page.payload.formRecord.type === 'edit'
             ? page.payload.formRecord.recordId
             : null;
     const candidate = visitor.recoveryCandidate;
     const card = element('form', undefined, 'card');
+    if (formQueries?.diagnostic != null)
+        card.append(
+            element('p', formQueries.diagnostic, 'child-query-diagnostic')
+        );
     card.noValidate = true; // Display the server's complete validation result.
     card.append(element('h2', page.payload.extensionName ?? 'Custom Form'));
     if (visitor.root != null)
@@ -603,6 +635,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 visitor.screen = visitor.root;
                 visitor.formContext = { type: 'direct-url' };
                 visitor.formParentScope = null;
+                visitor.formQueries = null;
                 render();
             })
         );
@@ -1154,9 +1187,7 @@ const renderForm = (page: FormLoadedResult): void => {
             conditionalFilters = createConditionalLinkedFilters({
                 schema,
                 extensionAccessToken: page.payload.extensionAccessToken,
-                // Portal child loads keep their existing context/query behavior.
-                query:
-                    visitor.root == null ? (connection?.input.query ?? {}) : {},
+                query: cascadeQuery,
                 current: ownsLinkedFilters,
                 readMetadata: readFilterMetadata,
                 request: (description, work) => {
@@ -1352,6 +1383,7 @@ const renderForm = (page: FormLoadedResult): void => {
                         if (!current() || !ownsForm()) return;
                         visitor.drafts.discard(draft);
                         visitor.formParentScope = null;
+                        visitor.formQueries = null;
                         visitor.screen = visitor.root;
                         render();
                         status(
@@ -1454,6 +1486,7 @@ const renderForm = (page: FormLoadedResult): void => {
                         return;
                     visitor.screen = visitor.root;
                     visitor.formParentScope = null;
+                    visitor.formQueries = null;
                     visitor.recoveryCandidate = null;
                     render();
                     visitor.portal?.checkLatestRequests();
@@ -1529,7 +1562,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 options: {
                     captchaVal: null,
                     isComputeMode: false,
-                    searchQuery: connection?.input.query ?? {},
+                    searchQuery: structuredClone(saveQuery),
                     context,
                     conditionalLinkedRecordFieldIdsToFilteringValues:
                         Object.fromEntries(
@@ -1614,6 +1647,7 @@ const renderForm = (page: FormLoadedResult): void => {
             const result = normalized.raw;
             visitor.drafts.discard(draft);
             visitor.formParentScope = null;
+            visitor.formQueries = null;
             if (visitor.root != null && result.loggedInUserRecord != null) {
                 visitor.root.payload.formRecord.data = {
                     ...result.loggedInUserRecord.fields,
@@ -1865,7 +1899,7 @@ const render = (): void => {
                               page
                           ),
                       },
-            openChild: (child, context, scope, recoveryHandoff) => {
+            openChild: (child, context, scope, recoveryHandoff, queries) => {
                 if (
                     recoveryHandoff?.newAttempt != null ||
                     recoveryHandoff?.candidate != null
@@ -1881,6 +1915,13 @@ const render = (): void => {
                 visitor.screen = child;
                 visitor.formContext = context;
                 visitor.formParentScope = scope;
+                visitor.formQueries = {
+                    ...structuredClone(
+                        queries ?? { cascade: {}, save: {}, diagnostic: null }
+                    ),
+                    page: child,
+                    loadVersion: visitor.formLoadVersion,
+                };
                 render();
             },
         });

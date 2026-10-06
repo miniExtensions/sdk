@@ -656,3 +656,11 @@ export async function checkBrowserLinkedFilterExample({
     }
     return { checks: scenarios.length };
 }
+
+export const linkedFilterExampleFixtures = {
+    definitions,
+    values,
+    prefillMap,
+    metadata,
+    makeForm,
+};

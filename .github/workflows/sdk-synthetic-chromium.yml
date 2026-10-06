@@ -1,9 +1,9 @@
-name: Immutable SDK synthetic Chromium proof
+name: Immutable address parent findings before proof
 
 on:
     push:
         branches:
-            - codex/sdk-visibility-chromium-20261006
+            - codex/sdk-address-parent-findings-before-20261006
 
 permissions:
     contents: read
@@ -28,9 +28,9 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  # Exact successful PR17 push producer, verified from actual ZIPs.
-                  run-id: 37404068752
-                  artifact-ids: 11386557517
+                  # Root must bind the successful PR18 producer's actual ZIPs.
+                  run-id: 37407528443
+                  artifact-ids: 11387754071
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/package
                   skip-decompress: true
@@ -39,8 +39,8 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  run-id: 37404068752
-                  artifact-ids: 11386542568
+                  run-id: 37407528443
+                  artifact-ids: 11388090164
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/fixture
                   skip-decompress: true
@@ -48,7 +48,7 @@ jobs:
             - name: Install isolated WebDriver client
               working-directory: test/browser-ci
               run: npm ci --ignore-scripts --no-audit --no-fund
-            - name: Exercise immutable synthetic UI in system Chrome
+            - name: Record both native parent findings against old immutable UI
               working-directory: test/browser-ci
               env:
                   SDK_PACKAGE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/package

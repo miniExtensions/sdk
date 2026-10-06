@@ -4,7 +4,7 @@ import {
     type FormLoadedResult,
 } from '@miniextensions/sdk';
 import {
-    createFlatScalarFormRecordProjection,
+    createScalarFormRecordProjection,
     describeLoadedFormFields,
 } from '@miniextensions/sdk/forms';
 import type { ConfirmationRow } from './confirmation.js';
@@ -57,7 +57,7 @@ export const prepareFormReviewRows = (
         )
             unavailable();
     }
-    const projection = createFlatScalarFormRecordProjection({
+    const projection = createScalarFormRecordProjection({
         fieldIds: page.payload.fieldIdsInForm,
         fieldIdsToSchemas: page.payload.fieldIdsToSchemas,
         airtableFields: Object.values(page.payload.fieldIdsToSchemas).map(

@@ -6,7 +6,7 @@ import type {
 } from '@miniextensions/sdk';
 import { getSelectFieldPolicy } from '@miniextensions/sdk/ui';
 import {
-    createFlatScalarFormRecordProjection,
+    createScalarFormRecordProjection,
     evaluateFormFieldVisibility,
 } from '@miniextensions/sdk/forms';
 import { settings } from './dom.js';
@@ -28,7 +28,7 @@ const scalarTypes = new Set([
 const object = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Flat scalar choice recipe; linked/lookup/section projection stays unavailable. */
+/** Scalar choice recipe; linked/lookup projection stays unavailable. */
 export function flatChoiceConditionRecord(
     page: FormLoadedResult,
     field: RuntimeFieldSchema,
@@ -39,7 +39,7 @@ export function flatChoiceConditionRecord(
         const configured = new Set(page.payload.fieldIdsInForm);
         const pageMode = settings(page.payload.publicFields).multiPageFormMode;
         if (pageMode != null && pageMode !== 'one-page') return null;
-        const projection = createFlatScalarFormRecordProjection({
+        const projection = createScalarFormRecordProjection({
             fieldIds: page.payload.fieldIdsInForm,
             fieldIdsToSchemas: page.payload.fieldIdsToSchemas,
             airtableFields: schemas.map((schema) => schema.airtableField),

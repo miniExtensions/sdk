@@ -1,3 +1,4 @@
+import { AirtableFieldType } from '../formulas/types.js';
 import type {
     AirtableRecord,
     AirtableValue,
@@ -50,20 +51,167 @@ export type FlatScalarFormRecordProjection =
 export function createFlatScalarFormRecordProjection(
     input: CreateFlatScalarFormRecordProjectionInput
 ): FlatScalarFormRecordProjection {
+    return project(input, 'flat');
+}
+
+/** Pass fieldIdsInForm verbatim: this input cannot establish order completeness. */
+export type CreateScalarFormRecordProjectionInput =
+    CreateFlatScalarFormRecordProjectionInput;
+
+export type ScalarFormRecordProjection =
+    | Extract<FlatScalarFormRecordProjection, { type: 'available' }>
+    | {
+          type: 'blocked';
+          code:
+              | Exclude<
+                    Extract<
+                        FlatScalarFormRecordProjection,
+                        { type: 'blocked' }
+                    >['code'],
+                    'unsupported-sections'
+                >
+              | 'invalid-field-order'
+              | 'invalid-metadata';
+          diagnostics: readonly FormVisibilityDiagnostic[];
+      };
+
+/**
+ * Canonical ordered sections, with direct scalar predicates only. Returns a
+ * detached deep copy, not a frozen record or a replacement native Save draft.
+ * One-page suitability remains a consumer check.
+ */
+export function createScalarFormRecordProjection(
+    input: CreateScalarFormRecordProjectionInput
+): ScalarFormRecordProjection {
+    return project(input, 'sections');
+}
+
+function project(
+    input: CreateFlatScalarFormRecordProjectionInput,
+    mode: 'flat'
+): FlatScalarFormRecordProjection;
+function project(
+    input: CreateScalarFormRecordProjectionInput,
+    mode: 'sections'
+): ScalarFormRecordProjection;
+function project(
+    input: CreateScalarFormRecordProjectionInput,
+    mode: 'flat' | 'sections'
+): FlatScalarFormRecordProjection | ScalarFormRecordProjection {
     const diagnostics: FormVisibilityDiagnostic[] = [];
     try {
+        if (mode === 'sections') {
+            if (!Array.isArray(input.fieldIds))
+                return {
+                    type: 'blocked',
+                    code: 'invalid-field-order',
+                    diagnostics,
+                };
+            if (
+                input.fieldIdsToSchemas == null ||
+                typeof input.fieldIdsToSchemas !== 'object' ||
+                Array.isArray(input.fieldIdsToSchemas) ||
+                !Array.isArray(input.airtableFields)
+            )
+                return {
+                    type: 'blocked',
+                    code: 'invalid-metadata',
+                    diagnostics,
+                };
+            const validPhysical = (field: RuntimeAirtableField): boolean =>
+                field != null &&
+                typeof field === 'object' &&
+                !Array.isArray(field) &&
+                typeof field.id === 'string' &&
+                typeof field.name === 'string' &&
+                (field.isComputed === undefined ||
+                    typeof field.isComputed === 'boolean') &&
+                field.config != null &&
+                typeof field.config === 'object' &&
+                !Array.isArray(field.config) &&
+                Object.values(AirtableFieldType).some(
+                    (type) => type === field.config.type
+                );
+            const seen = new Set<string>();
+            for (let index = 0; index < input.fieldIds.length; index++) {
+                const id = input.fieldIds[index];
+                if (
+                    !Object.hasOwn(input.fieldIds, index) ||
+                    typeof id !== 'string' ||
+                    seen.has(id)
+                )
+                    return {
+                        type: 'blocked',
+                        code: 'invalid-field-order',
+                        diagnostics,
+                    };
+                seen.add(id);
+            }
+            const physicalIds = new Set<string>();
+            for (const field of input.airtableFields) {
+                if (!validPhysical(field) || physicalIds.has(field.id))
+                    return {
+                        type: 'blocked',
+                        code: 'invalid-metadata',
+                        diagnostics,
+                    };
+                physicalIds.add(field.id);
+            }
+            for (const [id, field] of Object.entries(input.fieldIdsToSchemas)) {
+                if (field == null) continue;
+                const physical = input.airtableFields.find(
+                    (candidate) => candidate.id === id
+                );
+                if (
+                    !validPhysical(field.airtableField) ||
+                    field.airtableField.id !== id ||
+                    field.fieldType !== field.airtableField.config.type ||
+                    physical == null ||
+                    physical.name !== field.airtableField.name ||
+                    physical.config.type !== field.airtableField.config.type ||
+                    physical.isComputed !== field.airtableField.isComputed
+                )
+                    return {
+                        type: 'blocked',
+                        code: 'invalid-metadata',
+                        diagnostics,
+                    };
+                const config = field.miniExtConfig;
+                if (config == null) continue;
+                if (
+                    typeof config !== 'object' ||
+                    Array.isArray(config) ||
+                    ('headerSectionTitle' in config &&
+                        config.headerSectionTitle != null &&
+                        typeof config.headerSectionTitle !== 'string') ||
+                    ('enableSectionHeader' in config &&
+                        config.enableSectionHeader != null &&
+                        typeof config.enableSectionHeader !== 'boolean') ||
+                    ('applyFieldConditionsToSection' in config &&
+                        config.applyFieldConditionsToSection != null &&
+                        typeof config.applyFieldConditionsToSection !==
+                            'boolean')
+                )
+                    return {
+                        type: 'blocked',
+                        code: 'invalid-metadata',
+                        diagnostics,
+                    };
+            }
+        }
         // Canonical projection recognizes retained nonblank titles regardless
-        // of the frontend's enableSectionHeader flag. Refuse section contexts
-        // rather than substituting composeFormFieldVisibility's screen rules.
+        // of the frontend's enableSectionHeader flag. The legacy flat path
+        // keeps its all-schema rejection scan; neither path uses screen rules.
         for (const schema of Object.values(input.fieldIdsToSchemas)) {
             const config = schema?.miniExtConfig;
             if (config == null) continue;
             if (
-                ('headerSectionTitle' in config &&
+                mode === 'flat' &&
+                (('headerSectionTitle' in config &&
                     typeof config.headerSectionTitle === 'string' &&
                     config.headerSectionTitle.trim() !== '') ||
-                ('applyFieldConditionsToSection' in config &&
-                    config.applyFieldConditionsToSection === true)
+                    ('applyFieldConditionsToSection' in config &&
+                        config.applyFieldConditionsToSection === true))
             )
                 return {
                     type: 'blocked',
@@ -94,6 +242,7 @@ export function createFlatScalarFormRecordProjection(
         }
 
         const hiddenFieldIds: string[] = [];
+        let section: FormFieldVisibility | null = null;
         for (const fieldId of input.fieldIds) {
             const field = input.fieldIdsToSchemas[fieldId];
             if (field == null || field.airtableField.id !== fieldId)
@@ -102,55 +251,30 @@ export function createFlatScalarFormRecordProjection(
                     code: 'missing-schema',
                     diagnostics,
                 };
-            const compiled = compileRuntimeConditions({
-                conditions:
-                    field.miniExtConfig != null &&
-                    'conditionalFields' in field.miniExtConfig
-                        ? (field.miniExtConfig.conditionalFields ?? null)
-                        : null,
-                airtableFields: input.airtableFields,
-                invalidConditionMode: input.invalidConditionMode,
-            });
-            if (compiled.type === 'compiled') {
-                for (const reference of extractIdentifiersFromFormula(
-                    compiled.formula
-                )) {
-                    const matches = input.airtableFields.filter(
-                        (candidate) =>
-                            candidate.id === reference ||
-                            candidate.name === reference
-                    );
-                    if (
-                        new Set(matches.map((candidate) => candidate.id)).size >
-                        1
-                    )
-                        return {
-                            type: 'blocked',
-                            code: 'ambiguous-reference',
-                            diagnostics,
-                        };
+            if (mode === 'sections') {
+                const config = field.miniExtConfig;
+                if (
+                    config != null &&
+                    'headerSectionTitle' in config &&
+                    typeof config.headerSectionTitle === 'string' &&
+                    config.headerSectionTitle.trim() !== ''
+                ) {
+                    // Projection recognizes retained titles even when display is disabled.
+                    section =
+                        config.applyFieldConditionsToSection === true &&
+                        config.conditionalFields != null
+                            ? predicate(field, input, diagnostics)
+                            : null;
+                    if (section?.type === 'blocked')
+                        return { ...section, diagnostics };
                 }
             }
-            const visibility = evaluateFormFieldVisibility({
-                field: {
-                    ...field,
-                    miniExtConfig: {
-                        ...field.miniExtConfig,
-                        // Native empty hiding belongs to presentation, not
-                        // canonical conditional-record pruning.
-                        hideFieldIfEmpty: false,
-                    },
-                },
-                airtableFields: input.airtableFields,
-                data: input.data,
-                formRecordType: 'create',
-                evaluationMode: 'runtime',
-                invalidConditionMode: input.invalidConditionMode,
-            });
-            diagnostics.push(...visibility.diagnostics);
+            // Validate own predicates even beneath a hidden section.
+            const visibility = predicate(field, input, diagnostics);
             if (visibility.type === 'blocked')
                 return { ...visibility, diagnostics };
-            if (visibility.type === 'hidden') hiddenFieldIds.push(fieldId);
+            if (section?.type === 'hidden' || visibility.type === 'hidden')
+                hiddenFieldIds.push(fieldId);
         }
 
         // Collect decisions first: deleting a hidden driver must never change
@@ -168,4 +292,55 @@ export function createFlatScalarFormRecordProjection(
     } catch {
         return { type: 'blocked', code: 'evaluation-exception', diagnostics };
     }
+}
+
+function predicate(
+    field: RuntimeFieldSchema,
+    input: CreateScalarFormRecordProjectionInput,
+    diagnostics: FormVisibilityDiagnostic[]
+): FormFieldVisibility {
+    const compiled = compileRuntimeConditions({
+        conditions:
+            field.miniExtConfig != null &&
+            'conditionalFields' in field.miniExtConfig
+                ? (field.miniExtConfig.conditionalFields ?? null)
+                : null,
+        airtableFields: input.airtableFields,
+        invalidConditionMode: input.invalidConditionMode,
+    });
+    if (compiled.type === 'compiled') {
+        for (const reference of extractIdentifiersFromFormula(
+            compiled.formula
+        )) {
+            const matches = input.airtableFields.filter(
+                (candidate) =>
+                    candidate.id === reference || candidate.name === reference
+            );
+            if (new Set(matches.map((candidate) => candidate.id)).size > 1)
+                return {
+                    type: 'blocked',
+                    code: 'ambiguous-reference',
+                    diagnostics,
+                };
+        }
+    }
+    const visibility = evaluateFormFieldVisibility({
+        field: {
+            ...field,
+            miniExtConfig: {
+                ...field.miniExtConfig,
+                // Native empty hiding belongs to presentation, not
+                // canonical conditional-record pruning.
+                hideFieldIfEmpty: false,
+            },
+        },
+        airtableFields: input.airtableFields,
+        data: input.data,
+        formRecordType: 'create',
+        evaluationMode: 'runtime',
+        invalidConditionMode: input.invalidConditionMode,
+    });
+    diagnostics.push(...visibility.diagnostics);
+    if (visibility.type === 'blocked') return { ...visibility, diagnostics };
+    return visibility;
 }

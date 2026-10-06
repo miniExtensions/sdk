@@ -1,0 +1,1844 @@
+{
+    "provenance": {
+        "revision": "58f73d575ab10baa0a10693660d8002f204368e1",
+        "tree": "b39e58ead46a311c497def57474cf5ca720542ae",
+        "generatorSha256": "8242e683d3fda7bccf0c1a0f22fba503a41b942b5105788bab014a0fb9cc887e",
+        "helper": "components/PublicExtension/helpers/getFormRecordWithFieldsRemovedIfHiddenByConditionalFields.ts",
+        "sources": {
+            "components/PublicExtension/helpers/getFormRecordWithFieldsRemovedIfHiddenByConditionalFields.ts": "66c1ec59ca43900539406a24fd14764f2a36b3de6a58c2d196fc4d06a593b5ba",
+            "utils/isFieldHiddenByConditionalFields.ts": "b0f31ce92fab137306cc54d2e79678d38421aa436913f9efdfd49acd8c96f3b7",
+            "types/extensions/conditions/convertConditionalFields.ts": "397b3a1a35ae07d0235d6477078cc10e7cf02ba00e02269272b4b3946f0dd3e1"
+        },
+        "casesSourceSha256": "7bffb4f828e6a210b75446e753e764565ce50e4dc02eefa40ce88a936b7f5794",
+        "generator": "scripts/generate-section-projection-fixtures.mjs",
+        "execution": "pinned canonical helper, edit record, empty linked state and filter map"
+    },
+    "cases": [
+        {
+            "name": "enabled hidden section with untitled propagation and reset",
+            "input": {
+                "fieldIds": [
+                    "gate",
+                    "header",
+                    "inside",
+                    "next",
+                    "independent",
+                    "other"
+                ],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " Delivery ",
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            },
+                            "enableSectionHeader": true
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "other"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "next": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "next",
+                            "name": "next",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": "Independent",
+                            "applyFieldConditionsToSection": false,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "independent": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "independent",
+                            "name": "independent",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "other": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "other",
+                            "name": "other",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "next",
+                        "name": "next",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "independent",
+                        "name": "independent",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "other",
+                        "name": "other",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native",
+                    "next": "native",
+                    "independent": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["header", "inside", "next"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "independent": "native"
+                    }
+                }
+            }
+        },
+        {
+            "name": "legacy title-only section",
+            "input": {
+                "fieldIds": ["gate", "header", "inside"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " Delivery ",
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["header", "inside"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": { "gate": "no", "other": "yes" }
+                }
+            }
+        },
+        {
+            "name": "retained disabled header projects",
+            "input": {
+                "fieldIds": ["gate", "header", "inside"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " Delivery ",
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            },
+                            "enableSectionHeader": false
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["header", "inside"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": { "gate": "no", "other": "yes" }
+                }
+            }
+        },
+        {
+            "name": "conditionless apply true header resets",
+            "input": {
+                "fieldIds": [
+                    "gate",
+                    "header",
+                    "inside",
+                    "reset",
+                    "independent"
+                ],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " Delivery ",
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "reset": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "reset",
+                            "name": "reset",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": "Next",
+                            "applyFieldConditionsToSection": true
+                        }
+                    },
+                    "independent": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "independent",
+                            "name": "independent",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "reset",
+                        "name": "reset",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "independent",
+                        "name": "independent",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native",
+                    "reset": "native",
+                    "independent": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["header", "inside"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "reset": "native",
+                        "independent": "native"
+                    }
+                }
+            }
+        },
+        {
+            "name": "removed title does not propagate stale flag",
+            "input": {
+                "fieldIds": ["gate", "header", "inside"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["header"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "inside": "native"
+                    }
+                }
+            }
+        },
+        {
+            "name": "blank title does not start section",
+            "input": {
+                "fieldIds": ["gate", "header", "inside"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " \t ",
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["header"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "inside": "native"
+                    }
+                }
+            }
+        },
+        {
+            "name": "no propagation keeps independent children",
+            "input": {
+                "fieldIds": ["gate", "header", "inside"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " Delivery ",
+                            "applyFieldConditionsToSection": false,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["header"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "inside": "native"
+                    }
+                }
+            }
+        },
+        {
+            "name": "visible section failing own follower",
+            "input": {
+                "fieldIds": ["gate", "header", "inside"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " Delivery ",
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "no"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "yes",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["inside"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "yes",
+                        "other": "yes",
+                        "header": "native"
+                    }
+                }
+            }
+        },
+        {
+            "name": "visible section visible follower",
+            "input": {
+                "fieldIds": ["gate", "header", "inside"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " Delivery ",
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "yes",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": [],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "yes",
+                        "other": "yes",
+                        "header": "native",
+                        "inside": "native"
+                    }
+                }
+            }
+        },
+        {
+            "name": "hidden driver still controls later visibility",
+            "input": {
+                "fieldIds": ["gate", "hiddenDriver", "dependent"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "hiddenDriver": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "hiddenDriver",
+                            "name": "hiddenDriver",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "gate"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "dependent": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "dependent",
+                            "name": "dependent",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "hiddenDriver"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "hiddenDriver",
+                        "name": "hiddenDriver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "dependent",
+                        "name": "dependent",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "hiddenDriver": "yes",
+                    "dependent": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["hiddenDriver"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "dependent": "native"
+                    }
+                }
+            }
+        },
+        {
+            "name": "self and mutual references use full snapshot",
+            "input": {
+                "fieldIds": ["a", "b", "self"],
+                "fieldIdsToSchemas": {
+                    "a": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "a",
+                            "name": "a",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "b"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "b": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "b",
+                            "name": "b",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "a"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "self": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "self",
+                            "name": "self",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "conditionalFields": {
+                                "logicalOperator": "and",
+                                "conditions": [
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "self"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "a",
+                        "name": "a",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "b",
+                        "name": "b",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "self",
+                        "name": "self",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "a": "yes",
+                    "b": "yes",
+                    "self": "no"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": ["self"],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "a": "yes",
+                        "b": "yes"
+                    }
+                }
+            }
+        },
+        {
+            "name": "readonly empty and nested unrendered data preserved",
+            "input": {
+                "fieldIds": ["readonly", "empty"],
+                "fieldIdsToSchemas": {
+                    "readonly": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "readonly",
+                            "name": "readonly",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": { "readOnly": true }
+                    },
+                    "empty": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "empty",
+                            "name": "empty",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": { "hideFieldIfEmpty": true }
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "readonly",
+                        "name": "readonly",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "empty",
+                        "name": "empty",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "readonly": "private synthetic",
+                    "empty": "",
+                    "outside": [
+                        {
+                            "id": "att_synthetic",
+                            "url": "https://example.test/file",
+                            "filename": "synthetic.txt"
+                        }
+                    ]
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": [],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "readonly": "private synthetic",
+                        "empty": "",
+                        "outside": [
+                            {
+                                "id": "att_synthetic",
+                                "url": "https://example.test/file",
+                                "filename": "synthetic.txt"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "name": "nested section predicate",
+            "input": {
+                "fieldIds": ["gate", "header", "inside", "other"],
+                "fieldIdsToSchemas": {
+                    "gate": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "gate",
+                            "name": "gate",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "header": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "header",
+                            "name": "header",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {
+                            "headerSectionTitle": " Delivery ",
+                            "applyFieldConditionsToSection": true,
+                            "conditionalFields": {
+                                "logicalOperator": "or",
+                                "conditions": [
+                                    {
+                                        "type": "groupCondition",
+                                        "id": "nested",
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-condition",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "gate"
+                                                    },
+                                                    "value": "yes"
+                                                }
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "id": "synthetic-condition",
+                                        "type": "singleCondition",
+                                        "setting": {
+                                            "type": "is",
+                                            "fieldType": "singleLineText",
+                                            "idOrName": {
+                                                "type": "id",
+                                                "id": "other"
+                                            },
+                                            "value": "yes"
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "inside": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "inside",
+                            "name": "inside",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    },
+                    "other": {
+                        "fieldType": "singleLineText",
+                        "airtableField": {
+                            "id": "other",
+                            "name": "other",
+                            "description": null,
+                            "isComputed": false,
+                            "isPrimaryField": false,
+                            "config": {
+                                "type": "singleLineText",
+                                "options": null
+                            }
+                        },
+                        "miniExtConfig": {}
+                    }
+                },
+                "airtableFields": [
+                    {
+                        "id": "gate",
+                        "name": "gate",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "header",
+                        "name": "header",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "inside",
+                        "name": "inside",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "other",
+                        "name": "other",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "data": {
+                    "gate": "no",
+                    "other": "yes",
+                    "header": "native",
+                    "inside": "native"
+                },
+                "recordId": "rec_synthetic",
+                "invalidConditionMode": "strict"
+            },
+            "expected": {
+                "hiddenFieldIds": [],
+                "record": {
+                    "id": "rec_synthetic",
+                    "fields": {
+                        "gate": "no",
+                        "other": "yes",
+                        "header": "native",
+                        "inside": "native"
+                    }
+                }
+            }
+        }
+    ]
+}

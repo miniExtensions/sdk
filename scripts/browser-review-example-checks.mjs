@@ -81,6 +81,7 @@ export async function checkBrowserReviewExample({
             form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.headerSectionTitle =
                 'Retained section';
             form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.enableSectionHeader = false;
+            form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.hideFieldIfEmpty = true;
         }
         const initial = structuredClone(form.payload.formRecord.data);
         const window = new Window({
@@ -180,7 +181,7 @@ export async function checkBrowserReviewExample({
                 assert.equal(document.querySelector('dialog'), null);
                 assert.match(
                     document.getElementById('status').textContent,
-                    /Review is unavailable/
+                    /unavailable|blocked/i
                 );
                 assert.equal(saves().length, 0);
             } else if (scenario === 'answers') {

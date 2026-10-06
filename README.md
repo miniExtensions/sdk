@@ -214,9 +214,9 @@ rendering and ownership. It adds no backend permission. See
 [Form workflow](examples/browser/README.md#form-workflow).
 
 Configured Form choice availability composes the scalar condition compiler
-with typed formula outcomes. The starter handles flat rules using visible
-direct physical driver fields that require no hidden-field or linked-value
-pruning, and recomputes after accepted draft changes while the owner remains
+with typed formula outcomes. The starter projects condition-hidden scalar drivers before choice
+evaluation, including canonical section conditions. Linked-value pruning stays
+unsupported. It recomputes after accepted draft changes while the owner remains
 current. Choice rules match stable IDs and intersect static limits; saved
 values remain canonical names. Unsupported, invalid or failed evaluation
 blocks the field without clearing its draft. Retained denied names remain
@@ -295,8 +295,8 @@ enforces its published rules.
 
 The packaged browser starter also supplies a
 [bounded Review/Edit/Confirm recipe](examples/browser/README.md#form-workflow)
-for the published `promptUserBeforeSubmission` setting on flat, one-page manual
-Forms. It renders ordered nonempty direct scalar answers as plain text and
+for the published `promptUserBeforeSubmission` setting on one-page manual
+Forms with supported scalar answers and section conditions. It renders ordered nonempty direct scalar answers as plain text and
 fixed password masks. The prepared intent captures the actual draft revision
 and current owner/configuration context; edits or context changes invalidate
 confirmation. Edit/dismiss performs no Save, while explicit current Confirm
@@ -326,12 +326,15 @@ filtered-record projection.
 
 These helpers read the same accepted native draft but use distinct record
 contracts. Field visibility reads the complete unfiltered draft.
-`createFlatScalarFormRecordProjection` supplies a separate conditional-record
-copy for configured choices in flat one-page Forms with direct scalar drivers.
+`createScalarFormRecordProjection` supplies a detached conditional-record
+copy for one-page configured choices and scalar Review, including canonical
+ordered sections with direct scalar drivers. The old flat export is unchanged.
 Every field predicate reads the complete draft before condition-hidden IDs are
 removed from the copy. Hidden native values remain in the draft and Save.
-Sections and linked/lookup/computed projection remain unsupported; frontend
-visibility results never substitute for this projection.
+Active linked filtering and referenced linked/lookup/computed drivers remain
+unsupported; frontend visibility never substitutes for this projection.
+See the [section projection recipe](docs/forms.md#one-page-conditional-field-visibility)
+for retained disabled titles, ordering and native Save preservation.
 
 The runtime supplies [conditional-filter primary values](docs/runtime.md#conditional-linked-filter-primary-values),
 [address reads](docs/runtime.md#address-predictions-and-place-formatting) and

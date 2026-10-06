@@ -22,6 +22,7 @@ import {
     assertPackedDocLinks,
 } from './package-checks.mjs';
 import { checkUiRecipes } from './ui-recipe-checks.mjs';
+import { checkSelectAvailabilityRecipe } from './select-availability-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
@@ -69,6 +70,7 @@ const browserStarterFiles = [
     'src/drafts.ts',
     'src/recovery.ts',
     'src/linkedFilters.ts',
+    'src/choiceAvailability.ts',
 ].map((path) => `examples/browser/${path}`);
 
 function run(command, args, cwd = temporaryDirectory) {
@@ -210,6 +212,11 @@ try {
     ]);
 
     await checkUiRecipes({
+        consumerDirectory: temporaryDirectory,
+        guideSources: uiGuideSources,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    const selectAvailabilityRecipeChecks = await checkSelectAvailabilityRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: uiGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -1068,7 +1075,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

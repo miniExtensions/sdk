@@ -5,7 +5,10 @@ import {
     type RuntimeFieldSchema,
     type SelectFieldChoice,
 } from '@miniextensions/sdk';
-import { createSelectControl } from '@miniextensions/sdk/ui';
+import {
+    createSelectControl,
+    type SelectFieldAvailability,
+} from '@miniextensions/sdk/ui';
 import { element, labeled } from './dom.js';
 
 export type FieldControl = {
@@ -14,6 +17,9 @@ export type FieldControl = {
     write(value: AirtableValue): void;
     editable: boolean;
     updateSelectChoices?(choices: readonly SelectFieldChoice[]): void;
+    updateSelectAvailability?(availability: SelectFieldAvailability): void;
+    selectAvailabilityReady?(): boolean;
+    isSelectOptionAvailable?(choice: SelectFieldChoice): boolean;
     destroy(): void;
 };
 
@@ -83,6 +89,8 @@ const selectFieldControl = (
         schema.airtableField.isComputed === true;
     const multiple = schema.fieldType === AirtableFieldType.MULTIPLE_SELECTS;
     let destroyed = false;
+    let availabilityReady = true;
+    let eligibleOptions: SelectFieldAvailability['options'] = [];
     const select = createSelectControl({
         field: schema,
         value: initialValue,
@@ -95,9 +103,14 @@ const selectFieldControl = (
     const input = select.element.querySelector('select');
     if (input != null) input.dataset.fieldId = schema.airtableField.id;
     const node = element('div');
+    const availabilityStatus = element('span', '', 'field-hint');
+    availabilityStatus.dataset.choiceAvailabilityFieldId =
+        schema.airtableField.id;
+    availabilityStatus.setAttribute('role', 'status');
     node.append(
         select.element,
-        element('span', schema.airtableField.id, 'field-hint')
+        element('span', schema.airtableField.id, 'field-hint'),
+        availabilityStatus
     );
     return {
         node,
@@ -118,6 +131,26 @@ const selectFieldControl = (
                     }))
                 );
         },
+        updateSelectAvailability: (availability) => {
+            if (destroyed) return;
+            availabilityReady = availability.status === 'ready';
+            eligibleOptions = availability.options;
+            select.model.setOptions(availability.options);
+            availabilityStatus.dataset.choiceAvailability = availability.status;
+            availabilityStatus.dataset.choiceAvailabilityCode =
+                availability.diagnostics[0]?.code ?? '';
+            availabilityStatus.textContent = availabilityReady
+                ? ''
+                : 'New choices are unavailable for this configuration. Existing selections can still be removed.';
+        },
+        selectAvailabilityReady: () => availabilityReady,
+        isSelectOptionAvailable: (choice) =>
+            !destroyed &&
+            availabilityReady &&
+            eligibleOptions.some(
+                (option) =>
+                    option.id === choice.id && option.value === choice.name
+            ),
         destroy: () => {
             if (destroyed) return;
             destroyed = true;

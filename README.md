@@ -111,14 +111,14 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
-| Import                         | Included behavior                                                                                                                                          | Guide                             |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                            | [Runtime](docs/runtime.md)        |
-| `@miniextensions/sdk/forms`    | `FormDraftStore`, field descriptors, `createFormSaveInput`, normalized validation and `createFormController`                                               | [Form helpers](docs/forms.md)     |
-| `@miniextensions/sdk/portals`  | `createPortalCollection`, accepted first/next reads, returned details and configured child requests for direct links or valid linked-record lookup results | [Portal helpers](docs/portals.md) |
-| `@miniextensions/sdk/auth`     | `createAuthFlow`, captured screen/revision, verification challenges, explicit credential application and login presentation helpers                        | [Authentication](docs/auth.md)    |
-| `@miniextensions/sdk/ui`       | Native selects, `getSelectFieldPolicy`, authorized linked-record loaders, headless selection model and optional mounted controls                           | [Selection UI](docs/ui.md)        |
-| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                  | [Formulas](docs/formulas.md)      |
+| Import                         | Included behavior                                                                                                                                            | Guide                             |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                              | [Runtime](docs/runtime.md)        |
+| `@miniextensions/sdk/forms`    | `FormDraftStore`, field descriptors, `createFormSaveInput`, normalized validation and `createFormController`                                                 | [Form helpers](docs/forms.md)     |
+| `@miniextensions/sdk/portals`  | `createPortalCollection`, accepted first/next reads, returned details and configured child requests for direct links or valid linked-record lookup results   | [Portal helpers](docs/portals.md) |
+| `@miniextensions/sdk/auth`     | `createAuthFlow`, captured screen/revision, verification challenges, explicit credential application and login presentation helpers                          | [Authentication](docs/auth.md)    |
+| `@miniextensions/sdk/ui`       | Native selects, static policy and `resolveSelectFieldAvailability`, authorized linked-record loaders, headless selection model and optional mounted controls | [Selection UI](docs/ui.md)        |
+| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                    | [Formulas](docs/formulas.md)      |
 
 Helpers are optional and headless except for the optional `/ui` controls. The
 SDK requires no React installation. The shipped guides include
@@ -212,6 +212,17 @@ guards remain intact. Portal child URL-prefill propagation is unsupported.
 This adds no SDK API or backend permission. See
 [Form workflow](examples/browser/README.md#form-workflow).
 
+Configured Form choice availability composes the scalar condition compiler
+with typed formula outcomes. The starter handles flat rules using visible
+direct physical driver fields that require no hidden-field or linked-value
+pruning, and recomputes after accepted draft changes while the owner remains
+current. Choice rules match stable IDs and intersect static limits; saved
+values remain canonical names. Unsupported, invalid or failed evaluation
+blocks the field without clearing its draft. Retained denied names remain
+removable while current and editable. Other projections and choice presentation
+remain application-owned. See the installed
+[scalar choice recipe](docs/ui.md#configured-scalar-choice-availability).
+
 Eligible Portal inline selects reuse Form static selection policy, preserving
 canonical choice names and allowing removal of loaded values outside current
 limits. Child Form field policy takes precedence over detail policy. Nonempty
@@ -271,10 +282,12 @@ first-page read or root Reload before further Portal actions. See
 
 ## Current application boundaries
 
-Conditional field/option visibility, sections/pages/review, Save & Continue,
-progress persistence, CAPTCHA/fingerprint/GPS collection and advanced field
-widgets remain application-owned. Static select limits and display labels do
-not evaluate option conditions. The starter uses final Save and supplies no
+Conditional field visibility and choice workflows beyond the
+[configured scalar support](docs/ui.md#configured-scalar-choice-availability),
+sections/pages/review, Save & Continue, progress persistence,
+CAPTCHA/fingerprint/GPS collection and advanced field widgets remain
+application-owned. Static select limits and display labels alone do not
+evaluate option conditions. The starter uses final Save and supplies no
 general conditional evaluator or CAPTCHA widget. The existing server still
 enforces its published rules.
 
@@ -282,7 +295,8 @@ enforces its published rules.
 [bounded scalar subset](docs/forms.md#compile-scalar-runtime-conditions) to a
 formula with diagnostics. Supply current field metadata and explicit strict or
 compatibility mode; handle `unsupported` and `invalid` results. Compilation
-performs no evaluation or request and enables no starter visibility workflow.
+alone performs no evaluation or request. The choice availability helper
+explicitly composes compilation with typed formula evaluation.
 
 The runtime supplies [conditional-filter primary values](docs/runtime.md#conditional-linked-filter-primary-values),
 [address reads](docs/runtime.md#address-predictions-and-place-formatting) and

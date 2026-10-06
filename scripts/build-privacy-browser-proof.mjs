@@ -33,6 +33,8 @@ const starterFiles = [
     'src/drafts.ts',
     'src/recovery.ts',
     'src/confirmation.ts',
+    'src/linkedFilters.ts',
+    'src/choiceAvailability.ts',
 ];
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const within = (root, path) => {
@@ -54,6 +56,17 @@ const regular = (path) => {
 
 /** This function is serialized into the static kit; it imports no SDK source. */
 function createPrivacyFixture(scenario) {
+    if (
+        [
+            'choice-single',
+            'choice-multiple',
+            'choice-add-single',
+            'choice-add-multiple',
+            'linked-filters',
+            'linked-filter-deferred',
+        ].includes(scenario)
+    )
+        return createInteractionFixture(scenario);
     const cases = {
         pin: {
             name: 'Identifier',
@@ -500,12 +513,440 @@ function createPrivacyFixture(scenario) {
     return { state, fetch: transport, loginPage, portalPage };
 }
 
-/** Read-only diagnostic controls, never an automatic browser exerciser. */
+/** Synthetic wire responses; actual packed starter controls own every Save. */
+function createInteractionFixture(scenario) {
+    const linked = scenario.startsWith('linked-filter');
+    const multiple = scenario.endsWith('-multiple');
+    const adding = scenario.startsWith('choice-add-');
+    const token = 'FAKE_SYNTHETIC_INTERACTION_TOKEN';
+    const field = (id, name, type, options = null) => ({
+        id,
+        name,
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: { type, options },
+    });
+    const driver = field('fld_driver', 'Driver', 'singleLineText');
+    const choices = field(
+        'fld_choices',
+        'Choices',
+        multiple ? 'multipleSelects' : 'singleSelect',
+        {
+            choices: [
+                { id: 'sel_alpha', name: 'Alpha' },
+                { id: 'sel_beta', name: 'Beta' },
+                { id: 'sel_gamma', name: 'Gamma' },
+            ],
+        }
+    );
+    const choiceSchema = {
+        fieldType: choices.config.type,
+        airtableField: choices,
+        miniExtConfig: {
+            enableConditionalOptions: true,
+            ...(adding
+                ? { allowAddingNewOptions: true }
+                : {
+                      maxNumberOfSelections: 2,
+                      singleOrMultiSelectLimitSelectionOptions: [
+                          'sel_alpha',
+                          'sel_beta',
+                      ],
+                  }),
+            conditionsForOptions: [
+                {
+                    id: 'rule_beta',
+                    config: {
+                        optionForConditions: 'sel_beta',
+                        name: 'Conditional Beta',
+                        conditionsForOption: {
+                            logicalOperator: 'and',
+                            conditions: [
+                                {
+                                    id: 'driver_contains',
+                                    type: 'singleCondition',
+                                    setting: {
+                                        type: 'contains',
+                                        fieldType: 'singleLineText',
+                                        idOrName: { type: 'id', id: driver.id },
+                                        value: 'allowed',
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            ],
+        },
+    };
+    const definitions = [
+        { id: 'fld_country', name: 'Current country', title: 'Country' },
+        { id: 'fld_region', name: 'Current region', title: 'Region' },
+        { id: 'fld_city', name: 'Current city', title: 'City' },
+    ];
+    const values = {
+        fld_country: [
+            { recordId: 'rec_country_north', stringValue: 'North, East' },
+            { recordId: 'rec_country_south', stringValue: 'South' },
+        ],
+        fld_region: [
+            { recordId: 'rec_region_one', stringValue: 'Duplicate label' },
+            { recordId: 'rec_region_two', stringValue: 'Duplicate label' },
+        ],
+        fld_city: [{ recordId: 'rec_city', stringValue: 'City = "One"' }],
+    };
+    const link = (id, name) =>
+        field(id, name, 'multipleRecordLinks', {
+            linkedTableId: 'tbl_projects',
+            inverseLinkFieldId: 'fld_parent',
+            isReversed: false,
+            prefersSingleRecordLink: false,
+        });
+    const metadata = {
+        tbl_projects: {
+            airtableFields: [
+                {
+                    ...field(
+                        'fld_project_name',
+                        'Project name',
+                        'singleLineText'
+                    ),
+                    isPrimaryField: true,
+                },
+                ...definitions.map((entry) => link(entry.id, entry.name)),
+            ],
+            recordIdsToAirtableRecords: {},
+        },
+    };
+    const projectSchema = {
+        fieldType: 'multipleRecordLinks',
+        airtableField: link('fld_projects', 'Projects'),
+        miniExtConfig: {
+            dynamicFilteringToggle: true,
+            conditionalLinkedRecordFilteringFieldsType: 'show-in-form',
+            conditionalLinkedRecordFilterFields: definitions.map((entry) => ({
+                idOrName: { type: 'id', id: entry.id },
+                config: {
+                    type: 'multipleRecordLinks',
+                    config: {
+                        title: entry.title,
+                        disableAddingIfConditionalFilterIsEmpty: false,
+                        disableRemovingIfConditionalFilterIsEmpty: false,
+                    },
+                },
+            })),
+        },
+    };
+    const schemas = [
+        {
+            fieldType: 'singleLineText',
+            airtableField: driver,
+            miniExtConfig: {},
+        },
+        linked ? projectSchema : choiceSchema,
+    ];
+    const initial = linked
+        ? { fld_driver: 'denied', fld_projects: ['rec_retained'] }
+        : {
+              fld_driver: 'denied',
+              fld_choices: adding
+                  ? multiple
+                      ? ['Beta']
+                      : 'Beta'
+                  : multiple
+                    ? []
+                    : null,
+          };
+    const page = () =>
+        structuredClone({
+            extensionId: 'interaction_form_synthetic',
+            language: 'en',
+            themeColor: 'blue',
+            enableCommentsOnChildForms: false,
+            workspaceId: 'interaction_workspace_synthetic',
+            extensionOwnerUID: 'interaction_owner_synthetic',
+            faviconUrl: null,
+            googleAnalyticsMeasurementId: null,
+            isStarterExtension: false,
+            extensionScreen: 'form_loaded',
+            payload: {
+                baseId: 'interaction_base_synthetic',
+                loggedInUserCanEditExtension: false,
+                showMiniExtensionsBranding: true,
+                onFreePlan: true,
+                trialExpiresAtUnixEpoch: null,
+                extensionType: 'form',
+                extensionName: 'Synthetic interaction Form',
+                extensionAccessToken: token,
+                hasParentExtension: false,
+                publicFields: {},
+                formRecord: {
+                    type: 'edit',
+                    tableId: 'tbl_interaction_synthetic',
+                    recordId: 'rec_interaction_synthetic',
+                    data: initial,
+                },
+                formErrors: {},
+                fieldIdsInForm: schemas.map(
+                    (schema) => schema.airtableField.id
+                ),
+                fieldNamesToSchemas: Object.fromEntries(
+                    schemas.map((schema) => [schema.airtableField.name, schema])
+                ),
+                fieldIdsToSchemas: Object.fromEntries(
+                    schemas.map((schema) => [schema.airtableField.id, schema])
+                ),
+                formFieldIdsWithUnsavedChanges: [],
+                urlPrefilledFieldIds: [],
+                linkedRecordFieldIdToDetailFields: {},
+                cookieKeyForLoginToken: null,
+            },
+        });
+    const state = {
+        scenario,
+        synthetic: true,
+        realNetworkEnabled: false,
+        calls: [],
+        events: [],
+        unexpected: [],
+        pending: null,
+        expected: { multiple, adding, filterValues: values, initial },
+    };
+    let release = null;
+    let delayedFilter = false;
+    let delayedRead = false;
+    const fail = (message) => {
+        state.unexpected.push(message);
+        throw new Error(message);
+    };
+    const json = (value) =>
+        new Response(JSON.stringify(value), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    const defer = async (route, signal) => {
+        if (release != null)
+            return fail('Only one bounded synthetic read can be pending.');
+        state.pending = { route };
+        state.events.push({ type: 'deferred-start', route });
+        await new Promise((done) => {
+            release = done;
+        });
+        state.pending = null;
+        state.events.push({
+            type: 'deferred-settled',
+            route,
+            aborted: signal?.aborted === true,
+        });
+        // Return the already-started READ after cancellation. Real SDK and
+        // application signal/owner fences must discard it; this is no write.
+    };
+    const transport = async (resource, init = {}) => {
+        const url = new URL(
+            resource instanceof Request ? resource.url : String(resource)
+        );
+        const method =
+            init.method ??
+            (resource instanceof Request ? resource.method : 'GET');
+        if (
+            url.origin !== 'https://synthetic-sdk.invalid' ||
+            init.credentials !== 'omit'
+        )
+            return fail('Non-synthetic origin or credential mode refused.');
+        init.signal?.throwIfAborted();
+        let input;
+        try {
+            input = JSON.parse(
+                method === 'GET'
+                    ? (url.searchParams.get('input') ?? '{}')
+                    : String(init.body ?? '{}')
+            );
+        } catch {
+            return fail('Malformed synthetic input.');
+        }
+        const route = url.searchParams.get('route') ?? url.pathname;
+        const visibleInput = { ...input };
+        delete visibleInput.miniExtStorageV4;
+        delete visibleInput.miniExtSession;
+        state.calls.push({
+            route,
+            method,
+            input: structuredClone(visibleInput),
+            credentialsMode: init.credentials,
+        });
+        if (route === 'fetchExtensionForEndUser') {
+            if (
+                method !== 'POST' ||
+                input.shareId !== 'privacy_share_synthetic' ||
+                input.childExtensionInfo
+            )
+                return fail('Unexpected synthetic root load.');
+            return json(page());
+        }
+        if (input.extensionAccessToken !== token)
+            return fail('Unexpected synthetic Form scope.');
+        if (route === '/api/trpc/airtable.addNewAirtableOptionForFormField') {
+            if (
+                !adding ||
+                method !== 'POST' ||
+                input.airtableFieldId !== 'fld_choices' ||
+                input.newChoiceText !== ' bEtA '
+            )
+                return fail(
+                    'Unexpected synthetic existing-choice resolution scope.'
+                );
+            // The canonical route may resolve an equivalent existing name.
+            // Return the exact current metadata ID/name; create no metadata.
+            state.events.push({
+                type: 'existing-choice-returned',
+                choiceId: 'sel_beta',
+                choiceName: 'Beta',
+                metadataCreated: false,
+            });
+            return json({
+                result: {
+                    data: { newChoice: { id: 'sel_beta', name: 'Beta' } },
+                },
+            });
+        }
+        if (route === 'saveForm') {
+            if (
+                method !== 'POST' ||
+                input.formRecord?.recordId !== 'rec_interaction_synthetic' ||
+                input.formRecord?.tableId !== 'tbl_interaction_synthetic' ||
+                input.context?.type !== 'direct-url'
+            )
+                return fail('Unexpected synthetic native Save scope.');
+            const value =
+                input.formRecord?.data?.[
+                    linked ? 'fld_projects' : 'fld_choices'
+                ];
+            if (
+                linked
+                    ? !Array.isArray(value) ||
+                      value.some(
+                          (id) =>
+                              ![
+                                  'rec_retained',
+                                  'rec_available',
+                                  'rec_page_two',
+                              ].includes(id)
+                      )
+                    : multiple
+                      ? !Array.isArray(value) ||
+                        value.some((name) => !['Alpha', 'Beta'].includes(name))
+                      : value !== null && !['Alpha', 'Beta'].includes(value)
+            )
+                return fail('Save must preserve native names/record IDs.');
+            // Normal validation output preserves the actual app draft for
+            // subsequent probes. These cases prove dispatch, not persistence.
+            return json({
+                type: 'error',
+                formValidationErrors: [],
+                formErrors: {},
+            });
+        }
+        if (!linked)
+            return fail(
+                'Choice fixture permits only root load, explicit Save and the bounded existing-choice resolution variant.'
+            );
+        if (
+            route ===
+            '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates'
+        ) {
+            if (method !== 'GET')
+                return fail('Metadata procedure requires GET.');
+            return json({ result: { data: metadata } });
+        }
+        if (
+            route === 'fetchPrimaryValuesForConditionalLinkedRecordFilterField'
+        ) {
+            const entry = definitions.find(
+                (definition) =>
+                    definition.id === input.linkedRecordsFilterFieldId
+            );
+            if (
+                method !== 'POST' ||
+                input.mainTableLinkedRecordsFieldId !== 'fld_projects' ||
+                !entry
+            )
+                return fail('Unexpected synthetic filter scope.');
+            if (scenario === 'linked-filter-deferred' && !delayedFilter) {
+                delayedFilter = true;
+                await defer(route, init.signal);
+            }
+            return json({
+                primaryValues: values[entry.id],
+                prefillValue:
+                    values[entry.id].find(
+                        (pair) => pair.stringValue === input.urlSearchValue
+                    ) ?? null,
+            });
+        }
+        if (route === 'fetchRecordsForFormLinkedRecordsSelector') {
+            if (
+                method !== 'POST' ||
+                input.linkedRecordFieldId !== 'fld_projects' ||
+                input.filter?.viewType !== 'list' ||
+                (input.offset !== null &&
+                    input.offset !== 'cursor_interaction_next')
+            )
+                return fail('Unexpected synthetic choice-read cursor/scope.');
+            if (scenario === 'linked-filter-deferred' && !delayedRead) {
+                delayedRead = true;
+                await defer(route, init.signal);
+            }
+            const second = input.offset === 'cursor_interaction_next';
+            return json({
+                records: second
+                    ? [
+                          {
+                              id: 'rec_page_two',
+                              fields: { fld_project_name: 'Page two project' },
+                          },
+                      ]
+                    : [
+                          {
+                              id: 'rec_retained',
+                              fields: { fld_project_name: 'Retained project' },
+                          },
+                          {
+                              id: 'rec_available',
+                              fields: { fld_project_name: 'Available project' },
+                          },
+                      ],
+                offset: second ? null : 'cursor_interaction_next',
+                tableIdsToLinkedTableStates: metadata,
+            });
+        }
+        return fail(
+            'Unsupported interaction route refused; no real fetch fallback.'
+        );
+    };
+    const releaseDeferred = () => {
+        if (release == null) return;
+        const done = release;
+        release = null;
+        state.events.push({
+            type: 'deferred-release',
+            route: state.pending?.route,
+        });
+        done();
+    };
+    return {
+        state,
+        fetch: transport,
+        ...(scenario === 'linked-filter-deferred' ? { releaseDeferred } : {}),
+    };
+}
+
+/** Read-only snapshots plus an explicit native synthetic-read release button. */
 function installProofInspection(fixture, kind) {
     const banner = document.createElement('section');
     banner.className = 'proof-banner';
     banner.innerHTML =
-        '<h1>Synthetic packed SDK privacy proof</h1><p>Manual browser exercise only. No backend, real credentials, network fallback or permission grant. Refreshing this document resets synthetic state.</p><p><a href="../index.html">All scenarios</a></p><button type="button">Inspect current trace and UI</button><pre hidden></pre>';
+        '<h1>Synthetic packed SDK privacy proof</h1><p>Manual or separately authorized hosted W3C browser exercise. No backend, real credentials, network fallback or permission grant. Refreshing this document resets synthetic state.</p><p><a href="../index.html">All scenarios</a></p><button type="button">Inspect current trace and UI</button><pre hidden></pre>';
     document.body.prepend(banner);
     const snapshot = () => {
         const application =
@@ -516,6 +957,10 @@ function installProofInspection(fixture, kind) {
             kind,
             scenario: fixture.state.scenario,
             expected: fixture.state.expected,
+            busy:
+                kind === 'starter'
+                    ? application?.getAttribute('aria-busy') === 'true'
+                    : null,
             applicationText: application?.textContent ?? '',
             status:
                 kind === 'starter'
@@ -529,6 +974,26 @@ function installProofInspection(fixture, kind) {
                     autocomplete: input.autocomplete,
                 })
             ),
+            selects: [...(application?.querySelectorAll('select') ?? [])].map(
+                (select) => ({
+                    fieldId: select.dataset.fieldId ?? null,
+                    filterFieldId: select.dataset.filterFieldId ?? null,
+                    value: select.value,
+                    multiple: select.multiple,
+                    disabled: select.disabled,
+                    options: [...select.options].map((option) => ({
+                        value: option.value,
+                        label: option.textContent,
+                        selected: option.selected,
+                        disabled: option.disabled,
+                    })),
+                })
+            ),
+            linkedDraft:
+                application?.querySelector(
+                    'textarea[data-field-id="fld_projects"]'
+                )?.value ?? null,
+            pending: structuredClone(fixture.state.pending ?? null),
             cells: [...(application?.querySelectorAll('tbody tr') ?? [])].map(
                 (row) => ({
                     recordId: row.dataset.recordId,
@@ -543,7 +1008,15 @@ function installProofInspection(fixture, kind) {
             unexpected: [...fixture.state.unexpected],
         };
     };
-    window.__privacyBrowserProof = { fixture: fixture.state, snapshot };
+    window.__privacyBrowserProof = Object.freeze({ snapshot });
+    if (fixture.releaseDeferred) {
+        const release = document.createElement('button');
+        release.type = 'button';
+        release.textContent = 'Release pending synthetic read';
+        release.dataset.proofControl = 'release-read';
+        release.addEventListener('click', fixture.releaseDeferred);
+        banner.append(release);
+    }
     const button = banner.querySelector('button');
     button.addEventListener('click', () => {
         const pre = banner.querySelector('pre');
@@ -781,7 +1254,7 @@ export async function buildPrivacyBrowserProof({
         write('starter/index.html', starterHtml);
         write(
             'fixture.js',
-            `export const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
+            `const createInteractionFixture = ${createInteractionFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
         );
         write(
             'starter/bootstrap.js',
@@ -882,11 +1355,24 @@ renderPanel();
                     `<li><a href="starter/index.html?scenario=${name}">Actual starter: ${name}</a> · <a href="auth/index.html?scenario=${name}">Complete AuthPanel: ${name}</a></li>`
             )
             .join('');
+        const interactionLinks = [
+            'choice-single',
+            'choice-multiple',
+            'choice-add-single',
+            'choice-add-multiple',
+            'linked-filters',
+            'linked-filter-deferred',
+        ]
+            .map(
+                (name) =>
+                    `<li><a href="starter/index.html?scenario=${name}">Actual starter: ${name}</a></li>`
+            )
+            .join('');
         write(
             'index.html',
             shell(
                 'Synthetic packed SDK browser proof',
-                `<main><h1>Manual synthetic privacy scenarios</h1><p>This static kit contains the actual packed starter and complete shipped AuthPanel recipe. It proves only what you manually observe in this browser. Read README.md before recording a result.</p><ul>${links}<li><a href="starter/index.html?scenario=portal">Actual starter: obscured Portal child-config Grid save/reopen</a></li></ul><p><a href="README.md">Manual assertions and scope</a> · <a href="manifest.json">Source/package manifest</a></p></main>`
+                `<main><h1>Manual synthetic SDK scenarios</h1><p>This static kit contains the actual packed starter and complete shipped AuthPanel recipe. Generation alone proves no browser outcome. Read README.md before recording a result.</p><ul>${links}<li><a href="starter/index.html?scenario=portal">Actual starter: obscured Portal child-config Grid save/reopen</a></li>${interactionLinks}</ul><p><a href="README.md">Manual assertions and scope</a> · <a href="manifest.json">Source/package manifest</a></p></main>`
             ).replace('href="../proof.css"', 'href="./proof.css"')
         );
         write('SDK-LICENSE', regular(join(authSdk, 'LICENSE')));
@@ -901,7 +1387,7 @@ renderPanel();
             );
         const readme = `# Manual packed SDK privacy browser proof
 
-This kit needs only a static server. Serve this directory as its root and open index.html in normal Chrome with certificate verification enabled. Do not use browser automation, CDP, certificate exceptions or trust/profile changes. A browser/sandbox/TLS startup failure is a capability blocker, not a successful UI result. The generator installs nothing, starts no server, launches no browser and repacks no package.
+This kit needs only a static server. Serve this directory as its root and open index.html in normal Chrome with certificate verification enabled. The separately authorized hosted W3C proof may consume these exact immutable assets; label its result automated synthetic UI evidence, never independent manual exploration. Do not use CDP, certificate exceptions or changes to existing trust stores/browser profiles. The approved hosted route uses a fresh profile strictly inside its owned disposable work root and audits that concrete path's absence after cleanup. A browser/sandbox/TLS startup failure is a capability blocker, not a successful UI result. The generator installs nothing, starts no server, launches no browser and repacks no package.
 
 Package SHA256: ${packageSha256}
 Source commit: ${source.commit}
@@ -923,6 +1409,16 @@ For each Actual starter login link, choose Connect and load (origin/share are al
 4. **Portal child-config mask/native Grid:** choose Connect and load, then Load records. In Row Alpha, Private text must show fixed eight bullets and its cell title must not contain the synthetic original; Row Empty must show an empty value (its Edit cell action may remain, but no bullets); Ordinary text must show Ordinary public value. Effective child config wins over deliberately contradictory detail config in both masked and unmasked fields. Click Edit cell in Row Alpha's Private text column. Input type=password and native input value must be Exact Case-Sensitive Original (inspect only; no visible plaintext cell). Replace it with Different-length Saved Value and choose Save cell. Exactly one POST airtable.updatePortalRecord must use recordId rec_private_synthetic, recordFieldId fld_secret_synthetic, portalFieldId fld_children_synthetic, selectedCustomViewId view_privacy_synthetic and that exact native value. The returned body cell must remain fixed-mask. Reopen Edit cell: type=password and native input value must equal the saved value. Choose Cancel, Load records, then Open Form for Row Alpha to inspect the fresh native child payload: Private text remains a password control with that exact saved value. Do not submit the child Form; unrelated mutation routes are deliberately rejected. Empty and ordinary controls must remain unchanged.
 
 At each stage choose Inspect current trace and UI, or read window.__privacyBrowserProof.snapshot() in normal browser developer tools. It only reads state; it triggers no app action/request. Save the manual observations/screenshots and scenario URLs with the manifest digest separately. The snapshot contains synthetic expected values and trace inputs on purpose; privacy assertions apply to applicationText/status/cells, not the diagnostics banner/README or synthetic transport trace. Input values are omitted from the generic DOM snapshot. A rejected/extra route, browser error or nonempty unexpected list must be reported; never hide it or claim all assertions passed merely because the page loaded.
+
+## Bounded interaction scenarios
+
+choice-single and choice-multiple use only visible direct scalar Driver/Choices fields. Driver starts denied; Beta is unavailable, while Gamma is excluded by the static choice-ID allowlist. Type allowed into Driver and select Conditional Beta using the actual native select. Its value is Beta (or [Beta]), never sel_beta or the display label. Type denied again: the existing selected name/label must remain unchanged and removable, without an automatic Save. Choose Save explicitly to inspect that native request. The fixture intentionally returns a normal validation result, retaining the draft; it does not prove persistence. Remove the retained selection, verify Beta cannot be added again, and deliberately Save the native null/empty array. These cases cover the application's conservative flat direct-scalar projection only; no hidden/linked driver projection or general hosted conditional visibility is claimed. One-page field visibility is not included.
+
+choice-add-single and choice-add-multiple enable the actual Add Choice controls without a static allowlist or selection maximum. Driver starts denied with the existing Beta name retained. Remove it natively and deliberately Save null/empty array. Type the whitespace/case-equivalent name " bEtA " in New choice name and choose Create choice. The synthetic add-option route returns the already-existing sel_beta/Beta metadata; it creates no choice. The denied choice must not be reselected or change the record draft, and no automatic Save may occur. The next deliberate Save must still carry null/empty array. Inspect the one exact existing-choice resolution request and metadataCreated:false event; this is an availability boundary assertion, not metadata creation or persistence proof.
+
+linked-filters uses the current published linked cascade, separately from the flat choice cases. For ordered prefills, add prefill_Current%20country=North%2C%20East, prefill_Current%20region=Duplicate%20label and prefill_Current%20city=City%20%3D%20%22One%22 to its scenario URL. Choose Load conditional filters, Search choices and More choices; select Available project and Page two project through their native checkbox controls, then Save deliberately. Observe exact returned record/string pairs and the one next-page cursor. Changing Country to South must clear downstream filter choices and invalidate the old cursor while retaining native selected record IDs; a subsequent Search choices starts with a null cursor and performs no automatic Save.
+
+linked-filter-deferred has one explicit test-only control, Release pending synthetic read. Its first Country search and first inner choice read wait for that native button. Start Country search, choose the real app Cancel control, then release the already-started read: no filter choice, child read or Save may appear. Search Country again, choose the returned North record and start Search choices. Switch the real app visitor A to B to A, then release that read. The retired owner must add no stale choices or writes and retain its original record IDs. Disconnect normally. This release control only settles these two synthetic read responses; it neither changes the application DOM nor dispatches a mutation. Every other diagnostic hook is read-only.
 
 ## CI generation and remaining verification
 
@@ -979,11 +1475,26 @@ CI generated this static kit only after the existing exact archive consumer chec
             sources,
             bundleInputs: { starter: starterInputs, auth: authInputs },
             outputs,
-            scenarios: ['pin', 'password', 'word', 'email', 'phone', 'portal'],
+            scenarios: [
+                'pin',
+                'password',
+                'word',
+                'email',
+                'phone',
+                'portal',
+                'choice-single',
+                'choice-multiple',
+                'choice-add-single',
+                'choice-add-multiple',
+                'linked-filters',
+                'linked-filter-deferred',
+            ],
             limits: [
                 'Synthetic transport only; real network fallback disabled.',
                 'No backend/security/permission/OTP delivery/durable persistence proof.',
-                'No automation/CDP/TLS exception included.',
+                'No browser execution, CDP or TLS exception performed by generation.',
+                'Configured-choice cases use only visible direct scalar drivers in a flat Form; no general hidden/linked projection or field visibility proof.',
+                'Interaction Save cases prove explicit native dispatch with validation responses, not durable persistence.',
                 'Generated successful output is not a manual browser pass.',
             ],
         };

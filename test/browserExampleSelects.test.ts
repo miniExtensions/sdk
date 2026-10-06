@@ -201,6 +201,362 @@ const selectForm = () => {
     return form;
 };
 
+const dynamicSelectForm = (multiple: boolean) => {
+    const form = loadedForm();
+    const schema = selectSchema(multiple);
+    schema.miniExtConfig = {
+        enableConditionalOptions: true,
+        singleOrMultiSelectLimitSelectionOptions: ['sel_red', 'sel_blue'],
+        maxNumberOfSelections: 2,
+        conditionsForOptions: [
+            {
+                id: 'rule_blue',
+                config: {
+                    optionForConditions: 'sel_blue',
+                    name: 'Conditional Blue',
+                    conditionsForOption: {
+                        logicalOperator: 'and',
+                        conditions: [
+                            {
+                                id: 'driver_contains',
+                                type: 'singleCondition',
+                                setting: {
+                                    type: 'contains',
+                                    fieldType: 'singleLineText',
+                                    idOrName: { type: 'id', id: 'fld_driver' },
+                                    value: 'allowed',
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+        ],
+    };
+    const driver: RuntimeFieldSchema = {
+        fieldType: AirtableFieldType.SINGLE_LINE_TEXT,
+        airtableField: {
+            id: 'fld_driver',
+            name: 'Driver',
+            description: null,
+            isComputed: false,
+            isPrimaryField: false,
+            config: { type: AirtableFieldType.SINGLE_LINE_TEXT, options: null },
+        },
+    };
+    form.payload.fieldIdsInForm = ['fld_driver', 'fld_colors'];
+    form.payload.fieldIdsToSchemas = { fld_driver: driver, fld_colors: schema };
+    form.payload.fieldNamesToSchemas = { Driver: driver, Colors: schema };
+    form.payload.formRecord = {
+        type: 'create',
+        data: {
+            fld_driver: 'denied',
+            fld_colors: multiple ? [] : null,
+            fld_adjacent: 'Preserved adjacent baseline',
+        },
+    };
+    form.payload.formFieldIdsWithUnsavedChanges = [];
+    form.payload.urlPrefilledFieldIds = [];
+    return form;
+};
+
+const mountDynamicSelectForm = async (
+    test: TestContext,
+    form: ReturnType<typeof dynamicSelectForm>,
+    additionalRequest?: (url: URL, init: RequestInit | undefined) => Response
+) => {
+    const saves: SaveFormInput[] = [];
+    const requests: string[] = [];
+    const window = await environment(test, async (input, init) => {
+        const url = new URL(String(input));
+        requests.push(url.pathname + url.search);
+        if (url.searchParams.get('route') === 'fetchExtensionForEndUser')
+            return new Response(JSON.stringify(form));
+        if (url.searchParams.get('route') === 'saveForm') {
+            saves.push(JSON.parse(String(init?.body)));
+            return new Response(
+                JSON.stringify({
+                    type: 'error',
+                    formValidationErrors: [],
+                    formErrors: {},
+                })
+            );
+        }
+        if (additionalRequest) return additionalRequest(url, init);
+        throw new Error('Unexpected configured-choice fixture request.');
+    });
+    await example('main');
+    const origin = window.document.getElementById('api-origin');
+    const share = window.document.getElementById('share-id');
+    const connection = window.document.getElementById('connection-form');
+    assert.ok(origin instanceof window.HTMLInputElement);
+    assert.ok(share instanceof window.HTMLInputElement);
+    assert.ok(connection);
+    origin.value = 'https://sdk.example.test';
+    share.value = 'share_example';
+    submit(window, connection);
+    await waitFor(
+        () =>
+            window.document.querySelector(
+                'select[data-field-id="fld_colors"]'
+            ) !== null
+    );
+    return { window, saves, requests };
+};
+
+describe('actual Form starter configured scalar choices', () => {
+    for (const multiple of [false, true]) {
+        it(`${multiple ? 'multi' : 'single'} recomputes from accepted driver edits, retains denied names, and saves native removal`, async (test) => {
+            const form = dynamicSelectForm(multiple);
+            const { window, saves, requests } = await mountDynamicSelectForm(
+                test,
+                form
+            );
+            const select = colorSelect(window);
+            const driver = window.document.querySelector(
+                'input[data-field-id="fld_driver"]'
+            );
+            assert.ok(driver instanceof window.HTMLInputElement);
+            const eligible = () =>
+                Array.from(select.options)
+                    .map((option) => option.value)
+                    .filter(Boolean);
+            assert.deepEqual(eligible(), ['Red']);
+            assert.equal(saves.length, 0);
+            assert.equal(requests.length, 1);
+            driver.value = 'allowed';
+            change(window, driver);
+            assert.equal(colorSelect(window), select);
+            assert.deepEqual(eligible(), ['Red', 'Blue']);
+            chooseBlue(window, select);
+            driver.value = 'denied again';
+            change(window, driver);
+            assert.deepEqual(selected(select), ['Blue']);
+            const retained = Array.from(select.options).find(
+                (option) => option.value === 'Blue'
+            );
+            assert.ok(retained);
+            assert.equal(retained.textContent, 'Conditional Blue');
+            assert.equal(retained.disabled, false);
+            assert.equal(saves.length, 0);
+            assert.equal(requests.length, 1);
+            const card = select.closest('form');
+            assert.ok(card);
+            submit(window, card);
+            await waitFor(
+                () =>
+                    saves.length === 1 &&
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            assert.deepEqual(
+                saves[0]!.formRecord.data.fld_colors,
+                multiple ? ['Blue'] : 'Blue'
+            );
+            assert.equal(saves[0]!.formRecord.data.fld_driver, 'denied again');
+            assert.equal(
+                saves[0]!.formRecord.data.fld_adjacent,
+                'Preserved adjacent baseline'
+            );
+            for (const option of select.options) option.selected = false;
+            if (!multiple) select.value = '';
+            change(window, select);
+            assert.deepEqual(eligible(), ['Red']);
+            const injected = window.document.createElement('option');
+            injected.value = 'Blue';
+            injected.selected = true;
+            select.append(injected);
+            change(window, select);
+            assert.deepEqual(selected(select).filter(Boolean), []);
+            submit(window, card);
+            await waitFor(
+                () =>
+                    saves.length === 2 &&
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            assert.deepEqual(
+                saves[1]!.formRecord.data.fld_colors,
+                multiple ? [] : null
+            );
+            assert.equal(
+                saves[1]!.formRecord.data.fld_adjacent,
+                'Preserved adjacent baseline'
+            );
+            assert.deepEqual(
+                new Set(saves[1]!.formFieldIdsWithUnsavedChanges),
+                new Set(['fld_driver', 'fld_colors'])
+            );
+            assert.equal(
+                requests.length,
+                3,
+                'Availability and driver edits must not issue requests'
+            );
+        });
+    }
+
+    for (const multiple of [false, true]) {
+        it(`${multiple ? 'multi' : 'single'} does not reselect a denied existing choice returned by Add Choice after removal`, async (test) => {
+            const form = dynamicSelectForm(multiple);
+            const schema = form.payload.fieldIdsToSchemas.fld_colors!;
+            const config = schema.miniExtConfig;
+            assert.ok(config && 'enableConditionalOptions' in config);
+            config.singleOrMultiSelectLimitSelectionOptions = [];
+            config.allowAddingNewOptions = true;
+            form.payload.formRecord.data.fld_colors = multiple
+                ? ['Blue']
+                : 'Blue';
+            let creationCalls = 0;
+            const { window, saves, requests } = await mountDynamicSelectForm(
+                test,
+                form,
+                (url) => {
+                    assert.equal(
+                        url.pathname,
+                        '/api/trpc/airtable.addNewAirtableOptionForFormField'
+                    );
+                    creationCalls++;
+                    // The canonical route can reuse an equivalent existing
+                    // name without evaluating that choice's conditions.
+                    return new Response(
+                        JSON.stringify({
+                            result: {
+                                data: {
+                                    newChoice: { id: 'sel_blue', name: 'Blue' },
+                                },
+                            },
+                        })
+                    );
+                }
+            );
+            const select = colorSelect(window);
+            assert.deepEqual(selected(select), ['Blue']);
+            for (const option of select.options) option.selected = false;
+            if (!multiple) select.value = '';
+            change(window, select);
+            assert.deepEqual(selected(select).filter(Boolean), []);
+            assert.equal(
+                Array.from(select.options).some(
+                    (option) => option.value === 'Blue'
+                ),
+                false
+            );
+            const card = select.closest('form');
+            assert.ok(card);
+            submit(window, card);
+            await waitFor(
+                () =>
+                    saves.length === 1 &&
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            assert.deepEqual(
+                saves[0]!.formRecord.data.fld_colors,
+                multiple ? [] : null
+            );
+            const dirtyBefore = [...saves[0]!.formFieldIdsWithUnsavedChanges];
+            const choice = window.document.querySelector(
+                'input[placeholder="New choice name"]'
+            );
+            assert.ok(choice instanceof window.HTMLInputElement);
+            choice.value = ' blue ';
+            button(window, 'Create choice').click();
+            await waitFor(
+                () =>
+                    creationCalls === 1 &&
+                    choice.value === '' &&
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            // Decisive actual-control sink: ready status alone must not make
+            // the reused denied native name selectable through setValue.
+            assert.deepEqual(selected(colorSelect(window)).filter(Boolean), []);
+            assert.equal(
+                Array.from(colorSelect(window).options).some(
+                    (option) => option.value === 'Blue'
+                ),
+                false
+            );
+            assert.equal(saves.length, 1, 'Add Choice must not save a record');
+            submit(window, card);
+            await waitFor(
+                () =>
+                    saves.length === 2 &&
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            assert.deepEqual(
+                saves[1]!.formRecord.data.fld_colors,
+                multiple ? [] : null
+            );
+            assert.deepEqual(
+                saves[1]!.formFieldIdsWithUnsavedChanges,
+                dirtyBefore
+            );
+            assert.equal(saves[1]!.formRecord.data.fld_driver, 'denied');
+            assert.equal(
+                saves[1]!.formRecord.data.fld_adjacent,
+                'Preserved adjacent baseline'
+            );
+            assert.equal(requests.length, 4);
+        });
+    }
+
+    it('blocks a broader projected context with finite presentation status while permitting retained removal', async (test) => {
+        const form = dynamicSelectForm(true);
+        const driver = form.payload.fieldIdsToSchemas.fld_driver!;
+        driver.miniExtConfig = {
+            conditionalFields: { logicalOperator: 'and', conditions: [] },
+        };
+        form.payload.formRecord.data.fld_colors = ['Blue'];
+        const { window, saves, requests } = await mountDynamicSelectForm(
+            test,
+            form
+        );
+        const select = colorSelect(window);
+        assert.deepEqual(selected(select), ['Blue']);
+        assert.deepEqual(
+            Array.from(select.options).map((option) => option.value),
+            ['Blue']
+        );
+        const diagnostic = window.document.querySelector(
+            '[data-choice-availability-field-id="fld_colors"]'
+        );
+        assert.ok(diagnostic instanceof window.HTMLElement);
+        assert.equal(diagnostic.dataset.choiceAvailability, 'blocked');
+        assert.equal(
+            diagnostic.dataset.choiceAvailabilityCode,
+            'unavailable-record'
+        );
+        assert.equal(select.disabled, false);
+        assert.equal(saves.length, 0);
+        for (const option of select.options) option.selected = false;
+        change(window, select);
+        assert.equal(select.options.length, 0);
+        const card = select.closest('form');
+        assert.ok(card);
+        submit(window, card);
+        await waitFor(
+            () =>
+                saves.length === 1 &&
+                window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+        assert.deepEqual(saves[0]!.formRecord.data.fld_colors, []);
+        assert.equal(
+            saves[0]!.formRecord.data.fld_adjacent,
+            'Preserved adjacent baseline'
+        );
+        assert.equal(requests.length, 2);
+    });
+});
+
 const selectPortal = async (
     test: TestContext,
     schema = selectSchema(),

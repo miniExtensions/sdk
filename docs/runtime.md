@@ -532,7 +532,9 @@ another page and reset it when the filter changes.
 
 `linkedRecords.loadSelectedRecords({extensionAccessToken})` returns linked
 table states for the current Form's selected values. It has no caller-supplied
-record IDs and makes no mutation. Merge those states to show selected labels.
+record IDs and makes no mutation. Returned extension-used field metadata can
+also include an authorized linked table with no selected record IDs; it is
+not an arbitrary full-schema read. Merge those states to show selected labels.
 
 When a Form allows adding select choices,
 `forms.addSelectOption({extensionAccessToken, airtableFieldId, newChoiceText})`
@@ -590,9 +592,36 @@ downstream selections when an earlier selection changes, and cancels or
 discards responses after a search, prior choice, visitor, record, or loaded
 configuration change. Pass the selected pair/null map to
 `linkedRecords.listFormOptions` as `conditionalLinkedRecordFilteringValues`
-and to the Form save as `conditionalLinkedRecordFieldIdsToFilteringValues`.
-The SDK does not supply a conditional-filter control or a general condition
-evaluator; the published handler enforces its configured filter rules.
+and nest it under the outer linked-field ID in the Form save's
+`conditionalLinkedRecordFieldIdsToFilteringValues`. Preserve existing raw link
+IDs when the filter changes; projected available records and a saved draft are
+different states. Honor the configured add/remove restrictions independently
+when a driver is missing, null, or has an empty primary string. The published
+handler enforces its configured rules and may sanitize links while accepting
+other field edits; save success alone does not establish that a proposed link
+was accepted.
+
+The shipped [browser example](../examples/browser/README.md) implements these
+controls locally, without adding an SDK export. **Load conditional filters**
+explicitly obtains and shares the existing token-only metadata read for that
+loaded Form, then resolves root/direct URL prefills sequentially, including
+when its selectors are configured hidden. Filter names come from returned current metadata;
+URL keys are `prefill_<current field name>`. The Connect handler copies only
+`prefill_*` query entries, preserving decoded bytes and repeated-key arrays.
+The cascade accepts only scalar strings and server-returned prefill pairs;
+Portal child URL-prefill propagation is not added. A failed metadata request
+permits another explicit Load action, without automatic retry.
+
+This bounded example supports unique ID-based configured descriptors whose
+fields/names are all present in authorized metadata. Name references,
+duplicates, malformed config, or missing fields show an unavailable state
+rather than guessed controls or native skipped-descriptor parity. Original
+empty-driver flags still apply independently, and flags that permit ordinary
+candidate reads/local changes retain that behavior. Filter/search changes
+invalidate stale responses and linked-option paging. Visitor, session,
+loaded-Form, field, request and disposal guards prevent an old response from
+crossing owners. This supplies neither a general conditional UI evaluator nor
+additional backend permission.
 
 ## Address predictions and place formatting
 

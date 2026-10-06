@@ -197,6 +197,21 @@ archive and intended deployment separately.
   row is not a commit receipt; an explicit new blank attempt does not prove
   exactly-once creation. Follow [recovery](docs/browser-lifecycle.md#inspect-an-unknown-create).
 
+The browser example implements configured Form linked-filter cascades locally.
+**Load conditional filters** shares the existing token-only metadata read for
+the loaded Form and resolves unique configured field IDs to current names.
+Filters follow configured order and retain native server-returned
+`recordId`/`stringValue` pairs. Root/direct scalar
+`prefill_<current field name>` URL values resolve sequentially through
+server-returned prefills, including hidden controls. Earlier choices reset
+downstream filters, linked choices and paging while preserving raw link drafts.
+Name references, duplicate IDs, malformed rules and missing metadata make
+filter presentation unavailable; repeated URL values are unsupported.
+Add/remove empty-driver flags remain independent; read-only and stale-owner
+guards remain intact. Portal child URL-prefill propagation is unsupported.
+This adds no SDK API or backend permission. See
+[Form workflow](examples/browser/README.md#form-workflow).
+
 Eligible Portal inline selects reuse Form static selection policy, preserving
 canonical choice names and allowing removal of loaded values outside current
 limits. Child Form field policy takes precedence over detail policy. Nonempty

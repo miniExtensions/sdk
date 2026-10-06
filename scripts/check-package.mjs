@@ -27,8 +27,10 @@ import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 import { checkAdditionalRuntimeOperations } from './additional-runtime-recipe-checks.mjs';
 import { checkFormConditions } from './form-conditions-checks.mjs';
+import { checkScalarVisibilityRecipe } from './scalar-visibility-recipe-checks.mjs';
 import { checkBrowserPortalExample } from './browser-portal-example-checks.mjs';
 import { checkBrowserSelectExample } from './browser-select-example-checks.mjs';
+import { checkBrowserLinkedFilterExample } from './browser-linked-filter-example-checks.mjs';
 import { createHash } from 'node:crypto';
 import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
@@ -49,6 +51,7 @@ const uiDirectory = realpathSync(
 const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
 let browserPortalChecks = 0;
 let browserSelectChecks = 0;
+let browserLinkedFilterChecks = 0;
 const browserStarterFiles = [
     'README.md',
     'package.json',
@@ -65,6 +68,7 @@ const browserStarterFiles = [
     'src/dom.ts',
     'src/drafts.ts',
     'src/recovery.ts',
+    'src/linkedFilters.ts',
 ].map((path) => `examples/browser/${path}`);
 
 function run(command, args, cwd = temporaryDirectory) {
@@ -242,6 +246,10 @@ try {
         consumerDirectory: temporaryDirectory,
         guideSources: formsGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
+    });
+    const scalarVisibilityRecipe = await checkScalarVisibilityRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: formsGuideSources,
     });
 
     const portalsGuide = readFileSync(
@@ -967,6 +975,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 happyDomModulePath: require.resolve('happy-dom'),
             });
             browserSelectChecks = selectResult.checks;
+            const linkedFilterResult = await checkBrowserLinkedFilterExample({
+                consumerDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
+            browserLinkedFilterChecks = linkedFilterResult.checks;
         }
     }
 
@@ -1055,7 +1068,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

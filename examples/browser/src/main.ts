@@ -13,6 +13,9 @@ import {
     type RuntimeSession,
     type SaveFormInput,
     type AirtableValue,
+    type RuntimeQuery,
+    type RuntimeTableStates,
+    type ListLinkedRecordOptionsResult,
 } from '@miniextensions/sdk';
 import {
     shouldMaskLoginFieldInput,
@@ -34,6 +37,10 @@ import {
 } from './dom.js';
 import { displayValue, formFieldControl, type FieldControl } from './fields.js';
 import { createPortalView, type PortalView } from './portal.js';
+import {
+    createConditionalLinkedFilters,
+    type ConditionalLinkedFilters,
+} from './linkedFilters.js';
 import { FormDraftStore, type ParentFormDraftScope } from './drafts.js';
 import {
     RecoveryJournal,
@@ -90,6 +97,26 @@ let connection: {
 } | null = null;
 let request: AbortController | null = null;
 let disposeFormControls = (): void => {};
+const sessionKey = (client: MiniExtensionsClient): string =>
+    JSON.stringify(
+        Object.entries(client.getSession()).sort(([a], [b]) =>
+            a.localeCompare(b)
+        )
+    );
+// Only direct/root Form prefills enter this example's connection query.
+const currentConditionalPrefills = (): RuntimeQuery => {
+    const query: RuntimeQuery = {};
+    for (const [key, value] of new URLSearchParams(location.search)) {
+        if (!key.startsWith('prefill_')) continue;
+        const previous = query[key];
+        if (typeof previous === 'string') query[key] = [previous, value];
+        else if (Array.isArray(previous)) previous.push(value);
+        else query[key] = value;
+    }
+    for (const value of Object.values(query))
+        if (Array.isArray(value)) Object.freeze(value);
+    return Object.freeze(query);
+};
 const screenNode = nodeById('screen');
 const statusNode = nodeById('status');
 const connectionForm = nodeById('connection-form');
@@ -607,6 +634,42 @@ const renderForm = (page: FormLoadedResult): void => {
         );
     let updateComments = (): void => {};
     const controls = new Map<string, FieldControl>();
+    const linkedFilterViews = new Map<string, ConditionalLinkedFilters>();
+    const formClient = visitor.client;
+    const formRevision = visitor.revision;
+    const formSession = formClient == null ? null : sessionKey(formClient);
+    const ownsLinkedFilters = (): boolean =>
+        mayUseForm() &&
+        visitor.client === formClient &&
+        visitor.revision === formRevision &&
+        formClient != null &&
+        sessionKey(formClient) === formSession;
+    let metadataPromise: Promise<RuntimeTableStates> | null = null;
+    const readFilterMetadata = (context: {
+        client: MiniExtensionsClient;
+        signal: AbortSignal;
+        current(): boolean;
+    }): Promise<RuntimeTableStates> => {
+        context.signal.throwIfAborted();
+        if (
+            !ownsLinkedFilters() ||
+            !context.current() ||
+            context.client !== formClient
+        )
+            throw new Error('Reopen the current Form before loading filters.');
+        if (metadataPromise == null) {
+            const pending = context.client.linkedRecords.loadSelectedRecords(
+                { extensionAccessToken: page.payload.extensionAccessToken },
+                { signal: context.signal, session: context.client.getSession() }
+            );
+            metadataPromise = pending;
+            // A failed read permits a new explicit Load action, never an automatic retry.
+            void pending.catch(() => {
+                if (metadataPromise === pending) metadataPromise = null;
+            });
+        }
+        return metadataPromise;
+    };
     const retainInput = (
         attempt: RecoveryAttempt,
         selectedFile?: { fieldId: string; filename: string }
@@ -661,6 +724,8 @@ const renderForm = (page: FormLoadedResult): void => {
             });
     };
     disposeFormControls = () => {
+        for (const view of linkedFilterViews.values()) view.destroy();
+        linkedFilterViews.clear();
         for (const control of controls.values()) control.destroy();
         controls.clear();
     };
@@ -854,30 +919,61 @@ const renderForm = (page: FormLoadedResult): void => {
             search.placeholder = 'Search available linked records';
             const choices = element('div', undefined, 'choice-list');
             let offset: string | null = null;
+            let generation = 0;
+            let requestVersion = 0;
+            let conditionalFilters: ConditionalLinkedFilters | null = null;
+            const resetChoices = (): void => {
+                generation += 1;
+                requestVersion += 1;
+                offset = null;
+                choices.replaceChildren();
+                moreButton.disabled = true;
+            };
             const fetchOptions = (more: boolean): void => {
-                if (!mayUseForm()) return;
+                if (!ownsLinkedFilters() || (more && offset == null)) return;
+                if (!more) resetChoices();
+                const capturedGeneration = generation;
+                const capturedRequest = ++requestVersion;
+                const capturedFilterRevision = conditionalFilters?.revision();
+                const capturedSearch = search.value;
+                const capturedOffset = more ? offset : null;
+                const filterValues = conditionalFilters?.snapshot() ?? {};
                 void run(
                     'Loading allowed linked records…',
                     async ({ client, signal, current }) => {
-                        if (!mayUseForm()) return;
+                        if (!ownsLinkedFilters() || client !== formClient)
+                            return;
+                        const accepted = (): boolean =>
+                            current() &&
+                            ownsLinkedFilters() &&
+                            capturedGeneration === generation &&
+                            capturedRequest === requestVersion &&
+                            capturedFilterRevision ===
+                                conditionalFilters?.revision() &&
+                            capturedSearch === search.value;
                         signal.throwIfAborted();
-                        const result =
-                            await client.linkedRecords.listFormOptions(
+                        let result: ListLinkedRecordOptionsResult;
+                        try {
+                            result = await client.linkedRecords.listFormOptions(
                                 {
                                     extensionAccessToken:
                                         page.payload.extensionAccessToken,
                                     linkedRecordFieldId: fieldId,
                                     filter: {
                                         viewType: 'list',
-                                        searchTerm: search.value,
+                                        searchTerm: capturedSearch,
                                     },
-                                    offset: more ? offset : null,
-                                    conditionalLinkedRecordFilteringValues: {},
+                                    offset: capturedOffset,
+                                    conditionalLinkedRecordFilteringValues:
+                                        filterValues,
                                 },
-                                { signal }
+                                { signal, session: client.getSession() }
                             );
-                        if (!current() || !mayUseForm()) return;
-                        if (!more) choices.replaceChildren();
+                        } catch (error) {
+                            if (!accepted()) return;
+                            throw error;
+                        }
+                        if (!accepted()) return;
                         offset = result.offset;
                         for (const record of result.records) {
                             const choice = element('input');
@@ -887,7 +983,14 @@ const renderForm = (page: FormLoadedResult): void => {
                                 Array.isArray(selectedValue) &&
                                 selectedValue.includes(record.id);
                             choice.addEventListener('change', () => {
-                                if (!mayUseForm()) return;
+                                if (
+                                    !ownsLinkedFilters() ||
+                                    generation !== capturedGeneration ||
+                                    conditionalFilters?.revision() !==
+                                        capturedFilterRevision ||
+                                    !choices.contains(choice)
+                                )
+                                    return;
                                 const value = control.read();
                                 const selected = new Set(
                                     Array.isArray(value)
@@ -897,6 +1000,21 @@ const renderForm = (page: FormLoadedResult): void => {
                                           )
                                         : []
                                 );
+                                if (selected.has(record.id) === choice.checked)
+                                    return;
+                                if (
+                                    conditionalFilters != null &&
+                                    !conditionalFilters.canChange(
+                                        choice.checked
+                                    )
+                                ) {
+                                    choice.checked = selected.has(record.id);
+                                    status(
+                                        'Load the configured filters and choose the required driver before changing linked records.',
+                                        true
+                                    );
+                                    return;
+                                }
                                 if (choice.checked) selected.add(record.id);
                                 else selected.delete(record.id);
                                 control.write([...selected]);
@@ -938,9 +1056,26 @@ const renderForm = (page: FormLoadedResult): void => {
             const moreButton = button('More choices', () => fetchOptions(true));
             moreButton.disabled = true;
             search.addEventListener('input', () => {
-                offset = null;
-                moreButton.disabled = true;
+                if (ownsLinkedFilters()) resetChoices();
             });
+            conditionalFilters = createConditionalLinkedFilters({
+                schema,
+                extensionAccessToken: page.payload.extensionAccessToken,
+                // Portal child loads keep their existing context/query behavior.
+                query:
+                    visitor.root == null ? (connection?.input.query ?? {}) : {},
+                current: ownsLinkedFilters,
+                readMetadata: readFilterMetadata,
+                request: (description, work) => {
+                    void run(description, work);
+                },
+                changed: resetChoices,
+                status,
+            });
+            if (conditionalFilters != null) {
+                linkedFilterViews.set(fieldId, conditionalFilters);
+                control.node.append(conditionalFilters.node);
+            }
             control.node.append(
                 search,
                 button('Search choices', () => fetchOptions(false)),
@@ -1262,6 +1397,13 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (control.editable) control.read();
             const snapshot = visitor.drafts.snapshot(draft);
             if (snapshot == null) return;
+            if (linkedFilterViews.size !== 0 && !ownsLinkedFilters()) {
+                status(
+                    'Reopen the current Form before saving its conditional filters.',
+                    true
+                );
+                return;
+            }
             const input = createFormSaveInput({
                 loaded: page,
                 draft: snapshot,
@@ -1270,7 +1412,13 @@ const renderForm = (page: FormLoadedResult): void => {
                     isComputeMode: false,
                     searchQuery: connection?.input.query ?? {},
                     context,
-                    conditionalLinkedRecordFieldIdsToFilteringValues: {},
+                    conditionalLinkedRecordFieldIdsToFilteringValues:
+                        Object.fromEntries(
+                            Array.from(linkedFilterViews, ([id, view]) => [
+                                id,
+                                view.snapshot(),
+                            ])
+                        ),
                 },
             });
             signal.throwIfAborted();
@@ -1529,7 +1677,7 @@ connectionForm.addEventListener('submit', (event) => {
                 shareId,
                 recordId,
                 context: { type: 'direct-url' },
-                query: {},
+                query: currentConditionalPrefills(),
                 clientTimeZone:
                     Intl.DateTimeFormat().resolvedOptions().timeZone,
             },

@@ -196,6 +196,12 @@ export function assertRuntimeCorsPolicy(source, operations) {
             `workspaces.byId,${route}`,
             `${route},`,
             `,${route}`,
+            [route],
+            [
+                route,
+                publicOperations.find((entry) => entry.route !== route)
+                    ?.route ?? route,
+            ],
             [route, 'workspaces.byId'],
         ]) {
             check(

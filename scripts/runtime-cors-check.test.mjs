@@ -123,6 +123,32 @@ test('global grants fail private and mixed selectors in both orders', () => {
     );
 });
 
+test('normalizing singleton-public and all-public arrays fails canonical selector denial', () => {
+    const normalized = after.replace(
+        'const paths = req.query.trpc;',
+        "const paths = Array.isArray(req.query.trpc) ? req.query.trpc.join(',') : req.query.trpc;"
+    );
+    assert.notEqual(normalized, after);
+    const first = publicOperations[0];
+    const second = publicOperations.find(
+        (entry) => entry.route !== first.route
+    );
+    assert(second);
+    assert.throws(
+        () => assertRuntimeCorsPolicy(normalized, operations),
+        (error) => {
+            for (const selector of [[first.route], [first.route, second.route]])
+                assert(
+                    error.message.includes(
+                        `${first.operation} denied selector ${JSON.stringify(selector)}:`
+                    ),
+                    `Normalization must fail the exact array probe ${JSON.stringify(selector)}.`
+                );
+            return true;
+        }
+    );
+});
+
 test('prefix broadening fails exact-route denial', () => {
     const broadened = after.replace(
         'publicRuntimeProcedures.has(path)',

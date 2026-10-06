@@ -30,17 +30,17 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11390861176',
+    packageArtifactId: '11393462851',
     packageZipSha256:
-        'ae186ef2e3dfa0c91853b5fd7dfd5ff8289ba9242662ced4b25b927fdbf77b26',
+        '81a09d609b3bba1c3d2f5606e1fcca4d8f7ab9a147518f95809482cd26c7481f',
     packageSha256:
-        'def1edd5ce761aaffea6063071bc7b02261ef2f9ddc6787a9e0d48a4ae3b0ca6',
-    packageBytes: 269979,
+        '00e36dd0ff8f52bd138cb94f1f490c9e4ce59f34759b4d5f7cf6b4bbeb5f8b00',
+    packageBytes: 270331,
     packageFiles: 191,
     packageZipMembers: 4,
-    fixtureArtifactId: '11390871291',
+    fixtureArtifactId: '11393842376',
     fixtureZipSha256:
-        '2480616eefd97ff566f10c049e00b517d01b4aa3c0cb6937f58de128490f0d2c',
+        '6a69045147e804eaca428f4827012063811fdcca6dc2c89055fd72ec576d8e57',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
@@ -48,10 +48,10 @@ const expected = {
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: '8af6932f6a87a059052dfe13fd63875173eba7e6',
-        tree: 'ffa1f7bab2a2efbbbc35488c19c79eca77c5a800',
+        commit: '5e03ba02e7a076bc3b0798288ab50d2918d70e54',
+        tree: 'bdd8186f3aa5e726764c7eaed253ecb03bd51430',
     },
-    runId: '37414232867',
+    runId: '37422851373',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -3196,7 +3196,309 @@ try {
             }
         );
     }
-    assert.equal(receipt.cases.length, 26);
+    for (const teardown of ['logout', 'disconnect']) {
+        await exercise(
+            `starter-private-reference-${teardown}`,
+            async (result) => {
+                await driver.get(
+                    `${origin}/starter/index.html?scenario=teardown-${teardown}`
+                );
+                await clickText('Connect and load');
+                const loadCount = (state) =>
+                    state.calls.filter(
+                        (call) => call.route === 'fetchExtensionForEndUser'
+                    ).length;
+                const readNative = () =>
+                    driver.executeScript(`
+                    const screen = document.getElementById('screen');
+                    const card = screen.querySelector('form');
+                    const controls = [...screen.querySelectorAll('[data-field-id]')];
+                    const byId = Object.fromEntries(controls.map(control => [
+                        control.dataset.fieldId,
+                        { value: control.value, checked: control.checked === true,
+                          disabled: control.disabled === true }
+                    ]));
+                    const save = card?.querySelector('button[type="submit"]');
+                    return {
+                        busy: screen.getAttribute('aria-busy') === 'true',
+                        formCount: screen.querySelectorAll('form').length,
+                        controls: byId,
+                        saveDisabled: save == null ? null : save.disabled,
+                        fieldsInert: card?.querySelector('.fields')?.inert ?? null,
+                        references: [...screen.querySelectorAll(
+                            'details[aria-label="Earlier local input (reference only)"]'
+                        )].map(node => node.textContent),
+                        session: document.getElementById('session-summary').textContent,
+                        screenText: screen.textContent,
+                        activeDom: JSON.stringify({
+                            text: document.body.textContent,
+                            attributes: [...document.body.querySelectorAll('*')]
+                                .flatMap(node => node.getAttributeNames()
+                                    .map(name => node.getAttribute(name))),
+                            values: [...document.body.querySelectorAll('input,textarea,select')]
+                                .map(node => node.value)
+                        })
+                    };
+                `);
+                const waitLoaded = (count) =>
+                    driver.wait(
+                        async () => {
+                            const state = await snapshot();
+                            assert.deepEqual(state.unexpected, []);
+                            const native = await readNative();
+                            return (
+                                loadCount(state) === count &&
+                                !native.busy &&
+                                native.controls.fld_title != null &&
+                                state.status === 'Loaded form loaded.'
+                            );
+                        },
+                        10000,
+                        'Actual anonymous teardown Form load.'
+                    );
+                const observe = async (name) => {
+                    const state = await capture(result, name);
+                    const native = await readNative();
+                    result.observations.push({
+                        stage: `${name}-native-dom`,
+                        native,
+                    });
+                    return { state, native };
+                };
+                const secrets = (state) => [
+                    state.expected.privateText,
+                    state.expected.privateTitle,
+                    state.expected.privateFilename,
+                ];
+                const assertFresh = (state, native) => {
+                    assert.equal(native.formCount, 1);
+                    assert.deepEqual(
+                        Object.keys(native.controls).sort(),
+                        [
+                            'fld_title',
+                            'fld_files',
+                            'fld_readonly',
+                            'fld_number',
+                            'fld_checkbox',
+                        ].sort()
+                    );
+                    assert.deepEqual(
+                        {
+                            fld_title: native.controls.fld_title.value,
+                            fld_files: JSON.parse(
+                                native.controls.fld_files.value
+                            ),
+                            fld_readonly: native.controls.fld_readonly.value,
+                            fld_number: Number(
+                                native.controls.fld_number.value
+                            ),
+                            fld_checkbox: native.controls.fld_checkbox.checked,
+                        },
+                        state.expected.fresh,
+                        'The complete freshly loaded native record must stay unchanged.'
+                    );
+                    assert.equal(native.controls.fld_readonly.disabled, true);
+                    assert.equal(native.saveDisabled, true);
+                    assert.equal(native.fieldsInert, true);
+                    assert(
+                        native.screenText.includes(
+                            'Earlier outcome not confirmed'
+                        )
+                    );
+                    assert.match(native.session, /Visitor A · Anonymous/);
+                    assert.equal(saves(state).length, 1);
+                };
+                const assertScrubbed = (state, native) => {
+                    assert.equal(
+                        native.references.length,
+                        0,
+                        'Explicit teardown must remove retained reference rows.'
+                    );
+                    for (const secret of secrets(state))
+                        assert.equal(
+                            native.activeDom.includes(secret),
+                            false,
+                            `${teardown} must scrub old private text, physical labels and filenames from the active DOM.`
+                        );
+                };
+                await waitLoaded(1);
+                let state = await snapshot();
+                const expected = state.expected;
+                assert.equal(
+                    await (await find('#api-origin')).getAttribute('value'),
+                    'https://synthetic-sdk.invalid'
+                );
+                assert.equal(
+                    await (await find('#share-id')).getAttribute('value'),
+                    'privacy_share_synthetic'
+                );
+                await replaceInput(
+                    await find('#screen input[data-field-id="fld_title"]'),
+                    expected.privateText,
+                    'text'
+                );
+                await clickText('Save');
+                await driver.wait(
+                    async () => {
+                        const value = await snapshot();
+                        assert.deepEqual(value.unexpected, []);
+                        const native = await readNative();
+                        return (
+                            saves(value).length === 1 &&
+                            !native.busy &&
+                            native.saveDisabled === true &&
+                            native.references.length === 1
+                        );
+                    },
+                    10000,
+                    'Handled lost response leaves the real create attempt unknown.'
+                );
+                await (
+                    await find(
+                        '#screen details[aria-label="Earlier local input (reference only)"] summary'
+                    )
+                ).click();
+                let observed = await observe(
+                    'unknown-create-retains-dirty-private-witnesses'
+                );
+                state = observed.state;
+                const call = saves(state)[0];
+                assert.equal(call.method, 'POST');
+                assert.equal(call.input.extensionAccessToken, expected.token);
+                assert.deepEqual(call.input.formRecord, {
+                    type: 'create',
+                    data: {
+                        ...expected.initial,
+                        fld_title: expected.privateText,
+                    },
+                });
+                assert.deepEqual(
+                    [...call.input.formFieldIdsWithUnsavedChanges].sort(),
+                    ['fld_files', 'fld_title'].sort()
+                );
+                assert.deepEqual(call.input.context, { type: 'direct-url' });
+                assert.deepEqual(call.input.searchQuery, {});
+                assert.deepEqual(
+                    call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
+                    {}
+                );
+                assert.equal(call.input.captchaVal, null);
+                assert.equal(call.input.isComputeMode, false);
+                for (const secret of secrets(state))
+                    assert(
+                        observed.native.references[0].includes(secret),
+                        'All three private witnesses must be retained before teardown.'
+                    );
+                await (await find('#reload')).click();
+                await waitLoaded(2);
+                await (
+                    await find(
+                        '#screen details[aria-label="Earlier local input (reference only)"] summary'
+                    )
+                ).click();
+                observed = await observe(
+                    'same-person-reload-reference-only-fresh-full-record'
+                );
+                state = observed.state;
+                assertFresh(state, observed.native);
+                assert.equal(observed.native.references.length, 1);
+                for (const secret of secrets(state))
+                    assert(
+                        observed.native.references[0].includes(secret),
+                        'Ordinary Reload must preserve same-person reference-only recovery.'
+                    );
+                assertCalls(state, [
+                    'fetchExtensionForEndUser',
+                    'saveForm',
+                    'fetchExtensionForEndUser',
+                ]);
+                await (
+                    await find(
+                        teardown === 'logout' ? '#logout' : '#disconnect'
+                    )
+                ).click();
+                observed = await observe(
+                    'explicit-teardown-active-dom-scrubbed'
+                );
+                assert.equal(observed.native.formCount, 0);
+                assertScrubbed(observed.state, observed.native);
+                assert.equal(loadCount(observed.state), 2);
+                assert.equal(saves(observed.state).length, 1);
+                if (teardown === 'logout')
+                    await (await find('#reload')).click();
+                else await clickText('Connect and load');
+                await waitLoaded(3);
+                observed = await observe(
+                    'anonymous-same-share-reopen-scrubbed-create-still-blocked'
+                );
+                state = observed.state;
+                assertFresh(state, observed.native);
+                assertScrubbed(state, observed.native);
+                assert.deepEqual(
+                    state.events
+                        .filter(
+                            (event) =>
+                                event.type === 'synthetic-teardown-form-load'
+                        )
+                        .map((event) => ({
+                            load: event.load,
+                            formRecord: event.formRecord,
+                            dirtyFieldIds: event.dirtyFieldIds,
+                        })),
+                    [
+                        {
+                            load: 1,
+                            formRecord: {
+                                type: 'create',
+                                data: expected.initial,
+                            },
+                            dirtyFieldIds: ['fld_files'],
+                        },
+                        {
+                            load: 2,
+                            formRecord: {
+                                type: 'create',
+                                data: expected.fresh,
+                            },
+                            dirtyFieldIds: [],
+                        },
+                        {
+                            load: 3,
+                            formRecord: {
+                                type: 'create',
+                                data: expected.fresh,
+                            },
+                            dirtyFieldIds: [],
+                        },
+                    ]
+                );
+                // The visible disabled Save control stays blocked; adversarial detached/current
+                // programmatic submits are covered in the actual starter and packed tests.
+                await (await find('#screen button[type="submit"]')).click();
+                const until = Date.now() + 500;
+                await driver.wait(
+                    async () => {
+                        const value = await snapshot();
+                        assertCalls(value, [
+                            'fetchExtensionForEndUser',
+                            'saveForm',
+                            'fetchExtensionForEndUser',
+                            'fetchExtensionForEndUser',
+                        ]);
+                        return Date.now() >= until;
+                    },
+                    10000,
+                    'The disabled Save gesture must not replay the unknown create.'
+                );
+                observed = await observe(
+                    'native-disabled-save-zero-replay-scrub-preserved'
+                );
+                assertFresh(observed.state, observed.native);
+                assertScrubbed(observed.state, observed.native);
+            }
+        );
+    }
+    assert.equal(receipt.cases.length, 28);
     assert(
         receipt.cases.every((v) => v.status === 'passed'),
         'Every exact synthetic case must pass; failed cases are retained without retry.'

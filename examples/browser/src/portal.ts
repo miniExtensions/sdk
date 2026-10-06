@@ -1,4 +1,8 @@
 import {
+    childQuerySnapshots,
+    type ChildQuerySnapshots,
+} from './childQueries.js';
+import {
     AirtableFieldType,
     type AirtableValue,
     type FormLoadedResult,
@@ -198,7 +202,8 @@ export const createPortalView = (options: {
             candidate?: RecoveryAttempt;
             newAttempt?: RecoveryAttempt;
             isCurrent(): boolean;
-        }
+        },
+        queries?: ChildQuerySnapshots
     ): void;
 }): PortalView => {
     const { page, run, status } = options;
@@ -462,6 +467,9 @@ export const createPortalView = (options: {
                     clientTimeZone:
                         Intl.DateTimeFormat().resolvedOptions().timeZone,
                 });
+                const dispatchedDynamic =
+                    plan.input.context.prefillDataForLinkedRecordsForm
+                        ?.prefillQueryForChildExtension;
                 const accepted = () =>
                     current() && collection === owner && plan.isCurrent();
                 if (!accepted() || client !== options.client) return;
@@ -515,11 +523,17 @@ export const createPortalView = (options: {
                             0
                         );
                 }
-                options.openChild(loaded, plan.saveContext, plan.parent, {
-                    candidate,
-                    newAttempt,
-                    isCurrent: plan.isCurrent,
-                });
+                options.openChild(
+                    loaded,
+                    structuredClone(plan.saveContext),
+                    structuredClone(plan.parent),
+                    {
+                        candidate,
+                        newAttempt,
+                        isCurrent: plan.isCurrent,
+                    },
+                    childQuerySnapshots(dispatchedDynamic, loaded)
+                );
                 status(
                     creating
                         ? 'Create Form loaded. No record has been created yet.'

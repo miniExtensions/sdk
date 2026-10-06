@@ -36,6 +36,55 @@ import type {
     RuntimeConditionsDefinition,
 } from '@miniextensions/sdk';
 import { compileRuntimeConditions } from '@miniextensions/sdk/forms';
+import {
+    FormulaRunner,
+    type FormulaRunOutcome,
+    type InterpreterContext,
+} from '@miniextensions/sdk/formulas';
+
+// Synthetic field IDs: replace them with IDs from the current returned metadata.
+export const exampleConditions: RuntimeConditionsDefinition = {
+    logicalOperator: 'and',
+    conditions: [
+        {
+            id: 'title-ready',
+            type: 'singleCondition',
+            setting: {
+                type: 'contains',
+                fieldType: 'singleLineText',
+                idOrName: { type: 'id', id: 'fld_title' },
+                value: 'ready',
+            },
+        },
+        {
+            id: 'quantity-or-approved',
+            type: 'groupCondition',
+            logicalOperator: 'or',
+            conditions: [
+                {
+                    id: 'quantity-at-least-two',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'greaterThanOrEqualsTo',
+                        fieldType: 'number',
+                        idOrName: { type: 'id', id: 'fld_quantity' },
+                        value: 2,
+                    },
+                },
+                {
+                    id: 'approved',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'is',
+                        fieldType: 'checkbox',
+                        idOrName: { type: 'id', id: 'fld_approved' },
+                        value: true,
+                    },
+                },
+            ],
+        },
+    ],
+};
 
 export function compileScalarConditions(
     conditions: RuntimeConditionsDefinition | null,
@@ -48,7 +97,59 @@ export function compileScalarConditions(
         fieldReferenceMode: 'saved',
     });
 }
+
+// This is the application's presentation/error policy, not SDK authorization.
+export type ScalarVisibility =
+    | { type: 'visible' | 'hidden' }
+    | {
+          type: 'blocked';
+          code:
+              | 'unsupported'
+              | 'invalid'
+              | 'evaluation-exception'
+              | Extract<FormulaRunOutcome, { type: 'error' }>['code'];
+      };
+
+export function scalarVisibility(
+    airtableFields: readonly RuntimeAirtableField[],
+    context: InterpreterContext,
+    conditions: RuntimeConditionsDefinition | null = exampleConditions
+): ScalarVisibility {
+    const compiled = compileScalarConditions(conditions, airtableFields);
+    if (compiled.type !== 'compiled')
+        return { type: 'blocked', code: compiled.type };
+    try {
+        const runner = new FormulaRunner(compiled.formula);
+        runner.context = { ...context, airtableFields: [...airtableFields] };
+        const result = runner.runWithOutcome();
+        if (result.type === 'error')
+            return { type: 'blocked', code: result.code };
+        return {
+            type: FormulaRunner.isFalsyValue(result.value)
+                ? 'hidden'
+                : 'visible',
+        };
+    } catch {
+        return { type: 'blocked', code: 'evaluation-exception' };
+    }
+}
 ```
+
+The example matches a title containing `ready` and either quantity at least two
+or a checked approval. Supply the current fields and the native record context
+from the [formula context recipe](formulas.md#loaded-form-and-portal-metadata)
+to `scalarVisibility(fields, context)`. Rebuild both after accepted edits or a
+fresh load, and check the application's current visitor/revision before applying
+the decision. For a Portal row, use that row's record and table metadata; the
+formula guide's logged-in Portal context describes the parent user record.
+
+Only a successful typed value reaches `isFalsyValue`. Unsupported/invalid
+definitions, recognized formula faults and thrown evaluation exceptions all
+block this example's presentation. Compiled warnings retain the strict compiler
+semantics below; an application may choose a stricter warning policy. Use only
+metadata and native values actually supplied to the current caller. A local
+presentation decision grants no read/write permissions and does not remove
+record values or change save authority.
 
 The result is `{ type: 'compiled', formula, diagnostics }`, or
 `{ type: 'unsupported' | 'invalid', diagnostics }` with no formula. Callers must

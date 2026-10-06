@@ -107,6 +107,15 @@ revisions, requests, cancellation, and when to discard drafts.
   saving. It does not undo a completed upload or a created Airtable choice.
 - Linked fields offer an authorized search and paginated selection. Selecting
   choices only edits the local draft; **Save** writes the relationship.
+- Configured conditional linked filters expose **Load conditional filters**.
+  This explicit action shares one token-only metadata read per loaded Form,
+  resolves root/direct URL prefills from the server, including when filter
+  controls are configured hidden. Search each visible filter by its
+  current linked-table name and choose a returned record. Choices retain both
+  native record IDs and exact primary-value strings, including duplicate labels.
+  Changing an earlier choice clears downstream filter choices, linked options
+  and paging; it preserves the raw linked-record draft. **Search choices** uses
+  the copied filter map, and **Save** nests that map under the outer linked field.
 - Attachment fields let you select and upload a file. Uploading creates a file
   at the authorized destination; **Save** attaches its returned value to the
   record. There is no upload or submission retry.
@@ -116,11 +125,34 @@ revisions, requests, cancellation, and when to discard drafts.
 
 The custom renderer deliberately leaves advanced presentation to your app:
 conditional field or select-option visibility, multi-page navigation, signatures, calendar
-pickers, dynamic linked-filter values, custom validation presentation, and
+pickers, custom validation presentation, and
 CAPTCHA widgets. The server still enforces those extension rules. To use a
 CAPTCHA-enabled Form, integrate the configured widget and supply its token in
 `captchaVal`; this example supplies `null`. It does not disable the Form's
 configuration.
+
+The conditional-filter integration supports unique configured field IDs with
+current fields/names returned by the Form-authorized metadata read. Name
+references, duplicate IDs, malformed rules, or missing metadata are explicitly
+unavailable; it does not guess schema or emulate the native renderer's skipped
+descriptors. This presentation limitation preserves each original
+`disableAddingIfConditionalFilterIsEmpty` and
+`disableRemovingIfConditionalFilterIsEmpty` rule independently: a missing,
+null, or empty primary value blocks only the configured transition. With both
+flags false, the existing authorized option read and local link changes remain
+available. Server validation or sanitization still decides which relationships
+can be saved, so a successful save alone does not prove a proposed link was
+accepted. Read-only and computed fields keep their existing restrictions.
+
+Connect forwards only browser URL `prefill_*` keys into the root/direct load,
+preserving decoded strings and repeated keys as arrays. A filter prefill key
+uses its current linked-table field name. Only a scalar string is supported,
+and only the returned `prefillValue` resolves a selection. Repeated values are
+reported as unsupported. Click **Load conditional filters** before reading
+options or saving a hidden-prefill Form; the button remains visible in hidden
+mode. Portal child URL-prefill propagation remains outside this example's
+integration. There is no automatic metadata retry, discovery paging cursor,
+new schema read, or additional mutation permission.
 
 Custom static and dynamic Form headers also belong to your app. Render them
 from the published settings and record metadata when needed. This example uses

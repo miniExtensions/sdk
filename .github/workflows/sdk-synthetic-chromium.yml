@@ -3,7 +3,7 @@ name: Immutable SDK synthetic Chromium proof
 on:
     push:
         branches:
-            - codex/sdk-projection-chromium-20261006
+            - codex/sdk-review-chromium-20261006
 
 permissions:
     contents: read
@@ -28,9 +28,9 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  # Immutable PR19 push producer at native head 8af6932f.
-                  run-id: 37414232867
-                  artifact-ids: 11390861176
+                  # Immutable reviewed PR20 push producer at native head 25392413.
+                  run-id: 37418032257
+                  artifact-ids: 11391712638
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/package
                   skip-decompress: true
@@ -39,8 +39,8 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  run-id: 37414232867
-                  artifact-ids: 11390871291
+                  run-id: 37418032257
+                  artifact-ids: 11391387743
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/fixture
                   skip-decompress: true

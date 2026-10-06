@@ -33,6 +33,11 @@ export const privacyScenarioInventory = Object.freeze([
     'review-address',
     'review-validation',
     'review-unknown',
+    'hide-empty-edit',
+    'hide-empty-create',
+    'hide-empty-unavailable',
+    'hide-empty-review',
+    'hide-empty-review-malformed',
 ]);
 
 export const privacyAuthScenarioInventory = Object.freeze([

@@ -5,7 +5,10 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
-import { createReviewFixture } from './build-privacy-browser-proof.mjs';
+import {
+    createReviewFixture,
+    createHideEmptyReviewFixture,
+} from './build-privacy-browser-proof.mjs';
 
 /** Pure archived Review contract: no empty-hiding helper or browser mutation. */
 export function assertCanonicalBlankReviewMatrix(prepareFormReviewRows) {
@@ -90,7 +93,7 @@ export async function checkFormReviewRecipe({
     const entry = join(consumer, '.generated/review-recipe-entry.ts');
     writeFileSync(
         entry,
-        "export { prepareFormReviewRows } from '../src/review.js';\nexport { requestConfirmation, cancelConfirmation } from '../src/confirmation.js';\n"
+        "export { prepareFormReviewRows } from '../src/review.js';\nexport { requestConfirmation, cancelConfirmation } from '../src/confirmation.js';\nexport { createFormSaveInput } from '@miniextensions/sdk/forms';\n"
     );
     const outfile = join(consumer, '.generated/review-recipe-checks.mjs');
     const bundled = await build({
@@ -114,8 +117,12 @@ export async function checkFormReviewRecipe({
             path.endsWith('dist/esm/forms/projection.js')
         )
     );
-    const { prepareFormReviewRows, requestConfirmation, cancelConfirmation } =
-        await import(pathToFileURL(outfile).href);
+    const {
+        prepareFormReviewRows,
+        requestConfirmation,
+        cancelConfirmation,
+        createFormSaveInput,
+    } = await import(pathToFileURL(outfile).href);
     const require = createRequire(import.meta.url);
     const { Window } = require(happyDomModulePath);
     const fixture = createReviewFixture('review-answers');
@@ -171,6 +178,80 @@ export async function checkFormReviewRecipe({
     assert.deepEqual(empty.fld_review_unrendered_multi, ['Retained', 'Native']);
     checks++;
     assertCanonicalBlankReviewMatrix(prepareFormReviewRows);
+    checks++;
+    const combinedFixture = createHideEmptyReviewFixture('hide-empty-review');
+    const combinedPage = combinedFixture.page();
+    const combinedBefore = structuredClone(combinedPage);
+    for (const blank of ['', ' \t\n ']) {
+        const data = {
+            ...structuredClone(combinedPage.payload.formRecord.data),
+            ...Object.fromEntries(
+                combinedFixture.state.expected.blankFieldIds.map((id) => [
+                    id,
+                    blank,
+                ])
+            ),
+            fld_empty_tail: 'Accepted combined sibling',
+        };
+        const before = structuredClone(data);
+        assert.deepEqual(prepareFormReviewRows(combinedPage, data), [
+            {
+                fieldId: 'fld_empty_locked',
+                title: 'Empty locked',
+                value: 'Retained readonly native answer',
+                hideTitle: false,
+            },
+            {
+                fieldId: 'fld_empty_tail',
+                title: 'Empty tail',
+                value: 'Accepted combined sibling',
+                hideTitle: false,
+            },
+        ]);
+        const input = createFormSaveInput({
+            loaded: combinedPage,
+            draft: { data, dirtyFieldIds: ['fld_empty_tail'] },
+            options: {
+                captchaVal: null,
+                isComputeMode: false,
+                searchQuery: {},
+                context: { type: 'direct-url' },
+                conditionalLinkedRecordFieldIdsToFilteringValues: {},
+            },
+        });
+        assert.deepEqual(input.formRecord, {
+            ...combinedPage.payload.formRecord,
+            data,
+        });
+        assert.deepEqual(input.formFieldIdsWithUnsavedChanges, [
+            ...combinedFixture.state.expected.blankFieldIds,
+            'fld_empty_tail',
+        ]);
+        assert.deepEqual(data, before);
+        assert.deepEqual(combinedPage, combinedBefore);
+    }
+    assert.deepEqual(combinedFixture.state.calls, []);
+    checks++;
+    for (const kind of ['number', 'checkbox', 'barcode', 'rich', 'computed']) {
+        const variant = structuredClone(combinedPage);
+        const data = structuredClone(variant.payload.formRecord.data);
+        if (kind === 'rich')
+            variant.payload.fieldIdsInForm.push('fld_empty_rich');
+        else if (kind === 'computed')
+            variant.payload.fieldIdsToSchemas.fld_empty_number.airtableField.isComputed = true;
+        else {
+            data[`fld_empty_${kind}`] = `PrivateCombinedMalformed_${kind}`;
+            variant.payload.fieldIdsToSchemas[
+                `fld_empty_${kind}`
+            ].miniExtConfig.hideFieldIfEmpty = false;
+        }
+        const before = structuredClone(data);
+        assert.throws(
+            () => prepareFormReviewRows(variant, data),
+            /Review is unavailable/
+        );
+        assert.deepEqual(data, before);
+    }
     checks++;
     for (const unsupported of [
         'multi-page',

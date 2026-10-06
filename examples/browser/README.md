@@ -159,8 +159,12 @@ One-page field conditions use the installed Form visibility helpers with the
 complete accepted native draft. Direct scalar drivers recompute presentation
 after accepted edits, including readonly targets and configured frontend
 section propagation. Hidden controls retain their native values and dirty IDs
-for Save. Unsupported predicates, computed/linked drivers and active edit
-empty hiding show an unavailable-field message and block Save until resolved.
+for Save. Explicit edit-mode `hideFieldIfEmpty` supports the flat direct scalar
+subset, including readonly targets: null/blank values, unchecked checkboxes,
+rating zero and blank barcode text hide; ordinary numeric zero stays visible.
+The flag is inactive in create mode. Unsupported predicates, computed/linked
+drivers, richer empty-hiding targets and section contexts with active empty
+hiding show an unavailable-field message and block Save until resolved.
 See the [visibility contract](../../docs/forms.md#one-page-conditional-field-visibility)
 for lookup defaults, preview and section boundaries. This is presentation;
 the server still enforces its published rules.

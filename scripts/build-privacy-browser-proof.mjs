@@ -62,6 +62,10 @@ const regular = (path) => {
 
 /** This function is serialized into the static kit; it imports no SDK source. */
 function createPrivacyFixture(scenario) {
+    if (['hide-empty-review', 'hide-empty-review-malformed'].includes(scenario))
+        return createHideEmptyReviewFixture(scenario);
+    if (scenario.startsWith('hide-empty-'))
+        return createEditHideEmptyFixture(scenario);
     if (scenario.startsWith('review-')) return createReviewFixture(scenario);
     if (scenario === 'address-ime') return createAddressCompositionFixture();
     if (scenario === 'teardown-logout' || scenario === 'teardown-disconnect')
@@ -1210,6 +1214,308 @@ export function createProjectionFixture(scenario) {
         });
     };
     return { state, page, fetch: transport };
+}
+
+/** Combined Review/empty-hiding fixture; the three existing fixtures stay intact. */
+export function createHideEmptyReviewFixture(scenario) {
+    if (
+        !['hide-empty-review', 'hide-empty-review-malformed'].includes(scenario)
+    )
+        throw new Error('Unknown combined empty-hiding Review scenario.');
+    const fixture = createEditHideEmptyFixture('hide-empty-edit');
+    const malformed = scenario === 'hide-empty-review-malformed';
+    const blankFieldIds = fixture.state.expected.controlFieldIds.filter(
+        (id) =>
+            !['fld_empty_rich', 'fld_empty_locked', 'fld_empty_tail'].includes(
+                id
+            )
+    );
+    const initial = {
+        ...structuredClone(fixture.state.expected.initial),
+        ...Object.fromEntries(blankFieldIds.map((id) => [id, ' \t\n '])),
+        ...(malformed
+            ? { fld_empty_barcode: 'PrivateCombinedMalformedBarcode' }
+            : {}),
+    };
+    fixture.state.scenario = scenario;
+    fixture.state.expected = {
+        ...fixture.state.expected,
+        initial: structuredClone(initial),
+        blankFieldIds,
+        controlFieldIds: fixture.state.expected.controlFieldIds.filter(
+            (id) => id !== 'fld_empty_rich'
+        ),
+        initialDirtyFieldIds: [...blankFieldIds],
+    };
+    const page = () => {
+        const loaded = fixture.page();
+        loaded.payload.formRecord.data = structuredClone(initial);
+        loaded.payload.fieldIdsInForm = [
+            ...fixture.state.expected.controlFieldIds,
+        ];
+        loaded.payload.formFieldIdsWithUnsavedChanges = [...blankFieldIds];
+        loaded.payload.publicFields.state = {
+            promptUserBeforeSubmission: true,
+        };
+        if (malformed)
+            loaded.payload.fieldIdsToSchemas.fld_empty_barcode.miniExtConfig.hideFieldIfEmpty = false;
+        return loaded;
+    };
+    const fetch = async (resource, init) => {
+        const response = await fixture.fetch(resource, init);
+        const url = new URL(
+            resource instanceof Request ? resource.url : String(resource)
+        );
+        // The base transport closes over its own page/initial. Transform the
+        // actual root response too, using the independent native map above.
+        if (url.searchParams.get('route') === 'fetchExtensionForEndUser')
+            return new Response(JSON.stringify(page()), {
+                status: response.status,
+                headers: response.headers,
+            });
+        return response;
+    };
+    return { state: fixture.state, page, fetch };
+}
+
+/** Empty hiding is presentation only; the fixture retains every native value. */
+export function createEditHideEmptyFixture(scenario) {
+    if (
+        ![
+            'hide-empty-edit',
+            'hide-empty-create',
+            'hide-empty-unavailable',
+        ].includes(scenario)
+    )
+        throw new Error('Unknown synthetic empty-hiding scenario.');
+    const create = scenario === 'hide-empty-create';
+    const unavailable = scenario === 'hide-empty-unavailable';
+    const token = 'FAKE_SYNTHETIC_HIDE_EMPTY_TOKEN';
+    const families = [
+        [
+            'title',
+            'singleLineText',
+            create || unavailable ? null : 'Required retained answer',
+        ],
+        ['email', 'email', null],
+        ['url', 'url', ''],
+        ['multiline', 'multilineText', '   '],
+        ['phone', 'phoneNumber', null],
+        ['rich', 'richText', '  '],
+        ['number', 'number', 0],
+        ['currency', 'currency', 0],
+        ['percent', 'percent', 0],
+        ['rating', 'rating', 0],
+        ['checkbox', 'checkbox', false],
+        ['barcode', 'barcode', { text: '   ', type: 'code128' }],
+        ['locked', 'singleLineText', 'Retained readonly native answer'],
+        ['tail', 'singleLineText', 'Adjacent native answer'],
+    ];
+    const fields = families.map(([name, type]) => ({
+        id: `fld_empty_${name}`,
+        name: name === 'title' ? 'Hidden required answer' : `Empty ${name}`,
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: {
+            type,
+            options:
+                type === 'checkbox'
+                    ? { icon: 'check', color: 'greenBright' }
+                    : type === 'rating'
+                      ? { max: 5, icon: 'star', color: 'yellowBright' }
+                      : type === 'currency'
+                        ? { precision: 2, symbol: '$' }
+                        : ['number', 'percent'].includes(type)
+                          ? { precision: 2 }
+                          : null,
+        },
+    }));
+    const initial = {
+        ...Object.fromEntries(
+            families.map(([name, , value]) => [`fld_empty_${name}`, value])
+        ),
+        fld_empty_unrendered_multi: ['Retained', 'Native'],
+        fld_empty_unrendered_linked: ['rec_empty_parent'],
+        fld_empty_unrendered_barcode: { text: '004', type: 'code128' },
+    };
+    const state = {
+        scenario,
+        synthetic: true,
+        realNetworkEnabled: false,
+        calls: [],
+        events: [],
+        unexpected: [],
+        pending: null,
+        expected: {
+            initial,
+            controlFieldIds: fields.map((field) => field.id),
+            tableId: 'tbl_empty_synthetic',
+            recordId: 'rec_empty_synthetic',
+            initialDirtyFieldIds: ['fld_empty_title'],
+            urlPrefilledFieldIds: ['fld_empty_number'],
+            validationMessage:
+                'This hidden answer is still required by the synthetic response.',
+        },
+    };
+    let rootLoads = 0;
+    const page = () => {
+        const blocked = unavailable && rootLoads <= 1;
+        const schemas = fields.map((field, index) => ({
+            fieldType: field.config.type,
+            airtableField: field,
+            miniExtConfig: {
+                ...(index < 12
+                    ? { hideFieldIfEmpty: !(unavailable && !blocked) }
+                    : {}),
+                ...(['fld_empty_email', 'fld_empty_locked'].includes(field.id)
+                    ? { readOnly: true }
+                    : {}),
+                ...(field.id === 'fld_empty_title' && !create && !unavailable
+                    ? { required: true }
+                    : {}),
+                ...(field.id === 'fld_empty_tail' && blocked
+                    ? {
+                          headerSectionTitle: 'Retained disabled section',
+                          enableSectionHeader: false,
+                      }
+                    : {}),
+            },
+        }));
+        return structuredClone({
+            extensionId: 'empty_form_synthetic',
+            language: 'en',
+            themeColor: 'blue',
+            enableCommentsOnChildForms: false,
+            workspaceId: 'empty_workspace_synthetic',
+            extensionOwnerUID: 'empty_owner_synthetic',
+            faviconUrl: null,
+            googleAnalyticsMeasurementId: null,
+            isStarterExtension: false,
+            extensionScreen: 'form_loaded',
+            payload: {
+                baseId: 'empty_base_synthetic',
+                loggedInUserCanEditExtension: false,
+                showMiniExtensionsBranding: true,
+                onFreePlan: true,
+                trialExpiresAtUnixEpoch: null,
+                extensionType: 'form',
+                extensionName: 'Synthetic edit empty-hiding Form',
+                extensionAccessToken: token,
+                hasParentExtension: false,
+                publicFields: {},
+                formRecord: create
+                    ? { type: 'create', data: initial }
+                    : {
+                          type: 'edit',
+                          tableId: state.expected.tableId,
+                          recordId: state.expected.recordId,
+                          data: initial,
+                      },
+                formErrors: {},
+                fieldIdsInForm: state.expected.controlFieldIds,
+                fieldNamesToSchemas: Object.fromEntries(
+                    schemas.map((schema) => [schema.airtableField.name, schema])
+                ),
+                fieldIdsToSchemas: Object.fromEntries(
+                    schemas.map((schema) => [schema.airtableField.id, schema])
+                ),
+                formFieldIdsWithUnsavedChanges:
+                    state.expected.initialDirtyFieldIds,
+                urlPrefilledFieldIds: state.expected.urlPrefilledFieldIds,
+                linkedRecordFieldIdToDetailFields: {},
+                cookieKeyForLoginToken: null,
+            },
+        });
+    };
+    const fail = (message) => {
+        state.unexpected.push(message);
+        throw new Error(message);
+    };
+    const json = (value) =>
+        new Response(JSON.stringify(value), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    const fetch = async (resource, init = {}) => {
+        const url = new URL(
+            resource instanceof Request ? resource.url : String(resource)
+        );
+        const method =
+            init.method ??
+            (resource instanceof Request ? resource.method : 'GET');
+        if (
+            url.origin !== 'https://synthetic-sdk.invalid' ||
+            init.credentials !== 'omit'
+        )
+            return fail(
+                'Non-synthetic empty-hiding origin or credential mode refused.'
+            );
+        init.signal?.throwIfAborted();
+        let input;
+        try {
+            input = JSON.parse(
+                method === 'GET'
+                    ? (url.searchParams.get('input') ?? '{}')
+                    : String(init.body ?? '{}')
+            );
+        } catch {
+            return fail('Malformed synthetic empty-hiding input.');
+        }
+        const route = url.searchParams.get('route') ?? url.pathname;
+        const visibleInput = { ...input };
+        delete visibleInput.miniExtStorageV4;
+        delete visibleInput.miniExtSession;
+        state.calls.push({
+            route,
+            method,
+            input: structuredClone(visibleInput),
+            credentialsMode: init.credentials,
+        });
+        if (route === 'fetchExtensionForEndUser') {
+            if (
+                method !== 'POST' ||
+                input.shareId !== 'privacy_share_synthetic' ||
+                input.childExtensionInfo
+            )
+                return fail('Unexpected synthetic empty-hiding root load.');
+            rootLoads++;
+            state.events.push({
+                type: 'hide-empty-root-response',
+                load: rootLoads,
+                blocked: unavailable && rootLoads === 1,
+            });
+            return json(page());
+        }
+        if (
+            route !== 'saveForm' ||
+            method !== 'POST' ||
+            input.extensionAccessToken !== token ||
+            input.formRecord?.type !== (create ? 'create' : 'edit') ||
+            input.context?.type !== 'direct-url' ||
+            (!create &&
+                (input.formRecord?.recordId !== state.expected.recordId ||
+                    input.formRecord?.tableId !== state.expected.tableId))
+        )
+            return fail('Unexpected empty-hiding route or native Save scope.');
+        if (unavailable && rootLoads === 1)
+            return fail('Blocked empty hiding must stop before Save dispatch.');
+        return json({
+            type: 'error',
+            formValidationErrors:
+                !create && !unavailable
+                    ? [
+                          {
+                              fieldId: 'fld_empty_title',
+                              fieldTitle: 'Hidden required answer',
+                              errorMessage: state.expected.validationMessage,
+                          },
+                      ]
+                    : [],
+            formErrors: {},
+        });
+    };
+    return { state, page, fetch };
 }
 
 /** Native one-page visibility fixtures; no application actions are simulated. */
@@ -2554,69 +2860,79 @@ function installProofInspection(fixture, kind) {
                           ),
                       }
                     : null,
-            review: fixture.state.scenario.startsWith('review-')
-                ? {
-                      dialogs: [
-                          ...document.querySelectorAll(
-                              'dialog[data-form-review]'
-                          ),
-                      ].map((dialog) => ({
-                          open: dialog.open,
-                          role: dialog.getAttribute('role'),
-                          text: dialog.textContent,
-                          rows: [...dialog.querySelectorAll('dt')].map(
-                              (label) => ({
-                                  fieldId: label.dataset.reviewFieldId,
-                                  title: label.textContent,
-                                  hideTitle:
-                                      label.dataset.reviewTitleHidden ===
-                                      'true',
-                                  labelId: label.id,
-                                  value: label.nextElementSibling?.textContent,
-                                  labelledBy:
-                                      label.nextElementSibling?.getAttribute(
-                                          'aria-labelledby'
-                                      ),
-                              })
-                          ),
-                          nestedMarkup:
-                              dialog.querySelectorAll('img,b,a').length,
-                      })),
-                      controls: [
-                          ...(application?.querySelectorAll(
-                              '[data-field-id]'
-                          ) ?? []),
-                      ]
-                          .filter((control) =>
-                              fixture.state.expected.controlFieldIds.includes(
-                                  control.dataset.fieldId
-                              )
-                          )
-                          .map((control) => ({
-                              fieldId: control.dataset.fieldId,
-                              type: control.type,
-                              hidden: control.closest('[hidden]') !== null,
-                              disabled: control.disabled,
-                              value:
-                                  control.type === 'checkbox'
-                                      ? control.checked
-                                      : control.value,
+            review:
+                fixture.state.scenario.startsWith('review-') ||
+                ['hide-empty-review', 'hide-empty-review-malformed'].includes(
+                    fixture.state.scenario
+                )
+                    ? {
+                          dialogs: [
+                              ...document.querySelectorAll(
+                                  'dialog[data-form-review]'
+                              ),
+                          ].map((dialog) => ({
+                              open: dialog.open,
+                              role: dialog.getAttribute('role'),
+                              text: dialog.textContent,
+                              rows: [...dialog.querySelectorAll('dt')].map(
+                                  (label) => ({
+                                      fieldId: label.dataset.reviewFieldId,
+                                      title: label.textContent,
+                                      hideTitle:
+                                          label.dataset.reviewTitleHidden ===
+                                          'true',
+                                      labelId: label.id,
+                                      value: label.nextElementSibling
+                                          ?.textContent,
+                                      labelledBy:
+                                          label.nextElementSibling?.getAttribute(
+                                              'aria-labelledby'
+                                          ),
+                                  })
+                              ),
+                              nestedMarkup:
+                                  dialog.querySelectorAll('img,b,a').length,
                           })),
-                      fieldsInert:
-                          application?.querySelector('.fields')?.inert ?? false,
-                      activeButton:
-                          document.activeElement?.tagName === 'BUTTON'
-                              ? document.activeElement.textContent
-                              : null,
-                      errors: [
-                          ...(application?.querySelectorAll('.error-list li') ??
-                              []),
-                      ].map((node) => node.textContent),
-                      abortCounts: structuredClone(fixture.state.abortCounts),
-                  }
-                : null,
+                          controls: [
+                              ...(application?.querySelectorAll(
+                                  '[data-field-id]'
+                              ) ?? []),
+                          ]
+                              .filter((control) =>
+                                  fixture.state.expected.controlFieldIds.includes(
+                                      control.dataset.fieldId
+                                  )
+                              )
+                              .map((control) => ({
+                                  fieldId: control.dataset.fieldId,
+                                  type: control.type,
+                                  hidden: control.closest('[hidden]') !== null,
+                                  disabled: control.disabled,
+                                  value:
+                                      control.type === 'checkbox'
+                                          ? control.checked
+                                          : control.value,
+                              })),
+                          fieldsInert:
+                              application?.querySelector('.fields')?.inert ??
+                              false,
+                          activeButton:
+                              document.activeElement?.tagName === 'BUTTON'
+                                  ? document.activeElement.textContent
+                                  : null,
+                          errors: [
+                              ...(application?.querySelectorAll(
+                                  '.error-list li'
+                              ) ?? []),
+                          ].map((node) => node.textContent),
+                          abortCounts: structuredClone(
+                              fixture.state.abortCounts
+                          ),
+                      }
+                    : null,
             visibility:
                 fixture.state.scenario.startsWith('visibility-') ||
+                fixture.state.scenario.startsWith('hide-empty-') ||
                 fixture.state.scenario.startsWith('projection-')
                     ? {
                           controls: [
@@ -2651,6 +2967,11 @@ function installProofInspection(fixture, kind) {
                               text: alert.textContent ?? '',
                               hidden: alert.closest('[hidden]') !== null,
                           })),
+                          errors: [
+                              ...(application?.querySelectorAll(
+                                  '.error-list li'
+                              ) ?? []),
+                          ].map((node) => node.textContent),
                       }
                     : null,
             selects: [...(application?.querySelectorAll('select') ?? [])].map(
@@ -2986,7 +3307,7 @@ export async function buildPrivacyBrowserProof({
         write('starter/index.html', starterHtml);
         write(
             'fixture.js',
-            `const createTeardownFixture = ${createTeardownFixture.toString()};\nconst createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nconst createAddressCompositionFixture = ${createAddressCompositionFixture.toString()};\nconst createReviewFixture = ${createReviewFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
+            `const createTeardownFixture = ${createTeardownFixture.toString()};\nconst createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createEditHideEmptyFixture = ${createEditHideEmptyFixture.toString()};\nconst createHideEmptyReviewFixture = ${createHideEmptyReviewFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nconst createAddressCompositionFixture = ${createAddressCompositionFixture.toString()};\nconst createReviewFixture = ${createReviewFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
         );
         write(
             'starter/bootstrap.js',
@@ -3179,6 +3500,12 @@ Choose Reload before either teardown: the active Form must contain Fresh public 
 
 ## Prepared review scenarios
 
+hide-empty-edit uses explicit edit-mode hideFieldIfEmpty:true on twelve matching direct scalar families, including richText. Readonly null, blank text, false checkbox, zero rating and blank native barcode remain hidden; ordinary number/currency/percent zero stay visible. Replace the populated required answer with one SPACE in one native key command, then edit the visible sibling and Save. The complete whitespace/native snapshot, readonly/unrendered values, initial dirty ID, URL-prefilled ID and accepted edits must appear in the single Save. The synthetic returned hidden-field required error remains visible. Visitor A-to-B-to-A retains the accepted hidden draft without a read or replay; Discard restores initial controls without another Save. This is presentation and returned-error handling, not hosted required-rule evaluation, hidden-write authority or persistence.
+
+hide-empty-create keeps the same empty scalar controls visible because ordinary empty hiding is inactive in create mode. The installed/packed checks assert the exact create envelope and full native data after an adjacent edit. hide-empty-unavailable retains a nonblank disabled section title: active edit empty hiding is blocked, the unavailable alert is visible and deliberate Save dispatches zero requests. Visitor round trip keeps the adjacent accepted draft. A normal Reload supplies the explicitly supported no-section/hide-false configuration; only a later explicit Save may dispatch. Review's separate row preparation supports eleven direct scalar types and excludes richText; these empty-hiding scenarios use promptUserBeforeSubmission:false/absent and grant no Review richText support.
+
+hide-empty-review combines edit hideFieldIfEmpty:true with promptUserBeforeSubmission:true. All eleven Review-supported scalar targets contain exact whitespace native strings and remain hidden. RichText is retained as unrendered native data; it receives no Review support. Only the readonly locked answer and accepted visible sibling appear as ordered semantic review rows. Edit/Escape dispatch zero Saves. One fresh Confirm preserves all original whitespace bytes, readonly/unrendered native values, all eleven initial dirty IDs, the duplicate URL-prefilled numeric ID and accepted sibling ID in the full unique Save union. Returned hidden-required errors remain synthetic. hide-empty-review-malformed changes only the barcode answer to nonblank malformed native text and disables hide-empty for that field; ordinary visibility stays available, while Review rejects without opening a dialog or dispatching Save. This isolates Review's nonblank validation from empty-hiding's unavailable gate.
+
 review-answers uses the exact archived starter review.ts and confirmation.ts with promptUserBeforeSubmission:true. Edit the masked secret and conditional answer, then hide the latter using the actual checkbox. Save opens a semantic modal with Edit focused first. The ordered review rows contain a fixed eight-bullet secret mask, literal readonly markup, a plain URL and populated numeric zero. Hidden conditional data, unchecked checkbox, zero rating and blank barcode have no rows. No rich markup/link/image is manufactured. Edit, Escape and Enter on initial Edit perform zero Saves and restore focus to Save. Fresh explicit Confirm dispatches the complete native snapshot and exact dirty IDs once, preserving hidden and unrendered native values. The response is validation output, not persistence.
 
 The supported direct scalar review families are singleLineText, multilineText, email, url, phoneNumber, number, currency, percent, rating, checkbox and readonly barcode. Native empty or whitespace-only strings are omitted before typed formatting for every supported family. This controls review presentation only: Confirm keeps the complete native Save snapshot, including omitted values and dirty field IDs; it does not trim, coerce or prune that record. Populated malformed scalar values still make review unavailable. The installed archived recipe checks exercise empty and whitespace strings across all eleven families; these four browser scenarios do not claim every matrix row was entered through a native control.
@@ -3252,6 +3579,7 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'Configured-choice cases use only visible direct scalar drivers in a flat Form; no general hidden/linked projection proof.',
                 'Projection cases compose conditional field removal with option conditions for their declared flat physical scalar dependencies only; no section/computed/linked/lookup projection or persistence proof.',
                 'Visibility scenarios cover their declared one-page checkbox/unsupported condition and section configurations only; no multipage or general hosted parity proof.',
+                'Empty-hiding fixtures cover twelve direct scalar targets in explicit edit mode, inactive create mode, and blocked section recovery. Returned required errors are synthetic; no hosted backend validation, hidden-write authority or persistence credit.',
                 'Interaction Save cases prove explicit native dispatch with validation responses, not durable persistence.',
                 'Address scenarios cover only editable unmasked singleLineText, a valid cap and one optional one-page checkbox predicate; no provider, backend, hosted parity or other field/configuration credit.',
                 'Address stale-response cases cover combined installed SDK and starter/presenter cancellation; they do not independently isolate presenter generations.',

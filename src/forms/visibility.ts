@@ -59,6 +59,33 @@ export type ComposeFormFieldVisibilityInput = FormVisibilityContext & {
 const isObject = (value: unknown): value is Record<string, unknown> =>
     value != null && typeof value === 'object' && !Array.isArray(value);
 
+const emptyHidingScalarTypes = new Set<string>([
+    'singleLineText',
+    'email',
+    'url',
+    'multilineText',
+    'phoneNumber',
+    'richText',
+    'number',
+    'percent',
+    'currency',
+    'rating',
+    'checkbox',
+    'barcode',
+]);
+
+const hasSectionContext = (field: Readonly<RuntimeFieldSchema>): boolean => {
+    const config = field.miniExtConfig;
+    return (
+        config != null &&
+        (('headerSectionTitle' in config &&
+            typeof config.headerSectionTitle === 'string' &&
+            config.headerSectionTitle.trim() !== '') ||
+            ('applyFieldConditionsToSection' in config &&
+                config.applyFieldConditionsToSection === true))
+    );
+};
+
 const nativeValueProblem = (
     field: RuntimeAirtableField,
     value: AirtableValue | undefined
@@ -101,7 +128,7 @@ const nativeValueProblem = (
     }
 };
 
-/** Conditional presentation only; this helper never changes drafts or authority. */
+/** Field presentation only; this helper never changes drafts or authority. */
 export function evaluateFormFieldVisibility(
     input: EvaluateFormFieldVisibilityInput
 ): FormFieldVisibility {
@@ -111,15 +138,58 @@ export function evaluateFormFieldVisibility(
             ? config.hideFieldIfEmpty
             : undefined;
     if (
-        (input.formRecordType === 'edit' && hideEmpty === true) ||
-        (input.field.airtableField.config.type === 'multipleLookupValues' &&
-            hideEmpty !== false)
+        input.field.airtableField.config.type === 'multipleLookupValues' &&
+        hideEmpty !== false
     )
         return {
             type: 'blocked',
             code: 'unsupported-hide-empty',
             diagnostics: [],
         };
+    if (input.formRecordType === 'edit' && hideEmpty === true) {
+        const field = input.field.airtableField;
+        // Canonical link/lookup filtering preserves these direct scalar values.
+        // Empty hiding is separate from conditional projection and never removes
+        // anything from the accepted draft used below or by Save.
+        if (
+            field.isComputed === true ||
+            input.field.fieldType !== field.config.type ||
+            !emptyHidingScalarTypes.has(field.config.type) ||
+            hasSectionContext(input.field)
+        )
+            return {
+                type: 'blocked',
+                code: 'unsupported-hide-empty',
+                diagnostics: [],
+            };
+        const value = input.data[field.id];
+        // Canonical emptiness checks missing/blank text before field-type rules.
+        if (value == null || (typeof value === 'string' && value.trim() === ''))
+            return { type: 'hidden', diagnostics: [] };
+        const problem = nativeValueProblem(field, value);
+        if (
+            problem != null ||
+            (isObject(value) &&
+                (field.config.type !== 'barcode' ||
+                    !('text' in value) ||
+                    Object.hasOwn(value, 'error') ||
+                    Object.hasOwn(value, 'specialValue')))
+        )
+            return {
+                type: 'blocked',
+                code: problem ?? 'invalid-native-value',
+                diagnostics: [],
+            };
+        const empty =
+            (field.config.type === 'checkbox' && value === false) ||
+            (field.config.type === 'rating' && value === 0) ||
+            (field.config.type === 'barcode' &&
+                isObject(value) &&
+                (value.text == null ||
+                    (typeof value.text === 'string' &&
+                        value.text.trim() === '')));
+        if (empty) return { type: 'hidden', diagnostics: [] };
+    }
     // Preview skips conditions, but canonical native empty hiding still applies.
     if (input.evaluationMode === 'preview')
         return { type: 'visible', diagnostics: [] };
@@ -200,6 +270,10 @@ export function composeFormFieldVisibility(
     input: ComposeFormFieldVisibilityInput
 ): Readonly<Record<string, FormFieldVisibility>> {
     const result: Record<string, FormFieldVisibility> = {};
+    const sectionContext = input.fieldIds.some((fieldId) => {
+        const field = input.fieldIdsToSchemas[fieldId];
+        return field != null && hasSectionContext(field);
+    });
     let enclosing: FormFieldVisibility | null = null;
     for (const fieldId of input.fieldIds) {
         const field = input.fieldIdsToSchemas[fieldId];
@@ -213,15 +287,25 @@ export function composeFormFieldVisibility(
                 config.enableSectionHeader !== false);
         if (startsSection) enclosing = null;
         const visibility: FormFieldVisibility =
-            enclosing != null && enclosing.type !== 'visible'
-                ? enclosing
-                : field == null
-                  ? {
-                        type: 'blocked',
-                        code: 'missing-schema',
-                        diagnostics: [],
-                    }
-                  : evaluateFormFieldVisibility({ ...input, field });
+            sectionContext &&
+            input.formRecordType === 'edit' &&
+            config != null &&
+            'hideFieldIfEmpty' in config &&
+            config.hideFieldIfEmpty === true
+                ? {
+                      type: 'blocked',
+                      code: 'unsupported-hide-empty',
+                      diagnostics: [],
+                  }
+                : enclosing != null && enclosing.type !== 'visible'
+                  ? enclosing
+                  : field == null
+                    ? {
+                          type: 'blocked',
+                          code: 'missing-schema',
+                          diagnostics: [],
+                      }
+                    : evaluateFormFieldVisibility({ ...input, field });
         result[fieldId] = visibility;
         if (
             startsSection &&

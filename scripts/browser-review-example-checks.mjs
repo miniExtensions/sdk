@@ -5,7 +5,10 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
-import { createReviewFixture } from './build-privacy-browser-proof.mjs';
+import {
+    createReviewFixture,
+    createHideEmptyReviewFixture,
+} from './build-privacy-browser-proof.mjs';
 
 const waitFor = async (predicate) => {
     for (let turn = 0; turn < 100; turn++) {
@@ -438,4 +441,284 @@ export async function checkBrowserReviewExample({
         }
     }
     return { checks: scenarios.length };
+}
+
+/** Actual copied starter: hidden canonical blanks compose with current Review. */
+export async function checkBrowserCombinedEmptyReviewExample({
+    consumerDirectory,
+    happyDomModulePath,
+}) {
+    const consumer = realpathSync(consumerDirectory);
+    const require = createRequire(import.meta.url);
+    const { Window } = require(happyDomModulePath);
+    const outfile = join(
+        consumer,
+        '.generated/combined-empty-review-checks.mjs'
+    );
+    const bundled = await build({
+        absWorkingDir: consumer,
+        entryPoints: [join(consumer, 'src/main.ts')],
+        bundle: true,
+        platform: 'browser',
+        format: 'esm',
+        outfile,
+        logLevel: 'silent',
+        metafile: true,
+    });
+    await assertBrowserInputs(bundled.metafile, consumer);
+    assert(
+        Object.keys(bundled.metafile.inputs).some((path) =>
+            path.endsWith('src/review.ts')
+        )
+    );
+    assert(
+        Object.keys(bundled.metafile.inputs).some((path) =>
+            path.endsWith('dist/esm/forms/visibility.js')
+        )
+    );
+    for (const [index, scenario] of [
+        'hide-empty-review',
+        'hide-empty-review-malformed',
+    ].entries()) {
+        const fixture = createHideEmptyReviewFixture(scenario);
+        const initial = structuredClone(fixture.state.expected.initial);
+        const window = new Window({
+            url: 'https://combined-review.example.test',
+            settings: {
+                disableCSSFileLoading: true,
+                disableJavaScriptFileLoading: true,
+            },
+        });
+        window.document.write(
+            readFileSync(join(consumer, 'index.html'), 'utf8').replace(
+                /<script\b[^>]*>[\s\S]*?<\/script>/g,
+                ''
+            )
+        );
+        const globals = {
+            document: window.document,
+            location: window.location,
+            HTMLElement: window.HTMLElement,
+            HTMLInputElement: window.HTMLInputElement,
+            HTMLSelectElement: window.HTMLSelectElement,
+            HTMLButtonElement: window.HTMLButtonElement,
+            fetch: fixture.fetch,
+        };
+        const previous = Object.keys(globals).map((key) => [
+            key,
+            Object.getOwnPropertyDescriptor(globalThis, key),
+        ]);
+        Object.assign(globalThis, globals);
+        try {
+            await import(`${pathToFileURL(outfile).href}?combined=${index}`);
+            const doc = window.document;
+            const field = (id) => {
+                const control = doc.querySelector(`[data-field-id="${id}"]`);
+                assert(control);
+                return control;
+            };
+            const saves = () =>
+                fixture.state.calls.filter((call) => call.route === 'saveForm');
+            const submit = () =>
+                field('fld_empty_tail')
+                    .closest('form')
+                    .dispatchEvent(
+                        new window.Event('submit', {
+                            bubbles: true,
+                            cancelable: true,
+                        })
+                    );
+            const open = async () => {
+                submit();
+                await waitFor(
+                    () =>
+                        doc.querySelector('dialog[data-form-review][open]') !==
+                        null
+                );
+                const dialog = doc.querySelector(
+                    'dialog[data-form-review][open]'
+                );
+                assert.equal(doc.activeElement, button(dialog, 'Edit'));
+                assert.equal(doc.querySelector('#screen .fields').inert, true);
+                assert.deepEqual(
+                    [...dialog.querySelectorAll('dt')].map(
+                        (node) => node.dataset.reviewFieldId
+                    ),
+                    ['fld_empty_locked', 'fld_empty_tail']
+                );
+                assert.deepEqual(
+                    [...dialog.querySelectorAll('dd')].map(
+                        (node) => node.textContent
+                    ),
+                    [
+                        'Retained readonly native answer',
+                        'Accepted combined sibling',
+                    ]
+                );
+                assert.equal(dialog.querySelectorAll('img,b,a').length, 0);
+                for (const label of dialog.querySelectorAll('dt'))
+                    assert.equal(
+                        label.nextElementSibling.getAttribute(
+                            'aria-labelledby'
+                        ),
+                        label.id
+                    );
+                return dialog;
+            };
+            doc.getElementById('api-origin').value =
+                'https://synthetic-sdk.invalid';
+            doc.getElementById('share-id').value = 'privacy_share_synthetic';
+            doc.getElementById('connection-form').dispatchEvent(
+                new window.Event('submit', { bubbles: true, cancelable: true })
+            );
+            await waitFor(
+                () =>
+                    doc.querySelector('[data-field-id="fld_empty_tail"]') !==
+                        null &&
+                    doc.getElementById('screen').getAttribute('aria-busy') ===
+                        'false'
+            );
+            assert.equal(
+                doc.querySelectorAll('#screen [data-field-id]').length,
+                13
+            );
+            for (const id of fixture.state.expected.blankFieldIds) {
+                const shown = field(id).closest('[hidden]') === null;
+                assert.equal(
+                    shown,
+                    scenario === 'hide-empty-review-malformed' &&
+                        id === 'fld_empty_barcode'
+                );
+            }
+            assert.equal(field('fld_empty_locked').disabled, true);
+            assert.equal(
+                doc.querySelector('form.card > p[role="alert"]').hidden,
+                true
+            );
+            assert.equal(saves().length, 0);
+            field('fld_empty_tail').value = 'Accepted combined sibling';
+            field('fld_empty_tail').dispatchEvent(
+                new window.Event('input', { bubbles: true })
+            );
+            if (scenario === 'hide-empty-review-malformed') {
+                submit();
+                await waitFor(() =>
+                    doc
+                        .getElementById('status')
+                        .textContent.includes('Review is unavailable')
+                );
+                assert.equal(doc.querySelector('dialog'), null);
+                assert.equal(saves().length, 0);
+                assert.equal(doc.querySelector('#screen .fields').inert, false);
+                assert.equal(
+                    doc.querySelector('form.card > p[role="alert"]').hidden,
+                    true
+                );
+                assert.equal(
+                    field('fld_empty_barcode').value,
+                    initial.fld_empty_barcode
+                );
+                assert.equal(
+                    field('fld_empty_tail').value,
+                    'Accepted combined sibling'
+                );
+                assert.equal(
+                    doc
+                        .getElementById('status')
+                        .textContent.includes('PrivateCombinedMalformed'),
+                    false
+                );
+                await settled();
+                assert.equal(saves().length, 0);
+                assert.deepEqual(
+                    fixture.state.calls.map((call) => call.route),
+                    ['fetchExtensionForEndUser']
+                );
+            } else {
+                let dialog = await open();
+                assert.equal(saves().length, 0);
+                button(dialog, 'Edit').click();
+                await settled();
+                assert.equal(saves().length, 0);
+                assert.equal(doc.querySelector('dialog'), null);
+                assert.equal(
+                    field('fld_empty_tail').value,
+                    'Accepted combined sibling'
+                );
+                dialog = await open();
+                dialog.dispatchEvent(
+                    new window.Event('cancel', { cancelable: true })
+                );
+                await settled();
+                assert.equal(saves().length, 0);
+                assert.equal(doc.querySelector('dialog'), null);
+                dialog = await open();
+                button(dialog, 'Confirm').click();
+                await waitFor(
+                    () =>
+                        saves().length === 1 &&
+                        doc
+                            .getElementById('screen')
+                            .getAttribute('aria-busy') === 'false' &&
+                        doc
+                            .getElementById('status')
+                            .textContent.includes('validation errors')
+                );
+                await settled();
+                assert.equal(saves().length, 1);
+                const call = saves()[0];
+                assert.equal(call.method, 'POST');
+                assert.equal(
+                    call.input.extensionAccessToken,
+                    'FAKE_SYNTHETIC_HIDE_EMPTY_TOKEN'
+                );
+                assert.deepEqual(call.input.formRecord, {
+                    type: 'edit',
+                    tableId: fixture.state.expected.tableId,
+                    recordId: fixture.state.expected.recordId,
+                    data: {
+                        ...initial,
+                        fld_empty_tail: 'Accepted combined sibling',
+                    },
+                });
+                assert.deepEqual(call.input.formFieldIdsWithUnsavedChanges, [
+                    ...fixture.state.expected.blankFieldIds,
+                    'fld_empty_tail',
+                ]);
+                assert.deepEqual(call.input.context, { type: 'direct-url' });
+                assert.equal(call.input.isComputeMode, false);
+                assert.deepEqual(
+                    call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
+                    {}
+                );
+                assert(
+                    doc
+                        .querySelector('.error-list')
+                        .textContent.includes(
+                            `Hidden required answer: ${fixture.state.expected.validationMessage}`
+                        )
+                );
+                assert.equal(doc.querySelector('dialog'), null);
+                assert.deepEqual(
+                    fixture.state.calls.map((entry) => entry.route),
+                    ['fetchExtensionForEndUser', 'saveForm']
+                );
+            }
+            assert.deepEqual(fixture.state.expected.initial, initial);
+            assert.deepEqual(fixture.state.unexpected, []);
+            assert(
+                fixture.state.calls.every(
+                    (call) => call.credentialsMode === 'omit'
+                )
+            );
+        } finally {
+            for (const [key, descriptor] of previous) {
+                if (descriptor)
+                    Object.defineProperty(globalThis, key, descriptor);
+                else Reflect.deleteProperty(globalThis, key);
+            }
+            await window.happyDOM.close();
+        }
+    }
+    return { checks: 2 };
 }

@@ -315,9 +315,13 @@ explicitly composes compilation with typed formula evaluation.
 [bounded one-page field visibility](docs/forms.md#one-page-conditional-field-visibility)
 using direct scalar drivers and frontend section propagation. The starter
 recomputes after accepted edits and preserves hidden native drafts and Save
-types. Unsupported predicates, computed/linked drivers and active native
-empty hiding return explicit blocked outcomes. These presentation helpers do
-not grant permissions or supply a backend filtered-record projection.
+types. Explicit edit-mode `hideFieldIfEmpty` supports the flat direct scalar
+subset, including readonly fields; null/blank text, checkbox false, rating zero
+and blank barcode text hide while ordinary numeric zero remains populated.
+Unsupported predicates, computed/linked drivers, richer empty-hiding targets
+and section contexts with active empty hiding return explicit blocked outcomes.
+These presentation helpers do not grant permissions or supply a backend
+filtered-record projection.
 
 These helpers read the same accepted native draft but use distinct record
 contracts. Field visibility reads the complete unfiltered draft.

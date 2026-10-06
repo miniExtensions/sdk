@@ -2303,6 +2303,7 @@ export function createReviewFixture(scenario) {
             headers: { 'Content-Type': 'application/json' },
         });
     let release;
+    let loseReviewResponse = false;
     const fetch = async (resource, init = {}) => {
         const url = new URL(
             resource instanceof Request ? resource.url : String(resource)
@@ -2385,6 +2386,8 @@ export function createReviewFixture(scenario) {
                 id: pending.id,
                 aborted: pending.aborted,
             });
+            if (loseReviewResponse)
+                throw new Error('Synthetic confirmed Review response lost.');
             // Deliver the already-started response despite cancellation; the
             // actual SDK and starter own its rejection and uncertain state.
         }
@@ -2411,6 +2414,16 @@ export function createReviewFixture(scenario) {
         ...(held
             ? {
                   addressControls: [
+                      [
+                          'Lose held review Save response',
+                          () => {
+                              const done = release;
+                              if (done == null) return;
+                              release = null;
+                              loseReviewResponse = true;
+                              done();
+                          },
+                      ],
                       [
                           'Release held review Save',
                           () => {
@@ -3174,7 +3187,7 @@ review-address reuses the existing bounded held address transport. Opening revie
 
 review-validation opens review with a missing required scalar answer. Explicit Confirm dispatches once and the synthetic backend-shaped required validation message remains visible with the full draft retained. Repair and fresh Edit preserve that answer without an additional Save. This proves returned-error handling, not actual server rule evaluation.
 
-review-unknown holds the one confirmed Save. Cancel request aborts its accepted request scope. The visible response-release button then delivers a late validation result; uncertainty must remain blocked, native Save disabled, accepted values retained, and no automatic replay or reopened review occurs. Native modal inertness prevents ordinary background field or Visitor edits while review is open. Pending draft/configuration invalidation is separately exercised by actual-starter installed/packed event checks; these automated native cases do not claim an impossible background gesture or independent manual exploration.
+review-unknown holds the one confirmed Save. Cancel request aborts its accepted request scope. The visible response-release button then delivers a late validation result; the separate response-loss button instead rejects the held transport. For either settled uncertain outcome, native Save and the actual field group remain blocked: attempted text, number and checkbox edits must leave their values unchanged, with no repeated Save or reopened review. Reload keeps uncertainty blocked until explicit fresh-record acknowledgment enables a separate tracked edit. Native modal inertness also prevents ordinary background field or Visitor edits while review is open. Pending draft/configuration invalidation is separately exercised by actual-starter installed/packed event checks; these automated native cases do not claim an impossible background gesture or independent manual exploration.
 
 ## CI generation and remaining verification
 

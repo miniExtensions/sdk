@@ -356,7 +356,11 @@ export async function checkBrowserReviewExample({
                     button(document, 'Cancel request').click();
                     await settled();
                     assert.equal(fixture.state.abortCounts.save, 1);
-                    fixture.addressControls[0][1]();
+                    const release = fixture.addressControls.find(
+                        ([label]) => label === 'Release held review Save'
+                    );
+                    assert(release, 'late-response release control is present');
+                    release[1]();
                 }
                 await waitFor(
                     () =>
@@ -371,6 +375,11 @@ export async function checkBrowserReviewExample({
                 assert.equal(document.querySelector('dialog'), null);
                 assert.equal(button(document, 'Save').disabled, true);
                 assert.equal(
+                    field('fld_review_title').closest('.fields').inert,
+                    true,
+                    'settled unknown/cancelled Review Save retains recovery inertness'
+                );
+                assert.equal(
                     field('fld_review_title').value,
                     initial.fld_review_title
                 );
@@ -384,7 +393,13 @@ export async function checkBrowserReviewExample({
                         document.querySelector('.error-list').textContent,
                         /may have completed/
                     );
-                else
+                else {
+                    assert.deepEqual(
+                        fixture.state.events.filter(
+                            (event) => event.type === 'review-save-released'
+                        ),
+                        [{ type: 'review-save-released', id: 'review-save-1' }]
+                    );
                     assert.deepEqual(
                         fixture.state.events.filter(
                             (event) => event.type === 'review-save-settled'
@@ -397,6 +412,7 @@ export async function checkBrowserReviewExample({
                             },
                         ]
                     );
+                }
             }
             assert.deepEqual(fixture.state.unexpected, []);
             assert.deepEqual(form.payload.formRecord.data, initial);

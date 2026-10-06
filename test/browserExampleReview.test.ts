@@ -1128,6 +1128,15 @@ describe('actual browser starter prepared review', () => {
         assert.equal(fixture.window.document.querySelector('dialog'), null);
         assert.equal(fixture.button('Save').disabled, true);
         assert.equal(fixture.field('fld_title').value, 'Initial title');
+        assert.equal(
+            (
+                fixture.field('fld_title').closest('.fields') as unknown as {
+                    inert: boolean;
+                } | null
+            )?.inert,
+            true,
+            'uncertain Review Save keeps the actual field group inert'
+        );
     });
 
     it('blocks a cancelled held Save and ignores its late response without replaying review', async (test) => {
@@ -1147,6 +1156,15 @@ describe('actual browser starter prepared review', () => {
         assert.equal(fixture.saves.length, 1);
         assert.equal(fixture.window.document.querySelector('dialog'), null);
         assert.ok(held.resolve);
+        assert.equal(
+            (
+                fixture.field('fld_title').closest('.fields') as unknown as {
+                    inert: boolean;
+                } | null
+            )?.inert,
+            true,
+            'cancelled Review Save keeps the actual field group inert'
+        );
         held.resolve(
             new Response(
                 JSON.stringify({
@@ -1161,6 +1179,15 @@ describe('actual browser starter prepared review', () => {
         await settled();
         assert.equal(fixture.saves.length, 1);
         assert.equal(fixture.window.document.querySelector('dialog'), null);
+        assert.equal(
+            (
+                fixture.field('fld_title').closest('.fields') as unknown as {
+                    inert: boolean;
+                } | null
+            )?.inert,
+            true,
+            'late cancelled response cannot unlock untracked field edits'
+        );
     });
 
     for (const config of [

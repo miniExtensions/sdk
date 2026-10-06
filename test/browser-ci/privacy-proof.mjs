@@ -30,28 +30,28 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11385315194',
+    packageArtifactId: '11386557517',
     packageZipSha256:
-        '2f4ac378b62918ca56de0d766e16891cbbe2d823f4b0ea389868192ec676f64a',
+        'bef536febc36716b61c840c1ecb9ebb46411bc6818542d71ff82c3271d9d9dfd',
     packageSha256:
-        'c56d82fef54af0177387104fb2ce9a072f018838ac286a7df9aa063904abca4c',
-    packageBytes: 251605,
-    packageFiles: 179,
+        'c650c42798a99aa5e1ad4a3894998376d163e1a4ce20beb1eed163aadb5d3355',
+    packageBytes: 256676,
+    packageFiles: 183,
     packageZipMembers: 4,
-    fixtureArtifactId: '11384876422',
+    fixtureArtifactId: '11386542568',
     fixtureZipSha256:
-        'f0cbbd656840aa5994891a24e0089d49242cedfc3a7cc0f3a2f02063392c1103',
+        '6be8e952eac36c4af72e430e906a4e11d4a7fbb100dcfcb8fd66466e0c8b2802',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
     fixtureSources: 13,
-    starterSdkInputs: 30,
+    starterSdkInputs: 31,
     authSdkInputs: 7,
     source: {
-        commit: 'c57844698f0fa30690bd197b43a32959e10cc469',
-        tree: 'ac42f5b2559379f7a6624d818af6d88890a477fc',
+        commit: '41f809e5ec34e4a270b378f6355ed3979fa128c2',
+        tree: 'bf5217ba83d166736100e11552e46fd3d3a063c8',
     },
-    runId: '37400031332',
+    runId: '37404068752',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -176,6 +176,7 @@ for entry in manifest['sources']:
         assert len(recipe)==1; data=recipe[0].encode()
     check(entry,data)
 sdk_counts={}
+assert any(e['origin']=='installed-sdk-archive' and e['path']=='node_modules/@miniextensions/sdk/dist/esm/forms/visibility.js' for e in manifest['bundleInputs']['starter'])
 for kind,count in [('starter',expected['starterSdkInputs']),('auth',expected['authSdkInputs'])]:
     entries=[e for e in manifest['bundleInputs'][kind] if e['origin']=='installed-sdk-archive']
     assert len(entries)==count
@@ -214,7 +215,8 @@ const receipt = {
         'No backend permission, OTP delivery, Airtable persistence or hosted UI parity proof.',
         'No independent exploratory/manual Chrome credit.',
         'Hidden/blank title and fallback verification variants are not in this fixture.',
-        'Configured choices cover a flat Form with a visible direct scalar driver; no general hidden/linked projection or field visibility credit.',
+        'Configured choices cover a flat Form with a visible direct scalar driver; no general hidden/linked projection credit.',
+        'Visibility cases cover their declared one-page checkbox/unsupported condition and section configurations; no multipage or general hosted parity credit.',
         'Interaction Save assertions prove native dispatch with validation responses, not durable persistence.',
     ],
 };
@@ -1490,7 +1492,406 @@ try {
         assert.equal(state.linkedDraft, null);
         assert(state.calls.every((call) => call.credentialsMode === 'omit'));
     });
-    assert.equal(receipt.cases.length, 17);
+    const visibilityControl = (state, fieldId) => {
+        const control = state.visibility?.controls.find(
+            (entry) => entry.fieldId === fieldId
+        );
+        assert(control, `Missing actual visibility control ${fieldId}.`);
+        return control;
+    };
+    const visibilityAlert = (state) => {
+        const alert = state.visibility?.alerts.find((entry) =>
+            entry.text.includes('Some fields cannot be displayed')
+        );
+        assert(alert, 'Actual unavailable visibility alert must exist.');
+        return alert;
+    };
+    const assertNativeVisibility = async (fieldIds, displayed) => {
+        for (const fieldId of fieldIds)
+            assert.equal(
+                await (
+                    await find(`#screen [data-field-id="${fieldId}"]`)
+                ).isDisplayed(),
+                displayed,
+                `Actual native display mismatch for ${fieldId}.`
+            );
+    };
+    const assertNativeVisibilityAlert = async (displayed) => {
+        assert.equal(
+            await (
+                await find('#screen form.card > p[role="alert"]')
+            ).isDisplayed(),
+            displayed,
+            'Actual unavailable alert display mismatch.'
+        );
+    };
+    const assertVisibilitySave = (call, expectedData, dirtyFieldIds) => {
+        assert.equal(call.method, 'POST');
+        assert.equal(
+            call.input.extensionAccessToken,
+            'FAKE_SYNTHETIC_VISIBILITY_TOKEN'
+        );
+        assert.deepEqual(call.input.formRecord, {
+            type: 'edit',
+            tableId: 'tbl_visibility_synthetic',
+            recordId: 'rec_visibility_synthetic',
+            data: expectedData,
+        });
+        assert.deepEqual(
+            [...call.input.formFieldIdsWithUnsavedChanges].sort(),
+            [...dirtyFieldIds].sort()
+        );
+        assert.deepEqual(call.input.context, { type: 'direct-url' });
+        assert.deepEqual(
+            call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
+            {}
+        );
+    };
+    await exercise('starter-visibility-draft', async (result) => {
+        await driver.get(
+            `${origin}/starter/index.html?scenario=visibility-draft`
+        );
+        await clickText('Connect and load');
+        await waitReady(
+            (state) =>
+                state.visibility?.controls.length === 5 &&
+                state.status === 'Loaded form loaded.',
+            'Actual one-page visibility Form load.'
+        );
+        let state = await capture(result, 'initial-hidden-native-values');
+        const targets = [
+            'fld_visibility_text',
+            'fld_visibility_readonly',
+            'fld_visibility_number',
+        ];
+        for (const id of targets) assert(visibilityControl(state, id).hidden);
+        await assertNativeVisibility(targets, false);
+        await assertNativeVisibility(['fld_visibility_tail'], true);
+        await assertNativeVisibilityAlert(false);
+        assert(!visibilityControl(state, 'fld_visibility_tail').hidden);
+        assert(
+            visibilityAlert(state).hidden,
+            'A supported false predicate is ordinary hidden presentation, not unavailable.'
+        );
+        assert.equal(saves(state).length, 0);
+        const toggle = await find(
+            '#screen input[data-field-id="fld_visibility_driver"]'
+        );
+        assert.equal(await toggle.getAttribute('type'), 'checkbox');
+        assert(!(await toggle.isSelected()));
+        await toggle.sendKeys(Key.SPACE, Key.TAB);
+        state = await capture(result, 'keyboard-reveal-focus');
+        assert(visibilityControl(state, 'fld_visibility_driver').value);
+        for (const id of targets) assert(!visibilityControl(state, id).hidden);
+        await assertNativeVisibility(targets, true);
+        assert.equal(state.visibility.activeFieldId, 'fld_visibility_text');
+        assert(visibilityControl(state, 'fld_visibility_readonly').disabled);
+        const text = await find(
+            '#screen input[data-field-id="fld_visibility_text"]'
+        );
+        await replaceInput(text, 'Accepted conditional draft', 'text');
+        const number = await find(
+            '#screen input[data-field-id="fld_visibility_number"]'
+        );
+        assert.equal(await number.getAttribute('type'), 'number');
+        await number.clear();
+        await number.sendKeys('1');
+        state = await capture(result, 'accepted-native-number');
+        assert.equal(
+            visibilityControl(state, 'fld_visibility_number').value,
+            '1'
+        );
+        assert(visibilityControl(state, 'fld_visibility_number').valid);
+        // Append an incomplete exponent using the actual native input. Observe
+        // badInput in Chrome; do not assign a value or dispatch an input event.
+        await number.sendKeys('e');
+        state = await capture(result, 'visible-native-bad-input');
+        assert(
+            visibilityControl(state, 'fld_visibility_number').badInput,
+            'The actual native keyboard sequence must establish badInput.'
+        );
+        assert(!visibilityControl(state, 'fld_visibility_number').valid);
+        assert.equal(saves(state).length, 0);
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                value.status === 'Conditional number must be a valid number.' &&
+                saves(value).length === 0,
+            'Visible invalid number must stop before Save dispatch.'
+        );
+        await toggle.sendKeys(Key.SPACE, Key.TAB);
+        state = await capture(result, 'keyboard-hide-skips-target-focus');
+        assert.equal(
+            visibilityControl(state, 'fld_visibility_driver').value,
+            false
+        );
+        for (const id of targets) assert(visibilityControl(state, id).hidden);
+        await assertNativeVisibility(targets, false);
+        assert(visibilityControl(state, 'fld_visibility_number').badInput);
+        assert.equal(
+            state.visibility.activeFieldId,
+            'fld_visibility_tail',
+            'Hidden and disabled targets must not receive native TAB focus.'
+        );
+        assert.equal(saves(state).length, 0);
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 1 &&
+                value.status?.includes('The Form was not saved.'),
+            'Explicit hidden invalid-control Save dispatch uses complete accepted draft.'
+        );
+        state = await capture(result, 'saved-complete-hidden-native-draft');
+        const accepted = {
+            ...state.expected.initial,
+            fld_visibility_driver: false,
+            fld_visibility_text: 'Accepted conditional draft',
+            fld_visibility_number: 1,
+        };
+        const dirty = [
+            'fld_visibility_driver',
+            'fld_visibility_text',
+            'fld_visibility_number',
+        ];
+        assertVisibilitySave(saves(state)[0], accepted, dirty);
+        await toggle.sendKeys(Key.SPACE, Key.TAB);
+        state = await capture(
+            result,
+            'reveal-retains-accepted-text-and-invalid-control'
+        );
+        assert.equal(
+            visibilityControl(state, 'fld_visibility_text').value,
+            'Accepted conditional draft'
+        );
+        assert(visibilityControl(state, 'fld_visibility_number').badInput);
+        assert.equal(saves(state).length, 1);
+        // Use native editing keys to clear the browser's incomplete-input
+        // buffer even when the reflected value is already the empty string.
+        await number.sendKeys(
+            Key.chord(Key.CONTROL, 'a'),
+            Key.BACK_SPACE,
+            '2',
+            Key.TAB
+        );
+        state = await capture(result, 'native-number-repair');
+        assert(visibilityControl(state, 'fld_visibility_number').valid);
+        assert.equal(
+            visibilityControl(state, 'fld_visibility_number').value,
+            '2'
+        );
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 2 &&
+                value.status?.includes('The Form was not saved.'),
+            'Explicit repaired visible-control Save dispatch.'
+        );
+        state = await capture(result, 'saved-repaired-native-draft');
+        assertVisibilitySave(
+            saves(state)[1],
+            {
+                ...accepted,
+                fld_visibility_driver: true,
+                fld_visibility_number: 2,
+            },
+            dirty
+        );
+        assertCalls(state, [
+            'fetchExtensionForEndUser',
+            'saveForm',
+            'saveForm',
+        ]);
+    });
+    await exercise('starter-visibility-unavailable', async (result) => {
+        await driver.get(
+            `${origin}/starter/index.html?scenario=visibility-unavailable`
+        );
+        await clickText('Connect and load');
+        await waitReady(
+            (state) =>
+                state.visibility?.controls.length === 3 &&
+                state.status === 'Loaded form loaded.',
+            'Actual unsupported published visibility Form load.'
+        );
+        let state = await capture(result, 'unsupported-explicit-unavailable');
+        assert(visibilityControl(state, 'fld_visibility_text').hidden);
+        assert(!visibilityControl(state, 'fld_visibility_tail').hidden);
+        assert(
+            !visibilityAlert(state).hidden,
+            'Unsupported condition must be explicit unavailable, not ordinary false.'
+        );
+        await assertNativeVisibility(['fld_visibility_text'], false);
+        await assertNativeVisibility(['fld_visibility_tail'], true);
+        await assertNativeVisibilityAlert(true);
+        assert.equal(saves(state).length, 0);
+        await replaceInput(
+            await find('#screen input[data-field-id="fld_visibility_tail"]'),
+            'Accepted adjacent draft',
+            'text'
+        );
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                value.status ===
+                    'Review the unavailable fields before saving this Form.' &&
+                saves(value).length === 0,
+            'Unavailable predicate stops native Save dispatch.'
+        );
+        state = await capture(
+            result,
+            'blocked-submit-retains-adjacent-native-edit'
+        );
+        assert.equal(
+            visibilityControl(state, 'fld_visibility_tail').value,
+            'Accepted adjacent draft'
+        );
+        assert.equal(
+            visibilityControl(state, 'fld_visibility_text').value,
+            state.expected.initial.fld_visibility_text
+        );
+        assertCalls(state, ['fetchExtensionForEndUser']);
+        await (await find('#reload')).click();
+        await waitReady(
+            (value) =>
+                value.events.filter(
+                    (event) => event.type === 'visibility-root-response'
+                ).length === 2 &&
+                value.status === 'Loaded form loaded.' &&
+                !visibilityControl(value, 'fld_visibility_text').hidden,
+            'Fresh native Reload supplies supported published visibility.'
+        );
+        state = await capture(result, 'fresh-supported-reload-recovers');
+        assert(visibilityAlert(state).hidden);
+        await assertNativeVisibility(
+            ['fld_visibility_text', 'fld_visibility_tail'],
+            true
+        );
+        await assertNativeVisibilityAlert(false);
+        assert.equal(
+            visibilityControl(state, 'fld_visibility_tail').value,
+            state.expected.initial.fld_visibility_tail,
+            'Fresh explicit Reload replaces the rejected old draft with newly read native values.'
+        );
+        assert.deepEqual(
+            state.events
+                .filter((event) => event.type === 'visibility-root-response')
+                .map((event) => event.condition),
+            ['unsupported-singleSelect', 'supported-checkbox']
+        );
+        assert.equal(saves(state).length, 0);
+        await replaceInput(
+            await find('#screen input[data-field-id="fld_visibility_text"]'),
+            'Fresh supported draft',
+            'text'
+        );
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 1 &&
+                value.status?.includes('The Form was not saved.'),
+            'Supported freshly loaded visibility permits deliberate native Save.'
+        );
+        state = await capture(result, 'fresh-supported-native-save');
+        assertVisibilitySave(
+            saves(state)[0],
+            {
+                ...state.expected.initial,
+                fld_visibility_text: 'Fresh supported draft',
+            },
+            ['fld_visibility_text']
+        );
+        assertCalls(state, [
+            'fetchExtensionForEndUser',
+            'fetchExtensionForEndUser',
+            'saveForm',
+        ]);
+    });
+    await exercise('starter-visibility-section', async (result) => {
+        await driver.get(
+            `${origin}/starter/index.html?scenario=visibility-section`
+        );
+        await clickText('Connect and load');
+        await waitReady(
+            (state) =>
+                state.visibility?.controls.length === 5 &&
+                state.status === 'Loaded form loaded.',
+            'Actual one-page section visibility Form load.'
+        );
+        let state = await capture(
+            result,
+            'hidden-lead-follower-visible-reset-section'
+        );
+        for (const id of ['fld_visibility_lead', 'fld_visibility_follower'])
+            assert(visibilityControl(state, id).hidden);
+        await assertNativeVisibility(
+            ['fld_visibility_lead', 'fld_visibility_follower'],
+            false
+        );
+        await assertNativeVisibility(
+            ['fld_visibility_reset', 'fld_visibility_tail'],
+            true
+        );
+        for (const id of ['fld_visibility_reset', 'fld_visibility_tail'])
+            assert(!visibilityControl(state, id).hidden);
+        assert(visibilityAlert(state).hidden);
+        const toggle = await find(
+            '#screen input[data-field-id="fld_visibility_driver"]'
+        );
+        await toggle.sendKeys(Key.SPACE, Key.TAB);
+        state = await capture(result, 'native-section-reveal-focus');
+        for (const id of ['fld_visibility_lead', 'fld_visibility_follower'])
+            assert(!visibilityControl(state, id).hidden);
+        await assertNativeVisibility(
+            ['fld_visibility_lead', 'fld_visibility_follower'],
+            true
+        );
+        assert.equal(state.visibility.activeFieldId, 'fld_visibility_lead');
+        await replaceInput(
+            await find(
+                '#screen input[data-field-id="fld_visibility_follower"]'
+            ),
+            'Accepted section follower',
+            'text'
+        );
+        await toggle.sendKeys(Key.SPACE, Key.TAB);
+        state = await capture(result, 'native-section-hide-reset-focus');
+        for (const id of ['fld_visibility_lead', 'fld_visibility_follower'])
+            assert(visibilityControl(state, id).hidden);
+        await assertNativeVisibility(
+            ['fld_visibility_lead', 'fld_visibility_follower'],
+            false
+        );
+        await assertNativeVisibility(
+            ['fld_visibility_reset', 'fld_visibility_tail'],
+            true
+        );
+        for (const id of ['fld_visibility_reset', 'fld_visibility_tail'])
+            assert(!visibilityControl(state, id).hidden);
+        assert.equal(state.visibility.activeFieldId, 'fld_visibility_reset');
+        assert.equal(
+            saves(state).length,
+            0,
+            'Section presentation changes never save automatically.'
+        );
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 1 &&
+                value.status?.includes('The Form was not saved.'),
+            'Deliberate hidden section native Save.'
+        );
+        state = await capture(result, 'saved-complete-native-hidden-section');
+        assertVisibilitySave(
+            saves(state)[0],
+            {
+                ...state.expected.initial,
+                fld_visibility_follower: 'Accepted section follower',
+            },
+            ['fld_visibility_driver', 'fld_visibility_follower']
+        );
+        assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+    });
+    assert.equal(receipt.cases.length, 20);
     assert(
         receipt.cases.every((v) => v.status === 'passed'),
         'Every exact synthetic case must pass; failed cases are retained without retry.'

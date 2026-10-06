@@ -3,7 +3,7 @@ name: Immutable SDK synthetic Chromium proof
 on:
     push:
         branches:
-            - codex/sdk-choice-chromium-20261006
+            - codex/sdk-visibility-chromium-20261006
 
 permissions:
     contents: read
@@ -28,9 +28,9 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  # Exact immutable push producer; SDK is not rebuilt here.
-                  run-id: 37400031332
-                  artifact-ids: 11385315194
+                  # Exact successful PR17 push producer, verified from actual ZIPs.
+                  run-id: 37404068752
+                  artifact-ids: 11386557517
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/package
                   skip-decompress: true
@@ -39,8 +39,8 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  run-id: 37400031332
-                  artifact-ids: 11384876422
+                  run-id: 37404068752
+                  artifact-ids: 11386542568
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/fixture
                   skip-decompress: true

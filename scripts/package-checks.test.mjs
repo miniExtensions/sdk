@@ -267,6 +267,29 @@ test('public distribution accepts captured contracts and complete notices', asyn
     await fixture.check();
 });
 
+test('public distribution rejects unrecorded backend paths and accepts public helper descriptions', async (t) => {
+    const fixture = await distributionFixture(t);
+    const original = await readFile(
+        join(fixture.root, 'docs/runtime.md'),
+        'utf8'
+    );
+    await write(
+        fixture.root,
+        'docs/runtime.md',
+        original + 'Canonical `backend-src/trpc/publicRuntimeCors.ts` helper.\n'
+    );
+    await assert.rejects(
+        fixture.check,
+        /Private source provenance shipped in docs\/runtime.md/
+    );
+    await write(
+        fixture.root,
+        'docs/runtime.md',
+        original + 'Canonical public-runtime CORS transport helper.\n'
+    );
+    await fixture.check();
+});
+
 test('public distribution rejects private paths in an otherwise unrelated guide', async (t) => {
     const fixture = await distributionFixture(t);
     await write(

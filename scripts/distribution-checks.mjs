@@ -57,6 +57,9 @@ export async function assertPublicDistribution(
 ) {
     const contents = new Map();
     const privateValues = [
+        // The private backend source namespace must not leak through new
+        // documentation paths absent from the generated contract manifest.
+        'backend-src/',
         internal.sourceRepository,
         internal.sourceRevision,
         ...internal.sources.map(({ path }) => path),

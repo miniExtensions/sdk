@@ -22,7 +22,7 @@ import {
     relative,
     resolve,
 } from 'node:path';
-import { By } from 'selenium-webdriver';
+import { By, Key } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
 
 // This bounded job reuses these immutable push artifacts; it never rebuilds SDK.
@@ -30,21 +30,29 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    source: {
-        commit: '2fda7938b347cc1cb0f82302c424de96862f69f3',
-        tree: '9cfd23097b178804dddbec4a3ed4e904b8b36106',
-    },
-    runId: '37341389181',
-    packageArtifactId: '11357789263',
-    fixtureArtifactId: '11357639404',
+    packageArtifactId: '11385315194',
     packageZipSha256:
-        '66b077f17684ce22b17dee28c776ffdf9b9f7ef7acf6bb66e5a45935f0c471c4',
-    fixtureZipSha256:
-        '79b0b63f43d1c665d0158bbadbebf4a7358f75d366e966115f40e117e37046ae',
+        '2f4ac378b62918ca56de0d766e16891cbbe2d823f4b0ea389868192ec676f64a',
     packageSha256:
-        'dbadca9bfed9efcd1f45b1ca8059e6ebdf02ac6ebad8d037928d4bd6cf8a5b50',
-    packageBytes: 210721,
-    packageFiles: 165,
+        'c56d82fef54af0177387104fb2ce9a072f018838ac286a7df9aa063904abca4c',
+    packageBytes: 251605,
+    packageFiles: 179,
+    packageZipMembers: 4,
+    fixtureArtifactId: '11384876422',
+    fixtureZipSha256:
+        'f0cbbd656840aa5994891a24e0089d49242cedfc3a7cc0f3a2f02063392c1103',
+    fixtureZipMembers: 18,
+    fixtureChecksums: 17,
+    fixtureOutputs: 16,
+    fixtureSources: 13,
+    starterSdkInputs: 30,
+    authSdkInputs: 7,
+    source: {
+        commit: 'c57844698f0fa30690bd197b43a32959e10cc469',
+        tree: 'ac42f5b2559379f7a6624d818af6d88890a477fc',
+    },
+    runId: '37400031332',
+    runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const within = (root, path) => {
@@ -114,8 +122,8 @@ def unpack(path,directory,digest,count):
             with target.open('xb') as f: f.write(z.read(i))
     return [i.filename for i in members]
 package=work/'package'; fixture=work/'fixture'
-package_names=unpack(package_zip,package,expected['packageZipSha256'],4)
-fixture_names=unpack(fixture_zip,fixture,expected['fixtureZipSha256'],18)
+package_names=unpack(package_zip,package,expected['packageZipSha256'],expected['packageZipMembers'])
+fixture_names=unpack(fixture_zip,fixture,expected['fixtureZipSha256'],expected['fixtureZipMembers'])
 def sums(directory,names,count):
     lines=(directory/'SHA256SUMS').read_text().splitlines(); assert len(lines)==count
     paths=[]
@@ -125,14 +133,14 @@ def sums(directory,names,count):
         paths.append(name)
     assert len(set(paths))==len(paths)
     return paths
-assert set(sums(fixture,fixture_names,17))==set(fixture_names)-{'SHA256SUMS'}
+assert set(sums(fixture,fixture_names,expected['fixtureChecksums']))==set(fixture_names)-{'SHA256SUMS'}
 sums(package,package_names,2)
 receipt=json.loads((package/'artifact-receipt.json').read_text())
 manifest=json.loads((fixture/'manifest.json').read_text())
 for value in [receipt,manifest]:
     assert value['source']==expected['source']
     ci=value['ci']; assert ci['repository']=='miniExtensions/sdk' and ci['event']=='push'
-    assert ci['runId']==expected['runId'] and ci['runAttempt']=='1'
+    assert ci['runId']==expected['runId'] and ci['runAttempt']==expected['runAttempt']
     assert ci['workflowSha']==expected['source']['commit']
     assert value['package']['sha256']==expected['packageSha256']
     assert value['package']['bytes']==expected['packageBytes']
@@ -149,12 +157,14 @@ with tarfile.open(fileobj=io.BytesIO(tgz),mode='r:gz') as t:
 assert len(files)==expected['packageFiles']
 def check(entry,data):
     assert len(data)==entry['bytes'] and sha(data)==entry['sha256']
-assert len(manifest['outputs'])==16
-assert len({e['path'] for e in manifest['outputs']})==16
+assert len(manifest['outputs'])==expected['fixtureOutputs']
+assert len({e['path'] for e in manifest['outputs']})==expected['fixtureOutputs']
 for entry in manifest['outputs']:
     safe(entry['path']); check(entry,(fixture/entry['path']).read_bytes())
 assert {e['path'] for e in manifest['outputs']}==set(fixture_names)-{'SHA256SUMS','manifest.json'}
-assert len(manifest['sources'])==11
+assert len(manifest['sources'])==expected['fixtureSources']
+assert any(e['origin']=='packed-browser-starter' and e['path']=='src/linkedFilters.ts' for e in manifest['sources'])
+assert any(e['origin']=='packed-browser-starter' and e['path']=='src/choiceAvailability.ts' for e in manifest['sources'])
 for entry in manifest['sources']:
     origin=entry['origin']
     if origin=='packed-browser-starter': data=files['package/examples/browser/'+safe(entry['path'])]
@@ -166,7 +176,7 @@ for entry in manifest['sources']:
         assert len(recipe)==1; data=recipe[0].encode()
     check(entry,data)
 sdk_counts={}
-for kind,count in [('starter',18),('auth',7)]:
+for kind,count in [('starter',expected['starterSdkInputs']),('auth',expected['authSdkInputs'])]:
     entries=[e for e in manifest['bundleInputs'][kind] if e['origin']=='installed-sdk-archive']
     assert len(entries)==count
     for entry in entries:
@@ -181,7 +191,7 @@ assert manifest['provenance']['sdkSourceAliases'] is False
 assert manifest['provenance']['packageRepacked'] is False
 print(json.dumps({'source':manifest['source'],'ci':manifest['ci'],'package':manifest['package'],
  'manifestSha256':sha((fixture/'manifest.json').read_bytes()),'fixtureFiles':len(fixture_names),
- 'checksums':17,'outputs':16,'sources':11,'sdkBundleInputs':sdk_counts}))
+ 'checksums':expected['fixtureChecksums'],'outputs':expected['fixtureOutputs'],'sources':expected['fixtureSources'],'sdkBundleInputs':sdk_counts}))
 `;
 
 const output = requiredPath('SDK_BROWSER_RESULTS_DIR');
@@ -189,6 +199,8 @@ assert(!existsSync(output), 'Refuse an existing result directory.');
 assert.equal(realpathSync(dirname(output)), dirname(output));
 mkdirSync(output);
 const work = mkdtempSync(join(tmpdir(), 'sdk-synthetic-chromium-'));
+// A fresh runner-owned profile stays inside this exact disposable work root.
+const profile = join(work, 'chrome-profile');
 const receipt = {
     schemaVersion: 1,
     status: 'running',
@@ -202,6 +214,8 @@ const receipt = {
         'No backend permission, OTP delivery, Airtable persistence or hosted UI parity proof.',
         'No independent exploratory/manual Chrome credit.',
         'Hidden/blank title and fallback verification variants are not in this fixture.',
+        'Configured choices cover a flat Form with a visible direct scalar driver; no general hidden/linked projection or field visibility credit.',
+        'Interaction Save assertions prove native dispatch with validation responses, not durable persistence.',
     ],
 };
 const writeJson = (path, data) =>
@@ -365,6 +379,36 @@ try {
     );
     assert.equal(process.version, 'v22.23.3');
     assert.match(
+        expected.source.commit,
+        /^[a-f0-9]{40}$/,
+        'Root must bind the actual immutable producer before dispatch.'
+    );
+    assert.match(expected.source.tree, /^[a-f0-9]{40}$/);
+    for (const key of ['packageZipSha256', 'fixtureZipSha256', 'packageSha256'])
+        assert.match(expected[key], /^[a-f0-9]{64}$/);
+    for (const key of [
+        'runId',
+        'runAttempt',
+        'packageArtifactId',
+        'fixtureArtifactId',
+    ])
+        assert.match(expected[key], /^\d+$/);
+    for (const key of [
+        'packageBytes',
+        'packageFiles',
+        'packageZipMembers',
+        'fixtureZipMembers',
+        'fixtureChecksums',
+        'fixtureOutputs',
+        'fixtureSources',
+        'starterSdkInputs',
+        'authSdkInputs',
+    ])
+        assert(
+            Number.isSafeInteger(expected[key]) && expected[key] > 0,
+            `Root must bind actual ${key}.`
+        );
+    assert.match(
         readFileSync('/etc/os-release', 'utf8'),
         /^VERSION_ID="24\.04"$/m
     );
@@ -425,7 +469,12 @@ try {
         driverBinary,
         browserVersion,
         driverVersion,
-        options: ['--headless=new', '--window-size=1440,1200'],
+        options: [
+            '--headless=new',
+            '--window-size=1440,1200',
+            `--user-data-dir=${profile}`,
+        ],
+        ownedProfileDirectory: profile,
         sandbox: 'default, unchanged',
         certificateVerification: 'default, unchanged',
     };
@@ -476,7 +525,11 @@ try {
         .build();
     const options = new chrome.Options()
         .setChromeBinaryPath(binary)
-        .addArguments('--headless=new', '--window-size=1440,1200');
+        .addArguments(
+            '--headless=new',
+            '--window-size=1440,1200',
+            `--user-data-dir=${profile}`
+        );
     driver = chrome.Driver.createSession(options, service);
     const capabilities = await driver.getCapabilities();
     assert.equal(capabilities.get('acceptInsecureCerts'), false);
@@ -769,7 +822,675 @@ try {
         );
         await noVisibleSecret('starter', 'Different-length Saved Value');
     });
-    assert.equal(receipt.cases.length, 11);
+    const nativeChoice = async (selector, value) => {
+        const select = await find(selector);
+        const option = await select.findElement(
+            By.css(`option[value="${value}"]`)
+        );
+        assert(
+            await option.isEnabled(),
+            'Only an enabled native choice may be selected.'
+        );
+        await option.click();
+        await select.sendKeys(Key.TAB);
+        assert.equal(await select.getAttribute('value'), value);
+    };
+    const linkedCheckbox = async (title) => {
+        const labels = await driver.findElements(By.css('#screen label'));
+        const matches = [];
+        for (const label of labels)
+            if ((await label.getText()).trim() === title) matches.push(label);
+        assert.equal(
+            matches.length,
+            1,
+            'Expected one actual linked-record checkbox.'
+        );
+        return matches[0].findElement(By.css('input[type="checkbox"]'));
+    };
+    const saves = (state) =>
+        state.calls.filter((call) => call.route === 'saveForm');
+    const reads = (state) =>
+        state.calls.filter(
+            (call) => call.route === 'fetchRecordsForFormLinkedRecordsSelector'
+        );
+    const choiceState = (state) =>
+        state.selects.find((select) => select.fieldId === 'fld_choices');
+    const deniedNew = (state, name) => {
+        const option = choiceState(state).options.find(
+            (entry) => entry.value === name
+        );
+        assert(
+            !option || option.disabled,
+            `${name} must not be offered as a new choice.`
+        );
+    };
+    const waitReady = (predicate, description) =>
+        waitSnapshot((state) => !state.busy && predicate(state), description);
+    for (const multiple of [false, true]) {
+        await exercise(
+            multiple ? 'starter-choice-multiple' : 'starter-choice-single',
+            async (result) => {
+                await driver.get(
+                    `${origin}/starter/index.html?scenario=choice-${multiple ? 'multiple' : 'single'}`
+                );
+                await clickText('Connect and load');
+                await waitReady(
+                    (state) =>
+                        choiceState(state) != null &&
+                        state.status === 'Loaded form loaded.',
+                    'Actual configured-choice Form load.'
+                );
+                let state = await capture(result, 'denied-native-options');
+                const availability = await find(
+                    '#screen [data-choice-availability-field-id="fld_choices"]'
+                );
+                assert.equal(
+                    await availability.getAttribute('data-choice-availability'),
+                    'ready'
+                );
+                deniedNew(state, 'Beta');
+                deniedNew(state, 'Gamma');
+                assert.equal(saves(state).length, 0);
+                const text = await find(
+                    '#screen input[data-field-id="fld_driver"]'
+                );
+                await replaceInput(text, 'allowed', 'text');
+                const select = await find(
+                    '#screen select[data-field-id="fld_choices"]'
+                );
+                assert.equal(
+                    await select.getAttribute('multiple'),
+                    multiple ? 'true' : null
+                );
+                const beta = await select.findElement(
+                    By.css('option[value="Beta"]')
+                );
+                assert.equal((await beta.getText()).trim(), 'Conditional Beta');
+                assert(await beta.isEnabled());
+                // Native keyboard selection, followed by real focus traversal;
+                // no element.value assignment or synthetic dispatchEvent.
+                await select.sendKeys(Key.END, Key.TAB);
+                assert.equal(await select.getAttribute('value'), 'Beta');
+                state = await capture(result, 'allowed-keyboard-selection');
+                assert.deepEqual(
+                    choiceState(state)
+                        .options.filter((entry) => entry.selected)
+                        .map((entry) => entry.value),
+                    ['Beta']
+                );
+                deniedNew(state, 'Gamma');
+                assert.equal(saves(state).length, 0);
+                await replaceInput(text, 'denied', 'text');
+                state = await capture(result, 'retained-now-unavailable');
+                assert.deepEqual(
+                    choiceState(state)
+                        .options.filter((entry) => entry.selected)
+                        .map((entry) => entry.value),
+                    ['Beta']
+                );
+                assert.equal(
+                    choiceState(state).options.find(
+                        (entry) => entry.value === 'Beta'
+                    ).label,
+                    'Conditional Beta'
+                );
+                assert.equal(
+                    saves(state).length,
+                    0,
+                    'Driver/availability changes never save automatically.'
+                );
+                await clickText('Save');
+                await waitReady(
+                    (value) =>
+                        saves(value).length === 1 &&
+                        value.status?.includes('The Form was not saved.'),
+                    'Exact native retained-choice Save/validation result.'
+                );
+                state = await capture(result, 'retained-native-save');
+                const first = saves(state)[0];
+                assert.equal(first.method, 'POST');
+                assert.equal(
+                    first.input.extensionAccessToken,
+                    'FAKE_SYNTHETIC_INTERACTION_TOKEN'
+                );
+                assert.deepEqual(first.input.formRecord, {
+                    type: 'edit',
+                    tableId: 'tbl_interaction_synthetic',
+                    recordId: 'rec_interaction_synthetic',
+                    data: {
+                        fld_driver: 'denied',
+                        fld_choices: multiple ? ['Beta'] : 'Beta',
+                    },
+                });
+                assert.deepEqual(
+                    first.input
+                        .conditionalLinkedRecordFieldIdsToFilteringValues,
+                    {}
+                );
+                assert.deepEqual(first.input.context, { type: 'direct-url' });
+                assert(
+                    first.input.formFieldIdsWithUnsavedChanges.includes(
+                        'fld_driver'
+                    )
+                );
+                assert(
+                    first.input.formFieldIdsWithUnsavedChanges.includes(
+                        'fld_choices'
+                    )
+                );
+                if (multiple) {
+                    const retained = await (
+                        await find(
+                            '#screen select[data-field-id="fld_choices"]'
+                        )
+                    ).findElement(By.css('option[value="Beta"]'));
+                    assert(
+                        await retained.isEnabled(),
+                        'Selected unavailable names must remain natively removable.'
+                    );
+                    await driver
+                        .actions()
+                        .keyDown(Key.CONTROL)
+                        .click(retained)
+                        .keyUp(Key.CONTROL)
+                        .perform();
+                    await (
+                        await find(
+                            '#screen select[data-field-id="fld_choices"]'
+                        )
+                    ).sendKeys(Key.TAB);
+                } else
+                    await (
+                        await find(
+                            '#screen select[data-field-id="fld_choices"]'
+                        )
+                    ).sendKeys(Key.HOME, Key.TAB);
+                state = await capture(result, 'native-removal-denied-readd');
+                assert.deepEqual(
+                    choiceState(state)
+                        .options.filter(
+                            (entry) => entry.selected && entry.value !== ''
+                        )
+                        .map((entry) => entry.value),
+                    []
+                );
+                deniedNew(state, 'Beta');
+                deniedNew(state, 'Gamma');
+                assert.equal(saves(state).length, 1);
+                await clickText('Save');
+                await waitReady(
+                    (value) =>
+                        saves(value).length === 2 &&
+                        value.status?.includes('The Form was not saved.'),
+                    'Native cleared-choice Save.'
+                );
+                state = await capture(result, 'cleared-native-save');
+                assert.deepEqual(saves(state)[1].input.formRecord.data, {
+                    fld_driver: 'denied',
+                    fld_choices: multiple ? [] : null,
+                });
+                assertCalls(state, [
+                    'fetchExtensionForEndUser',
+                    'saveForm',
+                    'saveForm',
+                ]);
+            }
+        );
+    }
+    for (const multiple of [false, true]) {
+        await exercise(
+            multiple
+                ? 'starter-choice-add-multiple'
+                : 'starter-choice-add-single',
+            async (result) => {
+                await driver.get(
+                    `${origin}/starter/index.html?scenario=choice-add-${multiple ? 'multiple' : 'single'}`
+                );
+                await clickText('Connect and load');
+                await waitReady(
+                    (state) =>
+                        choiceState(state) != null &&
+                        state.status === 'Loaded form loaded.',
+                    'Actual Add Choice Form load.'
+                );
+                let state = await capture(
+                    result,
+                    'retained-denied-existing-choice'
+                );
+                assert.deepEqual(
+                    choiceState(state)
+                        .options.filter((entry) => entry.selected)
+                        .map((entry) => entry.value),
+                    ['Beta']
+                );
+                assert.equal(
+                    choiceState(state).options.find(
+                        (entry) => entry.value === 'Beta'
+                    ).label,
+                    'Conditional Beta'
+                );
+                assert.equal(
+                    await (
+                        await find(
+                            '#screen [data-choice-availability-field-id="fld_choices"]'
+                        )
+                    ).getAttribute('data-choice-availability'),
+                    'ready'
+                );
+                assert.equal(saves(state).length, 0);
+                const select = await find(
+                    '#screen select[data-field-id="fld_choices"]'
+                );
+                if (multiple) {
+                    const retained = await select.findElement(
+                        By.css('option[value="Beta"]')
+                    );
+                    assert(
+                        await retained.isEnabled(),
+                        'Existing denied selection must remain removable.'
+                    );
+                    await driver
+                        .actions()
+                        .keyDown(Key.CONTROL)
+                        .click(retained)
+                        .keyUp(Key.CONTROL)
+                        .perform();
+                    await select.sendKeys(Key.TAB);
+                } else await select.sendKeys(Key.HOME, Key.TAB);
+                state = await capture(result, 'removed-existing-choice');
+                assert.deepEqual(
+                    choiceState(state)
+                        .options.filter(
+                            (entry) => entry.selected && entry.value !== ''
+                        )
+                        .map((entry) => entry.value),
+                    []
+                );
+                deniedNew(state, 'Beta');
+                assert.equal(saves(state).length, 0);
+                await clickText('Save');
+                await waitReady(
+                    (value) =>
+                        saves(value).length === 1 &&
+                        value.status?.includes('The Form was not saved.'),
+                    'Native empty Save before Add Choice.'
+                );
+                state = await capture(
+                    result,
+                    'saved-empty-before-existing-choice-resolution'
+                );
+                const empty = {
+                    fld_driver: 'denied',
+                    fld_choices: multiple ? [] : null,
+                };
+                assert.deepEqual(saves(state)[0].input.formRecord, {
+                    type: 'edit',
+                    tableId: 'tbl_interaction_synthetic',
+                    recordId: 'rec_interaction_synthetic',
+                    data: empty,
+                });
+                assert.deepEqual(saves(state)[0].input.context, {
+                    type: 'direct-url',
+                });
+                assert.deepEqual(
+                    saves(state)[0].input
+                        .conditionalLinkedRecordFieldIdsToFilteringValues,
+                    {}
+                );
+                assert.deepEqual(
+                    saves(state)[0].input.formFieldIdsWithUnsavedChanges,
+                    ['fld_choices']
+                );
+                const addInput = await find(
+                    '#screen input[placeholder="New choice name"]'
+                );
+                await replaceInput(addInput, ' bEtA ', 'text');
+                await clickText('Create choice');
+                const route =
+                    '/api/trpc/airtable.addNewAirtableOptionForFormField';
+                await waitReady(
+                    (value) =>
+                        value.events.some(
+                            (event) => event.type === 'existing-choice-returned'
+                        ) &&
+                        value.calls.filter((call) => call.route === route)
+                            .length === 1,
+                    'Current server-equivalent existing metadata resolved.'
+                );
+                state = await capture(
+                    result,
+                    'existing-denied-choice-not-reselected'
+                );
+                const resolved = state.calls.filter(
+                    (call) => call.route === route
+                );
+                assert.equal(resolved.length, 1);
+                assert.equal(resolved[0].method, 'POST');
+                assert.deepEqual(resolved[0].input, {
+                    extensionAccessToken: 'FAKE_SYNTHETIC_INTERACTION_TOKEN',
+                    airtableFieldId: 'fld_choices',
+                    newChoiceText: ' bEtA ',
+                });
+                assert.deepEqual(
+                    state.events.filter(
+                        (event) => event.type === 'existing-choice-returned'
+                    ),
+                    [
+                        {
+                            type: 'existing-choice-returned',
+                            choiceId: 'sel_beta',
+                            choiceName: 'Beta',
+                            metadataCreated: false,
+                        },
+                    ]
+                );
+                assert.deepEqual(
+                    choiceState(state)
+                        .options.filter(
+                            (entry) => entry.selected && entry.value !== ''
+                        )
+                        .map((entry) => entry.value),
+                    []
+                );
+                deniedNew(state, 'Beta');
+                assert.equal(
+                    saves(state).length,
+                    1,
+                    'Resolving an existing denied choice must not save automatically.'
+                );
+                await clickText('Save');
+                await waitReady(
+                    (value) =>
+                        saves(value).length === 2 &&
+                        value.status?.includes('The Form was not saved.'),
+                    'Native empty Save after denied existing-choice resolution.'
+                );
+                state = await capture(
+                    result,
+                    'saved-empty-after-existing-choice-resolution'
+                );
+                assert.deepEqual(saves(state)[1].input.formRecord.data, empty);
+                assert.deepEqual(
+                    saves(state)[1].input.formFieldIdsWithUnsavedChanges,
+                    saves(state)[0].input.formFieldIdsWithUnsavedChanges,
+                    'Existing denied metadata must not change the record draft.'
+                );
+                assert.deepEqual(saves(state)[1].input.context, {
+                    type: 'direct-url',
+                });
+                assert.deepEqual(
+                    saves(state)[1].input
+                        .conditionalLinkedRecordFieldIdsToFilteringValues,
+                    {}
+                );
+                assertCalls(state, [
+                    'fetchExtensionForEndUser',
+                    'saveForm',
+                    route,
+                    'saveForm',
+                ]);
+            }
+        );
+    }
+    await exercise('starter-linked-filter-paging', async (result) => {
+        const query = new URLSearchParams({
+            scenario: 'linked-filters',
+            'prefill_Current country': 'North, East',
+            'prefill_Current region': 'Duplicate label',
+            'prefill_Current city': 'City = "One"',
+        });
+        await driver.get(`${origin}/starter/index.html?${query}`);
+        await clickText('Connect and load');
+        await waitReady(
+            (state) => state.status === 'Loaded form loaded.',
+            'Current linked-filter Form load.'
+        );
+        await clickText('Load conditional filters');
+        await waitReady(
+            (state) =>
+                state.selects.some(
+                    (select) =>
+                        select.filterFieldId === 'fld_city' &&
+                        select.value === 'rec_city'
+                ),
+            'Three actual ordered returned prefills.'
+        );
+        let state = await capture(result, 'ordered-prefill-pairs');
+        const filters = state.calls.filter(
+            (call) =>
+                call.route ===
+                'fetchPrimaryValuesForConditionalLinkedRecordFilterField'
+        );
+        assert.deepEqual(
+            filters.map((call) => ({
+                id: call.input.linkedRecordsFilterFieldId,
+                search: call.input.searchTerm,
+                url: call.input.urlSearchValue,
+                previous: call.input.filterData,
+            })),
+            [
+                {
+                    id: 'fld_country',
+                    search: 'North, East',
+                    url: 'North, East',
+                    previous: null,
+                },
+                {
+                    id: 'fld_region',
+                    search: 'Duplicate label',
+                    url: 'Duplicate label',
+                    previous: {
+                        previousFilterFieldId: 'fld_country',
+                        previousFilterPrimaryValue: 'North, East',
+                    },
+                },
+                {
+                    id: 'fld_city',
+                    search: 'City = "One"',
+                    url: 'City = "One"',
+                    previous: {
+                        previousFilterFieldId: 'fld_region',
+                        previousFilterPrimaryValue: 'Duplicate label',
+                    },
+                },
+            ]
+        );
+        assert.equal(saves(state).length, 0);
+        const map = {
+            fld_country: state.expected.filterValues.fld_country[0],
+            fld_region: state.expected.filterValues.fld_region[0],
+            fld_city: state.expected.filterValues.fld_city[0],
+        };
+        await clickText('Search choices');
+        await waitReady(
+            (value) =>
+                reads(value).length === 1 &&
+                value.status === 'Loaded 2 allowed linked records.',
+            'Native first page.'
+        );
+        const available = await linkedCheckbox('Available project');
+        await available.sendKeys(Key.SPACE, Key.TAB);
+        assert(await available.isSelected());
+        await clickText('More choices');
+        await waitReady(
+            (value) =>
+                reads(value).length === 2 &&
+                value.status === 'Loaded 1 allowed linked records.',
+            'Native next page with exact cursor.'
+        );
+        const next = await linkedCheckbox('Page two project');
+        await next.sendKeys(Key.SPACE, Key.TAB);
+        assert(await next.isSelected());
+        state = await capture(result, 'keyboard-selection-second-page');
+        assert.deepEqual(
+            reads(state).map((call) => call.input.offset),
+            [null, 'cursor_interaction_next']
+        );
+        for (const call of reads(state))
+            assert.deepEqual(
+                call.input.conditionalLinkedRecordFilteringValues,
+                map
+            );
+        assert.equal(saves(state).length, 0);
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 1 &&
+                value.status?.includes('The Form was not saved.'),
+            'Deliberate native linked-record Save.'
+        );
+        state = await capture(result, 'native-linked-save');
+        assert.deepEqual(saves(state)[0].input.formRecord.data, {
+            fld_driver: 'denied',
+            fld_projects: ['rec_retained', 'rec_available', 'rec_page_two'],
+        });
+        assert.deepEqual(
+            saves(state)[0].input
+                .conditionalLinkedRecordFieldIdsToFilteringValues,
+            { fld_projects: map }
+        );
+        await nativeChoice(
+            '#screen select[data-filter-field-id="fld_country"]',
+            'rec_country_south'
+        );
+        state = await capture(result, 'upstream-reset-retains-draft');
+        for (const id of ['fld_region', 'fld_city'])
+            assert.equal(
+                state.selects.find((select) => select.filterFieldId === id)
+                    .value,
+                ''
+            );
+        assert.deepEqual(JSON.parse(state.linkedDraft), [
+            'rec_retained',
+            'rec_available',
+            'rec_page_two',
+        ]);
+        const more = await driver.findElements(By.css('#screen button'));
+        for (const button of more)
+            if ((await button.getText()).trim() === 'More choices')
+                assert(!(await button.isEnabled()));
+        assert.equal(reads(state).length, 2);
+        assert.equal(saves(state).length, 1);
+        await clickText('Search choices');
+        await waitReady(
+            (value) =>
+                reads(value).length === 3 &&
+                value.status === 'Loaded 2 allowed linked records.',
+            'Changed upstream filter gets a fresh first page.'
+        );
+        state = await capture(result, 'fresh-filter-read-no-replay');
+        assert.equal(reads(state)[2].input.offset, null);
+        assert.deepEqual(
+            reads(state)[2].input.conditionalLinkedRecordFilteringValues,
+            {
+                fld_country: state.expected.filterValues.fld_country[1],
+                fld_region: null,
+                fld_city: null,
+            }
+        );
+        assert.equal(saves(state).length, 1);
+        assert(state.calls.every((call) => call.credentialsMode === 'omit'));
+    });
+    await exercise('starter-linked-filter-interruption', async (result) => {
+        await driver.get(
+            `${origin}/starter/index.html?scenario=linked-filter-deferred`
+        );
+        await clickText('Connect and load');
+        await waitReady(
+            (state) => state.status === 'Loaded form loaded.',
+            'Deferred fixture load.'
+        );
+        await clickText('Load conditional filters');
+        await waitReady(
+            (state) =>
+                state.selects.some(
+                    (select) => select.filterFieldId === 'fld_country'
+                ),
+            'Current returned filter metadata.'
+        );
+        await clickText('Search Country');
+        await waitSnapshot(
+            (state) =>
+                state.pending?.route ===
+                'fetchPrimaryValuesForConditionalLinkedRecordFilterField',
+            'Actual pending primary-value read.'
+        );
+        await (await find('#cancel')).click();
+        await clickText('Release pending synthetic read');
+        await waitReady(
+            (state) =>
+                state.events.some((event) => event.type === 'deferred-settled'),
+            'Cancelled primary read settled.'
+        );
+        let state = await capture(result, 'cancelled-filter-zero-effects');
+        assert.equal(
+            state.events.find((event) => event.type === 'deferred-settled')
+                .aborted,
+            true
+        );
+        assert.equal(
+            state.selects
+                .find((select) => select.filterFieldId === 'fld_country')
+                .options.filter((option) => option.value !== '').length,
+            0
+        );
+        assert.equal(saves(state).length, 0);
+        assert.equal(reads(state).length, 0);
+        await clickText('Search Country');
+        await waitReady(
+            (value) =>
+                value.selects.some(
+                    (select) =>
+                        select.filterFieldId === 'fld_country' &&
+                        select.options.length > 1
+                ),
+            'Fresh explicit primary read.'
+        );
+        await nativeChoice(
+            '#screen select[data-filter-field-id="fld_country"]',
+            'rec_country_north'
+        );
+        await clickText('Search choices');
+        await waitSnapshot(
+            (value) =>
+                value.pending?.route ===
+                'fetchRecordsForFormLinkedRecordsSelector',
+            'Actual pending inner choice read.'
+        );
+        await nativeChoice('#visitor', 'B');
+        await nativeChoice('#visitor', 'A');
+        await clickText('Release pending synthetic read');
+        await waitReady(
+            (value) =>
+                value.events.filter(
+                    (event) => event.type === 'deferred-settled'
+                ).length === 2,
+            'Old-owner inner read settled after A-B-A.'
+        );
+        state = await capture(result, 'aba-read-zero-stale-effects');
+        assert(
+            state.events
+                .filter((event) => event.type === 'deferred-settled')
+                .every((event) => event.aborted)
+        );
+        assert.deepEqual(JSON.parse(state.linkedDraft), ['rec_retained']);
+        assert.equal(
+            (
+                await driver.findElements(
+                    By.css('#screen .choice-list input[type="checkbox"]')
+                )
+            ).length,
+            0
+        );
+        assert.equal(saves(state).length, 0);
+        assert.equal(reads(state).length, 1);
+        await (await find('#disconnect')).click();
+        state = await capture(result, 'disconnected-no-write');
+        assert.equal(saves(state).length, 0);
+        assert.equal(state.linkedDraft, null);
+        assert(state.calls.every((call) => call.credentialsMode === 'omit'));
+    });
+    assert.equal(receipt.cases.length, 17);
     assert(
         receipt.cases.every((v) => v.status === 'passed'),
         'Every exact synthetic case must pass; failed cases are retained without retry.'
@@ -847,6 +1568,14 @@ try {
         receipt.cleanup.workDirectoryError = String(error);
         process.exitCode = 1;
     }
+    // This is an actual path-absence check after quit/service/process cleanup
+    // and owned work removal, not a finally/quit inference.
+    receipt.cleanup.ownedProfileDirectory = {
+        path: profile,
+        existsAfterOwnedWorkRemoval: existsSync(profile),
+    };
+    receipt.cleanup.ownedProfileDirectoryRemoved = !existsSync(profile);
+    if (!receipt.cleanup.ownedProfileDirectoryRemoved) process.exitCode = 1;
     receipt.finishedAt = new Date().toISOString();
     if (process.exitCode) receipt.status = 'failed';
     writeJson('run.json', receipt);

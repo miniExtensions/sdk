@@ -123,6 +123,38 @@ The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
 revisions, requests, cancellation, and when to discard drafts.
 
+When the published `promptUserBeforeSubmission` setting is true, **Save** opens
+**Review your answers** before the final submission. **Edit**, Escape and closing
+the dialog preserve the native draft and perform no Save. **Confirm** submits
+the captured full native values and dirty IDs once through the existing Save
+runner. A validation response preserves your draft and displays the server's
+errors; an unknown outcome keeps submission blocked until explicit inspection.
+Review may open with an empty required answer: the server remains authoritative
+for required, readonly, computed and conditional-field validation.
+
+This review recipe supports a flat, one-page manual Form containing direct
+single-line/multiline text, email, URL, phone, number, currency, percent, rating,
+checkbox and barcode fields, including readonly scalar answers. It presents
+plain text in published field order, omits canonical empty/conditionally hidden
+answers, and masks nonempty single-line passwords as `••••••••`. A visually
+hidden title retains its semantic accessible name. Numeric zero remains a
+review answer; unchecked checkboxes, zero ratings and blank barcode text do not.
+URLs are displayed as text, with no link or embedded content.
+Barcode answers keep the starter's existing readonly display; review adds no
+barcode editor.
+
+Review uses the installed canonical flat scalar projection as a separate copy;
+it never sends that projection as the Save record. Preparing review makes the
+fields inert and retires pending address prediction/detail intents before
+capture. Confirmation belongs to the current visitor/client/session, loaded
+Form, configuration/context, draft handle and actual draft revision. An edit,
+including edit-away-and-back, Reload, Discard, disconnect or owner transition
+invalidates it. Returning to Edit permits fresh typing without repeating an old
+address query. Sections, pages, compute/automatic submission, linked filters,
+linked/lookup/computed fields, selects, dates, rich text and other complex
+renderers remain outside this recipe; unavailable review blocks submission
+instead of presenting an incomplete preview.
+
 One-page field conditions use the installed Form visibility helpers with the
 complete accepted native draft. Direct scalar drivers recompute presentation
 after accepted edits, including readonly targets and configured frontend

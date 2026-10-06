@@ -47,7 +47,12 @@ import {
     createConditionalLinkedFilters,
     type ConditionalLinkedFilters,
 } from './linkedFilters.js';
-import { FormDraftStore, type ParentFormDraftScope } from './drafts.js';
+import {
+    FormDraftStore,
+    type FormDraftSnapshot,
+    type ParentFormDraftScope,
+} from './drafts.js';
+import { prepareFormReviewRows } from './review.js';
 import {
     RecoveryJournal,
     recoveryOwner,
@@ -641,6 +646,7 @@ const renderForm = (page: FormLoadedResult): void => {
             candidate.acknowledgment === 'none'
         );
     let updateComments = (): void => {};
+    let reviewPending = false;
     const controls = new Map<string, FieldControl>();
     let updateSelectAvailability = (): void => {};
     const linkedFilterViews = new Map<string, ConditionalLinkedFilters>();
@@ -733,6 +739,7 @@ const renderForm = (page: FormLoadedResult): void => {
             });
     };
     disposeFormControls = () => {
+        if (reviewPending) cancelConfirmation();
         updateFormActivity = () => {};
         for (const view of linkedFilterViews.values()) view.destroy();
         linkedFilterViews.clear();
@@ -810,6 +817,7 @@ const renderForm = (page: FormLoadedResult): void => {
                     fieldVisibility[fieldId]?.type !== 'visible'
                 )
                     return;
+                if (reviewPending) cancelConfirmation();
                 try {
                     visitor.drafts.write(draft, fieldId, control.read());
                     updateFieldVisibility();
@@ -1491,31 +1499,11 @@ const renderForm = (page: FormLoadedResult): void => {
             );
     };
     updateRecovery();
-    card.addEventListener('submit', (event) => {
-        event.preventDefault();
-        if (
-            !card.isConnected ||
-            visitors[activeVisitor] !== visitor ||
-            visitor.screen !== page
-        )
-            return;
-        if (
-            recovery.blocking(scope, recordId) != null ||
-            (candidate?.outcome === 'unknown' &&
-                candidate.acknowledgment === 'none')
-        ) {
-            status(uncertainSaveMessage, true);
-            return;
-        }
-        updateFieldVisibility();
-        if (!visibilityMessage.hidden) {
-            status(
-                'Review the unavailable fields before saving this Form.',
-                true
-            );
-            return;
-        }
-        void run('Saving the Form…', async ({ client, signal, current }) => {
+    const save = (prepared?: {
+        snapshot: FormDraftSnapshot<AirtableValue>;
+        current(): boolean;
+    }): Promise<void> =>
+        run('Saving the Form…', async ({ client, signal, current }) => {
             // Reject an invalid visible control instead of saving its last
             // valid draft value (for example, a non-finite numeric input).
             for (const [fieldId, control] of controls)
@@ -1524,7 +1512,9 @@ const renderForm = (page: FormLoadedResult): void => {
                     fieldVisibility[fieldId]?.type === 'visible'
                 )
                     control.read();
-            const snapshot = visitor.drafts.snapshot(draft);
+            if (prepared != null && !prepared.current()) return;
+            const snapshot =
+                prepared?.snapshot ?? visitor.drafts.snapshot(draft);
             if (snapshot == null) return;
             if (linkedFilterViews.size !== 0 && !ownsLinkedFilters()) {
                 status(
@@ -1551,7 +1541,12 @@ const renderForm = (page: FormLoadedResult): void => {
                 },
             });
             signal.throwIfAborted();
-            if (!ownsForm()) return;
+            if (
+                !current() ||
+                !ownsForm() ||
+                (prepared != null && !prepared.current())
+            )
+                return;
             const attempt = recovery.begin(
                 scope,
                 recordId,
@@ -1637,6 +1632,111 @@ const renderForm = (page: FormLoadedResult): void => {
                 `Saved record ${result.record.id}.${warnings == null || warnings === '' ? '' : ` Post-submission warning: ${warnings}.`}`
             );
         });
+    card.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!ownsForm() || request != null || reviewPending) return;
+        if (
+            recovery.blocking(scope, recordId) != null ||
+            (candidate?.outcome === 'unknown' &&
+                candidate.acknowledgment === 'none')
+        ) {
+            status(uncertainSaveMessage, true);
+            return;
+        }
+        updateFieldVisibility();
+        if (!visibilityMessage.hidden) {
+            status(
+                'Review the unavailable fields before saving this Form.',
+                true
+            );
+            return;
+        }
+        if (
+            settings(page.payload.publicFields).promptUserBeforeSubmission !==
+            true
+        ) {
+            void save();
+            return;
+        }
+        // Native modal focus prevents ordinary edits. The inert field owner
+        // also retires prediction/detail intents before the accepted capture.
+        reviewPending = true;
+        fields.inert = true;
+        updateFormActivity();
+        try {
+            for (const [fieldId, control] of controls)
+                if (
+                    control.editable &&
+                    fieldVisibility[fieldId]?.type === 'visible'
+                )
+                    control.read();
+            const snapshot = visitor.drafts.snapshot(draft);
+            const draftRevision = visitor.drafts.revision(draft);
+            if (
+                snapshot == null ||
+                draftRevision == null ||
+                !ownsLinkedFilters()
+            )
+                return;
+            const rows = prepareFormReviewRows(page, snapshot.data);
+            const formConnection = connection;
+            const parentScope = visitor.formParentScope;
+            const configurationKey = (): string =>
+                JSON.stringify([
+                    page.extensionId,
+                    page.payload.extensionAccessToken,
+                    page.payload.formRecord.type === 'edit'
+                        ? [
+                              page.payload.formRecord.type,
+                              page.payload.formRecord.recordId,
+                              page.payload.formRecord.tableId,
+                          ]
+                        : [page.payload.formRecord.type],
+                    page.payload.fieldIdsInForm,
+                    page.payload.fieldIdsToSchemas,
+                    page.payload.publicFields,
+                    visitor.formContext,
+                    visitor.formParentScope,
+                    connection,
+                ]);
+            const capturedConfiguration = configurationKey();
+            const preparedCurrent = (): boolean =>
+                ownsLinkedFilters() &&
+                visitor.formContext === context &&
+                visitor.formParentScope === parentScope &&
+                connection === formConnection &&
+                visitor.drafts.revision(draft) === draftRevision &&
+                configurationKey() === capturedConfiguration;
+            const accepted = await requestConfirmation({
+                title: 'Review your answers',
+                message:
+                    'Choose Edit to return to the Form, or Confirm to submit these answers.',
+                confirmLabel: 'Confirm',
+                cancelLabel: 'Edit',
+                rows,
+            });
+            if (!accepted || request != null || !preparedCurrent()) return;
+            // run() owns the single request and uncertain-outcome contract;
+            // it checks this same captured intent again before dispatch.
+            await save({
+                snapshot,
+                current: preparedCurrent,
+            });
+        } catch (error) {
+            if (ownsForm())
+                status(
+                    error instanceof Error
+                        ? error.message
+                        : 'Review is unavailable.',
+                    true
+                );
+        } finally {
+            // Restore only this card. A superseded review cannot reactivate a
+            // newer visitor's controls or repeat an old address query.
+            reviewPending = false;
+            fields.inert = false;
+            if (ownsForm()) updateFormActivity();
+        }
     });
     screenNode.append(card);
     updateSelectAvailability();

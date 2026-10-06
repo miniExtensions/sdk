@@ -77,7 +77,7 @@ async function proofInventoryFixture(t) {
 test('privacy proof inventory accepts complete declarations without dispatching fixture transport', async (t) => {
     const fixture = await proofInventoryFixture(t);
     assert.deepEqual(await assertPrivacyProofInventory(fixture.root), {
-        scenarios: 24,
+        scenarios: 28,
         authScenarios: 5,
     });
 });

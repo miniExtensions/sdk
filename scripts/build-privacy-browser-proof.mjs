@@ -38,6 +38,7 @@ const starterFiles = [
     'src/drafts.ts',
     'src/recovery.ts',
     'src/confirmation.ts',
+    'src/review.ts',
     'src/linkedFilters.ts',
     'src/choiceAvailability.ts',
 ];
@@ -61,6 +62,7 @@ const regular = (path) => {
 
 /** This function is serialized into the static kit; it imports no SDK source. */
 function createPrivacyFixture(scenario) {
+    if (scenario.startsWith('review-')) return createReviewFixture(scenario);
     if (scenario === 'address-ime') return createAddressCompositionFixture();
     if (scenario === 'teardown-logout' || scenario === 'teardown-disconnect')
         return createTeardownFixture(scenario);
@@ -2109,6 +2111,325 @@ function createTeardownFixture(scenario) {
     return { state, fetch: transport };
 }
 
+/** Review responses reuse normal scalar controls and existing transport fences. */
+export function createReviewFixture(scenario) {
+    if (scenario === 'review-address') {
+        const fixture = createAddressFixture('address-lifecycle');
+        fixture.state.scenario = scenario;
+        const fetch = fixture.fetch;
+        return {
+            ...fixture,
+            fetch: async (resource, init) => {
+                const response = await fetch(resource, init);
+                const url = new URL(
+                    resource instanceof Request
+                        ? resource.url
+                        : String(resource)
+                );
+                if (
+                    url.searchParams.get('route') !== 'fetchExtensionForEndUser'
+                )
+                    return response;
+                const page = await response.json();
+                page.payload.publicFields.state = {
+                    promptUserBeforeSubmission: true,
+                };
+                return new Response(JSON.stringify(page), {
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            },
+        };
+    }
+    const token = 'FAKE_SYNTHETIC_REVIEW_TOKEN';
+    const required = scenario === 'review-validation';
+    const held = scenario === 'review-unknown';
+    const field = (id, name, type, options = null) => ({
+        id,
+        name,
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: { type, options },
+    });
+    const schema = (entry, miniExtConfig = {}) => ({
+        fieldType: entry.config.type,
+        airtableField: entry,
+        miniExtConfig,
+    });
+    const title = field('fld_review_title', 'Review answer', 'singleLineText');
+    const show = field(
+        'fld_review_show',
+        'Show conditional answer',
+        'checkbox',
+        {
+            icon: 'check',
+            color: 'greenBright',
+        }
+    );
+    const conditional = field(
+        'fld_review_conditional',
+        'Conditional answer',
+        'singleLineText'
+    );
+    const readonly = field(
+        'fld_review_readonly',
+        'Plain readonly answer',
+        'singleLineText'
+    );
+    const url = field('fld_review_url', 'Plain URL answer', 'url');
+    const number = field('fld_review_number', 'Zero count', 'number', {
+        precision: 0,
+    });
+    const rating = field('fld_review_rating', 'Empty rating', 'rating', {
+        max: 5,
+        icon: 'star',
+        color: 'yellowBright',
+    });
+    const barcode = field('fld_review_barcode', 'Empty barcode', 'barcode');
+    const schemas = [
+        schema(
+            title,
+            required
+                ? { title: 'Required answer', required: true }
+                : {
+                      title: '<b>Semantic secret</b>',
+                      obscurePassword: true,
+                      showTitle: false,
+                  }
+        ),
+        schema(show),
+        schema(conditional, {
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'review_conditional_answer',
+                        type: 'singleCondition',
+                        setting: {
+                            type: 'is',
+                            fieldType: 'checkbox',
+                            idOrName: { type: 'id', id: show.id },
+                            value: true,
+                        },
+                    },
+                ],
+            },
+        }),
+        schema(readonly, { readOnly: true }),
+        schema(url),
+        schema(number),
+        schema(rating),
+        schema(barcode),
+    ];
+    const initial = {
+        [title.id]: required ? null : 'CaseSensitiveReviewSecret',
+        [show.id]: !required,
+        [conditional.id]: 'Retained conditional answer',
+        [readonly.id]: '<img src=x onerror=alert(1)>',
+        [url.id]: 'https://example.test/review?value=<b>literal</b>',
+        [number.id]: 0,
+        [rating.id]: 0,
+        [barcode.id]: { text: '   ', type: 'code128' },
+        fld_review_unrendered_multi: ['Retained', 'Native'],
+        fld_review_unrendered_linked: ['rec_review_parent'],
+        fld_review_unrendered_barcode: { text: '004', type: 'code128' },
+    };
+    const state = {
+        scenario,
+        synthetic: true,
+        realNetworkEnabled: false,
+        calls: [],
+        events: [],
+        unexpected: [],
+        pending: [],
+        abortCounts: { save: 0 },
+        expected: {
+            initial,
+            controlFieldIds: schemas.map((entry) => entry.airtableField.id),
+            recordId: 'rec_review_synthetic',
+            tableId: 'tbl_review_synthetic',
+            validationMessage: 'A review answer is required.',
+        },
+    };
+    const page = () =>
+        structuredClone({
+            extensionId: 'review_form_synthetic',
+            language: 'en',
+            themeColor: 'blue',
+            enableCommentsOnChildForms: false,
+            workspaceId: 'review_workspace_synthetic',
+            extensionOwnerUID: 'review_owner_synthetic',
+            faviconUrl: null,
+            googleAnalyticsMeasurementId: null,
+            isStarterExtension: false,
+            extensionScreen: 'form_loaded',
+            payload: {
+                baseId: 'review_base_synthetic',
+                loggedInUserCanEditExtension: false,
+                showMiniExtensionsBranding: true,
+                onFreePlan: true,
+                trialExpiresAtUnixEpoch: null,
+                extensionType: 'form',
+                extensionName: 'Synthetic prepared review Form',
+                extensionAccessToken: token,
+                hasParentExtension: false,
+                publicFields: { state: { promptUserBeforeSubmission: true } },
+                formRecord: {
+                    type: 'edit',
+                    tableId: state.expected.tableId,
+                    recordId: state.expected.recordId,
+                    data: initial,
+                },
+                formErrors: {},
+                fieldIdsInForm: schemas.map((entry) => entry.airtableField.id),
+                fieldNamesToSchemas: Object.fromEntries(
+                    schemas.map((entry) => [entry.airtableField.name, entry])
+                ),
+                fieldIdsToSchemas: Object.fromEntries(
+                    schemas.map((entry) => [entry.airtableField.id, entry])
+                ),
+                formFieldIdsWithUnsavedChanges: [],
+                urlPrefilledFieldIds: [],
+                linkedRecordFieldIdToDetailFields: {},
+                cookieKeyForLoginToken: null,
+            },
+        });
+    const fail = (message) => {
+        state.unexpected.push(message);
+        throw new Error(message);
+    };
+    const json = (value) =>
+        new Response(JSON.stringify(value), {
+            headers: { 'Content-Type': 'application/json' },
+        });
+    let release;
+    const fetch = async (resource, init = {}) => {
+        const url = new URL(
+            resource instanceof Request ? resource.url : String(resource)
+        );
+        const method =
+            init.method ??
+            (resource instanceof Request ? resource.method : 'GET');
+        if (
+            url.origin !== 'https://synthetic-sdk.invalid' ||
+            init.credentials !== 'omit'
+        )
+            return fail('Non-synthetic review origin or credentials.');
+        init.signal?.throwIfAborted();
+        let input;
+        try {
+            input = JSON.parse(
+                method === 'GET'
+                    ? (url.searchParams.get('input') ?? '{}')
+                    : String(init.body ?? '{}')
+            );
+        } catch {
+            return fail('Malformed synthetic review input.');
+        }
+        const route = url.searchParams.get('route') ?? url.pathname;
+        const visibleInput = { ...input };
+        delete visibleInput.miniExtStorageV4;
+        delete visibleInput.miniExtSession;
+        state.calls.push({
+            route,
+            method,
+            input: structuredClone(visibleInput),
+            credentialsMode: init.credentials,
+        });
+        if (route === 'fetchExtensionForEndUser') {
+            if (
+                method !== 'POST' ||
+                input.shareId !== 'privacy_share_synthetic' ||
+                input.childExtensionInfo
+            )
+                return fail('Unexpected synthetic review root load.');
+            return json(page());
+        }
+        if (
+            route !== 'saveForm' ||
+            method !== 'POST' ||
+            input.extensionAccessToken !== token ||
+            input.formRecord?.type !== 'edit' ||
+            input.formRecord?.recordId !== state.expected.recordId ||
+            input.formRecord?.tableId !== state.expected.tableId ||
+            input.context?.type !== 'direct-url'
+        )
+            return fail('Unexpected review route or native Save scope.');
+        if (held) {
+            if (release != null)
+                return fail('Only one review Save may be pending.');
+            const pending = {
+                id: 'review-save-1',
+                kind: 'save',
+                aborted: false,
+            };
+            state.pending.push(pending);
+            init.signal?.addEventListener(
+                'abort',
+                () => {
+                    pending.aborted = true;
+                    state.abortCounts.save += 1;
+                    state.events.push({
+                        type: 'review-save-aborted',
+                        id: pending.id,
+                    });
+                },
+                { once: true }
+            );
+            await new Promise((done) => {
+                release = done;
+            });
+            state.pending = [];
+            state.events.push({
+                type: 'review-save-settled',
+                id: pending.id,
+                aborted: pending.aborted,
+            });
+            // Deliver the already-started response despite cancellation; the
+            // actual SDK and starter own its rejection and uncertain state.
+        }
+        return json({
+            type: 'error',
+            formValidationErrors: required
+                ? [
+                      {
+                          fieldId: title.id,
+                          fieldTitle: 'Required answer',
+                          errorMessage: state.expected.validationMessage,
+                      },
+                  ]
+                : [],
+            formErrors: required
+                ? { [title.id]: state.expected.validationMessage }
+                : {},
+        });
+    };
+    return {
+        state,
+        page,
+        fetch,
+        ...(held
+            ? {
+                  addressControls: [
+                      [
+                          'Release held review Save',
+                          () => {
+                              const done = release;
+                              release = null;
+                              if (done == null) return;
+                              state.events.push({
+                                  type: 'review-save-released',
+                                  id: 'review-save-1',
+                              });
+                              done();
+                          },
+                      ],
+                  ],
+              }
+            : {}),
+    };
+}
+
 /** Read-only snapshots plus an explicit native synthetic-read release button. */
 function installProofInspection(fixture, kind) {
     const banner = document.createElement('section');
@@ -2142,8 +2463,112 @@ function installProofInspection(fixture, kind) {
                     autocomplete: input.autocomplete,
                 })
             ),
-            address: fixture.state.scenario.startsWith('address-')
+            address:
+                fixture.state.scenario.startsWith('address-') ||
+                fixture.state.scenario === 'review-address'
+                    ? {
+                          controls: [
+                              ...(application?.querySelectorAll(
+                                  '[data-field-id]'
+                              ) ?? []),
+                          ]
+                              .filter((control) =>
+                                  fixture.state.expected.controlFieldIds.includes(
+                                      control.dataset.fieldId
+                                  )
+                              )
+                              .map((control) => ({
+                                  fieldId: control.dataset.fieldId,
+                                  id: control.id,
+                                  type: control.type,
+                                  hidden: control.closest('[hidden]') !== null,
+                                  visible: control.getClientRects().length > 0,
+                                  disabled: control.disabled,
+                                  value:
+                                      control.type === 'checkbox'
+                                          ? control.checked
+                                          : control.value,
+                                  focused: document.activeElement === control,
+                              })),
+                          presenters: [
+                              ...(application?.querySelectorAll(
+                                  '[data-ui="address-autocomplete"]'
+                              ) ?? []),
+                          ].map((presenter) => ({
+                              fieldId:
+                                  presenter.querySelector('input')?.dataset
+                                      .fieldId,
+                              expanded: presenter
+                                  .querySelector('input')
+                                  ?.getAttribute('aria-expanded'),
+                              activeDescendant: presenter
+                                  .querySelector('input')
+                                  ?.getAttribute('aria-activedescendant'),
+                              status:
+                                  presenter.querySelector('p')?.textContent ??
+                                  '',
+                              statusRole: presenter
+                                  .querySelector('p')
+                                  ?.getAttribute('role'),
+                              retryHidden: presenter.querySelector(
+                                  ':scope > button:last-child'
+                              )?.hidden,
+                              retryDisabled: presenter.querySelector(
+                                  ':scope > button:last-child'
+                              )?.disabled,
+                              options: [
+                                  ...presenter.querySelectorAll(
+                                      '[role="option"]'
+                                  ),
+                              ].map((option) => ({
+                                  label: option.textContent,
+                                  selected:
+                                      option.getAttribute('aria-selected') ===
+                                      'true',
+                                  hidden: option.closest('[hidden]') !== null,
+                                  visible: option.getClientRects().length > 0,
+                                  disabled: option.disabled,
+                              })),
+                          })),
+                          screenInert: application?.inert ?? false,
+                          fieldsInert:
+                              application?.querySelector('.fields')?.inert ??
+                              false,
+                          activeFieldId:
+                              document.activeElement?.dataset.fieldId ?? null,
+                          abortCounts: structuredClone(
+                              fixture.state.abortCounts
+                          ),
+                      }
+                    : null,
+            review: fixture.state.scenario.startsWith('review-')
                 ? {
+                      dialogs: [
+                          ...document.querySelectorAll(
+                              'dialog[data-form-review]'
+                          ),
+                      ].map((dialog) => ({
+                          open: dialog.open,
+                          role: dialog.getAttribute('role'),
+                          text: dialog.textContent,
+                          rows: [...dialog.querySelectorAll('dt')].map(
+                              (label) => ({
+                                  fieldId: label.dataset.reviewFieldId,
+                                  title: label.textContent,
+                                  hideTitle:
+                                      label.dataset.reviewTitleHidden ===
+                                      'true',
+                                  labelId: label.id,
+                                  value: label.nextElementSibling?.textContent,
+                                  labelledBy:
+                                      label.nextElementSibling?.getAttribute(
+                                          'aria-labelledby'
+                                      ),
+                              })
+                          ),
+                          nestedMarkup:
+                              dialog.querySelectorAll('img,b,a').length,
+                      })),
                       controls: [
                           ...(application?.querySelectorAll(
                               '[data-field-id]'
@@ -2156,58 +2581,24 @@ function installProofInspection(fixture, kind) {
                           )
                           .map((control) => ({
                               fieldId: control.dataset.fieldId,
-                              id: control.id,
                               type: control.type,
                               hidden: control.closest('[hidden]') !== null,
-                              visible: control.getClientRects().length > 0,
                               disabled: control.disabled,
                               value:
                                   control.type === 'checkbox'
                                       ? control.checked
                                       : control.value,
-                              focused: document.activeElement === control,
                           })),
-                      presenters: [
-                          ...(application?.querySelectorAll(
-                              '[data-ui="address-autocomplete"]'
-                          ) ?? []),
-                      ].map((presenter) => ({
-                          fieldId:
-                              presenter.querySelector('input')?.dataset.fieldId,
-                          expanded: presenter
-                              .querySelector('input')
-                              ?.getAttribute('aria-expanded'),
-                          activeDescendant: presenter
-                              .querySelector('input')
-                              ?.getAttribute('aria-activedescendant'),
-                          status:
-                              presenter.querySelector('p')?.textContent ?? '',
-                          statusRole: presenter
-                              .querySelector('p')
-                              ?.getAttribute('role'),
-                          retryHidden: presenter.querySelector(
-                              ':scope > button:last-child'
-                          )?.hidden,
-                          retryDisabled: presenter.querySelector(
-                              ':scope > button:last-child'
-                          )?.disabled,
-                          options: [
-                              ...presenter.querySelectorAll('[role="option"]'),
-                          ].map((option) => ({
-                              label: option.textContent,
-                              selected:
-                                  option.getAttribute('aria-selected') ===
-                                  'true',
-                              hidden: option.closest('[hidden]') !== null,
-                              visible: option.getClientRects().length > 0,
-                              disabled: option.disabled,
-                          })),
-                      })),
-                      screenInert: application?.inert ?? false,
                       fieldsInert:
                           application?.querySelector('.fields')?.inert ?? false,
-                      activeFieldId:
-                          document.activeElement?.dataset.fieldId ?? null,
+                      activeButton:
+                          document.activeElement?.tagName === 'BUTTON'
+                              ? document.activeElement.textContent
+                              : null,
+                      errors: [
+                          ...(application?.querySelectorAll('.error-list li') ??
+                              []),
+                      ].map((node) => node.textContent),
                       abortCounts: structuredClone(fixture.state.abortCounts),
                   }
                 : null,
@@ -2537,6 +2928,14 @@ export async function buildPrivacyBrowserProof({
         assert(
             starterInputs.some(
                 (entry) =>
+                    entry.origin === 'consumer-installed-or-copied-input' &&
+                    entry.path === 'src/review.ts'
+            ),
+            'Actual starter must bind the exact archive-copied review recipe.'
+        );
+        assert(
+            starterInputs.some(
+                (entry) =>
                     entry.origin === 'installed-sdk-archive' &&
                     entry.path ===
                         'node_modules/@miniextensions/sdk/dist/esm/ui/addressAutocomplete.js'
@@ -2574,7 +2973,7 @@ export async function buildPrivacyBrowserProof({
         write('starter/index.html', starterHtml);
         write(
             'fixture.js',
-            `const createTeardownFixture = ${createTeardownFixture.toString()};\nconst createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nconst createAddressCompositionFixture = ${createAddressCompositionFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
+            `const createTeardownFixture = ${createTeardownFixture.toString()};\nconst createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nconst createAddressCompositionFixture = ${createAddressCompositionFixture.toString()};\nconst createReviewFixture = ${createReviewFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
         );
         write(
             'starter/bootstrap.js',
@@ -2765,6 +3164,18 @@ teardown-logout and teardown-disconnect use the actual starter's public anonymou
 
 Choose Reload before either teardown: the active Form must contain Fresh public baseline, no attachments, Fresh public readonly witness, numeric zero and checkbox false, while the earlier reference remains available separately and Save stays blocked. In teardown-logout choose Clear this visitor's session then Reload. In teardown-disconnect choose Disconnect then Connect and load the same share. Each anonymous reconnect must show those unchanged fresh values, no Earlier local input details and none of the three earlier private witnesses in application text, attributes or current field values. Earlier outcome not confirmed and the disabled Save must remain. Deliberate attempts to submit the current Form may not add another saveForm call; its total remains one. These cases prove synthetic UI teardown and conservative no-replay behavior; the original write outcome remains unknown. Diagnostic fixture expectations and traces remain synthetic reference material outside the application privacy assertion.
 
+## Prepared review scenarios
+
+review-answers uses the exact archived starter review.ts and confirmation.ts with promptUserBeforeSubmission:true. Edit the masked secret and conditional answer, then hide the latter using the actual checkbox. Save opens a semantic modal with Edit focused first. The ordered review rows contain a fixed eight-bullet secret mask, literal readonly markup, a plain URL and populated numeric zero. Hidden conditional data, unchecked checkbox, zero rating and blank barcode have no rows. No rich markup/link/image is manufactured. Edit, Escape and Enter on initial Edit perform zero Saves and restore focus to Save. Fresh explicit Confirm dispatches the complete native snapshot and exact dirty IDs once, preserving hidden and unrendered native values. The response is validation output, not persistence.
+
+The supported direct scalar review families are singleLineText, multilineText, email, url, phoneNumber, number, currency, percent, rating, checkbox and readonly barcode. Native empty or whitespace-only strings are omitted before typed formatting for every supported family. This controls review presentation only: Confirm keeps the complete native Save snapshot, including omitted values and dirty field IDs; it does not trim, coerce or prune that record. Populated malformed scalar values still make review unavailable. The installed archived recipe checks exercise empty and whitespace strings across all eleven families; these four browser scenarios do not claim every matrix row was entered through a native control.
+
+review-address reuses the existing bounded held address transport. Opening review retires a held prediction or selected-place detail before capture; native Edit restores controls. Only then can the existing visible response-release buttons deliver the cancelled response. No late option, stale formatted value, repeat read or Save may result. A later explicit Confirm saves the captured selected description through the existing Save runner.
+
+review-validation opens review with a missing required scalar answer. Explicit Confirm dispatches once and the synthetic backend-shaped required validation message remains visible with the full draft retained. Repair and fresh Edit preserve that answer without an additional Save. This proves returned-error handling, not actual server rule evaluation.
+
+review-unknown holds the one confirmed Save. Cancel request aborts its accepted request scope. The visible response-release button then delivers a late validation result; uncertainty must remain blocked, native Save disabled, accepted values retained, and no automatic replay or reopened review occurs. Native modal inertness prevents ordinary background field or Visitor edits while review is open. Pending draft/configuration invalidation is separately exercised by actual-starter installed/packed event checks; these automated native cases do not claim an impossible background gesture or independent manual exploration.
+
 ## CI generation and remaining verification
 
 CI generated this static kit only after the existing exact archive consumer checks passed. It did not launch a browser or perform these manual interactions. This bounded fixture does not expose every configured title/destination variant; deterministic helper tests cover hidden/blank titles and fallback-destination semantics separately. Record any additional manual exploration separately, and do not claim those variants were exercised from the positive scenarios alone. The manifest binds the source/CI identity, exact SDK package digest, complete recipe and bundle inputs, and static outputs. Preserve the original tested SDK TGZ and receipt alongside this fixture; browser evidence must name both digests.
@@ -2832,6 +3243,8 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'Address scenarios cover only editable unmasked singleLineText, a valid cap and one optional one-page checkbox predicate; no provider, backend, hosted parity or other field/configuration credit.',
                 'Address stale-response cases cover combined installed SDK and starter/presenter cancellation; they do not independently isolate presenter generations.',
                 'The address-ime scenario supplies explicit untrusted DOM composition and keyboard event markers through visible synthetic fixture controls; it does not prove an OS IME, platform composition integration or native Japanese text entry.',
+                'Review scenarios cover their declared one-page manual scalar rows and explicit-confirm dispatch only; returned validation/uncertainty handling gives no backend permission, actual rule evaluation or persistence credit.',
+                'Native modal background inertness is preserved; pending draft/configuration invalidation is an installed/packed event oracle, not a claimed normal background native gesture.',
                 'Generated successful output is not a manual browser pass.',
             ],
         };

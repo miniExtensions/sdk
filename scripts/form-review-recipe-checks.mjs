@@ -1,0 +1,296 @@
+import assert from 'node:assert/strict';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+import { assertBrowserInputs } from './package-checks.mjs';
+import { createReviewFixture } from './build-privacy-browser-proof.mjs';
+
+/** Pure archived Review contract: no empty-hiding helper or browser mutation. */
+export function assertCanonicalBlankReviewMatrix(prepareFormReviewRows) {
+    const fixture = createReviewFixture('review-answers');
+    const loaded = fixture.page();
+    const types = [
+        'singleLineText',
+        'email',
+        'url',
+        'multilineText',
+        'phoneNumber',
+        'number',
+        'currency',
+        'percent',
+        'rating',
+        'checkbox',
+        'barcode',
+    ];
+    const schemas = types.map((type) => ({
+        fieldType: type,
+        airtableField: {
+            id: `fld_pure_blank_${type}`,
+            name: `Pure blank ${type}`,
+            description: null,
+            isComputed: false,
+            isPrimaryField: false,
+            config: {
+                type,
+                options:
+                    type === 'checkbox'
+                        ? { icon: 'check', color: 'greenBright' }
+                        : type === 'rating'
+                          ? { max: 5, icon: 'star', color: 'yellowBright' }
+                          : type === 'currency'
+                            ? { precision: 2, symbol: '$' }
+                            : ['number', 'percent'].includes(type)
+                              ? { precision: 2 }
+                              : null,
+            },
+        },
+        miniExtConfig: {},
+    }));
+    loaded.payload.fieldIdsInForm = schemas.map(
+        (schema) => schema.airtableField.id
+    );
+    loaded.payload.fieldIdsToSchemas = Object.fromEntries(
+        schemas.map((schema) => [schema.airtableField.id, schema])
+    );
+    loaded.payload.fieldNamesToSchemas = Object.fromEntries(
+        schemas.map((schema) => [schema.airtableField.name, schema])
+    );
+    const beforeLoaded = structuredClone(loaded);
+    for (const blank of ['', ' \t\n ']) {
+        const data = {
+            ...structuredClone(loaded.payload.formRecord.data),
+            ...Object.fromEntries(
+                loaded.payload.fieldIdsInForm.map((id) => [id, blank])
+            ),
+        };
+        const before = structuredClone(data);
+        assert.deepEqual(prepareFormReviewRows(loaded, data), []);
+        assert.deepEqual(data, before);
+        assert.deepEqual(loaded, beforeLoaded);
+    }
+    assert.deepEqual(fixture.state.calls, []);
+}
+
+/** Execute the actual archive-copied review and confirmation recipe modules. */
+export async function checkFormReviewRecipe({
+    consumerDirectory,
+    happyDomModulePath,
+}) {
+    const consumer = realpathSync(consumerDirectory);
+    const installed = realpathSync(
+        join(consumer, 'node_modules/@miniextensions/sdk')
+    );
+    for (const name of ['review.ts', 'confirmation.ts', 'dom.ts'])
+        assert.deepEqual(
+            readFileSync(join(consumer, 'src', name)),
+            readFileSync(join(installed, 'examples/browser/src', name))
+        );
+    const entry = join(consumer, '.generated/review-recipe-entry.ts');
+    writeFileSync(
+        entry,
+        "export { prepareFormReviewRows } from '../src/review.js';\nexport { requestConfirmation, cancelConfirmation } from '../src/confirmation.js';\n"
+    );
+    const outfile = join(consumer, '.generated/review-recipe-checks.mjs');
+    const bundled = await build({
+        absWorkingDir: consumer,
+        entryPoints: [entry],
+        bundle: true,
+        platform: 'browser',
+        format: 'esm',
+        outfile,
+        metafile: true,
+        logLevel: 'silent',
+    });
+    await assertBrowserInputs(bundled.metafile, consumer);
+    assert(
+        Object.keys(bundled.metafile.inputs).some((path) =>
+            path.endsWith('src/review.ts')
+        )
+    );
+    assert(
+        Object.keys(bundled.metafile.inputs).some((path) =>
+            path.endsWith('dist/esm/forms/projection.js')
+        )
+    );
+    const { prepareFormReviewRows, requestConfirmation, cancelConfirmation } =
+        await import(pathToFileURL(outfile).href);
+    const require = createRequire(import.meta.url);
+    const { Window } = require(happyDomModulePath);
+    const fixture = createReviewFixture('review-answers');
+    const page = fixture.page();
+    const native = structuredClone(page.payload.formRecord.data);
+    native.fld_review_show = false;
+    native.fld_review_title = 'EditedSecretForArchive';
+    native.fld_review_conditional = 'Edited hidden native answer';
+    const original = structuredClone(native);
+    const rows = prepareFormReviewRows(page, native);
+    assert.deepEqual(rows, [
+        {
+            fieldId: 'fld_review_title',
+            title: '<b>Semantic secret</b>',
+            value: '••••••••',
+            hideTitle: true,
+        },
+        {
+            fieldId: 'fld_review_readonly',
+            title: 'Plain readonly answer',
+            value: '<img src=x onerror=alert(1)>',
+            hideTitle: false,
+        },
+        {
+            fieldId: 'fld_review_url',
+            title: 'Plain URL answer',
+            value: native.fld_review_url,
+            hideTitle: false,
+        },
+        {
+            fieldId: 'fld_review_number',
+            title: 'Zero count',
+            value: '0',
+            hideTitle: false,
+        },
+    ]);
+    assert.deepEqual(native, original);
+    assert.deepEqual(native.fld_review_unrendered_linked, [
+        'rec_review_parent',
+    ]);
+    let checks = 1;
+    const empty = structuredClone(native);
+    for (const id of page.payload.fieldIdsInForm)
+        empty[id] =
+            id === 'fld_review_show'
+                ? false
+                : id === 'fld_review_rating'
+                  ? 0
+                  : id === 'fld_review_barcode'
+                    ? { text: '  ', type: 'code128' }
+                    : null;
+    assert.deepEqual(prepareFormReviewRows(page, empty), []);
+    assert.deepEqual(empty.fld_review_unrendered_multi, ['Retained', 'Native']);
+    checks++;
+    assertCanonicalBlankReviewMatrix(prepareFormReviewRows);
+    checks++;
+    for (const unsupported of [
+        'multi-page',
+        'compute',
+        'automatic',
+        'section',
+        'computed',
+        'malformed-readonly',
+    ]) {
+        const variant = structuredClone(page);
+        const data = structuredClone(native);
+        if (unsupported === 'multi-page')
+            variant.payload.publicFields.state.multiPageFormMode = 'multi-page';
+        else if (unsupported === 'compute')
+            variant.payload.publicFields.state.enableFormComputeMode = true;
+        else if (unsupported === 'automatic')
+            variant.payload.publicFields.state.autoSubmitAfterPrefill = true;
+        else if (unsupported === 'section') {
+            variant.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.headerSectionTitle =
+                'Retained section';
+            variant.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.enableSectionHeader = false;
+        } else if (unsupported === 'computed')
+            variant.payload.fieldIdsToSchemas.fld_review_readonly.airtableField.isComputed = true;
+        else data.fld_review_readonly = ['Unsupported native array'];
+        const before = structuredClone(data);
+        assert.throws(
+            () => prepareFormReviewRows(variant, data),
+            /Review is unavailable/
+        );
+        assert.deepEqual(data, before);
+        checks++;
+    }
+    const window = new Window({ url: 'https://review-recipe.example.test' });
+    const globals = {
+        document: window.document,
+        HTMLElement: window.HTMLElement,
+    };
+    const previous = Object.keys(globals).map((key) => [
+        key,
+        Object.getOwnPropertyDescriptor(globalThis, key),
+    ]);
+    Object.assign(globalThis, globals);
+    try {
+        const trigger = window.document.createElement('button');
+        trigger.textContent = 'Save';
+        window.document.body.append(trigger);
+        const open = () => {
+            trigger.focus();
+            const decision = requestConfirmation({
+                title: 'Review your answers',
+                message: 'Review the captured answers.',
+                confirmLabel: 'Confirm',
+                cancelLabel: 'Edit',
+                rows,
+            });
+            const dialog = window.document.querySelector('dialog[open]');
+            assert(dialog);
+            const buttons = [...dialog.querySelectorAll('button')];
+            const edit = buttons.find(
+                (button) => button.textContent === 'Edit'
+            );
+            const confirm = buttons.find(
+                (button) => button.textContent === 'Confirm'
+            );
+            assert(edit && confirm);
+            assert.equal(window.document.activeElement, edit);
+            assert.equal(dialog.getAttribute('role'), 'dialog');
+            assert.equal(dialog.getAttribute('aria-modal'), 'true');
+            assert.equal(dialog.querySelectorAll('img,b,a').length, 0);
+            assert.equal(
+                dialog.textContent.includes(native.fld_review_title),
+                false
+            );
+            assert.deepEqual(
+                [...dialog.querySelectorAll('dd')].map(
+                    (node) => node.textContent
+                ),
+                rows.map((row) => row.value)
+            );
+            for (const label of dialog.querySelectorAll('dt'))
+                assert.equal(
+                    label.nextElementSibling.getAttribute('aria-labelledby'),
+                    label.id
+                );
+            return { decision, dialog, edit, confirm };
+        };
+        let prompt = open();
+        prompt.edit.click();
+        assert.equal(await prompt.decision, false);
+        assert.equal(window.document.activeElement, trigger);
+        assert.equal(prompt.dialog.isConnected, false);
+        checks++;
+        prompt = open();
+        prompt.dialog.dispatchEvent(
+            new window.Event('cancel', { cancelable: true })
+        );
+        assert.equal(await prompt.decision, false);
+        assert.equal(window.document.activeElement, trigger);
+        checks++;
+        prompt = open();
+        cancelConfirmation();
+        prompt.confirm.click();
+        assert.equal(await prompt.decision, false);
+        assert.equal(prompt.dialog.isConnected, false);
+        checks++;
+        prompt = open();
+        prompt.confirm.click();
+        prompt.confirm.click();
+        assert.equal(await prompt.decision, true);
+        assert.equal(window.document.querySelector('dialog'), null);
+        assert.equal(window.document.activeElement, trigger);
+        assert.deepEqual(native, original);
+        checks++;
+    } finally {
+        cancelConfirmation();
+        for (const [key, descriptor] of previous) {
+            if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+            else Reflect.deleteProperty(globalThis, key);
+        }
+        await window.happyDOM.close();
+    }
+    return { checks };
+}

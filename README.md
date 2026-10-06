@@ -285,12 +285,24 @@ first-page read or root Reload before further Portal actions. See
 Field presentation and choice workflows beyond the
 [one-page field support](docs/forms.md#one-page-conditional-field-visibility)
 and [configured scalar choices](docs/ui.md#configured-scalar-choice-availability)
-remain application-owned, along with section headers/collapse, pages/review,
+remain application-owned, along with section headers/collapse, pages,
 Save & Continue, progress persistence, CAPTCHA/fingerprint/GPS collection and
 advanced field widgets. Static select limits and display labels alone do not
 evaluate option conditions. The starter uses final Save and supplies no
 general conditional evaluator or CAPTCHA widget. The existing server still
 enforces its published rules.
+
+The packaged browser starter also supplies a
+[bounded Review/Edit/Confirm recipe](examples/browser/README.md#form-workflow)
+for the published `promptUserBeforeSubmission` setting on flat, one-page manual
+Forms. It renders ordered nonempty direct scalar answers as plain text and
+fixed password masks. The prepared intent captures the actual draft revision
+and current owner/configuration context; edits or context changes invalidate
+confirmation. Edit/dismiss performs no Save, while explicit current Confirm
+uses the existing final Save and unknown-outcome recovery path once with the
+complete native values and dirty IDs. General review renderers, compute and
+automatic workflows remain application-owned; this recipe adds no backend
+validation, permission or persistence API.
 
 `compileRuntimeConditions` from `@miniextensions/sdk/forms` compiles a
 [bounded scalar subset](docs/forms.md#compile-scalar-runtime-conditions) to a

@@ -33,6 +33,51 @@ private repository checkout. Its application code connects selection drafts
 and labels to visitor changes, save recovery, uploads, and Portal pagination.
 Custom layouts and advanced presentation remain application-owned.
 
+## Prepared Form review in the browser starter
+
+The packaged starter's `src/review.ts` and existing DOM confirmation dialog
+implement the published `promptUserBeforeSubmission` setting for a bounded
+flat, one-page manual Form. This is application code shipped with the example,
+not a new SDK mutation or a general review renderer.
+
+Supported physical scalar fields are single-line/multiline text, email, URL,
+phone, number, currency, percent, rating, checkbox and barcode. Readonly scalar
+answers participate. Labels and values use plain text APIs in published field
+order; URL text never becomes a link. Semantic field titles still name values
+when their visual titles are hidden. Nonempty single-line password values use
+the fixed `••••••••` mask, while the native password stays unchanged for Save.
+
+The installed `createFlatScalarFormRecordProjection` supplies a separate
+conditional evaluation copy. Review omits its conditionally removed IDs and
+canonically empty answers: null, whitespace strings in every supported scalar
+family, checkbox false, rating zero and blank barcode text. Nonblank values
+must still match their physical field shape. Ordinary numeric zero stays visible.
+Keep the full native snapshot and dirty IDs for `createFormSaveInput`; review is
+not a writable projection. Sections, multipage, compute and automatic submission, linked
+filters, linked/lookup/computed fields, selects, dates, rich text and other
+complex renderers fail closed for this recipe.
+Barcode review reads the native text from the starter's existing readonly
+display; it does not add a barcode editor.
+
+Before capture, the starter makes its fields inert and calls each address
+control's activity hook to retire pending prediction/detail intents. It binds
+the dialog to the visitor/client/session, loaded Form, configuration/context,
+draft handle and `FormDraftStore.revision(handle)`. Repeated-value edits still
+advance that revision. Any edit, Reload, Discard, disposal, disconnect or owner
+transition, including A→B→A, invalidates confirmation. The caller rechecks after
+the dialog await and immediately before dispatch through its existing runner.
+Restoration applies only to that card; Edit permits a fresh address gesture
+without automatically querying an old value.
+
+The dialog initially focuses **Edit**. Edit, Escape, close and stale Confirm
+perform zero Saves. One explicit current Confirm passes the captured complete
+native draft to the existing final Save runner once. Review can open before
+required validation; the starter preserves visible control validity reads,
+server validation errors and native draft on failure. Required, readonly,
+computed and conditionally hidden exemptions remain the server's contract.
+An unknown Save outcome keeps the scope blocked; review never replays it.
+See the [starter workflow](../examples/browser/README.md#form-workflow).
+
 ## Address autocomplete
 
 `createAddressAutocompleteControl` presents the existing typed address reads

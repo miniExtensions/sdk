@@ -378,5 +378,419 @@ export async function checkBrowserSelectExample({
             await window.happyDOM.close();
         }
     }
-    return { checks: scenarios.length };
+    const portalChecks = await checkPackedPortalSelects({
+        consumer,
+        Window,
+        outfile,
+    });
+    return { checks: scenarios.length + portalChecks };
 }
+
+const checkPackedPortalSelects = async ({ consumer, Window, outfile }) => {
+    const scenarios = [
+        {
+            name: 'Portal ID allowlist uses native names',
+            restricted: true,
+            config: {
+                singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+                conditionsForOptions: [],
+                conditionalFields: { logicalOperator: 'and', conditions: [] },
+            },
+        },
+        {
+            name: 'Portal conditional option labels cannot authorize inline writes',
+            locked: true,
+            config: {
+                enableConditionalOptions: true,
+                conditionsForOptions: [
+                    {
+                        id: 'blue_label',
+                        config: {
+                            optionForConditions: 'sel_blue',
+                            name: ' Azure ',
+                            conditionsForOption: {
+                                logicalOperator: 'and',
+                                conditions: [],
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            name: 'Portal choice names do not match allowed IDs',
+            noAllowedChoices: true,
+            config: { singleOrMultiSelectLimitSelectionOptions: ['Blue'] },
+        },
+        {
+            name: 'Portal over-limit baseline and removal',
+            maximum: true,
+            config: { maxNumberOfSelections: 2 },
+        },
+        {
+            name: 'Portal zero maximum permits removal only',
+            zero: true,
+            config: { maxNumberOfSelections: 0 },
+        },
+        {
+            name: 'Portal empty allowlist and native multi names',
+            config: { singleOrMultiSelectLimitSelectionOptions: [] },
+        },
+        {
+            name: 'Portal nonempty option config blocks even when disabled',
+            locked: true,
+            config: {
+                enableConditionalOptions: false,
+                conditionsForOptions: [
+                    {
+                        id: 'blue_label',
+                        config: {
+                            optionForConditions: 'sel_blue',
+                            name: 'Ignored label',
+                            conditionsForOption: {
+                                logicalOperator: 'and',
+                                conditions: [],
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+        {
+            name: 'Portal single-select native name',
+            single: true,
+            restricted: true,
+            config: {
+                singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+            },
+        },
+        {
+            name: 'Portal nonempty conditional fields do not become inline permission',
+            locked: true,
+            config: {
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'nested_empty_group',
+                            type: 'groupCondition',
+                            logicalOperator: 'and',
+                            conditions: [],
+                        },
+                    ],
+                },
+            },
+        },
+        {
+            name: 'Portal read-only has no inline dispatch',
+            locked: true,
+            config: { readOnly: true },
+        },
+        {
+            name: 'Portal computed has no inline dispatch',
+            locked: true,
+            computed: true,
+            config: {},
+        },
+    ];
+    let revision = 0;
+    for (const scenario of scenarios) {
+        const window = new Window({
+            url: 'https://example.test',
+            settings: {
+                disableCSSFileLoading: true,
+                disableJavaScriptFileLoading: true,
+            },
+        });
+        window.document.write(
+            readFileSync(join(consumer, 'index.html'), 'utf8').replace(
+                /<script\b[^>]*>[\s\S]*?<\/script>/g,
+                ''
+            )
+        );
+        const portal = portalRecipeFixtures.makePortal();
+        const parentConfig =
+            portal.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
+        parentConfig.disableInlineEdit = false;
+        parentConfig.customViews = [
+            { id: 'view_example', config: { name: 'Example view' } },
+        ];
+        const schema =
+            makeSelectForm(scenario).payload.fieldIdsToSchemas.fld_colors;
+        portal.payload.linkedRecordFieldIdToDetailFields.fld_children = [
+            {
+                fieldId: 'fld_colors',
+                fieldName: 'Colors',
+                titleOverride: null,
+                isHidden: false,
+                fieldIsInEditingChildForm: true,
+                childFormField: null,
+                miniExtConfig: schema.miniExtConfig,
+            },
+        ];
+        const baseline = scenario.single
+            ? 'Legacy'
+            : scenario.maximum
+              ? ['Legacy', 'Red', 'Older']
+              : ['Legacy', 'Red'];
+        let nativeValue = structuredClone(baseline);
+        const updates = [];
+        const unexpected = [];
+        const fetch = async (input, init) => {
+            const url = new URL(String(input));
+            const route = url.searchParams.get('route') ?? url.pathname;
+            if (route === 'fetchExtensionForEndUser')
+                return new Response(JSON.stringify(portal));
+            if (route === 'fetchRecordsForLinkedTableOnPortal')
+                return new Response(
+                    JSON.stringify({
+                        airtableOffset: null,
+                        recordIds: ['rec_one'],
+                        customViewDetailFields: null,
+                        tableIdsToLinkedTableStates: {
+                            tbl_children: {
+                                airtableFields: [schema.airtableField],
+                                recordIdsToAirtableRecords: {
+                                    rec_one: {
+                                        id: 'rec_one',
+                                        fields: { fld_colors: nativeValue },
+                                    },
+                                },
+                            },
+                        },
+                    })
+                );
+            if (route === '/api/trpc/airtable.updatePortalRecord') {
+                const value = JSON.parse(String(init.body));
+                updates.push(value);
+                nativeValue = structuredClone(value.value);
+                return new Response(
+                    JSON.stringify({
+                        result: {
+                            data: {
+                                record: {
+                                    id: 'rec_one',
+                                    fields: { fld_colors: nativeValue },
+                                },
+                                auditTrail: null,
+                                auditTrails: [],
+                            },
+                        },
+                    })
+                );
+            }
+            if (route === '/api/trpc/airtable.getUserRecord')
+                return new Response(JSON.stringify({ result: { data: null } }));
+            unexpected.push(route);
+            throw new Error(
+                'Packed Portal select attempted an unexpected call.'
+            );
+        };
+        function Option(text = '', value = '') {
+            const option = window.document.createElement('option');
+            option.textContent = text;
+            option.value = value;
+            return option;
+        }
+        const globals = {
+            document: window.document,
+            location: window.location,
+            HTMLElement: window.HTMLElement,
+            HTMLInputElement: window.HTMLInputElement,
+            HTMLSelectElement: window.HTMLSelectElement,
+            HTMLButtonElement: window.HTMLButtonElement,
+            Option,
+            fetch,
+        };
+        const previous = Object.keys(globals).map((key) => [
+            key,
+            Object.getOwnPropertyDescriptor(globalThis, key),
+        ]);
+        Object.assign(globalThis, globals);
+        try {
+            await import(`${pathToFileURL(outfile).href}?portal=${++revision}`);
+            const document = window.document;
+            document.getElementById('api-origin').value =
+                'https://sdk.example.test';
+            document.getElementById('share-id').value = 'share_example';
+            submit(window, document.getElementById('connection-form'));
+            await waitFor(() =>
+                [...document.querySelectorAll('button')].some(
+                    (node) => node.textContent === 'Load records'
+                )
+            );
+            const load = async () => {
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        document.querySelector(
+                            'tr[data-record-id="rec_one"]'
+                        ) !== null &&
+                        document
+                            .getElementById('screen')
+                            .getAttribute('aria-busy') === 'false'
+                );
+            };
+            await load();
+            if (scenario.locked) {
+                assert.equal(
+                    [...document.querySelectorAll('button')].some(
+                        (node) => node.textContent === 'Edit cell'
+                    ),
+                    false
+                );
+                assert.equal(
+                    document.querySelector(
+                        'select[data-field-id="fld_colors"]'
+                    ),
+                    null
+                );
+                assert.deepEqual(updates, []);
+            } else {
+                const open = () => {
+                    button(document, 'Edit cell').click();
+                    const select = document.querySelector(
+                        'select[data-field-id="fld_colors"]'
+                    );
+                    assert(select);
+                    return select;
+                };
+                const save = async (select) => {
+                    const count = updates.length;
+                    submit(window, select.closest('form'));
+                    await waitFor(
+                        () =>
+                            updates.length === count + 1 &&
+                            document
+                                .getElementById('screen')
+                                .getAttribute('aria-busy') === 'false'
+                    );
+                };
+                let select = open();
+                assert.deepEqual(
+                    new Set(selected(select)),
+                    new Set(scenario.single ? [baseline] : baseline)
+                );
+                const originalForm = select.closest('form');
+                assert(originalForm);
+                await save(select);
+                assert.deepEqual(updates[0].value, baseline);
+                select = open();
+                const blue = [...select.options].find(
+                    (option) => option.value === 'Blue'
+                );
+                if (scenario.noAllowedChoices) assert.equal(blue, undefined);
+                else {
+                    assert(blue);
+                    assert.equal(blue.textContent, 'Blue');
+                }
+                if (scenario.single) {
+                    select.value = 'Blue';
+                    change(window, select);
+                } else {
+                    if (scenario.maximum || scenario.zero) {
+                        blue.disabled = false;
+                        blue.selected = true;
+                        change(window, select);
+                        assert.deepEqual(
+                            new Set(selected(select)),
+                            new Set(baseline)
+                        );
+                    }
+                    for (const option of select.options)
+                        option.selected =
+                            scenario.maximum && option.value === 'Red';
+                    change(window, select);
+                    if (blue) {
+                        blue.disabled = false;
+                        blue.selected = true;
+                        change(window, select);
+                    }
+                    if (
+                        scenario.restricted ||
+                        scenario.noAllowedChoices ||
+                        scenario.zero
+                    ) {
+                        const injected = document.createElement('option');
+                        injected.value =
+                            scenario.noAllowedChoices || scenario.zero
+                                ? 'Blue'
+                                : 'Red';
+                        injected.selected = true;
+                        select.append(injected);
+                        change(window, select);
+                    }
+                }
+                const expected = scenario.single
+                    ? 'Blue'
+                    : scenario.noAllowedChoices || scenario.zero
+                      ? []
+                      : scenario.maximum
+                        ? ['Red', 'Blue']
+                        : ['Blue'];
+                const staleForm = select.closest('form');
+                assert(staleForm);
+                await save(select);
+                assert.deepEqual(updates.at(-1), {
+                    portalExtensionAccessToken: 'portal_access_example',
+                    portalFieldId: 'fld_children',
+                    recordFieldId: 'fld_colors',
+                    recordId: 'rec_one',
+                    value: expected,
+                    selectedCustomViewId: 'view_example',
+                });
+                assert.equal(
+                    document.querySelector(
+                        'input[placeholder="New choice name"]'
+                    ),
+                    null
+                );
+                const count = updates.length;
+                submit(window, originalForm);
+                submit(window, staleForm);
+                select = open();
+                const cachedForm = select.closest('form');
+                assert(cachedForm);
+                const retainedSelection = selected(select);
+                const visitor = document.getElementById('visitor');
+                visitor.value = 'B';
+                change(window, visitor);
+                submit(window, cachedForm);
+                visitor.value = 'A';
+                change(window, visitor);
+                assert.deepEqual(selected(select), retainedSelection);
+                submit(window, cachedForm);
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(updates.length, count);
+                await load();
+                const fresh = open();
+                assert.notEqual(fresh, select);
+                button(document, 'Cancel').click();
+                const canceledForm = fresh.closest('form');
+                // The detached element's closest form is retained by the caller,
+                // even after closeEditor removes the card from the document.
+                assert(canceledForm);
+                submit(window, canceledForm);
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(updates.length, count);
+            }
+            assert.deepEqual(unexpected, []);
+            console.log(
+                `[packed Portal select ${revision}/${scenarios.length}] ${scenario.name}: passed`
+            );
+        } catch (error) {
+            throw new Error(
+                `Packed Portal select scenario failed: ${scenario.name}`,
+                { cause: error }
+            );
+        } finally {
+            for (const [key, descriptor] of previous) {
+                if (descriptor)
+                    Object.defineProperty(globalThis, key, descriptor);
+                else Reflect.deleteProperty(globalThis, key);
+            }
+            await window.happyDOM.close();
+        }
+    }
+    return scenarios.length;
+};

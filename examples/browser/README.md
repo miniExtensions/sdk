@@ -157,6 +157,21 @@ are omitted; this does not convert a computed lookup into a writable link.
   cells use the Portal's authorized selector. After saving, the current Portal
   user's record is refreshed. Choose **Load records** before paging or opening
   a child again. If that refresh fails, choose **Reload**.
+- Inline select cells use the same static policy control as Forms: configured
+  choice IDs limit new selections, saved values remain native choice names,
+  and numeric maxima permit removal from an existing over-limit value.
+  Unchanged saves retain native selection order. The effective child Form
+  field config takes precedence over detail config. There is no inline Add
+  Choice action or conditional option-visibility evaluator. A cached draft
+  survives A → B → A, but its expired owner cannot save; **Load records** fetches
+  a fresh view before opening another editor. Cancelled, replaced and disposed
+  editors cannot dispatch.
+- The canonical Portal route blocks inline edits for nonempty conditional
+  fields/options or active linked filters. This includes option entries that
+  only customize a label, even with `enableConditionalOptions` disabled. The
+  starter omits their inline action; use an eligible configured child Form for
+  its select labels and draft workflow. Full conditional presentation remains
+  application-owned.
 - Configured unlink actions require confirmation. The example retires that
   parent token before dispatching unlink; use **Reload** before taking another
   action, including after failure or cancellation.

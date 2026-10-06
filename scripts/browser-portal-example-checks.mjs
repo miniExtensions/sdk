@@ -508,7 +508,333 @@ export async function checkBrowserPortalExample({
             while (environments.length) await environments.pop()();
         }
     };
+    const mountSelectPrefillInteraction = async (
+        initiallyFormatted = false
+    ) => {
+        const colorField = {
+            id: 'fld_colors',
+            name: 'Colors',
+            description: null,
+            isComputed: false,
+            isPrimaryField: false,
+            config: {
+                type: 'multipleSelects',
+                options: {
+                    choices: [
+                        { id: 'sel_red', name: 'Red' },
+                        { id: 'sel_blue', name: 'Blue' },
+                    ],
+                },
+            },
+        };
+        let nativeColors = ['Legacy', 'Red'];
+        let parentQuery = ['**prefill_Title**=Red'];
+        let formatted = initiallyFormatted;
+        let parentLoads = 0;
+        let reads = 0;
+        let parentRefreshes = 0;
+        const gridWrites = [];
+        const childLoads = [];
+        const saves = [];
+        const unexpected = [];
+        const freshPortal = () => {
+            const portal = editablePortal();
+            portal.payload.formRecord.data.fld_prefill =
+                structuredClone(parentQuery);
+            portal.payload.fieldIdsToSchemas.fld_prefill = {
+                fieldType: 'multipleLookupValues',
+                airtableField: {
+                    id: 'fld_prefill',
+                    name: 'Current parent lookup',
+                    description: null,
+                    isPrimaryField: false,
+                    isComputed: true,
+                    config: {
+                        type: 'multipleLookupValues',
+                        options: {
+                            isValid: true,
+                            recordLinkFieldId: 'fld_children',
+                            fieldIdInLinkedTable: 'fld_query',
+                            result: formatted
+                                ? { type: 'richText', options: null }
+                                : { type: 'singleLineText', options: null },
+                        },
+                    },
+                },
+            };
+            portal.payload.linkedRecordFieldIdToDetailFields.fld_children = [
+                {
+                    fieldId: 'fld_colors',
+                    fieldName: 'Colors',
+                    titleOverride: null,
+                    isHidden: false,
+                    fieldIsInEditingChildForm: true,
+                    childFormField: null,
+                    miniExtConfig: {
+                        singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+                        maxNumberOfSelections: 2,
+                    },
+                },
+            ];
+            return portal;
+        };
+        const fetch = async (input, init) => {
+            const url = new URL(String(input));
+            const route = url.searchParams.get('route') ?? url.pathname;
+            const body = JSON.parse(String(init?.body ?? '{}'));
+            if (route === 'fetchExtensionForEndUser') {
+                if (body.childExtensionInfo) {
+                    childLoads.push(structuredClone(body));
+                    return new Response(JSON.stringify(makeForm(body)));
+                }
+                parentLoads += 1;
+                return new Response(JSON.stringify(freshPortal()));
+            }
+            if (route === 'fetchRecordsForLinkedTableOnPortal') {
+                reads += 1;
+                const result = page([
+                    { id: 'rec_one', fields: { fld_colors: nativeColors } },
+                ]);
+                result.tableIdsToLinkedTableStates.tbl_children.airtableFields =
+                    [colorField];
+                return new Response(JSON.stringify(result));
+            }
+            if (route === '/api/trpc/airtable.updatePortalRecord') {
+                gridWrites.push(structuredClone(body));
+                nativeColors = structuredClone(body.value);
+                // These are synthetic server-returned values and metadata.
+                // No lookup expression or query grammar is evaluated here.
+                parentQuery = ['**prefill_Title**=Blue'];
+                formatted = true;
+                return new Response(
+                    JSON.stringify({
+                        result: {
+                            data: {
+                                record: {
+                                    id: 'rec_one',
+                                    fields: { fld_colors: nativeColors },
+                                },
+                                auditTrail: null,
+                                auditTrails: [],
+                            },
+                        },
+                    })
+                );
+            }
+            if (route === '/api/trpc/airtable.getUserRecord') {
+                parentRefreshes += 1;
+                return new Response(
+                    JSON.stringify({
+                        result: {
+                            data: {
+                                id: 'rec_user',
+                                fields: { fld_prefill: parentQuery },
+                            },
+                        },
+                    })
+                );
+            }
+            if (route === 'saveForm') {
+                saves.push(structuredClone(body));
+                return new Response(
+                    JSON.stringify({
+                        type: 'error',
+                        formValidationErrors: [],
+                        formErrors: {},
+                    })
+                );
+            }
+            unexpected.push(route);
+            throw new Error(
+                'Unexpected packed select-prefill interaction route.'
+            );
+        };
+        const { window } = await environment(fetch);
+        await loadExample('main');
+        const document = window.document;
+        document.getElementById('api-origin').value =
+            'https://sdk.example.test';
+        document.getElementById('share-id').value = 'share_example';
+        const idle = () =>
+            document.getElementById('screen').getAttribute('aria-busy') ===
+            'false';
+        submit(window, document.getElementById('connection-form'));
+        await waitFor(() => parentLoads === 1 && idle());
+        const load = async () => {
+            const before = reads;
+            button(document, 'Load records').click();
+            await waitFor(() => reads === before + 1 && idle());
+        };
+        const reload = async () => {
+            const before = parentLoads;
+            document.getElementById('reload').click();
+            await waitFor(() => parentLoads === before + 1 && idle());
+        };
+        const create = async () => {
+            const before = childLoads.length;
+            button(document, 'Create record').click();
+            await waitFor(() => childLoads.length === before + 1 && idle());
+        };
+        return {
+            window,
+            document,
+            idle,
+            load,
+            reload,
+            create,
+            gridWrites,
+            childLoads,
+            saves,
+            unexpected,
+            parentRefreshes: () => parentRefreshes,
+        };
+    };
+    const interactionPrefill = (query) => ({
+        toLinkToParent: {
+            reversedFieldIdToPrefill: 'fld_parent',
+            parentFormRecordId: 'rec_user',
+        },
+        prefillQueryForChildExtension: query,
+    });
     try {
+        await check(
+            'composed Portal select save and explicit Reload bind current formatted lookup prefill at actual child load and Save',
+            async () => {
+                const h = await mountSelectPrefillInteraction();
+                await h.load();
+                assert.equal(h.gridWrites.length, 0);
+                assert.equal(h.childLoads.length, 0);
+                assert.equal(h.saves.length, 0);
+                button(h.document, 'Edit cell').click();
+                const select = h.document.querySelector(
+                    'select[data-field-id="fld_colors"]'
+                );
+                assert(select);
+                for (const option of select.options)
+                    option.selected = option.value === 'Blue';
+                change(h.window, select);
+                for (const value of ['Red', 'sel_blue']) {
+                    const injected = h.document.createElement('option');
+                    injected.value = value;
+                    injected.selected = true;
+                    select.append(injected);
+                    change(h.window, select);
+                }
+                submit(h.window, select.closest('form'));
+                await waitFor(() => h.gridWrites.length === 1 && h.idle());
+                assert.deepEqual(h.gridWrites[0], {
+                    portalExtensionAccessToken: 'portal_access_example',
+                    portalFieldId: 'fld_children',
+                    recordFieldId: 'fld_colors',
+                    recordId: 'rec_one',
+                    value: ['Blue'],
+                    selectedCustomViewId: 'view_example',
+                });
+                assert.equal(h.parentRefreshes(), 1);
+                assert.equal(
+                    button(h.document, 'Create record').disabled,
+                    true
+                );
+                assert.equal(h.childLoads.length, 0);
+                assert.equal(h.saves.length, 0);
+                await h.reload();
+                assert.equal(
+                    h.gridWrites.length,
+                    1,
+                    'Reload must never replay the Grid update.'
+                );
+                await h.load();
+                await h.create();
+                const expected = interactionPrefill('prefill_Title=Blue');
+                assert.deepEqual(h.childLoads[0].context, {
+                    type: 'modal',
+                    linkedTableIdOfLinkedRecordField: 'tbl_children',
+                    prefillDataForLinkedRecordsForm: expected,
+                });
+                assert.deepEqual(h.childLoads[0].childExtensionAccessData, {
+                    parentExtensionAccessToken: 'portal_access_example',
+                    fieldIdUsedToAccessExtension: 'fld_children',
+                });
+                assert.equal(
+                    h.saves.length,
+                    0,
+                    'Opening a child Form cannot automatically save it.'
+                );
+                const title = h.document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                assert(title);
+                title.value = 'Explicit packed composed request';
+                change(h.window, title, 'input');
+                submit(h.window, title.closest('form'));
+                await waitFor(() => h.saves.length === 1 && h.idle());
+                assert.deepEqual(h.saves[0].context, {
+                    type: 'modal',
+                    prefillData: expected,
+                });
+                assert.equal(
+                    h.saves[0].formRecord.data.fld_title,
+                    'Explicit packed composed request'
+                );
+                assert.equal(h.gridWrites.length, 1);
+                assert.deepEqual(h.unexpected, []);
+            }
+        );
+        await check(
+            'composed Portal A-to-B-to-A select draft sends no writes and fresh child load preserves current lookup and parent context',
+            async () => {
+                const h = await mountSelectPrefillInteraction(true);
+                await h.load();
+                button(h.document, 'Edit cell').click();
+                const select = h.document.querySelector(
+                    'select[data-field-id="fld_colors"]'
+                );
+                assert(select);
+                for (const option of select.options)
+                    option.selected = option.value === 'Blue';
+                change(h.window, select);
+                const editor = select.closest('form');
+                const visitor = h.document.getElementById('visitor');
+                visitor.value = 'B';
+                change(h.window, visitor);
+                submit(h.window, editor);
+                visitor.value = 'A';
+                change(h.window, visitor);
+                assert.equal(
+                    h.document.querySelector(
+                        'select[data-field-id="fld_colors"]'
+                    ),
+                    select
+                );
+                assert.deepEqual(
+                    [...select.options]
+                        .filter((option) => option.selected)
+                        .map((option) => option.value),
+                    ['Blue']
+                );
+                submit(h.window, editor);
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(h.gridWrites.length, 0);
+                assert.equal(h.childLoads.length, 0);
+                assert.equal(h.saves.length, 0);
+                await h.reload();
+                await h.load();
+                await h.create();
+                assert.deepEqual(h.childLoads[0].context, {
+                    type: 'modal',
+                    linkedTableIdOfLinkedRecordField: 'tbl_children',
+                    prefillDataForLinkedRecordsForm:
+                        interactionPrefill('prefill_Title=Red'),
+                });
+                assert.deepEqual(h.childLoads[0].childExtensionAccessData, {
+                    parentExtensionAccessToken: 'portal_access_example',
+                    fieldIdUsedToAccessExtension: 'fld_children',
+                });
+                assert.equal(h.gridWrites.length, 0);
+                assert.equal(h.saves.length, 0);
+                assert.deepEqual(h.unexpected, []);
+            }
+        );
         await check(
             'lookup tables retain the outer field across paging and existing-child edits without create or parent unlink controls',
             async () => {

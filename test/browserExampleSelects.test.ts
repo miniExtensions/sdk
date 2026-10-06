@@ -10,6 +10,7 @@ import {
     AirtableFieldType,
     createMiniExtensionsClient,
     type AirtableValue,
+    type LoadExtensionInput,
     type RuntimeFieldSchema,
     type SaveFormInput,
     type SelectFieldChoice,
@@ -54,6 +55,7 @@ before(async () => {
         )
     );
 });
+
 after(async () => rm(directory, { recursive: true, force: true }));
 const example = (name: string) =>
     import(
@@ -197,6 +199,142 @@ const selectForm = () => {
     form.payload.fieldIdsToSchemas = { fld_colors: selectSchema() };
     form.payload.formRecord.data.fld_colors = ['Legacy', 'Red'];
     return form;
+};
+
+const selectPortal = async (
+    test: TestContext,
+    schema = selectSchema(),
+    initialValue: AirtableValue = ['Legacy', 'Red'],
+    childConfig?: Extract<
+        RuntimeFieldSchema,
+        { fieldType: 'multipleSelects' }
+    >['miniExtConfig']
+) => {
+    const window = await environment(test);
+    const { createPortalView } = await example('portal');
+    const page = portalPage({
+        customViews: [
+            { id: 'view_example', config: { name: 'Example view' } },
+            { id: 'view_other', config: { name: 'Other view' } },
+        ],
+    });
+    page.payload.linkedRecordFieldIdToDetailFields.fld_children = [
+        {
+            fieldId: 'fld_colors',
+            fieldName: 'Colors',
+            titleOverride: null,
+            isHidden: false,
+            fieldIsInEditingChildForm: true,
+            childFormField:
+                childConfig === undefined
+                    ? null
+                    : {
+                          idOrName: { type: 'id', id: 'fld_colors' },
+                          config: {
+                              type: 'multipleSelects',
+                              config: childConfig,
+                          },
+                      },
+            miniExtConfig: schema.miniExtConfig,
+        },
+    ];
+    const scope = { ownerId: 'visitor_A', revision: 0 };
+    let nativeValue = structuredClone(initialValue);
+    const updates: UpdateGridCellInput[] = [];
+    const errors: string[] = [];
+    const client = createMiniExtensionsClient({
+        apiOrigin: 'https://sdk.example.test',
+        fetch: async () => {
+            throw new Error('Unexpected fixture network.');
+        },
+    });
+    client.portals.listLinkedRecords = async () =>
+        portalListPage({
+            recordIds: ['record_child'],
+            tableIdsToLinkedTableStates: {
+                table_children: {
+                    airtableFields: [structuredClone(schema.airtableField)],
+                    recordIdsToAirtableRecords: {
+                        record_child: {
+                            id: 'record_child',
+                            fields: {
+                                fld_colors: structuredClone(nativeValue),
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    client.portals.updateGridCell = async (input) => {
+        updates.push(structuredClone(input));
+        nativeValue = structuredClone(input.value);
+        return {
+            record: {
+                id: 'record_child',
+                fields: { fld_colors: structuredClone(input.value) },
+            },
+            auditTrail: null,
+            auditTrails: [],
+        };
+    };
+    client.portals.getUserRecord = async () => null;
+    let pending = Promise.resolve();
+    const view = createPortalView({
+        page,
+        client,
+        getScope: () => scope,
+        run: (
+            _description: string,
+            action: (context: {
+                client: typeof client;
+                signal: AbortSignal;
+                current(): boolean;
+            }) => Promise<void>
+        ) => {
+            const revision = scope.revision;
+            const ownerId = scope.ownerId;
+            pending = action({
+                client,
+                signal: new AbortController().signal,
+                current: () =>
+                    scope.revision === revision &&
+                    scope.ownerId === ownerId &&
+                    view.node.isConnected,
+            }).catch((error: Error) => {
+                errors.push(error.message);
+            });
+            return pending;
+        },
+        status: () => {},
+        confirm: async () => false,
+        openChild: () => {
+            throw new Error('Unexpected child Form.');
+        },
+    });
+    window.document.body.append(view.node);
+    test.after(() => view.destroy());
+    return {
+        window,
+        view,
+        scope,
+        updates,
+        errors,
+        pending: () => pending,
+        load: async () => {
+            button(window, 'Load records').click();
+            await pending;
+        },
+        open: () => {
+            button(window, 'Edit cell').click();
+            return colorSelect(window);
+        },
+        save: async (select: DOMSelect) => {
+            const form = select.closest('form');
+            assert.ok(form);
+            submit(window, form);
+            await pending;
+        },
+    };
 };
 
 describe(
@@ -947,11 +1085,14 @@ describe(
             );
             button(window, 'Edit cell').click();
             const original = colorSelect(window);
+            const originalEditor = original.closest('form');
+            assert.ok(originalEditor);
             chooseBlue(window, original);
             const visitor = window.document.getElementById('visitor');
             assert.ok(visitor instanceof window.HTMLSelectElement);
             visitor.value = 'B';
             change(window, visitor);
+            submit(window, originalEditor);
             assert.equal(
                 window.document.querySelector(
                     'select[data-field-id="fld_colors"]'
@@ -965,6 +1106,9 @@ describe(
                 new Set(selected(original)),
                 new Set(['Legacy', 'Red', 'Blue'])
             );
+            submit(window, originalEditor);
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            assert.equal(writes, 0);
             button(window, "Clear this visitor's session").click();
             assert.equal(
                 window.document.querySelector(
@@ -973,6 +1117,7 @@ describe(
                 null
             );
             chooseBlue(window, original);
+            submit(window, originalEditor);
             button(window, 'Reload').click();
             await waitFor(() =>
                 Array.from(window.document.querySelectorAll('button')).some(
@@ -992,6 +1137,723 @@ describe(
                 new Set(['Legacy', 'Red'])
             );
             assert.equal(writes, 0);
+        });
+    }
+);
+
+describe('Portal inline static select policy', { concurrency: false }, () => {
+    it('uses configured IDs and display labels without truncating native baselines', async (test) => {
+        const window = await environment(test);
+        const { fieldControl } = await example('fields');
+        const schema = selectSchema();
+        schema.miniExtConfig = {
+            singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+            maxNumberOfSelections: 2,
+            enableConditionalOptions: true,
+            conditionsForOptions: [
+                {
+                    id: 'blue_label',
+                    config: {
+                        optionForConditions: 'sel_blue',
+                        name: ' Azure ',
+                        conditionsForOption: {
+                            logicalOperator: 'and',
+                            conditions: [],
+                        },
+                    },
+                },
+            ],
+        };
+        const baseline = ['Legacy', 'Red', 'Older'];
+        const changes: AirtableValue[] = [];
+        const control = fieldControl(
+            schema.airtableField,
+            schema.miniExtConfig,
+            baseline,
+            () => changes.push(control.read())
+        );
+        test.after(() => control.destroy());
+        window.document.body.append(control.node);
+        const select = colorSelect(window);
+        assert.deepEqual(control.read(), baseline);
+        const blue = Array.from(select.options).find(
+            (option) => option.value === 'Blue'
+        );
+        assert.ok(blue);
+        assert.equal(blue.textContent, 'Azure');
+        assert.equal(blue.disabled, true);
+        blue.disabled = false;
+        blue.selected = true;
+        change(window, select);
+        assert.deepEqual(control.read(), baseline);
+        assert.deepEqual(changes, []);
+        for (const option of select.options)
+            option.selected = option.value === 'Red';
+        change(window, select);
+        assert.deepEqual(control.read(), ['Red']);
+        const injected = window.document.createElement('option');
+        injected.value = 'Legacy';
+        injected.textContent = 'Injected legacy';
+        injected.selected = true;
+        select.append(injected);
+        blue.selected = true;
+        change(window, select);
+        assert.deepEqual(control.read(), ['Red', 'Blue']);
+        assert.equal(
+            Array.from(select.options).some(
+                (option) => option.value === 'Legacy'
+            ),
+            false
+        );
+        assert.deepEqual(changes, [['Red'], ['Red', 'Blue']]);
+    });
+
+    it('keeps single-select names canonical and denies name-shaped allowlist IDs', async (test) => {
+        const window = await environment(test);
+        const { fieldControl } = await example('fields');
+        const schema = selectSchema(false);
+        schema.miniExtConfig = {
+            singleOrMultiSelectLimitSelectionOptions: ['Blue'],
+        };
+        const control = fieldControl(
+            schema.airtableField,
+            schema.miniExtConfig,
+            'Legacy',
+            () => {}
+        );
+        test.after(() => control.destroy());
+        window.document.body.append(control.node);
+        const select = colorSelect(window);
+        assert.equal(control.read(), 'Legacy');
+        select.value = '';
+        change(window, select);
+        assert.equal(control.read(), null);
+        const injected = window.document.createElement('option');
+        injected.value = 'Blue';
+        select.append(injected);
+        select.value = 'Blue';
+        change(window, select);
+        assert.equal(control.read(), null);
+    });
+
+    it('allows removal from a zero maximum and fails closed on malformed policy', async (test) => {
+        const window = await environment(test);
+        const { fieldControl } = await example('fields');
+        const schema = selectSchema();
+        schema.miniExtConfig = { maxNumberOfSelections: 0 };
+        const control = fieldControl(
+            schema.airtableField,
+            schema.miniExtConfig,
+            ['Red'],
+            () => {}
+        );
+        test.after(() => control.destroy());
+        window.document.body.append(control.node);
+        const select = colorSelect(window);
+        chooseBlue(window, select);
+        assert.deepEqual(control.read(), ['Red']);
+        for (const option of select.options) option.selected = false;
+        change(window, select);
+        assert.deepEqual(control.read(), []);
+        chooseBlue(window, select);
+        assert.deepEqual(control.read(), []);
+        assert.throws(
+            () =>
+                fieldControl(
+                    schema.airtableField,
+                    { maxNumberOfSelections: Number.NaN },
+                    [],
+                    () => {}
+                ),
+            /nonnegative number/
+        );
+    });
+
+    it('keeps generic read-only, computed and forced controls immutable and disposable', async (test) => {
+        const window = await environment(test);
+        const { fieldControl } = await example('fields');
+        let changes = 0;
+        for (const mode of ['readOnly', 'computed', 'forced']) {
+            const schema = selectSchema(false);
+            if (mode === 'readOnly') schema.miniExtConfig = { readOnly: true };
+            if (mode === 'computed') schema.airtableField.isComputed = true;
+            const control = fieldControl(
+                schema.airtableField,
+                schema.miniExtConfig,
+                'Legacy',
+                () => changes++,
+                mode === 'forced'
+            );
+            window.document.body.append(control.node);
+            const select = colorSelect(window);
+            assert.equal(control.editable, false);
+            assert.equal(select.disabled, true);
+            select.value = 'Blue';
+            change(window, select);
+            assert.equal(control.read(), 'Legacy');
+            assert.equal(select.value, 'Legacy');
+            control.destroy();
+            control.destroy();
+            select.value = 'Blue';
+            change(window, select);
+            assert.equal(changes, 0);
+            control.node.remove();
+        }
+    });
+
+    it('uses the child config and writes exact native values through the actual Portal editor', async (test) => {
+        const schema = selectSchema();
+        schema.miniExtConfig = {
+            readOnly: true,
+            singleOrMultiSelectLimitSelectionOptions: ['sel_red'],
+        };
+        const fixture = await selectPortal(test, schema, ['Legacy', 'Red'], {
+            singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+            enableConditionalOptions: true,
+            conditionsForOptions: [],
+            conditionalFields: { logicalOperator: 'and', conditions: [] },
+        });
+        await fixture.load();
+        const select = fixture.open();
+        assert.deepEqual(new Set(selected(select)), new Set(['Legacy', 'Red']));
+        assert.equal(
+            Array.from(select.options).find((option) => option.value === 'Blue')
+                ?.textContent,
+            'Blue'
+        );
+        assert.equal(
+            fixture.window.document.querySelector(
+                'input[placeholder="New choice name"]'
+            ),
+            null
+        );
+        assert.equal(
+            Array.from(fixture.window.document.querySelectorAll('button')).some(
+                (node) => node.textContent === 'Create choice'
+            ),
+            false
+        );
+        for (const option of select.options)
+            option.selected = option.value === 'Blue';
+        change(fixture.window, select);
+        const denied = fixture.window.document.createElement('option');
+        denied.value = 'Red';
+        denied.selected = true;
+        select.append(denied);
+        change(fixture.window, select);
+        await fixture.save(select);
+        assert.deepEqual(fixture.updates, [
+            {
+                portalExtensionAccessToken: 'portal_access_example',
+                portalFieldId: 'fld_children',
+                recordFieldId: 'fld_colors',
+                recordId: 'record_child',
+                value: ['Blue'],
+                selectedCustomViewId: 'view_example',
+            },
+        ]);
+        assert.deepEqual(fixture.errors, []);
+    });
+
+    it('preserves over-limit order on unchanged saves and removes before adding', async (test) => {
+        const schema = selectSchema();
+        schema.miniExtConfig = { maxNumberOfSelections: 2 };
+        const baseline = ['Legacy', 'Red', 'Older'];
+        const fixture = await selectPortal(test, schema, baseline);
+        await fixture.load();
+        await fixture.save(fixture.open());
+        assert.deepEqual(fixture.updates[0].value, baseline);
+        const select = fixture.open();
+        chooseBlue(fixture.window, select);
+        for (const option of select.options)
+            option.selected = option.value === 'Red';
+        change(fixture.window, select);
+        chooseBlue(fixture.window, select);
+        await fixture.save(select);
+        assert.deepEqual(fixture.updates[1].value, ['Red', 'Blue']);
+        assert.deepEqual(fixture.errors, []);
+    });
+
+    it('retains an A-to-B-to-A draft but prevents its expired owner from dispatching', async (test) => {
+        const fixture = await selectPortal(test);
+        await fixture.load();
+        const select = fixture.open();
+        chooseBlue(fixture.window, select);
+        fixture.scope.ownerId = 'visitor_B';
+        fixture.scope.revision++;
+        fixture.view.retireCollection();
+        fixture.view.node.remove();
+        await fixture.save(select);
+        fixture.scope.ownerId = 'visitor_A';
+        fixture.scope.revision++;
+        fixture.window.document.body.append(fixture.view.node);
+        assert.deepEqual(
+            new Set(selected(select)),
+            new Set(['Legacy', 'Red', 'Blue'])
+        );
+        await fixture.save(select);
+        assert.equal(fixture.updates.length, 0);
+        await fixture.load();
+        const fresh = fixture.open();
+        assert.notEqual(fresh, select);
+        await fixture.save(fresh);
+        assert.deepEqual(fixture.updates[0].value, ['Legacy', 'Red']);
+    });
+
+    it('prevents disposed, replaced and view-reset editor forms from dispatching clears', async (test) => {
+        const fixture = await selectPortal(test);
+        await fixture.load();
+        const canceled = fixture.open();
+        const canceledForm = canceled.closest('form');
+        assert.ok(canceledForm);
+        fixture.view.closeEditor();
+        submit(fixture.window, canceledForm);
+        const replaced = fixture.open();
+        const replacedForm = replaced.closest('form');
+        assert.ok(replacedForm);
+        fixture.open();
+        submit(fixture.window, replacedForm);
+        const reset = colorSelect(fixture.window);
+        const resetForm = reset.closest('form');
+        assert.ok(resetForm);
+        const viewSelect = fixture.view.node.querySelectorAll('select')[1];
+        assert.ok(viewSelect);
+        viewSelect.value = 'view_other';
+        change(fixture.window, viewSelect);
+        submit(fixture.window, resetForm);
+        await fixture.load();
+        const disposed = fixture.open();
+        const disposedForm = disposed.closest('form');
+        assert.ok(disposedForm);
+        fixture.view.destroy();
+        chooseBlue(fixture.window, disposed);
+        submit(fixture.window, disposedForm);
+        await fixture.pending();
+        assert.equal(fixture.updates.length, 0);
+        assert.deepEqual(fixture.errors, []);
+    });
+
+    for (const mode of ['readOnly', 'computed']) {
+        it(`does not offer or dispatch a ${mode} Portal cell edit`, async (test) => {
+            const schema = selectSchema();
+            if (mode === 'readOnly') schema.miniExtConfig = { readOnly: true };
+            else schema.airtableField.isComputed = true;
+            const fixture = await selectPortal(test, schema);
+            await fixture.load();
+            assert.equal(
+                Array.from(
+                    fixture.window.document.querySelectorAll('button')
+                ).some((node) => node.textContent === 'Edit cell'),
+                false
+            );
+            assert.equal(
+                fixture.view.node.querySelector(
+                    'select[data-field-id="fld_colors"]'
+                ),
+                null
+            );
+            assert.equal(fixture.updates.length, 0);
+        });
+    }
+
+    for (const enabled of [true, false]) {
+        it(`denies child option conditions with enableConditionalOptions=${enabled}`, async (test) => {
+            const schema = selectSchema();
+            schema.miniExtConfig = {
+                singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+            };
+            const fixture = await selectPortal(test, schema, ['Red'], {
+                enableConditionalOptions: enabled,
+                conditionsForOptions: [
+                    {
+                        id: 'blue_label',
+                        config: {
+                            optionForConditions: 'sel_blue',
+                            name: 'Azure',
+                            conditionsForOption: {
+                                logicalOperator: 'and',
+                                conditions: [],
+                            },
+                        },
+                    },
+                ],
+            });
+            await fixture.load();
+            assert.equal(
+                Array.from(
+                    fixture.window.document.querySelectorAll('button')
+                ).some((node) => node.textContent === 'Edit cell'),
+                false
+            );
+            assert.equal(fixture.updates.length, 0);
+        });
+    }
+
+    it('denies nonempty conditional fields instead of evaluating them inline', async (test) => {
+        const schema = selectSchema();
+        schema.miniExtConfig = {
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'nested_empty_group',
+                        type: 'groupCondition',
+                        logicalOperator: 'and',
+                        conditions: [],
+                    },
+                ],
+            },
+        };
+        const fixture = await selectPortal(test, schema);
+        await fixture.load();
+        assert.equal(
+            Array.from(fixture.window.document.querySelectorAll('button')).some(
+                (node) => node.textContent === 'Edit cell'
+            ),
+            false
+        );
+        assert.equal(fixture.updates.length, 0);
+    });
+});
+
+describe(
+    'Portal select and readable-prefill interaction',
+    { concurrency: false },
+    () => {
+        const mount = async (test: TestContext, initiallyFormatted = false) => {
+            const schema = selectSchema();
+            schema.miniExtConfig = {
+                singleOrMultiSelectLimitSelectionOptions: ['sel_blue'],
+                maxNumberOfSelections: 2,
+            };
+            let nativeColors: AirtableValue = ['Legacy', 'Red'];
+            let parentQuery: AirtableValue = ['**prefill_Title**=Red'];
+            let formatted = initiallyFormatted;
+            let parentLoads = 0;
+            let parentRefreshes = 0;
+            let reads = 0;
+            const gridWrites: UpdateGridCellInput[] = [];
+            const childLoads: LoadExtensionInput[] = [];
+            const saves: SaveFormInput[] = [];
+            const unexpected: string[] = [];
+            const freshPortal = () => {
+                const page = portalPage({ disableInlineEdit: false });
+                page.payload.formRecord.data.fld_prefill =
+                    structuredClone(parentQuery);
+                page.payload.fieldIdsToSchemas.fld_prefill = {
+                    fieldType: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                    airtableField: {
+                        id: 'fld_prefill',
+                        name: 'Current parent lookup',
+                        description: null,
+                        isPrimaryField: false,
+                        isComputed: true,
+                        config: {
+                            type: AirtableFieldType.MULTIPLE_LOOKUP_VALUES,
+                            options: {
+                                isValid: true,
+                                recordLinkFieldId: 'fld_children',
+                                fieldIdInLinkedTable: 'fld_query',
+                                result: formatted
+                                    ? {
+                                          type: AirtableFieldType.RICH_TEXT,
+                                          options: null,
+                                      }
+                                    : {
+                                          type: AirtableFieldType.SINGLE_LINE_TEXT,
+                                          options: null,
+                                      },
+                            },
+                        },
+                    },
+                };
+                page.payload.linkedRecordFieldIdToDetailFields.fld_children = [
+                    {
+                        fieldId: 'fld_colors',
+                        fieldName: 'Colors',
+                        titleOverride: null,
+                        isHidden: false,
+                        fieldIsInEditingChildForm: true,
+                        childFormField: null,
+                        miniExtConfig: schema.miniExtConfig,
+                    },
+                ];
+                return page;
+            };
+            const fetch: typeof globalThis.fetch = async (input, init) => {
+                const url = new URL(String(input));
+                const route = url.searchParams.get('route') ?? url.pathname;
+                const body = JSON.parse(String(init?.body ?? '{}'));
+                if (route === 'fetchExtensionForEndUser') {
+                    if (body.childExtensionInfo) {
+                        childLoads.push(structuredClone(body));
+                        const child = loadedForm();
+                        child.extensionId = 'extension_child';
+                        child.payload.hasParentExtension = true;
+                        child.payload.fieldIdsInForm = ['fld_title'];
+                        child.payload.formRecord = {
+                            type: 'create',
+                            data: { fld_title: 'Returned child title' },
+                        };
+                        child.payload.formFieldIdsWithUnsavedChanges = [];
+                        child.payload.urlPrefilledFieldIds = [];
+                        return new Response(JSON.stringify(child));
+                    }
+                    parentLoads++;
+                    return new Response(JSON.stringify(freshPortal()));
+                }
+                if (route === 'fetchRecordsForLinkedTableOnPortal') {
+                    reads++;
+                    return new Response(
+                        JSON.stringify(
+                            portalListPage({
+                                recordIds: ['record_child'],
+                                tableIdsToLinkedTableStates: {
+                                    table_children: {
+                                        airtableFields: [schema.airtableField],
+                                        recordIdsToAirtableRecords: {
+                                            record_child: {
+                                                id: 'record_child',
+                                                fields: {
+                                                    fld_colors: nativeColors,
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            })
+                        )
+                    );
+                }
+                if (route === '/api/trpc/airtable.updatePortalRecord') {
+                    gridWrites.push(structuredClone(body));
+                    nativeColors = structuredClone(body.value);
+                    // Synthetic returned state changes; the SDK does not evaluate
+                    // a lookup expression or infer fresh metadata from its value.
+                    parentQuery = ['**prefill_Title**=Blue'];
+                    formatted = true;
+                    return new Response(
+                        JSON.stringify({
+                            result: {
+                                data: {
+                                    record: {
+                                        id: 'record_child',
+                                        fields: { fld_colors: nativeColors },
+                                    },
+                                    auditTrail: null,
+                                    auditTrails: [],
+                                },
+                            },
+                        })
+                    );
+                }
+                if (route === '/api/trpc/airtable.getUserRecord') {
+                    parentRefreshes++;
+                    return new Response(
+                        JSON.stringify({
+                            result: {
+                                data: {
+                                    id: 'record_parent',
+                                    fields: { fld_prefill: parentQuery },
+                                },
+                            },
+                        })
+                    );
+                }
+                if (route === 'saveForm') {
+                    saves.push(structuredClone(body));
+                    return new Response(
+                        JSON.stringify({
+                            type: 'error',
+                            formValidationErrors: [],
+                            formErrors: {},
+                        })
+                    );
+                }
+                unexpected.push(route);
+                throw new Error('Unexpected composition fixture route.');
+            };
+            const window = await environment(test, fetch);
+            await example('main');
+            const origin = window.document.getElementById('api-origin');
+            const share = window.document.getElementById('share-id');
+            const connection =
+                window.document.getElementById('connection-form');
+            assert.ok(origin instanceof window.HTMLInputElement);
+            assert.ok(share instanceof window.HTMLInputElement);
+            assert.ok(connection);
+            origin.value = 'https://sdk.example.test';
+            share.value = 'share_example';
+            const idle = () =>
+                window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false';
+            submit(window, connection);
+            await waitFor(() => parentLoads === 1 && idle());
+            const load = async () => {
+                const before = reads;
+                button(window, 'Load records').click();
+                await waitFor(() => reads === before + 1 && idle());
+            };
+            const reload = async () => {
+                const before = parentLoads;
+                button(window, 'Reload').click();
+                await waitFor(() => parentLoads === before + 1 && idle());
+            };
+            const create = async () => {
+                const before = childLoads.length;
+                button(window, 'Create record').click();
+                await waitFor(() => childLoads.length === before + 1 && idle());
+            };
+            return {
+                window,
+                gridWrites,
+                childLoads,
+                saves,
+                unexpected,
+                idle,
+                load,
+                reload,
+                create,
+                parentRefreshes: () => parentRefreshes,
+            };
+        };
+        const prefill = (value: string) => ({
+            toLinkToParent: {
+                reversedFieldIdToPrefill: 'fld_parent',
+                parentFormRecordId: 'record_parent',
+            },
+            prefillQueryForChildExtension: value,
+        });
+
+        it('saves native allowed names then explicitly reloads current lookup metadata for identical child load/save prefills', async (test) => {
+            const h = await mount(test);
+            await h.load();
+            assert.equal(h.gridWrites.length, 0);
+            assert.equal(h.childLoads.length, 0);
+            assert.equal(h.saves.length, 0);
+            button(h.window, 'Edit cell').click();
+            const select = colorSelect(h.window);
+            for (const option of select.options)
+                option.selected = option.value === 'Blue';
+            change(h.window, select);
+            // Exercise policy at the real Save sink, including native-option
+            // injection after the unavailable persisted values were removed.
+            for (const value of ['Red', 'sel_blue']) {
+                const injected = h.window.document.createElement('option');
+                injected.value = value;
+                injected.selected = true;
+                select.append(injected);
+                change(h.window, select);
+            }
+            const editor = select.closest('form');
+            assert.ok(editor);
+            submit(h.window, editor);
+            await waitFor(() => h.gridWrites.length === 1 && h.idle());
+            assert.deepEqual(h.gridWrites[0], {
+                portalExtensionAccessToken: 'portal_access_example',
+                portalFieldId: 'fld_children',
+                recordFieldId: 'fld_colors',
+                recordId: 'record_child',
+                value: ['Blue'],
+                selectedCustomViewId: 'view_example',
+            });
+            assert.equal(h.childLoads.length, 0);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.parentRefreshes(), 1);
+            assert.equal(button(h.window, 'Create record').disabled, true);
+            await h.reload();
+            assert.equal(
+                h.gridWrites.length,
+                1,
+                'Reload must not replay the select write.'
+            );
+            assert.equal(h.childLoads.length, 0);
+            await h.load();
+            assert.equal(h.gridWrites.length, 1);
+            await h.create();
+            const expected = prefill('prefill_Title=Blue');
+            const childLoad = h.childLoads[0];
+            assert.ok(childLoad);
+            assert.ok('childExtensionAccessData' in childLoad);
+            assert.deepEqual(childLoad.context, {
+                type: 'modal',
+                linkedTableIdOfLinkedRecordField: 'table_children',
+                prefillDataForLinkedRecordsForm: expected,
+            });
+            assert.deepEqual(childLoad.childExtensionAccessData, {
+                parentExtensionAccessToken: 'portal_access_example',
+                fieldIdUsedToAccessExtension: 'fld_children',
+            });
+            assert.equal(
+                h.saves.length,
+                0,
+                'Opening a child must not automatically save it.'
+            );
+            const title = h.window.document.querySelector(
+                'input[data-field-id="fld_title"]'
+            );
+            assert.ok(title instanceof h.window.HTMLInputElement);
+            title.value = 'Explicit composed request';
+            title.dispatchEvent(new h.window.Event('input', { bubbles: true }));
+            const form = title.closest('form');
+            assert.ok(form);
+            submit(h.window, form);
+            await waitFor(() => h.saves.length === 1 && h.idle());
+            assert.deepEqual(h.saves[0].context, {
+                type: 'modal',
+                prefillData: expected,
+            });
+            assert.equal(
+                h.saves[0].formRecord.data.fld_title,
+                'Explicit composed request'
+            );
+            assert.deepEqual(h.unexpected, []);
+        });
+
+        it('denies an A-to-B-to-A select draft without writes and preserves current child prefill after explicit reload', async (test) => {
+            const h = await mount(test, true);
+            await h.load();
+            button(h.window, 'Edit cell').click();
+            const select = colorSelect(h.window);
+            for (const option of select.options)
+                option.selected = option.value === 'Blue';
+            change(h.window, select);
+            const editor = select.closest('form');
+            assert.ok(editor);
+            const visitor = h.window.document.getElementById('visitor');
+            assert.ok(visitor instanceof h.window.HTMLSelectElement);
+            visitor.value = 'B';
+            change(h.window, visitor);
+            submit(h.window, editor);
+            visitor.value = 'A';
+            change(h.window, visitor);
+            assert.equal(colorSelect(h.window), select);
+            assert.deepEqual(selected(select), ['Blue']);
+            submit(h.window, editor);
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            assert.equal(h.gridWrites.length, 0);
+            assert.equal(h.childLoads.length, 0);
+            assert.equal(h.saves.length, 0);
+            await h.reload();
+            await h.load();
+            assert.equal(h.gridWrites.length, 0);
+            await h.create();
+            const childLoad = h.childLoads[0];
+            assert.ok(childLoad);
+            assert.ok('childExtensionAccessData' in childLoad);
+            assert.deepEqual(childLoad.context, {
+                type: 'modal',
+                linkedTableIdOfLinkedRecordField: 'table_children',
+                prefillDataForLinkedRecordsForm: prefill('prefill_Title=Red'),
+            });
+            assert.deepEqual(childLoad.childExtensionAccessData, {
+                parentExtensionAccessToken: 'portal_access_example',
+                fieldIdUsedToAccessExtension: 'fld_children',
+            });
+            assert.equal(h.gridWrites.length, 0);
+            assert.equal(h.saves.length, 0);
+            assert.deepEqual(h.unexpected, []);
         });
     }
 );

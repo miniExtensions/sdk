@@ -1,8 +1,9 @@
 # Headless Portal collections
 
 `@miniextensions/sdk/portals` wraps the existing authorized Portal reads and
-child Form metadata. It has no DOM, React, renderer, storage, or runtime
-dependency of its own. Install the supplied private archive using the
+child Form metadata. It has no DOM, React, renderer, or storage. Readable
+child-prefill formatting reuses the formulas formatter and its runtime
+dependencies. Install the supplied private archive using the
 [runtime quickstart](runtime.md#packaged-form-quickstart); this package has not
 been published to npm. The core client uses the existing miniExtensions APIs
 and the visitor's current session; the server retains authorization.
@@ -456,7 +457,7 @@ The configured parent query is carried only when
 `prefillChildFormForCreatingRecords` is explicitly `true`, the selected field
 has current ID-keyed source metadata and an own record value, and its canonical
 readable type is string. The helper formats that value with
-`getReadableStringFromAirtableValue`, using browser-local date parsing and the
+`getReadableStringFromAirtableValue`, using execution-environment local date parsing and the
 source field's date/time format and timezone. Text, rich text, URL, email,
 phone, barcode, single select, date/dateTime, created/modified timestamps and
 created/modified-by fields are supported; formula and lookup sources follow

@@ -723,6 +723,12 @@ describe(
             await loadFilters(window);
             assert.equal(api.filters.length, 2);
             assert.equal(api.saves.length, 0);
+            assert.match(
+                window.document.getElementById('status')?.textContent ?? '',
+                /Use Load conditional filters to retry unresolved prefills/
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            assert.equal(api.filters.length, 2);
             const metadataReads = api.bootstraps.length;
             await loadFilters(window);
             assert.equal(api.bootstraps.length, metadataReads);
@@ -738,6 +744,34 @@ describe(
             assert.deepEqual(api.saves[0].formRecord.data.fld_projects, [
                 'rec_retained',
             ]);
+        });
+
+        it('renders Search retry guidance for failed and invalid ordinary reads without automatically retrying', async (test) => {
+            const api = fixture(makeForm());
+            const window = await environment(test, api.fetch);
+            await loadFilters(window);
+            api.handlers.filter = async () => {
+                throw new Error('ordinary failed');
+            };
+            await searchFilter(window, 'Country');
+            assert.match(
+                window.document.getElementById('status')?.textContent ?? '',
+                /Use Search Country to retry this filter read/
+            );
+            assert.equal(api.filters.length, 1);
+            api.handlers.filter = async () => ({
+                primaryValues: [],
+                prefillValue: { recordId: 'missing', stringValue: 'invalid' },
+            });
+            await searchFilter(window, 'Country');
+            assert.match(
+                window.document.getElementById('status')?.textContent ?? '',
+                /unresolved prefill.*Use Search Country to retry this filter read/
+            );
+            await new Promise((resolve) => setTimeout(resolve, 10));
+            assert.equal(api.filters.length, 2);
+            assert.equal(api.saves.length, 0);
+            assert.deepEqual(rawIds(window), ['rec_retained']);
         });
 
         it('keeps hidden-mode selectors hidden throughout server-prefill resolution and explicit Load visible', async (test) => {

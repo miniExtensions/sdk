@@ -126,6 +126,9 @@ export function createConditionalLinkedFilters(options: {
             options.status(plan.diagnostic, true);
             return false;
         }
+        const retry = usePrefill
+            ? 'Use Load conditional filters to retry unresolved prefills.'
+            : `Use Search ${model.state().filters.find((value) => value.id === filter.id)!.title ?? model.state().filters.find((value) => value.id === filter.id)!.name} to retry this filter read.`;
         const controller = new AbortController();
         const abort = () => controller.abort();
         context.signal.addEventListener('abort', abort, { once: true });
@@ -152,10 +155,7 @@ export function createConditionalLinkedFilters(options: {
             if (!accepts()) return false;
             const accepted = model.accept(plan.ticket, result);
             if (accepted.status === 'invalid') {
-                options.status(
-                    `${accepted.diagnostic} Use Load conditional filters to retry unresolved prefills.`,
-                    true
-                );
+                options.status(`${accepted.diagnostic} ${retry}`, true);
                 return false;
             }
             if (accepted.status !== 'accepted') return false;
@@ -167,11 +167,8 @@ export function createConditionalLinkedFilters(options: {
             return true;
         } catch (error) {
             if (accepts()) {
-                options.status(
-                    'Filter read failed. Use Load conditional filters to retry unresolved prefills.',
-                    true
-                );
-                throw error;
+                options.status(`Filter read failed. ${retry}`, true);
+                return false;
             }
             if (
                 current() &&
@@ -179,10 +176,7 @@ export function createConditionalLinkedFilters(options: {
                 sessionKey(context.client) === key &&
                 model.isCurrent(plan.ticket)
             )
-                options.status(
-                    'Filter read interrupted. Use Load conditional filters to retry unresolved prefills.',
-                    true
-                );
+                options.status(`Filter read interrupted. ${retry}`, true);
             return false;
         } finally {
             model.discard(plan.ticket);

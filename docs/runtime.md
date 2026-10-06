@@ -357,10 +357,29 @@ Maintainers with authorized internal source access can verify the checked-in
 snapshot against the detailed internal manifest:
 
 ```sh
-node scripts/generate-runtime-contracts.mjs --monorepo /path/to/monorepo --check
+node scripts/generate-runtime-contracts.mjs --monorepo /path/to/monorepo --revision <approved-full-source-SHA> --check
 ```
 
-The generator checks the recorded source revision and input file hashes.
+The generator checks the selected source revision and input file hashes.
+Before compiling contracts or writing outputs, it executes that checkout's
+unchanged canonical `backend-src/trpc/publicRuntimeCors.ts` transport helper.
+Every generated public tRPC query/mutation must receive both preflight and
+actual-response grants with the SDK's `miniext-context` header; private, mixed,
+malformed and unsupported-method/header requests must remain denied. The actual
+responses must remain private/no-store without credentialed CORS grants.
+
+This runs only when a maintainer explicitly passes `--monorepo`. Ordinary SDK
+and package CI uses committed source fixtures and never accesses the private
+monorepo. The helper currently has only type imports; if runtime dependencies
+are added, generation fails clearly and needs an explicit canonical backend
+test adapter, not an SDK copy of permission code or an allowlist parser.
+
+Do not assume an open canonical CORS fix is merged or deployed. Adopt an
+approved source revision with the matching policy; omission errors name each
+SDK operation, route, HTTP method and failed grant. To regenerate, omit
+`--check`, then review both generated outputs and the provenance (including
+the canonical policy source hash and guard hash). The existing default pins a
+historical revision and is not an automatic selection of current backend code.
 Regenerate the snapshot and update the packaged declaration digest when
 adopting API contract changes. Installed consumers need no internal source,
 generator or credentials.

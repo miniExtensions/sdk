@@ -550,7 +550,7 @@ try {
         assert.deepEqual(constructed.state.unexpected, []);
         constructedScenarios.push(scenario);
     }
-    assert.equal(constructedScenarios.length, 28);
+    assert.equal(constructedScenarios.length, 33);
     receipt.fixtureInventoryConstruction = {
         beforeServerAndBrowserStartup: true,
         scenarios: constructedScenarios,
@@ -4448,14 +4448,25 @@ try {
             call.input.extensionAccessToken,
             'FAKE_SYNTHETIC_HIDE_EMPTY_TOKEN'
         );
-        assert.equal(call.input.formRecord.type, type);
-        assert.equal(call.input.formRecord.tableId, state.expected.tableId);
-        if (type === 'edit')
+        if (type === 'edit') {
+            assert.deepEqual(call.input.formRecord, {
+                type: 'edit',
+                tableId: state.expected.tableId,
+                recordId: state.expected.recordId,
+                data,
+            });
+        } else {
+            assert.equal(type, 'create');
             assert.equal(
-                call.input.formRecord.recordId,
-                state.expected.recordId
+                Object.hasOwn(call.input.formRecord, 'tableId'),
+                false
             );
-        assert.deepEqual(call.input.formRecord.data, data);
+            assert.equal(
+                Object.hasOwn(call.input.formRecord, 'recordId'),
+                false
+            );
+            assert.deepEqual(call.input.formRecord, { type: 'create', data });
+        }
         assert.deepEqual(call.input.formFieldIdsWithUnsavedChanges, dirty);
         assert.deepEqual(call.input.context, { type: 'direct-url' });
         assert.equal(call.input.isComputeMode, false);

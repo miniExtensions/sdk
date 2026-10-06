@@ -30,28 +30,28 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11387853990',
+    packageArtifactId: '11390861176',
     packageZipSha256:
-        'de15a529e408ce3a09f22b0724f55085859dabaf82d3063133df55a9d65064e9',
+        'ae186ef2e3dfa0c91853b5fd7dfd5ff8289ba9242662ced4b25b927fdbf77b26',
     packageSha256:
-        'e376ab9da69376ad93b5742b2c12508df4a680819c5afbbf09a66defcc1381c0',
-    packageBytes: 267441,
-    packageFiles: 187,
+        'def1edd5ce761aaffea6063071bc7b02261ef2f9ddc6787a9e0d48a4ae3b0ca6',
+    packageBytes: 269979,
+    packageFiles: 191,
     packageZipMembers: 4,
-    fixtureArtifactId: '11388497203',
+    fixtureArtifactId: '11390871291',
     fixtureZipSha256:
-        '3baa9bd6edd8e76f414eb0c35c1d824739aa48a9384560efd5f788190e3f6705',
+        '2480616eefd97ff566f10c049e00b517d01b4aa3c0cb6937f58de128490f0d2c',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
     fixtureSources: 13,
-    starterSdkInputs: 32,
+    starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: '35348352f4f6b0f50703a54c5ab32f39655a18e4',
-        tree: '0c4e150d4bda8354ac0fe363fa191b67408f1f58',
+        commit: '8af6932f6a87a059052dfe13fd63875173eba7e6',
+        tree: 'ffa1f7bab2a2efbbbc35488c19c79eca77c5a800',
     },
-    runId: '37409650974',
+    runId: '37414232867',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -177,6 +177,7 @@ for entry in manifest['sources']:
     check(entry,data)
 sdk_counts={}
 assert any(e['origin']=='installed-sdk-archive' and e['path']=='node_modules/@miniextensions/sdk/dist/esm/forms/visibility.js' for e in manifest['bundleInputs']['starter'])
+assert any(e['origin']=='installed-sdk-archive' and e['path']=='node_modules/@miniextensions/sdk/dist/esm/forms/projection.js' for e in manifest['bundleInputs']['starter'])
 assert any(e['origin']=='installed-sdk-archive' and e['path']=='node_modules/@miniextensions/sdk/dist/esm/ui/addressAutocomplete.js' for e in manifest['bundleInputs']['starter'])
 for kind,count in [('starter',expected['starterSdkInputs']),('auth',expected['authSdkInputs'])]:
     entries=[e for e in manifest['bundleInputs'][kind] if e['origin']=='installed-sdk-archive']
@@ -217,6 +218,7 @@ const receipt = {
         'No independent exploratory/manual Chrome credit.',
         'Hidden/blank title and fallback verification variants are not in this fixture.',
         'Configured choices cover a flat Form with a visible direct scalar driver; no general hidden/linked projection credit.',
+        'Additional projection cases compose conditional removal with configured choices for their declared flat physical scalar dependencies only; no section/computed/linked/lookup projection credit.',
         'Visibility cases cover their declared one-page checkbox/unsupported condition and section configurations; no multipage or general hosted parity credit.',
         'Interaction Save assertions prove native dispatch with validation responses, not durable persistence.',
         'Address cases cover editable unmasked singleLineText, a valid character cap and one optional one-page checkbox predicate; no provider/backend/general configuration credit.',
@@ -2918,7 +2920,283 @@ try {
             save: 0,
         });
     });
-    assert.equal(receipt.cases.length, 24);
+    for (const multiple of [false, true]) {
+        await exercise(
+            multiple
+                ? 'starter-projection-multiple'
+                : 'starter-projection-single',
+            async (result) => {
+                await driver.get(
+                    `${origin}/starter/index.html?scenario=projection-${multiple ? 'multiple' : 'single'}`
+                );
+                await clickText('Connect and load');
+                const choiceId = multiple
+                    ? 'fld_projection_multiple'
+                    : 'fld_projection_single';
+                const selectSelector = `#screen select[data-field-id="${choiceId}"]`;
+                const projectionChoice = (state) =>
+                    state.selects.find((entry) => entry.fieldId === choiceId);
+                const selectedProjection = (state) =>
+                    projectionChoice(state)
+                        .options.filter(
+                            (entry) => entry.selected && entry.value !== ''
+                        )
+                        .map((entry) => entry.value);
+                const assertBetaDenied = (state) => {
+                    const beta = projectionChoice(state).options.find(
+                        (entry) => entry.value === 'Beta'
+                    );
+                    assert(!beta || beta.disabled);
+                    assert(
+                        !projectionChoice(state).options.some(
+                            (entry) => entry.value === 'Gamma'
+                        ),
+                        'Static allowlist must still exclude Gamma.'
+                    );
+                };
+                const driverSelector =
+                    '#screen input[data-field-id="fld_projection_driver"]';
+                const showSelector =
+                    '#screen input[data-field-id="fld_projection_show"]';
+                const witnessSelector =
+                    '#screen input[data-field-id="fld_projection_witness"]';
+                const assertCompleteSave = (
+                    call,
+                    state,
+                    show,
+                    selectedValue
+                ) => {
+                    assert.equal(call.method, 'POST');
+                    assert.equal(
+                        call.input.extensionAccessToken,
+                        'FAKE_SYNTHETIC_PROJECTION_TOKEN'
+                    );
+                    assert.deepEqual(call.input.formRecord, {
+                        type: 'edit',
+                        tableId: state.expected.tableId,
+                        recordId: state.expected.recordId,
+                        data: {
+                            ...state.expected.initial,
+                            fld_projection_show: show,
+                            fld_projection_driver: 'allowed edited',
+                            [choiceId]: selectedValue,
+                        },
+                    });
+                    assert.deepEqual(
+                        [...call.input.formFieldIdsWithUnsavedChanges].sort(),
+                        [
+                            'fld_projection_show',
+                            'fld_projection_driver',
+                            choiceId,
+                        ].sort()
+                    );
+                    assert.deepEqual(call.input.context, {
+                        type: 'direct-url',
+                    });
+                    assert.deepEqual(
+                        call.input
+                            .conditionalLinkedRecordFieldIdsToFilteringValues,
+                        {}
+                    );
+                };
+                await waitReady(
+                    (state) =>
+                        projectionChoice(state) != null &&
+                        state.status === 'Loaded form loaded.',
+                    'Actual flat conditional projection Form load.'
+                );
+                let state = await capture(
+                    result,
+                    'populated-driver-denies-beta'
+                );
+                assertBetaDenied(state);
+                assert.equal(saves(state).length, 0);
+                await assertNativeVisibility(
+                    ['fld_projection_driver', 'fld_projection_witness'],
+                    true
+                );
+                const witness = await find(witnessSelector);
+                assert.equal(await witness.isEnabled(), false);
+                assert.equal(
+                    await witness.getAttribute('value'),
+                    'Retained readonly text'
+                );
+                const text = await find(driverSelector);
+                const originalTextId = await text.getId();
+                await replaceInput(text, 'allowed edited', 'text');
+                const show = await find(showSelector);
+                assert.equal(await show.isSelected(), true);
+                await show.sendKeys(Key.SPACE, Key.TAB);
+                await waitReady(
+                    (value) =>
+                        visibilityControl(value, 'fld_projection_driver')
+                            .hidden &&
+                        projectionChoice(value).options.some(
+                            (entry) => entry.value === 'Beta' && !entry.disabled
+                        ),
+                    'Hidden scalar driver removes only its evaluation-copy ID.'
+                );
+                state = await capture(
+                    result,
+                    'hidden-driver-enables-beta-full-record-witness'
+                );
+                await assertNativeVisibility(['fld_projection_driver'], false);
+                await assertNativeVisibility(['fld_projection_witness'], true);
+                assert.equal(
+                    await text.getAttribute('value'),
+                    'allowed edited'
+                );
+                assert.equal(
+                    await witness.getAttribute('value'),
+                    'Retained readonly text'
+                );
+                assert.equal(await witness.isEnabled(), false);
+                assert.equal(
+                    projectionChoice(state).options.find(
+                        (entry) => entry.value === 'Beta'
+                    ).label,
+                    'Projected Beta'
+                );
+                assert.equal(
+                    await (
+                        await find(
+                            `#screen [data-choice-availability-field-id="${choiceId}"]`
+                        )
+                    ).getAttribute('data-choice-availability'),
+                    'ready'
+                );
+                assert.equal(saves(state).length, 0);
+                const select = await find(selectSelector);
+                assert.equal(
+                    await select.getAttribute('multiple'),
+                    multiple ? 'true' : null
+                );
+                await select.sendKeys(Key.END, Key.TAB);
+                state = await capture(
+                    result,
+                    'native-projected-beta-selection'
+                );
+                assert.deepEqual(selectedProjection(state), ['Beta']);
+                assert.equal(saves(state).length, 0);
+                await clickText('Save');
+                await waitReady(
+                    (value) =>
+                        saves(value).length === 1 &&
+                        value.status?.includes('The Form was not saved.'),
+                    'Deliberate complete native Save preserves hidden scalar driver.'
+                );
+                state = await capture(result, 'complete-hidden-native-save');
+                assertCompleteSave(
+                    saves(state)[0],
+                    state,
+                    false,
+                    multiple ? ['Beta'] : 'Beta'
+                );
+                await assertNativeVisibility(['fld_projection_driver'], false);
+                await show.sendKeys(Key.SPACE, Key.TAB);
+                await waitReady(
+                    (value) =>
+                        !visibilityControl(value, 'fld_projection_driver')
+                            .hidden,
+                    'Reveal restores the populated scalar driver without rewriting it.'
+                );
+                state = await capture(
+                    result,
+                    'revealed-driver-retains-unavailable-beta'
+                );
+                await assertNativeVisibility(
+                    ['fld_projection_driver', 'fld_projection_witness'],
+                    true
+                );
+                assert.equal(
+                    await text.getAttribute('value'),
+                    'allowed edited'
+                );
+                assert.deepEqual(selectedProjection(state), ['Beta']);
+                assert.equal(
+                    projectionChoice(state).options.find(
+                        (entry) => entry.value === 'Beta'
+                    ).label,
+                    'Projected Beta'
+                );
+                assert.equal(saves(state).length, 1);
+                if (multiple) {
+                    const retained = await (
+                        await find(selectSelector)
+                    ).findElement(By.css('option[value="Beta"]'));
+                    assert(await retained.isEnabled());
+                    await driver
+                        .actions()
+                        .keyDown(Key.CONTROL)
+                        .click(retained)
+                        .keyUp(Key.CONTROL)
+                        .perform();
+                    await (await find(selectSelector)).sendKeys(Key.TAB);
+                } else
+                    await (
+                        await find(selectSelector)
+                    ).sendKeys(Key.HOME, Key.TAB);
+                state = await capture(
+                    result,
+                    'native-removal-denies-readdition'
+                );
+                assert.deepEqual(selectedProjection(state), []);
+                assertBetaDenied(state);
+                assert.equal(saves(state).length, 1);
+                await clickText('Save');
+                await waitReady(
+                    (value) =>
+                        saves(value).length === 2 &&
+                        value.status?.includes('The Form was not saved.'),
+                    'Deliberate complete native cleared-selection Save.'
+                );
+                state = await capture(result, 'complete-cleared-native-save');
+                assertCompleteSave(
+                    saves(state)[1],
+                    state,
+                    true,
+                    multiple ? [] : null
+                );
+                await nativeChoice('#visitor', 'B');
+                state = await capture(
+                    result,
+                    'native-visitor-b-retires-projection-controls'
+                );
+                assert.equal(state.visibility.controls.length, 0);
+                assert.equal(projectionChoice(state), undefined);
+                assert.equal(saves(state).length, 2);
+                await nativeChoice('#visitor', 'A');
+                await waitReady(
+                    (value) => projectionChoice(value) != null && !value.busy,
+                    'A-to-B-to-A restores the accepted draft with a fresh owner.'
+                );
+                state = await capture(
+                    result,
+                    'native-aba-fresh-controls-retained-draft'
+                );
+                assert.notEqual(
+                    await (await find(driverSelector)).getId(),
+                    originalTextId
+                );
+                assert.equal(
+                    await (await find(driverSelector)).getAttribute('value'),
+                    'allowed edited'
+                );
+                assert.equal(
+                    await (await find(showSelector)).isSelected(),
+                    true
+                );
+                assert.deepEqual(selectedProjection(state), []);
+                assertBetaDenied(state);
+                assertCalls(state, [
+                    'fetchExtensionForEndUser',
+                    'saveForm',
+                    'saveForm',
+                ]);
+            }
+        );
+    }
+    assert.equal(receipt.cases.length, 26);
     assert(
         receipt.cases.every((v) => v.status === 'passed'),
         'Every exact synthetic case must pass; failed cases are retained without retry.'

@@ -1,0 +1,90 @@
+name: Immutable SDK synthetic Chromium proof
+
+on:
+    push:
+        branches:
+            - codex/sdk-cascade-native-run-20261006
+
+permissions:
+    contents: read
+    actions: read
+
+jobs:
+    privacy:
+        if: github.repository == 'miniExtensions/sdk'
+        runs-on: ubuntu-24.04
+        timeout-minutes: 15
+        env:
+            SDK_CHROME_BINARY: /opt/google/chrome/chrome
+            SDK_CHROMEDRIVER_BINARY: /usr/local/share/chromedriver-linux64/chromedriver
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+              with:
+                  node-version: 22.23.3
+            - name: Download exact tested package ZIP
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+              with:
+                  repository: miniExtensions/sdk
+                  # Accepted main: 38 baseline cases plus three separately scoped cascade cases.
+                  # Activation branch is created only after parent authorizes one exact run.
+                  run-id: 37524742913
+                  artifact-ids: 11441218222
+                  github-token: ${{ github.token }}
+                  path: ${{ runner.temp }}/sdk-chromium-inputs/package
+                  skip-decompress: true
+                  digest-mismatch: error
+            - name: Download exact synthetic fixture ZIP
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+              with:
+                  repository: miniExtensions/sdk
+                  run-id: 37524742913
+                  artifact-ids: 11441602856
+                  github-token: ${{ github.token }}
+                  path: ${{ runner.temp }}/sdk-chromium-inputs/fixture
+                  skip-decompress: true
+                  digest-mismatch: error
+            - name: Install isolated WebDriver client
+              working-directory: test/browser-ci
+              run: npm ci --ignore-scripts --no-audit --no-fund
+            - name: Verify harness-only cascade transport supplement
+              working-directory: test/browser-ci
+              env:
+                  SDK_FIXTURE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/fixture
+              run: node --test cascade-fixture.test.mjs
+            - name: Exercise immutable synthetic UI in system Chrome
+              working-directory: test/browser-ci
+              env:
+                  SDK_PACKAGE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/package
+                  SDK_FIXTURE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/fixture
+                  SDK_BROWSER_RESULTS_DIR: ${{ runner.temp }}/sdk-chromium-results
+              run: node privacy-proof.mjs
+            - name: Preserve failures before harness startup
+              if: always()
+              env:
+                  JOB_STATUS: ${{ job.status }}
+                  SDK_BROWSER_RESULTS_DIR: ${{ runner.temp }}/sdk-chromium-results
+              run: |
+                  node --input-type=module -e "import fs from 'node:fs'; import path from 'node:path'; const directory = process.env.SDK_BROWSER_RESULTS_DIR; fs.mkdirSync(directory, { recursive: true }); const receipt = path.join(directory, 'run.json'); if (!fs.existsSync(receipt)) fs.writeFileSync(receipt, JSON.stringify({ status: 'not-executed', jobStatus: process.env.JOB_STATUS, harnessHead: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID, reason: 'A preceding download/install/startup step failed. Native job logs own the failure; no browser assertion credit.' }, null, 2) + '\n');"
+            - name: Retain browser results and failure evidence
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: sdk-synthetic-chromium-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+                  path: ${{ runner.temp }}/sdk-chromium-results/
+                  if-no-files-found: warn
+                  retention-days: 7
+                  compression-level: 0
+                  archive: true
+                  overwrite: false
+                  include-hidden-files: false
+            - name: Remove owned downloads, results and isolated dependencies
+              if: always()
+              env:
+                  SDK_PACKAGE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/package
+                  SDK_FIXTURE_ZIP_DIR: ${{ runner.temp }}/sdk-chromium-inputs/fixture
+                  SDK_BROWSER_RESULTS_DIR: ${{ runner.temp }}/sdk-chromium-results
+              run: |
+                  node --input-type=module -e "import fs from 'node:fs'; for (const path of [process.env.SDK_PACKAGE_ZIP_DIR, process.env.SDK_FIXTURE_ZIP_DIR, process.env.SDK_BROWSER_RESULTS_DIR, 'test/browser-ci/node_modules']) { fs.rmSync(path, { recursive: true, force: true }); if (fs.existsSync(path)) throw new Error('Owned cleanup failed: ' + path); } console.log('Owned Chromium inputs, results and isolated dependencies removed');"

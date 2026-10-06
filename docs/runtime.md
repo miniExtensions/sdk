@@ -362,7 +362,7 @@ node scripts/generate-runtime-contracts.mjs --monorepo /path/to/monorepo --revis
 
 The generator checks the selected source revision and input file hashes.
 Before compiling contracts or writing outputs, it executes that checkout's
-unchanged canonical `backend-src/trpc/publicRuntimeCors.ts` transport helper.
+unchanged canonical public-runtime CORS transport helper.
 Every generated public tRPC query/mutation must receive both preflight and
 actual-response grants with the SDK's `miniext-context` header; private, mixed,
 malformed and unsupported-method/header requests must remain denied. The actual

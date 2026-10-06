@@ -1323,14 +1323,21 @@ describe('actual browser starter prepared review', () => {
         });
     }
 
-    it('blocks unsupported rendered fields and retained section configuration without exposing values', async (test) => {
+    it('blocks section plus active edit empty hiding without exposing values', async (test) => {
         const form = reviewForm();
+        form.payload.formRecord = {
+            type: 'edit',
+            tableId: 'tbl_review',
+            recordId: 'rec_review',
+            data: form.payload.formRecord.data,
+        };
         const readonly = form.payload.fieldIdsToSchemas.fld_readonly;
         assert.ok(readonly);
         readonly.miniExtConfig = {
             readOnly: true,
             enableSectionHeader: false,
             headerSectionTitle: 'Retained section',
+            hideFieldIfEmpty: true,
         };
         const fixture = await mount(test, form);
         fixture.submit();
@@ -1339,7 +1346,7 @@ describe('actual browser starter prepared review', () => {
         assert.equal(fixture.window.document.querySelector('dialog'), null);
         assert.match(
             fixture.window.document.getElementById('status')?.textContent ?? '',
-            /review.*unavailable|review.*supports/i
+            /unavailable|blocked/i
         );
     });
 

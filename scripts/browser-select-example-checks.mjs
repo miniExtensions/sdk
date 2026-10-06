@@ -401,8 +401,8 @@ const checkPackedConditionalProjection = async ({
         { name: 'single scalar conditional projection', multiple: false },
         { name: 'multiple scalar conditional projection', multiple: true },
         {
-            name: 'retained disabled section title blocks projection',
-            blocked: 'section',
+            name: 'active linked filter blocks projection',
+            blocked: 'linked-filter',
         },
         { name: 'computed driver blocks projection', blocked: 'computed' },
     ];
@@ -426,9 +426,13 @@ const checkPackedConditionalProjection = async ({
         const form = fixture.page();
         const driverSchema =
             form.payload.fieldIdsToSchemas.fld_projection_driver;
-        if (scenario.blocked === 'section') {
+        if (scenario.blocked === 'linked-filter') {
             driverSchema.miniExtConfig.headerSectionTitle =
                 'Retained section title';
+            driverSchema.miniExtConfig.filterLinkedRecordsConditionFields = {
+                logicalOperator: 'and',
+                conditions: [],
+            };
             driverSchema.miniExtConfig.enableSectionHeader = false;
         } else if (scenario.blocked === 'computed') {
             driverSchema.airtableField.isComputed = true;

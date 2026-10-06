@@ -658,12 +658,14 @@ describe('actual Form starter configured scalar choices', () => {
         assert.equal(requests.length, 2);
     });
 
-    it('blocks a retained section title with finite presentation status while permitting retained removal', async (test) => {
+    it('blocks active linked-filter projection with finite status while permitting retained removal', async (test) => {
         const form = dynamicSelectForm(true);
         const driver = form.payload.fieldIdsToSchemas.fld_driver!;
         driver.miniExtConfig = {
-            headerSectionTitle: 'Retained canonical section',
-            enableSectionHeader: false,
+            filterLinkedRecordsConditionFields: {
+                logicalOperator: 'and',
+                conditions: [],
+            },
         };
         form.payload.formRecord.data.fld_colors = ['Blue'];
         const { window, saves, requests } = await mountDynamicSelectForm(

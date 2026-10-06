@@ -257,7 +257,6 @@ export async function checkFormReviewRecipe({
         'multi-page',
         'compute',
         'automatic',
-        'section',
         'computed',
         'malformed-readonly',
     ]) {
@@ -269,11 +268,7 @@ export async function checkFormReviewRecipe({
             variant.payload.publicFields.state.enableFormComputeMode = true;
         else if (unsupported === 'automatic')
             variant.payload.publicFields.state.autoSubmitAfterPrefill = true;
-        else if (unsupported === 'section') {
-            variant.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.headerSectionTitle =
-                'Retained section';
-            variant.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.enableSectionHeader = false;
-        } else if (unsupported === 'computed')
+        else if (unsupported === 'computed')
             variant.payload.fieldIdsToSchemas.fld_review_readonly.airtableField.isComputed = true;
         else data.fld_review_readonly = ['Unsupported native array'];
         const before = structuredClone(data);

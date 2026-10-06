@@ -89,7 +89,7 @@ are displayed intact rather than converted to text for saving.
 Select controls use the published choice-ID allowlist and numeric maximum,
 retain existing unavailable choice names for removal, and keep custom labels
 separate from saved native names. A nonempty allowlist disables **Add a choice**
-even when a retained `allowAddingNewOptions` flag is true. In a flat Form,
+even when a retained `allowAddingNewOptions` flag is true. In a supported one-page Form,
 configured choice conditions use the installed bounded scalar helper.
 Unsupported predicates show an unavailable status; the projection limits
 below apply.
@@ -132,7 +132,8 @@ errors; an unknown outcome keeps submission blocked until explicit inspection.
 Review may open with an empty required answer: the server remains authoritative
 for required, readonly, computed and conditional-field validation.
 
-This review recipe supports a flat, one-page manual Form containing direct
+This review recipe supports a one-page manual Form with scalar section
+conditions, containing direct
 single-line/multiline text, email, URL, phone, number, currency, percent, rating,
 checkbox and barcode fields, including readonly scalar answers. It presents
 plain text in published field order, omits canonical empty/conditionally hidden
@@ -143,14 +144,14 @@ URLs are displayed as text, with no link or embedded content.
 Barcode answers keep the starter's existing readonly display; review adds no
 barcode editor.
 
-Review uses the installed canonical flat scalar projection as a separate copy;
+Review uses the installed canonical scalar section projection as a separate copy;
 it never sends that projection as the Save record. Preparing review makes the
 fields inert and retires pending address prediction/detail intents before
 capture. Confirmation belongs to the current visitor/client/session, loaded
 Form, configuration/context, draft handle and actual draft revision. An edit,
 including edit-away-and-back, Reload, Discard, disconnect or owner transition
 invalidates it. Returning to Edit permits fresh typing without repeating an old
-address query. Sections, pages, compute/automatic submission, linked filters,
+address query. Pages, compute/automatic submission, linked filters,
 linked/lookup/computed fields, selects, dates, rich text and other complex
 renderers remain outside this recipe; unavailable review blocks submission
 instead of presenting an incomplete preview.
@@ -173,12 +174,16 @@ Field visibility and configured choice availability both recompute after
 accepted edits while retaining the native draft. Their record contracts
 differ: field predicates use the complete unfiltered draft, while choice
 predicates need a separate conditional-record projection. The starter uses
-`createFlatScalarFormRecordProjection` for absent or explicit `one-page` mode
+`createScalarFormRecordProjection` for absent or explicit `one-page` mode
 with direct scalar dependencies: every field predicate reads the complete
 accepted draft, then condition-hidden IDs are removed only from an evaluation
 copy. Hiding or revealing a driver recomputes choice availability while all
-native values and dirty IDs remain available for Save. Sections, active linked
-filters and referenced linked/lookup/computed drivers remain unsupported.
+native values and dirty IDs remain available for Save. Canonical section
+projection recognizes retained titles even when displayed headers are disabled;
+screen visibility still honors the enable flag. Active linked filters and
+referenced linked/lookup/computed drivers remain unsupported. Section plus
+active edit empty hiding remains blocked. Pass the published order verbatim;
+see the [projection recipe](../../docs/forms.md#one-page-conditional-field-visibility).
 Frontend visibility results never replace the choice projection.
 
 - Choose **Save** to submit. Server validation is shown next to the Form; a

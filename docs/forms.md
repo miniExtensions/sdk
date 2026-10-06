@@ -655,24 +655,84 @@ the previous section, even if it retains the propagation flag without a
 predicate. This frontend compositor does not produce the backend's filtered
 record projection for conditional select options or other consumers.
 
-`createFlatScalarFormRecordProjection` supplies a separate conditional-record
-copy for flat Forms with supported direct scalar predicates. Pass Form field
-IDs/schema metadata, complete accepted native data, current record ID and an
-explicit compiler policy. The available result contains `record`,
-`hiddenFieldIds` and safe diagnostics; blocked results carry finite codes. It
-evaluates every field against the same complete data before removing only
-condition-hidden IDs from a deep copy. It retains readonly, empty-hidden,
-ordinary select and unrendered native values, and never changes the draft or
-Save input. Referenced computed/linked/lookup drivers, native errors and
-ambiguous metadata remain unavailable. Any published nonblank section title
-(including `enableSectionHeader: false`), section propagation or active linked
-filter blocks this bounded adapter. It does not supply linked/lookup value
-filtering or general section projection; unrelated complex values are retained
-unchanged and are not claimed as projected values. The starter uses this copy
-for configured choices in absent or explicit `one-page` mode, with supported
-configured scalar dependencies. A condition-hidden driver therefore changes
-new choice availability while its accepted native value remains in the full
-Save record. Frontend visibility results never replace this projection.
+`createScalarFormRecordProjection` supplies a detached deep copy for one-page
+conditional evaluation with supported direct scalar predicates and canonical
+ordered sections. Pass `fieldIdsInForm` verbatim: the input cannot prove order
+completeness. Duplicate IDs, nonstrings and sparse entries block. Duplicate
+physical IDs, contradictory schema/physical identity, type, name or computed
+status, and malformed section metadata return `invalid-metadata`.
+
+A nonblank `headerSectionTitle` starts a projection section even when
+`enableSectionHeader: false`; displayed grouping follows the frontend rules
+above. At each titled header, reset the inherited predicate, then inherit that
+header's non-null conditions only when `applyFieldConditionsToSection: true`.
+Untitled propagation flags do not start or replace inheritance. Section and own
+field predicates combine with AND. Every predicate reads the same complete
+native data, including hidden drivers; collect decisions before removing
+condition-hidden IDs from the copied record. Self, forward and mutual field
+references use that snapshot, without a fixed point or dependency graph.
+Cyclic condition definitions remain invalid. Invalid or unsupported own
+predicates block even beneath a hidden section.
+
+Use the copied record for configured choice evaluation's second phase; never
+feed it back into visibility or Save. Readonly, empty-hidden and unrendered
+native values are not independently pruned. The result is writable and
+detached, not runtime-frozen. Active linked filtering and referenced
+linked/lookup/computed drivers remain unsupported. Section plus active edit
+empty hiding still blocks presentation and the starter Save gate.
+
+The existing `createFlatScalarFormRecordProjection` retains its types, blocked
+codes and behavior, including scanning schemas outside the supplied order and
+rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
+adapter and scalar-only Review opt into the new helper, retaining their
+one-page and supported-driver/answer checks. Review still rejects select fields;
+choice and Review acceptance fixtures are separate consumers.
+
+```ts
+import type { AirtableValue, FormLoadedResult } from '@miniextensions/sdk';
+import { createScalarFormRecordProjection } from '@miniextensions/sdk/forms';
+
+export function sectionProjection(
+    loaded: FormLoadedResult,
+    nativeData: Readonly<Record<string, AirtableValue>>
+) {
+    const state = loaded.payload.publicFields.state;
+    const mode =
+        state != null &&
+        typeof state === 'object' &&
+        'multiPageFormMode' in state
+            ? state.multiPageFormMode
+            : undefined;
+    if (mode != null && mode !== 'one-page') return null;
+    return createScalarFormRecordProjection({
+        fieldIds: loaded.payload.fieldIdsInForm,
+        fieldIdsToSchemas: loaded.payload.fieldIdsToSchemas,
+        airtableFields: Object.values(loaded.payload.fieldIdsToSchemas).map(
+            (schema) => schema.airtableField
+        ),
+        data: nativeData,
+        recordId:
+            loaded.payload.formRecord.type === 'edit'
+                ? loaded.payload.formRecord.recordId
+                : '',
+        invalidConditionMode: 'strict',
+    });
+}
+```
+
+Recompute after each accepted edit and metadata replacement. Keep the full
+native snapshot and dirty IDs for a later deliberate `createFormSaveInput`.
+Apply current owner/revision checks before using a result. A blocked projection
+is unavailable conditional presentation, not new write authority or an
+automatic mutation. The starter choice adapter additionally checks configured,
+noncomputed scalar option drivers before its existing projected-record second
+phase. Backend validation and permissions remain authoritative.
+
+Maintainer comparison fixtures execute the canonical helper at its pinned
+revision. In the SDK source checkout run
+`node scripts/generate-section-projection-fixtures.mjs /path/to/explicit/canonical-checkout`.
+The generator requires that exact clean revision and writes source-bound local
+test fixtures; ordinary package CI needs no private checkout or runtime network.
 
 `blocked` carries a finite code and safe compiler code/severity/index-path
 diagnostics, excluding editor IDs, formulas, operands, values and exception

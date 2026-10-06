@@ -320,15 +320,16 @@ record values or condition IDs.
 Record projection belongs to the caller. Supply the same accepted native
 record and metadata used by your presentation, including any required hidden
 field or linked-value projection. The helper neither reconstructs hidden
-fields nor hydrates linked records. The browser starter applies this helper
-only to flat rules using visible direct physical driver fields that need no
-hidden-field or linked-value pruning. It recomputes after accepted draft
-changes while the visitor, Form and field context remain current. Broader
+fields nor hydrates linked records. The browser starter supplies
+`createFlatScalarFormRecordProjection` for flat one-page rules with current
+noncomputed direct scalar dependencies. It evaluates field predicates against
+the same complete accepted draft, removes condition-hidden IDs only from an
+independent evaluation copy and recomputes after accepted edits. Hidden values
+remain in the full native Save record. Sections (including retained nonblank
+titles with disabled headers), active linked filters and referenced
+linked/lookup/computed drivers remain unavailable. Native empty hiding and
+readonly display settings do not prune this conditional-record copy. Broader
 projection and presentation workflows remain application-owned.
-The starter's conservative gate requires absent or null `conditionalFields`
-on all published schemas, no configured sections, multi-page mode or active
-linked filters, and current visible noncomputed scalar drivers. Even an empty
-saved conditional-field definition uses the caller-projected recipe instead.
 
 This complete browser recipe mounts one select into an empty host. The caller
 owns the accepted field/metadata snapshot, projected record, native baseline

@@ -5,6 +5,10 @@ import type {
     RuntimeFieldSchema,
 } from '@miniextensions/sdk';
 import { getSelectFieldPolicy } from '@miniextensions/sdk/ui';
+import {
+    createFlatScalarFormRecordProjection,
+    evaluateFormFieldVisibility,
+} from '@miniextensions/sdk/forms';
 import { settings } from './dom.js';
 
 const scalarTypes = new Set([
@@ -24,7 +28,7 @@ const scalarTypes = new Set([
 const object = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Narrow starter recipe, not the canonical linked/hidden Form projector. */
+/** Flat scalar choice recipe; linked/lookup/section projection stays unavailable. */
 export function flatChoiceConditionRecord(
     page: FormLoadedResult,
     field: RuntimeFieldSchema,
@@ -32,34 +36,21 @@ export function flatChoiceConditionRecord(
 ): AirtableRecord | null {
     try {
         const schemas = Object.values(page.payload.fieldIdsToSchemas);
-        const visible = new Set(page.payload.fieldIdsInForm);
-        if (settings(page.payload.publicFields).multiPageFormMode != null)
-            return null;
-        // Inspect all published schemas: a section rule can prune another
-        // driver's value even when that driver's own config has no condition.
-        for (const schema of schemas) {
-            const config = schema.miniExtConfig;
-            if (config == null) continue;
-            if (
-                ('conditionalFields' in config &&
-                    config.conditionalFields != null) ||
-                ('applyFieldConditionsToSection' in config &&
-                    config.applyFieldConditionsToSection === true) ||
-                ('enableSectionHeader' in config &&
-                    config.enableSectionHeader === true) ||
-                ('headerSectionTitle' in config &&
-                    typeof config.headerSectionTitle === 'string' &&
-                    config.headerSectionTitle.trim() !== '') ||
-                ('conditionalLinkedRecordFilterFields' in config &&
-                    config.conditionalLinkedRecordFilterFields != null &&
-                    (!Array.isArray(
-                        config.conditionalLinkedRecordFilterFields
-                    ) ||
-                        config.conditionalLinkedRecordFilterFields.length !==
-                            0))
-            )
-                return null;
-        }
+        const configured = new Set(page.payload.fieldIdsInForm);
+        const pageMode = settings(page.payload.publicFields).multiPageFormMode;
+        if (pageMode != null && pageMode !== 'one-page') return null;
+        const projection = createFlatScalarFormRecordProjection({
+            fieldIds: page.payload.fieldIdsInForm,
+            fieldIdsToSchemas: page.payload.fieldIdsToSchemas,
+            airtableFields: schemas.map((schema) => schema.airtableField),
+            data,
+            recordId:
+                page.payload.formRecord.type === 'edit'
+                    ? page.payload.formRecord.recordId
+                    : '',
+            invalidConditionMode: 'strict',
+        });
+        if (projection.type !== 'available') return null;
         const config = field.miniExtConfig;
         const rules =
             config && 'conditionsForOptions' in config
@@ -88,26 +79,23 @@ export function flatChoiceConditionRecord(
                         return false;
                     const reference = condition.setting.idOrName;
                     if (!object(reference)) return false;
-                    const driver = schemas.find((schema) =>
+                    const drivers = schemas.filter((schema) =>
                         reference.type === 'id'
                             ? schema.airtableField.id === reference.id
                             : reference.type === 'name'
                               ? schema.airtableField.name === reference.name
                               : false
                     );
+                    const driver = drivers[0];
                     if (
+                        drivers.length !== 1 ||
                         driver == null ||
-                        !visible.has(driver.airtableField.id) ||
+                        !configured.has(driver.airtableField.id) ||
                         driver.airtableField.isComputed ||
                         !scalarTypes.has(driver.airtableField.config.type)
                     )
                         return false;
-                    const driverConfig = driver.miniExtConfig;
-                    return !(
-                        driverConfig &&
-                        'hideFieldIfEmpty' in driverConfig &&
-                        driverConfig.hideFieldIfEmpty === true
-                    );
+                    return true;
                 });
             } finally {
                 active.delete(definition);
@@ -125,16 +113,31 @@ export function flatChoiceConditionRecord(
             );
             if (!inspect(rule?.config?.conditionsForOption ?? null))
                 return null;
+            // Reuse native/error/reference guards before the existing select
+            // resolver evaluates its current projected record. A hidden
+            // driver's accepted value remains in the draft, but is absent
+            // from this record by the canonical conditional rule.
+            const outcome = evaluateFormFieldVisibility({
+                field: {
+                    ...field,
+                    miniExtConfig: {
+                        ...field.miniExtConfig,
+                        conditionalFields:
+                            rule?.config?.conditionsForOption ?? undefined,
+                        hideFieldIfEmpty: false,
+                    },
+                },
+                airtableFields: schemas.map((schema) => schema.airtableField),
+                data: projection.record.fields,
+                formRecordType: 'create',
+                evaluationMode: 'runtime',
+                // Match the existing starter option resolver's saved-rule
+                // policy; conditional-field projection above stays strict.
+                invalidConditionMode: 'compatibility',
+            });
+            if (outcome.type === 'blocked') return null;
         }
-        // Only these flat, visible direct scalar dependencies are supported.
-        // Keep native bytes; the helper never reads links or computes values.
-        return {
-            id:
-                page.payload.formRecord.type === 'edit'
-                    ? page.payload.formRecord.recordId
-                    : '',
-            fields: { ...data },
-        };
+        return projection.record;
     } catch {
         return null;
     }

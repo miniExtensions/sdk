@@ -308,11 +308,13 @@ empty hiding return explicit blocked outcomes. These presentation helpers do
 not grant permissions or supply a backend filtered-record projection.
 
 These helpers read the same accepted native draft but use distinct record
-contracts. Field visibility reads the complete unfiltered draft. Configured
-choice conditions require the canonical filtered-record projection; the
-starter's flat adapter remains unavailable for any conditional-field or
-section context, even when all current field predicates are visible. Adding
-field visibility does not broaden that adapter.
+contracts. Field visibility reads the complete unfiltered draft.
+`createFlatScalarFormRecordProjection` supplies a separate conditional-record
+copy for configured choices in flat one-page Forms with direct scalar drivers.
+Every field predicate reads the complete draft before condition-hidden IDs are
+removed from the copy. Hidden native values remain in the draft and Save.
+Sections and linked/lookup/computed projection remain unsupported; frontend
+visibility results never substitute for this projection.
 
 The runtime supplies [conditional-filter primary values](docs/runtime.md#conditional-linked-filter-primary-values),
 [address reads](docs/runtime.md#address-predictions-and-place-formatting) and

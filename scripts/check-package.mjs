@@ -31,6 +31,7 @@ import {
 } from './address-autocomplete-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkFormAttachmentRecipe } from './form-attachment-recipe-checks.mjs';
+import { checkFormLinkedFilterRecipe } from './form-linked-filter-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 import { checkAdditionalRuntimeOperations } from './additional-runtime-recipe-checks.mjs';
@@ -291,6 +292,10 @@ try {
         happyDomModulePath: require.resolve('happy-dom'),
     });
     const attachmentRecipe = await checkFormAttachmentRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: formsGuideSources,
+    });
+    const linkedFilterRecipe = await checkFormLinkedFilterRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: formsGuideSources,
     });
@@ -1164,7 +1169,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         `${browserCombinedReviewChecks} actual packed browser combined empty-hiding/Review cases`
     );
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${attachmentRecipe.checks} attachment, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${editHideEmptyRecipe.checks} installed edit empty-hiding checkpoints, ${browserEditHideEmptyChecks} actual packed browser edit empty-hiding cases, ${addressAutocompleteRecipe.checks} actual installed address recipe checkpoints, ${browserAddressChecks} actual packed browser address checkpoints, ${addressCompositionRecipe.checks} actual installed address DOM-composition checkpoints and ${browserAddressCompositionChecks} actual packed browser address DOM-composition checkpoints (no OS IME proof), ${formReviewRecipeChecks} actual installed prepared-review recipe checkpoints, ${browserReviewChecks} actual packed browser prepared-review cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${attachmentRecipe.checks} attachment, ${linkedFilterRecipe.checks} cascade, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${editHideEmptyRecipe.checks} installed edit empty-hiding checkpoints, ${browserEditHideEmptyChecks} actual packed browser edit empty-hiding cases, ${addressAutocompleteRecipe.checks} actual installed address recipe checkpoints, ${browserAddressChecks} actual packed browser address checkpoints, ${addressCompositionRecipe.checks} actual installed address DOM-composition checkpoints and ${browserAddressCompositionChecks} actual packed browser address DOM-composition checkpoints (no OS IME proof), ${formReviewRecipeChecks} actual installed prepared-review recipe checkpoints, ${browserReviewChecks} actual packed browser prepared-review cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

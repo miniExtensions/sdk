@@ -209,7 +209,8 @@ Name references, duplicate IDs, malformed rules and missing metadata make
 filter presentation unavailable; repeated URL values are unsupported.
 Add/remove empty-driver flags remain independent; read-only and stale-owner
 guards remain intact. Portal child URL-prefill propagation is unsupported.
-This adds no SDK API or backend permission. See
+The opt-in `/forms` cascade model supplies this state; callers keep network,
+rendering and ownership. It adds no backend permission. See
 [Form workflow](examples/browser/README.md#form-workflow).
 
 Configured Form choice availability composes the scalar condition compiler
@@ -336,9 +337,11 @@ The runtime supplies [conditional-filter primary values](docs/runtime.md#conditi
 [address reads](docs/runtime.md#address-predictions-and-place-formatting) and
 [configured Button webhooks](docs/runtime.md#configured-button-webhooks).
 These are thin operations. The starter supplies the bounded configured cascade
-controls described above; other applications own their cascade presentation
-and downstream resets. Your app supplies deliberate single-flight Button
-actions. The optional
+controls described above; `createFormLinkedFilterModel` also exposes their
+network-free cascade state for custom renderers. See the
+[installed custom-renderer recipe](docs/forms.md#headless-conditional-linked-filter-cascades).
+Other applications own presentation and apply its downstream paging resets.
+Your app supplies deliberate single-flight Button actions. The optional
 [`/ui` address control](docs/ui.md#address-autocomplete) adds a bounded
 autocomplete presenter with intent/generation checks; the browser starter
 wires it for editable, unmasked direct single-line text and suspends it on

@@ -30,17 +30,17 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11391712638',
+    packageArtifactId: '11391623783',
     packageZipSha256:
-        '5cf2fb9f2098bf56b633df126b065467f625a26a3013140d572eb58f4cd8ad91',
+        '43ed78b1ddea42047dee4c0ec12077d75ec5241eef68f0f91412edaf5497e1c2',
     packageSha256:
-        '6942d5b46f768cf6c91ff83ed24b152d5e3ebea3273f043766769916fc951a27',
-    packageBytes: 274531,
+        '8c92567216dbf64df89b5662cd637d475cf7d971692784d04a74901aac1ead61',
+    packageBytes: 275848,
     packageFiles: 192,
     packageZipMembers: 4,
-    fixtureArtifactId: '11391387743',
+    fixtureArtifactId: '11391603719',
     fixtureZipSha256:
-        '76eb51fa787aa500689d768f92d18e293a356a0e7017761789360d2c5b9c27b2',
+        '72c227d5dba543b9c22ae405c38071c9f54df75d332de69c9f46cc2052046279',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
@@ -48,10 +48,10 @@ const expected = {
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: '25392413c4e22c9df76981d9f5f2e238b090eaec',
-        tree: '9a7791e1376438e9053221a80e8f8ceaa5edfec0',
+        commit: 'bdd662ca4ed84f96752273069a41b0c667b9ceb0',
+        tree: '149eb70bd11ff0e227214cd2b19ce884df3e6ada',
     },
-    runId: '37418032257',
+    runId: '37418887500',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -231,6 +231,7 @@ const receipt = {
         'Address stale responses exercise combined installed SDK and starter/presenter cancellation, without independently isolating presenter generations.',
         'Review cases cover one-page manual scalar rows and explicit current Confirm only; synthetic returned validation and uncertainty handling prove no backend rule evaluation or persistence.',
         'Native modal inertness is preserved. Pending draft/owner/configuration invalidation is separately a packed real-starter event oracle, not an ordinary background native gesture claim.',
+        'Empty-hiding cases cover explicit edit mode on twelve direct scalar types including richText and blocked section recovery; returned hidden-required errors are synthetic, without hosted backend validation, hidden-write authority or persistence credit. Create-mode polarity is a separate installed/packed oracle.',
     ],
 };
 const writeJson = (path, data) =>
@@ -3755,7 +3756,338 @@ try {
             assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
         }
     );
-    assert.equal(receipt.cases.length, 30);
+    const emptyControl = (state, name) =>
+        visibilityControl(state, `fld_empty_${name}`);
+    const loadEmpty = async (scenario) => {
+        await driver.get(`${origin}/starter/index.html?scenario=${scenario}`);
+        await clickText('Connect and load');
+        return waitReady(
+            (value) =>
+                value.visibility?.controls.length === 14 &&
+                value.status === 'Loaded form loaded.',
+            'Actual twelve-family empty-hiding Form load.'
+        );
+    };
+    const assertEmptySave = (state, expectedData, dirtyIds) => {
+        assert.equal(saves(state).length, 1);
+        const call = saves(state)[0];
+        assert.equal(call.method, 'POST');
+        assert.equal(
+            call.input.extensionAccessToken,
+            'FAKE_SYNTHETIC_HIDE_EMPTY_TOKEN'
+        );
+        assert.deepEqual(call.input.formRecord, {
+            type: 'edit',
+            tableId: state.expected.tableId,
+            recordId: state.expected.recordId,
+            data: expectedData,
+        });
+        assert.deepEqual(call.input.formFieldIdsWithUnsavedChanges, dirtyIds);
+        assert.deepEqual(call.input.context, { type: 'direct-url' });
+        assert.deepEqual(
+            call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
+            {}
+        );
+        assert.equal(call.input.isComputeMode, false);
+    };
+    await exercise(
+        'starter-edit-empty-hidden-required-native-save',
+        async (result) => {
+            await loadEmpty('hide-empty-edit');
+            let state = await capture(
+                result,
+                'canonical-empty-and-populated-native-twins'
+            );
+            const hidden = [
+                'email',
+                'url',
+                'multiline',
+                'phone',
+                'rich',
+                'rating',
+                'checkbox',
+                'barcode',
+            ];
+            const visible = [
+                'title',
+                'number',
+                'currency',
+                'percent',
+                'locked',
+                'tail',
+            ];
+            for (const name of hidden) assert(emptyControl(state, name).hidden);
+            for (const name of visible)
+                assert(!emptyControl(state, name).hidden);
+            await assertNativeVisibility(
+                hidden.map((name) => `fld_empty_${name}`),
+                false
+            );
+            await assertNativeVisibility(
+                visible.map((name) => `fld_empty_${name}`),
+                true
+            );
+            assert(emptyControl(state, 'email').disabled);
+            assert(emptyControl(state, 'locked').disabled);
+            assert.equal(
+                await (
+                    await find('#screen [data-field-id="fld_empty_locked"]')
+                ).isEnabled(),
+                false
+            );
+            assert(visibilityAlert(state).hidden);
+            await assertNativeVisibilityAlert(false);
+            assert.equal(saves(state).length, 0);
+            const title = await find(
+                '#screen input[data-field-id="fld_empty_title"]'
+            );
+            const initialTitleId = await title.getId();
+            // One accepted whitespace input hides this same control. Do not clear it
+            // first or send a second key command to an already hidden element.
+            await title.sendKeys(Key.chord(Key.CONTROL, 'a'), ' ');
+            await waitReady(
+                (value) =>
+                    emptyControl(value, 'title').hidden &&
+                    emptyControl(value, 'title').value === ' ',
+                'Native accepted whitespace self-hides the target.'
+            );
+            await replaceInput(
+                await find('#screen input[data-field-id="fld_empty_tail"]'),
+                'Accepted empty-hiding sibling',
+                'text'
+            );
+            state = await capture(
+                result,
+                'accepted-whitespace-hidden-with-visible-sibling'
+            );
+            assert.equal(await title.getAttribute('value'), ' ');
+            assert.equal(await title.isDisplayed(), false);
+            assert.equal(
+                emptyControl(state, 'tail').value,
+                'Accepted empty-hiding sibling'
+            );
+            assert.equal(saves(state).length, 0);
+            await clickText('Save');
+            await waitReady(
+                (value) =>
+                    saves(value).length === 1 &&
+                    value.status?.includes('validation errors') &&
+                    value.visibility.errors.some(
+                        (text) =>
+                            text ===
+                            `Hidden required answer: ${value.expected.validationMessage}`
+                    ),
+                'Synthetic returned hidden-required error is visible after one complete native Save.'
+            );
+            state = await capture(
+                result,
+                'returned-hidden-required-error-full-native-save'
+            );
+            assertEmptySave(
+                state,
+                {
+                    ...state.expected.initial,
+                    fld_empty_title: ' ',
+                    fld_empty_tail: 'Accepted empty-hiding sibling',
+                },
+                ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail']
+            );
+            assert(
+                (await (await find('#screen .error-list')).getText()).includes(
+                    `Hidden required answer: ${state.expected.validationMessage}`
+                )
+            );
+            assert.equal(emptyControl(state, 'title').value, ' ');
+            assert(emptyControl(state, 'title').hidden);
+            assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+            await nativeChoice('#visitor', 'B');
+            await nativeChoice('#visitor', 'A');
+            await waitReady(
+                (value) =>
+                    value.visibility?.controls.length === 14 &&
+                    emptyControl(value, 'title').hidden,
+                'Native Visitor round trip remounts the accepted hidden draft.'
+            );
+            state = await capture(
+                result,
+                'visitor-aba-retains-hidden-answer-without-replay'
+            );
+            assert.notEqual(
+                await (
+                    await find('#screen input[data-field-id="fld_empty_title"]')
+                ).getId(),
+                initialTitleId
+            );
+            assert.equal(emptyControl(state, 'title').value, ' ');
+            assert.equal(
+                emptyControl(state, 'tail').value,
+                'Accepted empty-hiding sibling'
+            );
+            assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+            await clickText('Discard draft');
+            await waitReady(
+                (value) =>
+                    value.status ===
+                        'This Form draft was discarded. No record was saved.' &&
+                    !emptyControl(value, 'title').hidden,
+                'Native Discard restores the loaded initial values.'
+            );
+            state = await capture(
+                result,
+                'discard-restores-initial-controls-no-save'
+            );
+            assert.equal(
+                emptyControl(state, 'title').value,
+                state.expected.initial.fld_empty_title
+            );
+            assert.equal(
+                emptyControl(state, 'tail').value,
+                state.expected.initial.fld_empty_tail
+            );
+            await assertNativeVisibility(
+                ['fld_empty_title', 'fld_empty_tail'],
+                true
+            );
+            assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+        }
+    );
+    await exercise(
+        'starter-edit-empty-section-blocked-native-recovery',
+        async (result) => {
+            await loadEmpty('hide-empty-unavailable');
+            let state = await capture(
+                result,
+                'retained-disabled-section-explicit-unavailable'
+            );
+            for (const id of state.expected.controlFieldIds.slice(0, 12))
+                assert(visibilityControl(state, id).hidden);
+            await assertNativeVisibility(
+                state.expected.controlFieldIds.slice(0, 12),
+                false
+            );
+            await assertNativeVisibility(
+                ['fld_empty_locked', 'fld_empty_tail'],
+                true
+            );
+            assert(!visibilityAlert(state).hidden);
+            await assertNativeVisibilityAlert(true);
+            assert.equal(saves(state).length, 0);
+            const oldTailId = await (
+                await find('#screen input[data-field-id="fld_empty_tail"]')
+            ).getId();
+            await replaceInput(
+                await find('#screen input[data-field-id="fld_empty_tail"]'),
+                'Accepted blocked sibling',
+                'text'
+            );
+            await clickText('Save');
+            await waitReady(
+                (value) =>
+                    value.status ===
+                        'Review the unavailable fields before saving this Form.' &&
+                    saves(value).length === 0,
+                'Blocked empty hiding prevents native Save dispatch.'
+            );
+            state = await capture(
+                result,
+                'blocked-native-save-retains-adjacent-edit'
+            );
+            assert.equal(
+                emptyControl(state, 'tail').value,
+                'Accepted blocked sibling'
+            );
+            assert.equal(emptyControl(state, 'title').value, '');
+            assertCalls(state, ['fetchExtensionForEndUser']);
+            await nativeChoice('#visitor', 'B');
+            await nativeChoice('#visitor', 'A');
+            await waitReady(
+                (value) =>
+                    value.visibility?.controls.length === 14 &&
+                    emptyControl(value, 'title').hidden,
+                'Blocked native draft remount remains unavailable without replay.'
+            );
+            state = await capture(
+                result,
+                'blocked-visitor-aba-keeps-native-draft-zero-save'
+            );
+            assert.notEqual(
+                await (
+                    await find('#screen input[data-field-id="fld_empty_tail"]')
+                ).getId(),
+                oldTailId
+            );
+            assert.equal(
+                emptyControl(state, 'tail').value,
+                'Accepted blocked sibling'
+            );
+            assert.equal(emptyControl(state, 'title').value, '');
+            assert(!visibilityAlert(state).hidden);
+            assertCalls(state, ['fetchExtensionForEndUser']);
+            await (await find('#reload')).click();
+            await waitReady(
+                (value) =>
+                    value.events.filter(
+                        (event) => event.type === 'hide-empty-root-response'
+                    ).length === 2 &&
+                    !emptyControl(value, 'title').hidden &&
+                    value.status === 'Loaded form loaded.',
+                'Explicit native Reload supplies no-section hide-false replacement.'
+            );
+            state = await capture(
+                result,
+                'supported-explicit-reload-reveals-empty-controls'
+            );
+            await assertNativeVisibility(state.expected.controlFieldIds, true);
+            assert(visibilityAlert(state).hidden);
+            await assertNativeVisibilityAlert(false);
+            assert.equal(
+                emptyControl(state, 'tail').value,
+                state.expected.initial.fld_empty_tail
+            );
+            assert.deepEqual(
+                state.events
+                    .filter(
+                        (event) => event.type === 'hide-empty-root-response'
+                    )
+                    .map((event) => event.blocked),
+                [true, false]
+            );
+            assertCalls(state, [
+                'fetchExtensionForEndUser',
+                'fetchExtensionForEndUser',
+            ]);
+            await replaceInput(
+                await find('#screen input[data-field-id="fld_empty_tail"]'),
+                'Accepted recovered sibling',
+                'text'
+            );
+            await clickText('Save');
+            await waitReady(
+                (value) =>
+                    saves(value).length === 1 &&
+                    value.status?.includes('validation errors'),
+                'Only fresh explicit native Save dispatches after supported recovery.'
+            );
+            state = await capture(
+                result,
+                'recovered-explicit-save-complete-native-envelope'
+            );
+            assertEmptySave(
+                state,
+                {
+                    ...state.expected.initial,
+                    fld_empty_tail: 'Accepted recovered sibling',
+                },
+                ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail']
+            );
+            assertCalls(state, [
+                'fetchExtensionForEndUser',
+                'fetchExtensionForEndUser',
+                'saveForm',
+            ]);
+        }
+    );
+    assert.equal(receipt.cases.length, 32);
     assert(
         receipt.cases.every((v) => v.status === 'passed'),
         'Every exact synthetic case must pass; failed cases are retained without retry.'

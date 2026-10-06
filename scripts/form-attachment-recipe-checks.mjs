@@ -221,6 +221,26 @@ export async function checkFormAttachmentRecipe({
             true
         );
     });
+    check(({ actions, loaded, store, handle }) => {
+        const before = store.snapshot(handle);
+        for (const value of [null, undefined]) {
+            loaded.payload.persistedAddOnlyAttachmentValuesByFieldId = {
+                fld_files: value,
+            };
+            assert.throws(() => actions.view(), TypeError);
+            assert.throws(
+                () => actions.remove(store.revision(handle), 1),
+                TypeError
+            );
+            assert.throws(() => actions.checkFiles([]), TypeError);
+            assert.deepEqual(store.snapshot(handle), before);
+        }
+        loaded.payload.persistedAddOnlyAttachmentValuesByFieldId = {};
+        assert.equal(
+            actions.view().policy.rows.every((row) => row.removeAllowed),
+            true
+        );
+    });
     check(({ actions, loaded }) => {
         const files = [
             { type: 'image/png', size: 1 },

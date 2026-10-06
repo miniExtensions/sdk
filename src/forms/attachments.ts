@@ -153,12 +153,17 @@ export function getFormAttachmentPolicy(
         return { status: 'unavailable', reason: 'missing-persisted-baseline' };
     if (addOnly && !object(baseline))
         throw new TypeError('Persisted attachment baseline is malformed.');
-    const persistedUrls = new Set(
+    const hasPersistedEntry =
         addOnly &&
         baseline !== undefined &&
-        Object.hasOwn(baseline, input.fieldId)
-            ? attachments(baseline[input.fieldId]).map((entry) => entry.url)
-            : []
+        Object.hasOwn(baseline, input.fieldId);
+    const persistedValue = hasPersistedEntry ? baseline[input.fieldId] : [];
+    if (hasPersistedEntry && !Array.isArray(persistedValue))
+        throw new TypeError(
+            'A present persisted attachment baseline must be an array.'
+        );
+    const persistedUrls = new Set(
+        attachments(persistedValue).map((entry) => entry.url)
     );
     const maxFiles =
         config?.allowedFiles == null

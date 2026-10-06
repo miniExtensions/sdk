@@ -38,6 +38,8 @@ When the whole persisted map is absent, effective writable add-only returns
 `unavailable`. This intentionally declines legitimate legacy/rolling-deploy
 payloads rather than guessing provenance. It is not silently substituted into
 existing controls. A present map without this field means an empty baseline.
+A present field entry must be an attachment array; nullish or malformed entries throw rather than
+unlocking stored rows.
 Readonly or non-add-only fields do not require the map.
 
 `visible` is presentation only. Configured hiding and

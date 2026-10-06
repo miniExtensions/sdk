@@ -247,6 +247,33 @@ describe('opt-in Form attachment presentation and native identity', () => {
         if (policy.status !== 'ready') throw new Error('Fixture policy');
         assert.ok(policy.rows.every((row) => !row.removeAllowed));
     });
+    it('rejects malformed own persisted entries while an absent field remains an empty baseline', () => {
+        const args = input({ addOnlyMode: true });
+        for (const malformed of [null, undefined, 'text', {}, [{}], Array(1)]) {
+            args.loaded.payload.persistedAddOnlyAttachmentValuesByFieldId = {
+                fld_files: malformed,
+            } as unknown as NonNullable<
+                typeof args.loaded.payload.persistedAddOnlyAttachmentValuesByFieldId
+            >;
+            assert.throws(() => getFormAttachmentPolicy(args), TypeError);
+            assert.throws(
+                () => checkFormAttachmentFiles({ ...args, files: [] }),
+                TypeError
+            );
+            assert.deepEqual(args.value, [stored, added]);
+        }
+        args.loaded.payload.persistedAddOnlyAttachmentValuesByFieldId = {};
+        const policy = getFormAttachmentPolicy(args);
+        assert.equal(policy.status, 'ready');
+        if (policy.status !== 'ready') throw new Error('Fixture policy');
+        assert.ok(
+            policy.rows.every((row) => !row.persisted && row.removeAllowed)
+        );
+        args.loaded.payload.persistedAddOnlyAttachmentValuesByFieldId = {
+            fld_files: [],
+        };
+        assert.deepEqual(getFormAttachmentPolicy(args), policy);
+    });
     it('accepts canonical empty values and rejects malformed/non-attachment fields without effects', () => {
         for (const value of [undefined, null, []]) {
             const policy = getFormAttachmentPolicy({ ...input(), value });

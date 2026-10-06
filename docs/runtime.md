@@ -621,7 +621,8 @@ other field edits; save success alone does not establish that a proposed link
 was accepted.
 
 The shipped [browser example](../examples/browser/README.md) implements these
-controls locally, without adding an SDK export. **Load conditional filters**
+controls through the [pure SDK cascade model](forms.md#headless-conditional-linked-filter-cascades);
+the example adapter owns DOM, network, cancellation and paging. **Load conditional filters**
 explicitly obtains and shares the existing token-only metadata read for that
 loaded Form, then resolves root/direct URL prefills sequentially, including
 when its selectors are configured hidden. Filter names come from returned current metadata;

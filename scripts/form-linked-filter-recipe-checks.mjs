@@ -246,6 +246,125 @@ export async function checkFormLinkedFilterRecipe({
             f.adapter.dispose();
         }
     };
+    for (const interruption of ['failed', 'cancelled', 'invalid']) {
+        await check(
+            `explicit hidden prefill retry after ${interruption}`,
+            async (f) => {
+                const initial = structuredClone(
+                    f.loaded.payload.formRecord.data
+                );
+                const pending = deferred();
+                const controller = new AbortController();
+                f.respond((input) =>
+                    input.linkedRecordsFilterFieldId === 'region'
+                        ? pending.promise
+                        : response(input.linkedRecordsFilterFieldId)
+                );
+                const first = f.adapter.loadPrefills(controller.signal);
+                while (f.calls.length < 2)
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                if (interruption === 'failed')
+                    pending.reject(new Error('interrupted'));
+                else if (interruption === 'cancelled') {
+                    controller.abort();
+                    pending.resolve(response('region'));
+                } else
+                    pending.resolve({
+                        primaryValues: [],
+                        prefillValue: response('region').prefillValue,
+                    });
+                if (interruption === 'failed') await assert.rejects(first);
+                else await first;
+                assert.equal(f.calls.length, 2);
+                assert.equal(f.saves.length, 0);
+                assert.equal(f.adapter.state().hidden, true);
+                assert.equal(
+                    f.adapter.snapshot().country.recordId,
+                    'country_two'
+                );
+                assert.equal(f.adapter.snapshot().region, null);
+                f.respond((input) =>
+                    response(input.linkedRecordsFilterFieldId)
+                );
+                await f.adapter.loadPrefills();
+                assert.deepEqual(
+                    f.calls.map(
+                        (call) => call.input.linkedRecordsFilterFieldId
+                    ),
+                    ['country', 'region', 'region', 'city']
+                );
+                assert.deepEqual(f.calls[2].input.filterData, {
+                    previousFilterFieldId: 'country',
+                    previousFilterPrimaryValue: labels[0],
+                });
+                assert.deepEqual(f.calls[3].input.filterData, {
+                    previousFilterFieldId: 'region',
+                    previousFilterPrimaryValue: labels[1],
+                });
+                await f.adapter.saveOnce();
+                assert.equal(f.saves.length, 1);
+                assert.deepEqual(f.saves[0].formRecord.data, initial);
+                assert.deepEqual(
+                    f.saves[0].conditionalLinkedRecordFieldIdsToFilteringValues
+                        .outer,
+                    Object.fromEntries(
+                        definitions.map((id) => [id, response(id).prefillValue])
+                    )
+                );
+            }
+        );
+    }
+    await check(
+        'valid null prefill completion is skipped by explicit retry',
+        async (f) => {
+            f.respond((input) => ({ primaryValues: [], prefillValue: null }));
+            await f.adapter.loadPrefills();
+            await f.adapter.loadPrefills();
+            assert.equal(f.calls.length, 3);
+            assert.deepEqual(f.adapter.snapshot(), {
+                country: null,
+                region: null,
+                city: null,
+            });
+            assert.equal(f.saves.length, 0);
+        }
+    );
+    await check(
+        'late interrupted prefill error cannot retire a newer explicit retry',
+        async (f) => {
+            const old = deferred(),
+                next = deferred();
+            let count = 0;
+            f.respond(() => (++count === 1 ? old.promise : next.promise));
+            const retired = f.adapter.readDriver('country', true);
+            const retry = f.adapter.readDriver('country', true);
+            old.reject(new Error('late old error'));
+            assert.equal((await retired).status, 'stale');
+            next.resolve(response('country'));
+            assert.equal((await retry).status, 'accepted');
+            assert.equal(
+                (await f.adapter.readDriver('country', true)).status,
+                'resolved'
+            );
+            assert.equal(f.calls.length, 2);
+        }
+    );
+    await check(
+        'user edit before explicit retry prevents old URL prefills',
+        async (f) => {
+            f.respond((input) => {
+                if (input.linkedRecordsFilterFieldId === 'region')
+                    throw new Error('interrupted');
+                return response(input.linkedRecordsFilterFieldId);
+            });
+            await assert.rejects(f.adapter.loadPrefills());
+            f.adapter.searchDriver('country', 'deliberate edit');
+            await f.adapter.loadPrefills();
+            assert.equal(f.calls.length, 2);
+            assert.equal(f.saves.length, 0);
+            assert.equal(f.adapter.snapshot().country.recordId, 'country_two');
+        }
+    );
     await check(
         'ordered hidden prefills, duplicate labels, fresh nested Save and unchanged native values',
         async (f) => {
@@ -451,7 +570,7 @@ export async function checkFormLinkedFilterRecipe({
         async (f) => {
             const held = deferred();
             f.respond(() => held.promise);
-            const pending = f.adapter.readDriver('country');
+            const pending = f.adapter.readDriver('country', true);
             f.scope({ ownerId: 'B', revision: 1 });
             f.scope({ ownerId: 'A', revision: 2 });
             held.resolve(response('country'));
@@ -462,7 +581,7 @@ export async function checkFormLinkedFilterRecipe({
             try {
                 const error = deferred();
                 next.respond(() => error.promise);
-                const pendingError = next.adapter.readDriver('country');
+                const pendingError = next.adapter.readDriver('country', true);
                 next.scope({ ownerId: 'B', revision: 1 });
                 next.scope({ ownerId: 'A', revision: 2 });
                 error.reject(new Error('Late synthetic failure'));
@@ -477,7 +596,7 @@ export async function checkFormLinkedFilterRecipe({
         async (f) => {
             const held = deferred();
             f.respond(() => held.promise);
-            const pending = f.adapter.readDriver('country');
+            const pending = f.adapter.readDriver('country', true);
             f.adapter.dispose();
             held.reject(new Error('Late disposed failure'));
             assert.equal((await pending).status, 'stale');

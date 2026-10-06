@@ -119,11 +119,12 @@ export function createConditionalLinkedFilters(options: {
             !filters.includes(filter) ||
             !filter.select.isConnected
         )
-            return;
+            return false;
         const plan = model.prepareRead(filter.id, { usePrefill });
+        if (plan.status === 'resolved') return true;
         if (plan.status !== 'ready') {
             options.status(plan.diagnostic, true);
-            return;
+            return false;
         }
         const controller = new AbortController();
         const abort = () => controller.abort();
@@ -148,20 +149,41 @@ export function createConditionalLinkedFilters(options: {
                     },
                     { signal: controller.signal, session }
                 );
-            if (!accepts()) return;
+            if (!accepts()) return false;
             const accepted = model.accept(plan.ticket, result);
             if (accepted.status === 'invalid') {
-                options.status(accepted.diagnostic, true);
-                return;
+                options.status(
+                    `${accepted.diagnostic} Use Load conditional filters to retry unresolved prefills.`,
+                    true
+                );
+                return false;
             }
-            if (accepted.status !== 'accepted') return;
+            if (accepted.status !== 'accepted') return false;
             render();
             if (accepted.changed) changed();
             options.status(
                 `Loaded ${result.primaryValues.length} filter choices. Search to refine; this read has no paging cursor.`
             );
+            return true;
         } catch (error) {
-            if (accepts()) throw error;
+            if (accepts()) {
+                options.status(
+                    'Filter read failed. Use Load conditional filters to retry unresolved prefills.',
+                    true
+                );
+                throw error;
+            }
+            if (
+                current() &&
+                context.current() &&
+                sessionKey(context.client) === key &&
+                model.isCurrent(plan.ticket)
+            )
+                options.status(
+                    'Filter read interrupted. Use Load conditional filters to retry unresolved prefills.',
+                    true
+                );
+            return false;
         } finally {
             model.discard(plan.ticket);
             context.signal.removeEventListener('abort', abort);
@@ -169,12 +191,7 @@ export function createConditionalLinkedFilters(options: {
         }
     };
     const initialize = async (context: RequestContext) => {
-        if (
-            !current() ||
-            !context.current() ||
-            model.state().status === 'ready'
-        )
-            return;
+        if (!current() || !context.current() || context.signal.aborted) return;
         if (model.state().diagnostics.length !== 0) {
             options.status(
                 `Conditional filters unavailable: ${model.state().diagnostics.join(' ')}`,
@@ -182,95 +199,103 @@ export function createConditionalLinkedFilters(options: {
             );
             return;
         }
-        const version = ++initialization;
-        const generation = model.state().generation;
-        const key = sessionKey(context.client);
-        const accepts = () =>
-            current() &&
-            context.current() &&
-            version === initialization &&
-            generation === model.state().generation &&
-            sessionKey(context.client) === key;
-        let states: RuntimeTableStates;
-        try {
-            states = await options.readMetadata(context);
-        } catch (error) {
-            if (accepts()) throw error;
-            return;
-        }
-        if (!accepts()) return;
-        const state = model.initialize(states);
-        if (state.status !== 'ready') {
-            options.status(
-                `Conditional filters unavailable: ${state.diagnostics.join(' ')}`,
-                true
-            );
-            return;
-        }
-        changed();
-        fields.hidden = state.hidden;
-        fields.replaceChildren();
-        filters = state.filters.map((value) => {
-            const search = element('input');
-            search.dataset.filterSearchFieldId = value.id;
-            const select = element('select');
-            select.dataset.filterFieldId = value.id;
-            const filter = { id: value.id, search, select };
-            search.addEventListener('input', () => {
-                if (
-                    current() &&
-                    filters.includes(filter) &&
-                    search.isConnected &&
-                    model.search(value.id, search.value)
-                ) {
-                    changed();
-                    render();
-                }
-            });
-            select.addEventListener('change', () => {
-                if (
-                    !current() ||
-                    !filters.includes(filter) ||
-                    !select.isConnected
-                )
-                    return;
-                const generation = model.state().generation;
-                if (
-                    !model.choose(
-                        value.id,
-                        select.value === '' ? null : select.value
-                    )
-                )
-                    options.status('Choose a returned filter record.', true);
-                else if (generation !== model.state().generation) changed();
-                render();
-            });
-            const title = value.title ?? value.name;
-            fields.append(
-                labeled(`Search ${title}`, search),
-                button(`Search ${title}`, () => {
+        if (model.state().status !== 'ready') {
+            const version = ++initialization;
+            const generation = model.state().generation;
+            const key = sessionKey(context.client);
+            const accepts = () =>
+                current() &&
+                context.current() &&
+                version === initialization &&
+                generation === model.state().generation &&
+                !context.signal.aborted &&
+                sessionKey(context.client) === key;
+            let states: RuntimeTableStates;
+            try {
+                states = await options.readMetadata(context);
+            } catch (error) {
+                if (accepts()) throw error;
+                return;
+            }
+            if (!accepts()) return;
+            const state = model.initialize(states);
+            if (state.status !== 'ready') {
+                options.status(
+                    `Conditional filters unavailable: ${state.diagnostics.join(' ')}`,
+                    true
+                );
+                return;
+            }
+            changed();
+            fields.hidden = state.hidden;
+            fields.replaceChildren();
+            filters = state.filters.map((value) => {
+                const search = element('input');
+                search.dataset.filterSearchFieldId = value.id;
+                const select = element('select');
+                select.dataset.filterFieldId = value.id;
+                const filter = { id: value.id, search, select };
+                search.addEventListener('input', () => {
                     if (
                         current() &&
                         filters.includes(filter) &&
-                        search.isConnected
+                        search.isConnected &&
+                        model.search(value.id, search.value)
+                    ) {
+                        changed();
+                        render();
+                    }
+                });
+                select.addEventListener('change', () => {
+                    if (
+                        !current() ||
+                        !filters.includes(filter) ||
+                        !select.isConnected
                     )
-                        options.request(
-                            'Loading configured filter choices…',
-                            (context) => load(filter, context)
+                        return;
+                    const generation = model.state().generation;
+                    if (
+                        !model.choose(
+                            value.id,
+                            select.value === '' ? null : select.value
+                        )
+                    )
+                        options.status(
+                            'Choose a returned filter record.',
+                            true
                         );
-                }),
-                labeled(title, select)
-            );
-            return filter;
-        });
-        render();
+                    else if (generation !== model.state().generation) changed();
+                    render();
+                });
+                const title = value.title ?? value.name;
+                fields.append(
+                    labeled(`Search ${title}`, search),
+                    button(`Search ${title}`, () => {
+                        if (
+                            current() &&
+                            filters.includes(filter) &&
+                            search.isConnected
+                        )
+                            options.request(
+                                'Loading configured filter choices…',
+                                async (context) => {
+                                    await load(filter, context);
+                                }
+                            );
+                    }),
+                    labeled(title, select)
+                );
+                return filter;
+            });
+            render();
+        }
         for (const filter of filters) {
             if (!current() || !context.current()) return;
             const name = model
                 .state()
                 .filters.find((value) => value.id === filter.id)!.name;
             if (query[`prefill_${name}`] != null)
-                await load(filter, context, true);
+                if (!(await load(filter, context, true))) return;
         }
     };
     node.append(

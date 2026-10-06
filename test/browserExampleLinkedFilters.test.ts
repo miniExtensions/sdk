@@ -704,6 +704,42 @@ describe(
             assert.deepEqual(api.unexpected, []);
         });
 
+        it('explicit Load resumes hidden prefills after failure without metadata refetch or native draft loss', async (test) => {
+            const api = fixture(makeForm({ hidden: true }));
+            let failed = false;
+            api.handlers.filter = async (request) => {
+                if (
+                    request.linkedRecordsFilterFieldId === 'fld_region' &&
+                    !failed
+                ) {
+                    failed = true;
+                    throw new Error('interrupted region');
+                }
+                return confirmedPrefill(request);
+            };
+            const query =
+                '?prefill_Current%20country=North%2C%20East&prefill_Current%20region=Duplicate%20label&prefill_Current%20city=City%20%3D%20%22One%22';
+            const window = await environment(test, api.fetch, query);
+            await loadFilters(window);
+            assert.equal(api.filters.length, 2);
+            assert.equal(api.saves.length, 0);
+            const metadataReads = api.bootstraps.length;
+            await loadFilters(window);
+            assert.equal(api.bootstraps.length, metadataReads);
+            assert.deepEqual(
+                api.filters.map((call) => call.linkedRecordsFilterFieldId),
+                ['fld_country', 'fld_region', 'fld_region', 'fld_city']
+            );
+            const fields = filterSelect(window, 'fld_country').closest('div');
+            assert.ok(fields instanceof window.HTMLElement);
+            assert.equal(fields.hidden, true);
+            assert.deepEqual(rawIds(window), ['rec_retained']);
+            await save(window, api.saves);
+            assert.deepEqual(api.saves[0].formRecord.data.fld_projects, [
+                'rec_retained',
+            ]);
+        });
+
         it('keeps hidden-mode selectors hidden throughout server-prefill resolution and explicit Load visible', async (test) => {
             const api = fixture(makeForm({ hidden: true }));
             const last = deferred<ListConditionalFilterPrimaryValuesResult>();

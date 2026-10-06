@@ -311,13 +311,13 @@ describe('one pure Form cascade with canonical pairs and owned tickets', () => {
         assert.equal(plan(model).input.urlSearchValue, null);
         assert.equal(model.canChange(true), true);
     });
-    it('does not replay prefills after edits or repeated attempts and retires disposed instances', () => {
+    it('does not replay prefills after edits or successful resolution and retires disposed instances', () => {
         const model = fixture({ 'prefill_Current country': 'Duplicate' });
         const read = plan(model, 'country', true);
         model.accept(read.ticket, result(true));
         assert.equal(
             model.prepareRead('country', { usePrefill: true }).status,
-            'unavailable'
+            'resolved'
         );
         model.search('region', 'Edit');
         assert.equal(
@@ -330,5 +330,38 @@ describe('one pure Form cascade with canonical pairs and owned tickets', () => {
         assert.equal(model.canChange(true), false);
         assert.deepEqual(model.snapshot(), {});
         assert.equal(model.initialize(metadata()).status, 'unavailable');
+    });
+    it('retires interrupted/invalid tickets without completing prefills; validated null completes', () => {
+        const model = fixture({ 'prefill_Current country': 'Duplicate' });
+        const old = plan(model, 'country', true);
+        model.discard(old.ticket);
+        const invalid = plan(model, 'country', true);
+        assert.equal(
+            model.accept(invalid.ticket, {
+                primaryValues: [],
+                prefillValue: choices[0]!,
+            }).status,
+            'invalid'
+        );
+        const retry = plan(model, 'country', true);
+        model.discard(old.ticket);
+        assert.equal(model.accept(old.ticket, result(true)).status, 'stale');
+        assert.equal(model.isCurrent(retry.ticket), true);
+        assert.equal(
+            model.accept(retry.ticket, {
+                primaryValues: [],
+                prefillValue: null,
+            }).status,
+            'accepted'
+        );
+        assert.equal(
+            model.prepareRead('country', { usePrefill: true }).status,
+            'resolved'
+        );
+        model.search('region', 'edited');
+        assert.equal(
+            model.prepareRead('country', { usePrefill: true }).status,
+            'unavailable'
+        );
     });
 });

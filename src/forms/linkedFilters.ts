@@ -29,7 +29,7 @@ export type FormLinkedFilterState = {
     }[];
 };
 export type FormLinkedFilterRead =
-    | { status: 'unavailable'; diagnostic: string }
+    | { status: 'unavailable' | 'resolved'; diagnostic: string }
     | {
           status: 'ready';
           ticket: FormLinkedFilterTicket;
@@ -265,13 +265,17 @@ export function createFormLinkedFilterModel(input: {
                 };
             const prefill =
                 options.usePrefill === true && typeof url === 'string';
-            if (prefill && (edited || prefilled.has(fieldId)))
+            if (prefill && edited)
                 return {
                     status: 'unavailable',
                     diagnostic:
-                        'URL prefills are not replayed after an edit or prior attempt.',
+                        'URL prefills are not replayed after a user edit.',
                 };
-            if (prefill) prefilled.add(fieldId);
+            if (prefill && prefilled.has(fieldId))
+                return {
+                    status: 'resolved',
+                    diagnostic: 'This URL prefill has already resolved.',
+                };
             const previous = index === 0 ? null : filters[index - 1]!;
             const old = latest.get(fieldId);
             if (old) discard(old);
@@ -343,6 +347,7 @@ export function createFormLinkedFilterModel(input: {
                     diagnostic:
                         'The filter response contains an unresolved prefill.',
                 };
+            if (usePrefill) prefilled.add(ticket.fieldId);
             const index = filters.findIndex(
                 (filter) => filter.id === ticket.fieldId
             );

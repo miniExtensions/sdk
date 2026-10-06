@@ -42,8 +42,10 @@ immediately preceding selected pair's string value. There is no driver paging.
 
 Hidden affects rendering only. Explicit initial prefill reads use current
 metadata names and server-returned matching pairs; repeated configured URL
-values return an unavailable read. Prefills cannot replay after edits or a prior
-attempt. Retire the model on every visitor/session/token/loaded-Form transition.
+values return an unavailable read. Successful resolution (including a valid null
+result) is not replayed, and user edits prevent later URL-prefill replay. Failed,
+cancelled or invalid reads allow an explicit retry only; ordered loading stops
+at the interruption and retains accepted upstream pairs. No retry is automatic. Retire the model on every visitor/session/token/loaded-Form transition.
 
 This complete custom-renderer adapter uses a caller-owned monotonic scope
 revision, including A → B → A. It recreates the existing linked-option loader
@@ -192,12 +194,17 @@ export function createConfiguredCascadeAdapter(args: {
         canChange: (adding: boolean) =>
             owned() && !descriptor.readOnly && cascade.canChange(adding),
         readDriver,
+        // Call explicitly again after interruption; successful/null outcomes are skipped.
         async loadPrefills(signal?: AbortSignal) {
             for (const filter of cascade.state().filters) {
                 if (!owned()) return;
                 if (query[`prefill_${filter.name}`] != null) {
                     const accepted = await readDriver(filter.id, true, signal);
-                    if (accepted.status !== 'accepted') return;
+                    if (
+                        accepted.status !== 'accepted' &&
+                        accepted.status !== 'resolved'
+                    )
+                        return accepted;
                 }
             }
         },

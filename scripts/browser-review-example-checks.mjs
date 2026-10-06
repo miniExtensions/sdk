@@ -371,6 +371,11 @@ export async function checkBrowserReviewExample({
                 assert.equal(document.querySelector('dialog'), null);
                 assert.equal(button(document, 'Save').disabled, true);
                 assert.equal(
+                    field('fld_review_title').closest('.fields').inert,
+                    true,
+                    'settled unknown/cancelled Review Save retains recovery inertness'
+                );
+                assert.equal(
                     field('fld_review_title').value,
                     initial.fld_review_title
                 );

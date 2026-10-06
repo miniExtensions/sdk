@@ -1734,8 +1734,7 @@ const renderForm = (page: FormLoadedResult): void => {
             // Restore only this card. A superseded review cannot reactivate a
             // newer visitor's controls or repeat an old address query.
             reviewPending = false;
-            fields.inert = false;
-            if (ownsForm()) updateFormActivity();
+            if (ownsForm()) updateRecovery();
         }
     });
     screenNode.append(card);

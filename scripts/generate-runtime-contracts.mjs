@@ -5,6 +5,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import prettier from 'prettier';
+import {
+    assertRuntimeCorsPolicy,
+    canonicalCorsPolicyPath,
+} from './runtime-cors-check.mjs';
 
 // This is a transport map, not a second definition of any API payload.
 const v1 = [
@@ -195,6 +199,25 @@ for (const [index, [operation, group, procedure, kind]] of trpc.entries()) {
         kindType: `TrpcKind${index}`,
     });
 }
+// This explicit maintainer-only path is never called by customer/package CI.
+// Pin policy bytes before compiling contracts or writing either output.
+const corsPolicy = readFileSync(path.join(monorepo, canonicalCorsPolicyPath));
+const recordedCorsPolicy = execFileSync(
+    'git',
+    ['show', `${revision}:${canonicalCorsPolicyPath}`],
+    {
+        cwd: monorepo,
+        maxBuffer: 1024 * 1024,
+    }
+);
+if (!corsPolicy.equals(recordedCorsPolicy))
+    throw new Error(
+        `Canonical source drifted from ${revision}: ${canonicalCorsPolicyPath}`
+    );
+const corsValidation = assertRuntimeCorsPolicy(
+    corsPolicy.toString('utf8'),
+    operationAliases
+);
 entryLines.push(
     "import type { AirtableAttachment, AirtableBarcodeValue, AirtableCollaborator, AirtableField, AirtableFieldSet, AirtableRecord, AirtableValue, SelectFieldChoice } from './types/airtable/types';"
 );
@@ -580,6 +603,7 @@ assertSemanticEntry();
 // not unrelated files that the compiler happens to load from the app router.
 for (const [, module] of v1) sourceFiles.add(`types/api/types/${module}.ts`);
 sourceFiles.add('backend-src/trpc/index.ts');
+sourceFiles.add(canonicalCorsPolicyPath);
 sourceFiles.add('backend-src/trpc/routers.ts');
 sourceFiles.add('backend-src/trpc/airtable/trpcRoute.ts');
 sourceFiles.add('backend-src/trpc/publicExtensions/trpcRoute.ts');
@@ -626,6 +650,14 @@ const provenance =
             sourceRevision: revision,
             compilerVersion: ts.version,
             generatorSha256: hash(readFileSync(fileURLToPath(import.meta.url))),
+            corsValidation: {
+                ...corsValidation,
+                guardSha256: hash(
+                    readFileSync(
+                        new URL('./runtime-cors-check.mjs', import.meta.url)
+                    )
+                ),
+            },
             transport:
                 'plain JSON; canonical enum literals; no runtime code or imports',
             operations: operationAliases,

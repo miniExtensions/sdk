@@ -286,6 +286,12 @@ The separate document-local recovery journal keeps unknown create attempts
 nonreplayable across these app actions; clearing a draft/session is not evidence
 that its dispatched create did not commit.
 
+**Clear this visitor's session** and **Disconnect** also remove the document
+journal's retained reference input for both visitor slots. Its uncertain-operation
+guards remain, so anonymous reconnect cannot reveal those earlier labels,
+values or attachment names or repeat an uncertain create. Same-person **Reload**
+keeps the reference input available for inspection.
+
 The example cancels pending requests when visitors or connections change.
 Cancelling a network request cannot undo an already committed server write.
 Inspect the records after cancellation or a network failure before submitting

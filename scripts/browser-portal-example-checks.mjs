@@ -3485,6 +3485,199 @@ export async function checkBrowserPortalExample({
                 await close();
             }
         );
+        for (const teardown of ['Logout', 'Disconnect']) {
+            await check(
+                `actual packed main ${teardown} scrubs private recovery reference input while keeping unknown-create replay blocked`,
+                async () => {
+                    const privateText = 'Previous visitor private narrative';
+                    const privateFilename =
+                        'previous-visitor-private-attachment.pdf';
+                    const privateTitle = 'Previous visitor private field label';
+                    const first = makeForm({
+                        childExtensionInfo: { accessType: { type: 'create' } },
+                    });
+                    first.payload.hasParentExtension = false;
+                    first.payload.fieldIdsInForm = ['fld_title', 'fld_files'];
+                    first.payload.fieldIdsToSchemas.fld_title.airtableField.name =
+                        privateTitle;
+                    first.payload.fieldIdsToSchemas.fld_title.miniExtConfig = {
+                        title: privateTitle,
+                    };
+                    first.payload.fieldIdsToSchemas.fld_files = {
+                        fieldType: 'multipleAttachments',
+                        airtableField: {
+                            id: 'fld_files',
+                            name: 'Files',
+                            config: { type: 'multipleAttachments' },
+                        },
+                    };
+                    first.payload.formRecord.data.fld_files = [
+                        {
+                            url: 'https://files.example.test/private-reference',
+                            filename: privateFilename,
+                        },
+                    ];
+                    first.payload.formFieldIdsWithUnsavedChanges = [
+                        'fld_files',
+                    ];
+                    first.payload.urlPrefilledFieldIds = [];
+                    const fresh = structuredClone(first);
+                    fresh.payload.fieldIdsToSchemas.fld_title.airtableField.name =
+                        'Current public title';
+                    fresh.payload.fieldIdsToSchemas.fld_title.miniExtConfig = {
+                        title: 'Current public title',
+                    };
+                    fresh.payload.formRecord.data.fld_title =
+                        'Fresh public baseline';
+                    fresh.payload.formRecord.data.fld_files = [];
+                    fresh.payload.formFieldIdsWithUnsavedChanges = [];
+                    const saves = [];
+                    let loads = 0;
+                    const fetch = async (input, init) => {
+                        const route = new URL(String(input)).searchParams.get(
+                            'route'
+                        );
+                        if (route === 'fetchExtensionForEndUser') {
+                            loads += 1;
+                            return new Response(
+                                JSON.stringify(loads === 1 ? first : fresh)
+                            );
+                        }
+                        assert.equal(route, 'saveForm');
+                        saves.push(JSON.parse(String(init?.body)));
+                        throw new Error(
+                            'Synthetic standalone response lost after dispatch.'
+                        );
+                    };
+                    const { window, close } = await environment(fetch);
+                    await loadExample('main');
+                    const document = window.document;
+                    const idle = () =>
+                        document
+                            .getElementById('screen')
+                            .getAttribute('aria-busy') === 'false';
+                    const reference = () =>
+                        document.querySelector(
+                            'details[aria-label="Earlier local input (reference only)"]'
+                        );
+                    const connect = async () => {
+                        document.getElementById('api-origin').value =
+                            'https://sdk.example.test';
+                        document.getElementById('share-id').value =
+                            'privacy_standalone_share';
+                        submit(
+                            window,
+                            document.getElementById('connection-form')
+                        );
+                        await waitFor(
+                            () =>
+                                document.querySelector(
+                                    '[data-field-id="fld_title"]'
+                                ) != null && idle()
+                        );
+                    };
+                    await connect();
+                    const oldTitle = document.querySelector(
+                        '[data-field-id="fld_title"]'
+                    );
+                    oldTitle.value = privateText;
+                    change(window, oldTitle, 'input');
+                    const oldCard = oldTitle.closest('form');
+                    submit(window, oldCard);
+                    await waitFor(() => saves.length === 1 && idle());
+                    assert.deepEqual(saves[0].formRecord.data, {
+                        ...first.payload.formRecord.data,
+                        fld_title: privateText,
+                    });
+                    for (const secret of [
+                        privateText,
+                        privateFilename,
+                        privateTitle,
+                    ])
+                        assert(reference().textContent.includes(secret));
+                    document.getElementById('reload').click();
+                    await waitFor(() => loads === 2 && idle());
+                    assert.equal(
+                        document.querySelector('[data-field-id="fld_title"]')
+                            .value,
+                        'Fresh public baseline'
+                    );
+                    assert.deepEqual(
+                        JSON.parse(
+                            document.querySelector(
+                                '[data-field-id="fld_files"]'
+                            ).value
+                        ),
+                        []
+                    );
+                    for (const secret of [
+                        privateText,
+                        privateFilename,
+                        privateTitle,
+                    ])
+                        assert(
+                            reference().textContent.includes(secret),
+                            'Same-person Reload retains reference-only input.'
+                        );
+                    document
+                        .getElementById(
+                            teardown === 'Logout' ? 'logout' : 'disconnect'
+                        )
+                        .click();
+                    if (teardown === 'Logout') {
+                        document.getElementById('reload').click();
+                        await waitFor(() => loads === 3 && idle());
+                    } else await connect();
+                    assert.equal(loads, 3);
+                    assert.equal(
+                        reference() === null,
+                        true,
+                        'Explicit privacy teardown must remove earlier reference input after anonymous reconnect.'
+                    );
+                    for (const secret of [
+                        privateText,
+                        privateFilename,
+                        privateTitle,
+                    ])
+                        assert.equal(
+                            document.body.textContent.includes(secret),
+                            false
+                        );
+                    assert.match(
+                        document.getElementById('session-summary').textContent,
+                        /Anonymous/
+                    );
+                    assert.equal(
+                        document.querySelector('[data-field-id="fld_title"]')
+                            .value,
+                        'Fresh public baseline'
+                    );
+                    assert.deepEqual(
+                        JSON.parse(
+                            document.querySelector(
+                                '[data-field-id="fld_files"]'
+                            ).value
+                        ),
+                        []
+                    );
+                    assert.equal(button(document, 'Save').disabled, true);
+                    assert.match(
+                        document.getElementById('screen').textContent,
+                        /Earlier outcome not confirmed/
+                    );
+                    submit(window, oldCard);
+                    submit(window, document.querySelector('#screen form'));
+                    await new Promise((resolve) => setImmediate(resolve));
+                    assert.equal(
+                        saves.length,
+                        1,
+                        'Privacy teardown must retain the uncertain-create operation guard.'
+                    );
+                    document.getElementById('disconnect').click();
+                    await close();
+                }
+            );
+        }
         if (failures.length)
             throw new AggregateError(
                 failures,

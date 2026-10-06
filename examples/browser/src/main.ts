@@ -1847,6 +1847,7 @@ visitorSelect.addEventListener('change', () => {
 });
 nodeById('reload').addEventListener('click', load);
 nodeById('logout').addEventListener('click', () => {
+    recovery.scrubRetainedInput();
     const visitor = visitors[activeVisitor];
     visitor.client?.setSession({});
     invalidate(visitor);
@@ -1862,6 +1863,7 @@ nodeById('cancel').addEventListener('click', () => {
     );
 });
 nodeById('disconnect').addEventListener('click', () => {
+    recovery.scrubRetainedInput();
     for (const visitor of Object.values(visitors)) {
         invalidate(visitor);
         visitor.client = null;

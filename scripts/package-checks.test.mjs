@@ -20,6 +20,11 @@ import {
 } from './package-checks.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
+import {
+    assertPrivacyProofInventory,
+    privacyScenarioInventory,
+    privacyAuthScenarioInventory,
+} from './privacy-proof-inventory.mjs';
 
 async function temporaryRoot(t) {
     const root = await mkdtemp(join(tmpdir(), 'sdk-package-guard-'));
@@ -32,6 +37,148 @@ async function write(root, path, content) {
     await mkdir(join(target, '..'), { recursive: true });
     await writeFile(target, content);
 }
+
+async function proofInventoryFixture(t) {
+    const root = await temporaryRoot(t);
+    const routes = [
+        ...privacyScenarioInventory.map((scenario) => ['starter', scenario]),
+        ...privacyAuthScenarioInventory.map((scenario) => ['auth', scenario]),
+    ];
+    const menu = routes
+        .map(
+            ([kind, scenario]) =>
+                `<a href="${kind}/index.html?scenario=${scenario}">${scenario}</a>`
+        )
+        .join('\n');
+    const readme = routes
+        .map(
+            ([kind, scenario]) =>
+                `[${scenario}](${kind}/index.html?scenario=${scenario})`
+        )
+        .join('\n');
+    const factory = `export function createPrivacyFixture(scenario) {
+        return { fetch() { throw new Error('Inventory guard must never dispatch transport.'); },
+            state: { scenario, calls: [], unexpected: [] } };
+    }\n`;
+    await Promise.all([
+        write(root, 'package.json', '{"type":"module"}\n'),
+        write(root, 'fixture.js', factory),
+        write(
+            root,
+            'manifest.json',
+            JSON.stringify({ scenarios: privacyScenarioInventory })
+        ),
+        write(root, 'index.html', menu),
+        write(root, 'README.md', readme),
+    ]);
+    return { root, menu, readme };
+}
+
+test('privacy proof inventory accepts complete declarations without dispatching fixture transport', async (t) => {
+    const fixture = await proofInventoryFixture(t);
+    assert.deepEqual(await assertPrivacyProofInventory(fixture.root), {
+        scenarios: 24,
+        authScenarios: 5,
+    });
+});
+
+test('privacy proof inventory rejects a supported teardown omitted from the manifest', async (t) => {
+    const fixture = await proofInventoryFixture(t);
+    await write(
+        fixture.root,
+        'manifest.json',
+        JSON.stringify({
+            scenarios: privacyScenarioInventory.filter(
+                (scenario) => scenario !== 'teardown-logout'
+            ),
+        })
+    );
+    await assert.rejects(
+        assertPrivacyProofInventory(fixture.root),
+        /Generated manifest: supported scenario inventory differs/
+    );
+});
+
+test('privacy proof inventory rejects the merged address IME route omitted from the manifest', async (t) => {
+    const fixture = await proofInventoryFixture(t);
+    await write(
+        fixture.root,
+        'manifest.json',
+        JSON.stringify({
+            scenarios: privacyScenarioInventory.filter(
+                (scenario) => scenario !== 'address-ime'
+            ),
+        })
+    );
+    await assert.rejects(
+        assertPrivacyProofInventory(fixture.root),
+        /Generated manifest: supported scenario inventory differs/
+    );
+});
+
+test('privacy proof inventory rejects a supported teardown omitted from the generated menu', async (t) => {
+    const fixture = await proofInventoryFixture(t);
+    await write(
+        fixture.root,
+        'index.html',
+        fixture.menu
+            .split('\n')
+            .filter((line) => !line.includes('teardown-disconnect'))
+            .join('\n')
+    );
+    await assert.rejects(
+        assertPrivacyProofInventory(fixture.root),
+        /Generated menu starter: supported scenario inventory differs/
+    );
+});
+
+test('privacy proof inventory rejects an unsupported route declared in the README', async (t) => {
+    const fixture = await proofInventoryFixture(t);
+    await write(
+        fixture.root,
+        'README.md',
+        fixture.readme.replace(
+            'scenario=teardown-logout',
+            'scenario=unsupported-route'
+        )
+    );
+    await assert.rejects(
+        assertPrivacyProofInventory(fixture.root),
+        /Generated README starter: supported scenario inventory differs/
+    );
+});
+
+test('privacy proof inventory rejects a factory that returns another scenario for a declared route', async (t) => {
+    const fixture = await proofInventoryFixture(t);
+    await write(
+        fixture.root,
+        'fixture.js',
+        `export function createPrivacyFixture(scenario) {
+        return { fetch() { throw new Error('No transport.'); },
+            state: { scenario: scenario === 'teardown-logout' ? 'portal' : scenario, calls: [], unexpected: [] } };
+    }\n`
+    );
+    await assert.rejects(
+        assertPrivacyProofInventory(fixture.root),
+        /teardown-logout: unsupported generated route/
+    );
+});
+
+test('privacy proof inventory rejects a factory that does not support a declared route', async (t) => {
+    const fixture = await proofInventoryFixture(t);
+    await write(
+        fixture.root,
+        'fixture.js',
+        `export function createPrivacyFixture(scenario) {
+        if (scenario === 'teardown-disconnect') throw new Error('Unsupported synthetic route.');
+        return { fetch() { throw new Error('No transport.'); }, state: { scenario, calls: [], unexpected: [] } };
+    }\n`
+    );
+    await assert.rejects(
+        assertPrivacyProofInventory(fixture.root),
+        /teardown-disconnect: unsupported generated route/
+    );
+});
 
 async function distributionFixture(t) {
     const root = await temporaryRoot(t);

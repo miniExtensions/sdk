@@ -19,6 +19,11 @@ import {
     relative,
     resolve,
 } from 'node:path';
+import {
+    assertPrivacyProofInventory,
+    privacyScenarioInventory,
+    privacyAuthScenarioInventory,
+} from './privacy-proof-inventory.mjs';
 
 // Retain a manual browser fixture only after the exact packed checks pass,
 // before their independent consumer directories are removed.
@@ -57,6 +62,8 @@ const regular = (path) => {
 /** This function is serialized into the static kit; it imports no SDK source. */
 function createPrivacyFixture(scenario) {
     if (scenario === 'address-ime') return createAddressCompositionFixture();
+    if (scenario === 'teardown-logout' || scenario === 'teardown-disconnect')
+        return createTeardownFixture(scenario);
     if (['projection-single', 'projection-multiple'].includes(scenario))
         return createProjectionFixture(scenario);
     if (
@@ -1905,6 +1912,203 @@ function createAddressCompositionFixture() {
     return fixture;
 }
 
+function createTeardownFixture(scenario) {
+    const token = 'FAKE_SYNTHETIC_TEARDOWN_TOKEN';
+    const privateText = 'Previous visitor private narrative';
+    const privateTitle = 'Previous visitor private field label';
+    const privateFilename = 'previous-visitor-private-attachment.pdf';
+    const initial = {
+        fld_title: 'Initial public title',
+        fld_files: [
+            {
+                url: 'https://synthetic-files.invalid/private-reference',
+                filename: privateFilename,
+            },
+        ],
+        fld_readonly: 'Public readonly witness',
+        fld_number: 7,
+        fld_checkbox: true,
+    };
+    const fresh = {
+        fld_title: 'Fresh public baseline',
+        fld_files: [],
+        fld_readonly: 'Fresh public readonly witness',
+        fld_number: 0,
+        fld_checkbox: false,
+    };
+    const field = (id, name, type, options = null) => ({
+        id,
+        name,
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: { type, options },
+    });
+    const state = {
+        scenario,
+        synthetic: true,
+        realNetworkEnabled: false,
+        calls: [],
+        events: [],
+        unexpected: [],
+        expected: {
+            token,
+            initial,
+            fresh,
+            privateText,
+            privateTitle,
+            privateFilename,
+            publicTitle: 'Current public title',
+        },
+    };
+    let loads = 0;
+    let saves = 0;
+    const page = (first) => {
+        const title = first ? privateTitle : state.expected.publicTitle;
+        const entries = [
+            [field('fld_title', title, 'singleLineText'), { title }],
+            [
+                field('fld_files', 'Files', 'multipleAttachments', {
+                    isReversed: false,
+                }),
+                {},
+            ],
+            [
+                field('fld_readonly', 'Public readonly', 'singleLineText'),
+                { readOnly: true },
+            ],
+            [
+                field('fld_number', 'Public number', 'number', {
+                    precision: 0,
+                }),
+                {},
+            ],
+            [
+                field('fld_checkbox', 'Public checkbox', 'checkbox', {
+                    icon: 'check',
+                    color: 'greenBright',
+                }),
+                {},
+            ],
+        ].map(([airtableField, miniExtConfig]) => ({
+            fieldType: airtableField.config.type,
+            airtableField,
+            miniExtConfig,
+        }));
+        return structuredClone({
+            extensionId: 'teardown_form_synthetic',
+            language: 'en',
+            themeColor: 'blue',
+            enableCommentsOnChildForms: false,
+            workspaceId: 'teardown_workspace_synthetic',
+            extensionOwnerUID: 'teardown_owner_synthetic',
+            faviconUrl: null,
+            googleAnalyticsMeasurementId: null,
+            isStarterExtension: false,
+            extensionScreen: 'form_loaded',
+            payload: {
+                baseId: 'teardown_base_synthetic',
+                loggedInUserCanEditExtension: false,
+                showMiniExtensionsBranding: true,
+                onFreePlan: true,
+                trialExpiresAtUnixEpoch: null,
+                extensionType: 'form',
+                extensionName: 'Synthetic public anonymous Form',
+                extensionAccessToken: token,
+                hasParentExtension: false,
+                publicFields: {},
+                formRecord: { type: 'create', data: first ? initial : fresh },
+                formErrors: {},
+                fieldIdsInForm: entries.map((entry) => entry.airtableField.id),
+                fieldNamesToSchemas: Object.fromEntries(
+                    entries.map((entry) => [entry.airtableField.name, entry])
+                ),
+                fieldIdsToSchemas: Object.fromEntries(
+                    entries.map((entry) => [entry.airtableField.id, entry])
+                ),
+                // The journal retains attachment names only from dirty fields.
+                formFieldIdsWithUnsavedChanges: first ? ['fld_files'] : [],
+                urlPrefilledFieldIds: [],
+                linkedRecordFieldIdToDetailFields: {},
+                cookieKeyForLoginToken: null,
+            },
+        });
+    };
+    const fail = (message) => {
+        state.unexpected.push(message);
+        throw new Error(message);
+    };
+    const transport = async (request, init = {}) => {
+        const url = new URL(
+            request instanceof Request ? request.url : String(request)
+        );
+        if (url.origin !== 'https://synthetic-sdk.invalid')
+            return fail('Real/unrecognized teardown origin refused.');
+        if (init.credentials !== 'omit')
+            return fail('Teardown fixture requires anonymous SDK transport.');
+        init.signal?.throwIfAborted();
+        const method =
+            init.method ??
+            (request instanceof Request ? request.method : 'GET');
+        const route = url.searchParams.get('route') ?? url.pathname;
+        let input;
+        try {
+            input = JSON.parse(
+                method === 'GET'
+                    ? (url.searchParams.get('input') ?? '{}')
+                    : String(init.body ?? '{}')
+            );
+        } catch {
+            return fail('Unexpected teardown JSON request.');
+        }
+        const visibleInput = { ...input };
+        delete visibleInput.miniExtStorageV4;
+        delete visibleInput.miniExtSession;
+        state.calls.push({
+            route,
+            method,
+            input: structuredClone(visibleInput),
+            credentialsMode: init.credentials,
+        });
+        if (route === 'fetchExtensionForEndUser') {
+            if (
+                input.shareId !== 'privacy_share_synthetic' ||
+                input.childExtensionInfo != null ||
+                input.recordId !== null ||
+                input.context?.type !== 'direct-url'
+            )
+                return fail('Unexpected standalone teardown Form load.');
+            loads += 1;
+            const result = page(loads === 1);
+            state.events.push({
+                type: 'synthetic-teardown-form-load',
+                load: loads,
+                formRecord: structuredClone(result.payload.formRecord),
+                dirtyFieldIds: [
+                    ...result.payload.formFieldIdsWithUnsavedChanges,
+                ],
+            });
+            return new Response(JSON.stringify(result), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        if (route === 'saveForm') {
+            saves += 1;
+            if (method !== 'POST' || saves !== 1)
+                return fail('An uncertain teardown create must never replay.');
+            state.events.push({ type: 'synthetic-create-response-lost' });
+            // An expected handled transport failure leaves the real journal
+            // outcome unknown. It grants no durable persistence credit.
+            throw new Error('Synthetic create response lost after dispatch.');
+        }
+        return fail(
+            'Unsupported teardown route; no network fallback: ' + route
+        );
+    };
+    return { state, fetch: transport };
+}
+
 /** Read-only snapshots plus an explicit native synthetic-read release button. */
 function installProofInspection(fixture, kind) {
     const banner = document.createElement('section');
@@ -2370,7 +2574,7 @@ export async function buildPrivacyBrowserProof({
         write('starter/index.html', starterHtml);
         write(
             'fixture.js',
-            `const createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nconst createAddressCompositionFixture = ${createAddressCompositionFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
+            `const createTeardownFixture = ${createTeardownFixture.toString()};\nconst createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nconst createAddressCompositionFixture = ${createAddressCompositionFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
         );
         write(
             'starter/bootstrap.js',
@@ -2465,40 +2669,17 @@ renderPanel();
                 '<script type="module" src="./auth.js"></script>'
             )
         );
-        const links = ['pin', 'password', 'word', 'email', 'phone']
+        const links = privacyScenarioInventory
             .map(
                 (name) =>
-                    `<li><a href="starter/index.html?scenario=${name}">Actual starter: ${name}</a> · <a href="auth/index.html?scenario=${name}">Complete AuthPanel: ${name}</a></li>`
-            )
-            .join('');
-        const interactionLinks = [
-            'choice-single',
-            'choice-multiple',
-            'choice-add-single',
-            'choice-add-multiple',
-            'projection-single',
-            'projection-multiple',
-            'linked-filters',
-            'linked-filter-deferred',
-            'visibility-draft',
-            'visibility-unavailable',
-            'visibility-section',
-            'address-acceptance',
-            'address-failure',
-            'address-lifecycle',
-            'address-remount',
-            'address-ime',
-        ]
-            .map(
-                (name) =>
-                    `<li><a href="starter/index.html?scenario=${name}">Actual starter: ${name}</a></li>`
+                    `<li><a href="starter/index.html?scenario=${name}">Actual starter: ${name === 'portal' ? 'obscured Portal child-config Grid save/reopen' : name}</a>${privacyAuthScenarioInventory.includes(name) ? ` · <a href="auth/index.html?scenario=${name}">Complete AuthPanel: ${name}</a>` : ''}</li>`
             )
             .join('');
         write(
             'index.html',
             shell(
                 'Synthetic packed SDK browser proof',
-                `<main><h1>Manual synthetic SDK scenarios</h1><p>This static kit contains the actual packed starter and complete shipped AuthPanel recipe. Generation alone proves no browser outcome. Read README.md before recording a result.</p><ul>${links}<li><a href="starter/index.html?scenario=portal">Actual starter: obscured Portal child-config Grid save/reopen</a></li>${interactionLinks}</ul><p><a href="README.md">Manual assertions and scope</a> · <a href="manifest.json">Source/package manifest</a></p></main>`
+                `<main><h1>Manual synthetic SDK scenarios</h1><p>This static kit contains the actual packed starter and complete shipped AuthPanel recipe. Generation alone proves no browser outcome. Read README.md before recording a result.</p><ul>${links}</ul><p><a href="README.md">Manual assertions and scope</a> · <a href="manifest.json">Source/package manifest</a></p></main>`
             ).replace('href="../proof.css"', 'href="./proof.css"')
         );
         write('SDK-LICENSE', regular(join(authSdk, 'LICENSE')));
@@ -2518,6 +2699,12 @@ This kit needs only a static server. Serve this directory as its root and open i
 Package SHA256: ${packageSha256}
 Source commit: ${source.commit}
 Source tree: ${source.tree}
+
+## Supported scenario routes
+
+The manifest declares ${privacyScenarioInventory.length} actual-starter scenarios. ${privacyAuthScenarioInventory.length} also expose the complete AuthPanel recipe, giving ${privacyScenarioInventory.length + privacyAuthScenarioInventory.length} menu routes. The generated inventory guard checks every declared factory route and reconciles this list with the menu and manifest; construction alone is not browser execution.
+
+${privacyScenarioInventory.map((name) => `- [Actual starter: ${name}](starter/index.html?scenario=${name})${privacyAuthScenarioInventory.includes(name) ? ` · [Complete AuthPanel: ${name}](auth/index.html?scenario=${name})` : ''}`).join('\n')}
 
 ## What is actual and what is synthetic
 
@@ -2571,6 +2758,12 @@ address-remount: hold predictions, switch the actual Visitor selector A to B to 
 address-ime reuses the same bounded address transport and adds separately labelled visible fixture controls. It proves SDK/starter handling of supplied untrusted DOM events, not OS IME behavior. First type an ordinary query with the real keyboard, release predictions and highlight the first option using native ArrowDown. Dispatch synthetic composing keyboard markers: each ArrowDown/ArrowUp/Enter/Escape with isComposing:true and again keyCode:229 must leave the value/highlight unchanged, defaultPrevented:false, dispatchReturned:true, and issue no details or Save. Marker logs bind exact supplied and observed flags, before/after value and active descendant.
 
 Start synthetic DOM composition; the existing popup and pending intents must retire. Update synthetic composing Japanese input: its fixed unfinished buffer exceeds the 24-character cap and must remain untouched for more than 800 ms, without a prediction, formatted details or Save. Dispatch the markers again while composition is active. Commit synthetic DOM composition: the actual compositionend plus final non-composing input commits the fixed final Japanese string and creates exactly one debounced prediction. Release it, focus the real input and use native ArrowDown/Enter; the ordinary highlight/selection/details behavior must still work. Release details, then explicitly Save and inspect full native record values and the address dirty ID. These composition controls intentionally dispatch app input markers only in this named scenario; existing four address response controls still settle transport only, and snapshot hooks remain read-only.
+
+## Bounded privacy teardown scenarios
+
+teardown-logout and teardown-disconnect use the actual starter's public anonymous create Form. Choose Connect and load, replace the title with Previous visitor private narrative and Save once. The synthetic response is lost; the uncertain create remains blocked. Earlier local input (reference only) must contain that text, Previous visitor private field label and previous-visitor-private-attachment.pdf. The attachment field starts dirty so this assertion exercises its retained filename.
+
+Choose Reload before either teardown: the active Form must contain Fresh public baseline, no attachments, Fresh public readonly witness, numeric zero and checkbox false, while the earlier reference remains available separately and Save stays blocked. In teardown-logout choose Clear this visitor's session then Reload. In teardown-disconnect choose Disconnect then Connect and load the same share. Each anonymous reconnect must show those unchanged fresh values, no Earlier local input details and none of the three earlier private witnesses in application text, attributes or current field values. Earlier outcome not confirmed and the disabled Save must remain. Deliberate attempts to submit the current Form may not add another saveForm call; its total remains one. These cases prove synthetic UI teardown and conservative no-replay behavior; the original write outcome remains unknown. Diagnostic fixture expectations and traces remain synthetic reference material outside the application privacy assertion.
 
 ## CI generation and remaining verification
 
@@ -2627,30 +2820,7 @@ CI generated this static kit only after the existing exact archive consumer chec
             sources,
             bundleInputs: { starter: starterInputs, auth: authInputs },
             outputs,
-            scenarios: [
-                'pin',
-                'password',
-                'word',
-                'email',
-                'phone',
-                'portal',
-                'choice-single',
-                'choice-multiple',
-                'choice-add-single',
-                'choice-add-multiple',
-                'projection-single',
-                'projection-multiple',
-                'linked-filters',
-                'linked-filter-deferred',
-                'visibility-draft',
-                'visibility-unavailable',
-                'visibility-section',
-                'address-acceptance',
-                'address-failure',
-                'address-lifecycle',
-                'address-remount',
-                'address-ime',
-            ],
+            scenarios: [...privacyScenarioInventory],
             limits: [
                 'Synthetic transport only; real network fallback disabled.',
                 'No backend/security/permission/OTP delivery/durable persistence proof.',
@@ -2679,6 +2849,7 @@ CI generated this static kit only after the existing exact archive consumer chec
             ].join('\n') + '\n',
             { flag: 'wx' }
         );
+        await assertPrivacyProofInventory(output);
         return {
             outputDirectory: output,
             manifestSha256,

@@ -26,6 +26,7 @@ import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 import { checkAdditionalRuntimeOperations } from './additional-runtime-recipe-checks.mjs';
+import { checkFormConditions } from './form-conditions-checks.mjs';
 import { checkBrowserPortalExample } from './browser-portal-example-checks.mjs';
 import { checkBrowserSelectExample } from './browser-select-example-checks.mjs';
 import { createHash } from 'node:crypto';
@@ -1048,8 +1049,13 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
     const additionalRuntimeChecks = await checkAdditionalRuntimeOperations({
         consumerDirectory: temporaryDirectory,
     });
+    const formConditionsChecks = checkFormConditions({
+        consumerDirectory: temporaryDirectory,
+        run,
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

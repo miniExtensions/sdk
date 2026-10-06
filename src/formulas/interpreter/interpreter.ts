@@ -17,7 +17,7 @@ import {
     Grouping,
     Identifier,
 } from '../parser/ast.js';
-import FormulaRunner from '../runner.js';
+import FormulaRunner, { type FormulaRunOutcome } from '../runner.js';
 import moment, { type unitOfTime } from 'moment';
 import {
     type AirtablePrimitive,
@@ -66,7 +66,9 @@ type FormulaFunctionType = `${FormulaFunctions}`;
  * Formula errors that need to be returned as an airtable formula error value
  */
 class FormulaRuntimeError extends Error {
-    constructor() {
+    constructor(
+        readonly code: 'runtime-error' | 'non-finite-result' = 'runtime-error'
+    ) {
         super();
         // We need to manually adjust the prototype chain when transpiling to es5
         // https://github.com/Microsoft/TypeScript-wiki/blob/main/Breaking-Changes.md#extending-built-ins-like-error-array-and-map-may-no-longer-work
@@ -91,6 +93,33 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
             throw e;
         }
     }
+
+    executeWithOutcome(): FormulaRunOutcome {
+        try {
+            const value = this.convertPrimitiveToStringOrNumber(
+                this._execute()
+            );
+            this.assertConsumableValue(value);
+            if (typeof value !== 'string' && typeof value !== 'number')
+                throw new FormulaRuntimeError();
+            return { type: 'value', value };
+        } catch (e) {
+            if (e instanceof FormulaRuntimeError)
+                return { type: 'error', code: e.code };
+            throw e;
+        }
+    }
+
+    private assertConsumableValue(value: unknown): void {
+        if (
+            value == null ||
+            (value instanceof Date && !Number.isFinite(value.getTime()))
+        )
+            throw new FormulaRuntimeError();
+        if (FormulaRunner.isErrorValue(value))
+            throw new FormulaRuntimeError('non-finite-result');
+    }
+
     private _execute() {
         return this.expr.accept(this);
     }
@@ -115,6 +144,10 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
 
         const convertedLeft = this.convertPrimitiveToStringOrNumber(_left);
         const convertedRight = this.convertPrimitiveToStringOrNumber(_right);
+        // Evaluate both operands before classifying consumption, preserving
+        // eager ordering and exceptions from the later operand.
+        this.assertConsumableValue(convertedLeft);
+        this.assertConsumableValue(convertedRight);
 
         switch (node.operator.type) {
             case TokenTypes.PLUS:
@@ -182,6 +215,7 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
      */
     visitUnaryExpr(node: Unary): string | number {
         const value = node.left.accept(this);
+        this.assertConsumableValue(value);
 
         switch (node.operator.type) {
             case TokenTypes.MINUS:
@@ -254,6 +288,32 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                 'Interpreter context must be set for resolving identifiers'
             );
         }
+        // Shared readable formatting deliberately presents native errors as
+        // text. Formula evaluation must retain their provenance before that
+        // conversion; literal marker strings remain ordinary data.
+        const arrayValue = Array.isArray(value);
+        for (const member of arrayValue ? value : [value]) {
+            if (
+                member != null &&
+                typeof member === 'object' &&
+                Object.hasOwn(member, 'error') &&
+                'error' in member &&
+                typeof member.error === 'string'
+            )
+                throw new FormulaRuntimeError();
+            if (
+                arrayValue &&
+                (FormulaRunner.isErrorValue(member) ||
+                    (member != null &&
+                        typeof member === 'object' &&
+                        Object.hasOwn(member, 'specialValue') &&
+                        'specialValue' in member &&
+                        (member.specialValue === 'NaN' ||
+                            member.specialValue === 'Infinity' ||
+                            member.specialValue === '-Infinity')))
+            )
+                throw new FormulaRuntimeError('non-finite-result');
+        }
         const primitive = convertAirtableValueToPrimitive({
             value,
             airtableFieldConfig: field.config,
@@ -267,6 +327,7 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
         if (!Array.isArray(primitive)) {
             return primitive;
         }
+        for (const member of primitive) this.assertConsumableValue(member);
 
         if (field.config.type !== AirtableFieldType.MULTIPLE_SELECTS) {
             return primitive.join(arrayJoinSeparator);
@@ -288,6 +349,15 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
         const convertedArgs = unconvertedArgs.map((arg) =>
             this.convertPrimitiveToStringOrNumber(arg)
         );
+        // Unknown callees keep their regular exception, including when an
+        // argument is non-finite. ISERROR handles private faults itself.
+        if (
+            functionName !== 'ISERROR' &&
+            (functionName !== 'RECORD_ID' || this.context != null) &&
+            Object.hasOwn(FormulaFunctions, functionName)
+        )
+            for (const argument of convertedArgs)
+                this.assertConsumableValue(argument);
         switch (functionName) {
             case 'RECORD_ID':
                 if (this.context == null)
@@ -346,19 +416,20 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                     FormulaRunner.isFalsyValue(convertedArgs[0]) ? true : false
                 );
             case 'REGEX_MATCH': {
+                const value = convertedArgs[0];
+                const regexString = convertedArgs[1];
+                if (
+                    typeof regexString !== 'string' ||
+                    typeof value !== 'string'
+                )
+                    throw new FormulaRuntimeError();
                 try {
-                    const value = convertedArgs[0];
-                    const regexString = convertedArgs[1];
-                    if (
-                        typeof regexString !== 'string' ||
-                        typeof value !== 'string'
-                    )
-                        // Both arguments must be strings.
-                        throw new FormulaRuntimeError();
                     const regex = new RegExp(regexString);
                     return Number(regex.test(value));
-                } catch {
-                    return AIRTABLE_FORMULA_ERROR_VALUE;
+                } catch (e) {
+                    if (e instanceof SyntaxError)
+                        throw new FormulaRuntimeError();
+                    throw e;
                 }
             }
             case 'REGEX_REPLACE': {
@@ -457,7 +528,9 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                     : trueValue;
             }
             case 'ISERROR':
-                return FormulaRunner.isErrorValue(convertedArgs[0]) ? 1 : 0;
+                for (const argument of convertedArgs)
+                    this.assertConsumableValue(argument);
+                return 0;
             default:
                 assertUnreachable(functionName);
         }

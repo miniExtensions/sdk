@@ -13,9 +13,57 @@ const formula = new FormulaRunner('2 + 3 * 4');
 const value = formula.run(); // 14
 ```
 
-The constructor parses the expression. `run()` evaluates it and returns a string
-or number. Construct one runner and replace its context when evaluating the same
-formula against different records.
+The constructor parses the expression. `run()` evaluates it and normally returns
+a string or number. Construct one runner and replace its context when evaluating
+the same formula against different records.
+
+## Distinguishing values from formula faults
+
+Use `runWithOutcome()` when a caller must distinguish data from an evaluation
+fault. It evaluates the current expression once and returns the exported
+`FormulaRunOutcome` union:
+
+```ts
+import {
+    FormulaRunner,
+    type FormulaRunOutcome,
+} from '@miniextensions/sdk/formulas';
+
+const result: FormulaRunOutcome = new FormulaRunner(
+    'AND(1, REGEX_MATCH("sample", "["))'
+).runWithOutcome();
+
+if (result.type === 'error') {
+    console.log(result.code); // 'runtime-error'
+} else {
+    console.log(result.value); // string or finite number
+}
+```
+
+The error codes are `runtime-error` for recognized evaluation faults and invalid
+converted results, and `non-finite-result` for numeric `NaN` or infinity. Numeric
+faults keep that code when another expression consumes them. A literal
+`'#ERROR!'`, including a returned text field with that value, remains a successful
+text result. An explicit native computed `{error: string}` cell or array member
+retains its fault provenance before readable formatting. Numeric error members
+of actual computed arrays are also rejected before formatting can turn them into
+text. This behavior does not change the shared readable-value formatter.
+
+`ISERROR(...)` can handle recognized formula faults and returns numeric `1`.
+Function arguments remain eager, including unselected `IF` branches. Neither
+method catches unknown-field errors, unsupported-function errors, parser errors,
+or unrelated exceptions such as an invalid `REGEX_REPLACE` pattern. An invalid
+`REGEX_MATCH` pattern is a recognized formula runtime fault.
+
+`run()` retains the legacy outer `'#ERROR!'` representation for recognized
+faults and still returns top-level numeric `NaN` or infinity. Those numeric values
+propagate as faults when consumed by logic, arithmetic, comparisons,
+concatenation, unary minus, or supported function calls. For example, `-1 / 0`
+still returns numeric negative infinity, while `-(1 / 0)` consumes infinity and
+returns `'#ERROR!'`. Bare invalid date conversions or missing `IF` results can
+still return legacy `null` or `undefined`; `runWithOutcome()` rejects them as
+`runtime-error`, as does consuming them in another expression. Replacing the
+context does not retain an earlier outcome or error state.
 
 ## Field references and context
 
@@ -159,9 +207,10 @@ literals can use single or double quotes. Function names are case sensitive.
   `2`.
 - Function arguments evaluate eagerly, including both branches of `IF`.
 - Boolean operations return numeric `1` or `0`.
-- Invalid numeric operations may return `NaN` or infinity. Certain runtime
-  errors return the string `'#ERROR!'`; syntax and unsupported-function errors
-  can throw.
+- Top-level invalid numeric operations may return `NaN` or infinity through
+  `run()`. Consuming them propagates a formula fault; recognized runtime faults
+  return the outer string `'#ERROR!'`. Unknown-field, unsupported-function and
+  unrelated syntax exceptions still throw.
 - `FormulaRunner.isErrorValue` identifies numeric `NaN` and infinity. It does
   not classify the string `'#ERROR!'` as an error. `isFalsyValue` also recognizes
   zero, false, empty strings, and empty arrays.
@@ -171,7 +220,9 @@ literals can use single or double quotes. Function names are case sensitive.
 - Array values join with `', '`. Multi-select values use the engine's existing
   quote escaping.
 
-These details are preserved for compatibility.
+The typed outcome method is additive. The propagation rules above prevent a
+recognized fault from turning into truthy text or a successful comparison;
+ordinary marker strings keep their existing data semantics.
 
 The public `GetReadableStringSource` context also accepts
 `dateParsing: 'local' | 'utc'` for readable-value conversion. Omitted or `utc`

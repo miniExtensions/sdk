@@ -263,6 +263,12 @@ not evaluate option conditions. The starter uses final Save and supplies no
 general conditional evaluator or CAPTCHA widget. The existing server still
 enforces its published rules.
 
+`compileRuntimeConditions` from `@miniextensions/sdk/forms` compiles a
+[bounded scalar subset](docs/forms.md#compile-scalar-runtime-conditions) to a
+formula with diagnostics. Supply current field metadata and explicit strict or
+compatibility mode; handle `unsupported` and `invalid` results. Compilation
+performs no evaluation or request and enables no starter visibility workflow.
+
 The runtime supplies [conditional-filter primary values](docs/runtime.md#conditional-linked-filter-primary-values),
 [address reads](docs/runtime.md#address-predictions-and-place-formatting) and
 [configured Button webhooks](docs/runtime.md#configured-button-webhooks).
@@ -295,6 +301,12 @@ CommonJS can use `require('@miniextensions/sdk/formulas')`. Follow the
 [existing semantics](docs/formulas.md#existing-semantics); numeric `NaN`/infinity,
 outer `'#ERROR!'` strings and thrown exceptions are distinct. Do not infer
 hosted conditional behavior from a locally evaluated formula.
+
+`FormulaRunner.runWithOutcome()` returns a typed value/error outcome after one
+evaluation, distinguishing recognized runtime faults and nonfinite results
+from data. Literal `'#ERROR!'` text remains data; unknown-field,
+unsupported-function and unrelated exceptions can still throw. See
+[typed outcomes](docs/formulas.md#distinguishing-values-from-formula-faults).
 
 Keep administrative, Airtable and provider secrets out of browser code. Render
 record text/labels with escaped or text APIs and review custom HTML, URL, embed

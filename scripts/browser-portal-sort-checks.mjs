@@ -225,6 +225,42 @@ export async function checkPortalSortCases({
     await check(
         'omitted custom overrides clear root hide, restrictions and custom primary; source mutation is detached',
         async () => {
+            // An absent whole config inherits root; omitted keys inside a
+            // custom config below instead clear the corresponding root keys.
+            for (const mode of ['omitted', 'undefined', 'null']) {
+                const inherited = editablePortal();
+                const root =
+                    inherited.payload.fieldIdsToSchemas.fld_children
+                        .miniExtConfig;
+                root.hideSortButtonForPortal = false;
+                root.sortingOnExtensionFields = ['fld_quantity'];
+                root.customPrimaryField = 'fld_quantity';
+                if (mode === 'omitted') delete root.customViews[0].config;
+                else
+                    root.customViews[0].config =
+                        mode === 'null' ? null : undefined;
+                const h = await mount({
+                    portal: inherited,
+                    initialCriteria: criteria(),
+                    handlers: {
+                        list: () => f.page([f.record('rec_one', 'Inherited')]),
+                    },
+                });
+                await h.click('Load records');
+                assert.deepEqual(
+                    [...controls(h.view.node).field.options].map(
+                        (x) => x.value
+                    ),
+                    ['', 'fld_quantity'],
+                    mode
+                );
+                assert.deepEqual(ids(h.view.node), ['rec_one']);
+                assert.equal(
+                    h.calls.filter((x) => x.operation === 'list').length,
+                    1
+                );
+                await h.dispose();
+            }
             const p = editablePortal(),
                 cfg = p.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
             cfg.hideSortButtonForPortal = true;

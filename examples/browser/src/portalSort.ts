@@ -58,7 +58,7 @@ export function mountPortalSortEditor(options: {
                 'Sort view does not match the accepted collection.'
             );
         const view = matches[0]?.config;
-        if (matches.length === 1 && !object(view))
+        if (view != null && !object(view))
             return unavailable('Sort view configuration is malformed.');
         // These overridable keys replace root values, including omitted values.
         const config = view?.viewBehavior === 'custom' ? view : root;

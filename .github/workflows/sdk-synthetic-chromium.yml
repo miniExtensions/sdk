@@ -3,7 +3,7 @@ name: Immutable SDK synthetic Chromium proof
 on:
     push:
         branches:
-            - codex/sdk-review-privacy-ime-chromium-20261006
+            - codex/sdk-review-recovery-inert-chromium-20261006
 
 permissions:
     contents: read
@@ -29,8 +29,8 @@ jobs:
               with:
                   repository: miniExtensions/sdk
                   # Composed Review, privacy and IME proof: 28 starter routes plus five AuthPanel routes.
-                  run-id: 37433447680
-                  artifact-ids: 11397763101
+                  run-id: 37450216536
+                  artifact-ids: 11406296517
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/package
                   skip-decompress: true
@@ -39,8 +39,8 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  run-id: 37433447680
-                  artifact-ids: 11397608337
+                  run-id: 37450216536
+                  artifact-ids: 11406781260
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/fixture
                   skip-decompress: true

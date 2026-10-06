@@ -31,17 +31,17 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11397763101',
+    packageArtifactId: '11406296517',
     packageZipSha256:
-        '72949117fa8da9d9cdb50f48339454105e591846edcb2e0939f2c19bc600a467',
+        '5678af1214ee94532486fb4c1f8b263682b5e82db5d536724a3d2cb3199fe722',
     packageSha256:
-        'b48e04254fe23b20cc3861e04225f5e7c6db9c752cd2894daa423583ea1f01ed',
-    packageBytes: 275510,
+        '1e24d840aaaea2a81cc02761eed38bfea5168d4a4eb5d0a25b04f8a28223083c',
+    packageBytes: 275500,
     packageFiles: 192,
     packageZipMembers: 4,
-    fixtureArtifactId: '11397608337',
+    fixtureArtifactId: '11406781260',
     fixtureZipSha256:
-        '80d35320fdcf4cba1db90178f93b8886b383120fabf2c43409f738be0fec2c6d',
+        '6584c72127453e40be6d6c3952040989d02c6e665841bdd68a9655ffdb1c90ee',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
@@ -49,10 +49,10 @@ const expected = {
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: '7680d388f3cddd26a33864a0531743c9eb4b6ec0',
-        tree: '4459463ed804729f24d1fb1721eef646f5bc7422',
+        commit: 'bfc72376d724f5fe61eec57da2f042280f36260d',
+        tree: 'f7c6d3bcd06a145880bbaac493a2db6247d75425',
     },
-    runId: '37433447680',
+    runId: '37450216536',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -4307,99 +4307,69 @@ try {
     await exercise(
         'starter-review-cancelled-unknown-save-no-replay',
         async (result) => {
-            await loadReview('review-unknown');
-            await openReview();
-            await clickText('Confirm', await reviewDialog());
-            let state = await waitSnapshot(
-                (value) =>
-                    saves(value).length === 1 &&
-                    value.pending.length === 1 &&
-                    value.busy,
-                'One confirmed Save is held by the synthetic transport.'
-            );
-            state = await capture(
-                result,
-                'confirmed-single-held-save-complete-native-data'
-            );
-            assertReviewSave(
-                saves(state)[0],
-                state,
-                state.expected.initial,
-                []
-            );
-            assert.equal(state.review.dialogs.length, 0);
-            const saveButtons = await driver.findElements(
-                By.css('#screen button')
-            );
-            const saveMatches = [];
-            for (const button of saveButtons)
-                if ((await button.getText()).trim() === 'Save')
-                    saveMatches.push(button);
-            assert.equal(saveMatches.length, 1);
-            assert.equal(await saveMatches[0].isEnabled(), false);
-            await clickText('Cancel request');
-            await waitSnapshot(
-                (value) => !value.busy && value.review.abortCounts.save === 1,
-                'Native Cancel retires the confirmed Save request.'
-            );
-            state = await capture(
-                result,
-                'native-cancel-uncertainty-remains-blocked'
-            );
-            assert.equal(saves(state).length, 1);
-            assert.equal(state.review.dialogs.length, 0);
-            assert.equal(await saveMatches[0].isEnabled(), false);
-            await clickText('Release held review Save');
-            await waitSnapshot(
-                (value) =>
-                    value.pending.length === 0 &&
-                    value.events.some(
-                        (event) =>
-                            event.type === 'review-save-settled' &&
-                            event.aborted
-                    ),
-                'Late cancelled validation arrives without reopening review.'
-            );
-            // Repeat a physical Enter from the actual retained Form input, rather
-            // than activating the transport-release button that currently holds
-            // focus. The disabled submit and uncertain scope must not dispatch.
-            await (
-                await find('#screen input[data-field-id="fld_review_title"]')
-            ).sendKeys(Key.ENTER, Key.ENTER);
-            const until = Date.now() + 500;
-            await driver.wait(
-                async () => {
-                    const value = await snapshot();
-                    assert.equal(saves(value).length, 1);
-                    assert.equal(value.review.dialogs.length, 0);
-                    return Date.now() >= until;
-                },
-                2000,
-                'No automatic replay after native cancelled uncertain Save.',
-                100
-            );
-            state = await capture(
-                result,
-                'late-result-and-repeated-enter-zero-replay'
-            );
-            assert.equal(await saveMatches[0].isEnabled(), false);
-            assert.equal(
-                reviewControl(state, 'fld_review_title').value,
-                state.expected.initial.fld_review_title
-            );
-            assert.deepEqual(
-                state.events.filter(
-                    (event) => event.type === 'review-save-settled'
-                ),
-                [
-                    {
-                        type: 'review-save-settled',
-                        id: 'review-save-1',
-                        aborted: true,
-                    },
-                ]
-            );
-            assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+            for (const outcome of ['cancelled', 'lost-response']) {
+                await loadReview('review-unknown');
+                await openReview();
+                await clickText('Confirm', await reviewDialog());
+                await waitSnapshot(
+                    value => saves(value).length === 1 && value.pending.length === 1 && value.busy,
+                    'One confirmed Save is held by the synthetic transport.'
+                );
+                if (outcome === 'cancelled') {
+                    await clickText('Cancel request');
+                    await waitSnapshot(value => !value.busy && value.review.abortCounts.save === 1,
+                        'Native Cancel retires the confirmed request.');
+                    await clickText('Release held review Save');
+                } else {
+                    await clickText('Lose held review Save response');
+                }
+                let state = await waitSnapshot(
+                    value => !value.busy && value.pending.length === 0 && value.review.fieldsInert,
+                    'Settled uncertain Review Save keeps the actual fields inert.'
+                );
+                assertReviewSave(saves(state)[0], state, state.expected.initial, []);
+                assert.equal(saves(state).length, 1);
+                assert.equal(state.review.dialogs.length, 0);
+                const before = state.review.controls;
+                for (const [id, action] of [
+                    ['fld_review_title', 'type'],
+                    ['fld_review_number', 'type'],
+                    ['fld_review_show', 'click'],
+                ]) {
+                    const input = await find(`#screen input[data-field-id="${id}"]`);
+                    try {
+                        if (action === 'click') await input.click();
+                        else await input.sendKeys('Untracked99', Key.ENTER);
+                    } catch (error) {
+                        assert.match(String(error), /interact|click|element/i);
+                    }
+                }
+                state = await capture(result, `${outcome}-native-text-number-checkbox-edits-blocked`);
+                assert.deepEqual(state.review.controls, before);
+                assert.equal(state.review.fieldsInert, true);
+                assert.equal(saves(state).length, 1);
+                assert.equal(state.review.dialogs.length, 0);
+                assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+                // An explicit fresh read does not silently acknowledge uncertainty.
+                await clickText('Reload');
+                await waitSnapshot(value => !value.busy && value.calls.length === 3 && value.review.fieldsInert,
+                    'Reload keeps an unacknowledged uncertain edit blocked.');
+                await clickText('Use this request');
+                const acknowledgment = await find('dialog[open]');
+                await clickText('Use this request', acknowledgment);
+                await waitSnapshot(value => !value.busy && !value.review.fieldsInert,
+                    'Explicit acknowledgment after fresh inspection enables a separate edit.');
+                await replaceInput(await find('#screen input[data-field-id="fld_review_title"]'),
+                    'Fresh separately tracked edit', 'password');
+                await openReview();
+                state = await capture(result, `${outcome}-fresh-acknowledged-edit-review-no-replay`, await reviewDialog());
+                assert.equal(state.review.dialogs[0].rows.find(row => row.fieldId === 'fld_review_title').value,
+                    'Fresh separately tracked edit');
+                assert.equal(saves(state).length, 1);
+                await clickText('Edit', await reviewDialog());
+                await waitReviewClosed();
+                assert.equal(saves(await snapshot()).length, 1);
+            }
         }
     );
     assert.equal(receipt.cases.length, 33);

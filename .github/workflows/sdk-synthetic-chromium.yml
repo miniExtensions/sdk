@@ -28,9 +28,9 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  # Corrected privacy inventory producer at native head bf1093e.
-                  run-id: 37426596991
-                  artifact-ids: 11395218756
+                  # Composed privacy and IME proof: 24 starter routes plus five AuthPanel routes.
+                  run-id: 37430037531
+                  artifact-ids: 11396706306
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/package
                   skip-decompress: true
@@ -39,8 +39,8 @@ jobs:
               uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
               with:
                   repository: miniExtensions/sdk
-                  run-id: 37426596991
-                  artifact-ids: 11394829604
+                  run-id: 37430037531
+                  artifact-ids: 11397130382
                   github-token: ${{ github.token }}
                   path: ${{ runner.temp }}/sdk-chromium-inputs/fixture
                   skip-decompress: true

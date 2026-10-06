@@ -31,17 +31,17 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11395218756',
+    packageArtifactId: '11396706306',
     packageZipSha256:
-        'cc4bc2fd686ea796d4a68e40a788e215f42c4ee27c720e5a17c49b70e19b4258',
+        '90052ec4dcc4992204668cc10bca6c3379bd5e348f6013e5972a7b8bb6e58316',
     packageSha256:
-        '00e36dd0ff8f52bd138cb94f1f490c9e4ce59f34759b4d5f7cf6b4bbeb5f8b00',
-    packageBytes: 270331,
+        'ad0394a55bf89c04c4e9c9868e974486568055f862a38b78ee61dad85de4de33',
+    packageBytes: 270823,
     packageFiles: 191,
     packageZipMembers: 4,
-    fixtureArtifactId: '11394829604',
+    fixtureArtifactId: '11397130382',
     fixtureZipSha256:
-        '4b4992b7dcd6acab7bd7fffa9e9280186b4443042e976b6c167512c8ec05c356',
+        '026a7eb4d4a3f46da8f08fa84664900c65c242899c1905dcb40020fbfd6eaaf8',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
@@ -49,10 +49,10 @@ const expected = {
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: 'bf1093e894e1e2d25d4d7d3da0431321dc09cccc',
-        tree: 'f395b98d52769546556e80d05b97a3340234c67f',
+        commit: '78c47556d9609f6330d383fff697f20ee49298cb',
+        tree: 'b6837d03dfd1bc1c2d33cb7f79938b9848d1aedc',
     },
-    runId: '37426596991',
+    runId: '37430037531',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -143,7 +143,7 @@ starter_scenarios=[
  'choice-single','choice-multiple','choice-add-single','choice-add-multiple',
  'projection-single','projection-multiple','linked-filters','linked-filter-deferred',
  'visibility-draft','visibility-unavailable','visibility-section',
- 'address-acceptance','address-failure','address-lifecycle','address-remount',
+ 'address-acceptance','address-failure','address-lifecycle','address-remount','address-ime',
  'teardown-logout','teardown-disconnect']
 auth_scenarios=['pin','password','word','email','phone']
 def exact_inventory(actual,declared,label):
@@ -154,7 +154,7 @@ exact_inventory(manifest['scenarios'],starter_scenarios,'Manifest starter')
 menu_routes=re.findall(r'href="(starter|auth)/index\.html\?scenario=([^"]+)"',(fixture/'index.html').read_text())
 readme_routes=re.findall(r'\[[^\]]+\]\((starter|auth)/index\.html\?scenario=([^)]+)\)',(fixture/'README.md').read_text())
 for label,routes in [('Menu',menu_routes),('README',readme_routes)]:
-    assert len(routes)==28 and len(set(routes))==28, label+' exact distinct28 surface/scenario routes'
+    assert len(routes)==29 and len(set(routes))==29, label+' exact distinct29 surface/scenario routes'
     exact_inventory([scenario for surface,scenario in routes if surface=='starter'],starter_scenarios,label+' starter')
     exact_inventory([scenario for surface,scenario in routes if surface=='auth'],auth_scenarios,label+' AuthPanel')
 assert set(menu_routes)==set(readme_routes), 'Menu/README scenario joins differ'
@@ -245,6 +245,7 @@ const receipt = {
         'Interaction Save assertions prove native dispatch with validation responses, not durable persistence.',
         'Address cases cover editable unmasked singleLineText, a valid character cap and one optional one-page checkbox predicate; no provider/backend/general configuration credit.',
         'Address stale responses exercise combined installed SDK and starter/presenter cancellation, without independently isolating presenter generations.',
+        'The added composition case supplies labelled untrusted DOM markers through visible fixture buttons; ordinary selection uses native W3C keyboard commands. No OS IME or platform composition integration proof.',
     ],
 };
 const writeJson = (path, data) =>
@@ -347,6 +348,7 @@ const scenarioCaseAliases = {
     'starter-address-failure-retry': 'address-failure',
     'starter-address-hide-save-interruption': 'address-lifecycle',
     'starter-address-aba-discard-remount': 'address-remount',
+    'starter-address-dom-composition': 'address-ime',
     'starter-private-reference-logout': 'teardown-logout',
     'starter-private-reference-disconnect': 'teardown-disconnect',
 };
@@ -532,6 +534,7 @@ try {
         assert.deepEqual(constructed.state.unexpected, []);
         constructedScenarios.push(scenario);
     }
+    assert.equal(constructedScenarios.length, 24);
     receipt.fixtureInventoryConstruction = {
         beforeServerAndBrowserStartup: true,
         scenarios: constructedScenarios,
@@ -3577,7 +3580,264 @@ try {
             }
         );
     }
-    assert.equal(receipt.cases.length, 28);
+    await exercise('starter-address-dom-composition', async (result) => {
+        const input = await loadAddress('address-ime');
+        let state = await capture(result, 'loaded-dom-composition-fixture');
+        assert.equal(
+            state.expected.composition.proofScope,
+            'synthetic DOM composition events; no OS IME proof'
+        );
+        const query = 'Native before composition';
+        await typeAddress(input, query);
+        state = await waitAddressPending('predictions');
+        const firstPredictionId = addressPending(state, 'predictions').id;
+        await settleAddress('predictions', firstPredictionId);
+        const options = await addressOptions(result);
+        await input.click();
+        await input.sendKeys(Key.ARROW_DOWN);
+        await assertNativeAddressHighlight(
+            result,
+            input,
+            options,
+            0,
+            capped(state, query),
+            'ordinary-native-highlight-before-composition'
+        );
+
+        const markers = (value) =>
+            value.events.filter(
+                (event) => event.type === 'synthetic-dom-composition-marker'
+            );
+        const assertKeyboardMarkers = (
+            entries,
+            expectedValue,
+            activeDescendant
+        ) => {
+            assert.equal(entries.length, 8);
+            for (const [index, entry] of entries.entries()) {
+                const key = ['ArrowDown', 'ArrowUp', 'Enter', 'Escape'][
+                    index % 4
+                ];
+                const flags =
+                    index < 4 ? { isComposing: true } : { keyCode: 229 };
+                assert.deepEqual(entry.supplied, {
+                    type: 'keydown',
+                    key,
+                    ...flags,
+                });
+                assert.deepEqual(entry.observed, {
+                    type: 'keydown',
+                    isTrusted: false,
+                    isComposing: flags.isComposing ?? false,
+                    key,
+                    keyCode: flags.keyCode ?? 0,
+                    defaultPrevented: false,
+                    dispatchReturned: true,
+                });
+                assert.deepEqual(entry.before, {
+                    value: expectedValue,
+                    activeDescendant,
+                });
+                assert.deepEqual(entry.after, entry.before);
+            }
+        };
+        const originalDescendant = addressPresenter(
+            await snapshot()
+        ).activeDescendant;
+        assert.ok(originalDescendant);
+        await clickText('Dispatch synthetic composing keyboard markers');
+        state = await capture(
+            result,
+            'synthetic-marked-keys-preserve-existing-option'
+        );
+        assertKeyboardMarkers(
+            markers(state),
+            capped(state, query),
+            originalDescendant
+        );
+        assertAddressReadInputs(state, [capped(state, query)], []);
+        assert.equal(saves(state).length, 0);
+        assert.equal(
+            addressPresenter(state).activeDescendant,
+            originalDescendant
+        );
+
+        await clickText('Start synthetic DOM composition');
+        state = await capture(
+            result,
+            'synthetic-compositionstart-retires-popup'
+        );
+        assertAddressQuiet(state, capped(state, query));
+        const start = markers(state)[8];
+        assert.deepEqual(start.supplied, { type: 'compositionstart' });
+        assert.equal(start.observed.type, 'compositionstart');
+        assert.equal(start.observed.isTrusted, false);
+        assert.equal(start.observed.defaultPrevented, false);
+        assert.equal(start.observed.dispatchReturned, true);
+        await assertAddressPopupClosed(result, 'compositionstart');
+        await clickText('Update synthetic composing Japanese input');
+        state = await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+        ]);
+        state = await capture(
+            result,
+            'unfinished-synthetic-buffer-uncapped-no-query'
+        );
+        const unfinished = state.expected.composition.composingValue;
+        assert(unfinished.length > state.expected.characterLimit);
+        assertAddressQuiet(state, unfinished);
+        assert.equal(await input.getAttribute('value'), unfinished);
+        assert.deepEqual(state.pending, []);
+        assert.equal(saves(state).length, 0);
+        const update = markers(state)[9];
+        assert.deepEqual(update.supplied, {
+            type: 'input',
+            isComposing: true,
+            inputType: 'insertCompositionText',
+            value: unfinished,
+        });
+        assert.equal(update.observed.type, 'input');
+        assert.equal(update.observed.isTrusted, false);
+        assert.equal(update.observed.isComposing, true);
+        assert.equal(update.observed.defaultPrevented, false);
+        assert.equal(update.observed.dispatchReturned, true);
+        assert.equal(update.after.value, unfinished);
+
+        await clickText('Dispatch synthetic composing keyboard markers');
+        state = await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+        ]);
+        state = await capture(
+            result,
+            'active-composition-keys-preserve-buffer'
+        );
+        assert.equal(markers(state).length, 18);
+        assertKeyboardMarkers(markers(state).slice(10), unfinished, null);
+        assertAddressQuiet(state, unfinished);
+        assertAddressReadInputs(state, [capped(state, query)], []);
+        assert.equal(saves(state).length, 0);
+
+        await clickText('Commit synthetic DOM composition');
+        state = await waitAddressPending('predictions');
+        const finalPredictionId = addressPending(state, 'predictions').id;
+        const committed = state.expected.composition.committedValue;
+        state = await observeAddressCalls([
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            predictionRoute,
+        ]);
+        state = await capture(
+            result,
+            'compositionend-one-final-debounced-query'
+        );
+        assert.equal(markers(state).length, 20);
+        const end = markers(state)[18];
+        assert.deepEqual(end.supplied, {
+            type: 'compositionend',
+            value: committed,
+        });
+        assert.equal(end.observed.type, 'compositionend');
+        assert.equal(end.observed.isTrusted, false);
+        assert.equal(end.observed.defaultPrevented, false);
+        assert.equal(end.observed.dispatchReturned, true);
+        const finalInput = markers(state)[19];
+        assert.deepEqual(finalInput.supplied, {
+            type: 'input',
+            isComposing: false,
+            inputType: 'insertText',
+            value: committed,
+        });
+        assert.equal(finalInput.observed.type, 'input');
+        assert.equal(finalInput.observed.isTrusted, false);
+        assert.equal(finalInput.observed.isComposing, false);
+        assert.equal(finalInput.observed.defaultPrevented, false);
+        assert.equal(finalInput.observed.dispatchReturned, true);
+        assert.equal(addressControl(state).value, committed);
+        assertAddressReadInputs(state, [capped(state, query), committed], []);
+        assert.equal(saves(state).length, 0);
+        await settleAddress('predictions', finalPredictionId);
+        await addressOptions(result);
+        await input.click();
+        await input.sendKeys(Key.ARROW_DOWN);
+        state = await capture(
+            result,
+            'ordinary-native-selection-resumes-after-commit'
+        );
+        assert(addressControl(state).focused);
+        assert.deepEqual(
+            addressPresenter(state).options.map((option) => option.selected),
+            [true, false]
+        );
+        assert.equal(
+            addressPresenter(state).activeDescendant,
+            `${await input.getAttribute('id')}-option-0`
+        );
+        assert.equal(addressControl(state).value, committed);
+        await input.sendKeys(Key.ENTER);
+        state = await waitAddressPending('details');
+        const detailId = addressPending(state, 'details').id;
+        assert.equal(
+            addressControl(state).value,
+            capped(state, state.expected.predictions[0].description)
+        );
+        assertAddressReadInputs(
+            state,
+            [capped(state, query), committed],
+            ['place_address_one']
+        );
+        assert.equal(saves(state).length, 0);
+        await settleAddress('details', detailId);
+        const formatted = capped(state, state.expected.formatted);
+        await waitReady(
+            (value) => addressControl(value).value === formatted,
+            'Ordinary native keyboard details remain accepted after DOM composition.'
+        );
+        state = await capture(
+            result,
+            'ordinary-format-accepted-without-autosave'
+        );
+        assertAddressQuiet(state, formatted);
+        assert.equal(saves(state).length, 0);
+        await clickText('Save');
+        await waitReady(
+            (value) =>
+                saves(value).length === 1 &&
+                value.status?.includes('The Form was not saved.'),
+            'Explicit native Save after synthetic DOM composition.'
+        );
+        state = await capture(
+            result,
+            'complete-native-save-after-dom-composition'
+        );
+        assertAddressSave(
+            saves(state)[0],
+            state,
+            { ...state.expected.initial, [addressFieldId]: formatted },
+            [addressFieldId]
+        );
+        assertAddressReadInputs(
+            state,
+            [capped(state, query), committed],
+            ['place_address_one']
+        );
+        assertCalls(state, [
+            'fetchExtensionForEndUser',
+            predictionRoute,
+            predictionRoute,
+            detailRoute,
+            'saveForm',
+        ]);
+        assert.deepEqual(state.pending, []);
+        assert.deepEqual(state.address.abortCounts, {
+            predictions: 0,
+            details: 0,
+            save: 0,
+        });
+        assert.equal(markers(state).length, 20);
+    });
+    assert.equal(receipt.cases.length, 29);
     const actualScenarioRoutes = receipt.cases.map(
         ({ scenarioRoute }) =>
             `${scenarioRoute.surface}/${scenarioRoute.scenario}`
@@ -3587,7 +3847,7 @@ try {
             (scenario) => `${surface}/${scenario}`
         )
     );
-    assert.equal(new Set(actualScenarioRoutes).size, 28);
+    assert.equal(new Set(actualScenarioRoutes).size, 29);
     assert.deepEqual(
         actualScenarioRoutes.sort(),
         declaredScenarioRoutes.sort()

@@ -89,9 +89,29 @@ are displayed intact rather than converted to text for saving.
 Select controls use the published choice-ID allowlist and numeric maximum,
 retain existing unavailable choice names for removal, and keep custom labels
 separate from saved native names. A nonempty allowlist disables **Add a choice**
-even when a retained `allowAddingNewOptions` flag is true. Conditional option
-visibility still requires an application evaluator; this starter does not
-evaluate option conditions.
+even when a retained `allowAddingNewOptions` flag is true. In a flat Form,
+configured choice conditions use the installed bounded scalar helper.
+Unsupported predicates show an unavailable status; the projection limits
+below apply.
+
+When a published editable, unmasked single-line text field enables address
+autocomplete, typing reads suggestions after an 800 ms debounce. Choose
+a suggestion to accept its description, then its formatted address if that
+selection is still current. Accepted edits respect the published character
+limit. Failed suggestion reads keep the native draft available for manual
+entry and offer an explicit retry. Hiding an address field or suspending the
+Form retires its pending address reads without clearing accepted values or
+submitting a Save.
+
+Arrow keys show a contrasting highlight while input focus stays in place;
+Enter accepts that highlighted suggestion without submitting the Form.
+The existing Google-backed results display the official Google Maps logo
+outside the selectable listbox, inside its bordered suggestions container.
+The unchanged embedded PNG displays at 98 × 18 pixels on white with the
+required clear space; closing suggestions hides their attribution too.
+Custom Content Security Policies must allow `data:` in `img-src`. Keep
+the attribution visible with these results and use a different presenter for
+non-Google adapters. See [asset provenance and policies](../../THIRD_PARTY_NOTICES.md#google-maps-attribution-asset).
 
 The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
@@ -142,8 +162,8 @@ choice projection from frontend visibility results.
   permits comments.
 
 The custom renderer deliberately leaves advanced presentation to your app:
-full conditional field or select-option presentation, multi-page navigation, signatures, calendar
-pickers, custom validation presentation, and
+conditional field or choice presentation beyond the bounded contracts above,
+multi-page navigation, signatures, calendar pickers, custom validation presentation, and
 CAPTCHA widgets. The server still enforces those extension rules. To use a
 CAPTCHA-enabled Form, integrate the configured widget and supply its token in
 `captchaVal`; this example supplies `null`. It does not disable the Form's

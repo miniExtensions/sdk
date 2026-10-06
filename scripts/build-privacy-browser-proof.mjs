@@ -58,6 +58,15 @@ const regular = (path) => {
 function createPrivacyFixture(scenario) {
     if (
         [
+            'address-acceptance',
+            'address-failure',
+            'address-lifecycle',
+            'address-remount',
+        ].includes(scenario)
+    )
+        return createAddressFixture(scenario);
+    if (
+        [
             'visibility-draft',
             'visibility-unavailable',
             'visibility-section',
@@ -1211,6 +1220,312 @@ function createVisibilityFixture(scenario) {
     return { state, fetch: transport };
 }
 
+/** Bounded address responses; controls settle transport only, never app state. */
+function createAddressFixture(scenario) {
+    const token = 'FAKE_SYNTHETIC_ADDRESS_TOKEN';
+    const predictionRoute =
+        '/api/trpc/publicExtensions.autoCompleteAddressField';
+    const detailRoute =
+        '/api/trpc/publicExtensions.getFormattedAddressFromPlaceId';
+    const conditional = scenario === 'address-lifecycle';
+    const field = (id, name, type = 'singleLineText', options = null) => ({
+        id,
+        name,
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: { type, options },
+    });
+    const address = field('fld_address_synthetic', 'Address');
+    const driver = field('fld_address_driver', 'Show address', 'checkbox', {
+        icon: 'check',
+        color: 'greenBright',
+    });
+    const tail = field('fld_address_tail', 'Adjacent text');
+    const initial = {
+        [address.id]: 'Loaded address',
+        [driver.id]: true,
+        [tail.id]: 'Adjacent native value',
+        fld_address_unrendered_multi: ['Retained', 'Native'],
+        fld_address_unrendered_linked: ['rec_address_parent'],
+        fld_address_unrendered_barcode: { text: '007', type: 'code128' },
+    };
+    const predictions = [
+        {
+            description: 'Selected native address beyond cap',
+            placeId: 'place_address_one',
+        },
+        {
+            description: '<b>Alternate native address</b>',
+            placeId: 'place_address_two',
+        },
+    ];
+    const fieldIds = conditional
+        ? [driver.id, address.id, tail.id]
+        : [address.id, tail.id];
+    const state = {
+        scenario,
+        synthetic: true,
+        realNetworkEnabled: false,
+        calls: [],
+        events: [],
+        unexpected: [],
+        pending: [],
+        abortCounts: { predictions: 0, details: 0, save: 0 },
+        expected: {
+            initial,
+            controlFieldIds: fieldIds,
+            characterLimit: 24,
+            predictions,
+            formatted: 'Formatted native address beyond cap',
+            recordId: 'rec_address_synthetic',
+            tableId: 'tbl_address_synthetic',
+        },
+    };
+    const schema = (entry, miniExtConfig = {}) => ({
+        fieldType: entry.config.type,
+        airtableField: entry,
+        miniExtConfig,
+    });
+    const schemas = [
+        schema(address, {
+            enableAddressAutocomplete: true,
+            characterLimit: state.expected.characterLimit,
+            ...(conditional
+                ? {
+                      conditionalFields: {
+                          logicalOperator: 'and',
+                          conditions: [
+                              {
+                                  id: 'address_checkbox_condition',
+                                  type: 'singleCondition',
+                                  setting: {
+                                      type: 'is',
+                                      fieldType: 'checkbox',
+                                      idOrName: { type: 'id', id: driver.id },
+                                      value: true,
+                                  },
+                              },
+                          ],
+                      },
+                  }
+                : {}),
+        }),
+        schema(driver),
+        schema(tail),
+    ];
+    const page = () =>
+        structuredClone({
+            extensionId: 'address_form_synthetic',
+            language: 'en',
+            themeColor: 'blue',
+            enableCommentsOnChildForms: false,
+            workspaceId: 'address_workspace_synthetic',
+            extensionOwnerUID: 'address_owner_synthetic',
+            faviconUrl: null,
+            googleAnalyticsMeasurementId: null,
+            isStarterExtension: false,
+            extensionScreen: 'form_loaded',
+            payload: {
+                baseId: 'address_base_synthetic',
+                loggedInUserCanEditExtension: false,
+                showMiniExtensionsBranding: true,
+                onFreePlan: true,
+                trialExpiresAtUnixEpoch: null,
+                extensionType: 'form',
+                extensionName: 'Synthetic bounded address Form',
+                extensionAccessToken: token,
+                hasParentExtension: false,
+                publicFields: {},
+                formRecord: {
+                    type: 'edit',
+                    tableId: state.expected.tableId,
+                    recordId: state.expected.recordId,
+                    data: initial,
+                },
+                formErrors: {},
+                fieldIdsInForm: fieldIds,
+                fieldNamesToSchemas: Object.fromEntries(
+                    schemas.map((entry) => [entry.airtableField.name, entry])
+                ),
+                fieldIdsToSchemas: Object.fromEntries(
+                    schemas.map((entry) => [entry.airtableField.id, entry])
+                ),
+                formFieldIdsWithUnsavedChanges: [],
+                urlPrefilledFieldIds: [],
+                linkedRecordFieldIdToDetailFields: {},
+                cookieKeyForLoginToken: null,
+            },
+        });
+    const fail = (message) => {
+        state.unexpected.push(message);
+        throw new Error(message);
+    };
+    const json = (value, status = 200) =>
+        new Response(JSON.stringify(value), {
+            status,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    const waiting = [];
+    let nextRead = 0;
+    const defer = (kind, route, signal) => {
+        if (waiting.length >= 2)
+            return fail('Only two concurrent synthetic address responses fit.');
+        const entry = { id: ++nextRead, kind, route, aborted: false };
+        state.pending.push(entry);
+        const aborted = () => {
+            if (entry.aborted) return;
+            entry.aborted = true;
+            state.abortCounts[kind] += 1;
+            state.events.push({ type: 'address-response-aborted', ...entry });
+        };
+        signal?.addEventListener('abort', aborted, { once: true });
+        return new Promise((resolve) => {
+            waiting.push({
+                entry,
+                resolve: (outcome) => {
+                    signal?.removeEventListener('abort', aborted);
+                    state.pending = state.pending.filter(
+                        (pending) => pending.id !== entry.id
+                    );
+                    state.events.push({
+                        type: 'address-response-settled',
+                        ...entry,
+                        outcome,
+                    });
+                    resolve(outcome);
+                },
+            });
+        });
+    };
+    const settle = (kind, outcome) => {
+        const index = waiting.findIndex((read) => read.entry.kind === kind);
+        if (index < 0) return;
+        const [read] = waiting.splice(index, 1);
+        read.resolve(outcome);
+    };
+    const transport = async (resource, init = {}) => {
+        const url = new URL(
+            resource instanceof Request ? resource.url : String(resource)
+        );
+        const method =
+            init.method ??
+            (resource instanceof Request ? resource.method : 'GET');
+        if (
+            url.origin !== 'https://synthetic-sdk.invalid' ||
+            init.credentials !== 'omit'
+        )
+            return fail('Non-synthetic address origin or credentials refused.');
+        init.signal?.throwIfAborted();
+        let input;
+        try {
+            input = JSON.parse(
+                method === 'GET'
+                    ? (url.searchParams.get('input') ?? '{}')
+                    : String(init.body ?? '{}')
+            );
+        } catch {
+            return fail('Malformed synthetic address input.');
+        }
+        const route = url.searchParams.get('route') ?? url.pathname;
+        const visibleInput = { ...input };
+        delete visibleInput.miniExtStorageV4;
+        delete visibleInput.miniExtSession;
+        state.calls.push({
+            route,
+            method,
+            input: structuredClone(visibleInput),
+            credentialsMode: init.credentials,
+        });
+        if (route === 'fetchExtensionForEndUser') {
+            if (
+                method !== 'POST' ||
+                input.shareId !== 'privacy_share_synthetic' ||
+                input.childExtensionInfo
+            )
+                return fail('Unexpected synthetic address root load.');
+            return json(page());
+        }
+        if (input.extensionAccessToken !== token)
+            return fail('Unexpected synthetic address token scope.');
+        if (route === predictionRoute || route === detailRoute) {
+            if (method !== 'GET' || input.fieldId !== address.id)
+                return fail('Unexpected synthetic address field/read scope.');
+            const kind = route === predictionRoute ? 'predictions' : 'details';
+            if (
+                kind === 'predictions'
+                    ? typeof input.addressFieldValue !== 'string' ||
+                      input.addressFieldValue.trim() === '' ||
+                      input.addressFieldValue.length > 200
+                    : !predictions.some(
+                          (prediction) => prediction.placeId === input.placeId
+                      )
+            )
+                return fail('Unexpected synthetic address query/place input.');
+            // Deliberately deliver after abort. The installed SDK and current
+            // starter/presenter must reject the retired response themselves.
+            const outcome = await defer(kind, route, init.signal);
+            if (outcome === 'failure')
+                return json(
+                    { error: { message: 'Synthetic unavailable' } },
+                    503
+                );
+            return json({
+                result: {
+                    data:
+                        kind === 'predictions'
+                            ? predictions
+                            : state.expected.formatted,
+                },
+            });
+        }
+        if (
+            route !== 'saveForm' ||
+            method !== 'POST' ||
+            input.formRecord?.type !== 'edit' ||
+            input.formRecord?.recordId !== state.expected.recordId ||
+            input.formRecord?.tableId !== state.expected.tableId ||
+            input.context?.type !== 'direct-url'
+        )
+            return fail(
+                'Unexpected address route or native Save scope; no real fetch fallback.'
+            );
+        if (scenario === 'address-lifecycle')
+            await defer('save', route, init.signal);
+        // A normal validation result retains the native draft. There is no
+        // persistence, provider, permission or automatic-retry simulation.
+        return json({
+            type: 'error',
+            formValidationErrors: [],
+            formErrors: {},
+        });
+    };
+    return {
+        state,
+        fetch: transport,
+        addressControls: [
+            [
+                'Release address predictions',
+                () => settle('predictions', 'success'),
+            ],
+            [
+                'Fail address predictions',
+                () => settle('predictions', 'failure'),
+            ],
+            ['Release address details', () => settle('details', 'success')],
+            ['Fail address details', () => settle('details', 'failure')],
+            ...(scenario === 'address-lifecycle'
+                ? [
+                      [
+                          'Release address Save validation',
+                          () => settle('save', 'success'),
+                      ],
+                  ]
+                : []),
+        ],
+    };
+}
+
 /** Read-only snapshots plus an explicit native synthetic-read release button. */
 function installProofInspection(fixture, kind) {
     const banner = document.createElement('section');
@@ -1244,6 +1559,75 @@ function installProofInspection(fixture, kind) {
                     autocomplete: input.autocomplete,
                 })
             ),
+            address: fixture.state.scenario.startsWith('address-')
+                ? {
+                      controls: [
+                          ...(application?.querySelectorAll(
+                              '[data-field-id]'
+                          ) ?? []),
+                      ]
+                          .filter((control) =>
+                              fixture.state.expected.controlFieldIds.includes(
+                                  control.dataset.fieldId
+                              )
+                          )
+                          .map((control) => ({
+                              fieldId: control.dataset.fieldId,
+                              id: control.id,
+                              type: control.type,
+                              hidden: control.closest('[hidden]') !== null,
+                              visible: control.getClientRects().length > 0,
+                              disabled: control.disabled,
+                              value:
+                                  control.type === 'checkbox'
+                                      ? control.checked
+                                      : control.value,
+                              focused: document.activeElement === control,
+                          })),
+                      presenters: [
+                          ...(application?.querySelectorAll(
+                              '[data-ui="address-autocomplete"]'
+                          ) ?? []),
+                      ].map((presenter) => ({
+                          fieldId:
+                              presenter.querySelector('input')?.dataset.fieldId,
+                          expanded: presenter
+                              .querySelector('input')
+                              ?.getAttribute('aria-expanded'),
+                          activeDescendant: presenter
+                              .querySelector('input')
+                              ?.getAttribute('aria-activedescendant'),
+                          status:
+                              presenter.querySelector('p')?.textContent ?? '',
+                          statusRole: presenter
+                              .querySelector('p')
+                              ?.getAttribute('role'),
+                          retryHidden: presenter.querySelector(
+                              ':scope > button:last-child'
+                          )?.hidden,
+                          retryDisabled: presenter.querySelector(
+                              ':scope > button:last-child'
+                          )?.disabled,
+                          options: [
+                              ...presenter.querySelectorAll('[role="option"]'),
+                          ].map((option) => ({
+                              label: option.textContent,
+                              selected:
+                                  option.getAttribute('aria-selected') ===
+                                  'true',
+                              hidden: option.closest('[hidden]') !== null,
+                              visible: option.getClientRects().length > 0,
+                              disabled: option.disabled,
+                          })),
+                      })),
+                      screenInert: application?.inert ?? false,
+                      fieldsInert:
+                          application?.querySelector('.fields')?.inert ?? false,
+                      activeFieldId:
+                          document.activeElement?.dataset.fieldId ?? null,
+                      abortCounts: structuredClone(fixture.state.abortCounts),
+                  }
+                : null,
             visibility: fixture.state.scenario.startsWith('visibility-')
                 ? {
                       controls: [
@@ -1314,6 +1698,15 @@ function installProofInspection(fixture, kind) {
         };
     };
     window.__privacyBrowserProof = Object.freeze({ snapshot });
+    if (fixture.addressControls)
+        for (const [text, settle] of fixture.addressControls) {
+            const control = document.createElement('button');
+            control.type = 'button';
+            control.textContent = text;
+            control.dataset.proofControl = 'address-response';
+            control.addEventListener('click', settle);
+            banner.append(control);
+        }
     if (fixture.releaseDeferred) {
         const release = document.createElement('button');
         release.type = 'button';
@@ -1537,6 +1930,15 @@ export async function buildPrivacyBrowserProof({
             ),
             'Actual starter must bind the installed archive visibility module.'
         );
+        assert(
+            starterInputs.some(
+                (entry) =>
+                    entry.origin === 'installed-sdk-archive' &&
+                    entry.path ===
+                        'node_modules/@miniextensions/sdk/dist/esm/ui/addressAutocomplete.js'
+            ),
+            'Actual starter must bind the installed archive address autocomplete module.'
+        );
         const builtMain = regular(join(browser, '.generated/main.js'));
         write('starter/main.js', builtMain);
         write(
@@ -1568,7 +1970,7 @@ export async function buildPrivacyBrowserProof({
         write('starter/index.html', starterHtml);
         write(
             'fixture.js',
-            `const createInteractionFixture = ${createInteractionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
+            `const createInteractionFixture = ${createInteractionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
         );
         write(
             'starter/bootstrap.js',
@@ -1679,6 +2081,10 @@ renderPanel();
             'visibility-draft',
             'visibility-unavailable',
             'visibility-section',
+            'address-acceptance',
+            'address-failure',
+            'address-lifecycle',
+            'address-remount',
         ]
             .map(
                 (name) =>
@@ -1742,6 +2148,18 @@ visibility-draft uses a supported checkbox predicate for text, readonly and nume
 visibility-unavailable initially returns a canonical singleSelect condition outside this scalar visibility subset. The target is unavailable with an explicit alert; edit the adjacent control and choose Save: no Save route is permitted. Native Reload returns a fresh supported checkbox condition and fresh server values. The alert hides, target appears and a deliberate native edit/Save succeeds. This is an explicit fresh-read recovery, never an automatic retry or stale draft submission.
 
 visibility-section uses one conditional section lead, its follower, and a later section header resetting that inherited condition. Initially the lead/follower hide while Reset section and Unconditional tail remain available. Native SPACE/TAB reveals and then hides the section; edit its follower before hiding and explicitly Save. Complete native field data and dirty IDs must remain unchanged by presentation. No multipage, computed/linked-driver projection or hosted section parity is claimed.
+
+## Bounded address scenarios
+
+These four scenarios use only a configured editable unmasked physical singleLineText Address with characterLimit 24. address-lifecycle adds the existing one-page checkbox visibility predicate. Native fixture buttons release or fail already-started synthetic predictions/details, and that lifecycle fixture separately releases a held Save validation response. They settle transport only and never edit application DOM, dispatch app events, or invoke a Save. All diagnostic hooks remain read-only. Predictions and details deliberately return even after their signal aborts; these cases exercise the combined installed SDK and starter/presenter cancellation fences, not an isolated generation mechanism or a real provider.
+
+address-acceptance: type more than 24 characters with the real keyboard and observe the capped native input and exact debounced query. Release predictions, use ArrowDown/Enter to choose the first actual option and inspect immediate capped selected description and retained input focus with zero Save. Release details to inspect accepted capped formatted text. Save deliberately and inspect complete native data and the address dirty ID. Clear address natively and explicitly Save null; no blank prediction or automatic Save is permitted.
+
+address-failure: fail a held prediction, inspect generic retry/manual-fallback status and retained input, then deliberately Save that manual draft. Type again, fail the new prediction and use the actual Try again control; only that explicit retry may request predictions. Release them, click an actual suggestion, fail its details, and inspect retained selected description. Use Try again to retry that same place, release formatting, then Save explicitly. Failure must not erase native values or submit automatically.
+
+address-lifecycle: start predictions, hide then reveal Address using native SPACE/TAB on Show address, and release the old response after reveal. Same input ID, retained value, hidden/disabled state, real focus traversal, zero options/status/retry, exact abort counts and zero Save must be observable. Type afresh, release predictions and select an option while details remain held. Choose actual Save, inspect its exact selected-description data while the Form is busy/inert and the address is disabled, then release old details despite abort. Only the native fixture button releases the normal Save validation response; re-enable must preserve the selected description and add no read/Save. This demonstrates dispatch, not persistence.
+
+address-remount: hold predictions, switch the actual Visitor selector A to B to A, and inspect a new input ID retaining the accepted draft with no automatic query. Release the old response after remount; it must add no options/status/retry, writes or detail read. Type afresh, release predictions, select an actual option and hold details. Choose Discard draft, inspect another new input ID and original loaded native data, then release old details after remount. The restored control and complete draft must stay unchanged. Deliberate Save must carry the loaded native data with no discarded dirty ID.
 
 ## CI generation and remaining verification
 
@@ -1814,6 +2232,10 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'visibility-draft',
                 'visibility-unavailable',
                 'visibility-section',
+                'address-acceptance',
+                'address-failure',
+                'address-lifecycle',
+                'address-remount',
             ],
             limits: [
                 'Synthetic transport only; real network fallback disabled.',
@@ -1822,6 +2244,8 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'Configured-choice cases use only visible direct scalar drivers in a flat Form; no general hidden/linked projection proof.',
                 'Visibility scenarios cover their declared one-page checkbox/unsupported condition and section configurations only; no multipage or general hosted parity proof.',
                 'Interaction Save cases prove explicit native dispatch with validation responses, not durable persistence.',
+                'Address scenarios cover only editable unmasked singleLineText, a valid cap and one optional one-page checkbox predicate; no provider, backend, hosted parity or other field/configuration credit.',
+                'Address stale-response cases cover combined installed SDK and starter/presenter cancellation; they do not independently isolate presenter generations.',
                 'Generated successful output is not a manual browser pass.',
             ],
         };

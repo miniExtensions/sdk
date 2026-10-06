@@ -22,9 +22,11 @@ import {
     getLoginVerificationDestination,
 } from '@miniextensions/sdk/auth';
 import {
+    composeFormFieldVisibility,
     createFormSaveInput,
     normalizeFormSaveResult,
     openLoadedFormDraft,
+    type FormFieldVisibility,
 } from '@miniextensions/sdk/forms';
 import {
     getSelectFieldPolicy,
@@ -735,6 +737,35 @@ const renderForm = (page: FormLoadedResult): void => {
         controls.clear();
     };
     const fields = element('div', undefined, 'fields');
+    const visibilityMessage = element(
+        'p',
+        'Some fields cannot be displayed with this published configuration. Review the Form configuration before saving.',
+        'error'
+    );
+    visibilityMessage.setAttribute('role', 'alert');
+    let fieldVisibility: Readonly<Record<string, FormFieldVisibility>> = {};
+    const updateFieldVisibility = (): void => {
+        const snapshot = visitor.drafts.snapshot(draft);
+        if (snapshot == null) return;
+        fieldVisibility = composeFormFieldVisibility({
+            fieldIds: page.payload.fieldIdsInForm.filter(
+                (id) => page.payload.fieldIdsToSchemas[id] != null
+            ),
+            fieldIdsToSchemas: page.payload.fieldIdsToSchemas,
+            airtableFields: Object.values(page.payload.fieldIdsToSchemas).map(
+                (schema) => schema.airtableField
+            ),
+            data: snapshot.data,
+            formRecordType: page.payload.formRecord.type,
+            evaluationMode: 'runtime',
+            invalidConditionMode: 'strict',
+        });
+        for (const [fieldId, control] of controls)
+            control.node.hidden = fieldVisibility[fieldId]?.type !== 'visible';
+        visibilityMessage.hidden = !Object.values(fieldVisibility).some(
+            (result) => result.type === 'blocked'
+        );
+    };
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
         if (schema == null) continue;
@@ -761,9 +792,14 @@ const renderForm = (page: FormLoadedResult): void => {
             schema,
             visitor.drafts.read(draft, fieldId),
             () => {
-                if (!mayUseForm()) return;
+                if (
+                    !mayUseForm() ||
+                    fieldVisibility[fieldId]?.type !== 'visible'
+                )
+                    return;
                 try {
                     visitor.drafts.write(draft, fieldId, control.read());
+                    updateFieldVisibility();
                     updateSelectAvailability();
                 } catch (error) {
                     status(
@@ -880,6 +916,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 control.updateSelectChoices?.(
                                     fieldConfig.options.choices
                                 );
+                                updateFieldVisibility();
                                 updateSelectAvailability();
                             }
                             if (
@@ -926,6 +963,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 fieldId,
                                 control.read()
                             );
+                            updateFieldVisibility();
                             updateSelectAvailability();
                             choice.value = '';
                             status(
@@ -1045,6 +1083,8 @@ const renderForm = (page: FormLoadedResult): void => {
                                     fieldId,
                                     control.read()
                                 );
+                                updateFieldVisibility();
+                                updateSelectAvailability();
                             });
                             const tableId =
                                 schema.airtableField.config.type ===
@@ -1171,6 +1211,8 @@ const renderForm = (page: FormLoadedResult): void => {
                                     fieldId,
                                     control.read()
                                 );
+                                updateFieldVisibility();
+                                updateSelectAvailability();
                                 file.value = '';
                                 recovery.accepted(attempt, 'uploaded');
                                 status(
@@ -1214,7 +1256,8 @@ const renderForm = (page: FormLoadedResult): void => {
             );
         }
     };
-    card.append(fields);
+    updateFieldVisibility();
+    card.append(visibilityMessage, fields);
     const errors = element('ul', undefined, 'error-list');
     errors.setAttribute('role', 'alert');
     const uncertainSaveMessage =
@@ -1440,11 +1483,23 @@ const renderForm = (page: FormLoadedResult): void => {
             status(uncertainSaveMessage, true);
             return;
         }
+        updateFieldVisibility();
+        if (!visibilityMessage.hidden) {
+            status(
+                'Review the unavailable fields before saving this Form.',
+                true
+            );
+            return;
+        }
         void run('Saving the Form…', async ({ client, signal, current }) => {
             // Reject an invalid visible control instead of saving its last
             // valid draft value (for example, a non-finite numeric input).
-            for (const control of controls.values())
-                if (control.editable) control.read();
+            for (const [fieldId, control] of controls)
+                if (
+                    control.editable &&
+                    fieldVisibility[fieldId]?.type === 'visible'
+                )
+                    control.read();
             const snapshot = visitor.drafts.snapshot(draft);
             if (snapshot == null) return;
             if (linkedFilterViews.size !== 0 && !ownsLinkedFilters()) {

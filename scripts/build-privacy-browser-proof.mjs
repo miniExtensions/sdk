@@ -58,6 +58,14 @@ const regular = (path) => {
 function createPrivacyFixture(scenario) {
     if (
         [
+            'visibility-draft',
+            'visibility-unavailable',
+            'visibility-section',
+        ].includes(scenario)
+    )
+        return createVisibilityFixture(scenario);
+    if (
+        [
             'choice-single',
             'choice-multiple',
             'choice-add-single',
@@ -941,6 +949,268 @@ function createInteractionFixture(scenario) {
     };
 }
 
+/** Native one-page visibility fixtures; no application actions are simulated. */
+function createVisibilityFixture(scenario) {
+    const token = 'FAKE_SYNTHETIC_VISIBILITY_TOKEN';
+    const unavailable = scenario === 'visibility-unavailable';
+    const section = scenario === 'visibility-section';
+    const field = (id, name, type = 'singleLineText', options = null) => ({
+        id,
+        name,
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: { type, options },
+    });
+    const driver = field('fld_visibility_driver', 'Show details', 'checkbox', {
+        icon: 'check',
+        color: 'greenBright',
+    });
+    const text = field('fld_visibility_text', 'Conditional text');
+    const locked = field('fld_visibility_readonly', 'Conditional readonly');
+    const number = field(
+        'fld_visibility_number',
+        'Conditional number',
+        'number',
+        { precision: 2 }
+    );
+    const tail = field('fld_visibility_tail', 'Unconditional tail');
+    const lead = field('fld_visibility_lead', 'Section lead');
+    const follower = field('fld_visibility_follower', 'Section follower');
+    const reset = field('fld_visibility_reset', 'Reset section');
+    const selection = field(
+        'fld_visibility_select',
+        'Published selection',
+        'singleSelect',
+        { choices: [{ id: 'sel_visibility_red', name: 'Red' }] }
+    );
+    const supported = {
+        logicalOperator: 'and',
+        conditions: [
+            {
+                id: 'visibility_checkbox_condition',
+                type: 'singleCondition',
+                setting: {
+                    type: 'is',
+                    fieldType: 'checkbox',
+                    idOrName: { type: 'id', id: driver.id },
+                    value: true,
+                },
+            },
+        ],
+    };
+    const unsupported = {
+        logicalOperator: 'and',
+        conditions: [
+            {
+                id: 'visibility_unsupported_select_condition',
+                type: 'singleCondition',
+                setting: {
+                    type: 'is',
+                    fieldType: 'singleSelect',
+                    idOrName: { type: 'id', id: selection.id },
+                    value: 'sel_visibility_red',
+                },
+            },
+        ],
+    };
+    const initial = {
+        [driver.id]: unavailable,
+        [text.id]: 'Retained conditional text',
+        [locked.id]: 'Locked native value',
+        [number.id]: 7,
+        [tail.id]: 'Adjacent native value',
+        [lead.id]: 'Retained lead',
+        [follower.id]: 'Retained follower',
+        [reset.id]: 'Reset stays available',
+        [selection.id]: 'Red',
+        // These complete native values are deliberately outside the rendered
+        // field list. Visibility must never prune/coerce the Save draft.
+        fld_visibility_unrendered_multi: ['Legacy', 'Red'],
+        fld_visibility_unrendered_linked: ['rec_visibility_parent'],
+        fld_visibility_unrendered_barcode: { text: '001', type: 'code128' },
+    };
+    const fieldIds = section
+        ? [driver.id, lead.id, follower.id, reset.id, tail.id]
+        : unavailable
+          ? [driver.id, text.id, tail.id]
+          : [driver.id, text.id, locked.id, number.id, tail.id];
+    const state = {
+        scenario,
+        synthetic: true,
+        realNetworkEnabled: false,
+        calls: [],
+        events: [],
+        unexpected: [],
+        pending: null,
+        expected: {
+            initial,
+            controlFieldIds: fieldIds,
+            recordId: 'rec_visibility_synthetic',
+            tableId: 'tbl_visibility_synthetic',
+        },
+    };
+    let rootLoads = 0;
+    const schema = (entry, miniExtConfig = {}) => ({
+        fieldType: entry.config.type,
+        airtableField: entry,
+        miniExtConfig,
+    });
+    const page = () => {
+        const blocked = unavailable && rootLoads === 1;
+        const schemas = [
+            schema(driver),
+            schema(text, {
+                conditionalFields: blocked ? unsupported : supported,
+            }),
+            schema(locked, { readOnly: true, conditionalFields: supported }),
+            schema(number, { conditionalFields: supported }),
+            schema(tail),
+            schema(lead, {
+                headerSectionTitle: 'Conditional section',
+                enableSectionHeader: true,
+                applyFieldConditionsToSection: true,
+                conditionalFields: supported,
+            }),
+            schema(follower),
+            schema(reset, {
+                headerSectionTitle: 'Next section',
+                enableSectionHeader: true,
+            }),
+            schema(selection),
+        ];
+        return structuredClone({
+            extensionId: 'visibility_form_synthetic',
+            language: 'en',
+            themeColor: 'blue',
+            enableCommentsOnChildForms: false,
+            workspaceId: 'visibility_workspace_synthetic',
+            extensionOwnerUID: 'visibility_owner_synthetic',
+            faviconUrl: null,
+            googleAnalyticsMeasurementId: null,
+            isStarterExtension: false,
+            extensionScreen: 'form_loaded',
+            payload: {
+                baseId: 'visibility_base_synthetic',
+                loggedInUserCanEditExtension: false,
+                showMiniExtensionsBranding: true,
+                onFreePlan: true,
+                trialExpiresAtUnixEpoch: null,
+                extensionType: 'form',
+                extensionName: 'Synthetic one-page visibility Form',
+                extensionAccessToken: token,
+                hasParentExtension: false,
+                publicFields: {},
+                formRecord: {
+                    type: 'edit',
+                    tableId: state.expected.tableId,
+                    recordId: state.expected.recordId,
+                    data: initial,
+                },
+                formErrors: {},
+                fieldIdsInForm: fieldIds,
+                fieldNamesToSchemas: Object.fromEntries(
+                    schemas.map((entry) => [entry.airtableField.name, entry])
+                ),
+                fieldIdsToSchemas: Object.fromEntries(
+                    schemas.map((entry) => [entry.airtableField.id, entry])
+                ),
+                formFieldIdsWithUnsavedChanges: [],
+                urlPrefilledFieldIds: [],
+                linkedRecordFieldIdToDetailFields: {},
+                cookieKeyForLoginToken: null,
+            },
+        });
+    };
+    const fail = (message) => {
+        state.unexpected.push(message);
+        throw new Error(message);
+    };
+    const json = (value) =>
+        new Response(JSON.stringify(value), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    const transport = async (resource, init = {}) => {
+        const url = new URL(
+            resource instanceof Request ? resource.url : String(resource)
+        );
+        const method =
+            init.method ??
+            (resource instanceof Request ? resource.method : 'GET');
+        if (
+            url.origin !== 'https://synthetic-sdk.invalid' ||
+            init.credentials !== 'omit'
+        )
+            return fail(
+                'Non-synthetic visibility origin or credential mode refused.'
+            );
+        init.signal?.throwIfAborted();
+        let input;
+        try {
+            input = JSON.parse(
+                method === 'GET'
+                    ? (url.searchParams.get('input') ?? '{}')
+                    : String(init.body ?? '{}')
+            );
+        } catch {
+            return fail('Malformed synthetic visibility input.');
+        }
+        const route = url.searchParams.get('route') ?? url.pathname;
+        const visibleInput = { ...input };
+        delete visibleInput.miniExtStorageV4;
+        delete visibleInput.miniExtSession;
+        state.calls.push({
+            route,
+            method,
+            input: structuredClone(visibleInput),
+            credentialsMode: init.credentials,
+        });
+        if (route === 'fetchExtensionForEndUser') {
+            if (
+                method !== 'POST' ||
+                input.shareId !== 'privacy_share_synthetic' ||
+                input.childExtensionInfo
+            )
+                return fail('Unexpected synthetic visibility root load.');
+            rootLoads += 1;
+            state.events.push({
+                type: 'visibility-root-response',
+                load: rootLoads,
+                condition:
+                    unavailable && rootLoads === 1
+                        ? 'unsupported-singleSelect'
+                        : 'supported-checkbox',
+            });
+            return json(page());
+        }
+        if (
+            route !== 'saveForm' ||
+            method !== 'POST' ||
+            input.extensionAccessToken !== token ||
+            input.formRecord?.type !== 'edit' ||
+            input.formRecord?.recordId !== state.expected.recordId ||
+            input.formRecord?.tableId !== state.expected.tableId ||
+            input.context?.type !== 'direct-url'
+        )
+            return fail(
+                'Unexpected visibility route or native Save scope; no real fetch fallback.'
+            );
+        if (unavailable && rootLoads === 1)
+            return fail(
+                'Unsupported visibility must stop before Save dispatch.'
+            );
+        // The actual application builds the complete native Save input. Normal
+        // validation output retains that draft; no persistence is simulated.
+        return json({
+            type: 'error',
+            formValidationErrors: [],
+            formErrors: {},
+        });
+    };
+    return { state, fetch: transport };
+}
+
 /** Read-only snapshots plus an explicit native synthetic-read release button. */
 function installProofInspection(fixture, kind) {
     const banner = document.createElement('section');
@@ -974,6 +1244,41 @@ function installProofInspection(fixture, kind) {
                     autocomplete: input.autocomplete,
                 })
             ),
+            visibility: fixture.state.scenario.startsWith('visibility-')
+                ? {
+                      controls: [
+                          ...(application?.querySelectorAll(
+                              '[data-field-id]'
+                          ) ?? []),
+                      ]
+                          .filter((control) =>
+                              fixture.state.expected.controlFieldIds.includes(
+                                  control.dataset.fieldId
+                              )
+                          )
+                          .map((control) => ({
+                              fieldId: control.dataset.fieldId,
+                              type: control.type,
+                              hidden: control.closest('[hidden]') !== null,
+                              disabled: control.disabled,
+                              value:
+                                  control.type === 'checkbox'
+                                      ? control.checked
+                                      : control.value,
+                              badInput: control.validity?.badInput ?? false,
+                              valid: control.validity?.valid ?? true,
+                          })),
+                      activeFieldId:
+                          document.activeElement?.dataset.fieldId ?? null,
+                      alerts: [
+                          ...(application?.querySelectorAll('[role="alert"]') ??
+                              []),
+                      ].map((alert) => ({
+                          text: alert.textContent ?? '',
+                          hidden: alert.closest('[hidden]') !== null,
+                      })),
+                  }
+                : null,
             selects: [...(application?.querySelectorAll('select') ?? [])].map(
                 (select) => ({
                     fieldId: select.dataset.fieldId ?? null,
@@ -1223,6 +1528,15 @@ export async function buildPrivacyBrowserProof({
             regular(join(browser, '.generated/metafile.json'))
         );
         const starterInputs = inputs(starterMeta, browser, browserSdk);
+        assert(
+            starterInputs.some(
+                (entry) =>
+                    entry.origin === 'installed-sdk-archive' &&
+                    entry.path ===
+                        'node_modules/@miniextensions/sdk/dist/esm/forms/visibility.js'
+            ),
+            'Actual starter must bind the installed archive visibility module.'
+        );
         const builtMain = regular(join(browser, '.generated/main.js'));
         write('starter/main.js', builtMain);
         write(
@@ -1254,7 +1568,7 @@ export async function buildPrivacyBrowserProof({
         write('starter/index.html', starterHtml);
         write(
             'fixture.js',
-            `const createInteractionFixture = ${createInteractionFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
+            `const createInteractionFixture = ${createInteractionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
         );
         write(
             'starter/bootstrap.js',
@@ -1362,6 +1676,9 @@ renderPanel();
             'choice-add-multiple',
             'linked-filters',
             'linked-filter-deferred',
+            'visibility-draft',
+            'visibility-unavailable',
+            'visibility-section',
         ]
             .map(
                 (name) =>
@@ -1412,13 +1729,19 @@ At each stage choose Inspect current trace and UI, or read window.__privacyBrows
 
 ## Bounded interaction scenarios
 
-choice-single and choice-multiple use only visible direct scalar Driver/Choices fields. Driver starts denied; Beta is unavailable, while Gamma is excluded by the static choice-ID allowlist. Type allowed into Driver and select Conditional Beta using the actual native select. Its value is Beta (or [Beta]), never sel_beta or the display label. Type denied again: the existing selected name/label must remain unchanged and removable, without an automatic Save. Choose Save explicitly to inspect that native request. The fixture intentionally returns a normal validation result, retaining the draft; it does not prove persistence. Remove the retained selection, verify Beta cannot be added again, and deliberately Save the native null/empty array. These cases cover the application's conservative flat direct-scalar projection only; no hidden/linked driver projection or general hosted conditional visibility is claimed. One-page field visibility is not included.
+choice-single and choice-multiple use only visible direct scalar Driver/Choices fields. Driver starts denied; Beta is unavailable, while Gamma is excluded by the static choice-ID allowlist. Type allowed into Driver and select Conditional Beta using the actual native select. Its value is Beta (or [Beta]), never sel_beta or the display label. Type denied again: the existing selected name/label must remain unchanged and removable, without an automatic Save. Choose Save explicitly to inspect that native request. The fixture intentionally returns a normal validation result, retaining the draft; it does not prove persistence. Remove the retained selection, verify Beta cannot be added again, and deliberately Save the native null/empty array. These choice cases cover the application's conservative flat direct-scalar projection only; no hidden/linked driver projection or general hosted conditional visibility is claimed. The separate visibility scenarios below cover only their declared one-page scalar configurations.
 
 choice-add-single and choice-add-multiple enable the actual Add Choice controls without a static allowlist or selection maximum. Driver starts denied with the existing Beta name retained. Remove it natively and deliberately Save null/empty array. Type the whitespace/case-equivalent name " bEtA " in New choice name and choose Create choice. The synthetic add-option route returns the already-existing sel_beta/Beta metadata; it creates no choice. The denied choice must not be reselected or change the record draft, and no automatic Save may occur. The next deliberate Save must still carry null/empty array. Inspect the one exact existing-choice resolution request and metadataCreated:false event; this is an availability boundary assertion, not metadata creation or persistence proof.
 
 linked-filters uses the current published linked cascade, separately from the flat choice cases. For ordered prefills, add prefill_Current%20country=North%2C%20East, prefill_Current%20region=Duplicate%20label and prefill_Current%20city=City%20%3D%20%22One%22 to its scenario URL. Choose Load conditional filters, Search choices and More choices; select Available project and Page two project through their native checkbox controls, then Save deliberately. Observe exact returned record/string pairs and the one next-page cursor. Changing Country to South must clear downstream filter choices and invalidate the old cursor while retaining native selected record IDs; a subsequent Search choices starts with a null cursor and performs no automatic Save.
 
 linked-filter-deferred has one explicit test-only control, Release pending synthetic read. Its first Country search and first inner choice read wait for that native button. Start Country search, choose the real app Cancel control, then release the already-started read: no filter choice, child read or Save may appear. Search Country again, choose the returned North record and start Search choices. Switch the real app visitor A to B to A, then release that read. The retired owner must add no stale choices or writes and retain its original record IDs. Disconnect normally. This release control only settles these two synthetic read responses; it neither changes the application DOM nor dispatches a mutation. Every other diagnostic hook is read-only.
+
+visibility-draft uses a supported checkbox predicate for text, readonly and numeric targets. The false checkbox hides all three while Unconditional tail remains available. Use native SPACE/TAB to reveal them, edit the text and enter a valid number, then append an incomplete exponent with the real keyboard. Inspect the read-only numeric badInput observation; scripting a number value or input event is not this proof. A visible invalid control must deny Save. Toggle the checkbox false: all three targets hide and normal TAB traversal skips them. The next explicit Save must preserve the complete last accepted native draft, including hidden readonly/unrendered array/link/barcode values and exact dirty IDs. Reveal again to inspect the retained accepted text and invalid numeric control, repair the number natively, and explicitly Save. Validation responses retain drafts and prove dispatch only.
+
+visibility-unavailable initially returns a canonical singleSelect condition outside this scalar visibility subset. The target is unavailable with an explicit alert; edit the adjacent control and choose Save: no Save route is permitted. Native Reload returns a fresh supported checkbox condition and fresh server values. The alert hides, target appears and a deliberate native edit/Save succeeds. This is an explicit fresh-read recovery, never an automatic retry or stale draft submission.
+
+visibility-section uses one conditional section lead, its follower, and a later section header resetting that inherited condition. Initially the lead/follower hide while Reset section and Unconditional tail remain available. Native SPACE/TAB reveals and then hides the section; edit its follower before hiding and explicitly Save. Complete native field data and dirty IDs must remain unchanged by presentation. No multipage, computed/linked-driver projection or hosted section parity is claimed.
 
 ## CI generation and remaining verification
 
@@ -1488,12 +1811,16 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'choice-add-multiple',
                 'linked-filters',
                 'linked-filter-deferred',
+                'visibility-draft',
+                'visibility-unavailable',
+                'visibility-section',
             ],
             limits: [
                 'Synthetic transport only; real network fallback disabled.',
                 'No backend/security/permission/OTP delivery/durable persistence proof.',
                 'No browser execution, CDP or TLS exception performed by generation.',
-                'Configured-choice cases use only visible direct scalar drivers in a flat Form; no general hidden/linked projection or field visibility proof.',
+                'Configured-choice cases use only visible direct scalar drivers in a flat Form; no general hidden/linked projection proof.',
+                'Visibility scenarios cover their declared one-page checkbox/unsupported condition and section configurations only; no multipage or general hosted parity proof.',
                 'Interaction Save cases prove explicit native dispatch with validation responses, not durable persistence.',
                 'Generated successful output is not a manual browser pass.',
             ],

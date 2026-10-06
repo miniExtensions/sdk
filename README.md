@@ -282,11 +282,12 @@ first-page read or root Reload before further Portal actions. See
 
 ## Current application boundaries
 
-Conditional field visibility and choice workflows beyond the
-[configured scalar support](docs/ui.md#configured-scalar-choice-availability),
-sections/pages/review, Save & Continue, progress persistence,
-CAPTCHA/fingerprint/GPS collection and advanced field widgets remain
-application-owned. Static select limits and display labels alone do not
+Field presentation and choice workflows beyond the
+[one-page field support](docs/forms.md#one-page-conditional-field-visibility)
+and [configured scalar choices](docs/ui.md#configured-scalar-choice-availability)
+remain application-owned, along with section headers/collapse, pages/review,
+Save & Continue, progress persistence, CAPTCHA/fingerprint/GPS collection and
+advanced field widgets. Static select limits and display labels alone do not
 evaluate option conditions. The starter uses final Save and supplies no
 general conditional evaluator or CAPTCHA widget. The existing server still
 enforces its published rules.
@@ -297,6 +298,21 @@ formula with diagnostics. Supply current field metadata and explicit strict or
 compatibility mode; handle `unsupported` and `invalid` results. Compilation
 alone performs no evaluation or request. The choice availability helper
 explicitly composes compilation with typed formula evaluation.
+
+`evaluateFormFieldVisibility` and `composeFormFieldVisibility` provide
+[bounded one-page field visibility](docs/forms.md#one-page-conditional-field-visibility)
+using direct scalar drivers and frontend section propagation. The starter
+recomputes after accepted edits and preserves hidden native drafts and Save
+types. Unsupported predicates, computed/linked drivers and active native
+empty hiding return explicit blocked outcomes. These presentation helpers do
+not grant permissions or supply a backend filtered-record projection.
+
+These helpers read the same accepted native draft but use distinct record
+contracts. Field visibility reads the complete unfiltered draft. Configured
+choice conditions require the canonical filtered-record projection; the
+starter's flat adapter remains unavailable for any conditional-field or
+section context, even when all current field predicates are visible. Adding
+field visibility does not broaden that adapter.
 
 The runtime supplies [conditional-filter primary values](docs/runtime.md#conditional-linked-filter-primary-values),
 [address reads](docs/runtime.md#address-predictions-and-place-formatting) and

@@ -215,6 +215,88 @@ section/page/review presentation, current owner/revision checks and any
 evaluation/error policy. No starter conditional workflow is enabled by this
 helper.
 
+## One-page conditional field visibility
+
+`evaluateFormFieldVisibility` evaluates one returned field's conditional
+predicate. `composeFormFieldVisibility` adds the ordered frontend section
+rules and returns stable field-ID keyed `visible`, `hidden` or `blocked`
+results. Both require current physical metadata, the complete accepted native
+draft, explicit create/edit and runtime/preview modes, and an explicit compiler
+policy. They reuse the scalar compiler and typed formula outcome above.
+
+```ts
+import type { AirtableValue, FormLoadedResult } from '@miniextensions/sdk';
+import {
+    composeFormFieldVisibility,
+    type FormDraftSnapshot,
+} from '@miniextensions/sdk/forms';
+
+export function onePageVisibility(
+    loaded: FormLoadedResult,
+    draft: FormDraftSnapshot<AirtableValue>
+) {
+    return composeFormFieldVisibility({
+        fieldIds: loaded.payload.fieldIdsInForm,
+        fieldIdsToSchemas: loaded.payload.fieldIdsToSchemas,
+        airtableFields: Object.values(loaded.payload.fieldIdsToSchemas).map(
+            (schema) => schema.airtableField
+        ),
+        data: draft.data,
+        formRecordType: loaded.payload.formRecord.type,
+        evaluationMode: 'runtime',
+        invalidConditionMode: 'strict',
+    });
+}
+```
+
+Call this after each accepted draft edit and fresh metadata load. Every
+predicate reads the same complete draft, including currently hidden values;
+readonly fields still evaluate their conditions. Never progressively remove
+hidden values before evaluating the next field. The helper makes no requests
+and does not write data, dirty IDs, local choices or child context. A native
+checkbox remains a boolean, percentages remain fractions, and barcode drivers
+use native objects with a `text` property; malformed driver values block
+evaluation. Linked and computed drivers remain unsupported, including a
+computed field whose reported physical type looks scalar.
+ID/name aliases that could select a different field or read another native
+ID-keyed value return `ambiguous-reference`; the helper does not guess.
+
+A nonblank `headerSectionTitle` starts a frontend section unless
+`enableSectionHeader` is explicitly false. A missing flag retains legacy
+title-only sections. A hidden lead with `applyFieldConditionsToSection: true`
+hides its followers until the next header. A blocked lead propagates a blocked
+outcome; other followers evaluate independently. A next header always resets
+the previous section, even if it retains the propagation flag without a
+predicate. This frontend compositor does not produce the backend's filtered
+record projection for conditional select options or other consumers.
+
+The starter retains its conservative flat choice adapter: any published
+conditional-field or section context makes configured choice evaluation
+unavailable, even when the current field visibility results are all visible.
+These results never stand in for the canonical filtered-record projection.
+
+`blocked` carries a finite code and safe compiler code/severity/index-path
+diagnostics, excluding editor IDs, formulas, operands, values and exception
+text. Supported missing references retain the compiler's false/warning
+semantics. Native error objects, nonfinite results and evaluation exceptions
+remain explicit errors; literal `#ERROR!` strings remain ordinary data.
+
+This conditional-only helper blocks active `hideFieldIfEmpty: true` in edit
+mode, because native empty hiding requires a separate canonical filtered-value
+adapter. The ordinary flag is inactive in create mode. Lookup fields hide
+empty values by default in both modes and therefore block unless that flag is
+explicitly false. Preview skips conditions but still blocks active native
+empty hiding. Multi-page navigation and native filtered-value adapters remain
+application-owned.
+
+The shipped browser starter applies these results to field presentation after
+accepted edits. It retains controls and native drafts, validates only visible
+controls at Save, and presents an explicit unavailable-field message for
+blocked outcomes. The visitor can repair an editable driver; Save remains
+blocked while visibility is unavailable. Hiding never clears accepted values
+or prunes `createFormSaveInput`: the existing server still owns validation and
+write authorization. A presentation result grants no permission.
+
 ## Preserve the full native draft
 
 Create one `FormDraftStore<AirtableValue>` per visitor. `openLoadedFormDraft`

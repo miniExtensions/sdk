@@ -29,6 +29,10 @@ import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 import { checkAdditionalRuntimeOperations } from './additional-runtime-recipe-checks.mjs';
 import { checkFormConditions } from './form-conditions-checks.mjs';
 import { checkScalarVisibilityRecipe } from './scalar-visibility-recipe-checks.mjs';
+import {
+    checkFormVisibilityRecipe,
+    checkBrowserVisibilityExample,
+} from './form-visibility-recipe-checks.mjs';
 import { checkBrowserPortalExample } from './browser-portal-example-checks.mjs';
 import { checkBrowserSelectExample } from './browser-select-example-checks.mjs';
 import { checkBrowserLinkedFilterExample } from './browser-linked-filter-example-checks.mjs';
@@ -53,6 +57,7 @@ const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
 let browserPortalChecks = 0;
 let browserSelectChecks = 0;
 let browserLinkedFilterChecks = 0;
+let browserVisibilityChecks = 0;
 const browserStarterFiles = [
     'README.md',
     'package.json',
@@ -255,6 +260,10 @@ try {
         happyDomModulePath: require.resolve('happy-dom'),
     });
     const scalarVisibilityRecipe = await checkScalarVisibilityRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: formsGuideSources,
+    });
+    const formVisibilityRecipe = await checkFormVisibilityRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: formsGuideSources,
     });
@@ -987,6 +996,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 happyDomModulePath: require.resolve('happy-dom'),
             });
             browserLinkedFilterChecks = linkedFilterResult.checks;
+            const visibilityResult = await checkBrowserVisibilityExample({
+                consumerDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
+            browserVisibilityChecks = visibilityResult.checks;
         }
     }
 
@@ -1075,7 +1089,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

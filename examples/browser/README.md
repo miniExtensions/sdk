@@ -97,6 +97,24 @@ The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
 revisions, requests, cancellation, and when to discard drafts.
 
+One-page field conditions use the installed Form visibility helpers with the
+complete accepted native draft. Direct scalar drivers recompute presentation
+after accepted edits, including readonly targets and configured frontend
+section propagation. Hidden controls retain their native values and dirty IDs
+for Save. Unsupported predicates, computed/linked drivers and active edit
+empty hiding show an unavailable-field message and block Save until resolved.
+See the [visibility contract](../../docs/forms.md#one-page-conditional-field-visibility)
+for lookup defaults, preview and section boundaries. This is presentation;
+the server still enforces its published rules.
+
+Field visibility and configured choice availability both recompute after
+accepted edits while retaining the native draft. Their record contracts
+differ: field predicates use the complete unfiltered draft, while choice
+predicates need the canonical filtered-record projection. The starter's flat
+choice adapter therefore remains unavailable for any conditional-field or
+section context, including currently visible fields. It does not derive a
+choice projection from frontend visibility results.
+
 - Choose **Save** to submit. Server validation is shown next to the Form; a
   failed validation keeps your values. A successful standalone create disables
   repeated submission until you choose **Reload**.
@@ -124,7 +142,7 @@ revisions, requests, cancellation, and when to discard drafts.
   permits comments.
 
 The custom renderer deliberately leaves advanced presentation to your app:
-conditional field or select-option visibility, multi-page navigation, signatures, calendar
+full conditional field or select-option presentation, multi-page navigation, signatures, calendar
 pickers, custom validation presentation, and
 CAPTCHA widgets. The server still enforces those extension rules. To use a
 CAPTCHA-enabled Form, integrate the configured widget and supply its token in

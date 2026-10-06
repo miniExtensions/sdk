@@ -33,3 +33,11 @@ export {
     type CompileRuntimeConditionsResult,
     type ConditionCompileDiagnostic,
 } from './conditions.js';
+export {
+    evaluateFormFieldVisibility,
+    composeFormFieldVisibility,
+    type FormVisibilityDiagnostic,
+    type FormFieldVisibility,
+    type EvaluateFormFieldVisibilityInput,
+    type ComposeFormFieldVisibilityInput,
+} from './visibility.js';

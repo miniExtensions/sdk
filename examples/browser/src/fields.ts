@@ -4,9 +4,12 @@ import {
     type RuntimeAirtableField,
     type RuntimeFieldSchema,
     type SelectFieldChoice,
+    type MiniExtensionsClient,
 } from '@miniextensions/sdk';
 import {
     createSelectControl,
+    createAddressAutocompleteControl,
+    AddressAutocompleteConfigurationError,
     type SelectFieldAvailability,
 } from '@miniextensions/sdk/ui';
 import { element, labeled } from './dom.js';
@@ -20,7 +23,14 @@ export type FieldControl = {
     updateSelectAvailability?(availability: SelectFieldAvailability): void;
     selectAvailabilityReady?(): boolean;
     isSelectOptionAvailable?(choice: SelectFieldChoice): boolean;
+    setActive?(active: boolean): void;
     destroy(): void;
+};
+
+export type AddressFieldContext = {
+    extensionAccessToken: string;
+    reads: MiniExtensionsClient['addresses'];
+    isCurrent(): boolean;
 };
 
 const selectNames = (
@@ -54,8 +64,79 @@ export const formFieldControl = (
     schema: RuntimeFieldSchema,
     initialValue: AirtableValue | undefined,
     onChange: () => void,
-    forceReadOnly = false
+    forceReadOnly = false,
+    address?: AddressFieldContext
 ): FieldControl => {
+    const config = schema.miniExtConfig;
+    if (
+        address != null &&
+        schema.fieldType === AirtableFieldType.SINGLE_LINE_TEXT &&
+        schema.airtableField.config.type ===
+            AirtableFieldType.SINGLE_LINE_TEXT &&
+        schema.airtableField.isComputed !== true &&
+        !forceReadOnly &&
+        config != null &&
+        'enableAddressAutocomplete' in config &&
+        config.enableAddressAutocomplete === true &&
+        config.readOnly !== true &&
+        config.obscurePassword !== true &&
+        (initialValue == null || typeof initialValue === 'string')
+    ) {
+        try {
+            const title =
+                typeof config.title === 'string' && config.title.trim() !== ''
+                    ? config.title
+                    : schema.airtableField.name;
+            const autocomplete = createAddressAutocompleteControl({
+                input: {
+                    extensionAccessToken: address.extensionAccessToken,
+                    fieldId: schema.airtableField.id,
+                },
+                reads: address.reads,
+                isCurrent: address.isCurrent,
+                onChange,
+                value: initialValue,
+                label: title,
+                characterLimit: config.characterLimit,
+                placeholder: config.placeholderText ?? undefined,
+            });
+            autocomplete.input.dataset.fieldId = schema.airtableField.id;
+            const node = element('div');
+            node.append(
+                autocomplete.element,
+                element('span', schema.airtableField.id, 'field-hint')
+            );
+            return {
+                node,
+                editable: true,
+                read: () => autocomplete.getValue() || null,
+                write: (value) => {
+                    if (value == null || typeof value === 'string')
+                        autocomplete.setValue(value);
+                },
+                setActive: autocomplete.setActive,
+                destroy: autocomplete.destroy,
+            };
+        } catch (error) {
+            if (!(error instanceof AddressAutocompleteConfigurationError))
+                throw error;
+            const fallback = fieldControl(
+                schema.airtableField,
+                config,
+                initialValue,
+                onChange
+            );
+            const message = element(
+                'p',
+                'Address suggestions are unavailable for this character limit. You can enter an address manually.',
+                'field-hint'
+            );
+            message.dataset.addressAutocompleteCode = error.code;
+            message.setAttribute('role', 'status');
+            fallback.node.append(message);
+            return fallback;
+        }
+    }
     if (
         schema.fieldType !== AirtableFieldType.SINGLE_SELECT &&
         schema.fieldType !== AirtableFieldType.MULTIPLE_SELECTS

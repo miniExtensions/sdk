@@ -103,6 +103,7 @@ let connection: {
 } | null = null;
 let request: AbortController | null = null;
 let disposeFormControls = (): void => {};
+let updateFormActivity = (): void => {};
 const sessionKey = (client: MiniExtensionsClient): string =>
     JSON.stringify(
         Object.entries(client.getSession()).sort(([a], [b]) =>
@@ -174,6 +175,7 @@ const status = (message: string, error = false): void => {
 const setBusy = (busy: boolean): void => {
     screenNode.inert = busy;
     connectionForm.inert = busy;
+    updateFormActivity();
     screenNode.setAttribute('aria-busy', String(busy));
     for (const id of ['reload', 'logout', 'cancel']) {
         const node = nodeById(id);
@@ -731,6 +733,7 @@ const renderForm = (page: FormLoadedResult): void => {
             });
     };
     disposeFormControls = () => {
+        updateFormActivity = () => {};
         for (const view of linkedFilterViews.values()) view.destroy();
         linkedFilterViews.clear();
         for (const control of controls.values()) control.destroy();
@@ -744,6 +747,15 @@ const renderForm = (page: FormLoadedResult): void => {
     );
     visibilityMessage.setAttribute('role', 'alert');
     let fieldVisibility: Readonly<Record<string, FormFieldVisibility>> = {};
+    const ownsAddressReads = (): boolean =>
+        ownsLinkedFilters() && !screenNode.inert && !fields.inert;
+    updateFormActivity = () => {
+        for (const [fieldId, control] of controls)
+            control.setActive?.(
+                ownsAddressReads() &&
+                    fieldVisibility[fieldId]?.type === 'visible'
+            );
+    };
     const updateFieldVisibility = (): void => {
         const snapshot = visitor.drafts.snapshot(draft);
         if (snapshot == null) return;
@@ -762,6 +774,7 @@ const renderForm = (page: FormLoadedResult): void => {
         });
         for (const [fieldId, control] of controls)
             control.node.hidden = fieldVisibility[fieldId]?.type !== 'visible';
+        updateFormActivity();
         visibilityMessage.hidden = !Object.values(fieldVisibility).some(
             (result) => result.type === 'blocked'
         );
@@ -809,7 +822,17 @@ const renderForm = (page: FormLoadedResult): void => {
                         true
                     );
                 }
-            }
+            },
+            false,
+            formClient == null
+                ? undefined
+                : {
+                      extensionAccessToken: page.payload.extensionAccessToken,
+                      reads: formClient.addresses,
+                      isCurrent: () =>
+                          ownsAddressReads() &&
+                          fieldVisibility[fieldId]?.type === 'visible',
+                  }
         );
         controls.set(fieldId, control);
         fields.append(control.node);
@@ -1351,6 +1374,7 @@ const renderForm = (page: FormLoadedResult): void => {
         if (deleteRecord != null) deleteRecord.disabled = submit.disabled;
         updateComments();
         fields.inert = submit.disabled;
+        updateFormActivity();
         recoveryPanel.replaceChildren();
         if (visitor.preparedAttempt?.outcome === 'not-submitted')
             recoveryPanel.append(
@@ -1616,6 +1640,7 @@ const renderForm = (page: FormLoadedResult): void => {
     });
     screenNode.append(card);
     updateSelectAvailability();
+    updateFormActivity();
     if (
         page.payload.formRecord.type === 'edit' &&
         page.payload.hasParentExtension &&

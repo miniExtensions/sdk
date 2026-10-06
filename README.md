@@ -111,14 +111,14 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
-| Import                         | Included behavior                                                                                                                                            | Guide                             |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
-| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                              | [Runtime](docs/runtime.md)        |
-| `@miniextensions/sdk/forms`    | `FormDraftStore`, field descriptors, `createFormSaveInput`, normalized validation and `createFormController`                                                 | [Form helpers](docs/forms.md)     |
-| `@miniextensions/sdk/portals`  | `createPortalCollection`, accepted first/next reads, returned details and configured child requests for direct links or valid linked-record lookup results   | [Portal helpers](docs/portals.md) |
-| `@miniextensions/sdk/auth`     | `createAuthFlow`, captured screen/revision, verification challenges, explicit credential application and login presentation helpers                          | [Authentication](docs/auth.md)    |
-| `@miniextensions/sdk/ui`       | Native selects, static policy and `resolveSelectFieldAvailability`, authorized linked-record loaders, headless selection model and optional mounted controls | [Selection UI](docs/ui.md)        |
-| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                    | [Formulas](docs/formulas.md)      |
+| Import                         | Included behavior                                                                                                                                                     | Guide                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                       | [Runtime](docs/runtime.md)             |
+| `@miniextensions/sdk/forms`    | `FormDraftStore`, field descriptors, `createFormSaveInput`, normalized validation and `createFormController`                                                          | [Form helpers](docs/forms.md)          |
+| `@miniextensions/sdk/portals`  | `createPortalCollection`, accepted first/next reads, returned details and configured child requests for direct links or valid linked-record lookup results            | [Portal helpers](docs/portals.md)      |
+| `@miniextensions/sdk/auth`     | `createAuthFlow`, captured screen/revision, verification challenges, explicit credential application and login presentation helpers                                   | [Authentication](docs/auth.md)         |
+| `@miniextensions/sdk/ui`       | Native selects, static policy and `resolveSelectFieldAvailability`, authorized linked-record loaders, headless selection model and `createAddressAutocompleteControl` | [Selection and address UI](docs/ui.md) |
+| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                             | [Formulas](docs/formulas.md)           |
 
 Helpers are optional and headless except for the optional `/ui` controls. The
 SDK requires no React installation. The shipped guides include
@@ -317,9 +317,15 @@ field visibility does not broaden that adapter.
 The runtime supplies [conditional-filter primary values](docs/runtime.md#conditional-linked-filter-primary-values),
 [address reads](docs/runtime.md#address-predictions-and-place-formatting) and
 [configured Button webhooks](docs/runtime.md#configured-button-webhooks).
-These are thin operations: your app supplies ordered cascade controls and
-downstream resets, autocomplete intent/generation checks, or deliberate
-single-flight Button actions. They do not provide those presenters. Preserve
+These are thin operations. The starter supplies the bounded configured cascade
+controls described above; other applications own their cascade presentation
+and downstream resets. Your app supplies deliberate single-flight Button
+actions. The optional
+[`/ui` address control](docs/ui.md#address-autocomplete) adds a bounded
+autocomplete presenter with intent/generation checks; the browser starter
+wires it for editable, unmasked direct single-line text and suspends it on
+hidden or inert Forms. Its caller still owns current visitor/Form authority.
+Other advanced presenters remain application-owned. Preserve
 the returned filter record/value pairs and exact parent/view context. The
 server resolves the Button URL/method; a known Button value does not authorize
 calling it, and an uncertain webhook outcome must not trigger a blind retry.

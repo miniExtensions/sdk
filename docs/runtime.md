@@ -668,8 +668,10 @@ predictions, accepts a selected description immediately, and applies place
 formatting only while that same selection is current. On a details failure,
 retain the draft and allow an explicit retry. Write the accepted string into
 your Form draft, mark that field dirty, and save through the normal Form
-operation. These methods supply no autocomplete presenter and never write or
-save the field themselves.
+operation. These thin methods never write or save the field themselves. The
+optional [`/ui` address control](ui.md#address-autocomplete) supplies the bounded
+presenter and intent guards over these same typed reads; its caller still owns
+current Form/visitor authority and deliberate final Save.
 
 ## Configured Button webhooks
 

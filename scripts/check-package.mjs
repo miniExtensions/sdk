@@ -23,6 +23,10 @@ import {
 } from './package-checks.mjs';
 import { checkUiRecipes } from './ui-recipe-checks.mjs';
 import { checkSelectAvailabilityRecipe } from './select-availability-recipe-checks.mjs';
+import {
+    checkAddressAutocompleteRecipe,
+    checkBrowserAddressExample,
+} from './address-autocomplete-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
@@ -58,6 +62,7 @@ let browserPortalChecks = 0;
 let browserSelectChecks = 0;
 let browserLinkedFilterChecks = 0;
 let browserVisibilityChecks = 0;
+let browserAddressChecks = 0;
 const browserStarterFiles = [
     'README.md',
     'package.json',
@@ -222,6 +227,11 @@ try {
         happyDomModulePath: require.resolve('happy-dom'),
     });
     const selectAvailabilityRecipeChecks = await checkSelectAvailabilityRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: uiGuideSources,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    const addressAutocompleteRecipe = await checkAddressAutocompleteRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: uiGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -1001,6 +1011,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 happyDomModulePath: require.resolve('happy-dom'),
             });
             browserVisibilityChecks = visibilityResult.checks;
+            const addressResult = await checkBrowserAddressExample({
+                consumerDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
+            browserAddressChecks = addressResult.checks;
         }
     }
 
@@ -1089,7 +1104,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         typescriptBin: require.resolve('typescript/bin/tsc'),
     });
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${addressAutocompleteRecipe.checks} actual installed address recipe checkpoints, ${browserAddressChecks} actual packed browser address checkpoints, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

@@ -1,7 +1,8 @@
 # Optional selection UI
 
 `@miniextensions/sdk/ui` provides conventional native single and multi-select
-controls, a searchable linked-record picker, and a headless selection model.
+controls, a searchable linked-record picker, a bounded address autocomplete
+control, and a headless selection model.
 It uses browser DOM APIs and has no React or other UI framework dependency.
 Importing the core client does not import this UI module. No control loads an
 extension, saves a record, adds a select choice, or calls Airtable directly.
@@ -31,6 +32,80 @@ You can copy the starter and install the exact supplied SDK archive without a
 private repository checkout. Its application code connects selection drafts
 and labels to visitor changes, save recovery, uploads, and Portal pagination.
 Custom layouts and advanced presentation remain application-owned.
+
+## Address autocomplete
+
+`createAddressAutocompleteControl` presents the existing typed address reads
+for an editable, unmasked direct `singleLineText` Form field configured with
+`enableAddressAutocomplete: true`. Its caller supplies the current Form token,
+exact field ID, read adapters and a current-owner callback. The presenter
+grants no field permission and never saves; the existing server still handles
+authorization, provider configuration, rate limits and validation.
+
+```ts
+import {
+    createAddressAutocompleteControl,
+    type AddressAutocompleteOptions,
+} from '@miniextensions/sdk/ui';
+
+export function mountAddressAutocomplete(
+    host: HTMLElement,
+    options: AddressAutocompleteOptions
+) {
+    const control = createAddressAutocompleteControl({
+        ...options,
+        document: host.ownerDocument,
+        isCurrent: () => host.isConnected && options.isCurrent(),
+    });
+    host.append(control.element);
+    return {
+        control,
+        setActive: control.setActive,
+        dispose() {
+            control.destroy();
+            control.element.remove();
+        },
+    };
+}
+```
+
+Use `client.addresses` as the `reads` adapter, bound to the same captured
+visitor/session as your current loaded Form. Check visitor, client, session,
+loaded Form, field and visibility in `isCurrent()` before accepting any
+callback. Write `onChange`'s accepted string to that field's native draft and
+mark it dirty. These reads are field-local: they must not make the Form inert
+while the visitor continues typing. Predictions wait 800 ms after the latest
+nonblank edit; suggestions are plain text. Arrow keys select a suggestion,
+Enter accepts the highlighted suggestion without submitting the Form, Escape dismisses pending
+suggestions, and Clear preserves focus on the input.
+
+A chosen description becomes the accepted value immediately. Place details
+replace it only for the same current owner and selected-place intent. Failures
+retain manual/selected data and offer an explicit retry; there is no automatic
+request retry or Save. The optional `characterLimit` caps all newly accepted
+manual, description and formatted-detail values. Null/undefined is uncapped;
+zero accepts empty text. Supplied loaded values and `setValue` replacements
+remain intact until an edit. Negative, fractional or nonfinite limits throw
+`AddressAutocompleteConfigurationError` with code `invalid-character-limit`.
+The starter displays an unavailable-suggestions hint and keeps manual entry
+for that unsupported configuration.
+
+Call `setActive(false)` when the field hides, becomes blocked, or the Form
+becomes inert for a mutation/recovery decision. It aborts reads, cancels the
+timer and retires both generations without clearing native data. Reveal with
+`setActive(true)` permits new input without repeating an old query. Destroy
+the control when its owner or field changes, including A→B→A and disconnect.
+An owner callback alone does not retire a hide→reveal intent. Abort alone does
+not protect against an adapter that resolves late.
+
+The starter wires this control only for editable direct single-line text.
+Masked/read-only/computed/lookup fields retain their ordinary presentation and
+do not request suggestions. Query limits remain request limits: the existing
+server trims and accepts 1–200-character queries and 1–256-character place IDs;
+an oversized query can fail while its native manual draft remains usable.
+This control supplies no map, geocoding, address parser or multi-field address
+model. Installed recipe checks exercise the actual shipped fence and starter;
+they do not establish provider availability or backend persistence.
 
 ## Native single and multi-selects
 

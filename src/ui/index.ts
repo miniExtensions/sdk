@@ -1,4 +1,10 @@
 export { createSelectionModel } from './model.js';
+export {
+    createAddressAutocompleteControl,
+    AddressAutocompleteConfigurationError,
+    type AddressAutocompleteOptions,
+    type AddressAutocompleteControl,
+} from './addressAutocomplete.js';
 export { createSelectControl, mountSelectionControl } from './controls.js';
 export { getSelectFieldPolicy } from './selectPolicy.js';
 export type { SelectFieldPolicy } from './selectPolicy.js';

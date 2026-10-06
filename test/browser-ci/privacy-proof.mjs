@@ -4312,22 +4312,36 @@ try {
                 await openReview();
                 await clickText('Confirm', await reviewDialog());
                 await waitSnapshot(
-                    value => saves(value).length === 1 && value.pending.length === 1 && value.busy,
+                    (value) =>
+                        saves(value).length === 1 &&
+                        value.pending.length === 1 &&
+                        value.busy,
                     'One confirmed Save is held by the synthetic transport.'
                 );
                 if (outcome === 'cancelled') {
                     await clickText('Cancel request');
-                    await waitSnapshot(value => !value.busy && value.review.abortCounts.save === 1,
-                        'Native Cancel retires the confirmed request.');
+                    await waitSnapshot(
+                        (value) =>
+                            !value.busy && value.review.abortCounts.save === 1,
+                        'Native Cancel retires the confirmed request.'
+                    );
                     await clickText('Release held review Save');
                 } else {
                     await clickText('Lose held review Save response');
                 }
                 let state = await waitSnapshot(
-                    value => !value.busy && value.pending.length === 0 && value.review.fieldsInert,
+                    (value) =>
+                        !value.busy &&
+                        value.pending.length === 0 &&
+                        value.review.fieldsInert,
                     'Settled uncertain Review Save keeps the actual fields inert.'
                 );
-                assertReviewSave(saves(state)[0], state, state.expected.initial, []);
+                assertReviewSave(
+                    saves(state)[0],
+                    state,
+                    state.expected.initial,
+                    []
+                );
                 assert.equal(saves(state).length, 1);
                 assert.equal(state.review.dialogs.length, 0);
                 const before = state.review.controls;
@@ -4336,7 +4350,9 @@ try {
                     ['fld_review_number', 'type'],
                     ['fld_review_show', 'click'],
                 ]) {
-                    const input = await find(`#screen input[data-field-id="${id}"]`);
+                    const input = await find(
+                        `#screen input[data-field-id="${id}"]`
+                    );
                     try {
                         if (action === 'click') await input.click();
                         else await input.sendKeys('Untracked99', Key.ENTER);
@@ -4344,7 +4360,10 @@ try {
                         assert.match(String(error), /interact|click|element/i);
                     }
                 }
-                state = await capture(result, `${outcome}-native-text-number-checkbox-edits-blocked`);
+                state = await capture(
+                    result,
+                    `${outcome}-native-text-number-checkbox-edits-blocked`
+                );
                 assert.deepEqual(state.review.controls, before);
                 assert.equal(state.review.fieldsInert, true);
                 assert.equal(saves(state).length, 1);
@@ -4352,19 +4371,56 @@ try {
                 assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
                 // An explicit fresh read does not silently acknowledge uncertainty.
                 await clickText('Reload');
-                await waitSnapshot(value => !value.busy && value.calls.length === 3 && value.review.fieldsInert,
-                    'Reload keeps an unacknowledged uncertain edit blocked.');
+                await waitSnapshot(
+                    (value) =>
+                        !value.busy &&
+                        value.calls.length === 3 &&
+                        value.review.fieldsInert,
+                    'Reload keeps an unacknowledged uncertain edit blocked.'
+                );
                 await clickText('Use this request');
                 const acknowledgment = await find('dialog[open]');
                 await clickText('Use this request', acknowledgment);
-                await waitSnapshot(value => !value.busy && !value.review.fieldsInert,
-                    'Explicit acknowledgment after fresh inspection enables a separate edit.');
-                await replaceInput(await find('#screen input[data-field-id="fld_review_title"]'),
-                    'Fresh separately tracked edit', 'password');
+                await waitSnapshot(
+                    (value) => !value.busy && !value.review.fieldsInert,
+                    'Explicit acknowledgment after fresh inspection enables a separate edit.'
+                );
+                await replaceInput(
+                    await find(
+                        '#screen input[data-field-id="fld_review_title"]'
+                    ),
+                    'Fresh separately tracked edit',
+                    'password'
+                );
+                await replaceInput(
+                    await find(
+                        '#screen input[data-field-id="fld_review_number"]'
+                    ),
+                    '7',
+                    'number'
+                );
                 await openReview();
-                state = await capture(result, `${outcome}-fresh-acknowledged-edit-review-no-replay`, await reviewDialog());
-                assert.equal(state.review.dialogs[0].rows.find(row => row.fieldId === 'fld_review_title').value,
-                    'Fresh separately tracked edit');
+                state = await capture(
+                    result,
+                    `${outcome}-fresh-acknowledged-edit-review-no-replay`,
+                    await reviewDialog()
+                );
+                assert.equal(
+                    state.review.dialogs[0].rows.find(
+                        (row) => row.fieldId === 'fld_review_title'
+                    ).value,
+                    '••••••••'
+                );
+                assert.equal(
+                    state.review.dialogs[0].rows.find(
+                        (row) => row.fieldId === 'fld_review_number'
+                    ).value,
+                    '7'
+                );
+                assert.equal(
+                    reviewControl(state, 'fld_review_title').value,
+                    'Fresh separately tracked edit'
+                );
                 assert.equal(saves(state).length, 1);
                 await clickText('Edit', await reviewDialog());
                 await waitReviewClosed();

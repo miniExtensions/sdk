@@ -133,7 +133,8 @@ The SDK does not retry a mutation automatically or undo a committed upload.
 document journal separate from draft clearing. An attempt is bound to its
 canonical owner/context and a local operation ID before dispatch. An unknown
 create remains nonreplayable across the app's Reload, logout and context
-teardown; those actions only replace visible/session/draft state.
+teardown. Explicit logout and Disconnect scrub reference input from every
+attempt in the document journal while keeping its unknown-operation guards.
 
 Use the current authorized Portal collection to select a record deliberately,
 then load its configured edit Form and inspect the returned data. A matching
@@ -150,6 +151,12 @@ retained separately under **Earlier local input (reference only)**; attachment
 entries retain names, not upload URLs, references or file bytes. These values
 are never merged into the fresh draft automatically. Reusing any value requires
 a deliberate new edit after inspection.
+
+Same-person Reload retains this reference input. **Clear this visitor's session**
+and **Disconnect** remove the journal's retained field labels, values and
+attachment names across both visitor slots, so anonymous reconnect cannot
+display them. This does not establish whether an earlier write committed or
+unlock its replay.
 
 Fields configured with `obscurePassword: true` are excluded before reference
 journaling, so recovery does not reveal their masked values. For rendered,

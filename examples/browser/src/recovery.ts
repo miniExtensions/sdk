@@ -49,10 +49,14 @@ export const sameRecoveryRelationship = (
     left.parentFieldId === right.parentFieldId &&
     left.tableId === right.tableId &&
     left.context === right.context;
-/** Never cleared by view/session/client/draft teardown; full document reload loses this journal. */
+/** Operation guards survive in-page teardown; a document reload loses the journal. */
 export class RecoveryJournal {
     private attempts: RecoveryAttempt[] = [];
     private sequence = 0;
+    /** Explicit privacy teardown drops reference input, never commit uncertainty. */
+    scrubRetainedInput(): void {
+        for (const attempt of this.attempts) attempt.retainedInput = [];
+    }
     unknown(owner: string): RecoveryAttempt[] {
         return this.attempts.filter(
             (attempt) =>

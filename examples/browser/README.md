@@ -130,10 +130,14 @@ the server still enforces its published rules.
 Field visibility and configured choice availability both recompute after
 accepted edits while retaining the native draft. Their record contracts
 differ: field predicates use the complete unfiltered draft, while choice
-predicates need the canonical filtered-record projection. The starter's flat
-choice adapter therefore remains unavailable for any conditional-field or
-section context, including currently visible fields. It does not derive a
-choice projection from frontend visibility results.
+predicates need a separate conditional-record projection. The starter uses
+`createFlatScalarFormRecordProjection` for absent or explicit `one-page` mode
+with direct scalar dependencies: every field predicate reads the complete
+accepted draft, then condition-hidden IDs are removed only from an evaluation
+copy. Hiding or revealing a driver recomputes choice availability while all
+native values and dirty IDs remain available for Save. Sections, active linked
+filters and referenced linked/lookup/computed drivers remain unsupported.
+Frontend visibility results never replace the choice projection.
 
 - Choose **Save** to submit. Server validation is shown next to the Form; a
   failed validation keeps your values. A successful standalone create disables

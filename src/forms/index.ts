@@ -41,3 +41,8 @@ export {
     type EvaluateFormFieldVisibilityInput,
     type ComposeFormFieldVisibilityInput,
 } from './visibility.js';
+export {
+    createFlatScalarFormRecordProjection,
+    type CreateFlatScalarFormRecordProjectionInput,
+    type FlatScalarFormRecordProjection,
+} from './projection.js';

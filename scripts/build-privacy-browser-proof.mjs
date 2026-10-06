@@ -56,6 +56,8 @@ const regular = (path) => {
 
 /** This function is serialized into the static kit; it imports no SDK source. */
 function createPrivacyFixture(scenario) {
+    if (['projection-single', 'projection-multiple'].includes(scenario))
+        return createProjectionFixture(scenario);
     if (
         [
             'address-acceptance',
@@ -958,6 +960,248 @@ function createInteractionFixture(scenario) {
     };
 }
 
+/** Shared synthetic responses for packed and native conditional projection. */
+export function createProjectionFixture(scenario) {
+    const multiple = scenario === 'projection-multiple';
+    const token = 'FAKE_SYNTHETIC_PROJECTION_TOKEN';
+    const field = (id, name, type, options = null) => ({
+        id,
+        name,
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: { type, options },
+    });
+    const show = field('fld_projection_show', 'Show driver', 'checkbox', {
+        icon: 'check',
+        color: 'greenBright',
+    });
+    const driver = field(
+        'fld_projection_driver',
+        'Projection driver',
+        'singleLineText'
+    );
+    const witness = field(
+        'fld_projection_witness',
+        'Readonly full-record witness',
+        'singleLineText'
+    );
+    const choice = field(
+        multiple ? 'fld_projection_multiple' : 'fld_projection_single',
+        multiple ? 'Multiple projected choices' : 'Single projected choice',
+        multiple ? 'multipleSelects' : 'singleSelect',
+        {
+            choices: [
+                { id: 'sel_alpha', name: 'Alpha' },
+                { id: 'sel_beta', name: 'Beta' },
+                { id: 'sel_gamma', name: 'Gamma' },
+            ],
+        }
+    );
+    const conditions = (id, setting) => ({
+        logicalOperator: 'and',
+        conditions: [{ id, type: 'singleCondition', setting }],
+    });
+    const schema = (entry, miniExtConfig = {}) => ({
+        fieldType: entry.config.type,
+        airtableField: entry,
+        miniExtConfig,
+    });
+    const betaConditions = conditions('hidden_driver_empty', {
+        type: 'isEmpty',
+        fieldType: 'singleLineText',
+        idOrName: { type: 'id', id: driver.id },
+    });
+    betaConditions.conditions.push(
+        ...conditions('projected_readonly_witness', {
+            type: 'contains',
+            fieldType: 'singleLineText',
+            idOrName: { type: 'id', id: witness.id },
+            value: 'Retained readonly',
+        }).conditions
+    );
+    const schemas = [
+        schema(show),
+        schema(driver, {
+            conditionalFields: conditions('show_driver', {
+                type: 'is',
+                fieldType: 'checkbox',
+                idOrName: { type: 'id', id: show.id },
+                value: true,
+            }),
+        }),
+        schema(witness, {
+            readOnly: true,
+            conditionalFields: conditions('witness_full_record', {
+                type: 'contains',
+                fieldType: 'singleLineText',
+                idOrName: { type: 'id', id: driver.id },
+                value: 'allowed',
+            }),
+        }),
+        schema(choice, {
+            enableConditionalOptions: true,
+            singleOrMultiSelectLimitSelectionOptions: ['sel_alpha', 'sel_beta'],
+            conditionsForOptions: [
+                {
+                    id: 'projected_beta',
+                    config: {
+                        optionForConditions: 'sel_beta',
+                        name: 'Projected Beta',
+                        conditionsForOption: betaConditions,
+                    },
+                },
+            ],
+        }),
+    ];
+    const initial = {
+        [show.id]: true,
+        [driver.id]: 'allowed',
+        [witness.id]: 'Retained readonly text',
+        [choice.id]: multiple ? [] : null,
+        fld_projection_unrendered_multi: ['Retained', 'Native'],
+        fld_projection_unrendered_linked: ['rec_projection_parent'],
+        fld_projection_unrendered_barcode: { text: '003', type: 'code128' },
+    };
+    const state = {
+        scenario,
+        synthetic: true,
+        realNetworkEnabled: false,
+        calls: [],
+        events: [],
+        unexpected: [],
+        expected: {
+            multiple,
+            initial,
+            choiceFieldId: choice.id,
+            controlFieldIds: schemas.map((entry) => entry.airtableField.id),
+            recordId: 'rec_projection_synthetic',
+            tableId: 'tbl_projection_synthetic',
+        },
+    };
+    const page = () =>
+        structuredClone({
+            extensionId: 'projection_form_synthetic',
+            language: 'en',
+            themeColor: 'blue',
+            enableCommentsOnChildForms: false,
+            workspaceId: 'projection_workspace_synthetic',
+            extensionOwnerUID: 'projection_owner_synthetic',
+            faviconUrl: null,
+            googleAnalyticsMeasurementId: null,
+            isStarterExtension: false,
+            extensionScreen: 'form_loaded',
+            payload: {
+                baseId: 'projection_base_synthetic',
+                loggedInUserCanEditExtension: false,
+                showMiniExtensionsBranding: true,
+                onFreePlan: true,
+                trialExpiresAtUnixEpoch: null,
+                extensionType: 'form',
+                extensionName: 'Synthetic flat scalar projection Form',
+                extensionAccessToken: token,
+                hasParentExtension: false,
+                publicFields: {},
+                formRecord: {
+                    type: 'edit',
+                    tableId: state.expected.tableId,
+                    recordId: state.expected.recordId,
+                    data: initial,
+                },
+                formErrors: {},
+                fieldIdsInForm: schemas.map((entry) => entry.airtableField.id),
+                fieldNamesToSchemas: Object.fromEntries(
+                    schemas.map((entry) => [entry.airtableField.name, entry])
+                ),
+                fieldIdsToSchemas: Object.fromEntries(
+                    schemas.map((entry) => [entry.airtableField.id, entry])
+                ),
+                formFieldIdsWithUnsavedChanges: [],
+                urlPrefilledFieldIds: [],
+                linkedRecordFieldIdToDetailFields: {},
+                cookieKeyForLoginToken: null,
+            },
+        });
+    const fail = (message) => {
+        state.unexpected.push(message);
+        throw new Error(message);
+    };
+    const json = (value) =>
+        new Response(JSON.stringify(value), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    const transport = async (resource, init = {}) => {
+        const url = new URL(
+            resource instanceof Request ? resource.url : String(resource)
+        );
+        const method =
+            init.method ??
+            (resource instanceof Request ? resource.method : 'GET');
+        if (
+            url.origin !== 'https://synthetic-sdk.invalid' ||
+            init.credentials !== 'omit'
+        )
+            return fail('Non-synthetic projection origin or credentials.');
+        init.signal?.throwIfAborted();
+        let input;
+        try {
+            input = JSON.parse(
+                method === 'GET'
+                    ? (url.searchParams.get('input') ?? '{}')
+                    : String(init.body ?? '{}')
+            );
+        } catch {
+            return fail('Malformed synthetic projection input.');
+        }
+        const route = url.searchParams.get('route') ?? url.pathname;
+        const visibleInput = { ...input };
+        delete visibleInput.miniExtStorageV4;
+        delete visibleInput.miniExtSession;
+        state.calls.push({
+            route,
+            method,
+            input: structuredClone(visibleInput),
+            credentialsMode: init.credentials,
+        });
+        if (route === 'fetchExtensionForEndUser') {
+            if (
+                method !== 'POST' ||
+                input.shareId !== 'privacy_share_synthetic' ||
+                input.childExtensionInfo
+            )
+                return fail('Unexpected synthetic projection root load.');
+            return json(page());
+        }
+        if (
+            route !== 'saveForm' ||
+            method !== 'POST' ||
+            input.extensionAccessToken !== token ||
+            input.formRecord?.type !== 'edit' ||
+            input.formRecord?.recordId !== state.expected.recordId ||
+            input.formRecord?.tableId !== state.expected.tableId ||
+            input.context?.type !== 'direct-url'
+        )
+            return fail('Unexpected projection route or native Save scope.');
+        const value = input.formRecord.data[choice.id];
+        if (
+            multiple
+                ? !Array.isArray(value) ||
+                  value.some((name) => !['Alpha', 'Beta'].includes(name))
+                : value !== null && !['Alpha', 'Beta'].includes(value)
+        )
+            return fail('Projection Save requires native names, not IDs.');
+        // A validation response retains the real draft; no persisted record
+        // or backend permission result is simulated by this fixture.
+        return json({
+            type: 'error',
+            formValidationErrors: [],
+            formErrors: {},
+        });
+    };
+    return { state, page, fetch: transport };
+}
+
 /** Native one-page visibility fixtures; no application actions are simulated. */
 function createVisibilityFixture(scenario) {
     const token = 'FAKE_SYNTHETIC_VISIBILITY_TOKEN';
@@ -1628,41 +1872,44 @@ function installProofInspection(fixture, kind) {
                       abortCounts: structuredClone(fixture.state.abortCounts),
                   }
                 : null,
-            visibility: fixture.state.scenario.startsWith('visibility-')
-                ? {
-                      controls: [
-                          ...(application?.querySelectorAll(
-                              '[data-field-id]'
-                          ) ?? []),
-                      ]
-                          .filter((control) =>
-                              fixture.state.expected.controlFieldIds.includes(
-                                  control.dataset.fieldId
+            visibility:
+                fixture.state.scenario.startsWith('visibility-') ||
+                fixture.state.scenario.startsWith('projection-')
+                    ? {
+                          controls: [
+                              ...(application?.querySelectorAll(
+                                  '[data-field-id]'
+                              ) ?? []),
+                          ]
+                              .filter((control) =>
+                                  fixture.state.expected.controlFieldIds.includes(
+                                      control.dataset.fieldId
+                                  )
                               )
-                          )
-                          .map((control) => ({
-                              fieldId: control.dataset.fieldId,
-                              type: control.type,
-                              hidden: control.closest('[hidden]') !== null,
-                              disabled: control.disabled,
-                              value:
-                                  control.type === 'checkbox'
-                                      ? control.checked
-                                      : control.value,
-                              badInput: control.validity?.badInput ?? false,
-                              valid: control.validity?.valid ?? true,
+                              .map((control) => ({
+                                  fieldId: control.dataset.fieldId,
+                                  type: control.type,
+                                  hidden: control.closest('[hidden]') !== null,
+                                  disabled: control.disabled,
+                                  value:
+                                      control.type === 'checkbox'
+                                          ? control.checked
+                                          : control.value,
+                                  badInput: control.validity?.badInput ?? false,
+                                  valid: control.validity?.valid ?? true,
+                              })),
+                          activeFieldId:
+                              document.activeElement?.dataset.fieldId ?? null,
+                          alerts: [
+                              ...(application?.querySelectorAll(
+                                  '[role="alert"]'
+                              ) ?? []),
+                          ].map((alert) => ({
+                              text: alert.textContent ?? '',
+                              hidden: alert.closest('[hidden]') !== null,
                           })),
-                      activeFieldId:
-                          document.activeElement?.dataset.fieldId ?? null,
-                      alerts: [
-                          ...(application?.querySelectorAll('[role="alert"]') ??
-                              []),
-                      ].map((alert) => ({
-                          text: alert.textContent ?? '',
-                          hidden: alert.closest('[hidden]') !== null,
-                      })),
-                  }
-                : null,
+                      }
+                    : null,
             selects: [...(application?.querySelectorAll('select') ?? [])].map(
                 (select) => ({
                     fieldId: select.dataset.fieldId ?? null,
@@ -1935,6 +2182,15 @@ export async function buildPrivacyBrowserProof({
                 (entry) =>
                     entry.origin === 'installed-sdk-archive' &&
                     entry.path ===
+                        'node_modules/@miniextensions/sdk/dist/esm/forms/projection.js'
+            ),
+            'Actual starter must bind the installed archive scalar projection module.'
+        );
+        assert(
+            starterInputs.some(
+                (entry) =>
+                    entry.origin === 'installed-sdk-archive' &&
+                    entry.path ===
                         'node_modules/@miniextensions/sdk/dist/esm/ui/addressAutocomplete.js'
             ),
             'Actual starter must bind the installed archive address autocomplete module.'
@@ -1970,7 +2226,7 @@ export async function buildPrivacyBrowserProof({
         write('starter/index.html', starterHtml);
         write(
             'fixture.js',
-            `const createInteractionFixture = ${createInteractionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
+            `const createInteractionFixture = ${createInteractionFixture.toString()};\nconst createProjectionFixture = ${createProjectionFixture.toString()};\nconst createVisibilityFixture = ${createVisibilityFixture.toString()};\nconst createAddressFixture = ${createAddressFixture.toString()};\nexport const createPrivacyFixture = ${createPrivacyFixture.toString()};\nexport const installProofInspection = ${installProofInspection.toString()};\n`
         );
         write(
             'starter/bootstrap.js',
@@ -2076,6 +2332,8 @@ renderPanel();
             'choice-multiple',
             'choice-add-single',
             'choice-add-multiple',
+            'projection-single',
+            'projection-multiple',
             'linked-filters',
             'linked-filter-deferred',
             'visibility-draft',
@@ -2138,6 +2396,8 @@ At each stage choose Inspect current trace and UI, or read window.__privacyBrows
 choice-single and choice-multiple use only visible direct scalar Driver/Choices fields. Driver starts denied; Beta is unavailable, while Gamma is excluded by the static choice-ID allowlist. Type allowed into Driver and select Conditional Beta using the actual native select. Its value is Beta (or [Beta]), never sel_beta or the display label. Type denied again: the existing selected name/label must remain unchanged and removable, without an automatic Save. Choose Save explicitly to inspect that native request. The fixture intentionally returns a normal validation result, retaining the draft; it does not prove persistence. Remove the retained selection, verify Beta cannot be added again, and deliberately Save the native null/empty array. These choice cases cover the application's conservative flat direct-scalar projection only; no hidden/linked driver projection or general hosted conditional visibility is claimed. The separate visibility scenarios below cover only their declared one-page scalar configurations.
 
 choice-add-single and choice-add-multiple enable the actual Add Choice controls without a static allowlist or selection maximum. Driver starts denied with the existing Beta name retained. Remove it natively and deliberately Save null/empty array. Type the whitespace/case-equivalent name " bEtA " in New choice name and choose Create choice. The synthetic add-option route returns the already-existing sel_beta/Beta metadata; it creates no choice. The denied choice must not be reselected or change the record draft, and no automatic Save may occur. The next deliberate Save must still carry null/empty array. Inspect the one exact existing-choice resolution request and metadataCreated:false event; this is an availability boundary assertion, not metadata creation or persistence proof.
+
+projection-single and projection-multiple compose one-page conditional visibility with configured option conditions. Show driver starts checked, Projection driver contains allowed, and Projected Beta is unavailable because that driver is populated. Edit the driver to allowed edited, then use native SPACE/TAB to hide it. Projected Beta becomes available because the canonical evaluation copy removes only the conditionally hidden driver ID. The readonly full-record witness remains visible: each field predicate reads the complete accepted snapshot rather than another field's already-pruned result. Select Beta natively and explicitly Save. That request must retain the hidden edited driver, readonly and unrendered native array/link/barcode values, plus exactly the driver, checkbox and choice dirty IDs. Reveal the driver: its accepted value remains, the selected Beta label is retained and removable, and removing Beta denies readdition. The next deliberate Save carries the complete native null/empty-array selection. A native A-to-B-to-A visitor switch retires the controls, restores the accepted A draft with fresh controls and performs no Save. These cases prove only the declared flat physical scalar dependencies; no section, computed/linked/lookup projection, backend validation or persistence credit is granted.
 
 linked-filters uses the current published linked cascade, separately from the flat choice cases. For ordered prefills, add prefill_Current%20country=North%2C%20East, prefill_Current%20region=Duplicate%20label and prefill_Current%20city=City%20%3D%20%22One%22 to its scenario URL. Choose Load conditional filters, Search choices and More choices; select Available project and Page two project through their native checkbox controls, then Save deliberately. Observe exact returned record/string pairs and the one next-page cursor. Changing Country to South must clear downstream filter choices and invalidate the old cursor while retaining native selected record IDs; a subsequent Search choices starts with a null cursor and performs no automatic Save.
 
@@ -2227,6 +2487,8 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'choice-multiple',
                 'choice-add-single',
                 'choice-add-multiple',
+                'projection-single',
+                'projection-multiple',
                 'linked-filters',
                 'linked-filter-deferred',
                 'visibility-draft',
@@ -2242,6 +2504,7 @@ CI generated this static kit only after the existing exact archive consumer chec
                 'No backend/security/permission/OTP delivery/durable persistence proof.',
                 'No browser execution, CDP or TLS exception performed by generation.',
                 'Configured-choice cases use only visible direct scalar drivers in a flat Form; no general hidden/linked projection proof.',
+                'Projection cases compose conditional field removal with option conditions for their declared flat physical scalar dependencies only; no section/computed/linked/lookup projection or persistence proof.',
                 'Visibility scenarios cover their declared one-page checkbox/unsupported condition and section configurations only; no multipage or general hosted parity proof.',
                 'Interaction Save cases prove explicit native dispatch with validation responses, not durable persistence.',
                 'Address scenarios cover only editable unmasked singleLineText, a valid cap and one optional one-page checkbox predicate; no provider, backend, hosted parity or other field/configuration credit.',

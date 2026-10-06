@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { transform } from 'esbuild';
+import { createProjectionFixture } from './build-privacy-browser-proof.mjs';
 
 const field = (multiple) => ({
     fieldType: multiple ? 'multipleSelects' : 'singleSelect',
@@ -83,6 +84,14 @@ export async function checkSelectAvailabilityRecipe({
             `${installed}/dist/`
         )
     );
+    assert.ok(
+        realpathSync(require.resolve('@miniextensions/sdk/forms')).startsWith(
+            `${installed}/dist/`
+        )
+    );
+    const {
+        createFlatScalarFormRecordProjection,
+    } = require('@miniextensions/sdk/forms');
     const sources = guideSources
         .map((path) => resolve(consumer, path))
         .filter((path) => {
@@ -210,6 +219,131 @@ export async function checkSelectAvailabilityRecipe({
             change();
             assert.equal(changes.length, 4);
             assert.equal(host.children.length, 0);
+            checks++;
+        } finally {
+            await window.happyDOM.close();
+        }
+    }
+    for (const multiple of [false, true]) {
+        const window = new Window({ url: 'https://projection.example.test' });
+        try {
+            const fixture = createProjectionFixture(
+                multiple ? 'projection-multiple' : 'projection-single'
+            );
+            const page = fixture.page();
+            const payload = page.payload;
+            const native = structuredClone(payload.formRecord.data);
+            native.fld_projection_driver = 'allowed edited';
+            const original = structuredClone(native);
+            const schemas = Object.values(payload.fieldIdsToSchemas);
+            const project = (data) =>
+                createFlatScalarFormRecordProjection({
+                    fieldIds: payload.fieldIdsInForm,
+                    fieldIdsToSchemas: payload.fieldIdsToSchemas,
+                    airtableFields: schemas.map((entry) => entry.airtableField),
+                    data,
+                    recordId: payload.formRecord.recordId,
+                    invalidConditionMode: 'strict',
+                });
+            const visible = project(native);
+            assert.equal(visible.type, 'available');
+            assert.deepEqual(visible.hiddenFieldIds, []);
+            assert.deepEqual(visible.record.fields, original);
+            const host = window.document.createElement('div');
+            window.document.body.append(host);
+            const changes = [];
+            let current = true;
+            const mounted = mountConfiguredScalarChoice(host, {
+                field: payload.fieldIdsToSchemas[
+                    fixture.state.expected.choiceFieldId
+                ],
+                airtableFields: schemas.map((entry) => entry.airtableField),
+                recordForConditionEvaluation: visible.record,
+                value: multiple ? [] : null,
+                mode: 'runtime',
+                invalidConditionMode: 'compatibility',
+                isCurrent: () => current,
+                onChange: (value) => changes.push(structuredClone(value)),
+            });
+            const select = host.querySelector('select');
+            assert.ok(select);
+            const names = () =>
+                [...select.options]
+                    .map((option) => option.value)
+                    .filter(Boolean);
+            const selected = () =>
+                [...select.selectedOptions]
+                    .map((option) => option.value)
+                    .filter(Boolean);
+            const change = () =>
+                select.dispatchEvent(
+                    new window.Event('change', { bubbles: true })
+                );
+            assert.deepEqual(names(), ['Alpha']);
+            const hiddenNative = { ...native, fld_projection_show: false };
+            const hidden = project(hiddenNative);
+            assert.equal(hidden.type, 'available');
+            assert.deepEqual(hidden.hiddenFieldIds, ['fld_projection_driver']);
+            assert.equal(
+                Object.hasOwn(hidden.record.fields, 'fld_projection_driver'),
+                false
+            );
+            assert.equal(
+                hidden.record.fields.fld_projection_witness,
+                original.fld_projection_witness
+            );
+            assert.deepEqual(
+                hidden.record.fields.fld_projection_unrendered_linked,
+                ['rec_projection_parent']
+            );
+            assert.deepEqual(native, original);
+            assert.equal(hiddenNative.fld_projection_driver, 'allowed edited');
+            assert.equal(mounted.updateRecord(hidden.record), 'ready');
+            assert.deepEqual(names(), ['Alpha', 'Beta']);
+            const beta = [...select.options].find(
+                (option) => option.value === 'Beta'
+            );
+            assert.equal(beta.textContent, 'Projected Beta');
+            beta.selected = true;
+            change();
+            assert.deepEqual(changes, [multiple ? ['Beta'] : 'Beta']);
+            assert.deepEqual(hiddenNative, {
+                ...original,
+                fld_projection_show: false,
+            });
+            checks++;
+
+            assert.equal(mounted.updateRecord(visible.record), 'ready');
+            assert.deepEqual(selected(), ['Beta']);
+            assert.equal(beta.disabled, false);
+            assert.equal(beta.textContent, 'Projected Beta');
+            for (const option of select.options) option.selected = false;
+            if (!multiple) select.value = '';
+            change();
+            assert.deepEqual(selected(), []);
+            assert.deepEqual(names(), ['Alpha']);
+            assert.deepEqual(changes, [
+                multiple ? ['Beta'] : 'Beta',
+                multiple ? [] : null,
+            ]);
+            assert.equal(mounted.updateRecord(null), 'blocked');
+            assert.deepEqual(selected(), []);
+            assert.equal(changes.length, 2);
+            assert.deepEqual(native, original);
+            checks++;
+
+            current = false;
+            assert.equal(mounted.updateRecord(hidden.record), 'blocked');
+            assert.equal(select.disabled, true);
+            beta.selected = true;
+            select.append(beta);
+            change();
+            assert.equal(changes.length, 2);
+            mounted.dispose();
+            change();
+            assert.equal(changes.length, 2);
+            assert.equal(host.children.length, 0);
+            assert.deepEqual(native, original);
             checks++;
         } finally {
             await window.happyDOM.close();

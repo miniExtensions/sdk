@@ -270,10 +270,24 @@ the previous section, even if it retains the propagation flag without a
 predicate. This frontend compositor does not produce the backend's filtered
 record projection for conditional select options or other consumers.
 
-The starter retains its conservative flat choice adapter: any published
-conditional-field or section context makes configured choice evaluation
-unavailable, even when the current field visibility results are all visible.
-These results never stand in for the canonical filtered-record projection.
+`createFlatScalarFormRecordProjection` supplies a separate conditional-record
+copy for flat Forms with supported direct scalar predicates. Pass Form field
+IDs/schema metadata, complete accepted native data, current record ID and an
+explicit compiler policy. The available result contains `record`,
+`hiddenFieldIds` and safe diagnostics; blocked results carry finite codes. It
+evaluates every field against the same complete data before removing only
+condition-hidden IDs from a deep copy. It retains readonly, empty-hidden,
+ordinary select and unrendered native values, and never changes the draft or
+Save input. Referenced computed/linked/lookup drivers, native errors and
+ambiguous metadata remain unavailable. Any published nonblank section title
+(including `enableSectionHeader: false`), section propagation or active linked
+filter blocks this bounded adapter. It does not supply linked/lookup value
+filtering or general section projection; unrelated complex values are retained
+unchanged and are not claimed as projected values. The starter uses this copy
+for configured choices in absent or explicit `one-page` mode, with supported
+configured scalar dependencies. A condition-hidden driver therefore changes
+new choice availability while its accepted native value remains in the full
+Save record. Frontend visibility results never replace this projection.
 
 `blocked` carries a finite code and safe compiler code/severity/index-path
 diagnostics, excluding editor IDs, formulas, operands, values and exception

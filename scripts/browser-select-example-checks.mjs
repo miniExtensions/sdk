@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
+import { createProjectionFixture } from './build-privacy-browser-proof.mjs';
 
 const waitFor = async (predicate) => {
     for (let turn = 0; turn < 100; turn++) {
@@ -383,8 +384,297 @@ export async function checkBrowserSelectExample({
         Window,
         outfile,
     });
-    return { checks: scenarios.length + portalChecks };
+    const projectionChecks = await checkPackedConditionalProjection({
+        consumer,
+        Window,
+        outfile,
+    });
+    return { checks: scenarios.length + portalChecks + projectionChecks };
 }
+
+const checkPackedConditionalProjection = async ({
+    consumer,
+    Window,
+    outfile,
+}) => {
+    const scenarios = [
+        { name: 'single scalar conditional projection', multiple: false },
+        { name: 'multiple scalar conditional projection', multiple: true },
+        {
+            name: 'retained disabled section title blocks projection',
+            blocked: 'section',
+        },
+        { name: 'computed driver blocks projection', blocked: 'computed' },
+    ];
+    for (const [revision, scenario] of scenarios.entries()) {
+        const window = new Window({
+            url: 'https://projection.example.test',
+            settings: {
+                disableCSSFileLoading: true,
+                disableJavaScriptFileLoading: true,
+            },
+        });
+        window.document.write(
+            readFileSync(join(consumer, 'index.html'), 'utf8').replace(
+                /<script\b[^>]*>[\s\S]*?<\/script>/g,
+                ''
+            )
+        );
+        const fixture = createProjectionFixture(
+            scenario.multiple ? 'projection-multiple' : 'projection-single'
+        );
+        const form = fixture.page();
+        const driverSchema =
+            form.payload.fieldIdsToSchemas.fld_projection_driver;
+        if (scenario.blocked === 'section') {
+            driverSchema.miniExtConfig.headerSectionTitle =
+                'Retained section title';
+            driverSchema.miniExtConfig.enableSectionHeader = false;
+        } else if (scenario.blocked === 'computed') {
+            driverSchema.airtableField.isComputed = true;
+        }
+        if (scenario.blocked)
+            form.payload.formRecord.data.fld_projection_show = false;
+        const initial = structuredClone(form.payload.formRecord.data);
+        const fetch = async (input, init) => {
+            const url = new URL(String(input));
+            const response = await fixture.fetch(input, init);
+            return url.searchParams.get('route') === 'fetchExtensionForEndUser'
+                ? new Response(JSON.stringify(form))
+                : response;
+        };
+        function Option(text = '', value = '') {
+            const option = window.document.createElement('option');
+            option.textContent = text;
+            option.value = value;
+            return option;
+        }
+        const globals = {
+            document: window.document,
+            location: window.location,
+            HTMLElement: window.HTMLElement,
+            HTMLInputElement: window.HTMLInputElement,
+            HTMLSelectElement: window.HTMLSelectElement,
+            HTMLButtonElement: window.HTMLButtonElement,
+            Option,
+            fetch,
+        };
+        const previous = Object.keys(globals).map((key) => [
+            key,
+            Object.getOwnPropertyDescriptor(globalThis, key),
+        ]);
+        Object.assign(globalThis, globals);
+        try {
+            await import(
+                `${pathToFileURL(outfile).href}?projection=${revision}`
+            );
+            window.document.getElementById('api-origin').value =
+                'https://synthetic-sdk.invalid';
+            window.document.getElementById('share-id').value =
+                'privacy_share_synthetic';
+            submit(window, window.document.getElementById('connection-form'));
+            const choiceId = fixture.state.expected.choiceFieldId;
+            const selectFor = () =>
+                window.document.querySelector(
+                    `select[data-field-id="${choiceId}"]`
+                );
+            await waitFor(() => selectFor() !== null);
+            const select = selectFor();
+            const show = window.document.querySelector(
+                'input[data-field-id="fld_projection_show"]'
+            );
+            const driver = window.document.querySelector(
+                'input[data-field-id="fld_projection_driver"]'
+            );
+            const witness = window.document.querySelector(
+                'input[data-field-id="fld_projection_witness"]'
+            );
+            assert(show && driver && witness);
+            const saves = () =>
+                fixture.state.calls.filter((call) => call.route === 'saveForm');
+            const availability = () =>
+                window.document
+                    .querySelector(
+                        `[data-choice-availability-field-id="${choiceId}"]`
+                    )
+                    .getAttribute('data-choice-availability');
+            const beta = () =>
+                [...selectFor().options].find(
+                    (option) => option.value === 'Beta'
+                );
+            const denied = () => assert(!beta() || beta().disabled);
+            const displayed = (control) => control.closest('[hidden]') === null;
+            assert.equal(saves().length, 0);
+            denied();
+            if (scenario.blocked) {
+                assert.equal(availability(), 'blocked');
+                const injected = window.document.createElement('option');
+                injected.value = 'Beta';
+                injected.selected = true;
+                select.append(injected);
+                change(window, select);
+                assert.deepEqual(selected(select).filter(Boolean), []);
+                assert.equal(saves().length, 0);
+                assert.deepEqual(form.payload.formRecord.data, initial);
+            } else {
+                assert.equal(availability(), 'ready');
+                assert.equal(displayed(driver), true);
+                assert.equal(displayed(witness), true);
+                assert.equal(witness.disabled, true);
+                witness.value = 'Injected readonly value';
+                witness.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+                driver.value = 'allowed edited';
+                driver.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+                show.checked = false;
+                show.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+                assert.equal(displayed(driver), false);
+                assert.equal(displayed(witness), true);
+                assert.equal(availability(), 'ready');
+                assert(beta());
+                assert.equal(beta().disabled, false);
+                assert.equal(beta().textContent, 'Projected Beta');
+                assert.equal(
+                    [...select.options].some(
+                        (option) => option.value === 'Gamma'
+                    ),
+                    false
+                );
+                beta().selected = true;
+                change(window, select);
+                assert.equal(saves().length, 0);
+                const expected = {
+                    ...initial,
+                    fld_projection_show: false,
+                    fld_projection_driver: 'allowed edited',
+                    [choiceId]: scenario.multiple ? ['Beta'] : 'Beta',
+                };
+                const assertSave = (call, data) => {
+                    assert.deepEqual(call.input.formRecord, {
+                        type: 'edit',
+                        tableId: fixture.state.expected.tableId,
+                        recordId: fixture.state.expected.recordId,
+                        data,
+                    });
+                    assert.deepEqual(
+                        [...call.input.formFieldIdsWithUnsavedChanges].sort(),
+                        [
+                            'fld_projection_show',
+                            'fld_projection_driver',
+                            choiceId,
+                        ].sort()
+                    );
+                    assert.equal(
+                        call.input.extensionAccessToken,
+                        'FAKE_SYNTHETIC_PROJECTION_TOKEN'
+                    );
+                    assert.deepEqual(call.input.context, {
+                        type: 'direct-url',
+                    });
+                    assert.deepEqual(
+                        call.input
+                            .conditionalLinkedRecordFieldIdsToFilteringValues,
+                        {}
+                    );
+                };
+                submit(window, select.closest('form'));
+                await waitFor(
+                    () =>
+                        saves().length === 1 &&
+                        window.document
+                            .getElementById('screen')
+                            .getAttribute('aria-busy') === 'false'
+                );
+                assertSave(saves()[0], expected);
+                show.checked = true;
+                show.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+                assert.equal(displayed(driver), true);
+                assert.equal(driver.value, 'allowed edited');
+                assert.deepEqual(selected(select).filter(Boolean), ['Beta']);
+                assert.equal(beta().textContent, 'Projected Beta');
+                for (const option of select.options) option.selected = false;
+                if (!scenario.multiple) select.value = '';
+                change(window, select);
+                denied();
+                assert.deepEqual(selected(select).filter(Boolean), []);
+                assert.equal(saves().length, 1);
+                submit(window, select.closest('form'));
+                await waitFor(
+                    () =>
+                        saves().length === 2 &&
+                        window.document
+                            .getElementById('screen')
+                            .getAttribute('aria-busy') === 'false'
+                );
+                assertSave(saves()[1], {
+                    ...expected,
+                    fld_projection_show: true,
+                    [choiceId]: scenario.multiple ? [] : null,
+                });
+                button(window.document, "Clear this visitor's session").click();
+                show.checked = false;
+                show.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+                driver.value = 'stale retired owner';
+                driver.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+                change(window, select);
+                assert.equal(saves().length, 2);
+                button(window.document, 'Reload').click();
+                await waitFor(
+                    () => selectFor() !== null && selectFor() !== select
+                );
+                assert.equal(
+                    window.document.querySelector(
+                        'input[data-field-id="fld_projection_driver"]'
+                    ).value,
+                    initial.fld_projection_driver
+                );
+                assert.deepEqual(selected(selectFor()).filter(Boolean), []);
+                denied();
+                assert.equal(saves().length, 2);
+            }
+            assert.deepEqual(fixture.state.unexpected, []);
+            assert.deepEqual(
+                fixture.state.calls.map((call) => call.route),
+                scenario.blocked
+                    ? ['fetchExtensionForEndUser']
+                    : [
+                          'fetchExtensionForEndUser',
+                          'saveForm',
+                          'saveForm',
+                          'fetchExtensionForEndUser',
+                      ]
+            );
+            assert.deepEqual(form.payload.formRecord.data, initial);
+            console.log(
+                `[packed projection ${revision + 1}/${scenarios.length}] ${scenario.name}: passed`
+            );
+        } catch (error) {
+            throw new Error(
+                `Packed projection scenario failed: ${scenario.name}`,
+                { cause: error }
+            );
+        } finally {
+            for (const [key, descriptor] of previous) {
+                if (descriptor)
+                    Object.defineProperty(globalThis, key, descriptor);
+                else Reflect.deleteProperty(globalThis, key);
+            }
+            await window.happyDOM.close();
+        }
+    }
+    return scenarios.length;
+};
 
 const checkPackedPortalSelects = async ({ consumer, Window, outfile }) => {
     const scenarios = [

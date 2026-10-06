@@ -507,11 +507,163 @@ describe('actual Form starter configured scalar choices', () => {
         });
     }
 
-    it('blocks a broader projected context with finite presentation status while permitting retained removal', async (test) => {
-        const form = dynamicSelectForm(true);
+    it('allows explicit one-page mode for configured scalar choices without conditional fields', async (test) => {
+        const form = dynamicSelectForm(false);
+        form.payload.publicFields.state = {
+            ...form.payload.publicFields.state,
+            multiPageFormMode: 'one-page',
+        };
+        form.payload.formRecord.data.fld_driver = 'allowed';
+        const { window, saves, requests } = await mountDynamicSelectForm(
+            test,
+            form
+        );
+        assert.deepEqual(
+            Array.from(colorSelect(window).options)
+                .map((option) => option.value)
+                .filter(Boolean),
+            ['Red', 'Blue']
+        );
+        assert.equal(saves.length, 0);
+        assert.equal(requests.length, 1);
+    });
+
+    it('composes an empty conditional predicate with configured scalar choices', async (test) => {
+        const form = dynamicSelectForm(false);
         const driver = form.payload.fieldIdsToSchemas.fld_driver!;
         driver.miniExtConfig = {
             conditionalFields: { logicalOperator: 'and', conditions: [] },
+        };
+        form.payload.formRecord.data.fld_driver = 'allowed';
+        const { window, saves, requests } = await mountDynamicSelectForm(
+            test,
+            form
+        );
+        const select = colorSelect(window);
+        assert.deepEqual(
+            Array.from(select.options)
+                .map((option) => option.value)
+                .filter(Boolean),
+            ['Red', 'Blue']
+        );
+        assert.equal(
+            window.document
+                .querySelector(
+                    '[data-choice-availability-field-id="fld_colors"]'
+                )
+                ?.getAttribute('data-choice-availability'),
+            'ready'
+        );
+        assert.equal(saves.length, 0);
+        assert.equal(requests.length, 1);
+    });
+
+    it('projects a hidden scalar driver for choices while saving the complete accepted native draft', async (test) => {
+        const form = dynamicSelectForm(true);
+        const gate: RuntimeFieldSchema = {
+            fieldType: AirtableFieldType.CHECKBOX,
+            airtableField: {
+                id: 'fld_gate',
+                name: 'Show driver',
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: {
+                    type: AirtableFieldType.CHECKBOX,
+                    options: { icon: 'check', color: 'greenBright' },
+                },
+            },
+        };
+        const driver = form.payload.fieldIdsToSchemas.fld_driver!;
+        driver.miniExtConfig = {
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'show_driver',
+                        type: 'singleCondition',
+                        setting: {
+                            type: 'is',
+                            fieldType: AirtableFieldType.CHECKBOX,
+                            idOrName: { type: 'id', id: 'fld_gate' },
+                            value: true,
+                        },
+                    },
+                ],
+            },
+        };
+        form.payload.fieldIdsInForm.unshift('fld_gate');
+        form.payload.fieldIdsToSchemas.fld_gate = gate;
+        form.payload.fieldNamesToSchemas['Show driver'] = gate;
+        form.payload.formRecord.data.fld_gate = false;
+        form.payload.formRecord.data.fld_driver = 'allowed';
+        form.payload.formRecord.data.fld_unrendered_native = ['rec_preserved'];
+        const { window, saves, requests } = await mountDynamicSelectForm(
+            test,
+            form
+        );
+        const select = colorSelect(window);
+        const gateControl = window.document.querySelector(
+            'input[data-field-id="fld_gate"]'
+        );
+        const driverControl = window.document.querySelector(
+            'input[data-field-id="fld_driver"]'
+        );
+        assert.ok(gateControl instanceof window.HTMLInputElement);
+        assert.ok(driverControl instanceof window.HTMLInputElement);
+        const eligible = () =>
+            Array.from(select.options)
+                .map((option) => option.value)
+                .filter(Boolean);
+        assert.deepEqual(eligible(), ['Red']);
+        assert.ok(driverControl.closest('[hidden]'));
+        assert.equal(driverControl.value, 'allowed');
+        gateControl.checked = true;
+        change(window, gateControl);
+        assert.deepEqual(eligible(), ['Red', 'Blue']);
+        chooseBlue(window, select);
+        gateControl.checked = false;
+        change(window, gateControl);
+        assert.deepEqual(selected(select), ['Blue']);
+        assert.equal(driverControl.value, 'allowed');
+        for (const option of select.options) option.selected = false;
+        change(window, select);
+        assert.deepEqual(eligible(), ['Red']);
+        assert.equal(saves.length, 0);
+        assert.equal(requests.length, 1);
+        const card = select.closest('form');
+        assert.ok(card);
+        submit(window, card);
+        await waitFor(
+            () =>
+                saves.length === 1 &&
+                window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+        assert.equal(saves[0]!.formRecord.data.fld_gate, false);
+        assert.equal(saves[0]!.formRecord.data.fld_driver, 'allowed');
+        assert.deepEqual(saves[0]!.formRecord.data.fld_colors, []);
+        assert.deepEqual(saves[0]!.formRecord.data.fld_unrendered_native, [
+            'rec_preserved',
+        ]);
+        assert.equal(
+            saves[0]!.formRecord.data.fld_adjacent,
+            'Preserved adjacent baseline'
+        );
+        assert.deepEqual(
+            new Set(saves[0]!.formFieldIdsWithUnsavedChanges),
+            new Set(['fld_gate', 'fld_colors'])
+        );
+        assert.equal(requests.length, 2);
+    });
+
+    it('blocks a retained section title with finite presentation status while permitting retained removal', async (test) => {
+        const form = dynamicSelectForm(true);
+        const driver = form.payload.fieldIdsToSchemas.fld_driver!;
+        driver.miniExtConfig = {
+            headerSectionTitle: 'Retained canonical section',
+            enableSectionHeader: false,
         };
         form.payload.formRecord.data.fld_colors = ['Blue'];
         const { window, saves, requests } = await mountDynamicSelectForm(

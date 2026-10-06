@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { build, transform } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
+import { createEditHideEmptyFixture } from './build-privacy-browser-proof.mjs';
 
 const predicate = {
     logicalOperator: 'and',
@@ -465,4 +466,630 @@ export async function checkBrowserVisibilityExample({
         await window.happyDOM.close();
     }
     return { checks: 2 };
+}
+
+/** Three finite boundaries against the actual installed public Form exports. */
+export async function checkEditHideEmptyRecipe({ consumerDirectory }) {
+    const root = realpathSync(consumerDirectory);
+    const require = createRequire(join(root, 'package.json'));
+    const installed = realpathSync(
+        join(root, 'node_modules/@miniextensions/sdk')
+    );
+    assert(
+        realpathSync(require.resolve('@miniextensions/sdk/forms')).startsWith(
+            `${installed}/dist/`
+        )
+    );
+    const {
+        evaluateFormFieldVisibility: evaluate,
+        composeFormFieldVisibility: compose,
+        createFormSaveInput,
+        createFlatScalarFormRecordProjection: project,
+    } = require('@miniextensions/sdk/forms');
+    const fixture = createEditHideEmptyFixture('hide-empty-edit');
+    const loaded = fixture.page();
+    const schemas = loaded.payload.fieldIdsToSchemas;
+    const data = structuredClone(loaded.payload.formRecord.data);
+    const before = structuredClone({ loaded, data });
+    const base = {
+        airtableFields: Object.values(schemas).map(
+            (schema) => schema.airtableField
+        ),
+        data,
+        formRecordType: 'edit',
+        evaluationMode: 'runtime',
+        invalidConditionMode: 'strict',
+    };
+    const positive = {
+        singleLineText: 'answer',
+        email: 'a@example.test',
+        url: 'https://example.test',
+        multilineText: 'answer',
+        phoneNumber: '555',
+        richText: '**literal**',
+        number: 0,
+        currency: 0,
+        percent: 0,
+        rating: 1,
+        checkbox: true,
+        barcode: { text: '004', type: 'code128' },
+    };
+    // HE-I1: all twelve direct physical families, their empty/populated twins,
+    // edit polarity, readonly and preview. No returned native input is changed.
+    for (const id of loaded.payload.fieldIdsInForm.slice(0, 12)) {
+        const field = schemas[id];
+        const type = field.airtableField.config.type;
+        const empty =
+            type === 'checkbox'
+                ? false
+                : type === 'rating'
+                  ? 0
+                  : type === 'barcode'
+                    ? { text: '   ', type: 'code128' }
+                    : null;
+        for (const evaluationMode of ['runtime', 'preview']) {
+            assert.deepEqual(
+                evaluate({
+                    ...base,
+                    field,
+                    evaluationMode,
+                    data: { ...data, [id]: empty },
+                }),
+                { type: 'hidden', diagnostics: [] }
+            );
+            assert.deepEqual(
+                evaluate({
+                    ...base,
+                    field,
+                    evaluationMode,
+                    data: { ...data, [id]: positive[type] },
+                }),
+                { type: 'visible', diagnostics: [] }
+            );
+            assert.deepEqual(
+                evaluate({
+                    ...base,
+                    field,
+                    evaluationMode,
+                    formRecordType: 'create',
+                    data: { ...data, [id]: empty },
+                }),
+                { type: 'visible', diagnostics: [] }
+            );
+        }
+        for (const hideFieldIfEmpty of [undefined, false]) {
+            const copy = structuredClone(field);
+            copy.miniExtConfig.hideFieldIfEmpty = hideFieldIfEmpty;
+            assert.deepEqual(
+                evaluate({
+                    ...base,
+                    field: copy,
+                    data: { ...data, [id]: null },
+                }),
+                { type: 'visible', diagnostics: [] }
+            );
+        }
+    }
+    for (const value of [undefined, null, '', '   '])
+        assert.deepEqual(
+            evaluate({
+                ...base,
+                field: schemas.fld_empty_email,
+                data: { ...data, fld_empty_email: value },
+            }),
+            { type: 'hidden', diagnostics: [] }
+        );
+    assert.equal(schemas.fld_empty_email.miniExtConfig.readOnly, true);
+    // HE-I2: populated targets still consume the full accepted conditional
+    // context. Empty hiding precedes runtime compilation and preview bypass.
+    const target = structuredClone(schemas.fld_empty_title);
+    target.miniExtConfig.conditionalFields = {
+        ...predicate,
+        conditions: predicate.conditions.map((entry) => ({
+            ...entry,
+            setting: {
+                ...entry.setting,
+                idOrName: { type: 'id', id: 'fld_empty_checkbox' },
+            },
+        })),
+    };
+    for (const driver of [false, true, false])
+        assert.equal(
+            evaluate({
+                ...base,
+                field: target,
+                data: { ...data, fld_empty_checkbox: driver },
+            }).type,
+            driver ? 'visible' : 'hidden'
+        );
+    assert.equal(
+        evaluate({ ...base, field: target, evaluationMode: 'preview' }).type,
+        'visible'
+    );
+    target.miniExtConfig.conditionalFields.conditions[0].setting.fieldType =
+        'richText';
+    target.miniExtConfig.conditionalFields.conditions[0].setting.idOrName.id =
+        'fld_empty_rich';
+    target.miniExtConfig.conditionalFields.conditions[0].setting.value =
+        'PrivateEmptyFixture rich equality';
+    const richDenied = evaluate({ ...base, field: target });
+    assert.equal(richDenied.type, 'blocked');
+    assert.equal(richDenied.code, 'unsupported');
+    assert.equal(
+        JSON.stringify(richDenied).includes('PrivateEmptyFixture'),
+        false
+    );
+    assert.deepEqual(
+        evaluate({
+            ...base,
+            field: target,
+            data: { ...data, fld_empty_title: ' ' },
+        }),
+        { type: 'hidden', diagnostics: [] }
+    );
+    assert.equal(
+        evaluate({ ...base, field: target, evaluationMode: 'preview' }).type,
+        'visible'
+    );
+    const blocked = (field, value, code = 'unsupported-hide-empty') => {
+        const actual = evaluate({
+            ...base,
+            field,
+            data: { ...data, [field.airtableField.id]: value },
+        });
+        assert.equal(actual.type, 'blocked');
+        assert.equal(actual.code, code);
+        assert.equal(
+            JSON.stringify(actual).includes('PrivateEmptyFixture'),
+            false
+        );
+    };
+    for (const type of ['date', 'multipleRecordLinks']) {
+        const field = structuredClone(schemas.fld_empty_title);
+        field.fieldType = type;
+        field.airtableField.config = {
+            type,
+            options:
+                type === 'date'
+                    ? { dateFormat: { name: 'iso', format: 'YYYY-MM-DD' } }
+                    : {
+                          linkedTableId: 'tbl_empty_linked',
+                          isReversed: false,
+                          prefersSingleRecordLink: false,
+                      },
+        };
+        blocked(field, null);
+    }
+    for (const change of [
+        (field) => {
+            field.airtableField.isComputed = true;
+        },
+        (field) => {
+            field.fieldType = 'email';
+        },
+        (field) => {
+            field.miniExtConfig.headerSectionTitle =
+                'PrivateEmptyFixture section';
+            field.miniExtConfig.enableSectionHeader = false;
+        },
+        (field) => {
+            field.miniExtConfig.applyFieldConditionsToSection = true;
+        },
+    ]) {
+        const field = structuredClone(schemas.fld_empty_title);
+        change(field);
+        blocked(field, null);
+    }
+    for (const [id, value, code] of [
+        ['fld_empty_number', '0', 'invalid-native-value'],
+        ['fld_empty_number', NaN, 'non-finite-result'],
+        ['fld_empty_number', Infinity, 'non-finite-result'],
+        ['fld_empty_number', -Infinity, 'non-finite-result'],
+        ['fld_empty_checkbox', 'false', 'invalid-native-value'],
+        ['fld_empty_title', ['PrivateEmptyFixture'], 'invalid-native-value'],
+        [
+            'fld_empty_title',
+            { error: 'PrivateEmptyFixture' },
+            'invalid-native-value',
+        ],
+        [
+            'fld_empty_barcode',
+            { text: '', error: 'PrivateEmptyFixture' },
+            'invalid-native-value',
+        ],
+        [
+            'fld_empty_barcode',
+            { text: '', specialValue: 'NaN' },
+            'invalid-native-value',
+        ],
+        ['fld_empty_barcode', { text: '', type: 3 }, 'invalid-native-value'],
+        ['fld_empty_barcode', 'PrivateEmptyFixture', 'invalid-native-value'],
+    ])
+        blocked(schemas[id], value, code);
+    for (const text of [null, undefined])
+        assert.deepEqual(
+            evaluate({
+                ...base,
+                field: schemas.fld_empty_barcode,
+                data: { ...data, fld_empty_barcode: { text } },
+            }),
+            { type: 'hidden', diagnostics: [] }
+        );
+    assert.equal(
+        evaluate({
+            ...base,
+            field: schemas.fld_empty_title,
+            data: { ...data, fld_empty_title: '#ERROR!' },
+        }).type,
+        'visible'
+    );
+    for (const section of [
+        { headerSectionTitle: 'Retained section', enableSectionHeader: false },
+        { applyFieldConditionsToSection: true },
+    ]) {
+        const copy = structuredClone(schemas);
+        copy.fld_empty_tail.miniExtConfig = section;
+        assert.deepEqual(
+            compose({
+                ...base,
+                fieldIds: loaded.payload.fieldIdsInForm,
+                fieldIdsToSchemas: copy,
+            }).fld_empty_title,
+            { type: 'blocked', code: 'unsupported-hide-empty', diagnostics: [] }
+        );
+    }
+    // HE-I3: conditional projection and Save remain distinct from presentation.
+    const draft = {
+        data: {
+            ...data,
+            fld_empty_title: ' ',
+            fld_empty_tail: 'Accepted sibling',
+        },
+        dirtyFieldIds: ['fld_empty_title', 'fld_empty_tail'],
+    };
+    assert.equal(
+        evaluate({ ...base, field: schemas.fld_empty_title, data: draft.data })
+            .type,
+        'hidden'
+    );
+    const projected = project({
+        fieldIds: ['fld_empty_title', 'fld_empty_tail'],
+        fieldIdsToSchemas: schemas,
+        airtableFields: base.airtableFields,
+        data: draft.data,
+        recordId: loaded.payload.formRecord.recordId,
+        invalidConditionMode: 'strict',
+    });
+    assert.equal(projected.type, 'available');
+    assert.deepEqual(projected.hiddenFieldIds, []);
+    assert.deepEqual(projected.record.fields, draft.data);
+    const saved = createFormSaveInput({
+        loaded,
+        draft,
+        options: {
+            captchaVal: null,
+            isComputeMode: false,
+            searchQuery: {},
+            context: { type: 'direct-url' },
+            conditionalLinkedRecordFieldIdsToFilteringValues: {},
+        },
+    });
+    assert.deepEqual(saved.formRecord, {
+        ...loaded.payload.formRecord,
+        data: draft.data,
+    });
+    assert.deepEqual(saved.formFieldIdsWithUnsavedChanges, [
+        'fld_empty_title',
+        'fld_empty_number',
+        'fld_empty_tail',
+    ]);
+    assert.equal(
+        saved.extensionAccessToken,
+        loaded.payload.extensionAccessToken
+    );
+    assert.deepEqual({ loaded, data }, before);
+    return { checks: 3 };
+}
+
+/** Three actual packed starter journeys; synthetic returned errors only. */
+export async function checkBrowserEditHideEmptyExample({
+    consumerDirectory,
+    happyDomModulePath,
+}) {
+    const root = realpathSync(consumerDirectory);
+    const require = createRequire(import.meta.url);
+    const { Window } = require(happyDomModulePath);
+    const outfile = join(root, '.generated/hide-empty-main-checks.mjs');
+    const bundled = await build({
+        absWorkingDir: root,
+        entryPoints: [join(root, 'src/main.ts')],
+        bundle: true,
+        platform: 'browser',
+        format: 'esm',
+        outfile,
+        logLevel: 'silent',
+        metafile: true,
+    });
+    await assertBrowserInputs(bundled.metafile, root);
+    assert(
+        Object.keys(bundled.metafile.inputs).some((path) =>
+            path.endsWith('dist/esm/forms/visibility.js')
+        )
+    );
+    for (const [index, scenario] of [
+        'hide-empty-edit',
+        'hide-empty-create',
+        'hide-empty-unavailable',
+    ].entries()) {
+        const fixture = createEditHideEmptyFixture(scenario);
+        const original = structuredClone(fixture.state.expected.initial);
+        const window = new Window({
+            url: 'https://empty-starter.example.test',
+            settings: {
+                disableCSSFileLoading: true,
+                disableJavaScriptFileLoading: true,
+            },
+        });
+        window.document.write(
+            readFileSync(join(root, 'index.html'), 'utf8').replace(
+                /<script\b[^>]*>[\s\S]*?<\/script>/g,
+                ''
+            )
+        );
+        const globals = {
+            document: window.document,
+            location: window.location,
+            HTMLElement: window.HTMLElement,
+            HTMLInputElement: window.HTMLInputElement,
+            HTMLSelectElement: window.HTMLSelectElement,
+            HTMLButtonElement: window.HTMLButtonElement,
+            fetch: fixture.fetch,
+        };
+        const previous = Object.keys(globals).map((key) => [
+            key,
+            Object.getOwnPropertyDescriptor(globalThis, key),
+        ]);
+        Object.assign(globalThis, globals);
+        const doc = window.document;
+        const control = (id) => {
+            const node = doc.querySelector(`[data-field-id="fld_empty_${id}"]`);
+            assert(node);
+            return node;
+        };
+        const shown = (id) => control(id).closest('[hidden]') === null;
+        const edit = (id, value) => {
+            const node = control(id);
+            node.value = value;
+            node.dispatchEvent(new window.Event('input', { bubbles: true }));
+        };
+        const click = (text) => {
+            const matches = [...doc.querySelectorAll('#screen button')].filter(
+                (node) => node.textContent.trim() === text
+            );
+            assert.equal(matches.length, 1);
+            matches[0].click();
+        };
+        const saves = () =>
+            fixture.state.calls.filter((call) => call.route === 'saveForm');
+        const reads = () =>
+            fixture.state.calls.filter(
+                (call) => call.route === 'fetchExtensionForEndUser'
+            );
+        const waitFor = async (predicate) => {
+            for (let turn = 0; turn < 100; turn++) {
+                if (predicate()) return;
+                await new Promise((resolve) => setImmediate(resolve));
+            }
+            assert.fail('Packed empty-hiding starter did not settle.');
+        };
+        const idle = () =>
+            doc.getElementById('screen').getAttribute('aria-busy') === 'false';
+        const assertSave = (data, dirtyIds) => {
+            assert.equal(saves().length, 1);
+            const call = saves()[0];
+            assert.equal(call.method, 'POST');
+            assert.equal(
+                call.input.extensionAccessToken,
+                'FAKE_SYNTHETIC_HIDE_EMPTY_TOKEN'
+            );
+            assert.deepEqual(call.input.formRecord, {
+                ...fixture.page().payload.formRecord,
+                data,
+            });
+            assert.deepEqual(
+                call.input.formFieldIdsWithUnsavedChanges,
+                dirtyIds
+            );
+            assert.deepEqual(call.input.context, { type: 'direct-url' });
+            assert.equal(call.input.isComputeMode, false);
+            assert.deepEqual(
+                call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
+                {}
+            );
+        };
+        const roundTrip = () => {
+            const visitor = doc.getElementById('visitor');
+            for (const identity of ['B', 'A']) {
+                visitor.value = identity;
+                visitor.dispatchEvent(
+                    new window.Event('change', { bubbles: true })
+                );
+            }
+        };
+        try {
+            await import(`${pathToFileURL(outfile).href}?hide-empty=${index}`);
+            doc.getElementById('api-origin').value =
+                'https://synthetic-sdk.invalid';
+            doc.getElementById('share-id').value = 'privacy_share_synthetic';
+            doc.getElementById('connection-form').dispatchEvent(
+                new window.Event('submit', { bubbles: true, cancelable: true })
+            );
+            await waitFor(
+                () =>
+                    doc.querySelector('[data-field-id="fld_empty_tail"]') &&
+                    idle()
+            );
+            assert.equal(reads().length, 1);
+            assert.equal(control('email').disabled, true);
+            assert.equal(control('locked').disabled, true);
+            if (scenario === 'hide-empty-edit') {
+                for (const id of [
+                    'email',
+                    'url',
+                    'multiline',
+                    'phone',
+                    'rich',
+                    'rating',
+                    'checkbox',
+                    'barcode',
+                ])
+                    assert.equal(shown(id), false);
+                for (const id of [
+                    'title',
+                    'number',
+                    'currency',
+                    'percent',
+                    'locked',
+                    'tail',
+                ])
+                    assert.equal(shown(id), true);
+                edit('title', ' ');
+                assert.equal(shown('title'), false);
+                assert.equal(control('title').value, ' ');
+                edit('tail', 'Accepted empty-hiding sibling');
+                click('Save');
+                await waitFor(
+                    () =>
+                        saves().length === 1 &&
+                        idle() &&
+                        doc
+                            .getElementById('status')
+                            .textContent.includes('validation errors')
+                );
+                assertSave(
+                    {
+                        ...original,
+                        fld_empty_title: ' ',
+                        fld_empty_tail: 'Accepted empty-hiding sibling',
+                    },
+                    ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail']
+                );
+                assert(
+                    doc
+                        .querySelector('.error-list')
+                        .textContent.includes(
+                            `Hidden required answer: ${fixture.state.expected.validationMessage}`
+                        )
+                );
+                roundTrip();
+                assert.equal(shown('title'), false);
+                assert.equal(control('title').value, ' ');
+                assert.equal(
+                    control('tail').value,
+                    'Accepted empty-hiding sibling'
+                );
+                assert.equal(saves().length, 1);
+                assert.equal(reads().length, 1);
+                click('Discard draft');
+                assert.equal(shown('title'), true);
+                assert.equal(control('title').value, original.fld_empty_title);
+                assert.equal(control('tail').value, original.fld_empty_tail);
+                assert.equal(saves().length, 1);
+            } else if (scenario === 'hide-empty-create') {
+                for (const id of fixture.state.expected.controlFieldIds)
+                    assert.equal(
+                        control(id.replace('fld_empty_', '')).closest(
+                            '[hidden]'
+                        ),
+                        null
+                    );
+                edit('tail', 'Accepted create sibling');
+                click('Save');
+                await waitFor(
+                    () =>
+                        saves().length === 1 &&
+                        idle() &&
+                        doc
+                            .getElementById('status')
+                            .textContent.includes('validation errors')
+                );
+                assertSave(
+                    { ...original, fld_empty_tail: 'Accepted create sibling' },
+                    ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail']
+                );
+                assert.equal(saves()[0].input.formRecord.type, 'create');
+            } else {
+                assert.equal(shown('title'), false);
+                assert.equal(shown('tail'), true);
+                const alert = doc.querySelector('form.card > p[role="alert"]');
+                assert(alert);
+                assert.equal(alert.hidden, false);
+                edit('tail', 'Accepted blocked sibling');
+                click('Save');
+                await waitFor(
+                    () =>
+                        doc.getElementById('status').textContent ===
+                        'Review the unavailable fields before saving this Form.'
+                );
+                assert.equal(saves().length, 0);
+                roundTrip();
+                assert.equal(control('tail').value, 'Accepted blocked sibling');
+                assert.equal(control('title').value, '');
+                assert.equal(saves().length, 0);
+                assert.equal(reads().length, 1);
+                doc.getElementById('reload').click();
+                await waitFor(
+                    () => reads().length === 2 && idle() && shown('title')
+                );
+                assert.equal(control('tail').value, original.fld_empty_tail);
+                assert.equal(
+                    doc.querySelector('form.card > p[role="alert"]').hidden,
+                    true
+                );
+                assert.equal(saves().length, 0);
+                edit('tail', 'Accepted recovered sibling');
+                click('Save');
+                await waitFor(
+                    () =>
+                        saves().length === 1 &&
+                        idle() &&
+                        doc
+                            .getElementById('status')
+                            .textContent.includes('validation errors')
+                );
+                assertSave(
+                    {
+                        ...original,
+                        fld_empty_tail: 'Accepted recovered sibling',
+                    },
+                    ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail']
+                );
+            }
+            assert.deepEqual(fixture.state.unexpected, []);
+            assert.deepEqual(fixture.state.expected.initial, original);
+            assert.deepEqual(
+                fixture.state.calls.map((call) => call.route),
+                scenario === 'hide-empty-unavailable'
+                    ? [
+                          'fetchExtensionForEndUser',
+                          'fetchExtensionForEndUser',
+                          'saveForm',
+                      ]
+                    : ['fetchExtensionForEndUser', 'saveForm']
+            );
+            assert(
+                fixture.state.calls.every(
+                    (call) => call.credentialsMode === 'omit'
+                )
+            );
+        } finally {
+            for (const [key, descriptor] of previous) {
+                if (descriptor === undefined)
+                    Reflect.deleteProperty(globalThis, key);
+                else Object.defineProperty(globalThis, key, descriptor);
+            }
+            await window.happyDOM.close();
+        }
+    }
+    return { checks: 3 };
 }

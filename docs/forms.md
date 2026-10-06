@@ -217,8 +217,9 @@ helper.
 
 ## One-page conditional field visibility
 
-`evaluateFormFieldVisibility` evaluates one returned field's conditional
-predicate. `composeFormFieldVisibility` adds the ordered frontend section
+`evaluateFormFieldVisibility` evaluates one returned field's conditions and
+supported native empty hiding. `composeFormFieldVisibility` adds the ordered
+frontend section
 rules and returns stable field-ID keyed `visible`, `hidden` or `blocked`
 results. Both require current physical metadata, the complete accepted native
 draft, explicit create/edit and runtime/preview modes, and an explicit compiler
@@ -295,13 +296,29 @@ text. Supported missing references retain the compiler's false/warning
 semantics. Native error objects, nonfinite results and evaluation exceptions
 remain explicit errors; literal `#ERROR!` strings remain ordinary data.
 
-This conditional-only helper blocks active `hideFieldIfEmpty: true` in edit
-mode, because native empty hiding requires a separate canonical filtered-value
-adapter. The ordinary flag is inactive in create mode. Lookup fields hide
-empty values by default in both modes and therefore block unless that flag is
-explicitly false. Preview skips conditions but still blocks active native
-empty hiding. Multi-page navigation and native filtered-value adapters remain
-application-owned.
+Explicit `hideFieldIfEmpty: true` also hides empty edit-mode fields in the flat
+direct scalar subset: `singleLineText`, `email`, `url`, `multilineText`,
+`phoneNumber`, `richText`, `number`, `percent`, `currency`, `rating`, `checkbox`
+and `barcode`. The returned schema and physical type must match and the field
+must be noncomputed; readonly fields participate. Canonical link/lookup
+filtering preserves these direct scalar values, so empty hiding reads the
+accepted native value without deriving it from frontend visibility or pruning
+the draft. Missing/null values and whitespace strings are empty, as are
+checkbox `false`, rating `0` and a native barcode object with nullish or blank
+`text`. Ordinary numeric, currency and percent `0` remain populated.
+Nonblank malformed scalar values, generic arrays/objects and nonfinite
+numbers block rather than being coerced or treated as empty.
+
+Empty hiding precedes the preview condition bypass. A populated supported
+field still evaluates its condition in runtime mode. The ordinary flag is
+inactive in create mode and when absent or false. The bounded empty-hiding
+adapter does not cover sections, linked, lookup, computed or other richer
+targets; the frontend compositor blocks active edit empty hiding in any
+section context, including a retained nonblank disabled section title.
+Lookup fields hide empty values by default in both modes and therefore block
+unless that flag is explicitly false. Conditional-only frontend sections
+retain the behavior described above. Multi-page navigation and richer native
+filtered-value adapters remain application-owned.
 
 The shipped browser starter applies these results to field presentation after
 accepted edits. It retains controls and native drafts, validates only visible

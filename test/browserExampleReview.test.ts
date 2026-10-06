@@ -767,6 +767,114 @@ describe('actual browser starter prepared review', () => {
         assert.equal(fixture.saves.length, 1);
     });
 
+    it('reviews edit Forms with hideFieldIfEmpty whitespace across every bounded scalar family without changing native Save data', async (test) => {
+        const form = reviewForm();
+        form.payload.publicFields.state = {
+            ...form.payload.publicFields.state,
+            multiPageFormMode: 'one-page',
+        };
+        const configs: ReviewScalarConfig[] = [
+            { type: AirtableFieldType.SINGLE_LINE_TEXT, options: null },
+            { type: AirtableFieldType.MULTILINE_TEXT, options: null },
+            { type: AirtableFieldType.EMAIL, options: null },
+            { type: AirtableFieldType.URL, options: null },
+            { type: AirtableFieldType.PHONE_NUMBER, options: null },
+            { type: AirtableFieldType.NUMBER, options: { precision: 0 } },
+            {
+                type: AirtableFieldType.CURRENCY,
+                options: { precision: 2, symbol: '$' },
+            },
+            { type: AirtableFieldType.PERCENT, options: { precision: 0 } },
+            {
+                type: AirtableFieldType.RATING,
+                options: { color: 'yellowBright', icon: 'star', max: 5 },
+            },
+            {
+                type: AirtableFieldType.CHECKBOX,
+                options: { color: 'greenBright', icon: 'check' },
+            },
+            { type: AirtableFieldType.BARCODE, options: null },
+        ];
+        const blankIds: string[] = [];
+        const readonlyIds: string[] = [];
+        for (const [index, config] of configs.entries()) {
+            // Barcode remains a read-only display. The other ten families
+            // cover both editable and explicitly read-only hidden controls.
+            const readonlyModes =
+                config.type === AirtableFieldType.BARCODE
+                    ? [true]
+                    : [false, true];
+            for (const readOnly of readonlyModes) {
+                const id = `fld_blank_${index}_${readOnly ? 'locked' : 'editable'}`;
+                const schema = scalarReviewSchema(id, config.type, config);
+                schema.miniExtConfig = {
+                    readOnly,
+                    hideFieldIfEmpty: true,
+                };
+                form.payload.fieldIdsToSchemas[id] = schema;
+                form.payload.fieldIdsInForm.push(id);
+                form.payload.formRecord.data[id] = ' \t\n ';
+                blankIds.push(id);
+                if (readOnly) readonlyIds.push(id);
+            }
+        }
+        const native = structuredClone(form.payload.formRecord.data);
+        form.payload.formRecord = {
+            type: 'edit',
+            recordId: 'record_review_whitespace',
+            tableId: 'table_review_whitespace',
+            data: native,
+        };
+        form.payload.formFieldIdsWithUnsavedChanges = [
+            'fld_hidden_native',
+            ...blankIds,
+        ];
+        const fixture = await mount(test, form);
+        for (const id of blankIds) {
+            const control = fixture.window.document.querySelector(
+                `[data-field-id="${id}"]`
+            );
+            assert.ok(control);
+            assert.notEqual(
+                control.closest('[hidden]'),
+                null,
+                `${id} must be hidden by the published edit-mode setting.`
+            );
+            if (readonlyIds.includes(id))
+                assert.equal(control.hasAttribute('disabled'), true);
+        }
+        fixture.edit('fld_title', 'Whitespace retained');
+        const dialog = await fixture.openReview();
+        assert.equal(fixture.saves.length, 0);
+        assert.equal(dialog.querySelectorAll('dt').length, 2);
+        assert.deepEqual(
+            Array.from(dialog.querySelectorAll('dd'), (row) => row.textContent),
+            ['Whitespace retained', 'Locked value']
+        );
+        fixture.button('Confirm', dialog).click();
+        await waitFor(
+            () =>
+                fixture.saves.length === 1 &&
+                fixture.window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+        assert.deepEqual(fixture.saves[0]?.formRecord, {
+            type: 'edit',
+            recordId: 'record_review_whitespace',
+            tableId: 'table_review_whitespace',
+            data: { ...native, fld_title: 'Whitespace retained' },
+        });
+        assert.deepEqual(fixture.saves[0]?.formFieldIdsWithUnsavedChanges, [
+            'fld_hidden_native',
+            ...blankIds,
+            'fld_title',
+        ]);
+        assert.equal(fixture.saves[0]?.isComputeMode, false);
+        assert.equal(fixture.saves[0]?.context.type, 'direct-url');
+        assert.equal(fixture.saves.length, 1);
+    });
+
     for (const config of [
         { type: AirtableFieldType.NUMBER, options: { precision: 0 } },
         { type: AirtableFieldType.PERCENT, options: { precision: 0 } },

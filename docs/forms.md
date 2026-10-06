@@ -19,6 +19,101 @@ published extension loading, passwords/login, query/context and visitor rules.
 These helpers require a real `FormLoadedResult`; first handle any other loaded
 screen or returned redirect. Use Node.js 22+ or your ES2022 browser bundler.
 
+## Compile scalar runtime conditions
+
+`compileRuntimeConditions` translates the existing `RuntimeConditionsDefinition`
+AST into a formula for the bounded scalar subset below. It accepts deeply
+readonly definitions and metadata and never changes them. Pass the current
+returned Airtable fields, an explicit `invalidConditionMode` and, optionally,
+`fieldReferenceMode: 'name'`. The default reference mode preserves the saved
+tagged field ID/name; name mode uses the first matching current field's name.
+Metadata lookup takes the first exact ID/name match. A renamed saved-name
+reference is missing even if an old value remains in a record.
+
+```ts
+import type {
+    RuntimeAirtableField,
+    RuntimeConditionsDefinition,
+} from '@miniextensions/sdk';
+import { compileRuntimeConditions } from '@miniextensions/sdk/forms';
+
+export function compileScalarConditions(
+    conditions: RuntimeConditionsDefinition | null,
+    airtableFields: readonly RuntimeAirtableField[]
+) {
+    return compileRuntimeConditions({
+        conditions,
+        airtableFields,
+        invalidConditionMode: 'strict',
+        fieldReferenceMode: 'saved',
+    });
+}
+```
+
+The result is `{ type: 'compiled', formula, diagnostics }`, or
+`{ type: 'unsupported' | 'invalid', diagnostics }` with no formula. Callers must
+handle both blocked outcomes; never substitute a truthy predicate. Diagnostics
+contain finite codes, severity, zero-based nested condition-index paths and an
+optional editor condition ID. They do not copy operands, record values,
+formulas or exception text. If unsupported and invalid rules coexist, the
+result is `unsupported` and retains the collected diagnostics.
+
+The supported boundary is **87 operator/type pairs**, **14 operators** and
+**12 direct physical field types**. Let T7 mean `singleLineText`, `email`,
+`url`, `multilineText`, `phoneNumber`, `barcode`, `richText`; T6 excludes
+`richText`; N4 means `number`, `percent`, `currency`, `rating`.
+
+| Operators                                                                                       | Direct types      | Pairs |
+| ----------------------------------------------------------------------------------------------- | ----------------- | ----: |
+| `matchesRegex`, `contains`, `doesNotContain`, `isOfLength`                                      | T7                |    28 |
+| `is`                                                                                            | T6 and `checkbox` |     7 |
+| `isNot`                                                                                         | T6                |     6 |
+| `isEmpty`, `isNotEmpty`                                                                         | T7 and N4         |    22 |
+| `equals`, `notEquals`, `greaterThan`, `lessThan`, `greaterThanOrEqualsTo`, `lessThanOrEqualsTo` | N4                |    24 |
+
+Nested groups support the existing `and`/`or` AST. There is no `not` group;
+negative operators generate the canonical `NOT(...)` formula where needed.
+Every saved operator/type pair and matching current physical operator/type
+pair must be in this table. Dates, selects, links, attachments, collaborators,
+computed formula/lookup/rollup fields and other richer variants block the whole
+definition, including in compatibility mode. The helper does not unwrap a
+computed result type or partially compile richer rules.
+
+Canonical scalar semantics are retained when both pairs are supported; exact
+saved/current type equality is not required. Numeric comparisons divide the
+operand by 100 when the current field is `percent`. Emptiness uses the saved
+`rating` setting's zero comparison; other supported saved types use
+`LEN('' & {field})`. Checkbox equality uses 0/1; case-insensitive substring
+rules use `FIND`/`LOWER`. This is precedence for compilation, not evidence that
+metadata is fresh or that a changed field grants an action.
+
+Null or a valid top-level empty definition compiles to `1`. A supported missing
+driver compiles to a `FALSE()` leaf with a warning; an OR sibling can still
+match, even in strict mode. Strict incomplete operands and empty nested groups
+return `invalid`, rather than the native converter's whole-definition
+`FALSE()`. Explicit compatibility mode can omit these with warnings when a
+complete sibling survives. A nonempty group whose entire contents are omitted
+is always `invalid`; it never becomes `AND()`, `OR()` or `1`.
+
+The helper preserves canonical quote/closing-brace escaping, then checks
+literal and reference round trips with the existing lexer/parser without
+evaluation. Ambiguous backslash sequences that would change saved bytes,
+invalid regex patterns, nonfinite numeric operands, malformed/cyclic input and
+unparseable formulas return `invalid`. These static checks occur before a
+missing driver can hide an invalid operand: that conservative boundary differs
+from native converter short-circuiting. Regex validation checks syntax only,
+not execution cost. Compatibility omits incomplete input only; it does not
+omit malformed operands, escape hazards or unsupported rules.
+
+`compiled` means a supported, parseable formula, not a matched or error-free
+condition. Evaluation still requires the explicit native field/record context
+described in the [formula guide](formulas.md). Compilation performs no formula
+execution, record read or request and grants no backend authentication,
+validation, save or visibility authority. Your application still owns field,
+section/page/review presentation, current owner/revision checks and any
+evaluation/error policy. No starter conditional workflow is enabled by this
+helper.
+
 ## Preserve the full native draft
 
 Create one `FormDraftStore<AirtableValue>` per visitor. `openLoadedFormDraft`

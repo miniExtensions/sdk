@@ -1,4 +1,5 @@
 export { default, default as FormulaRunner } from './runner.js';
+export type { FormulaRunOutcome } from './runner.js';
 export {
     default as Interpreter,
     FormulaFunctions,

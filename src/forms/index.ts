@@ -27,3 +27,9 @@ export {
     type FormControllerStatus,
     type FormOwnerScope,
 } from './controller.js';
+export {
+    compileRuntimeConditions,
+    type CompileRuntimeConditionsInput,
+    type CompileRuntimeConditionsResult,
+    type ConditionCompileDiagnostic,
+} from './conditions.js';

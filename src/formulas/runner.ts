@@ -4,6 +4,11 @@ import Lexer from './lexer/lexer.js';
 import Parser from './parser/parser.js';
 import type { Expr as _Expr } from './parser/ast.js';
 
+/** Distinguishes evaluated data from a formula fault without sentinel strings. */
+export type FormulaRunOutcome =
+    | { type: 'value'; value: string | number }
+    | { type: 'error'; code: 'runtime-error' | 'non-finite-result' };
+
 export default class FormulaRunner {
     private interpreter: Interpreter;
     private _expr: _Expr;
@@ -20,6 +25,11 @@ export default class FormulaRunner {
 
     run() {
         return this.interpreter.execute();
+    }
+
+    /** Evaluate once, retaining formula-fault provenance for the caller. */
+    runWithOutcome(): FormulaRunOutcome {
+        return this.interpreter.executeWithOutcome();
     }
 
     static isErrorValue(value: unknown) {

@@ -2158,8 +2158,8 @@ try {
             'Attribution must be a sibling of the actual listbox.'
         );
         assert.equal(await logo.getAttribute('alt'), 'Google Maps');
-        assert.equal(await logo.getAttribute('translate'), 'no');
-        assert.equal(await attribution.getAttribute('translate'), 'no');
+        assert.equal(await logo.getDomAttribute('translate'), 'no');
+        assert.equal(await attribution.getDomAttribute('translate'), 'no');
         await driver.wait(
             async () => (await logo.getProperty('complete')) === true,
             5000,

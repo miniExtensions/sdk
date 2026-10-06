@@ -2,6 +2,12 @@ export { createSelectionModel } from './model.js';
 export { createSelectControl, mountSelectionControl } from './controls.js';
 export { getSelectFieldPolicy } from './selectPolicy.js';
 export type { SelectFieldPolicy } from './selectPolicy.js';
+export {
+    resolveSelectFieldAvailability,
+    type SelectFieldAvailability,
+    type SelectFieldAvailabilityInput,
+    type SelectFieldAvailabilityDiagnostic,
+} from './selectAvailability.js';
 export type {
     SelectControlOptions,
     SelectControl,

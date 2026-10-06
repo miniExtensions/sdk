@@ -73,12 +73,12 @@ only a display label or `enableConditionalOptions` is false. Use the eligible
 configured child Form when that workflow is required; its select control can
 display those labels. Static limits alone do not add inline write authority.
 
-**Conditional option visibility remains application-owned.** These controls
-do not evaluate `conditionsForOption` or implement the native conditional
-visibility engine. Static option limits and labels do not establish that a
-conditional choice is currently available. Use an application renderer with
-an appropriate evaluator when that behavior is required; the canonical server
-retains validation and authorization.
+`createSelectControl` and `getSelectFieldPolicy` alone apply static policy.
+For configured scalar choice conditions, compose the control with
+[`resolveSelectFieldAvailability`](#configured-scalar-choice-availability).
+Other conditional presentation remains application-owned; static limits and
+labels alone do not establish that a conditional choice is currently available.
+The canonical server retains validation and authorization.
 
 Each convenience control stays bound to that field schema and single/multi
 mode. Recreate it if the field identity or schema changes. Use
@@ -186,6 +186,196 @@ name as a new choice.
 Native multi-select uses the operating system's keyboard conventions, including
 Command/Control and Shift. Use the searchable mounted control when you want
 visible checkbox/radio choices and individual remove buttons.
+
+## Configured scalar choice availability
+
+`resolveSelectFieldAvailability` evaluates configured `conditionsForOption`
+using the [scalar condition compiler](forms.md#compile-scalar-runtime-conditions)
+and the formula runner's typed outcome. Pass a current `RuntimeFieldSchema`,
+returned `RuntimeAirtableField` metadata, a caller-projected canonical
+`AirtableRecord` or `null`, and explicit `mode` and `invalidConditionMode`.
+The result contains `status`, eligible `options`, the static `policy`, and
+finite diagnostic codes. It performs no read, save, record projection or
+selection change.
+
+Rules match canonical choice IDs, and the first matching rule wins, including
+a rule with absent or null conditions. Unmatched choices are unrestricted by
+dynamic conditions once the required projected record is present. For editable
+schema policy, eligible options intersect the static choice-ID allowlist; values remain
+canonical choice names and labels remain presentation. Disabled conditional
+configuration, read-only fields and `mode: 'configuration-preview'` bypass
+evaluation. Every enabled runtime editable dynamic field requires a projected
+record; a missing record blocks the whole field, even when every matching rule
+has absent or null conditions or there is no matching rule.
+Readonly or computed schema policy preserves all current choices for display,
+including those outside a static allowlist. Configuration-preview mode on an
+otherwise editable schema retains that schema's static limits.
+
+The supported operators, physical field types and nested AND/OR groups are
+those of the scalar compiler. Both modes block unsupported conditions; strict
+mode rejects incomplete rules, while compatibility mode can omit incomplete
+rules when a complete sibling survives. A missing metadata driver follows the
+compiler's `FALSE()` leaf semantics, so an OR sibling can still match. The
+availability helper does not promote compiler warnings to failures. A failed
+compile or evaluation blocks the whole field with no eligible options.
+Emitted field references with ambiguous current ID/name metadata, including a
+field name that shadows another native field ID, are unsupported. The helper
+does not change the shared formula engine's legacy lookup behavior.
+Diagnostics contain only `unavailable-record`, `unsupported-condition`,
+`invalid-condition` or `evaluation-error`; they expose no raw errors, formulas,
+record values or condition IDs.
+
+Record projection belongs to the caller. Supply the same accepted native
+record and metadata used by your presentation, including any required hidden
+field or linked-value projection. The helper neither reconstructs hidden
+fields nor hydrates linked records. The browser starter applies this helper
+only to flat rules using visible direct physical driver fields that need no
+hidden-field or linked-value pruning. It recomputes after accepted draft
+changes while the visitor, Form and field context remain current. Broader
+projection and presentation workflows remain application-owned.
+The starter's conservative gate requires absent or null `conditionalFields`
+on all published schemas, no configured sections, multi-page mode or active
+linked filters, and current visible noncomputed scalar drivers. Even an empty
+saved conditional-field definition uses the caller-projected recipe instead.
+
+This complete browser recipe mounts one select into an empty host. The caller
+owns the accepted field/metadata snapshot, projected record, native baseline
+and draft. After accepting a driver edit, call `updateRecord` with the newly
+projected record. Recreate the control for a changed field, schema, visitor or
+Form; `isCurrent` must recognize those transitions. The callback receives only
+deliberate user edits. No request or save occurs.
+
+```ts
+import type {
+    AirtableRecord,
+    AirtableValue,
+    RuntimeAirtableField,
+    RuntimeFieldSchema,
+} from '@miniextensions/sdk';
+import {
+    createSelectControl,
+    resolveSelectFieldAvailability,
+    type SelectControl,
+} from '@miniextensions/sdk/ui';
+
+export function mountConfiguredScalarChoice(
+    host: HTMLElement,
+    input: {
+        field: RuntimeFieldSchema;
+        airtableFields: readonly RuntimeAirtableField[];
+        recordForConditionEvaluation: AirtableRecord | null;
+        value: AirtableValue;
+        mode: 'runtime' | 'configuration-preview';
+        invalidConditionMode: 'compatibility' | 'strict';
+        readOnly?: boolean;
+        isCurrent: () => boolean;
+        onChange: (value: AirtableValue) => void;
+    }
+) {
+    const field = structuredClone(input.field);
+    const airtableFields = structuredClone(input.airtableFields);
+    const status = host.ownerDocument.createElement('p');
+    status.setAttribute('role', 'status');
+    status.textContent = 'Choice availability unavailable.';
+    let disposed = false;
+    let ready = false;
+    let control: SelectControl | null = null;
+    const isCurrent = () => {
+        try {
+            return !disposed && input.isCurrent();
+        } catch {
+            return false;
+        }
+    };
+    try {
+        control = createSelectControl({
+            field,
+            value: structuredClone(input.value),
+            disabled: true,
+            readOnly: input.readOnly === true,
+            document: host.ownerDocument,
+            onChange(value) {
+                if (!isCurrent()) {
+                    ready = false;
+                    control?.model.setDisabled(true);
+                    return;
+                }
+                input.onChange(value);
+            },
+        });
+    } catch {
+        // Do not render raw exceptions or condition details.
+    }
+    host.replaceChildren(...(control ? [control.element, status] : [status]));
+
+    const updateRecord = (
+        record: AirtableRecord | null
+    ): 'ready' | 'blocked' => {
+        ready = false;
+        if (disposed || control === null) return 'blocked';
+        control.model.setDisabled(true);
+        try {
+            if (!isCurrent()) {
+                control.model.setOptions([]);
+                status.textContent = 'This selector is no longer current.';
+                return 'blocked';
+            }
+            const result = resolveSelectFieldAvailability({
+                field,
+                airtableFields,
+                recordForConditionEvaluation: structuredClone(record),
+                mode:
+                    input.readOnly === true
+                        ? 'configuration-preview'
+                        : input.mode,
+                invalidConditionMode: input.invalidConditionMode,
+            });
+            ready = result.status === 'ready' && isCurrent();
+            // Replace eligible options only. Keep selected native values intact.
+            control.model.setOptions(ready ? result.options : []);
+            control.model.setReadOnly(
+                input.readOnly === true || result.policy.readOnly
+            );
+            // A current blocked field still permits removal of retained values.
+            control.model.setDisabled(!isCurrent());
+            status.textContent = ready
+                ? 'Choices available.'
+                : 'Choice availability unavailable.';
+            return ready ? 'ready' : 'blocked';
+        } catch {
+            control.model.setOptions([]);
+            control.model.setDisabled(!isCurrent());
+            status.textContent = 'Choice availability unavailable.';
+            return 'blocked';
+        }
+    };
+    updateRecord(input.recordForConditionEvaluation);
+    return {
+        updateRecord,
+        dispose() {
+            if (disposed) return;
+            disposed = true;
+            ready = false;
+            control?.destroy();
+            control?.element.remove();
+            status.remove();
+        },
+    };
+}
+```
+
+`model.setOptions` changes eligible choices without clearing the current
+selection or emitting a user-change callback. A selected name that becomes
+denied remains visible and, while the owner is current and editable, removable;
+once removed it cannot be added again unless it becomes eligible. Never append
+retained denied values to the returned eligible options. A current blocked
+field offers no new choices and still permits removal; it keeps its draft
+for recovery. A stale owner disables the control. Read-only metadata remains effective. The caller's
+`readOnly` flag uses configuration-preview availability and keeps the control
+read-only, without emitting edits. Dispose before replacing the owner or host.
+Availability is a presentation result; preserve hidden prefills and dirty IDs,
+and let the canonical server validate any later deliberate save. Portal inline
+eligibility continues to follow its separate conditional-configuration restrictions above.
 
 ## Authorized linked-record selection
 

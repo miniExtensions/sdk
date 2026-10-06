@@ -26,7 +26,10 @@ import {
     normalizeFormSaveResult,
     openLoadedFormDraft,
 } from '@miniextensions/sdk/forms';
-import { getSelectFieldPolicy } from '@miniextensions/sdk/ui';
+import {
+    getSelectFieldPolicy,
+    resolveSelectFieldAvailability,
+} from '@miniextensions/sdk/ui';
 import {
     button,
     element,
@@ -36,6 +39,7 @@ import {
     settings,
 } from './dom.js';
 import { displayValue, formFieldControl, type FieldControl } from './fields.js';
+import { flatChoiceConditionRecord } from './choiceAvailability.js';
 import { createPortalView, type PortalView } from './portal.js';
 import {
     createConditionalLinkedFilters,
@@ -634,6 +638,7 @@ const renderForm = (page: FormLoadedResult): void => {
         );
     let updateComments = (): void => {};
     const controls = new Map<string, FieldControl>();
+    let updateSelectAvailability = (): void => {};
     const linkedFilterViews = new Map<string, ConditionalLinkedFilters>();
     const formClient = visitor.client;
     const formRevision = visitor.revision;
@@ -759,6 +764,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (!mayUseForm()) return;
                 try {
                     visitor.drafts.write(draft, fieldId, control.read());
+                    updateSelectAvailability();
                 } catch (error) {
                     status(
                         error instanceof Error
@@ -791,7 +797,8 @@ const renderForm = (page: FormLoadedResult): void => {
                 button('Create choice', () => {
                     if (
                         !mayUseForm() ||
-                        !getSelectFieldPolicy(schema).allowAddingNewOptions
+                        !getSelectFieldPolicy(schema).allowAddingNewOptions ||
+                        control.selectAvailabilityReady?.() === false
                     )
                         return;
                     const policy = getSelectFieldPolicy(schema);
@@ -819,7 +826,8 @@ const renderForm = (page: FormLoadedResult): void => {
                             if (
                                 !mayUseForm() ||
                                 !getSelectFieldPolicy(schema)
-                                    .allowAddingNewOptions
+                                    .allowAddingNewOptions ||
+                                control.selectAvailabilityReady?.() === false
                             )
                                 return;
                             const dispatchPolicy = getSelectFieldPolicy(schema);
@@ -872,6 +880,19 @@ const renderForm = (page: FormLoadedResult): void => {
                                 control.updateSelectChoices?.(
                                     fieldConfig.options.choices
                                 );
+                                updateSelectAvailability();
+                            }
+                            if (
+                                control.selectAvailabilityReady?.() === false ||
+                                control.isSelectOptionAvailable?.(
+                                    result.newChoice
+                                ) !== true
+                            ) {
+                                choice.value = '';
+                                status(
+                                    'This choice is not currently selectable.'
+                                );
+                                return;
                             }
                             const previous = control.read();
                             const maximum =
@@ -905,6 +926,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 fieldId,
                                 control.read()
                             );
+                            updateSelectAvailability();
                             choice.value = '';
                             status(
                                 'Choice created and selected in the draft. Save to update the record.'
@@ -1164,6 +1186,34 @@ const renderForm = (page: FormLoadedResult): void => {
             );
         }
     }
+    updateSelectAvailability = () => {
+        if (!ownsForm()) return;
+        const snapshot = visitor.drafts.snapshot(draft);
+        if (snapshot == null) return;
+        const airtableFields = Object.values(
+            page.payload.fieldIdsToSchemas
+        ).map((schema) => schema.airtableField);
+        for (const [fieldId, control] of controls) {
+            if (control.updateSelectAvailability == null) continue;
+            const field = page.payload.fieldIdsToSchemas[fieldId];
+            if (field == null) continue;
+            control.updateSelectAvailability(
+                resolveSelectFieldAvailability({
+                    field,
+                    airtableFields,
+                    recordForConditionEvaluation: flatChoiceConditionRecord(
+                        page,
+                        field,
+                        snapshot.data
+                    ),
+                    mode: control.editable
+                        ? 'runtime'
+                        : 'configuration-preview',
+                    invalidConditionMode: 'compatibility',
+                })
+            );
+        }
+    };
     card.append(fields);
     const errors = element('ul', undefined, 'error-list');
     errors.setAttribute('role', 'alert');
@@ -1510,6 +1560,7 @@ const renderForm = (page: FormLoadedResult): void => {
         });
     });
     screenNode.append(card);
+    updateSelectAvailability();
     if (
         page.payload.formRecord.type === 'edit' &&
         page.payload.hasParentExtension &&

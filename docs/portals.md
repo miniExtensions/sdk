@@ -424,6 +424,70 @@ them usable for child actions. A pre-aborted read dispatches nothing and keeps
 the prior accepted state. `readNext` returns `null` at the final cursor without
 dispatching; an empty page with a non-null cursor may still have a next page.
 
+## Single-field sorting recipe
+
+The shipped [Portal sorting recipe](../examples/browser/src/portalSort.ts) is
+used by the actual browser starter and can be copied with its `dom.ts` sibling
+into a custom consumer. It is a browser recipe, not a new SDK export or a
+filter editor. Its `mountPortalSortEditor` accepts the loaded Portal, exact
+Portal field ID, complete `PortalCollectionCriteria`, accepted
+`PortalCollectionSnapshot`, `isCurrent()` and `onApply(criteria)` callbacks.
+It returns either `{type:'ready', node, destroy}` or an unavailable diagnostic.
+Inputs and applied criteria are detached copies. It starts no request and
+changes no native draft values.
+
+The caller must bind `isCurrent` to the collection instance, accepted snapshot
+and mount epoch, criteria epoch, connected active Portal DOM, current session
+and monotonic owner revision. `collection.isCurrent()` alone is insufficient:
+a next-page read or cleanup can replace the accepted snapshot while retaining
+that collection. Retire the editor before every read, child opening, context
+replacement or cleanup; retire it before abort or application callbacks can
+reenter. A detached Portal cannot change an active child's parent context.
+
+The editor offers one exact field ID plus `asc`/`desc`. Multiple or unresolved
+existing sorts remain unchanged until **Replace existing sorts** is explicitly
+chosen. **Use configured order** applies `[]`; the backend then uses its
+configured ordering. This does not promise unsorted data. Applied sorting
+preserves filters, search, search-page parameters and cleanup flags. Render
+records in server-returned order; never sort a partially loaded dataset locally.
+
+Eligible fields intersect accepted visible detail fields/effective primary
+with returned linked-table metadata and any nonempty configured sort-ID list.
+Hidden sort-only metadata never becomes an option. Duplicate labels retain
+distinct IDs. Null/empty restrictions allow this returned presentation subset;
+a nonempty all-stale restriction allows none. Metadata is not the full table.
+The recipe never guesses that the first field is primary: without a valid
+configured primary or explicit primary flag, only visible details are offered.
+Malformed or ambiguous metadata makes this editor unavailable, without
+preventing ordinary permitted reads.
+
+Custom views replace `hideSortButtonForPortal`, `sortingOnExtensionFields`
+and `customPrimaryField`, including omitted values clearing parent settings.
+The recipe captures that configuration and supports table/list presentation;
+hidden sorting controls and other layouts are explicitly unavailable. These
+are presentation constraints; the backend authorizes and orders every read.
+
+On Apply, retire collection, paging, inline editing and child/action eligibility;
+keep them retired until the next explicit successful **Load records**. Editing
+search preserves committed sort/filter criteria and resets paging. Changing
+table/view resets its sort/filter selection. Do not prune native child Form
+fields, dirty IDs, modal context or uncertain-operation guards. The starter
+keeps complete owned criteria in memory; it adds no persistence or automatic
+read/mutation.
+
+Cleanup responses are proposals, not empty successful collections. Display the
+actual returned replacements and bind confirmation to the exact owner and
+criteria epoch. Explicit acceptance patches only properties present in the
+response, preserving all others, retires the collection and awaits an explicit
+first read. Sort cleanup may precede a separate filter cleanup. Cancellation
+and stale confirmation change nothing. Errors/cancellation require explicit
+read recovery; empty accepted results remain successful results.
+
+Filtering controls remain deferred. Existing typed filter criteria can travel
+unchanged and participate in cleanup. Do not translate select/linked/date or
+computed filters into scalar rules, partially remove unsupported conditions,
+or treat this sorting recipe as complete hosted Portal parity.
+
 ## Returned data and cleanup
 
 Render `snapshot.recordIds` in order, looking up records in the configured

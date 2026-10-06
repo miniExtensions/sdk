@@ -258,6 +258,12 @@ edit capabilities or bypass a custom view.
 The example imports its collection and child-request helpers from
 `@miniextensions/sdk/portals`. Each collection captures the selected table,
 view and search criteria; changing them retires its reads and child plans.
+The shipped [single-field sorting recipe](../../docs/portals.md#single-field-sorting-recipe)
+is reused by this starter. **Apply sort** preserves owned filters/search and
+retires records, paging and child actions until explicit **Load records**.
+**Use configured order** sends `[]`; richer saved sorts require explicit
+replacement. Eligible fields use accepted visible metadata/effective primary,
+not hidden sort-only fields or guessed schemas. There is no filtering editor.
 Only records in its accepted main list can open an edit child. Nested labels
 and cached records do not grant that access.
 
@@ -270,8 +276,10 @@ are omitted; this does not convert a computed lookup into a writable link.
 - **Search** loads page one. **Next page** appends the next opaque offset and
   merges the returned table data without duplicating rows. After a failed or
   cancelled page request, choose **Load records** before paging or opening a
-  child. Returned filter/sort cleanup requires **Reload**; this example stores
-  no end-user criteria to reconcile automatically.
+  child. Returned filter/sort cleanup displays the exact proposed replacements.
+  **Review criteria cleanup** asks for explicit acceptance, patches only returned
+  properties, and awaits the next **Load records**. Sort and filter cleanup may
+  require separate acceptance; cancellation and stale confirmations do nothing.
 - **Open Form** loads the configured edit child for a returned record.
   **Create record** loads the configured create child and preserves the inverse
   link to the Portal user. Loading either Form makes no write.
@@ -373,6 +381,7 @@ before adapting it to a production application.
 
 - `src/main.ts` owns connection, visitors, authentication, Form drafts and
   saves, file uploads, and comments.
+- `src/portalSort.ts` is the reusable typed DOM sorting recipe; it starts no requests.
 - `src/portal.ts` binds collection criteria and renders helper snapshots and
   child requests. It also owns Grid edits, selectors, unlink, and Kanban
   category changes.

@@ -1,3 +1,4 @@
+import { checkPortalSortCases } from './browser-portal-sort-checks.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -96,7 +97,7 @@ export async function checkBrowserPortalExample({
     const { createMiniExtensionsClient } = consumerRequire(
         '@miniextensions/sdk'
     );
-    for (const name of ['portal', 'main']) {
+    for (const name of ['portal', 'main', 'portalSort']) {
         const bundled = await build({
             absWorkingDir: consumer,
             entryPoints: [join(consumer, 'src', `${name}.ts`)],
@@ -168,7 +169,12 @@ export async function checkBrowserPortalExample({
         environments.push(close);
         return { window, close };
     };
-    const mount = async ({ portal = editablePortal(), handlers = {} } = {}) => {
+    const mount = async ({
+        portal = editablePortal(),
+        handlers = {},
+        initialCriteria,
+        confirm = async () => true,
+    } = {}) => {
         const { window, close } = await environment();
         const { createPortalView } = await loadExample('portal');
         const calls = [];
@@ -177,6 +183,7 @@ export async function checkBrowserPortalExample({
         const statuses = [];
         const actions = [];
         let scopeRevision = 0;
+        let scopeOwner = 'visitor_A';
         let controller;
         const client = createMiniExtensionsClient({
             apiOrigin: 'https://sdk.example.test',
@@ -206,7 +213,8 @@ export async function checkBrowserPortalExample({
         const view = createPortalView({
             page: portal,
             client,
-            getScope: () => ({ ownerId: 'visitor_A', revision: scopeRevision }),
+            initialCriteria,
+            getScope: () => ({ ownerId: scopeOwner, revision: scopeRevision }),
             run: (_description, action) => {
                 controller = new AbortController();
                 const ownController = controller;
@@ -226,7 +234,7 @@ export async function checkBrowserPortalExample({
                 return pending;
             },
             status: (...args) => statuses.push(args),
-            confirm: async () => true,
+            confirm,
             openChild: (...args) => handoffs.push(args),
         });
         window.document.getElementById('screen').append(view.node);
@@ -242,6 +250,7 @@ export async function checkBrowserPortalExample({
         return {
             window,
             view,
+            client,
             portal,
             calls,
             handoffs,
@@ -252,6 +261,11 @@ export async function checkBrowserPortalExample({
             dispose,
             abort: () => controller.abort(),
             retire: () => {
+                scopeRevision += 1;
+                view.retireCollection();
+            },
+            switchOwner: (ownerId) => {
+                scopeOwner = ownerId;
                 scopeRevision += 1;
                 view.retireCollection();
             },
@@ -1311,7 +1325,17 @@ export async function checkBrowserPortalExample({
                     'Cleanup requires explicit Portal recovery, never a silent read.'
                 );
                 assert.equal(h.handoffs.length, 0);
-                h.view.refreshRequired();
+                await h.click('Review criteria cleanup');
+                await waitFor(() =>
+                    h.statuses.some(([text]) =>
+                        text.includes('Cleanup accepted')
+                    )
+                );
+                assert.equal(h.calls.length, 2);
+                assert.equal(
+                    button(h.view.node, 'Create record').disabled,
+                    true
+                );
                 await h.click('Load records');
                 assert.deepEqual(rowIds(h.view.node), ['rec_fresh']);
                 assert.deepEqual(
@@ -3678,12 +3702,21 @@ export async function checkBrowserPortalExample({
                 }
             );
         }
+        const baselineChecks = checks;
+        await checkPortalSortCases({
+            check,
+            mount,
+            environment,
+            loadExample,
+            editablePortal,
+        });
+        const sortChecks = checks - baselineChecks;
         if (failures.length)
             throw new AggregateError(
                 failures,
                 'Packed browser Portal example regressions failed.'
             );
-        return { checks };
+        return { checks: baselineChecks, sortChecks };
     } finally {
         while (environments.length) await environments.pop()();
     }

@@ -354,7 +354,9 @@ the returned filter record/value pairs and exact parent/view context. The
 server resolves the Button URL/method; a known Button value does not authorize
 calling it, and an uncertain webhook outcome must not trigger a blind retry.
 
-The starter presents Portal table data and a Kanban move action, not complete
+The starter includes [single-field Portal sorting](docs/portals.md#single-field-sorting-recipe)
+and explicit server-proposed criteria cleanup. It presents Portal table data
+and a Kanban move action, not complete
 hosted Gallery/Calendar/Map/Chart layouts or an advanced criteria builder. There
 is no insight/dashboard/aggregate API. An application aggregate must describe
 whether it covers accepted pages or a complete permitted dataset. Configuration

@@ -1,3 +1,4 @@
+import { mountPortalSortEditor, type PortalSortEditor } from './portalSort.js';
 import {
     childQuerySnapshots,
     type ChildQuerySnapshots,
@@ -19,6 +20,7 @@ import {
     getPortalLinkedRecordFieldConfig,
     type PortalCollection,
     type PortalCollectionSnapshot,
+    type PortalCollectionCriteria,
     type PortalOwnerScope,
 } from '@miniextensions/sdk/portals';
 import { button, element, labeled } from './dom.js';
@@ -193,6 +195,8 @@ export const createPortalView = (options: {
     run: Run;
     status(message: string, error?: boolean): void;
     confirm(options: ConfirmationOptions): Promise<boolean>;
+    /** Optional complete owned criteria; no implicit persistence or filter editor. */
+    initialCriteria?: PortalCollectionCriteria;
     recovery?: { journal: RecoveryJournal; owner: string };
     openChild(
         page: FormLoadedResult,
@@ -206,7 +210,8 @@ export const createPortalView = (options: {
         queries?: ChildQuerySnapshots
     ): void;
 }): PortalView => {
-    const { page, run, status } = options;
+    const { run, status } = options;
+    const page = structuredClone(options.page);
     const card = element('section', undefined, 'card');
     card.append(element('h2', page.payload.extensionName ?? 'Custom Portal'));
     card.append(
@@ -244,6 +249,9 @@ export const createPortalView = (options: {
     card.append(toolbar);
     const actions = element('div', undefined, 'actions');
     const results = element('div', undefined, 'table-scroll');
+    const sorting = element('section');
+    const cleanupPanel = element('section');
+    cleanupPanel.setAttribute('aria-label', 'Portal criteria cleanup');
     const recoveryPanel = element('section');
     recoveryPanel.setAttribute('aria-label', 'Earlier request recovery');
     recoveryPanel.setAttribute('aria-live', 'polite');
@@ -254,19 +262,50 @@ export const createPortalView = (options: {
         editorControl = null;
         editor.replaceChildren();
     };
-    card.append(actions, recoveryPanel, results, editor);
+    card.append(actions, sorting, cleanupPanel, recoveryPanel, results, editor);
     let data: PortalCollectionSnapshot | null = null;
     let dataScope: PortalOwnerScope | null = null;
     let collection: PortalCollection | null = null;
     let needsRefresh = false;
     let readRequired = false;
+    let criteriaReadRequired = false;
     let destroyed = false;
+    let criteriaEpoch = 0;
+    let mountEpoch = 0;
+    let sortEditor: PortalSortEditor | null = null;
+    let cleanupRequired = false;
+    let criteria: PortalCollectionCriteria = structuredClone(
+        options.initialCriteria ?? {
+            selectedCustomViewId: '',
+            searchTerm: null,
+            sortFieldsByEndUser: null,
+            filtersByEndUser: null,
+            searchParamsMap: {},
+            supportsEndUserSortCleanup: true,
+            supportsEndUserFilterCleanup: true,
+        }
+    );
+    const retireSortEditor = (): void => {
+        mountEpoch += 1;
+        const previous = sortEditor;
+        sortEditor = null;
+        if (previous?.type === 'ready') previous.destroy();
+        sorting.replaceChildren();
+    };
+    const clearCleanup = (): void => {
+        cleanupRequired = false;
+        cleanupPanel.replaceChildren();
+    };
     const retireCollection = (): void => {
-        collection?.destroy();
+        // Retire eligibility before abort callbacks can reenter.
+        const previous = collection;
         collection = null;
         readRequired = true;
         next.disabled = true;
         create.disabled = true;
+        retireSortEditor();
+        clearCleanup();
+        previous?.destroy();
     };
     const getCollection = (): PortalCollection => {
         if (destroyed) throw new Error('This Portal view has been replaced.');
@@ -274,13 +313,7 @@ export const createPortalView = (options: {
             client: options.client,
             portal: page,
             portalFieldId: fieldSelect.value,
-            criteria: {
-                selectedCustomViewId: viewSelect.value,
-                searchTerm: search.value || null,
-                sortFieldsByEndUser: null,
-                filtersByEndUser: null,
-                searchParamsMap: {},
-            },
+            criteria: structuredClone(criteria),
             getScope: options.getScope,
         }));
     };
@@ -377,9 +410,15 @@ export const createPortalView = (options: {
             viewSelect.append(new Option('Legacy default view', ''));
     };
     const reset = (): void => {
+        criteriaEpoch += 1;
+        criteria = {
+            ...structuredClone(criteria),
+            selectedCustomViewId: viewSelect.value,
+            searchTerm: search.value || null,
+        };
         cancelConfirmation();
         retireCollection();
-        readRequired = false;
+        readRequired = criteriaReadRequired;
         data = null;
         dataScope = null;
         closeEditor();
@@ -387,8 +426,159 @@ export const createPortalView = (options: {
             element('p', 'Choose Load records to fetch this view.', 'hint')
         );
         next.disabled = true;
-        create.disabled = needsRefresh || creatingChildId() == null;
+        create.disabled =
+            readRequired || needsRefresh || creatingChildId() == null;
         renderRecovery();
+    };
+
+    // Apply/cleanup must not use reset(), which permits ordinary initial Create.
+    const awaitExplicitRead = (): void => {
+        criteriaReadRequired = true;
+        retireCollection();
+        closeEditor();
+        data = null;
+        dataScope = null;
+        results.replaceChildren(
+            element(
+                'p',
+                'Criteria changed. Choose Load records before opening or editing records.',
+                'hint'
+            )
+        );
+    };
+    const mountSorting = (): void => {
+        retireSortEditor();
+        if (
+            data == null ||
+            collection == null ||
+            readRequired ||
+            !card.isConnected
+        )
+            return;
+        const acceptedCollection = collection;
+        const acceptedSnapshot = data;
+        const acceptedEpoch = mountEpoch;
+        const acceptedCriteriaEpoch = criteriaEpoch;
+        const scope = { ...options.getScope() };
+        const owned = (): boolean => {
+            const current = options.getScope();
+            return (
+                !destroyed &&
+                card.isConnected &&
+                collection === acceptedCollection &&
+                data === acceptedSnapshot &&
+                mountEpoch === acceptedEpoch &&
+                criteriaEpoch === acceptedCriteriaEpoch &&
+                !readRequired &&
+                current.ownerId === scope.ownerId &&
+                current.revision === scope.revision &&
+                acceptedCollection.isCurrent()
+            );
+        };
+        sortEditor = mountPortalSortEditor({
+            portal: page,
+            portalFieldId: fieldSelect.value,
+            criteria,
+            snapshot: acceptedSnapshot,
+            isCurrent: owned,
+            onApply: (nextCriteria) => {
+                if (!owned()) return;
+                criteria = structuredClone(nextCriteria);
+                criteriaEpoch += 1;
+                awaitExplicitRead();
+                status(
+                    'Sort applied. Choose Load records to fetch the new order.'
+                );
+            },
+        });
+        sorting.append(
+            sortEditor.type === 'ready'
+                ? sortEditor.node
+                : element('p', sortEditor.diagnostic, 'hint')
+        );
+    };
+    const proposeCleanup = (
+        owner: PortalCollection,
+        raw: import('@miniextensions/sdk').ListPortalLinkedRecordsResult
+    ): void => {
+        const proposal = structuredClone(raw);
+        const acceptedCriteria = structuredClone(criteria);
+        const epoch = criteriaEpoch;
+        const scope = { ...options.getScope() };
+        const owned = (): boolean => {
+            const current = options.getScope();
+            return (
+                !destroyed &&
+                card.isConnected &&
+                collection === owner &&
+                criteriaEpoch === epoch &&
+                owner.isCurrent() &&
+                current.ownerId === scope.ownerId &&
+                current.revision === scope.revision
+            );
+        };
+        // Cleanup is not an empty successful read and grants no actions.
+        criteriaReadRequired = true;
+        readRequired = true;
+        next.disabled = true;
+        create.disabled = true;
+        closeEditor();
+        data = null;
+        dataScope = null;
+        results.replaceChildren(
+            element(
+                'p',
+                'The server returned a criteria cleanup proposal, not records.'
+            )
+        );
+        clearCleanup();
+        cleanupRequired = true;
+        const replacements = {
+            ...(proposal.endUserSortCleanup === undefined
+                ? {}
+                : {
+                      sortFieldsByEndUser:
+                          proposal.endUserSortCleanup.sortFields,
+                  }),
+            ...(proposal.endUserFilterCleanup === undefined
+                ? {}
+                : { filtersByEndUser: proposal.endUserFilterCleanup.filters }),
+        };
+        cleanupPanel.append(
+            element('pre', JSON.stringify(replacements, null, 2))
+        );
+        cleanupPanel.append(
+            button('Review criteria cleanup', () => {
+                if (!owned()) return;
+                void (async () => {
+                    const yes = await options.confirm({
+                        title: 'Accept criteria cleanup?',
+                        message: JSON.stringify(replacements, null, 2),
+                        confirmLabel: 'Accept criteria cleanup',
+                    });
+                    if (!yes || !owned()) return;
+                    criteria = {
+                        ...acceptedCriteria,
+                        ...structuredClone(replacements),
+                    };
+                    criteriaEpoch += 1;
+                    awaitExplicitRead();
+                    status(
+                        'Cleanup accepted. Choose Load records; another cleanup proposal may follow.'
+                    );
+                })().catch(() => {
+                    if (owned())
+                        status(
+                            'Cleanup confirmation failed. Review the proposal again.',
+                            true
+                        );
+                });
+            })
+        );
+        status(
+            'Saved sorts or filters need cleanup. Review the returned proposal before loading again.',
+            true
+        );
     };
 
     const openChild = async (
@@ -457,6 +647,8 @@ export const createPortalView = (options: {
                 : 'Loading the authorized record Form…',
             async ({ client, signal, current }) => {
                 const owner = getCollection();
+                retireSortEditor();
+                clearCleanup();
                 const plan = owner.childFormRequest({
                     access:
                         recordId == null
@@ -562,6 +754,7 @@ export const createPortalView = (options: {
         if (
             destroyed ||
             !card.isConnected ||
+            criteriaReadRequired ||
             !sameOwner() ||
             data == null ||
             !data.recordIds.includes(recordId)
@@ -1047,6 +1240,15 @@ export const createPortalView = (options: {
     };
 
     const fetchRecords = (more: boolean): void => {
+        if (destroyed || !card.isConnected) return;
+        if (cleanupRequired) {
+            status(
+                'Review and accept the criteria cleanup proposal before loading again.',
+                true
+            );
+            return;
+        }
+        if (more && (readRequired || collection == null)) return;
         if (needsRefresh) {
             status('Choose Reload before using this Portal token again.', true);
             return;
@@ -1055,8 +1257,16 @@ export const createPortalView = (options: {
             'Loading the permitted Portal records…',
             async ({ signal, current }) => {
                 signal.throwIfAborted();
-                if (!more) reset();
+                retireSortEditor();
+                if (!more) {
+                    // Fresh first read creates a new immutable collection with owned criteria.
+                    retireCollection();
+                    closeEditor();
+                    data = null;
+                    dataScope = null;
+                }
                 const owner = getCollection();
+                criteriaReadRequired = true;
                 readRequired = true;
                 next.disabled = true;
                 create.disabled = true;
@@ -1073,22 +1283,19 @@ export const createPortalView = (options: {
                         : await owner.readFirst(readOptions);
                     if (!accepted()) return;
                     if (result?.type === 'criteria-cleanup-required') {
-                        needsRefresh = true;
-                        reset();
-                        status(
-                            'Saved filters or sorts need cleanup. This example has no persisted criteria; reload the Portal.',
-                            true
-                        );
+                        proposeCleanup(owner, result.raw);
                         return;
                     }
                     if (result != null) {
                         data = result.snapshot;
                         dataScope = { ...options.getScope() };
                     }
+                    criteriaReadRequired = false;
                     readRequired = false;
                     create.disabled = creatingChildId() == null;
                     closeEditor();
                     renderRecords();
+                    mountSorting();
                     status(
                         result == null
                             ? 'This view has no more pages.'
@@ -1118,18 +1325,39 @@ export const createPortalView = (options: {
     });
     actions.append(first, next, create);
     fieldSelect.addEventListener('change', () => {
+        if (destroyed || !card.isConnected) return;
         fillViews();
+        criteria = {
+            ...criteria,
+            sortFieldsByEndUser: null,
+            filtersByEndUser: null,
+            searchParamsMap: {},
+        };
         reset();
     });
-    viewSelect.addEventListener('change', reset);
+    viewSelect.addEventListener('change', () => {
+        if (destroyed || !card.isConnected) return;
+        criteria = {
+            ...criteria,
+            sortFieldsByEndUser: null,
+            filtersByEndUser: null,
+        };
+        reset();
+    });
     search.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             fetchRecords(false);
         }
     });
-    search.addEventListener('input', reset);
+    search.addEventListener('input', () => {
+        if (!destroyed && card.isConnected) reset();
+    });
     fillViews();
+    if (options.initialCriteria != null) {
+        viewSelect.value = criteria.selectedCustomViewId;
+        search.value = criteria.searchTerm ?? '';
+    }
     reset();
     if (fields.length === 0)
         status('This Portal has no configured linked-record tables.', true);

@@ -31,28 +31,28 @@ import chrome from 'selenium-webdriver/chrome.js';
 // docs/auth.md AuthPanel fence. API: selenium.dev/selenium/docs/api/javascript/
 // module-selenium-webdriver_chrome-Driver.html (explicit DriverService session).
 const expected = {
-    packageArtifactId: '11396706306',
+    packageArtifactId: '11397763101',
     packageZipSha256:
-        '90052ec4dcc4992204668cc10bca6c3379bd5e348f6013e5972a7b8bb6e58316',
+        '72949117fa8da9d9cdb50f48339454105e591846edcb2e0939f2c19bc600a467',
     packageSha256:
-        'ad0394a55bf89c04c4e9c9868e974486568055f862a38b78ee61dad85de4de33',
-    packageBytes: 270823,
-    packageFiles: 191,
+        'b48e04254fe23b20cc3861e04225f5e7c6db9c752cd2894daa423583ea1f01ed',
+    packageBytes: 275510,
+    packageFiles: 192,
     packageZipMembers: 4,
-    fixtureArtifactId: '11397130382',
+    fixtureArtifactId: '11397608337',
     fixtureZipSha256:
-        '026a7eb4d4a3f46da8f08fa84664900c65c242899c1905dcb40020fbfd6eaaf8',
+        '80d35320fdcf4cba1db90178f93b8886b383120fabf2c43409f738be0fec2c6d',
     fixtureZipMembers: 18,
     fixtureChecksums: 17,
     fixtureOutputs: 16,
-    fixtureSources: 13,
+    fixtureSources: 14,
     starterSdkInputs: 33,
     authSdkInputs: 7,
     source: {
-        commit: '78c47556d9609f6330d383fff697f20ee49298cb',
-        tree: 'b6837d03dfd1bc1c2d33cb7f79938b9848d1aedc',
+        commit: '7680d388f3cddd26a33864a0531743c9eb4b6ec0',
+        tree: '4459463ed804729f24d1fb1721eef646f5bc7422',
     },
-    runId: '37430037531',
+    runId: '37433447680',
     runAttempt: '1',
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -144,7 +144,8 @@ starter_scenarios=[
  'projection-single','projection-multiple','linked-filters','linked-filter-deferred',
  'visibility-draft','visibility-unavailable','visibility-section',
  'address-acceptance','address-failure','address-lifecycle','address-remount','address-ime',
- 'teardown-logout','teardown-disconnect']
+ 'teardown-logout','teardown-disconnect',
+ 'review-answers','review-address','review-validation','review-unknown']
 auth_scenarios=['pin','password','word','email','phone']
 def exact_inventory(actual,declared,label):
     assert isinstance(actual,list) and all(isinstance(value,str) for value in actual), label+' inventory type'
@@ -154,7 +155,7 @@ exact_inventory(manifest['scenarios'],starter_scenarios,'Manifest starter')
 menu_routes=re.findall(r'href="(starter|auth)/index\.html\?scenario=([^"]+)"',(fixture/'index.html').read_text())
 readme_routes=re.findall(r'\[[^\]]+\]\((starter|auth)/index\.html\?scenario=([^)]+)\)',(fixture/'README.md').read_text())
 for label,routes in [('Menu',menu_routes),('README',readme_routes)]:
-    assert len(routes)==29 and len(set(routes))==29, label+' exact distinct29 surface/scenario routes'
+    assert len(routes)==33 and len(set(routes))==33, label+' exact distinct33 surface/scenario routes'
     exact_inventory([scenario for surface,scenario in routes if surface=='starter'],starter_scenarios,label+' starter')
     exact_inventory([scenario for surface,scenario in routes if surface=='auth'],auth_scenarios,label+' AuthPanel')
 assert set(menu_routes)==set(readme_routes), 'Menu/README scenario joins differ'
@@ -186,6 +187,7 @@ assert {e['path'] for e in manifest['outputs']}==set(fixture_names)-{'SHA256SUMS
 assert len(manifest['sources'])==expected['fixtureSources']
 assert any(e['origin']=='packed-browser-starter' and e['path']=='src/linkedFilters.ts' for e in manifest['sources'])
 assert any(e['origin']=='packed-browser-starter' and e['path']=='src/choiceAvailability.ts' for e in manifest['sources'])
+assert any(e['origin']=='packed-browser-starter' and e['path']=='src/review.ts' for e in manifest['sources'])
 for entry in manifest['sources']:
     origin=entry['origin']
     if origin=='packed-browser-starter': data=files['package/examples/browser/'+safe(entry['path'])]
@@ -213,6 +215,11 @@ assert manifest['provenance']['actualPackedStarterBuildReused'] is True
 assert manifest['provenance']['completeAuthPanelFence'] is True
 assert manifest['provenance']['sdkSourceAliases'] is False
 assert manifest['provenance']['packageRepacked'] is False
+source_map=json.loads((fixture/'starter/main.js.map').read_text())
+assert len(source_map['sources'])==len(source_map['sourcesContent'])
+review_sources=[content for name,content in zip(source_map['sources'],source_map['sourcesContent']) if name.replace('\\','/').endswith('/src/review.ts')]
+assert len(review_sources)==1
+assert review_sources[0].encode()==files['package/examples/browser/src/review.ts']
 print(json.dumps({'source':manifest['source'],'ci':manifest['ci'],'package':manifest['package'],
  'manifestSha256':sha((fixture/'manifest.json').read_bytes()),'fixtureFiles':len(fixture_names),
  'checksums':expected['fixtureChecksums'],'outputs':expected['fixtureOutputs'],'sources':expected['fixtureSources'],'sdkBundleInputs':sdk_counts,
@@ -246,6 +253,8 @@ const receipt = {
         'Address cases cover editable unmasked singleLineText, a valid character cap and one optional one-page checkbox predicate; no provider/backend/general configuration credit.',
         'Address stale responses exercise combined installed SDK and starter/presenter cancellation, without independently isolating presenter generations.',
         'The added composition case supplies labelled untrusted DOM markers through visible fixture buttons; ordinary selection uses native W3C keyboard commands. No OS IME or platform composition integration proof.',
+        'Review cases cover one-page manual scalar rows and explicit current Confirm only; synthetic returned validation and uncertainty handling prove no backend rule evaluation or persistence.',
+        'Native modal inertness is preserved. Pending draft/owner/configuration invalidation is separately a packed real-starter event oracle, not an ordinary background native gesture claim.',
     ],
 };
 const writeJson = (path, data) =>
@@ -351,6 +360,11 @@ const scenarioCaseAliases = {
     'starter-address-dom-composition': 'address-ime',
     'starter-private-reference-logout': 'teardown-logout',
     'starter-private-reference-disconnect': 'teardown-disconnect',
+    'starter-review-edit-escape-current-confirm': 'review-answers',
+    'starter-review-address-retirement-before-capture': 'review-address',
+    'starter-review-required-validation-draft-preservation':
+        'review-validation',
+    'starter-review-cancelled-unknown-save-no-replay': 'review-unknown',
 };
 const scenarioRouteForCase = (id) => {
     const surface = id.startsWith('starter-')
@@ -534,7 +548,7 @@ try {
         assert.deepEqual(constructed.state.unexpected, []);
         constructedScenarios.push(scenario);
     }
-    assert.equal(constructedScenarios.length, 24);
+    assert.equal(constructedScenarios.length, 28);
     receipt.fixtureInventoryConstruction = {
         beforeServerAndBrowserStartup: true,
         scenarios: constructedScenarios,
@@ -3837,7 +3851,558 @@ try {
         });
         assert.equal(markers(state).length, 20);
     });
-    assert.equal(receipt.cases.length, 29);
+    const reviewSelector = 'dialog[data-form-review][open]';
+    const reviewDialog = () => find(reviewSelector);
+    const waitReview = async () => {
+        const state = await waitSnapshot(
+            (value) =>
+                value.review?.dialogs.length === 1 &&
+                value.review.dialogs[0].open &&
+                value.review.fieldsInert,
+            'Actual semantic review modal opens before any Save.'
+        );
+        const dialog = await reviewDialog();
+        assert(await dialog.isDisplayed());
+        assert.equal(await dialog.getDomAttribute('role'), 'dialog');
+        assert.equal(await dialog.getDomAttribute('aria-modal'), 'true');
+        const buttons = await dialog.findElements(By.css('button'));
+        const edit = buttons[0];
+        assert.equal((await edit.getText()).trim(), 'Edit');
+        assert.equal(
+            await (await driver.switchTo().activeElement()).getId(),
+            await edit.getId()
+        );
+        assert.equal((await dialog.findElements(By.css('img,b,a'))).length, 0);
+        assert.equal(state.review.dialogs[0].nestedMarkup, 0);
+        for (const label of await dialog.findElements(By.css('dt'))) {
+            const id = await label.getDomAttribute('id');
+            const value = await label.findElement(
+                By.xpath('following-sibling::dd[1]')
+            );
+            assert.equal(await value.getDomAttribute('aria-labelledby'), id);
+        }
+        return state;
+    };
+    const openReview = async () => {
+        const saveButtons = await driver.findElements(By.css('#screen button'));
+        const matches = [];
+        for (const button of saveButtons)
+            if ((await button.getText()).trim() === 'Save')
+                matches.push(button);
+        assert.equal(matches.length, 1);
+        assert(await matches[0].isEnabled());
+        // Focus the real submit button and activate it with the real keyboard.
+        await matches[0].sendKeys(Key.ENTER);
+        return waitReview();
+    };
+    const waitReviewClosed = () =>
+        waitSnapshot(
+            (state) =>
+                state.review.dialogs.length === 0 &&
+                !state.review.fieldsInert &&
+                !state.busy,
+            'Edit/Escape restores the current Form without a Save.'
+        );
+    const reviewControl = (state, id) => {
+        const control = state.review.controls.find(
+            (entry) => entry.fieldId === id
+        );
+        assert(control, `Missing review control ${id}.`);
+        return control;
+    };
+    const loadReview = async (scenario) => {
+        await driver.get(`${origin}/starter/index.html?scenario=${scenario}`);
+        await clickText('Connect and load');
+        return waitReady(
+            (state) =>
+                state.review?.controls.length === 8 &&
+                state.status === 'Loaded form loaded.',
+            'Actual archive-copied prepared review Form load.'
+        );
+    };
+    const assertReviewSave = (call, state, data, dirty) => {
+        assert.equal(call.method, 'POST');
+        assert.equal(
+            call.input.extensionAccessToken,
+            'FAKE_SYNTHETIC_REVIEW_TOKEN'
+        );
+        assert.deepEqual(call.input.formRecord, {
+            type: 'edit',
+            tableId: state.expected.tableId,
+            recordId: state.expected.recordId,
+            data,
+        });
+        assert.deepEqual(
+            [...call.input.formFieldIdsWithUnsavedChanges].sort(),
+            [...dirty].sort()
+        );
+        assert.deepEqual(call.input.context, { type: 'direct-url' });
+        assert.deepEqual(
+            call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
+            {}
+        );
+        assert.equal(call.input.isComputeMode, false);
+    };
+    await exercise(
+        'starter-review-edit-escape-current-confirm',
+        async (result) => {
+            let state = await loadReview('review-answers');
+            assert.equal(saves(state).length, 0);
+            const secret = await find(
+                '#screen input[data-field-id="fld_review_title"]'
+            );
+            await replaceInput(secret, 'SecondExactReviewSecret', 'password');
+            const conditional = await find(
+                '#screen input[data-field-id="fld_review_conditional"]'
+            );
+            await replaceInput(
+                conditional,
+                'Edited conditional answer',
+                'text'
+            );
+            const show = await find(
+                '#screen input[data-field-id="fld_review_show"]'
+            );
+            await show.sendKeys(Key.SPACE, Key.TAB);
+            await assertNativeVisibility(['fld_review_conditional'], false);
+            state = await openReview();
+            const dialog = await reviewDialog();
+            state = await capture(
+                result,
+                'semantic-ordered-mask-plain-text-review',
+                dialog
+            );
+            assert.deepEqual(state.review.dialogs[0].rows, [
+                {
+                    fieldId: 'fld_review_title',
+                    title: '<b>Semantic secret</b>',
+                    hideTitle: true,
+                    labelId: 'confirmation-review-label-0',
+                    value: '••••••••',
+                    labelledBy: 'confirmation-review-label-0',
+                },
+                {
+                    fieldId: 'fld_review_readonly',
+                    title: 'Plain readonly answer',
+                    hideTitle: false,
+                    labelId: 'confirmation-review-label-1',
+                    value: state.expected.initial.fld_review_readonly,
+                    labelledBy: 'confirmation-review-label-1',
+                },
+                {
+                    fieldId: 'fld_review_url',
+                    title: 'Plain URL answer',
+                    hideTitle: false,
+                    labelId: 'confirmation-review-label-2',
+                    value: state.expected.initial.fld_review_url,
+                    labelledBy: 'confirmation-review-label-2',
+                },
+                {
+                    fieldId: 'fld_review_number',
+                    title: 'Zero count',
+                    hideTitle: false,
+                    labelId: 'confirmation-review-label-3',
+                    value: '0',
+                    labelledBy: 'confirmation-review-label-3',
+                },
+            ]);
+            assert.deepEqual(
+                await Promise.all(
+                    (await dialog.findElements(By.css('dd'))).map((node) =>
+                        node.getText()
+                    )
+                ),
+                [
+                    '••••••••',
+                    state.expected.initial.fld_review_readonly,
+                    state.expected.initial.fld_review_url,
+                    '0',
+                ]
+            );
+            assert(
+                !(await dialog.getText()).includes('SecondExactReviewSecret')
+            );
+            const hiddenLabel = await dialog.findElement(
+                By.css('dt[data-review-title-hidden="true"]')
+            );
+            assert.equal(await hiddenLabel.getCssValue('position'), 'absolute');
+            assert.equal(await hiddenLabel.getCssValue('width'), '1px');
+            assert.equal(await hiddenLabel.getCssValue('height'), '1px');
+            assert.equal(await hiddenLabel.getCssValue('overflow'), 'hidden');
+            assert.equal(
+                await hiddenLabel.getCssValue('clip-path'),
+                'inset(100%)'
+            );
+            assert.equal(saves(state).length, 0);
+            await clickText('Edit', dialog);
+            await waitReviewClosed();
+            state = await capture(
+                result,
+                'native-edit-zero-save-retains-accepted-draft'
+            );
+            assert.equal(saves(state).length, 0);
+            assert.equal(
+                reviewControl(state, 'fld_review_title').value,
+                'SecondExactReviewSecret'
+            );
+            assert.equal(
+                reviewControl(state, 'fld_review_conditional').value,
+                'Edited conditional answer'
+            );
+            assert.equal(
+                (
+                    await (await driver.switchTo().activeElement()).getText()
+                ).trim(),
+                'Save'
+            );
+            await openReview();
+            await (
+                await driver.switchTo().activeElement()
+            ).sendKeys(Key.ESCAPE);
+            await waitReviewClosed();
+            state = await capture(
+                result,
+                'native-escape-zero-save-restores-submit-focus'
+            );
+            assert.equal(saves(state).length, 0);
+            assert.equal(
+                (
+                    await (await driver.switchTo().activeElement()).getText()
+                ).trim(),
+                'Save'
+            );
+            await openReview();
+            await (await driver.switchTo().activeElement()).sendKeys(Key.ENTER);
+            await waitReviewClosed();
+            state = await capture(
+                result,
+                'initial-edit-enter-cancels-zero-save'
+            );
+            assert.equal(saves(state).length, 0);
+            await openReview();
+            await clickText('Confirm', await reviewDialog());
+            await waitReady(
+                (value) =>
+                    saves(value).length === 1 &&
+                    value.status?.includes('The Form was not saved.'),
+                'One explicit current Confirm dispatches the captured complete native draft.'
+            );
+            state = await capture(
+                result,
+                'confirmed-full-hidden-native-save-once'
+            );
+            assertReviewSave(
+                saves(state)[0],
+                state,
+                {
+                    ...state.expected.initial,
+                    fld_review_title: 'SecondExactReviewSecret',
+                    fld_review_conditional: 'Edited conditional answer',
+                    fld_review_show: false,
+                },
+                [
+                    'fld_review_title',
+                    'fld_review_conditional',
+                    'fld_review_show',
+                ]
+            );
+            assert.equal(state.review.dialogs.length, 0);
+            assert.equal(
+                reviewControl(state, 'fld_review_conditional').hidden,
+                true
+            );
+            assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+        }
+    );
+    await exercise(
+        'starter-review-address-retirement-before-capture',
+        async (result) => {
+            const input = await loadAddress('review-address');
+            const manual = 'Review pending prediction';
+            await typeAddress(input, manual);
+            let state = await waitAddressPending('predictions');
+            const oldPrediction = addressPending(state, 'predictions').id;
+            await openReview();
+            state = await capture(
+                result,
+                'review-retires-held-prediction-before-capture',
+                await reviewDialog()
+            );
+            assert.equal(state.address.abortCounts.predictions, 1);
+            assert.equal(addressControl(state).disabled, true);
+            assert.equal(
+                state.review.dialogs[0].rows.find(
+                    (row) => row.fieldId === addressFieldId
+                ).value,
+                capped(state, manual)
+            );
+            assert.equal(saves(state).length, 0);
+            await clickText('Edit', await reviewDialog());
+            await waitReviewClosed();
+            await settleAddress('predictions', oldPrediction);
+            await observeAddressCalls([
+                'fetchExtensionForEndUser',
+                predictionRoute,
+            ]);
+            state = await capture(
+                result,
+                'late-prediction-after-edit-zero-options-or-repeat-read'
+            );
+            assert.equal(addressSettled(state, oldPrediction).aborted, true);
+            assertAddressQuiet(state, capped(state, manual));
+            assert.equal(saves(state).length, 0);
+            const fresh = 'Review selected details';
+            await typeAddress(input, fresh);
+            state = await waitAddressPending('predictions');
+            await settleAddress(
+                'predictions',
+                addressPending(state, 'predictions').id
+            );
+            const options = await addressOptions(result);
+            await options[0].click();
+            state = await waitAddressPending('details');
+            const oldDetail = addressPending(state, 'details').id;
+            const selected = capped(
+                state,
+                state.expected.predictions[0].description
+            );
+            await openReview();
+            state = await capture(
+                result,
+                'review-retires-held-details-captures-selected-description',
+                await reviewDialog()
+            );
+            assert.equal(state.address.abortCounts.details, 1);
+            assert.equal(
+                state.review.dialogs[0].rows.find(
+                    (row) => row.fieldId === addressFieldId
+                ).value,
+                selected
+            );
+            assert.equal(saves(state).length, 0);
+            await clickText('Edit', await reviewDialog());
+            await waitReviewClosed();
+            await settleAddress('details', oldDetail);
+            await observeAddressCalls([
+                'fetchExtensionForEndUser',
+                predictionRoute,
+                predictionRoute,
+                detailRoute,
+            ]);
+            state = await capture(
+                result,
+                'late-details-after-edit-preserve-selected-native-draft'
+            );
+            assert.equal(addressSettled(state, oldDetail).aborted, true);
+            assertAddressQuiet(state, selected);
+            assert.equal(saves(state).length, 0);
+            await openReview();
+            await clickText('Confirm', await reviewDialog());
+            state = await waitAddressPending('save');
+            assertAddressSave(
+                saves(state)[0],
+                state,
+                { ...state.expected.initial, [addressFieldId]: selected },
+                [addressFieldId]
+            );
+            const saveId = addressPending(state, 'save').id;
+            await clickText('Release address Save validation');
+            await waitReady(
+                (value) =>
+                    addressSettled(value, saveId) &&
+                    !value.busy &&
+                    value.status?.includes('The Form was not saved.'),
+                'Explicit review Confirm retains selected native address after validation.'
+            );
+            state = await capture(
+                result,
+                'fresh-current-review-confirm-selected-description-save'
+            );
+            assertAddressQuiet(state, selected);
+            assert.equal(state.review.dialogs.length, 0);
+            assert.equal(saves(state).length, 1);
+            assertCalls(state, [
+                'fetchExtensionForEndUser',
+                predictionRoute,
+                predictionRoute,
+                detailRoute,
+                'saveForm',
+            ]);
+            assert.deepEqual(state.pending, []);
+        }
+    );
+    await exercise(
+        'starter-review-required-validation-draft-preservation',
+        async (result) => {
+            let state = await loadReview('review-validation');
+            const title = await find(
+                '#screen input[data-field-id="fld_review_title"]'
+            );
+            assert.equal(await title.getAttribute('value'), '');
+            await openReview();
+            state = await capture(
+                result,
+                'required-empty-answer-review-opens-before-validation',
+                await reviewDialog()
+            );
+            assert(
+                !state.review.dialogs[0].rows.some(
+                    (row) => row.fieldId === 'fld_review_title'
+                )
+            );
+            assert.equal(saves(state).length, 0);
+            await clickText('Confirm', await reviewDialog());
+            await waitReady(
+                (value) =>
+                    saves(value).length === 1 &&
+                    value.review.errors.some((text) =>
+                        text.includes(value.expected.validationMessage)
+                    ),
+                'Synthetic returned required validation is presented without dropping the draft.'
+            );
+            state = await capture(
+                result,
+                'returned-required-error-full-draft-retained'
+            );
+            assertReviewSave(
+                saves(state)[0],
+                state,
+                state.expected.initial,
+                []
+            );
+            assert.equal(await title.getAttribute('value'), '');
+            assert(
+                (await (await find('#screen .error-list')).getText()).includes(
+                    state.expected.validationMessage
+                )
+            );
+            await replaceInput(title, 'Repaired required answer', 'text');
+            await openReview();
+            state = await capture(
+                result,
+                'repaired-answer-fresh-review-zero-extra-save',
+                await reviewDialog()
+            );
+            assert.equal(
+                state.review.dialogs[0].rows.find(
+                    (row) => row.fieldId === 'fld_review_title'
+                ).value,
+                'Repaired required answer'
+            );
+            assert.equal(saves(state).length, 1);
+            await clickText('Edit', await reviewDialog());
+            await waitReviewClosed();
+            state = await capture(
+                result,
+                'native-edit-preserves-repair-and-validation-no-replay'
+            );
+            assert.equal(
+                await title.getAttribute('value'),
+                'Repaired required answer'
+            );
+            assert.equal(saves(state).length, 1);
+            assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+        }
+    );
+    await exercise(
+        'starter-review-cancelled-unknown-save-no-replay',
+        async (result) => {
+            await loadReview('review-unknown');
+            await openReview();
+            await clickText('Confirm', await reviewDialog());
+            let state = await waitSnapshot(
+                (value) =>
+                    saves(value).length === 1 &&
+                    value.pending.length === 1 &&
+                    value.busy,
+                'One confirmed Save is held by the synthetic transport.'
+            );
+            state = await capture(
+                result,
+                'confirmed-single-held-save-complete-native-data'
+            );
+            assertReviewSave(
+                saves(state)[0],
+                state,
+                state.expected.initial,
+                []
+            );
+            assert.equal(state.review.dialogs.length, 0);
+            const saveButtons = await driver.findElements(
+                By.css('#screen button')
+            );
+            const saveMatches = [];
+            for (const button of saveButtons)
+                if ((await button.getText()).trim() === 'Save')
+                    saveMatches.push(button);
+            assert.equal(saveMatches.length, 1);
+            assert.equal(await saveMatches[0].isEnabled(), false);
+            await clickText('Cancel request');
+            await waitSnapshot(
+                (value) => !value.busy && value.review.abortCounts.save === 1,
+                'Native Cancel retires the confirmed Save request.'
+            );
+            state = await capture(
+                result,
+                'native-cancel-uncertainty-remains-blocked'
+            );
+            assert.equal(saves(state).length, 1);
+            assert.equal(state.review.dialogs.length, 0);
+            assert.equal(await saveMatches[0].isEnabled(), false);
+            await clickText('Release held review Save');
+            await waitSnapshot(
+                (value) =>
+                    value.pending.length === 0 &&
+                    value.events.some(
+                        (event) =>
+                            event.type === 'review-save-settled' &&
+                            event.aborted
+                    ),
+                'Late cancelled validation arrives without reopening review.'
+            );
+            // Repeat a physical Enter from the actual retained Form input, rather
+            // than activating the transport-release button that currently holds
+            // focus. The disabled submit and uncertain scope must not dispatch.
+            await (
+                await find('#screen input[data-field-id="fld_review_title"]')
+            ).sendKeys(Key.ENTER, Key.ENTER);
+            const until = Date.now() + 500;
+            await driver.wait(
+                async () => {
+                    const value = await snapshot();
+                    assert.equal(saves(value).length, 1);
+                    assert.equal(value.review.dialogs.length, 0);
+                    return Date.now() >= until;
+                },
+                2000,
+                'No automatic replay after native cancelled uncertain Save.',
+                100
+            );
+            state = await capture(
+                result,
+                'late-result-and-repeated-enter-zero-replay'
+            );
+            assert.equal(await saveMatches[0].isEnabled(), false);
+            assert.equal(
+                reviewControl(state, 'fld_review_title').value,
+                state.expected.initial.fld_review_title
+            );
+            assert.deepEqual(
+                state.events.filter(
+                    (event) => event.type === 'review-save-settled'
+                ),
+                [
+                    {
+                        type: 'review-save-settled',
+                        id: 'review-save-1',
+                        aborted: true,
+                    },
+                ]
+            );
+            assertCalls(state, ['fetchExtensionForEndUser', 'saveForm']);
+        }
+    );
+    assert.equal(receipt.cases.length, 33);
     const actualScenarioRoutes = receipt.cases.map(
         ({ scenarioRoute }) =>
             `${scenarioRoute.surface}/${scenarioRoute.scenario}`
@@ -3847,7 +4412,7 @@ try {
             (scenario) => `${surface}/${scenario}`
         )
     );
-    assert.equal(new Set(actualScenarioRoutes).size, 29);
+    assert.equal(new Set(actualScenarioRoutes).size, 33);
     assert.deepEqual(
         actualScenarioRoutes.sort(),
         declaredScenarioRoutes.sort()

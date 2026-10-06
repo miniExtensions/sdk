@@ -75,9 +75,26 @@ loaded Form, field and visibility in `isCurrent()` before accepting any
 callback. Write `onChange`'s accepted string to that field's native draft and
 mark it dirty. These reads are field-local: they must not make the Form inert
 while the visitor continues typing. Predictions wait 800 ms after the latest
-nonblank edit; suggestions are plain text. Arrow keys select a suggestion,
-Enter accepts the highlighted suggestion without submitting the Form, Escape dismisses pending
-suggestions, and Clear preserves focus on the input.
+nonblank edit; suggestions are plain text. Arrow keys move the visible
+highlight while focus stays in the input. The control supplies contrasting
+background/text and an outline without requiring an application stylesheet.
+Enter accepts the highlighted suggestion without submitting the Form, Escape
+dismisses pending suggestions, and Clear preserves focus on the input.
+
+The `reads` adapter must supply the existing Google-backed address results.
+The control attributes those results to Google Maps using the unchanged
+official logo inside the bordered suggestions container, outside its selectable
+listbox. The logo displays at 98 × 18 pixels on white with 10 pixels of clear
+space above and at each side, and 5 below. It has the accessible name
+“Google Maps” and disables translation. The container and attribution retire
+together when suggestions close. Do not use this presenter for results from
+another provider or obscure its attribution.
+
+The PNG is embedded as a data URL; it makes no additional network request.
+Applications with a Content Security Policy must permit `data:` in
+`img-src` for this logo. Its provenance and Google's applicable attribution
+policies are recorded in [third-party notices](../THIRD_PARTY_NOTICES.md#google-maps-attribution-asset);
+the asset is not covered by the SDK's MIT license.
 
 A chosen description becomes the accepted value immediately. Place details
 replace it only for the same current owner and selected-place intent. Failures

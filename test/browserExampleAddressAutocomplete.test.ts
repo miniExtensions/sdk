@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { after, before, describe, it, type TestContext } from 'node:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -102,6 +103,10 @@ const mount = async (
                                 {
                                     description: '12 Main Street, Example City',
                                     placeId: 'place_main',
+                                },
+                                {
+                                    description: '12 Side Street, Example City',
+                                    placeId: 'place_side',
                                 },
                             ],
                         },
@@ -228,6 +233,68 @@ describe('actual browser starter address autocomplete', () => {
             )
         );
         assert.equal(input.value, '12 Main');
+        const popup = window.document.querySelector(
+            '[data-address-suggestions]'
+        );
+        const list = window.document.querySelector('[role="listbox"]');
+        const attribution = window.document.querySelector(
+            '[data-address-attribution]'
+        );
+        const logo = attribution?.querySelector('img');
+        assert.ok(popup instanceof window.HTMLElement);
+        assert.ok(list instanceof window.HTMLElement);
+        assert.ok(attribution instanceof window.HTMLElement);
+        assert.ok(logo instanceof window.HTMLImageElement);
+        assert.equal(popup.hidden, false);
+        assert.equal(list.parentElement, popup);
+        assert.equal(attribution.parentElement, popup);
+        assert.equal(list.contains(logo), false);
+        assert.equal(list.children.length, 2);
+        assert.equal(logo.alt, 'Google Maps');
+        assert.equal(logo.getAttribute('translate'), 'no');
+        assert.equal(logo.width, 98);
+        assert.equal(logo.height, 18);
+        assert.equal(
+            createHash('sha256')
+                .update(Buffer.from(logo.src.split(',')[1]!, 'base64'))
+                .digest('hex'),
+            'f542cdc1844d0e1a848455dffdc46a5cd618528576a4dba47bc4a096bfa4f60c'
+        );
+        const options = Array.from(list.querySelectorAll('[role="option"]'));
+        assert.ok(options[0] instanceof window.HTMLButtonElement);
+        assert.ok(options[1] instanceof window.HTMLButtonElement);
+        const ordinaryBackground = options[0].style.backgroundColor;
+        const ordinaryColor = options[0].style.color;
+        input.focus();
+        const key = (name: string): void => {
+            const event = new window.KeyboardEvent('keydown', {
+                key: name,
+                bubbles: true,
+                cancelable: true,
+            });
+            input.dispatchEvent(event);
+            assert.equal(event.defaultPrevented, true);
+            assert.equal(window.document.activeElement, input);
+        };
+        key('ArrowDown');
+        assert.equal(options[0].getAttribute('aria-selected'), 'true');
+        assert.notEqual(options[0].style.backgroundColor, ordinaryBackground);
+        assert.notEqual(options[0].style.color, ordinaryColor);
+        assert.equal(options[0].style.outlineWidth, '2px');
+        key('ArrowDown');
+        assert.equal(options[1].getAttribute('aria-selected'), 'true');
+        assert.equal(options[0].style.backgroundColor, ordinaryBackground);
+        assert.equal(options[0].style.color, ordinaryColor);
+        key('ArrowUp');
+        assert.equal(
+            input.getAttribute('aria-activedescendant'),
+            options[0].id
+        );
+        assert.equal(options[1].style.backgroundColor, ordinaryBackground);
+        key('Escape');
+        assert.equal(popup.hidden, true);
+        assert.equal(list.children.length, 0);
+        assert.equal(input.hasAttribute('aria-activedescendant'), false);
         assert.equal(
             saves.length,
             1,

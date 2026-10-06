@@ -167,3 +167,23 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Google Maps attribution asset
+
+The optional address autocomplete control embeds Google's official
+`GoogleMaps_Logo_DarkGray_2x.png` unchanged as a base64 PNG data URL.
+It attributes the existing Google-backed address results; the image is not
+licensed under this SDK's MIT license.
+
+- Source: [Google Maps attribution assets](https://developers.google.com/static/maps/documentation/images/Google_Maps_Attribution_Assets.zip)
+- Applicable guidance: [Places API policies and Google Maps attribution requirements](https://developers.google.com/maps/documentation/places/web-service/policies)
+- Original PNG: 196 × 36 pixels, 2,600 bytes
+- PNG SHA-256: `f542cdc1844d0e1a848455dffdc46a5cd618528576a4dba47bc4a096bfa4f60c`
+- Source ZIP SHA-256: `899e2ada2969330debb94adf6ec44290ee528fcec55ac18683485259e1bf82e8`
+
+The control preserves the aspect ratio at 98 × 18 pixels, uses a plain white
+background and the specified clear space, and labels the image “Google Maps.”
+Google's attribution requirements apply to this asset and its associated
+content. Preserve attribution when adapting the control. The embedded data
+URL requires application Content Security Policies to allow `data:` in
+`img-src`.

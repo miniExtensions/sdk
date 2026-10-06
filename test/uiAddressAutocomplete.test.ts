@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, it, type TestContext } from 'node:test';
 import { Window } from 'happy-dom';
 import {
@@ -124,7 +125,10 @@ describe('address autocomplete native control', { concurrency: false }, () => {
         test.mock.timers.tick(1);
         await settle();
         assert.deepEqual(queries, ['12 Main']);
-        assert.equal(h.control.element.querySelector('img'), null);
+        assert.equal(
+            h.control.element.querySelector('[role="listbox"] img'),
+            null
+        );
         assert.equal(
             h.control.element.querySelector('[role="option"]')?.textContent,
             '<img src=x> usable address'
@@ -142,6 +146,187 @@ describe('address autocomplete native control', { concurrency: false }, () => {
             '<img src=x> usable address',
             'Formatted address',
         ]);
+    });
+
+    it('shows official attribution separately from visibly highlighted keyboard options', async (test) => {
+        const places: string[] = [];
+        const pending = deferred<string>();
+        const h = fixture(test, {
+            listPredictions: async () => [
+                { description: 'First address', placeId: 'first' },
+                { description: 'Second address', placeId: 'second' },
+            ],
+            getFormattedAddress: async (request) => {
+                places.push(request.placeId);
+                return pending.promise;
+            },
+        });
+        const popup = h.control.element.querySelector<HTMLElement>(
+            '[data-address-suggestions]'
+        );
+        const list =
+            h.control.element.querySelector<HTMLElement>('[role="listbox"]');
+        const attribution = h.control.element.querySelector<HTMLElement>(
+            '[data-address-attribution]'
+        );
+        const logo = attribution?.querySelector('img');
+        assert.ok(popup && list && attribution && logo);
+        assert.equal(popup.hidden, true);
+        h.control.input.focus();
+        h.type('Two choices');
+        test.mock.timers.tick(800);
+        await settle();
+        assert.equal(popup.hidden, false);
+        assert.equal(list.hidden, false);
+        assert.equal(list.parentElement, popup);
+        assert.equal(attribution.parentElement, popup);
+        assert.equal(list.contains(attribution), false);
+        assert.equal(list.querySelector('img'), null);
+        assert.equal(list.children.length, 2);
+        assert.equal(h.control.element.querySelectorAll('img').length, 1);
+        assert.equal(logo.alt, 'Google Maps');
+        assert.equal(logo.getAttribute('translate'), 'no');
+        assert.equal(logo.width, 98);
+        assert.equal(logo.height, 18);
+        assert.equal(logo.style.width, '98px');
+        assert.equal(logo.style.height, '18px');
+        assert.equal(attribution.style.paddingTop, '10px');
+        assert.equal(attribution.style.paddingRight, '10px');
+        assert.equal(attribution.style.paddingBottom, '5px');
+        assert.equal(attribution.style.paddingLeft, '10px');
+        assert.notEqual(attribution.style.backgroundColor, '');
+        assert.equal(popup.style.borderWidth, '1px');
+        assert.equal(popup.style.borderStyle, 'solid');
+        const source = logo.getAttribute('src');
+        assert.ok(source);
+        assert.ok(source.startsWith('data:image/png;base64,'));
+        const bytes = Buffer.from(source.split(',')[1]!, 'base64');
+        assert.equal(bytes.length, 2600);
+        assert.equal(
+            createHash('sha256').update(bytes).digest('hex'),
+            'f542cdc1844d0e1a848455dffdc46a5cd618528576a4dba47bc4a096bfa4f60c'
+        );
+        const options = Array.from(
+            list.querySelectorAll<HTMLButtonElement>('[role="option"]')
+        );
+        const ordinaryBackground = options[0]!.style.backgroundColor;
+        const ordinaryColor = options[0]!.style.color;
+        const assertSelected = (index: number): void => {
+            for (const [optionIndex, option] of options.entries()) {
+                const selected = optionIndex === index;
+                assert.equal(
+                    option.getAttribute('aria-selected'),
+                    String(selected)
+                );
+                if (selected) {
+                    assert.notEqual(
+                        option.style.backgroundColor,
+                        ordinaryBackground
+                    );
+                    assert.notEqual(option.style.color, ordinaryColor);
+                    assert.equal(option.style.outlineWidth, '2px');
+                    assert.equal(option.style.outlineStyle, 'solid');
+                    assert.notEqual(option.style.outlineColor, 'transparent');
+                } else {
+                    assert.equal(
+                        option.style.backgroundColor,
+                        ordinaryBackground
+                    );
+                    assert.equal(option.style.color, ordinaryColor);
+                    assert.equal(option.style.outlineColor, 'transparent');
+                }
+            }
+            assert.equal(
+                h.control.input.getAttribute('aria-activedescendant'),
+                options[index]!.id
+            );
+            assert.equal(h.window.document.activeElement, h.control.input);
+        };
+        assert.equal(h.key('ArrowDown').defaultPrevented, true);
+        assertSelected(0);
+        h.key('ArrowDown');
+        assertSelected(1);
+        h.key('ArrowDown');
+        assertSelected(0);
+        h.key('ArrowUp');
+        assertSelected(1);
+        assert.equal(h.key('Enter').defaultPrevented, true);
+        assert.deepEqual(places, ['second']);
+        assert.equal(h.control.getValue(), 'Second address');
+        assert.equal(popup.hidden, true);
+        assert.equal(list.children.length, 0);
+        assert.equal(
+            h.control.input.hasAttribute('aria-activedescendant'),
+            false
+        );
+        assert.equal(h.window.document.activeElement, h.control.input);
+    });
+
+    it('retires the attributed popup across dismiss, clear, empty, failure, suspend and destroy', async (test) => {
+        let outcome: 'success' | 'empty' | 'error' = 'success';
+        const h = fixture(test, {
+            listPredictions: async () => {
+                if (outcome === 'error')
+                    throw new Error('Private provider diagnostic');
+                return outcome === 'empty'
+                    ? []
+                    : [{ description: 'Visible address', placeId: 'one' }];
+            },
+            getFormattedAddress: async () => 'Unused',
+        });
+        const popup = h.control.element.querySelector<HTMLElement>(
+            '[data-address-suggestions]'
+        );
+        const list =
+            h.control.element.querySelector<HTMLElement>('[role="listbox"]');
+        assert.ok(popup && list);
+        const read = async (value: string): Promise<void> => {
+            h.type(value);
+            test.mock.timers.tick(800);
+            await settle();
+        };
+        const assertClosed = (): void => {
+            assert.equal(popup.hidden, true);
+            assert.equal(list.hidden, true);
+            assert.equal(list.children.length, 0);
+            assert.equal(
+                h.control.input.getAttribute('aria-expanded'),
+                'false'
+            );
+            assert.equal(
+                h.control.input.hasAttribute('aria-activedescendant'),
+                false
+            );
+        };
+        await read('Dismiss');
+        h.key('ArrowDown');
+        h.key('Escape');
+        assertClosed();
+        await read('Clear');
+        h.button('Clear address');
+        assertClosed();
+        await read('Suspend');
+        h.control.setActive(false);
+        h.control.setActive(true);
+        assertClosed();
+        assert.equal(h.control.getValue(), 'Suspend');
+        await read('Replace supplied value');
+        h.control.setValue('Restored native value');
+        assertClosed();
+        outcome = 'empty';
+        await read('No results');
+        assertClosed();
+        outcome = 'error';
+        await read('Failure');
+        assertClosed();
+        assert.ok(h.control.element.querySelector('[role="alert"]'));
+        outcome = 'success';
+        h.button('Try again');
+        await settle();
+        assert.equal(popup.hidden, false);
+        h.control.destroy();
+        assertClosed();
+        assert.equal(h.control.getValue(), 'Failure');
     });
 
     it('ignores stale prediction success and failure when adapters ignore abort', async (test) => {

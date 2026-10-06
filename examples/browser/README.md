@@ -103,6 +103,16 @@ entry and offer an explicit retry. Hiding an address field or suspending the
 Form retires its pending address reads without clearing accepted values or
 submitting a Save.
 
+Arrow keys show a contrasting highlight while input focus stays in place;
+Enter accepts that highlighted suggestion without submitting the Form.
+The existing Google-backed results display the official Google Maps logo
+outside the selectable listbox, inside its bordered suggestions container.
+The unchanged embedded PNG displays at 98 × 18 pixels on white with the
+required clear space; closing suggestions hides their attribution too.
+Custom Content Security Policies must allow `data:` in `img-src`. Keep
+the attribution visible with these results and use a different presenter for
+non-Google adapters. See [asset provenance and policies](../../THIRD_PARTY_NOTICES.md#google-maps-attribution-asset).
+
 The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
 revisions, requests, cancellation, and when to discard drafts.

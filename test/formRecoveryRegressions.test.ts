@@ -642,9 +642,13 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
                 earlierInput()?.textContent ?? '',
                 /private narrative/
             );
-            assert.match(
+            assert.doesNotMatch(
                 earlierInput()?.textContent ?? '',
                 /previous-visitor-private-attachment\.pdf/
+            );
+            assert.match(
+                earlierInput()?.textContent ?? '',
+                /Attachment details are not retained/
             );
             const reload = window.document.getElementById('reload');
             assert.ok(reload instanceof window.HTMLButtonElement);
@@ -658,7 +662,10 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
             assert.ok(reloadedTitle instanceof window.HTMLInputElement);
             assert.equal(reloadedTitle.value, 'Fresh public baseline');
             assert.ok(earlierInput()?.textContent?.includes(privateText));
-            assert.ok(earlierInput()?.textContent?.includes(privateFilename));
+            assert.equal(
+                earlierInput()?.textContent?.includes(privateFilename),
+                false
+            );
             assert.ok(earlierInput()?.textContent?.includes(privateTitle));
             const teardownButton = window.document.getElementById(
                 teardown === 'Logout' ? 'logout' : 'disconnect'
@@ -1026,11 +1033,24 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
                 );
                 submit(window, card);
                 await waitFor(() => saves.length === expectedSaves && idle());
-                for (const secret of Object.values(secrets[identity]))
+                for (const secret of [
+                    secrets[identity].text,
+                    secrets[identity].title,
+                ])
                     assert.equal(
                         earlierInput()?.textContent?.includes(secret),
                         true
                     );
+                assert.equal(
+                    earlierInput()?.textContent?.includes(
+                        secrets[identity].filename
+                    ),
+                    false
+                );
+                assert.match(
+                    earlierInput()?.textContent ?? '',
+                    /Attachment details are not retained/
+                );
                 assert.deepEqual(
                     saves[expectedSaves - 1].formFieldIdsWithUnsavedChanges,
                     ['fld_files', 'fld_prefill', 'fld_parent', 'fld_title']
@@ -1092,7 +1112,7 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
                     false
                 );
                 selectVisitor('A');
-                for (const secret of Object.values(secrets.A))
+                for (const secret of [secrets.A.text, secrets.A.title])
                     assert.equal(
                         earlierInput()?.textContent?.includes(secret),
                         true

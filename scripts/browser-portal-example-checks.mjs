@@ -438,9 +438,9 @@ export async function checkBrowserPortalExample({
                 );
                 assert.match(
                     document.querySelector(
-                        'textarea[data-field-id="fld_files"]'
-                    ).value,
-                    /old-upload|old\.txt/
+                        '[data-form-attachment-field-id="fld_files"]'
+                    ).textContent,
+                    /Attachment — filename unavailable/
                 );
                 assert.equal(
                     file.value,
@@ -2705,8 +2705,8 @@ export async function checkBrowserPortalExample({
                 );
                 assert.doesNotMatch(
                     document.querySelector(
-                        'textarea[data-field-id="fld_files"]'
-                    ).value,
+                        '[data-form-attachment-field-id="fld_files"]'
+                    ).textContent,
                     /old-upload|old\.txt/
                 );
                 assert.equal(
@@ -2969,7 +2969,7 @@ export async function checkBrowserPortalExample({
             }
         );
         await check(
-            'actual main ordinary reopen after uncertain edit upload uses fresh server values and retains only a file-name reference without replay',
+            'actual main ordinary reopen after uncertain edit upload uses fresh server values and retains only a generic attachment notice without replay',
             async () => {
                 const h = await recoveryMain({
                     attachments: true,
@@ -3044,12 +3044,12 @@ export async function checkBrowserPortalExample({
                 assertReference(document, 'Retained dirty edit before upload');
                 const reference = assertReference(
                     document,
-                    'uncertain-upload.txt'
+                    'Attachment details are not retained.'
                 );
                 assert.doesNotMatch(
                     reference.textContent,
-                    /Synthetic uncertain upload bytes|https:\/\//,
-                    'Attachment reference retains its filename, without bytes or transport capabilities.'
+                    /Synthetic uncertain upload bytes|uncertain-upload\.txt|https:\/\//,
+                    'Attachment recovery retains a generic notice without filenames, bytes or transport capabilities.'
                 );
                 assert.equal(
                     document.querySelector('input[type="file"]').files.length,
@@ -3057,8 +3057,8 @@ export async function checkBrowserPortalExample({
                 );
                 assert.doesNotMatch(
                     document.querySelector(
-                        'textarea[data-field-id="fld_files"]'
-                    ).value,
+                        '[data-form-attachment-field-id="fld_files"]'
+                    ).textContent,
                     /uncertain-upload/
                 );
                 button(document, 'Use this request').click();
@@ -3076,7 +3076,10 @@ export async function checkBrowserPortalExample({
                     'Fresh server title after uncertain upload'
                 );
                 assertReference(document, 'Retained dirty edit before upload');
-                assertReference(document, 'uncertain-upload.txt');
+                assertReference(
+                    document,
+                    'Attachment details are not retained.'
+                );
                 // Neither a retained old upload action nor a fresh empty picker may replay the file.
                 oldUpload.dispatchEvent(new window.Event('click'));
                 button(document, 'Upload selected file').click();
@@ -3200,7 +3203,7 @@ export async function checkBrowserPortalExample({
             }
         );
         await check(
-            'actual main previously uploaded noneditable attachments retain filenames only after uncertain save and fresh inspection without replay',
+            'actual main previously uploaded noneditable attachments retain a generic notice after uncertain save and fresh inspection without replay',
             async () => {
                 const h = await recoveryMain({ attachments: true });
                 const { document, window } = h;
@@ -3239,14 +3242,17 @@ export async function checkBrowserPortalExample({
                         document.getElementById('screen').inert === false
                 );
                 const originalAttachments = document.querySelector(
-                    'textarea[data-field-id="fld_files"]'
+                    '[data-form-attachment-field-id="fld_files"]'
                 );
-                assert.equal(
-                    originalAttachments.readOnly,
-                    true,
-                    'Native attachment refs use the actual example noneditable field control.'
+                assert.equal(originalAttachments.tagName, 'P');
+                assert.match(
+                    originalAttachments.textContent,
+                    /Attachment — filename unavailable/
                 );
-                assert.match(originalAttachments.value, /retained-upload\.txt/);
+                assert.doesNotMatch(
+                    originalAttachments.textContent,
+                    /retained-upload|https:\/\//
+                );
                 submit(window, title.closest('form'));
                 await waitFor(
                     () =>
@@ -3290,22 +3296,22 @@ export async function checkBrowserPortalExample({
                     'Fresh server title with no uploaded attachment'
                 );
                 const freshAttachments = document.querySelector(
-                    'textarea[data-field-id="fld_files"]'
+                    '[data-form-attachment-field-id="fld_files"]'
                 );
-                assert.equal(freshAttachments.readOnly, true);
-                assert.deepEqual(JSON.parse(freshAttachments.value), []);
+                assert.equal(freshAttachments.tagName, 'P');
+                assert.equal(freshAttachments.textContent, '');
                 assert.equal(
                     document.querySelector('input[type="file"]').files.length,
                     0
                 );
                 const reference = assertReference(
                     document,
-                    'retained-upload.txt'
+                    'Attachment details are not retained.'
                 );
                 assert.doesNotMatch(
                     reference.textContent,
-                    /https:\/\/|old-upload|SYNTHETIC-UPLOADED-FILE-BYTES/,
-                    'Retained attachment input exposes its filename, never upload URLs, refs or file bytes.'
+                    /https:\/\/|old-upload|retained-upload\.txt|SYNTHETIC-UPLOADED-FILE-BYTES/,
+                    'Retained attachment input exposes no filename, upload URL, reference or file bytes.'
                 );
                 assert.equal(h.count('saveForm'), 1);
                 assert.equal(h.count(signRoute), 1);
@@ -3319,7 +3325,10 @@ export async function checkBrowserPortalExample({
                 await waitFor(
                     () => button(document, 'Save').disabled === false
                 );
-                assertReference(document, 'retained-upload.txt');
+                assertReference(
+                    document,
+                    'Attachment details are not retained.'
+                );
                 assert.equal(
                     h.count('saveForm'),
                     1,
@@ -3614,11 +3623,13 @@ export async function checkBrowserPortalExample({
                         ...first.payload.formRecord.data,
                         fld_title: privateText,
                     });
-                    for (const secret of [
-                        privateText,
-                        privateFilename,
-                        privateTitle,
-                    ])
+                    assert(!reference().textContent.includes(privateFilename));
+                    assert(
+                        reference().textContent.includes(
+                            'Attachment details are not retained.'
+                        )
+                    );
+                    for (const secret of [privateText, privateTitle])
                         assert(reference().textContent.includes(secret));
                     document.getElementById('reload').click();
                     await waitFor(() => loads === 2 && idle());
@@ -3627,19 +3638,19 @@ export async function checkBrowserPortalExample({
                             .value,
                         'Fresh public baseline'
                     );
-                    assert.deepEqual(
-                        JSON.parse(
-                            document.querySelector(
-                                '[data-field-id="fld_files"]'
-                            ).value
-                        ),
-                        []
+                    assert.equal(
+                        document.querySelector(
+                            '[data-form-attachment-field-id="fld_files"]'
+                        ).textContent,
+                        ''
                     );
-                    for (const secret of [
-                        privateText,
-                        privateFilename,
-                        privateTitle,
-                    ])
+                    assert(!reference().textContent.includes(privateFilename));
+                    assert(
+                        reference().textContent.includes(
+                            'Attachment details are not retained.'
+                        )
+                    );
+                    for (const secret of [privateText, privateTitle])
                         assert(
                             reference().textContent.includes(secret),
                             'Same-person Reload retains reference-only input.'
@@ -3677,13 +3688,11 @@ export async function checkBrowserPortalExample({
                             .value,
                         'Fresh public baseline'
                     );
-                    assert.deepEqual(
-                        JSON.parse(
-                            document.querySelector(
-                                '[data-field-id="fld_files"]'
-                            ).value
-                        ),
-                        []
+                    assert.equal(
+                        document.querySelector(
+                            '[data-form-attachment-field-id="fld_files"]'
+                        ).textContent,
+                        ''
                     );
                     assert.equal(button(document, 'Save').disabled, true);
                     assert.match(

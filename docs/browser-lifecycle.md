@@ -148,7 +148,7 @@ the ordinary **Open Form** action also starts inspection from the newly
 returned server values. An older cached dirty draft cannot mask that response
 or become saveable through acknowledgment. The earlier visible dirty input is
 retained separately under **Earlier local input (reference only)**; attachment
-entries retain names, not upload URLs, references or file bytes. These values
+entries retain a generic notice, never attachment filenames, raw field titles, upload URLs, metadata or file bytes. These values
 are never merged into the fresh draft automatically. Reusing any value requires
 a deliberate new edit after inspection.
 
@@ -160,10 +160,11 @@ unlock its replay.
 
 Fields configured with `obscurePassword: true` are excluded before reference
 journaling, so recovery does not reveal their masked values. For rendered,
-dirty attachment fields, the reference retains filenames from successful
-uploads even though the native attachment display is noneditable; read-only
-or computed fields remain excluded. No attachment IDs, URLs, references or
-file bytes enter this reference output.
+dirty attachment fields, the reference retains one generic attachment notice
+per attempt. Uploaded and pending filenames, raw attachment field titles,
+metadata, URLs and file bytes never enter the retained reference. Complete native
+attachment values remain in the owned draft and deliberate Save, separately from
+this presentation. Unrelated scalar recovery and password suppression are unchanged.
 
 If the user acknowledges that the old attempt may have committed, a separate
 blank draft can start a new local operation. It must not replay the original

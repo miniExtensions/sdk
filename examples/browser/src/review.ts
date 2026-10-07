@@ -262,7 +262,9 @@ export const prepareFormReviewRows = (
                     typeof attachment.filename === 'string' &&
                     attachment.filename.trim() !== ''
                         ? attachment.filename
-                        : 'Attachment — filename unavailable'
+                        : names
+                          ? 'Attachment — filename unavailable'
+                          : 'Attachment'
                 )
                 .join('\n');
         } else if (type === AirtableFieldType.MULTIPLE_RECORD_LINKS) {

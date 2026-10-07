@@ -441,7 +441,7 @@ export async function checkBrowserPortalExample({
                     document.querySelector(
                         '[data-form-attachment-field-id="fld_files"]'
                     ).textContent,
-                    /Attachment — filename unavailable/
+                    /^Attachment$/
                 );
                 assert.equal(
                     file.value,
@@ -3247,10 +3247,7 @@ export async function checkBrowserPortalExample({
                     '[data-form-attachment-field-id="fld_files"]'
                 );
                 assert.equal(originalAttachments.tagName, 'P');
-                assert.match(
-                    originalAttachments.textContent,
-                    /Attachment — filename unavailable/
-                );
+                assert.match(originalAttachments.textContent, /^Attachment$/);
                 assert.doesNotMatch(
                     originalAttachments.textContent,
                     /retained-upload|https:\/\//

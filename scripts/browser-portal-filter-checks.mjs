@@ -40,6 +40,23 @@ const controls = (root) => {
 };
 const change = (w, n) =>
     n.dispatchEvent(new w.Event('change', { bubbles: true }));
+const assertOperandRows = (window, c, textVisible, checkboxVisible) => {
+    for (const [control, label, visible] of [
+        [c.value, 'Filter value', textVisible],
+        [c.bool, 'Checkbox value', checkboxVisible],
+    ]) {
+        const row = control.closest('label');
+        assert(row);
+        assert.equal(row.firstChild.textContent, label);
+        assert.equal(row.hidden, !visible, label);
+        assert.equal(
+            window.getComputedStyle(row).display !== 'none',
+            visible,
+            label
+        );
+        assert.equal(control.hidden, !visible, label);
+    }
+};
 const condition = (id, type, operator, value) => ({
     logicalOperator: 'and',
     conditions: [
@@ -119,6 +136,12 @@ export async function checkPortalFilterCases({
                 fixture.provenance.generatorSha256
             );
             const { window, close } = await environment();
+            const style = window.document.createElement('style');
+            style.textContent = readFileSync(
+                join(consumer, 'styles.css'),
+                'utf8'
+            );
+            window.document.head.append(style);
             const { mountPortalScalarFilterEditor } =
                 await loadExample('portalFilter');
             let count = 0;
@@ -146,6 +169,15 @@ export async function checkPortalFilterCases({
                 c.operator.value = setting.type;
                 assert.equal(c.operator.value, setting.type, input.name);
                 change(window, c.operator);
+                const needsOperand = !['isEmpty', 'isNotEmpty'].includes(
+                    setting.type
+                );
+                assertOperandRows(
+                    window,
+                    c,
+                    needsOperand && input.field.config.type !== 'checkbox',
+                    needsOperand && input.field.config.type === 'checkbox'
+                );
                 c.value.value =
                     setting.value === undefined ? '' : String(setting.value);
                 c.bool.value = String(setting.value);
@@ -174,6 +206,70 @@ export async function checkPortalFilterCases({
                 count++;
             }
             assert.equal(count, 87);
+            // Exercise one live editor across field and operator changes,
+            // retaining valid operands when only presentation changes.
+            const p = editablePortal(),
+                s = snapshot();
+            const checkbox = {
+                id: 'fld_checked',
+                name: 'Checked',
+                config: { type: 'checkbox' },
+            };
+            s.tableIdsToLinkedTableStates.tbl_children.airtableFields.push(
+                checkbox
+            );
+            p.payload.linkedRecordFieldIdToDetailFields.fld_children.push({
+                fieldId: checkbox.id,
+                isHidden: false,
+            });
+            const changes = [];
+            const e = mountPortalScalarFilterEditor({
+                portal: p,
+                portalFieldId: 'fld_children',
+                criteria: criteria(),
+                snapshot: s,
+                isCurrent: () => true,
+                onApply: (n) => changes.push(n),
+            });
+            assert.equal(e.type, 'ready');
+            window.document.getElementById('screen').append(e.node);
+            const c = controls(e.node);
+            for (const [id, op, operand] of [
+                ['fld_title', 'contains', ' Exact text '],
+                ['fld_quantity', 'equals', '25'],
+            ]) {
+                c.field.value = id;
+                change(window, c.field);
+                c.operator.value = op;
+                change(window, c.operator);
+                c.value.value = operand;
+                assertOperandRows(window, c, true, false);
+                c.operator.value = 'isEmpty';
+                change(window, c.operator);
+                assertOperandRows(window, c, false, false);
+                assert.equal(c.value.value, operand);
+                c.operator.value = op;
+                change(window, c.operator);
+                assertOperandRows(window, c, true, false);
+                assert.equal(c.value.value, operand);
+            }
+            c.field.value = checkbox.id;
+            change(window, c.field);
+            assertOperandRows(window, c, false, true);
+            c.bool.value = 'true';
+            c.field.value = 'fld_title';
+            change(window, c.field);
+            assertOperandRows(window, c, true, false);
+            c.field.value = checkbox.id;
+            change(window, c.field);
+            assertOperandRows(window, c, false, true);
+            assert.equal(c.bool.value, 'true');
+            c.apply.click();
+            assert.equal(changes.length, 1);
+            assert.equal(
+                changes[0].filtersByEndUser.conditions[0].setting.value,
+                true
+            );
             await close();
         }
     );

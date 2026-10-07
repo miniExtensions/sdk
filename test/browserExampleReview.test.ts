@@ -30,6 +30,7 @@ before(async () => {
             '@miniextensions/sdk/ui': join(root, 'src/ui/index.ts'),
             '@miniextensions/sdk/forms': join(root, 'src/forms/index.ts'),
             '@miniextensions/sdk/portals': join(root, 'src/portals/index.ts'),
+            '@miniextensions/sdk/formulas': join(root, 'src/formulas/index.ts'),
             '@miniextensions/sdk': join(root, 'src/runtime/index.ts'),
         },
         bundle: true,
@@ -1368,7 +1369,7 @@ describe('actual browser starter prepared review', () => {
         );
     });
 
-    it('denies a noncomputed linked renderer while retaining its adjacent scalar answers', async (test) => {
+    it('presents an unhydrated linked answer generically while retaining its native ID and adjacent scalar answers', async (test) => {
         const form = reviewForm();
         const linkedConfig = structuredClone(portalField.config);
         assert.ok(
@@ -1395,11 +1396,19 @@ describe('actual browser starter prepared review', () => {
         fixture.submit();
         await settled();
         assert.equal(fixture.saves.length, 0);
-        assert.equal(fixture.window.document.querySelector('dialog'), null);
-        assert.match(
-            fixture.window.document.getElementById('status')?.textContent ?? '',
-            /review.*unavailable/i
+        const dialog = fixture.window.document.querySelector('dialog');
+        assert.ok(dialog);
+        const row = dialog.querySelector('[data-review-field-id="fld_linked"]');
+        assert.equal(
+            row?.nextElementSibling?.textContent,
+            'Selected record — details unavailable'
         );
+        assert.equal(dialog.textContent?.includes('record_linked'), false);
+        fixture.button('Confirm', dialog).click();
+        await waitFor(() => fixture.saves.length === 1);
+        assert.deepEqual(fixture.saves[0].formRecord.data.fld_linked, [
+            'record_linked',
+        ]);
         assert.equal(fixture.field('fld_title').value, 'Initial title');
         assert.equal(fixture.field('fld_readonly').value, 'Locked value');
         assert.equal(linked.value, JSON.stringify(['record_linked'], null, 2));

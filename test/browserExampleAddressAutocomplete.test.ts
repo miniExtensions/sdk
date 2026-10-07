@@ -28,6 +28,7 @@ before(async () => {
             '@miniextensions/sdk/ui': join(root, 'src/ui/index.ts'),
             '@miniextensions/sdk/forms': join(root, 'src/forms/index.ts'),
             '@miniextensions/sdk/portals': join(root, 'src/portals/index.ts'),
+            '@miniextensions/sdk/formulas': join(root, 'src/formulas/index.ts'),
             '@miniextensions/sdk': join(root, 'src/runtime/index.ts'),
         },
         bundle: true,

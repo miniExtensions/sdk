@@ -54,6 +54,7 @@ import {
     type ParentFormDraftScope,
 } from './drafts.js';
 import { prepareFormReviewRows } from './review.js';
+import { createLinkedReviewPresentation } from './linkedReview.js';
 import {
     RecoveryJournal,
     recoveryOwner,
@@ -693,6 +694,10 @@ const renderForm = (page: FormLoadedResult): void => {
         formClient != null &&
         sessionKey(formClient) === formSession;
     let metadataPromise: Promise<RuntimeTableStates> | null = null;
+    const linkedPresentation = createLinkedReviewPresentation(
+        page,
+        ownsLinkedFilters
+    );
     const readFilterMetadata = (context: {
         client: MiniExtensionsClient;
         signal: AbortSignal;
@@ -706,10 +711,23 @@ const renderForm = (page: FormLoadedResult): void => {
         )
             throw new Error('Reopen the current Form before loading filters.');
         if (metadataPromise == null) {
-            const pending = context.client.linkedRecords.loadSelectedRecords(
-                { extensionAccessToken: page.payload.extensionAccessToken },
-                { signal: context.signal, session: context.client.getSession() }
-            );
+            const pending = context.client.linkedRecords
+                .loadSelectedRecords(
+                    { extensionAccessToken: page.payload.extensionAccessToken },
+                    {
+                        signal: context.signal,
+                        session: context.client.getSession(),
+                    }
+                )
+                .then((result) => {
+                    if (
+                        !context.signal.aborted &&
+                        ownsLinkedFilters() &&
+                        context.current()
+                    )
+                        linkedPresentation.acceptHydration(result);
+                    return result;
+                });
             metadataPromise = pending;
             // A failed read permits a new explicit Load action, never an automatic retry.
             void pending.catch(() => {
@@ -772,6 +790,7 @@ const renderForm = (page: FormLoadedResult): void => {
             });
     };
     disposeFormControls = () => {
+        linkedPresentation.retire();
         if (reviewPending) cancelConfirmation();
         updateFormActivity = () => {};
         for (const view of linkedFilterViews.values()) view.destroy();
@@ -1098,6 +1117,7 @@ const renderForm = (page: FormLoadedResult): void => {
                             throw error;
                         }
                         if (!accepted()) return;
+                        linkedPresentation.acceptOptions(fieldId, result);
                         offset = result.offset;
                         for (const record of result.records) {
                             const choice = element('input');
@@ -1712,7 +1732,12 @@ const renderForm = (page: FormLoadedResult): void => {
                 !ownsLinkedFilters()
             )
                 return;
-            const rows = prepareFormReviewRows(page, snapshot.data);
+            const linkedSnapshot = linkedPresentation.snapshot();
+            const rows = prepareFormReviewRows(
+                page,
+                snapshot.data,
+                linkedSnapshot
+            );
             const formConnection = connection;
             const parentScope = visitor.formParentScope;
             const configurationKey = (): string =>
@@ -1728,6 +1753,7 @@ const renderForm = (page: FormLoadedResult): void => {
                         : [page.payload.formRecord.type],
                     page.payload.fieldIdsInForm,
                     page.payload.fieldIdsToSchemas,
+                    page.payload.linkedRecordFieldIdToDetailFields,
                     page.payload.publicFields,
                     visitor.formContext,
                     visitor.formParentScope,
@@ -1736,6 +1762,7 @@ const renderForm = (page: FormLoadedResult): void => {
             const capturedConfiguration = configurationKey();
             const preparedCurrent = (): boolean =>
                 ownsLinkedFilters() &&
+                linkedSnapshot.current() &&
                 visitor.formContext === context &&
                 visitor.formParentScope === parentScope &&
                 connection === formConnection &&

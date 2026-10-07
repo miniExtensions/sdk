@@ -38,6 +38,7 @@ before(async () => {
             '@miniextensions/sdk/ui': sdkEntry('ui'),
             '@miniextensions/sdk/forms': sdkEntry('forms'),
             '@miniextensions/sdk/portals': sdkEntry('portals'),
+            '@miniextensions/sdk/formulas': sdkEntry('formulas'),
             '@miniextensions/sdk': sdkEntry('runtime'),
         },
         bundle: true,

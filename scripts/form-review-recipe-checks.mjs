@@ -321,12 +321,7 @@ export async function checkFormReviewRecipe({
         ).value,
         'First'
     );
-    for (const type of [
-        'multipleRecordLinks',
-        'multipleAttachments',
-        'richText',
-        'date',
-    ]) {
+    for (const type of ['multipleAttachments', 'richText', 'date']) {
         const p = structuredClone(selectPage);
         p.payload.fieldIdsToSchemas.fld_review_single.fieldType = type;
         p.payload.fieldIdsToSchemas.fld_review_single.airtableField.config = {

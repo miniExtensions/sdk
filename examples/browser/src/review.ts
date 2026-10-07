@@ -10,6 +10,10 @@ import {
 import type { ConfirmationRow } from './confirmation.js';
 import { getSelectFieldPolicy } from '@miniextensions/sdk/ui';
 import { settings } from './dom.js';
+import {
+    unavailableLinkedAnswer,
+    type LinkedReviewSnapshot,
+} from './linkedReview.js';
 
 const textTypes = new Set<string>([
     AirtableFieldType.SINGLE_LINE_TEXT,
@@ -26,15 +30,17 @@ const numericTypes = new Set<string>([
 ]);
 function unavailable(): never {
     throw new Error(
-        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox, barcode and select answers.'
+        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox, barcode, select and conservatively presented linked answers.'
     );
 }
 
 /** A presentation copy only: the complete native snapshot still goes to Save. */
 export const prepareFormReviewRows = (
     page: FormLoadedResult,
-    data: Readonly<Record<string, AirtableValue>>
+    data: Readonly<Record<string, AirtableValue>>,
+    linked?: LinkedReviewSnapshot
 ): ConfirmationRow[] => {
+    if (linked != null && !linked.forPage(page)) unavailable();
     const configuration = settings(page.payload.publicFields);
     if (
         (configuration.multiPageFormMode != null &&
@@ -55,6 +61,7 @@ export const prepareFormReviewRows = (
                 !numericTypes.has(type) &&
                 type !== AirtableFieldType.SINGLE_SELECT &&
                 type !== AirtableFieldType.MULTIPLE_SELECTS &&
+                type !== AirtableFieldType.MULTIPLE_RECORD_LINKS &&
                 type !== AirtableFieldType.CHECKBOX &&
                 type !== AirtableFieldType.BARCODE)
         )
@@ -76,19 +83,45 @@ export const prepareFormReviewRows = (
     if (projection.type === 'blocked') unavailable();
     const rows: ConfirmationRow[] = [];
     for (const field of fields) {
+        if (projection.hiddenFieldIds.includes(field.fieldId)) continue;
         const type = field.fieldType;
         const value = projection.record.fields[field.fieldId];
+        // Linked membership always requires an array; scalar/select blank rules stay intact.
+        if (
+            type === AirtableFieldType.MULTIPLE_RECORD_LINKS &&
+            !Array.isArray(value)
+        )
+            unavailable();
         // Canonical emptiness accepts whitespace before field-specific shapes.
         if (value == null || (typeof value === 'string' && value.trim() === ''))
             continue;
         if (
-            type === AirtableFieldType.MULTIPLE_SELECTS &&
+            (type === AirtableFieldType.MULTIPLE_SELECTS ||
+                type === AirtableFieldType.MULTIPLE_RECORD_LINKS) &&
             Array.isArray(value) &&
             value.length === 0
         )
             continue;
         let text: string;
-        if (
+        if (type === AirtableFieldType.MULTIPLE_RECORD_LINKS) {
+            if (
+                !Array.isArray(value) ||
+                Array.from(value).some(
+                    (id, index) =>
+                        !Object.hasOwn(value, index) ||
+                        typeof id !== 'string' ||
+                        id.trim() === ''
+                )
+            )
+                unavailable();
+            text = value
+                .map(
+                    (id) =>
+                        linked?.label(field.fieldId, id as string) ??
+                        unavailableLinkedAnswer
+                )
+                .join('\n');
+        } else if (
             type === AirtableFieldType.SINGLE_SELECT ||
             type === AirtableFieldType.MULTIPLE_SELECTS
         ) {

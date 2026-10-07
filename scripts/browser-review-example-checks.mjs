@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { addSelectReviewAnswers } from './form-review-recipe-checks.mjs';
+import { addLinkedReviewAnswers } from './linked-review-recipe-checks.mjs';
 import {
     createReviewFixture,
     createHideEmptyReviewFixture,
@@ -40,7 +41,7 @@ export async function checkBrowserReviewExample({
     happyDomModulePath,
 }) {
     const consumer = realpathSync(consumerDirectory);
-    for (const name of ['main.ts', 'review.ts'])
+    for (const name of ['main.ts', 'review.ts', 'linkedReview.ts'])
         assert.deepEqual(
             readFileSync(join(consumer, 'src', name)),
             readFileSync(
@@ -77,6 +78,10 @@ export async function checkBrowserReviewExample({
     );
     const scenarios = [
         'answers',
+        'linked-options',
+        'linked-stale-options',
+        'linked-presentation-aba',
+        'linked-detail-config',
         'confirmed-draft-revision',
         'confirmed-owner-aba',
         'confirmed-reload',
@@ -98,7 +103,7 @@ export async function checkBrowserReviewExample({
         'refused-malformed-choice',
         'refused-multi-null',
         'refused-multi-empty-name',
-        'refused-linked-empty',
+        'refused-linked-malformed',
         'refused-attachment-empty',
         'refused-select-driver',
         'refused-select-hide-empty',
@@ -113,6 +118,11 @@ export async function checkBrowserReviewExample({
         );
         const form = fixture.page();
         const selectRows = addSelectReviewAnswers(form);
+        const linkedFixture = addLinkedReviewAnswers(form);
+        if (['linked-options', 'linked-stale-options'].includes(scenario))
+            for (const id of linkedFixture.ids)
+                form.payload.fieldIdsToSchemas[id].miniExtConfig.readOnly =
+                    false;
         if (scenario === 'empty-multi-selection')
             form.payload.formRecord.data.fld_review_multi = [];
         if (scenario === 'refused-duplicate-choice-id')
@@ -157,12 +167,12 @@ export async function checkBrowserReviewExample({
             setting.value = 'First';
         }
         if (
-            ['refused-linked-empty', 'refused-attachment-empty'].includes(
+            ['refused-linked-malformed', 'refused-attachment-empty'].includes(
                 scenario
             )
         ) {
             const type =
-                scenario === 'refused-linked-empty'
+                scenario === 'refused-linked-malformed'
                     ? 'multipleRecordLinks'
                     : 'multipleAttachments';
             const schema = form.payload.fieldIdsToSchemas.fld_review_multi;
@@ -179,7 +189,8 @@ export async function checkBrowserReviewExample({
                           },
                       }
                     : { type };
-            form.payload.formRecord.data.fld_review_multi = [];
+            form.payload.formRecord.data.fld_review_multi =
+                scenario === 'refused-linked-malformed' ? [null] : [];
         }
         if (scenario === 'confirmed-select-revision') {
             form.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig = {};
@@ -204,8 +215,21 @@ export async function checkBrowserReviewExample({
                 ''
             )
         );
+        const linkedCalls = [];
+        let releaseLinked;
+        const heldLinked = new Promise((resolve) => {
+            releaseLinked = resolve;
+        });
         const fetch = async (input, init) => {
             const url = new URL(String(input));
+            if (
+                url.searchParams.get('route') ===
+                'fetchRecordsForFormLinkedRecordsSelector'
+            ) {
+                linkedCalls.push(JSON.parse(init.body));
+                if (scenario === 'linked-stale-options') await heldLinked;
+                return new Response(JSON.stringify(linkedFixture.options));
+            }
             const response = await fixture.fetch(input, init);
             if (url.searchParams.get('route') === 'fetchExtensionForEndUser')
                 return new Response(JSON.stringify(form));
@@ -229,7 +253,10 @@ export async function checkBrowserReviewExample({
         Object.assign(globalThis, globals);
         try {
             let sourceProbe;
-            if (scenario.endsWith('-config')) {
+            if (
+                scenario.endsWith('-config') ||
+                scenario === 'linked-presentation-aba'
+            ) {
                 // Test-only observer; normal starter execution stays unchanged
                 // for every other case. No production test hook is shipped.
                 const probeFile = join(
@@ -254,8 +281,16 @@ export async function checkBrowserReviewExample({
                                     (args) => ({
                                         loader: 'ts',
                                         contents:
-                                            readFileSync(args.path, 'utf8') +
-                                            '\nexport const acceptedReviewPageForTest = () => visitors[activeVisitor].screen;\n',
+                                            readFileSync(args.path, 'utf8')
+                                                .replace(
+                                                    '    const linkedPresentation = createLinkedReviewPresentation(',
+                                                    '    const linkedPresentation = createLinkedReviewPresentation('
+                                                )
+                                                .replace(
+                                                    '    const readFilterMetadata = (context:',
+                                                    '    linkedReviewForTest = linkedPresentation;\n    const readFilterMetadata = (context:'
+                                                ) +
+                                            '\nlet linkedReviewForTest: ReturnType<typeof createLinkedReviewPresentation>;\nexport const linkedPresentationForTest = () => linkedReviewForTest;\nexport const acceptedReviewPageForTest = () => visitors[activeVisitor].screen;\n',
                                     })
                                 );
                             },
@@ -348,6 +383,163 @@ export async function checkBrowserReviewExample({
                         .textContent.includes('Private')
                 );
                 assert.equal(saves().length, 0);
+            } else if (scenario.startsWith('linked-')) {
+                const generic = 'Selected record — details unavailable';
+                const labels = (dialog) =>
+                    linkedFixture.ids.map(
+                        (id) =>
+                            dialog.querySelector(
+                                `[data-review-field-id="${id}"]`
+                            ).nextElementSibling.textContent
+                    );
+                if (
+                    scenario === 'linked-options' ||
+                    scenario === 'linked-stale-options'
+                ) {
+                    const searchButtons = [
+                        ...document.querySelectorAll('button'),
+                    ].filter((node) => node.textContent === 'Search choices');
+                    assert.equal(searchButtons.length, 3);
+                    searchButtons[0].click();
+                    if (scenario === 'linked-stale-options') {
+                        await waitFor(() => linkedCalls.length === 1);
+                        const input = document.querySelector(
+                            'input[placeholder="Search available linked records"]'
+                        );
+                        input.value = 'new search';
+                        input.dispatchEvent(
+                            new window.Event('input', { bubbles: true })
+                        );
+                        releaseLinked();
+                    }
+                    await waitFor(
+                        () =>
+                            linkedCalls.length === 1 &&
+                            document
+                                .getElementById('screen')
+                                .getAttribute('aria-busy') === 'false'
+                    );
+                    assert.equal(
+                        linkedCalls[0].linkedRecordFieldId,
+                        'fld_review_link'
+                    );
+                    if (scenario === 'linked-options') {
+                        for (const index of [1, 2]) {
+                            searchButtons[index].click();
+                            await waitFor(
+                                () =>
+                                    linkedCalls.length === index + 1 &&
+                                    document
+                                        .getElementById('screen')
+                                        .getAttribute('aria-busy') === 'false'
+                            );
+                            assert.equal(
+                                linkedCalls[index].linkedRecordFieldId,
+                                linkedFixture.ids[index]
+                            );
+                        }
+                    }
+                }
+                let dialog = await open();
+                const expected =
+                    scenario === 'linked-options'
+                        ? [
+                              '<b>Authorized name</b>',
+                              generic,
+                              '<b>Authorized name</b>',
+                          ].join('\n')
+                        : Array(3).fill(generic).join('\n');
+                assert.deepEqual(labels(dialog), [
+                    expected,
+                    scenario === 'linked-options'
+                        ? ['••••••••', generic, '••••••••'].join('\n')
+                        : Array(3).fill(generic).join('\n'),
+                    Array(3).fill(generic).join('\n'),
+                ]);
+                assert(!dialog.textContent.includes('PRIVATE'));
+                assert.equal(dialog.querySelectorAll('b,a,img').length, 0);
+                assert.equal(
+                    linkedCalls.length,
+                    scenario === 'linked-options'
+                        ? 3
+                        : scenario === 'linked-stale-options'
+                          ? 1
+                          : 0,
+                    'Review performs zero linked reads'
+                );
+                button(dialog, 'Edit').click();
+                await settled();
+                assert.equal(saves().length, 0);
+                dialog = await open();
+                dialog.dispatchEvent(
+                    new window.Event('cancel', { cancelable: true })
+                );
+                await settled();
+                assert.equal(saves().length, 0);
+                dialog = await open();
+                if (scenario === 'linked-presentation-aba') {
+                    const scope = sourceProbe.linkedPresentationForTest();
+                    scope.acceptOptions(
+                        'fld_review_link',
+                        linkedFixture.options
+                    );
+                    scope.acceptOptions('fld_review_link', {
+                        ...linkedFixture.options,
+                        records: [],
+                    });
+                } else if (scenario === 'linked-detail-config') {
+                    const page = sourceProbe.acceptedReviewPageForTest();
+                    page.payload.linkedRecordFieldIdToDetailFields.fld_review_link[0].isHidden = true;
+                    assert.equal(
+                        sourceProbe
+                            .linkedPresentationForTest()
+                            .snapshot()
+                            .current(),
+                        false
+                    );
+                    page.payload.linkedRecordFieldIdToDetailFields.fld_review_link[0].isHidden = false;
+                }
+                button(dialog, 'Confirm').click();
+                if (
+                    [
+                        'linked-presentation-aba',
+                        'linked-detail-config',
+                    ].includes(scenario)
+                ) {
+                    await settled();
+                    assert.equal(saves().length, 0);
+                    if (scenario === 'linked-detail-config') {
+                        const old = field('fld_review_title');
+                        button(document, 'Reload').click();
+                        await waitFor(
+                            () =>
+                                field('fld_review_title') != null &&
+                                field('fld_review_title') !== old
+                        );
+                    }
+                    dialog = await open();
+                    button(dialog, 'Confirm').click();
+                }
+                await waitFor(() => saves().length === 1);
+                assert.deepEqual(saves()[0].input.formRecord, {
+                    ...form.payload.formRecord,
+                    data: initial,
+                });
+                assert.deepEqual(
+                    saves()[0].input.formFieldIdsWithUnsavedChanges,
+                    []
+                );
+                assert.deepEqual(saves()[0].input.context, {
+                    type: 'direct-url',
+                });
+                assert.equal(
+                    linkedCalls.length,
+                    scenario === 'linked-options'
+                        ? 3
+                        : scenario === 'linked-stale-options'
+                          ? 1
+                          : 0
+                );
             } else if (scenario === 'empty-multi-selection') {
                 const dialog = await open();
                 assert.equal(
@@ -432,6 +624,7 @@ export async function checkBrowserReviewExample({
                         'Zero count',
                         'fld_review_single',
                         'fld_review_multi',
+                        ...linkedFixture.ids,
                     ]
                 );
                 assert.deepEqual(
@@ -444,6 +637,11 @@ export async function checkBrowserReviewExample({
                         initial.fld_review_url,
                         '0',
                         ...selectRows,
+                        ...linkedFixture.ids.map(() =>
+                            Array(3)
+                                .fill('Selected record — details unavailable')
+                                .join('\n')
+                        ),
                     ]
                 );
                 assert.equal(
@@ -543,7 +741,10 @@ export async function checkBrowserReviewExample({
                     await settled();
                     assert.equal(saves().length, 0);
                     button(document, 'Reload').click();
-                } else if (scenario.endsWith('-config')) {
+                } else if (
+                    scenario.endsWith('-config') ||
+                    scenario === 'linked-presentation-aba'
+                ) {
                     const config =
                         sourceProbe.acceptedReviewPageForTest().payload
                             .fieldIdsToSchemas.fld_review_single.miniExtConfig;
@@ -569,7 +770,10 @@ export async function checkBrowserReviewExample({
                 )
                     assert.notEqual(field('fld_review_title'), originalControl);
                 const fresh = await open();
-                if (scenario.endsWith('-config')) {
+                if (
+                    scenario.endsWith('-config') ||
+                    scenario === 'linked-presentation-aba'
+                ) {
                     const label = fresh.querySelector(
                         '[data-review-field-id="fld_review_single"]'
                     );
@@ -698,7 +902,11 @@ export async function checkBrowserReviewExample({
             assert.equal(
                 fixture.state.calls.filter((call) => call.route !== 'saveForm')
                     .length,
-                ['confirmed-reload', 'confirmed-logout'].includes(scenario)
+                [
+                    'confirmed-reload',
+                    'confirmed-logout',
+                    'linked-detail-config',
+                ].includes(scenario)
                     ? 2
                     : 1
             );

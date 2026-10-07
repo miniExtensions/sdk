@@ -726,6 +726,16 @@ const renderForm = (page: FormLoadedResult): void => {
     };
     const pendingPanel = element('section');
     pendingPanel.setAttribute('aria-label', 'Pending attachment selections');
+    const pendingInputs = new Set<HTMLInputElement>();
+    const clearPending = button('Clear pending files', () => {
+        let cleared = false;
+        for (const input of pendingInputs)
+            if (pendingFiles.capture(input) != null)
+                cleared = pendingFiles.clear(input) || cleared;
+        if (cleared) status('Pending file selections cleared.');
+    });
+    clearPending.hidden = pendingPanel.hidden = true;
+    pendingPanel.append(clearPending);
     const pendingFiles = createPendingFiles(
         () =>
             ownsForm() &&
@@ -734,6 +744,7 @@ const renderForm = (page: FormLoadedResult): void => {
             formClient != null &&
             sessionKey(formClient) === formSession,
         () => {
+            clearPending.hidden = pendingPanel.hidden = !pendingFiles.pending();
             if (reviewPending) cancelConfirmation();
         }
     );
@@ -836,10 +847,9 @@ const renderForm = (page: FormLoadedResult): void => {
     disposeFormControls = () => {
         linkedPresentation.retire();
         pendingFiles.retire();
+        pendingInputs.clear();
         if (reviewPending) cancelConfirmation();
-        updateFormActivity = () => {
-            observeReviewConfiguration();
-        };
+        updateFormActivity = () => {};
         for (const view of linkedFilterViews.values()) view.destroy();
         linkedFilterViews.clear();
         for (const control of controls.values()) control.destroy();
@@ -1280,16 +1290,7 @@ const renderForm = (page: FormLoadedResult): void => {
             file.type = 'file';
             file.dataset.pendingFieldId = fieldId;
             pendingFiles.register(file);
-            // Outside conditionally hidden fields, so clearing remains reachable.
-            pendingPanel.append(
-                button(
-                    `Clear pending file: ${schema.airtableField.name}`,
-                    () => {
-                        if (pendingFiles.clear(file))
-                            status('Pending file selection cleared.');
-                    }
-                )
-            );
+            pendingInputs.add(file);
             control.node.append(
                 file,
                 button('Upload selected file', () => {

@@ -281,6 +281,8 @@ export async function checkAttachmentReviewRecipe({
         'config-aba',
         'draft-aba',
         'owner-aba',
+        'custom-title-clear',
+        'dispose-observer',
         ...[
             'missing',
             'null',
@@ -303,6 +305,12 @@ export async function checkAttachmentReviewRecipe({
         addSelectReviewAnswers(page);
         addLinkedReviewAnswers(page);
         addAttachmentReviewAnswers(page);
+        if (scenario === 'custom-title-clear' || scenario === 'hidden-clear') {
+            page.payload.fieldIdsToSchemas.fld_review_files.airtableField.name =
+                'PRIVATE_RAW_ATTACHMENT_TITLE';
+            page.payload.fieldIdsToSchemas.fld_review_files.miniExtConfig.title =
+                'Configured attachment title';
+        }
         if (scenario === 'hidden-clear')
             page.payload.fieldIdsToSchemas.fld_review_files.miniExtConfig.conditionalFields =
                 structuredClone(
@@ -489,8 +497,7 @@ export async function checkAttachmentReviewRecipe({
             };
             const saves = () =>
                 calls.filter((call) => call.route === 'saveForm');
-            const clear = () =>
-                button('Clear pending file: fld_review_files').click();
+            const clear = () => button('Clear pending files').click();
             const expected = structuredClone(initial);
             if (scenario.startsWith('matrix-')) {
                 const beforeRequests = calls.length;
@@ -608,8 +615,48 @@ export async function checkAttachmentReviewRecipe({
                     saves()[0].input.formFieldIdsWithUnsavedChanges,
                     ['fld_review_title']
                 );
-            } else if (['pending-clear', 'hidden-clear'].includes(scenario)) {
+            } else if (
+                [
+                    'pending-clear',
+                    'hidden-clear',
+                    'custom-title-clear',
+                ].includes(scenario)
+            ) {
+                const clearControl = button('Clear pending files');
+                assert.equal(
+                    clearControl.hidden,
+                    true,
+                    'no selection means no clear action'
+                );
                 setFile();
+                assert.equal(clearControl.hidden, false);
+                const panel = clearControl.closest(
+                    '[aria-label="Pending attachment selections"]'
+                );
+                assert(
+                    !panel.textContent.includes('PRIVATE_RAW_ATTACHMENT_TITLE')
+                );
+                assert(
+                    !panel.textContent.includes('Configured attachment title')
+                );
+                for (const node of [panel, ...panel.querySelectorAll('*')])
+                    for (const attribute of node.attributes) {
+                        assert(
+                            !attribute.value.includes(
+                                'PRIVATE_RAW_ATTACHMENT_TITLE'
+                            )
+                        );
+                        assert(
+                            !attribute.value.includes(
+                                'Configured attachment title'
+                            )
+                        );
+                    }
+                if (scenario === 'custom-title-clear')
+                    assert.equal(
+                        file.parentElement.querySelector('label').textContent,
+                        'Configured attachment title'
+                    );
                 if (scenario === 'hidden-clear') {
                     const toggle = field('fld_review_show');
                     toggle.checked = false;
@@ -628,14 +675,42 @@ export async function checkAttachmentReviewRecipe({
                         .textContent.includes('Upload or clear')
                 );
                 assert.equal(
-                    button('Clear pending file: fld_review_files').closest(
-                        '[hidden]'
-                    ),
+                    button('Clear pending files').closest('[hidden]'),
                     null
                 );
                 clear();
+                assert.equal(clearControl.hidden, true);
                 assert.equal(file.files.length, 0);
                 button('Edit', await open()).click();
+                assert.equal(saves().length, 0);
+            } else if (scenario === 'dispose-observer') {
+                const accepted = probe.attachmentPageForTest();
+                const oldInput = file;
+                setFile();
+                const oldClear = button('Clear pending files');
+                button('Disconnect').click();
+                await settled();
+                for (const key of [
+                    'extensionAccessToken',
+                    'persistedAddOnlyAttachmentValuesByFieldId',
+                ])
+                    Object.defineProperty(accepted.payload, key, {
+                        configurable: true,
+                        get() {
+                            assert.fail(
+                                'disposed attachment configuration was read'
+                            );
+                        },
+                    });
+                probe.observeAttachmentConfigurationForTest();
+                oldInput.dispatchEvent(
+                    new window.Event('change', { bubbles: true })
+                );
+                oldClear.dispatchEvent(
+                    new window.Event('click', { bubbles: true })
+                );
+                assert.equal(oldInput.files.length, 1);
+                assert.equal(calls.length, 1);
                 assert.equal(saves().length, 0);
             } else if (scenario.startsWith('upload')) {
                 const first = setFile();

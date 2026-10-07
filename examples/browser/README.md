@@ -214,8 +214,9 @@ pre-existing surfaces; this slice does not establish whole-starter privacy. The
 existing uploader does not enforce the attachment policy's admission rules.
 These editor/recovery presentation and uploader-admission gaps need separate work.
 
-Selected unsent files block Review until explicitly uploaded or cleared. Clear
-buttons remain outside conditionally hidden field wrappers. Selection, explicit
+Selected unsent files block Review until explicitly uploaded or cleared. A generic, nameless Clear
+action appears only while selections are pending, outside conditionally hidden
+field wrappers, and clears all current pending selections. Selection, explicit
 clear and accepted programmatic clear advance a render-owned revision; an upload
 response may clear only its captured File identity and selection generation.
 Newer selections survive older accepted uploads. Cancelled, uncertain or stale

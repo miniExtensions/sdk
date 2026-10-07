@@ -215,6 +215,8 @@ export function mountPortalScalarFilterEditor(options: {
         value.type = 'text';
         const bool = element('select');
         bool.append(new Option('False', 'false'), new Option('True', 'true'));
+        const valueRow = labeled('Filter value', value);
+        const boolRow = labeled('Checkbox value', bool);
         const message = element('p', '', 'hint');
         message.setAttribute('role', 'status');
         let retired = false;
@@ -230,7 +232,19 @@ export function mountPortalScalarFilterEditor(options: {
                 !f ||
                 emptyOperator(operator.value) ||
                 f.config.type === 'checkbox';
-            bool.hidden = !f || f.config.type !== 'checkbox';
+            bool.hidden =
+                !f ||
+                emptyOperator(operator.value) ||
+                f.config.type !== 'checkbox';
+            for (const [row, control] of [
+                [valueRow, value],
+                [boolRow, bool],
+            ] as const) {
+                row.hidden = control.hidden;
+                // The shipped stylesheet gives labels display:grid, overriding
+                // the browser's default [hidden] display rule.
+                row.style.display = control.hidden ? 'none' : '';
+            }
         };
         const renderOperators = () => {
             operator.replaceChildren();
@@ -375,8 +389,8 @@ export function mountPortalScalarFilterEditor(options: {
         node.append(
             labeled('Filter field', field),
             labeled('Filter operator', operator),
-            labeled('Filter value', value),
-            labeled('Checkbox value', bool),
+            valueRow,
+            boolRow,
             message,
             apply,
             clear

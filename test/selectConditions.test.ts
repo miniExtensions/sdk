@@ -183,51 +183,69 @@ it('matches executed pinned converter fixtures or refuses unsafe literal represe
             .digest('hex')
     );
     assert.equal(fixture.cases.length, 432);
+    const acceptance = JSON.parse(
+        readFileSync('test/fixtures/selectConditionAcceptance.json', 'utf8')
+    );
+    const compiledIds = new Set<string>(acceptance.compiledIds);
+    const refusedIds = new Set<string>(acceptance.refusedIds);
+    assert.equal(compiledIds.size, 390);
+    assert.equal(refusedIds.size, 42);
+    assert.deepEqual(
+        [...compiledIds, ...refusedIds].sort(),
+        fixture.cases
+            .map((c: { input: { name: string } }) => c.input.name)
+            .sort()
+    );
     for (const { input, formula } of fixture.cases) {
         const result = compileRuntimeConditions({
             conditions: input.conditions,
             airtableFields: [input.field],
             invalidConditionMode: 'strict',
         });
-        if (result.type === 'compiled')
-            assert.equal(result.formula, formula, input.name);
-        else {
+        if (compiledIds.has(input.name)) {
+            assert.equal(result.type, 'compiled', input.name);
+            if (result.type === 'compiled')
+                assert.equal(result.formula, formula, input.name);
+        } else {
             assert.equal(result.type, 'invalid', input.name);
             assert(
                 result.diagnostics.some((d) => d.code === 'literal-roundtrip'),
                 input.name
             );
-            assert(/back|quote|literal/.test(input.name), input.name);
+            assert(refusedIds.has(input.name), input.name);
         }
     }
 });
 
-it('never omits malformed equality arrays beside a valid AND sibling', () => {
-    for (const mode of ['strict', 'compatibility'] as const)
-        for (const operator of ['is', 'isNot']) {
-            const invalid = definition('singleSelect', operator, [])
-                .conditions[0]!;
-            const valid = definition('singleSelect', 'is', 'a').conditions[0]!;
-            const result = compileRuntimeConditions({
-                conditions: {
-                    logicalOperator: 'and',
-                    conditions: [invalid, valid],
-                },
-                airtableFields: [field('singleSelect')],
-                invalidConditionMode: mode,
-            } as CompileRuntimeConditionsInput);
-            assert.equal(result.type, 'invalid');
-            assert(
-                result.diagnostics.some(
-                    (d) =>
-                        d.code === 'invalid-operand' && d.severity === 'error'
-                )
-            );
-            assert(
-                !result.diagnostics.some(
-                    (d) => d.code === 'incomplete-condition'
-                )
-            );
-            assert(!Object.hasOwn(result, 'formula'));
-        }
+it('never omits malformed equality arrays beside a valid AND/OR sibling', () => {
+    for (const logicalOperator of ['and', 'or'] as const)
+        for (const mode of ['strict', 'compatibility'] as const)
+            for (const operator of ['is', 'isNot']) {
+                const invalid = definition('singleSelect', operator, [])
+                    .conditions[0]!;
+                const valid = definition('singleSelect', 'is', 'a')
+                    .conditions[0]!;
+                const result = compileRuntimeConditions({
+                    conditions: {
+                        logicalOperator,
+                        conditions: [invalid, valid],
+                    },
+                    airtableFields: [field('singleSelect')],
+                    invalidConditionMode: mode,
+                } as CompileRuntimeConditionsInput);
+                assert.equal(result.type, 'invalid');
+                assert(
+                    result.diagnostics.some(
+                        (d) =>
+                            d.code === 'invalid-operand' &&
+                            d.severity === 'error'
+                    )
+                );
+                assert(
+                    !result.diagnostics.some(
+                        (d) => d.code === 'incomplete-condition'
+                    )
+                );
+                assert(!Object.hasOwn(result, 'formula'));
+            }
 });

@@ -4,13 +4,20 @@ import { join } from 'node:path';
 const fixture = JSON.parse(
     readFileSync('test/fixtures/selectConditions.json', 'utf8')
 );
+const acceptance = JSON.parse(
+    readFileSync('test/fixtures/selectConditionAcceptance.json', 'utf8')
+);
 const verify = `
+const compiledIds = new Set(acceptance.compiledIds), refusedIds = new Set(acceptance.refusedIds);
+assert.equal(compiledIds.size,390);assert.equal(refusedIds.size,42);
+assert.deepEqual([...compiledIds,...refusedIds].sort(),fixture.cases.map(c=>c.input.name).sort());
 let checks = 0;
 const compile = (conditions, fields, mode='strict') => compileRuntimeConditions({conditions,airtableFields:fields,invalidConditionMode:mode});
 for (const {input,formula,serialized} of fixture.cases) {
  const before=JSON.stringify(input);
  const result=compile(input.conditions,[input.field]);
- if (result.type==='compiled') {
+ if (compiledIds.has(input.name)) {
+  assert.equal(result.type,'compiled',input.name);
   assert.equal(result.formula,formula,input.name);
   const runner=new FormulaRunner(result.formula);
   // Complete native multi-select values use the canonical serializer, not
@@ -23,7 +30,7 @@ for (const {input,formula,serialized} of fixture.cases) {
  } else {
   assert.equal(result.type,'invalid',input.name);
   assert(result.diagnostics.some(d=>d.code==='literal-roundtrip'),input.name);
-  assert(/back|quote|literal/.test(input.name),'unexpected refusal '+input.name);
+  assert(refusedIds.has(input.name),'unlisted refusal '+input.name);
  }
  assert.equal(JSON.stringify(input),before);
  checks++;
@@ -55,11 +62,42 @@ for (const type of ['singleSelect','multipleSelects']) {
   assert.equal(availability.status,'blocked'); assert.equal(availability.diagnostics[0].code,'unsupported-condition');checks++;
  }
 }
-for(const mode of ['strict','compatibility']) for(const op of ['is','isNot']) {
+for(const logicalOperator of ['and','or']) for(const mode of ['strict','compatibility']) for(const op of ['is','isNot']) {
  const invalid=def('singleSelect',op,[]).conditions[0];
  const valid=def('singleSelect','is','sel_a').conditions[0];
- const r=compile({logicalOperator:'and',conditions:[invalid,valid]},[base],mode);
+ const r=compile({logicalOperator,conditions:[invalid,valid]},[base],mode);
  assert.equal(r.type,'invalid');assert(r.diagnostics.some(d=>d.code==='invalid-operand'&&d.severity==='error'));assert(!r.diagnostics.some(d=>d.code==='incomplete-condition'));assert(!Object.hasOwn(r,'formula'));checks++;
+}
+// Independent truth tables. These assert membership results, not only value
+// outcomes, and run against actual installed ESM and CommonJS engines.
+for(const names of [['Alpha','Beta','Alphabet'],['comma, value','double "quote"','emoji 🦋']]) {
+ const choices=names.map((name,index)=>({id:['a','b','c'][index],name}));
+ for(const type of ['singleSelect','multipleSelects']) {
+  const field={...base,config:{type,options:{choices}}};
+  const records=type==='singleSelect'?[names[0],names[1],names[2],null,'','Unknown']:[null,[],[names[0]],[names[1]],[names[0],names[1]],[names[0],names[1],names[2]],[names[2]],[names[1],names[0]],[names[0],names[0]]];
+  const table=type==='singleSelect'?[
+   ['is','a',[true,false,false,false,false,false]],
+   ['isNot','a',[false,true,true,true,true,true]],
+   ['isAnyOf',['a','b'],[true,true,false,false,false,false]],
+   ['isNoneOf',['a','b'],[false,false,true,true,true,true]],
+   ['isEmpty',undefined,[false,false,false,true,true,false]],
+   ['isNotEmpty',undefined,[true,true,true,false,false,true]]
+  ]:[
+   ['hasAnyOf',['a','b'],[false,false,true,true,true,true,false,true,true]],
+   ['hasAllOf',['a','b'],[false,false,false,false,true,true,false,true,false]],
+   ['hasNoneOf',['a','b'],[true,true,false,false,false,false,true,false,false]],
+   ['isExactly',['a','b'],[false,false,false,false,true,false,false,true,false]],
+   ['isEmpty',undefined,[true,true,false,false,false,false,false,false,false]],
+   ['isNotEmpty',undefined,[false,false,true,true,true,true,true,true,true]]
+  ];
+  for(const [op,operand,expected] of table) {
+   const compiled=compile(def(type,op,operand),[field]);assert.equal(compiled.type,'compiled');
+   for(let index=0;index<records.length;index++) {
+    const runner=new FormulaRunner(compiled.formula);runner.context={record:{id:'rec',fields:{fld_choice:records[index]}},airtableFields:[field],linkedTableLoadingStates:{}};
+    const outcome=runner.runWithOutcome();assert.equal(outcome.type,'value');assert.equal(!FormulaRunner.isFalsyValue(outcome.value),expected[index],type+'/'+op+'/'+index);checks++;
+   }
+  }
+ }
 }
 const drift=compile(def('singleSelect','matchesRegex','.*'),[base]);assert.equal(drift.type,'unsupported');checks++;
 console.log(JSON.stringify({checks}));
@@ -78,7 +116,7 @@ export function checkSelectConditions({ consumerDirectory, run }) {
     ]) {
         writeFileSync(
             join(consumerDirectory, name),
-            `importPLACEHOLDER\nconst fixture=${JSON.stringify(fixture)};\n${verify}`.replace(
+            `importPLACEHOLDER\nconst fixture=${JSON.stringify(fixture)}; const acceptance=${JSON.stringify(acceptance)};\n${verify}`.replace(
                 'importPLACEHOLDER',
                 name.endsWith('.cjs')
                     ? "const assert=require('node:assert/strict');" + imports

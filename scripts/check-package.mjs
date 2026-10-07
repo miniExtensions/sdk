@@ -1,3 +1,4 @@
+import { checkSelectConditions } from './select-condition-checks.mjs';
 import { checkBrowserChildQueryExample } from './browser-child-query-example-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -1202,6 +1203,13 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
     const additionalRuntimeChecks = await checkAdditionalRuntimeOperations({
         consumerDirectory: temporaryDirectory,
     });
+    const selectConditionsChecks = checkSelectConditions({
+        consumerDirectory: temporaryDirectory,
+        run,
+    });
+    console.log(
+        `Installed select compiler: ${selectConditionsChecks} checks passed.`
+    );
     const formConditionsChecks = checkFormConditions({
         consumerDirectory: temporaryDirectory,
         run,

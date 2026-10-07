@@ -1,3 +1,4 @@
+import { formatMultiSelectValue } from '../formulas/valueConversion.js';
 import type {
     RuntimeAirtableField,
     RuntimeConditionsDefinition,
@@ -65,16 +66,27 @@ const equalityTextTypes = textTypes.filter((type) => type !== 'richText');
 const numericTypes = ['number', 'percent', 'currency', 'rating'] as const;
 
 // Exact direct-field intersection of the canonical v105 condition declarations:
-// fourteen operators, twelve physical field types, eighty-seven pairs.
+// twenty operators, fourteen physical field types, ninety-nine pairs.
 const supportedPairs: Readonly<Record<string, readonly string[]>> = {
     matchesRegex: textTypes,
-    is: [...equalityTextTypes, 'checkbox'],
-    isNot: equalityTextTypes,
+    is: [...equalityTextTypes, 'checkbox', 'singleSelect'],
+    isNot: [...equalityTextTypes, 'singleSelect'],
     contains: textTypes,
     doesNotContain: textTypes,
     isOfLength: textTypes,
-    isEmpty: [...textTypes, ...numericTypes],
-    isNotEmpty: [...textTypes, ...numericTypes],
+    isEmpty: [...textTypes, ...numericTypes, 'singleSelect', 'multipleSelects'],
+    isNotEmpty: [
+        ...textTypes,
+        ...numericTypes,
+        'singleSelect',
+        'multipleSelects',
+    ],
+    isAnyOf: ['singleSelect'],
+    isNoneOf: ['singleSelect'],
+    hasAnyOf: ['multipleSelects'],
+    hasAllOf: ['multipleSelects'],
+    hasNoneOf: ['multipleSelects'],
+    isExactly: ['multipleSelects'],
     equals: numericTypes,
     notEquals: numericTypes,
     greaterThan: numericTypes,
@@ -198,7 +210,14 @@ export function compileRuntimeConditions(
                 ? candidate.id === savedReference
                 : candidate.name === savedReference
         );
-        if (field != null && !allowedTypes.includes(field.config.type)) {
+        const isSelect = (type: unknown) =>
+            type === 'singleSelect' || type === 'multipleSelects';
+        if (
+            field != null &&
+            (!allowedTypes.includes(field.config.type) ||
+                ((isSelect(setting.fieldType) || isSelect(field.config.type)) &&
+                    setting.fieldType !== field.config.type))
+        ) {
             report('unsupported-field-type', path, condition);
             return null;
         }
@@ -214,6 +233,124 @@ export function compileRuntimeConditions(
         if (!roundtrips(fieldFormula, reference, TokenTypes.IDENTIFIER)) {
             report('field-reference-roundtrip', path, condition);
             return null;
+        }
+
+        // Select operands are choice IDs, never native answer names. Keep this
+        // branch ahead of scalar parsing and the numeric switch fallback.
+        if (isSelect(setting.fieldType)) {
+            const empty = operator === 'isEmpty' || operator === 'isNotEmpty';
+            const equality = operator === 'is' || operator === 'isNot';
+            const value = setting.value;
+            if (
+                !empty &&
+                (value == null ||
+                    value === '' ||
+                    (Array.isArray(value) && value.length === 0))
+            )
+                return incomplete('incomplete-condition', path, condition);
+            if (
+                !empty &&
+                (equality
+                    ? typeof value !== 'string'
+                    : !Array.isArray(value) ||
+                      Array.from(value).some(
+                          (v) => typeof v !== 'string' || v === ''
+                      ))
+            ) {
+                report('invalid-operand', path, condition);
+                return null;
+            }
+            if (field == null) {
+                report('missing-field', path, condition, 'warning');
+                return 'FALSE()';
+            }
+            const options = field.config.options;
+            const choices =
+                isObject(options) && 'choices' in options
+                    ? options.choices
+                    : null;
+            if (!Array.isArray(choices)) {
+                report('invalid-definition', path, condition);
+                return null;
+            }
+            const ids = new Set<string>(),
+                names = new Set<string>();
+            const byId = new Map<string, string>();
+            for (const choice of Array.from(choices)) {
+                if (
+                    !isObject(choice) ||
+                    typeof choice.id !== 'string' ||
+                    !choice.id ||
+                    typeof choice.name !== 'string' ||
+                    !choice.name ||
+                    ids.has(choice.id) ||
+                    names.has(choice.name)
+                ) {
+                    report('invalid-definition', path, condition);
+                    return null;
+                }
+                ids.add(choice.id);
+                names.add(choice.name);
+                byId.set(choice.id, choice.name);
+            }
+            if (empty)
+                return `LEN('' & ${fieldFormula}) ${operator === 'isEmpty' ? '=' : '!='} 0`;
+            const selectedIds = equality
+                ? [value as string]
+                : [...new Set(value as string[])];
+            const selectedNames = selectedIds.map((id) => byId.get(id));
+            if (
+                selectedNames.some((v) => v === undefined) &&
+                (equality ||
+                    operator === 'hasAllOf' ||
+                    operator === 'isExactly')
+            )
+                return 'FALSE()';
+            const known = selectedNames.filter(
+                (v): v is string => v !== undefined
+            );
+            if (!known.length) return 'FALSE()';
+            const literal = (v: string): string | null => {
+                const result = quoted(v);
+                if (!roundtrips(result, v, TokenTypes.STRING)) {
+                    report('literal-roundtrip', path, condition);
+                    return null;
+                }
+                return result;
+            };
+            if (setting.fieldType === 'singleSelect') {
+                const values = known.map(literal);
+                if (values.some((v) => v === null)) return null;
+                if (equality)
+                    return `${fieldFormula} ${operator === 'is' ? '=' : '!='} ${values[0]}`;
+                const formula = `OR(${values.map((v) => `${fieldFormula} = ${v}`).join(',')})`;
+                return operator === 'isAnyOf' ? formula : `NOT(${formula})`;
+            }
+            const serialized = known.map(formatMultiSelectValue);
+            // Canonical escaping order is quote escaping BEFORE regex escaping.
+            const regexEscape = (v: string) =>
+                v.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
+            const patterns = serialized.map(
+                (v) => `(^|, )${regexEscape(v.replace(/'/g, "\\'"))}(,|$)`
+            );
+            const literals = patterns.map((v, index) => {
+                const result = `'${v}'`;
+                // Require the lexer to preserve the intended regex bytes.
+                const expected = `(^|, )${regexEscape(serialized[index]!)}(,|$)`;
+                if (!roundtrips(result, expected, TokenTypes.STRING)) {
+                    report('literal-roundtrip', path, condition);
+                    return null;
+                }
+                return result;
+            });
+            if (literals.some((v) => v === null)) return null;
+            const clauses = literals
+                .map((v) => `REGEX_MATCH(${fieldFormula}, ${v})`)
+                .join(',');
+            if (operator === 'hasAllOf') return `AND(${clauses})`;
+            if (operator === 'hasAnyOf') return `OR(${clauses})`;
+            if (operator === 'hasNoneOf') return `NOT(OR(${clauses}))`;
+            return `AND(LEN(${fieldFormula}) = ${serialized.join(', ').length}, ${clauses})`;
         }
 
         const isEmpty = operator === 'isEmpty' || operator === 'isNotEmpty';

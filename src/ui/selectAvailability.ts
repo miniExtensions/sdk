@@ -1,3 +1,4 @@
+import { hasSelectCondition } from '../forms/scalarConditionBoundary.js';
 import { compileRuntimeConditions } from '../forms/conditions.js';
 import FormulaRunner from '../formulas/runner.js';
 import { extractIdentifiersFromExpr } from '../formulas/helpers/extractIdentifiersFromExpr.js';
@@ -121,6 +122,8 @@ export function resolveSelectFieldAvailability(
                         ? 'unsupported-condition'
                         : 'invalid-condition'
                 );
+            if (hasSelectCondition(conditions, input.airtableFields))
+                return blocked('unsupported-condition');
             const runner = new FormulaRunner(compiled.formula);
             // Saved tagged references become untyped formula identifiers. The
             // legacy engine also reads a field's name before its native ID.

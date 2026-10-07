@@ -505,8 +505,6 @@ describe('compileRuntimeConditions bounded scalar contract', () => {
     for (const type of [
         'date',
         'dateTime',
-        'singleSelect',
-        'multipleSelects',
         'multipleRecordLinks',
         'multipleAttachments',
         'singleCollaborator',
@@ -551,14 +549,14 @@ describe('compileRuntimeConditions bounded scalar contract', () => {
                     logicalOperator: 'or',
                     conditions: [
                         condition(),
-                        condition('isAnyOf', 'singleSelect', ['choice-1']),
+                        condition('matchesRegex', 'singleSelect', 'probe'),
                     ],
                 },
                 [runtimeTextField],
                 { invalidConditionMode: 'compatibility' }
             ),
             'unsupported',
-            'unsupported-operator'
+            'unsupported-field-type'
         );
         blocked(
             compile(definition(condition('is', 'richText'))),

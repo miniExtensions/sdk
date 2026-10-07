@@ -319,6 +319,76 @@ export async function checkPortalAttachmentCases({
         });
     }
     for (const transition of [
+        'same view refresh',
+        'new view',
+        'new owner',
+        'owner ABA',
+    ]) {
+        await check(`attachment retained Edit: ${transition}`, async () => {
+            const h = await setup({
+                displayConfig: { hideAttachmentName: false },
+            });
+            const oldEdit = button(h.view.node, 'Edit cell');
+            assert(h.view.node.textContent.includes(attachment.filename));
+            h.result.customViewDetailFields.fld_children[0].miniExtConfig = {
+                hideAttachmentName: true,
+            };
+            h.original = structuredClone(h.result);
+            if (transition === 'new view') {
+                const select =
+                    h.view.node.querySelectorAll('.toolbar select')[1];
+                select.value = 'view_other';
+                select.dispatchEvent(
+                    new h.window.Event('change', { bubbles: true })
+                );
+            } else if (transition === 'new owner') h.switchOwner('visitor_B');
+            else if (transition === 'owner ABA') {
+                h.switchOwner('visitor_B');
+                h.switchOwner('visitor_A');
+            }
+            await h.click('Load records');
+            assert.equal(
+                h.view.node.querySelector('tbody tr').dataset.recordId,
+                'rec_one'
+            );
+            const calls = h.calls.length;
+            const statuses = structuredClone(h.statuses);
+            oldEdit.dispatchEvent(
+                new h.window.Event('click', { bubbles: true })
+            );
+            await h.settle();
+            assert.equal(
+                h.view.node.querySelector('form'),
+                null,
+                'Retained Edit must not open an obsolete preview.'
+            );
+            assert.deepEqual(
+                h.statuses,
+                statuses,
+                'A retired entry does not mutate successor status.'
+            );
+            assert.equal(h.calls.length, calls);
+            assertNoLeaks(h.view.node, [...leaks, attachment.filename]);
+            const fresh = await preview(h);
+            oldEdit.dispatchEvent(
+                new h.window.Event('click', { bubbles: true })
+            );
+            await h.settle();
+            assert(
+                fresh.isConnected,
+                'Retained Edit must not replace the current preview.'
+            );
+            assertNoLeaks(fresh, [
+                ...leaks,
+                attachment.filename,
+                'PRIVATE_RAW_FIELD_TITLE',
+            ]);
+            assert.equal(h.calls.length, calls);
+            assert.deepEqual(h.result, h.original);
+            await h.dispose();
+        });
+    }
+    for (const transition of [
         'paging',
         'view',
         'table',

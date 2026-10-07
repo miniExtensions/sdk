@@ -1119,6 +1119,10 @@ export const createPortalView = (options: {
         const tbody = element('tbody');
         const view = selectedView();
         const allowEditing = view?.config?.disableEditingForCustomView !== true;
+        const renderedData = data;
+        const renderedOwner = dataScope == null ? null : { ...dataScope };
+        const renderedFieldId = fieldSelect.value;
+        const renderedViewId = viewSelect.value;
         for (const recordId of data.recordIds) {
             const record = state.recordIdsToAirtableRecords[recordId];
             if (record == null) continue;
@@ -1156,7 +1160,28 @@ export const createPortalView = (options: {
                     layoutSetting('disableInlineEdit') !== true
                 ) {
                     cell.append(
-                        button('Edit cell', () =>
+                        button('Edit cell', () => {
+                            // Attachment entry carries a captured display policy.
+                            // A retained row must never promote it into a newer
+                            // snapshot/owner with the same native record ID.
+                            if (
+                                recordField.config.type ===
+                                AirtableFieldType.MULTIPLE_ATTACHMENTS
+                            ) {
+                                const owner = options.getScope();
+                                if (
+                                    destroyed ||
+                                    !row.isConnected ||
+                                    !card.isConnected ||
+                                    data !== renderedData ||
+                                    renderedOwner == null ||
+                                    owner.ownerId !== renderedOwner.ownerId ||
+                                    owner.revision !== renderedOwner.revision ||
+                                    fieldSelect.value !== renderedFieldId ||
+                                    viewSelect.value !== renderedViewId
+                                )
+                                    return;
+                            }
                             editCell(
                                 recordId,
                                 recordField,
@@ -1164,8 +1189,8 @@ export const createPortalView = (options: {
                                 column.miniExtConfig,
                                 column.displayConfig,
                                 column.title
-                            )
-                        )
+                            );
+                        })
                     );
                 }
                 row.append(cell);

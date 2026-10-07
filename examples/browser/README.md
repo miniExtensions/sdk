@@ -209,10 +209,21 @@ answers are not subjected to upload admission limits or producer-mode checks.
 Review provides no attachment URLs, thumbnails, metadata, Open/Download actions,
 navigation or uploads. Save retains all native values and metadata, including
 hidden rows. This is a plain-text summary, not canonical rich-renderer parity.
-The editor's existing raw attachment JSON and recovery UI filenames are separate
-pre-existing surfaces; this slice does not establish whole-starter privacy. The
-existing uploader does not enforce the attachment policy's admission rules.
-These editor/recovery presentation and uploader-admission gaps need separate work.
+The Form-specific attachment editor also uses the original loaded policy and
+complete native answer. It shows only visible plain-text summaries, with filenames
+only on explicit opt-in; unavailable or malformed presentation is generic. It
+never serializes attachment JSON, URLs or metadata into the Form DOM. Portal's
+shared field controls are unchanged. Recovery retains a generic attachment notice
+per attempt, never attachment filenames or raw attachment field titles; scalar
+recovery and password suppression retain their existing behavior.
+
+The native file input is hidden visually and from accessibility presentation.
+An explicit **Choose a file** button activates that same input; a generic status
+reports selection without a filename. This does not claim OS chooser cancellation
+or comprehensive accessibility acceptance from synthetic tests. Upload, Clear,
+Review and Save remain explicit actions. Initial readonly/computed fields still
+skip upload controls. Fresh upload mode/type/size/capacity/configuration admission
+remains a separate repair; this change does not enforce it.
 
 Selected unsent files block Review until explicitly uploaded or cleared. A generic, nameless Clear
 action appears only while selections are pending, outside conditionally hidden

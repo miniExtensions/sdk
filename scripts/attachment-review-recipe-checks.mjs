@@ -193,7 +193,12 @@ export async function checkAttachmentReviewRecipe({
     consumerDirectory: consumer,
     happyDomModulePath,
 }) {
-    for (const name of ['main.ts', 'review.ts', 'pendingFiles.ts'])
+    for (const name of [
+        'main.ts',
+        'review.ts',
+        'pendingFiles.ts',
+        'attachmentPresentation.ts',
+    ])
         assert.deepEqual(
             readFileSync(join(consumer, 'src', name)),
             readFileSync(
@@ -207,7 +212,7 @@ export async function checkAttachmentReviewRecipe({
     const entry = join(consumer, '.generated/attachment-review-entry.ts');
     writeFileSync(
         entry,
-        "export { prepareFormReviewRows } from '../src/review.js';\nexport { createFormSaveInput } from '@miniextensions/sdk/forms';\n"
+        "export { prepareFormReviewRows } from '../src/review.js';\nexport { createFormSaveInput } from '@miniextensions/sdk/forms';\nexport { formAttachmentControl } from '../src/attachmentPresentation.js';\n"
     );
     const outfile = join(consumer, '.generated/attachment-review-recipe.mjs');
     const recipe = await build({
@@ -226,9 +231,11 @@ export async function checkAttachmentReviewRecipe({
             path.endsWith('dist/esm/forms/attachments.js')
         )
     );
-    const { prepareFormReviewRows, createFormSaveInput } = await import(
-        pathToFileURL(outfile).href
-    );
+    const {
+        prepareFormReviewRows,
+        createFormSaveInput,
+        formAttachmentControl,
+    } = await import(pathToFileURL(outfile).href);
     const matrixChecks = assertAttachmentReviewMatrix(
         prepareFormReviewRows,
         createFormSaveInput
@@ -252,9 +259,9 @@ export async function checkAttachmentReviewRecipe({
                         contents:
                             readFileSync(args.path, 'utf8').replace(
                                 '    const readFilterMetadata = (context:',
-                                '    attachmentObserveForTest = () => updateFormActivity();\n    const readFilterMetadata = (context:'
+                                '    attachmentObserveForTest = () => updateFormActivity();\n    attachmentRetainedForTest = () => recovery.unknown(scope.owner).map(a => a.retainedInput);\n    const readFilterMetadata = (context:'
                             ) +
-                            '\nlet attachmentObserveForTest: () => void;\nexport const observeAttachmentConfigurationForTest = () => attachmentObserveForTest();\nexport const attachmentPageForTest = () => visitors[activeVisitor].screen;\n',
+                            '\nlet attachmentObserveForTest: () => void;\nexport const observeAttachmentConfigurationForTest = () => attachmentObserveForTest();\nexport const attachmentPageForTest = () => visitors[activeVisitor].screen;\nlet attachmentRetainedForTest: () => unknown;\nexport const attachmentAttemptsForTest = () => attachmentRetainedForTest();\n',
                     }));
                 },
             },
@@ -283,6 +290,9 @@ export async function checkAttachmentReviewRecipe({
         'owner-aba',
         'custom-title-clear',
         'dispose-observer',
+        'chooser-cancel',
+        'recovery-reload-error',
+        'recovery-reload-cancel',
         ...[
             'missing',
             'null',
@@ -352,6 +362,11 @@ export async function checkAttachmentReviewRecipe({
         if (scenario === 'matrix-filename-blank')
             for (const row of page.payload.formRecord.data.fld_review_files)
                 row.filename = ' \t ';
+        if (scenario.startsWith('recovery-')) {
+            page.payload.fieldIdsToSchemas.fld_review_files.airtableField.name =
+                'PRIVATE_RECOVERY_FIELD_TITLE';
+            page.payload.fieldIdsToSchemas.fld_review_files.miniExtConfig.hideAttachmentName = true;
+        }
         const initial = structuredClone(page.payload.formRecord.data);
         const window = new Window({
             url: 'https://attachment-review.invalid',
@@ -411,7 +426,10 @@ export async function checkAttachmentReviewRecipe({
                     );
                 if (url.origin === 'https://attachment-put.invalid') {
                     await uploadGate;
-                    if (scenario === 'upload-error')
+                    if (
+                        scenario === 'upload-error' ||
+                        scenario === 'recovery-reload-error'
+                    )
                         throw new Error('Synthetic upload failure');
                     return new Response('', { status: 200 });
                 }
@@ -499,6 +517,102 @@ export async function checkAttachmentReviewRecipe({
                 calls.filter((call) => call.route === 'saveForm');
             const clear = () => button('Clear pending files').click();
             const expected = structuredClone(initial);
+            const scan = (root) => {
+                for (const node of [root, ...root.querySelectorAll('*')]) {
+                    assert(!node.textContent.includes('PRIVATE_STORED'));
+                    assert(!node.textContent.includes('PRIVATE_NEW_URL'));
+                    assert(!node.textContent.includes('PRIVATE_THUMB'));
+                    if ('value' in node && node.type !== 'file')
+                        assert(!String(node.value).includes('PRIVATE'));
+                    for (const attr of node.attributes)
+                        assert(!attr.value.includes('PRIVATE'), attr.name);
+                }
+            };
+            scan(formNode);
+            assert.equal(file.hidden, true);
+            assert.equal(file.getAttribute('aria-hidden'), 'true');
+            assert.equal(file.tabIndex, -1);
+            assert.equal(file.parentElement.querySelector('textarea'), null);
+            const presentation = file.parentElement.querySelectorAll('p')[1];
+            if (
+                scenario.startsWith('matrix-') &&
+                [
+                    'matrix-bad-value',
+                    'matrix-bad-baseline',
+                    'matrix-missing-baseline',
+                ].includes(scenario)
+            )
+                assert.equal(
+                    presentation.textContent,
+                    'Attachment presentation unavailable'
+                );
+            else if (
+                !scenario.startsWith('recovery-') &&
+                !scenario.startsWith('matrix-')
+            )
+                assert.equal(
+                    presentation.textContent,
+                    '<b>Exact filename</b>\n<b>Exact filename</b>'
+                );
+            // Installed pure presenter: safe fallback, native snapshot and retirement.
+            const standalone = formAttachmentControl(
+                page,
+                'fld_review_files',
+                initial.fld_review_files
+            );
+            assert.deepEqual(
+                standalone.read(),
+                initial.fld_review_files ?? null
+            );
+            scan(standalone.node);
+            standalone.destroy();
+            const prior = standalone.node.textContent;
+            standalone.write([
+                { url: 'https://files.invalid/PRIVATE_NEW_URL' },
+            ]);
+            standalone.refresh();
+            assert.equal(standalone.node.textContent, prior);
+            if (scenario === 'mixed') {
+                for (const patch of [
+                    { hideAttachmentName: undefined },
+                    { hideAttachmentName: null },
+                    { hideAttachmentName: 'false' },
+                    { hideAttachmentName: true },
+                    { hideAttachmentName: false },
+                    { readOnly: true },
+                    { fieldMode: 'hand-signature' },
+                ]) {
+                    const detached = structuredClone(page);
+                    Object.assign(
+                        detached.payload.fieldIdsToSchemas.fld_review_files
+                            .miniExtConfig,
+                        patch
+                    );
+                    const native =
+                        detached.payload.formRecord.data.fld_review_files;
+                    const presenter = formAttachmentControl(
+                        detached,
+                        'fld_review_files',
+                        native
+                    );
+                    assert.deepEqual(presenter.read(), native);
+                    assert(
+                        !presenter.node.outerHTML.includes('PRIVATE_NEW_URL')
+                    );
+                    assert(!presenter.node.outerHTML.includes('PRIVATE_THUMB'));
+                    if (
+                        patch.hideAttachmentName !== false &&
+                        !patch.readOnly &&
+                        !patch.fieldMode
+                    )
+                        assert(
+                            !presenter.node.textContent.includes(
+                                'Exact filename'
+                            )
+                        );
+                    presenter.destroy();
+                }
+            }
             if (scenario.startsWith('matrix-')) {
                 const beforeRequests = calls.length;
                 if (
@@ -565,6 +679,33 @@ export async function checkAttachmentReviewRecipe({
                         []
                     );
                 }
+            } else if (scenario === 'chooser-cancel') {
+                let clicks = 0;
+                file.addEventListener('click', () => clicks++);
+                const choose = [
+                    ...file.parentElement.querySelectorAll('button'),
+                ].find((n) => n.textContent === 'Choose a file');
+                assert(choose);
+                choose.click();
+                assert.equal(clicks, 1);
+                assert.equal(file.files.length, 0);
+                assert.equal(
+                    file.parentElement.querySelector('[role=status]')
+                        .textContent,
+                    'No file selected.'
+                );
+                const selected = setFile('PRIVATE_PENDING_NAME');
+                choose.click(); // no selection event means the prior File survives.
+                assert.equal(file.files[0], selected);
+                assert(
+                    !file.parentElement.textContent.includes(
+                        'PRIVATE_PENDING_NAME'
+                    )
+                );
+                assert.equal(calls.length, 1);
+                clear();
+                button('Edit', await open()).click();
+                assert.equal(saves().length, 0);
             } else if (scenario === 'mixed') {
                 edit('fld_review_title', 'Edited secret');
                 expected.fld_review_title = 'Edited secret';
@@ -654,7 +795,7 @@ export async function checkAttachmentReviewRecipe({
                     }
                 if (scenario === 'custom-title-clear')
                     assert.equal(
-                        file.parentElement.querySelector('label').textContent,
+                        file.parentElement.querySelector('p').textContent,
                         'Configured attachment title'
                     );
                 if (scenario === 'hidden-clear') {
@@ -688,6 +829,11 @@ export async function checkAttachmentReviewRecipe({
                 const oldInput = file;
                 setFile();
                 const oldClear = button('Clear pending files');
+                const oldChoose = [
+                    ...oldInput.parentElement.querySelectorAll('button'),
+                ].find((n) => n.textContent === 'Choose a file');
+                let chooserClicks = 0;
+                oldInput.addEventListener('click', () => chooserClicks++);
                 button('Disconnect').click();
                 await settled();
                 for (const key of [
@@ -706,14 +852,25 @@ export async function checkAttachmentReviewRecipe({
                 oldInput.dispatchEvent(
                     new window.Event('change', { bubbles: true })
                 );
+                oldChoose.dispatchEvent(
+                    new window.Event('click', { bubbles: true })
+                );
+                assert.equal(chooserClicks, 0);
                 oldClear.dispatchEvent(
                     new window.Event('click', { bubbles: true })
                 );
                 assert.equal(oldInput.files.length, 1);
                 assert.equal(calls.length, 1);
                 assert.equal(saves().length, 0);
-            } else if (scenario.startsWith('upload')) {
-                const first = setFile();
+            } else if (
+                scenario.startsWith('upload') ||
+                scenario.startsWith('recovery-')
+            ) {
+                const first = setFile(
+                    scenario.startsWith('recovery-')
+                        ? 'PRIVATE_PENDING_NAME'
+                        : 'new-file.txt'
+                );
                 const upload = [
                     ...file.parentElement.querySelectorAll('button'),
                 ].find((node) => node.textContent === 'Upload selected file');
@@ -728,7 +885,10 @@ export async function checkAttachmentReviewRecipe({
                 assert.equal(document.querySelector('dialog'), null);
                 if (scenario === 'upload-replacement')
                     setFile('replacement.txt');
-                if (scenario === 'upload-cancel')
+                if (
+                    scenario === 'upload-cancel' ||
+                    scenario === 'recovery-reload-cancel'
+                )
                     document.getElementById('cancel').click();
                 if (scenario === 'upload-stale') {
                     document.getElementById('visitor').value = 'B';
@@ -797,6 +957,56 @@ export async function checkAttachmentReviewRecipe({
                     await settled();
                     assert.equal(calls.length, before);
                     assert.equal(saves().length, 0);
+                    if (scenario.startsWith('recovery-')) {
+                        const journal = document.querySelector(
+                            '[aria-label="Earlier request recovery"]'
+                        );
+                        assert(journal);
+                        const retained = JSON.stringify(
+                            probe.attachmentAttemptsForTest()
+                        );
+                        assert(!retained.includes('PRIVATE'));
+                        assert(!retained.includes('fld_review_files'));
+                        assert(
+                            retained.includes(
+                                'Attachment details are not retained.'
+                            )
+                        );
+                        assert(!journal.textContent.includes('PRIVATE'));
+                        assert(
+                            !journal.textContent.includes('fld_review_files')
+                        );
+                        assert(
+                            journal.textContent.includes(
+                                'Attachment details are not retained.'
+                            )
+                        );
+                        page.payload.fieldIdsToSchemas.fld_review_files.miniExtConfig.hideAttachmentName = true;
+                        document.getElementById('reload').click();
+                        await waitFor(
+                            () =>
+                                calls.filter(
+                                    (c) =>
+                                        c.route === 'fetchExtensionForEndUser'
+                                ).length === 2
+                        );
+                        await settled();
+                        const panel = document.querySelector(
+                            '[aria-label="Earlier request recovery"]'
+                        );
+                        assert(!panel.textContent.includes('PRIVATE'));
+                        assert(!panel.textContent.includes('fld_review_files'));
+                        assert(
+                            panel.textContent.includes(
+                                'Attachment details are not retained.'
+                            )
+                        );
+                        assert.equal(
+                            calls.filter((c) => c.route === 'PUT').length,
+                            1
+                        );
+                        assert.equal(saves().length, 0);
+                    }
                 }
             } else {
                 const dialog = await open();
@@ -823,6 +1033,12 @@ export async function checkAttachmentReviewRecipe({
                     const old = object[key];
                     object[key] = scenario === 'baseline-aba' ? {} : true;
                     probe.observeAttachmentConfigurationForTest();
+                    if (scenario === 'config-aba')
+                        assert(
+                            !file.parentElement.textContent.includes(
+                                'Exact filename'
+                            )
+                        );
                     object[key] = old;
                     probe.observeAttachmentConfigurationForTest();
                 }
@@ -862,6 +1078,12 @@ export async function checkAttachmentReviewRecipe({
                 else Object.defineProperty(globalThis, key, descriptor);
             await window.happyDOM.close();
         }
+    }
+    if (process.env.SDK_ATTACHMENT_NATIVE_PLAYWRIGHT) {
+        const { checkNativeAttachmentPresentation } = await import(
+            './browser-attachment-presentation-native.mjs'
+        );
+        await checkNativeAttachmentPresentation({ consumer, bundle: main });
     }
     return { checks: matrixChecks, browserChecks: scenarios.length };
 }

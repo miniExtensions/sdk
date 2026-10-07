@@ -55,6 +55,7 @@ import {
 } from './drafts.js';
 import { prepareFormReviewRows } from './review.js';
 import { createPendingFiles } from './pendingFiles.js';
+import { formAttachmentControl } from './attachmentPresentation.js';
 import { createLinkedReviewPresentation } from './linkedReview.js';
 import {
     RecoveryJournal,
@@ -727,6 +728,7 @@ const renderForm = (page: FormLoadedResult): void => {
     const pendingPanel = element('section');
     pendingPanel.setAttribute('aria-label', 'Pending attachment selections');
     const pendingInputs = new Set<HTMLInputElement>();
+    const pendingStatuses = new Map<HTMLInputElement, HTMLElement>();
     const clearPending = button('Clear pending files', () => {
         let cleared = false;
         for (const input of pendingInputs)
@@ -745,6 +747,11 @@ const renderForm = (page: FormLoadedResult): void => {
             sessionKey(formClient) === formSession,
         () => {
             clearPending.hidden = pendingPanel.hidden = !pendingFiles.pending();
+            for (const [input, notice] of pendingStatuses)
+                notice.textContent =
+                    pendingFiles.capture(input) == null
+                        ? 'No file selected.'
+                        : 'File selected; upload or clear explicitly.';
             if (reviewPending) cancelConfirmation();
         }
     );
@@ -793,7 +800,7 @@ const renderForm = (page: FormLoadedResult): void => {
     };
     const retainInput = (
         attempt: RecoveryAttempt,
-        selectedFile?: { fieldId: string; filename: string }
+        selectedFile?: { fieldId: string }
     ): void => {
         const snapshot = visitor.drafts.snapshot(draft);
         attempt.retainedInput = (snapshot?.dirtyFieldIds ?? []).flatMap(
@@ -809,45 +816,31 @@ const renderForm = (page: FormLoadedResult): void => {
                     config.obscurePassword === true
                 )
                     return [];
-                const attachment =
-                    schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS;
-                if (
-                    attachment
-                        ? schema.airtableField.isComputed === true ||
-                          (config != null &&
-                              'readOnly' in config &&
-                              config.readOnly === true)
-                        : !control.editable
-                )
+                if (schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS)
                     return [];
-                const value = snapshot!.data[fieldId];
-                const text = attachment
-                    ? Array.isArray(value)
-                        ? value
-                              .map((item) =>
-                                  typeof item === 'object' &&
-                                  item != null &&
-                                  'filename' in item &&
-                                  typeof item.filename === 'string'
-                                      ? item.filename
-                                      : '[Attachment reference]'
-                              )
-                              .join(', ')
-                        : ''
-                    : displayValue(value);
+                if (!control.editable) return [];
+                const text = displayValue(snapshot!.data[fieldId]);
                 return [{ title: schema.airtableField.name, value: text }];
             }
         );
-        if (selectedFile != null)
+        if (
+            selectedFile != null ||
+            (snapshot?.dirtyFieldIds ?? []).some(
+                (fieldId) =>
+                    page.payload.fieldIdsToSchemas[fieldId]?.fieldType ===
+                    AirtableFieldType.MULTIPLE_ATTACHMENTS
+            )
+        )
             attempt.retainedInput.push({
-                title: `${page.payload.fieldIdsToSchemas[selectedFile.fieldId]?.airtableField.name ?? 'Attachment'} — selected file`,
-                value: selectedFile.filename,
+                title: 'Attachment activity',
+                value: 'Attachment details are not retained.',
             });
     };
     disposeFormControls = () => {
         linkedPresentation.retire();
         pendingFiles.retire();
         pendingInputs.clear();
+        pendingStatuses.clear();
         if (reviewPending) cancelConfirmation();
         updateFormActivity = () => {};
         for (const view of linkedFilterViews.values()) view.destroy();
@@ -867,11 +860,14 @@ const renderForm = (page: FormLoadedResult): void => {
         ownsLinkedFilters() && !screenNode.inert && !fields.inert;
     updateFormActivity = () => {
         observeReviewConfiguration();
-        for (const [fieldId, control] of controls)
+        for (const [fieldId, control] of controls) {
+            if ('refresh' in control && typeof control.refresh === 'function')
+                control.refresh();
             control.setActive?.(
                 ownsAddressReads() &&
                     fieldVisibility[fieldId]?.type === 'visible'
             );
+        }
     };
     const updateFieldVisibility = (): void => {
         const snapshot = visitor.drafts.snapshot(draft);
@@ -918,40 +914,53 @@ const renderForm = (page: FormLoadedResult): void => {
                 choices: [...choices.values()],
             };
         }
-        const control: FieldControl = formFieldControl(
-            schema,
-            visitor.drafts.read(draft, fieldId),
-            () => {
-                if (
-                    !mayUseForm() ||
-                    fieldVisibility[fieldId]?.type !== 'visible'
-                )
-                    return;
-                if (reviewPending) cancelConfirmation();
-                try {
-                    visitor.drafts.write(draft, fieldId, control.read());
-                    updateFieldVisibility();
-                    updateSelectAvailability();
-                } catch (error) {
-                    status(
-                        error instanceof Error
-                            ? error.message
-                            : 'Invalid field value.',
-                        true
-                    );
-                }
-            },
-            false,
-            formClient == null
-                ? undefined
-                : {
-                      extensionAccessToken: page.payload.extensionAccessToken,
-                      reads: formClient.addresses,
-                      isCurrent: () =>
-                          ownsAddressReads() &&
-                          fieldVisibility[fieldId]?.type === 'visible',
-                  }
-        );
+        const control: FieldControl =
+            schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS
+                ? formAttachmentControl(
+                      page,
+                      fieldId,
+                      visitor.drafts.read(draft, fieldId)
+                  )
+                : formFieldControl(
+                      schema,
+                      visitor.drafts.read(draft, fieldId),
+                      () => {
+                          if (
+                              !mayUseForm() ||
+                              fieldVisibility[fieldId]?.type !== 'visible'
+                          )
+                              return;
+                          if (reviewPending) cancelConfirmation();
+                          try {
+                              visitor.drafts.write(
+                                  draft,
+                                  fieldId,
+                                  control.read()
+                              );
+                              updateFieldVisibility();
+                              updateSelectAvailability();
+                          } catch (error) {
+                              status(
+                                  error instanceof Error
+                                      ? error.message
+                                      : 'Invalid field value.',
+                                  true
+                              );
+                          }
+                      },
+                      false,
+                      formClient == null
+                          ? undefined
+                          : {
+                                extensionAccessToken:
+                                    page.payload.extensionAccessToken,
+                                reads: formClient.addresses,
+                                isCurrent: () =>
+                                    ownsAddressReads() &&
+                                    fieldVisibility[fieldId]?.type ===
+                                        'visible',
+                            }
+                  );
         controls.set(fieldId, control);
         fields.append(control.node);
         const config = schema.miniExtConfig;
@@ -1288,10 +1297,27 @@ const renderForm = (page: FormLoadedResult): void => {
         if (schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS) {
             const file = element('input');
             file.type = 'file';
+            file.hidden = true;
+            file.setAttribute('aria-hidden', 'true');
+            file.tabIndex = -1;
             file.dataset.pendingFieldId = fieldId;
             pendingFiles.register(file);
             pendingInputs.add(file);
+            const notice = element('p', 'No file selected.');
+            notice.setAttribute('role', 'status');
+            pendingStatuses.set(file, notice);
             control.node.append(
+                button('Choose a file', () => {
+                    if (
+                        !mayUseForm() ||
+                        reviewPending ||
+                        request != null ||
+                        fieldVisibility[fieldId]?.type !== 'visible'
+                    )
+                        return;
+                    file.click();
+                }),
+                notice,
                 file,
                 button('Upload selected file', () => {
                     if (
@@ -1326,7 +1352,6 @@ const renderForm = (page: FormLoadedResult): void => {
                             );
                             retainInput(attempt, {
                                 fieldId,
-                                filename: selected.name,
                             });
                             updateRecovery();
                             try {
@@ -1529,7 +1554,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 ),
                 element(
                     'p',
-                    'These were local values at the earlier dispatch, not the freshly loaded server values. They are never copied back or submitted automatically. Attachment entries retain names only.'
+                    'These were local values at the earlier dispatch, not the freshly loaded server values. They are never copied back or submitted automatically. Attachment details are not retained.'
                 )
             );
             for (const field of earlier.retainedInput)

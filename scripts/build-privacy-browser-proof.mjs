@@ -41,6 +41,7 @@ const starterFiles = [
     'src/review.ts',
     'src/linkedReview.ts',
     'src/pendingFiles.ts',
+    'src/attachmentPresentation.ts',
     'src/linkedFilters.ts',
     'src/choiceAvailability.ts',
     'src/childQueries.ts',

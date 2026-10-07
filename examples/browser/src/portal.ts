@@ -77,11 +77,47 @@ type DetailField = {
     fieldId: string;
     title: string | null;
     miniExtConfig?: RuntimeFieldSchema['miniExtConfig'];
+    displayConfig: unknown;
     inlineEditable: boolean;
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value != null && !Array.isArray(value);
+
+// A deliberately plain Portal presentation, not a Form policy or an uploader.
+// Returned native metadata stays untouched and is never serialized into the DOM.
+const attachmentSummary = (value: unknown, displayConfig: unknown): string => {
+    if (
+        value == null ||
+        (typeof value === 'string' && value.trim() === '') ||
+        (Array.isArray(value) && value.length === 0)
+    )
+        return '';
+    if (!Array.isArray(value)) return 'Attachment presentation unavailable';
+    const showNames =
+        isObject(displayConfig) && displayConfig.hideAttachmentName === false;
+    const lines: string[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+        const attachment: unknown = value[index];
+        if (
+            !Object.hasOwn(value, index) ||
+            !isObject(attachment) ||
+            typeof attachment.url !== 'string' ||
+            'label' in attachment ||
+            (attachment.filename !== undefined &&
+                typeof attachment.filename !== 'string')
+        )
+            return 'Attachment presentation unavailable';
+        lines.push(
+            showNames &&
+                typeof attachment.filename === 'string' &&
+                attachment.filename.trim() !== ''
+                ? attachment.filename
+                : 'Attachment'
+        );
+    }
+    return lines.join('\n');
+};
 
 // The canonical grid route denies conditional fields/options and active linked
 // filters, even when an option entry only supplies a display label. Static UI
@@ -165,6 +201,9 @@ const detailFields = (
                         ? field.titleOverride
                         : null,
                 miniExtConfig,
+                // Returned display policy merges child defaults then Portal
+                // overrides. The child-first config above is write authority.
+                displayConfig: field.miniExtConfig,
                 inlineEditable:
                     (miniExtConfig === undefined ||
                         !('readOnly' in miniExtConfig) ||
@@ -784,7 +823,9 @@ export const createPortalView = (options: {
         recordId: string,
         recordField: RuntimeAirtableField,
         value: AirtableValue,
-        miniExtConfig: RuntimeFieldSchema['miniExtConfig']
+        miniExtConfig: RuntimeFieldSchema['miniExtConfig'],
+        displayConfig: unknown,
+        title: string | null
     ): void => {
         const owner = { ...options.getScope() };
         const sameOwner = (): boolean => {
@@ -809,6 +850,44 @@ export const createPortalView = (options: {
         }
         closeEditor();
         const form = element('form', undefined, 'card');
+        const acceptedData = data;
+        const portalFieldId = fieldSelect.value;
+        const selectedCustomViewId = viewSelect.value;
+        if (
+            recordField.config.type === AirtableFieldType.MULTIPLE_ATTACHMENTS
+        ) {
+            // Preview only: native values never pass through a textarea or a
+            // submit handler. Display policy is independent of edit authority.
+            form.append(
+                element('h3', title ?? 'Attachments'),
+                element('p', attachmentSummary(value, displayConfig)),
+                element(
+                    'p',
+                    'Use the child Form to change attachments.',
+                    'hint'
+                )
+            );
+            const currentPreview = (): boolean =>
+                !destroyed &&
+                form.isConnected &&
+                card.isConnected &&
+                editor.firstElementChild === form &&
+                data === acceptedData &&
+                fieldSelect.value === portalFieldId &&
+                viewSelect.value === selectedCustomViewId &&
+                sameOwner();
+            form.append(
+                button('Close', () => {
+                    if (currentPreview()) closeEditor();
+                })
+            );
+            form.addEventListener('submit', (event) => event.preventDefault());
+            editor.append(form);
+            status(
+                'Attachment preview is read-only. Use the child Form to make changes.'
+            );
+            return;
+        }
         const control = fieldControl(
             recordField,
             miniExtConfig,
@@ -816,9 +895,6 @@ export const createPortalView = (options: {
             () => {}
         );
         editorControl = control;
-        const acceptedData = data;
-        const portalFieldId = fieldSelect.value;
-        const selectedCustomViewId = viewSelect.value;
         const editorIsCurrent = (): boolean =>
             !destroyed &&
             form.isConnected &&
@@ -1020,7 +1096,9 @@ export const createPortalView = (options: {
             results.append(element('p', 'No table data was returned.', 'hint'));
             return;
         }
-        const columns = detailFields(data.detailFields);
+        const columns = detailFields(data.detailFields).filter((column) =>
+            state.airtableFields.some((field) => field.id === column.fieldId)
+        );
         const table = element('table');
         const head = element('tr');
         for (const column of columns)
@@ -1061,7 +1139,12 @@ export const createPortalView = (options: {
                     value.length > 0;
                 const cell = element(
                     'td',
-                    obscured ? '••••••••' : displayValue(value)
+                    recordField?.config.type ===
+                        AirtableFieldType.MULTIPLE_ATTACHMENTS
+                        ? attachmentSummary(value, column.displayConfig)
+                        : obscured
+                          ? '••••••••'
+                          : displayValue(value)
                 );
                 const gridMode = (layoutSetting('layout') ?? 'grid') === 'grid';
                 if (
@@ -1078,7 +1161,9 @@ export const createPortalView = (options: {
                                 recordId,
                                 recordField,
                                 record.fields[column.fieldId],
-                                column.miniExtConfig
+                                column.miniExtConfig,
+                                column.displayConfig,
+                                column.title
                             )
                         )
                     );

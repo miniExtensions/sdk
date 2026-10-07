@@ -16,6 +16,22 @@ export type PortalFilterEditor =
     | { type: 'unavailable'; diagnostic: string };
 const object = (v: unknown): v is Record<string, unknown> =>
     v != null && typeof v === 'object' && !Array.isArray(v);
+// Tag values and own object entries so absence never equals an own undefined key.
+const policyEncoding = (value: unknown): unknown => {
+    if (value === undefined) return ['undefined'];
+    if (value === null) return ['null'];
+    if (Array.isArray(value))
+        return ['array', Array.from(value, policyEncoding)];
+    if (object(value))
+        return [
+            'object',
+            Object.entries(value).map(([key, entry]) => [
+                key,
+                policyEncoding(entry),
+            ]),
+        ];
+    return [typeof value, value];
+};
 const textOperators = [
     'is',
     'isNot',
@@ -311,20 +327,22 @@ export function mountPortalScalarFilterEditor(options: {
         message.setAttribute('role', 'status');
         let retired = false;
         const policyKey = () =>
-            JSON.stringify({
-                schema: options.portal.payload.fieldIdsToSchemas[
-                    options.portalFieldId
-                ],
-                fields: options.snapshot.tableIdsToLinkedTableStates[
-                    link.options.linkedTableId
-                ]?.airtableFields,
-                map:
-                    options.snapshot.customViewDetailFields === null
-                        ? options.portal.payload
-                              .linkedRecordFieldIdToDetailFields
-                        : options.snapshot.customViewDetailFields,
-                criteria: options.criteria,
-            });
+            JSON.stringify(
+                policyEncoding({
+                    schema: options.portal.payload.fieldIdsToSchemas[
+                        options.portalFieldId
+                    ],
+                    fields: options.snapshot.tableIdsToLinkedTableStates[
+                        link.options.linkedTableId
+                    ]?.airtableFields,
+                    map:
+                        options.snapshot.customViewDetailFields === null
+                            ? options.portal.payload
+                                  .linkedRecordFieldIdToDetailFields
+                            : options.snapshot.customViewDetailFields,
+                    criteria: options.criteria,
+                })
+            );
         const acceptedPolicyKey = policyKey();
         const current = () => {
             if (retired || !node.isConnected) return false;

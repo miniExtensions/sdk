@@ -557,6 +557,55 @@ export async function checkPortalFilterCases({
         }
     );
     await check(
+        'presence-aware policy rejects absent-to-own-undefined filtering transition before retained Apply',
+        async () => {
+            const p = editablePortal(),
+                s = selectSnapshot(),
+                c = criteria(),
+                before = structuredClone(c);
+            const root = p.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
+            assert.equal(
+                Object.hasOwn(root, 'disableFilteringOnExtension'),
+                false
+            );
+            const h = await standalone(p, s, c),
+                ui = controls(h.editor.node);
+            choose(h.window, ui, 'fld_choice_0', 'is', ['sel_a']);
+            const priorFetch = globalThis.fetch,
+                priorWindowFetch = h.window.fetch;
+            let io = 0;
+            const unexpectedRequest = async () => {
+                io++;
+                throw new Error('Unexpected retained-handler request');
+            };
+            globalThis.fetch = unexpectedRequest;
+            h.window.fetch = unexpectedRequest;
+            try {
+                root.disableFilteringOnExtension = undefined;
+                assert.equal(
+                    Object.hasOwn(root, 'disableFilteringOnExtension'),
+                    true
+                );
+                ui.apply.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
+                assert.equal(h.changes.length, 0);
+                assert.deepEqual(c, before);
+                assert(ui.node.inert);
+                delete root.disableFilteringOnExtension;
+                ui.apply.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
+                assert.equal(h.changes.length, 0);
+                assert.equal(io, 0);
+            } finally {
+                globalThis.fetch = priorFetch;
+                h.window.fetch = priorWindowFetch;
+                await h.close();
+            }
+        }
+    );
+    await check(
         'scalar recipe executes all87 advertised operator/type pairs against pinned canonical formula and normalization',
         async () => {
             assert.equal(

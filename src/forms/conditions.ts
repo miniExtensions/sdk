@@ -245,7 +245,7 @@ export function compileRuntimeConditions(
                 !empty &&
                 (value == null ||
                     value === '' ||
-                    (Array.isArray(value) && value.length === 0))
+                    (!equality && Array.isArray(value) && value.length === 0))
             )
                 return incomplete('incomplete-condition', path, condition);
             if (

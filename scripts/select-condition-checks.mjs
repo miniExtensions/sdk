@@ -55,6 +55,12 @@ for (const type of ['singleSelect','multipleSelects']) {
   assert.equal(availability.status,'blocked'); assert.equal(availability.diagnostics[0].code,'unsupported-condition');checks++;
  }
 }
+for(const mode of ['strict','compatibility']) for(const op of ['is','isNot']) {
+ const invalid=def('singleSelect',op,[]).conditions[0];
+ const valid=def('singleSelect','is','sel_a').conditions[0];
+ const r=compile({logicalOperator:'and',conditions:[invalid,valid]},[base],mode);
+ assert.equal(r.type,'invalid');assert(r.diagnostics.some(d=>d.code==='invalid-operand'&&d.severity==='error'));assert(!r.diagnostics.some(d=>d.code==='incomplete-condition'));assert(!Object.hasOwn(r,'formula'));checks++;
+}
 const drift=compile(def('singleSelect','matchesRegex','.*'),[base]);assert.equal(drift.type,'unsupported');checks++;
 console.log(JSON.stringify({checks}));
 `;

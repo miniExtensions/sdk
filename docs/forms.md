@@ -578,8 +578,10 @@ have unambiguous nonempty IDs and names. IDs resolve to current names, retaining
 insertion-order deduplication. Unknown single equality choices compile to
 `FALSE()`. Any/none operators retain known choices from mixed operands;
 multi-select all/exact returns `FALSE()` if any choice is unknown. All-unknown
-arrays return `FALSE()`. Empty operands are incomplete; use the dedicated
-emptiness operators. Native multi-select serialization, escaped regex boundaries
+arrays return `FALSE()`. Equality requires one choice-ID string: arrays,
+including `[]`, are invalid in both strict and compatibility modes. Null or
+empty-string equality operands and empty array-operator operands are incomplete;
+use the dedicated emptiness operators. Native multi-select serialization, escaped regex boundaries
 and exact serialized length are preserved. Unsafe literal/regex round trips
 fail closed rather than approximating set membership or splitting commas.
 

@@ -201,3 +201,33 @@ it('matches executed pinned converter fixtures or refuses unsafe literal represe
         }
     }
 });
+
+it('never omits malformed equality arrays beside a valid AND sibling', () => {
+    for (const mode of ['strict', 'compatibility'] as const)
+        for (const operator of ['is', 'isNot']) {
+            const invalid = definition('singleSelect', operator, [])
+                .conditions[0]!;
+            const valid = definition('singleSelect', 'is', 'a').conditions[0]!;
+            const result = compileRuntimeConditions({
+                conditions: {
+                    logicalOperator: 'and',
+                    conditions: [invalid, valid],
+                },
+                airtableFields: [field('singleSelect')],
+                invalidConditionMode: mode,
+            } as CompileRuntimeConditionsInput);
+            assert.equal(result.type, 'invalid');
+            assert(
+                result.diagnostics.some(
+                    (d) =>
+                        d.code === 'invalid-operand' && d.severity === 'error'
+                )
+            );
+            assert(
+                !result.diagnostics.some(
+                    (d) => d.code === 'incomplete-condition'
+                )
+            );
+            assert(!Object.hasOwn(result, 'formula'));
+        }
+});

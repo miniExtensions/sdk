@@ -42,6 +42,7 @@ const starterFiles = [
     'src/linkedFilters.ts',
     'src/choiceAvailability.ts',
     'src/childQueries.ts',
+    'src/portalSort.ts',
 ];
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const within = (root, path) => {

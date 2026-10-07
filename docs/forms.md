@@ -685,12 +685,13 @@ The existing `createFlatScalarFormRecordProjection` retains its types, blocked
 codes and behavior, including scanning schemas outside the supplied order and
 rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
 adapter and one-page Review opt into the new helper, retaining their
-one-page and supported-driver checks. Review accepts scalar and select answers;
+one-page and supported-driver checks. Review accepts scalar/select answers and conservative linked/attachment summaries;
 selects do not become supported condition drivers or edit-empty-hiding types.
 The shipped Review recipe maps native names through complete select policy
 metadata, preserves selected-but-ineligible values and ordered duplicates,
-and adds an explicit unavailable marker to unknown names. Linked records and
-attachments remain deferred. See the browser starter's Review section for the
+and adds an explicit unavailable marker to unknown names. Linked labels require previously accepted field-specific presentation; attachment
+filenames require explicit visibility and the original attachment policy. Review
+performs no hydration, upload or attachment navigation. See the browser starter's Review section for the
 presentation-only boundary; complete native data and dirty IDs still go to Save.
 
 Canonical select-label comparison fixtures are pinned to monorepo `58f73d5`.

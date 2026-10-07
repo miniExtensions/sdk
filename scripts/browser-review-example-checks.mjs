@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { addSelectReviewAnswers } from './form-review-recipe-checks.mjs';
+import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { addLinkedReviewAnswers } from './linked-review-recipe-checks.mjs';
 import {
     createReviewFixture,
@@ -110,7 +111,7 @@ export async function checkBrowserReviewExample({
         'refused-multi-null',
         'refused-multi-empty-name',
         'refused-linked-malformed',
-        'refused-attachment-empty',
+        'refused-attachment-malformed',
         'refused-select-driver',
         'refused-select-hide-empty',
     ];
@@ -202,9 +203,10 @@ export async function checkBrowserReviewExample({
             setting.value = 'First';
         }
         if (
-            ['refused-linked-malformed', 'refused-attachment-empty'].includes(
-                scenario
-            )
+            [
+                'refused-linked-malformed',
+                'refused-attachment-malformed',
+            ].includes(scenario)
         ) {
             const type =
                 scenario === 'refused-linked-malformed'
@@ -224,8 +226,7 @@ export async function checkBrowserReviewExample({
                           },
                       }
                     : { type };
-            form.payload.formRecord.data.fld_review_multi =
-                scenario === 'refused-linked-malformed' ? [null] : [];
+            form.payload.formRecord.data.fld_review_multi = [null];
         }
         if (scenario === 'confirmed-select-revision') {
             form.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig = {};
@@ -236,6 +237,17 @@ export async function checkBrowserReviewExample({
             form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.enableSectionHeader = false;
             form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.hideFieldIfEmpty = true;
         }
+        if (
+            [
+                'validation',
+                'unknown-transport',
+                'cancelled-held',
+                'confirmed-owner-aba',
+                'confirmed-reload',
+                'confirmed-logout',
+            ].includes(scenario)
+        )
+            addAttachmentReviewAnswers(form);
         const initial = structuredClone(form.payload.formRecord.data);
         const window = new Window({
             url: 'https://review-starter.example.test',

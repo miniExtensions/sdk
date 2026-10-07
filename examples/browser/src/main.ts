@@ -54,6 +54,7 @@ import {
     type ParentFormDraftScope,
 } from './drafts.js';
 import { prepareFormReviewRows } from './review.js';
+import { createPendingFiles } from './pendingFiles.js';
 import { createLinkedReviewPresentation } from './linkedReview.js';
 import {
     RecoveryJournal,
@@ -693,6 +694,60 @@ const renderForm = (page: FormLoadedResult): void => {
         visitor.revision === formRevision &&
         formClient != null &&
         sessionKey(formClient) === formSession;
+    const configurationKey = (): string =>
+        JSON.stringify([
+            page.extensionId,
+            page.payload.extensionAccessToken,
+            page.payload.formRecord.type === 'edit'
+                ? [
+                      page.payload.formRecord.type,
+                      page.payload.formRecord.recordId,
+                      page.payload.formRecord.tableId,
+                  ]
+                : [page.payload.formRecord.type],
+            page.payload.fieldIdsInForm,
+            page.payload.fieldIdsToSchemas,
+            page.payload.linkedRecordFieldIdToDetailFields,
+            page.payload.publicFields,
+            page.payload.persistedAddOnlyAttachmentValuesByFieldId,
+            visitor.formContext,
+            visitor.formParentScope,
+            connection,
+        ]);
+    let reviewConfiguration = configurationKey();
+    let reviewConfigurationRevision = 0;
+    const observeReviewConfiguration = (): number => {
+        const next = configurationKey();
+        if (next !== reviewConfiguration) {
+            reviewConfiguration = next;
+            reviewConfigurationRevision++;
+        }
+        return reviewConfigurationRevision;
+    };
+    const pendingPanel = element('section');
+    pendingPanel.setAttribute('aria-label', 'Pending attachment selections');
+    const pendingInputs = new Set<HTMLInputElement>();
+    const clearPending = button('Clear pending files', () => {
+        let cleared = false;
+        for (const input of pendingInputs)
+            if (pendingFiles.capture(input) != null)
+                cleared = pendingFiles.clear(input) || cleared;
+        if (cleared) status('Pending file selections cleared.');
+    });
+    clearPending.hidden = pendingPanel.hidden = true;
+    pendingPanel.append(clearPending);
+    const pendingFiles = createPendingFiles(
+        () =>
+            ownsForm() &&
+            visitor.client === formClient &&
+            visitor.revision === formRevision &&
+            formClient != null &&
+            sessionKey(formClient) === formSession,
+        () => {
+            clearPending.hidden = pendingPanel.hidden = !pendingFiles.pending();
+            if (reviewPending) cancelConfirmation();
+        }
+    );
     let metadataPromise: Promise<RuntimeTableStates> | null = null;
     const linkedPresentation = createLinkedReviewPresentation(
         page,
@@ -791,6 +846,8 @@ const renderForm = (page: FormLoadedResult): void => {
     };
     disposeFormControls = () => {
         linkedPresentation.retire();
+        pendingFiles.retire();
+        pendingInputs.clear();
         if (reviewPending) cancelConfirmation();
         updateFormActivity = () => {};
         for (const view of linkedFilterViews.values()) view.destroy();
@@ -809,6 +866,7 @@ const renderForm = (page: FormLoadedResult): void => {
     const ownsAddressReads = (): boolean =>
         ownsLinkedFilters() && !screenNode.inert && !fields.inert;
     updateFormActivity = () => {
+        observeReviewConfiguration();
         for (const [fieldId, control] of controls)
             control.setActive?.(
                 ownsAddressReads() &&
@@ -1230,6 +1288,9 @@ const renderForm = (page: FormLoadedResult): void => {
         if (schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS) {
             const file = element('input');
             file.type = 'file';
+            file.dataset.pendingFieldId = fieldId;
+            pendingFiles.register(file);
+            pendingInputs.add(file);
             control.node.append(
                 file,
                 button('Upload selected file', () => {
@@ -1245,11 +1306,12 @@ const renderForm = (page: FormLoadedResult): void => {
                         );
                         return;
                     }
-                    const selected = file.files?.[0];
-                    if (selected == null) {
+                    const selection = pendingFiles.capture(file);
+                    if (selection == null) {
                         status('Choose a file first.', true);
                         return;
                     }
+                    const selected = selection.file;
                     void run(
                         'Uploading the selected attachment…',
                         async ({ client, signal, current }) => {
@@ -1295,7 +1357,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 );
                                 updateFieldVisibility();
                                 updateSelectAvailability();
-                                file.value = '';
+                                pendingFiles.clear(file, selection);
                                 recovery.accepted(attempt, 'uploaded');
                                 status(
                                     'File uploaded. Choose Save to attach it to the record.'
@@ -1416,7 +1478,7 @@ const renderForm = (page: FormLoadedResult): void => {
         );
         actions.append(deleteRecord);
     }
-    card.append(actions);
+    card.append(actions, pendingPanel);
     const recoveryPanel = element('section');
     recoveryPanel.setAttribute('aria-label', 'Earlier request recovery');
     recoveryPanel.setAttribute('aria-live', 'polite');
@@ -1712,6 +1774,10 @@ const renderForm = (page: FormLoadedResult): void => {
             void save();
             return;
         }
+        if (pendingFiles.pending()) {
+            status('Upload or clear the selected file before reviewing.', true);
+            return;
+        }
         // Native modal focus prevents ordinary edits. The inert field owner
         // also retires prediction/detail intents before the accepted capture.
         reviewPending = true;
@@ -1740,26 +1806,8 @@ const renderForm = (page: FormLoadedResult): void => {
             );
             const formConnection = connection;
             const parentScope = visitor.formParentScope;
-            const configurationKey = (): string =>
-                JSON.stringify([
-                    page.extensionId,
-                    page.payload.extensionAccessToken,
-                    page.payload.formRecord.type === 'edit'
-                        ? [
-                              page.payload.formRecord.type,
-                              page.payload.formRecord.recordId,
-                              page.payload.formRecord.tableId,
-                          ]
-                        : [page.payload.formRecord.type],
-                    page.payload.fieldIdsInForm,
-                    page.payload.fieldIdsToSchemas,
-                    page.payload.linkedRecordFieldIdToDetailFields,
-                    page.payload.publicFields,
-                    visitor.formContext,
-                    visitor.formParentScope,
-                    connection,
-                ]);
-            const capturedConfiguration = configurationKey();
+            const capturedConfiguration = observeReviewConfiguration();
+            const pendingRevision = pendingFiles.revision();
             const preparedCurrent = (): boolean =>
                 ownsLinkedFilters() &&
                 linkedSnapshot.current() &&
@@ -1767,7 +1815,9 @@ const renderForm = (page: FormLoadedResult): void => {
                 visitor.formParentScope === parentScope &&
                 connection === formConnection &&
                 visitor.drafts.revision(draft) === draftRevision &&
-                configurationKey() === capturedConfiguration;
+                observeReviewConfiguration() === capturedConfiguration &&
+                pendingFiles.revision() === pendingRevision &&
+                !pendingFiles.pending();
             const accepted = await requestConfirmation({
                 title: 'Review your answers',
                 message:

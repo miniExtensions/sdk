@@ -296,8 +296,9 @@ enforces its published rules.
 The packaged browser starter also supplies a
 [bounded Review/Edit/Confirm recipe](examples/browser/README.md#form-workflow)
 for the published `promptUserBeforeSubmission` setting on one-page manual
-Forms with supported scalar answers and section conditions. It renders ordered nonempty direct scalar answers as plain text and
-fixed password masks. The prepared intent captures the actual draft revision
+Forms with supported scalar/select answers, conservative linked/attachment
+summaries and section conditions. It renders ordered nonempty answers as plain
+text with fixed scalar password masks; attachment filenames are opt-in. The prepared intent captures the actual draft revision
 and current owner/configuration context; edits or context changes invalidate
 confirmation. Edit/dismiss performs no Save, while explicit current Confirm
 uses the existing final Save and unknown-outcome recovery path once with the

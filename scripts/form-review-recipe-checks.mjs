@@ -4,11 +4,72 @@ import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { createHash } from 'node:crypto';
 import { assertBrowserInputs } from './package-checks.mjs';
 import {
     createReviewFixture,
     createHideEmptyReviewFixture,
 } from './build-privacy-browser-proof.mjs';
+
+export function addSelectReviewAnswers(page) {
+    const choices = [
+        { id: 'sel_first', name: 'First' },
+        { id: 'sel_second', name: 'Second' },
+    ];
+    for (const [id, type, value] of [
+        ['fld_review_single', 'singleSelect', 'First'],
+        [
+            'fld_review_multi',
+            'multipleSelects',
+            [
+                'Second',
+                'First',
+                'Second',
+                'sel_first',
+                '<i>Label</i>',
+                '<b>Unknown</b>',
+                '   ',
+            ],
+        ],
+    ]) {
+        page.payload.fieldIdsInForm.push(id);
+        page.payload.fieldIdsToSchemas[id] = {
+            fieldType: type,
+            airtableField: {
+                id,
+                name: id,
+                config: {
+                    type,
+                    options: { choices: structuredClone(choices) },
+                },
+            },
+            miniExtConfig: {
+                readOnly: true,
+                enableConditionalOptions: true,
+                singleOrMultiSelectLimitSelectionOptions: ['sel_first'],
+                conditionsForOptions: [
+                    {
+                        config: {
+                            optionForConditions: 'sel_first',
+                            name: '<i>Label</i>',
+                        },
+                    },
+                    {
+                        config: {
+                            optionForConditions: 'sel_second',
+                            name: '<i>Label</i>',
+                        },
+                    },
+                ],
+            },
+        };
+        page.payload.formRecord.data[id] = structuredClone(value);
+    }
+    return [
+        '<i>Label</i> (First)',
+        '<i>Label</i> (Second)\n<i>Label</i> (First)\n<i>Label</i> (Second)\nsel_first (unavailable)\n<i>Label</i> (unavailable)\n<b>Unknown</b> (unavailable)\n    (unavailable)',
+    ];
+}
 
 /** Pure archived Review contract: no empty-hiding helper or browser mutation. */
 export function assertCanonicalBlankReviewMatrix(prepareFormReviewRows) {
@@ -93,7 +154,7 @@ export async function checkFormReviewRecipe({
     const entry = join(consumer, '.generated/review-recipe-entry.ts');
     writeFileSync(
         entry,
-        "export { prepareFormReviewRows } from '../src/review.js';\nexport { requestConfirmation, cancelConfirmation } from '../src/confirmation.js';\nexport { createFormSaveInput } from '@miniextensions/sdk/forms';\n"
+        "export { prepareFormReviewRows } from '../src/review.js';\nexport { requestConfirmation, cancelConfirmation } from '../src/confirmation.js';\nexport { createFormSaveInput, evaluateFormFieldVisibility } from '@miniextensions/sdk/forms';\n"
     );
     const outfile = join(consumer, '.generated/review-recipe-checks.mjs');
     const bundled = await build({
@@ -117,11 +178,17 @@ export async function checkFormReviewRecipe({
             path.endsWith('dist/esm/forms/projection.js')
         )
     );
+    assert(
+        Object.keys(bundled.metafile.inputs).some((path) =>
+            path.endsWith('dist/esm/ui/selectPolicy.js')
+        )
+    );
     const {
         prepareFormReviewRows,
         requestConfirmation,
         cancelConfirmation,
         createFormSaveInput,
+        evaluateFormFieldVisibility,
     } = await import(pathToFileURL(outfile).href);
     const require = createRequire(import.meta.url);
     const { Window } = require(happyDomModulePath);
@@ -164,6 +231,182 @@ export async function checkFormReviewRecipe({
         'rec_review_parent',
     ]);
     let checks = 1;
+    const selectPage = structuredClone(page);
+    const expectedSelect = addSelectReviewAnswers(selectPage);
+    const selectNative = structuredClone(selectPage.payload.formRecord.data);
+    const beforeSelect = structuredClone(selectNative);
+    const selectRows = prepareFormReviewRows(selectPage, selectNative);
+    assert.deepEqual(
+        selectRows.slice(-2).map((row) => row.value),
+        expectedSelect
+    );
+    assert.deepEqual(selectNative, beforeSelect);
+    const canonical = JSON.parse(
+        readFileSync('test/fixtures/reviewSelect.json', 'utf8')
+    );
+    assert.equal(
+        canonical.provenance.revision,
+        '58f73d575ab10baa0a10693660d8002f204368e1'
+    );
+    assert.equal(
+        canonical.provenance.generatorSHA256,
+        createHash('sha256')
+            .update(readFileSync(canonical.provenance.generator))
+            .digest('hex')
+    );
+    for (const c of canonical.cases) {
+        const p = structuredClone(selectPage);
+        const schema = p.payload.fieldIdsToSchemas.fld_review_multi;
+        schema.airtableField.config.options.choices = c.choices;
+        schema.miniExtConfig = c.config;
+        const data = {
+            ...selectNative,
+            fld_review_multi: c.choices.map((choice) => choice.name),
+        };
+        assert.equal(
+            prepareFormReviewRows(p, data).find(
+                (row) => row.fieldId === 'fld_review_multi'
+            ).value,
+            c.expected.map((choice) => choice.displayName).join('\n')
+        );
+    }
+    assert.equal(canonical.unknown.displayName, '<b>Unknown</b>');
+    assert.equal(
+        prepareFormReviewRows(selectPage, {
+            ...selectNative,
+            fld_review_single: canonical.unknown.displayName,
+        }).find((row) => row.fieldId === 'fld_review_single').value,
+        '<b>Unknown</b> (unavailable)'
+    );
+    for (const options of [undefined, { choices: [] }]) {
+        const p = structuredClone(selectPage);
+        p.payload.fieldIdsToSchemas.fld_review_single.airtableField.config.options =
+            options;
+        assert.equal(
+            prepareFormReviewRows(p, selectNative).find(
+                (row) => row.fieldId === 'fld_review_single'
+            ).value,
+            'First (unavailable)'
+        );
+    }
+    const fallback = structuredClone(selectPage);
+    fallback.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig.conditionsForOptions[0].config.name = 123;
+    assert.equal(
+        prepareFormReviewRows(fallback, selectNative).find(
+            (row) => row.fieldId === 'fld_review_single'
+        ).value,
+        'First'
+    );
+    for (const type of [
+        'multipleRecordLinks',
+        'multipleAttachments',
+        'richText',
+        'date',
+    ]) {
+        const p = structuredClone(selectPage);
+        p.payload.fieldIdsToSchemas.fld_review_single.fieldType = type;
+        p.payload.fieldIdsToSchemas.fld_review_single.airtableField.config = {
+            type,
+        };
+        assert.throws(
+            () =>
+                prepareFormReviewRows(p, {
+                    ...selectNative,
+                    fld_review_single: null,
+                }),
+            /Review is unavailable/
+        );
+    }
+    const hiddenEmpty = structuredClone(selectPage);
+    hiddenEmpty.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig.hideFieldIfEmpty = true;
+    assert.equal(
+        evaluateFormFieldVisibility({
+            field: hiddenEmpty.payload.fieldIdsToSchemas.fld_review_single,
+            airtableFields: Object.values(
+                hiddenEmpty.payload.fieldIdsToSchemas
+            ).map((s) => s.airtableField),
+            data: selectNative,
+            formRecordType: 'edit',
+            evaluationMode: 'runtime',
+            invalidConditionMode: 'strict',
+        }).code,
+        'unsupported-hide-empty'
+    );
+    const driver = structuredClone(selectPage);
+    const setting =
+        driver.payload.fieldIdsToSchemas.fld_review_conditional.miniExtConfig
+            .conditionalFields.conditions[0].setting;
+    setting.idOrName.id = 'fld_review_single';
+    setting.fieldType = 'singleSelect';
+    setting.value = 'First';
+    assert.throws(
+        () => prepareFormReviewRows(driver, selectNative),
+        /Review is unavailable/
+    );
+    for (const [id, values] of [
+        ['fld_review_single', [1, true, {}, ['First']]],
+        [
+            'fld_review_multi',
+            [1, true, {}, ['First', null], ['First', 1], [''], new Array(1)],
+        ],
+    ])
+        for (const value of values) {
+            const data = structuredClone(selectNative);
+            data[id] = value;
+            assert.throws(
+                () => prepareFormReviewRows(selectPage, data),
+                (error) =>
+                    error.message.startsWith('Review is unavailable') &&
+                    !error.message.includes('First')
+            );
+        }
+    for (const value of [undefined, null, '', '   ', []]) {
+        const data = {
+            ...selectNative,
+            fld_review_single: value,
+            fld_review_multi: value,
+        };
+        assert.deepEqual(
+            prepareFormReviewRows(selectPage, data)
+                .slice(-2)
+                .map((row) => row.fieldId)
+                .filter(
+                    (id) =>
+                        id.startsWith('fld_review_single') ||
+                        id.startsWith('fld_review_multi')
+                ),
+            []
+        );
+    }
+    for (const value of ['sel_first', '<i>Label</i>', 'first', ' First ']) {
+        const data = { ...selectNative, fld_review_single: value };
+        assert.equal(
+            prepareFormReviewRows(selectPage, data).find(
+                (row) => row.fieldId === 'fld_review_single'
+            ).value,
+            `${value} (unavailable)`
+        );
+    }
+    const selectSave = createFormSaveInput({
+        loaded: selectPage,
+        draft: {
+            data: selectNative,
+            dirtyFieldIds: ['fld_review_single', 'fld_review_multi'],
+        },
+        options: {
+            captchaVal: null,
+            isComputeMode: false,
+            searchQuery: {},
+            context: { type: 'direct-url' },
+            conditionalLinkedRecordFieldIdsToFilteringValues: {},
+        },
+    });
+    assert.deepEqual(selectSave.formRecord.data, selectNative);
+    assert.deepEqual(selectSave.formFieldIdsWithUnsavedChanges, [
+        'fld_review_single',
+        'fld_review_multi',
+    ]);
+    checks++;
     const empty = structuredClone(native);
     for (const id of page.payload.fieldIdsInForm)
         empty[id] =
@@ -300,7 +543,7 @@ export async function checkFormReviewRecipe({
                 message: 'Review the captured answers.',
                 confirmLabel: 'Confirm',
                 cancelLabel: 'Edit',
-                rows,
+                rows: selectRows,
             });
             const dialog = window.document.querySelector('dialog[open]');
             assert(dialog);
@@ -324,7 +567,7 @@ export async function checkFormReviewRecipe({
                 [...dialog.querySelectorAll('dd')].map(
                     (node) => node.textContent
                 ),
-                rows.map((row) => row.value)
+                selectRows.map((row) => row.value)
             );
             for (const label of dialog.querySelectorAll('dt'))
                 assert.equal(

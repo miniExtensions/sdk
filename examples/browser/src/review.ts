@@ -8,6 +8,7 @@ import {
     describeLoadedFormFields,
 } from '@miniextensions/sdk/forms';
 import type { ConfirmationRow } from './confirmation.js';
+import { getSelectFieldPolicy } from '@miniextensions/sdk/ui';
 import { settings } from './dom.js';
 
 const textTypes = new Set<string>([
@@ -25,7 +26,7 @@ const numericTypes = new Set<string>([
 ]);
 function unavailable(): never {
     throw new Error(
-        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox and barcode answers.'
+        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox, barcode and select answers.'
     );
 }
 
@@ -52,6 +53,8 @@ export const prepareFormReviewRows = (
             field.isComputed ||
             (!textTypes.has(type) &&
                 !numericTypes.has(type) &&
+                type !== AirtableFieldType.SINGLE_SELECT &&
+                type !== AirtableFieldType.MULTIPLE_SELECTS &&
                 type !== AirtableFieldType.CHECKBOX &&
                 type !== AirtableFieldType.BARCODE)
         )
@@ -78,8 +81,34 @@ export const prepareFormReviewRows = (
         // Canonical emptiness accepts whitespace before field-specific shapes.
         if (value == null || (typeof value === 'string' && value.trim() === ''))
             continue;
+        if (Array.isArray(value) && value.length === 0) continue;
         let text: string;
-        if (textTypes.has(type)) {
+        if (
+            type === AirtableFieldType.SINGLE_SELECT ||
+            type === AirtableFieldType.MULTIPLE_SELECTS
+        ) {
+            const names =
+                type === AirtableFieldType.SINGLE_SELECT ? [value] : value;
+            if (
+                !Array.isArray(names) ||
+                Array.from(names).some(
+                    (name) => typeof name !== 'string' || name.length === 0
+                )
+            )
+                unavailable();
+            try {
+                const options = getSelectFieldPolicy(field.schema).options;
+                text = names
+                    .map(
+                        (name) =>
+                            options.find((option) => option.value === name)
+                                ?.label ?? `${name} (unavailable)`
+                    )
+                    .join('\n');
+            } catch {
+                unavailable();
+            }
+        } else if (textTypes.has(type)) {
             if (typeof value !== 'string') unavailable();
             const config = field.schema.miniExtConfig;
             text =

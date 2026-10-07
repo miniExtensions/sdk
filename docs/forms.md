@@ -684,9 +684,21 @@ empty hiding still blocks presentation and the starter Save gate.
 The existing `createFlatScalarFormRecordProjection` retains its types, blocked
 codes and behavior, including scanning schemas outside the supplied order and
 rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
-adapter and scalar-only Review opt into the new helper, retaining their
-one-page and supported-driver/answer checks. Review still rejects select fields;
-choice and Review acceptance fixtures are separate consumers.
+adapter and one-page Review opt into the new helper, retaining their
+one-page and supported-driver checks. Review accepts scalar and select answers;
+selects do not become supported condition drivers or edit-empty-hiding types.
+The shipped Review recipe maps native names through complete select policy
+metadata, preserves selected-but-ineligible values and ordered duplicates,
+and adds an explicit unavailable marker to unknown names. Linked records and
+attachments remain deferred. See the browser starter's Review section for the
+presentation-only boundary; complete native data and dirty IDs still go to Save.
+
+Canonical select-label comparison fixtures are pinned to monorepo `58f73d5`.
+Maintainers may explicitly supply that clean checkout to
+`node scripts/generate-review-select-fixtures.mjs /path/to/checkout`;
+ordinary package checks use the checked-in provenance fixtures without private
+repository access. The starter's unknown-name ` (unavailable)` marker is
+additional wording, not canonical presentation parity.
 
 ```ts
 import type { AirtableValue, FormLoadedResult } from '@miniextensions/sdk';

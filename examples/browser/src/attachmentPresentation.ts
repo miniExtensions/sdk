@@ -50,7 +50,9 @@ export function formAttachmentControl(
                     typeof attachment.filename === 'string' &&
                     attachment.filename.trim() !== ''
                         ? attachment.filename
-                        : 'Attachment — filename unavailable'
+                        : showNames
+                          ? 'Attachment — filename unavailable'
+                          : 'Attachment'
                 )
                 .join('\n');
         } catch {

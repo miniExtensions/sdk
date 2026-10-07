@@ -75,7 +75,7 @@ export function assertAttachmentReviewMatrix(review, createFormSaveInput) {
         rows()[0].value,
         '<b>Exact filename</b>\n<b>Exact filename</b>'
     );
-    const generic = 'Attachment — filename unavailable';
+    const generic = 'Attachment';
     let checks = 1;
     for (const empty of [null, undefined, '', ' \t ', []]) {
         const p = structuredClone(page);
@@ -96,6 +96,30 @@ export function assertAttachmentReviewMatrix(review, createFormSaveInput) {
                 .join('\n')
         );
         checks++;
+    }
+    for (const flag of [undefined, null, true, false]) {
+        for (const filename of [undefined, '', ' \t ']) {
+            const p = structuredClone(page);
+            p.payload.fieldIdsToSchemas[id].miniExtConfig.hideAttachmentName =
+                flag;
+            for (const attachment of p.payload.formRecord.data[id]) {
+                if (filename === undefined) delete attachment.filename;
+                else attachment.filename = filename;
+            }
+            const native = structuredClone(p.payload.formRecord.data);
+            assert.equal(
+                rows(p)[0].value,
+                Array(2)
+                    .fill(
+                        flag === false
+                            ? 'Attachment — filename unavailable'
+                            : 'Attachment'
+                    )
+                    .join('\n')
+            );
+            assert.deepEqual(p.payload.formRecord.data, native);
+            checks++;
+        }
     }
     for (const value of [
         {},
@@ -1218,7 +1242,9 @@ export async function checkAttachmentReviewRecipe({
                                         'matrix-filename-true',
                                         'matrix-filename-blank',
                                     ].includes(scenario)
-                                        ? 'Attachment — filename unavailable'
+                                        ? scenario === 'matrix-filename-blank'
+                                            ? 'Attachment — filename unavailable'
+                                            : 'Attachment'
                                         : '<b>Exact filename</b>'
                                 )
                                 .join('\n')
@@ -1276,7 +1302,7 @@ export async function checkAttachmentReviewRecipe({
                     dialog.querySelector(
                         '[data-review-field-id="fld_review_private_files"]'
                     ).nextElementSibling.textContent,
-                    'Attachment — filename unavailable'
+                    'Attachment'
                 );
                 assert(!dialog.textContent.includes('PRIVATE'));
                 for (const node of [dialog, ...dialog.querySelectorAll('*')])

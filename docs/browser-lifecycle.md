@@ -115,7 +115,14 @@ widgets, conditional pages and CAPTCHA remain application-owned.
 The attachment handler in `src/main.ts` uploads one deliberately selected
 file through the loaded Form's authorized attachment field. The returned
 reference is appended to the native draft and marked dirty immediately after
-success; the successful file selection is cleared before another action.
+a safe local acceptance. Admission and response checks use the complete native
+draft rather than control presentation. Hidden/blocked controls and policy refusals
+perform no I/O and create no uncertain attempt. After dispatch, the same active
+unknown/unacknowledged attempt and owner/session/token/configuration/native draft
+epoch must survive; otherwise remotely uploaded bytes remain an unknown outcome
+without append or replay. The successful file selection is cleared only when its
+captured File identity/generation still matches, including after a presentation
+exception. A replacement selection survives an earlier valid append.
 **Save** then persists that reference. Uploading bytes alone does not save the
 record.
 

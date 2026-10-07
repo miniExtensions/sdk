@@ -222,8 +222,26 @@ An explicit **Choose a file** button activates that same input; a generic status
 reports selection without a filename. This does not claim OS chooser cancellation
 or comprehensive accessibility acceptance from synthetic tests. Upload, Clear,
 Review and Save remain explicit actions. Initial readonly/computed fields still
-skip upload controls. Fresh upload mode/type/size/capacity/configuration admission
-remains a separate repair; this change does not enforce it.
+skip upload controls. Each explicit Upload now checks fresh mode, readonly/computed, MIME, size and
+capacity policy against the authoritative complete native draft, including hidden
+persisted rows. Admission requires both a null batch error and accepted file index 0. Hidden/blocked fields, an active request or Review, malformed native answers and
+unavailable policy refuse before any request or uncertain journal attempt. Clear
+and cancellation remain available independently of admission.
+
+After upload, the exact active unknown/unacknowledged attempt, owner, session,
+client, token, accepted load, parent, observed configuration epoch and native draft
+handle/revision must still match. A second fresh policy/admission pass and returned
+attachment/full-array validation precede one synchronous draft append. The attempt
+is marked accepted before presentation refresh; a presentation error cannot replay
+the completed upload. A newer File selection alone does not veto that append and
+is never cleared by the earlier upload's generation-bound clearing.
+
+If remote bytes return but cannot safely enter the draft, the outcome remains
+unknown: no append, success claim, automatic retry or remote cleanup. Reopen and
+inspect before deciding on another action. Policy checks cover metadata only, not
+folders, byte content or readability. The backend remains authoritative. Observed
+configuration/session transitions are epoch-fenced, including observed A→B→A;
+unobserved in-place replacement/restoration is not detected.
 
 Selected unsent files block Review until explicitly uploaded or cleared. A generic, nameless Clear
 action appears only while selections are pending, outside conditionally hidden

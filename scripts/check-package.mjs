@@ -107,6 +107,7 @@ const browserStarterFiles = [
     'src/linkedReview.ts',
     'src/pendingFiles.ts',
     'src/attachmentPresentation.ts',
+    'src/attachmentUpload.ts',
     'src/dom.ts',
     'src/drafts.ts',
     'src/recovery.ts',

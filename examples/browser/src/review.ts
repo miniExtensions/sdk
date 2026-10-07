@@ -4,6 +4,7 @@ import {
     type FormLoadedResult,
 } from '@miniextensions/sdk';
 import {
+    getFormAttachmentPolicy,
     createScalarFormRecordProjection,
     describeLoadedFormFields,
 } from '@miniextensions/sdk/forms';
@@ -30,7 +31,7 @@ const numericTypes = new Set<string>([
 ]);
 function unavailable(): never {
     throw new Error(
-        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox, barcode, select and conservatively presented linked answers.'
+        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox, barcode, select and conservatively presented linked and attachment answers.'
     );
 }
 
@@ -62,6 +63,7 @@ export const prepareFormReviewRows = (
                 type !== AirtableFieldType.SINGLE_SELECT &&
                 type !== AirtableFieldType.MULTIPLE_SELECTS &&
                 type !== AirtableFieldType.MULTIPLE_RECORD_LINKS &&
+                type !== AirtableFieldType.MULTIPLE_ATTACHMENTS &&
                 type !== AirtableFieldType.CHECKBOX &&
                 type !== AirtableFieldType.BARCODE)
         )
@@ -91,13 +93,44 @@ export const prepareFormReviewRows = (
             continue;
         if (
             (type === AirtableFieldType.MULTIPLE_SELECTS ||
-                type === AirtableFieldType.MULTIPLE_RECORD_LINKS) &&
+                type === AirtableFieldType.MULTIPLE_RECORD_LINKS ||
+                type === AirtableFieldType.MULTIPLE_ATTACHMENTS) &&
             Array.isArray(value) &&
             value.length === 0
         )
             continue;
         let text: string;
-        if (type === AirtableFieldType.MULTIPLE_RECORD_LINKS) {
+        if (type === AirtableFieldType.MULTIPLE_ATTACHMENTS) {
+            let policy;
+            try {
+                // Original loaded policy and complete native answer, before
+                // readonly presentation. Visibility never changes Save data.
+                policy = getFormAttachmentPolicy({
+                    loaded: page,
+                    fieldId: field.fieldId,
+                    value: data[field.fieldId],
+                });
+            } catch {
+                unavailable();
+            }
+            if (policy.status !== 'ready') unavailable();
+            const config = field.schema.miniExtConfig;
+            const names =
+                config != null &&
+                'hideAttachmentName' in config &&
+                config.hideAttachmentName === false;
+            const visible = policy.rows.filter((row) => row.visible);
+            if (visible.length === 0) continue;
+            text = visible
+                .map(({ attachment }) =>
+                    names &&
+                    typeof attachment.filename === 'string' &&
+                    attachment.filename.trim() !== ''
+                        ? attachment.filename
+                        : 'Attachment — filename unavailable'
+                )
+                .join('\n');
+        } else if (type === AirtableFieldType.MULTIPLE_RECORD_LINKS) {
             if (
                 !Array.isArray(value) ||
                 Array.from(value).some(

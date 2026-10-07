@@ -152,7 +152,7 @@ Form, configuration/context, draft handle and actual draft revision. An edit,
 including edit-away-and-back, Reload, Discard, disconnect or owner transition
 invalidates it. Returning to Edit permits fresh typing without repeating an old
 address query. Pages, compute/automatic submission, linked filters,
-lookup/computed fields, dates, rich text, attachments and other complex
+lookup/computed fields, dates, rich text and other unsupported complex
 renderers remain outside this recipe; unavailable review blocks submission
 instead of presenting an incomplete preview.
 
@@ -194,6 +194,37 @@ Canonical null, missing, blank and empty-array linked answers are omitted;
 nonempty linked values must be dense arrays of nonblank IDs. Linked condition drivers, active linked filters and edit-mode
 `hideFieldIfEmpty` remain unsupported. Save still submits the complete untouched
 native snapshot and dirty IDs, including hidden and unrendered values.
+
+Attachment Review uses `getFormAttachmentPolicy` on the original loaded Form
+and complete native answer before any readonly presentation override. Canonical
+null/missing/blank/empty-array answers are omitted first. Only visible policy rows
+are shown, in native order with duplicates. `hideAttachmentName: false` explicitly
+enables exact filenames; other settings and blank/missing filenames produce
+`Attachment — filename unavailable`. Hidden persisted add-only rows produce no
+lines or counts. Nonempty writable add-only answers without the persisted baseline
+refuse Review, following the opt-in helper's deliberately conservative policy.
+Readonly answers do not acquire add-only restrictions by being reviewed. Existing
+answers are not subjected to upload admission limits or producer-mode checks.
+
+Review provides no attachment URLs, thumbnails, metadata, Open/Download actions,
+navigation or uploads. Save retains all native values and metadata, including
+hidden rows. This is a plain-text summary, not canonical rich-renderer parity.
+The editor's existing raw attachment JSON and recovery UI filenames are separate
+pre-existing surfaces; this slice does not establish whole-starter privacy. The
+existing uploader does not enforce the attachment policy's admission rules.
+These editor/recovery presentation and uploader-admission gaps need separate work.
+
+Selected unsent files block Review until explicitly uploaded or cleared. Clear
+buttons remain outside conditionally hidden field wrappers. Selection, explicit
+clear and accepted programmatic clear advance a render-owned revision; an upload
+response may clear only its captured File identity and selection generation.
+Newer selections survive older accepted uploads. Cancelled, uncertain or stale
+outcomes keep selections without replay. An uploaded native answer still requires
+explicit Save; Review never describes it as an already saved record attachment.
+Confirm additionally fences the persisted baseline and observed configuration
+changes, including observed change-and-restoration. It does not detect an
+unobserved in-place configuration A→B→A. Packed tests use synthetic validation
+responses; they establish exact dispatch, not persistence or native-browser proof.
 
 One-page field conditions use the installed Form visibility helpers with the
 complete accepted native draft. Direct scalar drivers recompute presentation

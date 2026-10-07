@@ -40,6 +40,7 @@ const starterFiles = [
     'src/confirmation.ts',
     'src/review.ts',
     'src/linkedReview.ts',
+    'src/pendingFiles.ts',
     'src/linkedFilters.ts',
     'src/choiceAvailability.ts',
     'src/childQueries.ts',

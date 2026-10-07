@@ -1,3 +1,4 @@
+import { addDateReviewAnswers } from './review-date-recipe-checks.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -79,6 +80,21 @@ export async function checkBrowserReviewExample({
     );
     const scenarios = [
         'answers',
+        'date-client-zone',
+        'date-client-unsupported-zone',
+        'refused-date-client-unsupported',
+        'refused-date-unknown-offset',
+        'refused-date-password-policy',
+        'refused-date-button-policy',
+        'refused-date-html-policy',
+        'date-locale',
+        'date-writable',
+        'date-fixed-zone',
+        'date-only-zone',
+        'date-empty-client',
+        'date-hidden-client',
+        'refused-date-naive',
+        'refused-date-apia',
         'linked-options',
         'linked-rich-url',
         'linked-create-missing',
@@ -125,6 +141,69 @@ export async function checkBrowserReviewExample({
         );
         const form = fixture.page();
         const selectRows = addSelectReviewAnswers(form);
+        const dateRows = addDateReviewAnswers(form);
+        const previousTZ = process.env.TZ;
+        process.env.TZ =
+            scenario === 'refused-date-apia'
+                ? 'Pacific/Apia'
+                : scenario === 'refused-date-client-unsupported'
+                  ? 'America/Coyhaique'
+                  : 'UTC';
+        if (scenario === 'date-locale') {
+            form.payload.publicFields.state.language = 'fr';
+            form.payload.fieldIdsToSchemas.fld_review_date.airtableField.config.options.dateFormat =
+                { name: 'friendly', format: 'LL' };
+        }
+        if (scenario === 'date-writable')
+            form.payload.fieldIdsToSchemas.fld_review_date.miniExtConfig.readOnly = false;
+        if (scenario === 'refused-date-apia')
+            form.payload.formRecord.data.fld_review_date = '2011-12-30';
+        if (scenario === 'refused-date-naive')
+            form.payload.formRecord.data.fld_review_datetime =
+                '2026-03-08T10:30:00';
+        if (
+            [
+                'date-client-zone',
+                'date-client-unsupported-zone',
+                'refused-date-client-unsupported',
+                'date-empty-client',
+                'date-hidden-client',
+            ].includes(scenario)
+        )
+            form.payload.fieldIdsToSchemas.fld_review_datetime.airtableField.config.options.timeZone =
+                'client';
+        if (scenario === 'date-empty-client')
+            form.payload.formRecord.data.fld_review_datetime = null;
+        if (scenario === 'date-only-zone')
+            form.payload.formRecord.data.fld_review_datetime = null;
+        if (scenario === 'date-hidden-client') {
+            form.payload.fieldIdsToSchemas.fld_review_datetime.miniExtConfig.conditionalFields =
+                structuredClone(
+                    form.payload.fieldIdsToSchemas.fld_review_conditional
+                        .miniExtConfig.conditionalFields
+                );
+            form.payload.formRecord.data.fld_review_show = false;
+            form.payload.formRecord.data.fld_review_datetime =
+                'PRIVATE_INVALID_HIDDEN_DATE';
+        }
+        if (
+            [
+                'date-client-unsupported-zone',
+                'refused-date-client-unsupported',
+            ].includes(scenario)
+        )
+            form.payload.formRecord.data.fld_review_datetime =
+                '2024-07-01T12:00:00Z';
+        if (scenario === 'refused-date-unknown-offset')
+            form.payload.formRecord.data.fld_review_datetime =
+                '2026-01-01T00:00:00-00:00';
+        if (scenario === 'refused-date-password-policy')
+            form.payload.fieldIdsToSchemas.fld_review_date.miniExtConfig.obscurePassword =
+                'true';
+        if (scenario === 'refused-date-button-policy')
+            form.payload.fieldIdsToSchemas.fld_review_date.miniExtConfig.displayAsButton = 1;
+        if (scenario === 'refused-date-html-policy')
+            form.payload.fieldIdsToSchemas.fld_review_date.miniExtConfig.renderFormulaAsHTML = true;
         const linkedFixture = addLinkedReviewAnswers(form);
         if (
             [
@@ -464,7 +543,115 @@ export async function checkBrowserReviewExample({
                         .getElementById('status')
                         .textContent.includes('Private')
                 );
+                if (scenario.startsWith('refused-date-')) {
+                    const statusNode = document.getElementById('status');
+                    for (const raw of [
+                        initial.fld_review_date,
+                        initial.fld_review_datetime,
+                    ]) {
+                        assert(!statusNode.textContent.includes(raw));
+                        for (const node of [
+                            statusNode,
+                            ...statusNode.querySelectorAll('*'),
+                        ])
+                            for (const attr of node.attributes)
+                                assert(!attr.value.includes(raw));
+                    }
+                    assert.equal(
+                        document.querySelector('[data-form-review]'),
+                        null
+                    );
+                }
                 assert.equal(saves().length, 0);
+            } else if (scenario.startsWith('date-')) {
+                const expectedData = structuredClone(initial);
+                if (scenario === 'date-writable') {
+                    edit('fld_review_date', '2024-03-01');
+                    expectedData.fld_review_date = '2024-03-01';
+                }
+                let dialog = await open();
+                const dateRow = dialog.querySelector(
+                    '[data-review-field-id="fld_review_date"]'
+                );
+                assert.equal(
+                    dateRow.nextElementSibling.textContent,
+                    scenario === 'date-locale'
+                        ? 'February 29, 2024'
+                        : scenario === 'date-writable'
+                          ? '2024-03-01'
+                          : '2024-02-29'
+                );
+                if (
+                    [
+                        'date-only-zone',
+                        'date-empty-client',
+                        'date-hidden-client',
+                    ].includes(scenario)
+                )
+                    assert.equal(
+                        dialog.querySelector(
+                            '[data-review-field-id="fld_review_datetime"]'
+                        ),
+                        null
+                    );
+                button(dialog, 'Edit').click();
+                await settled();
+                assert.equal(saves().length, 0);
+                dialog = await open();
+                dialog.dispatchEvent(
+                    new window.Event('cancel', { cancelable: true })
+                );
+                await settled();
+                assert.equal(saves().length, 0);
+                dialog = await open();
+                process.env.TZ =
+                    scenario === 'date-client-unsupported-zone'
+                        ? 'America/Coyhaique'
+                        : 'America/Los_Angeles';
+                button(dialog, 'Confirm').click();
+                await settled();
+                if (
+                    [
+                        'date-client-zone',
+                        'date-client-unsupported-zone',
+                    ].includes(scenario)
+                ) {
+                    assert.equal(saves().length, 0);
+                    if (scenario === 'date-client-unsupported-zone') {
+                        submit();
+                        await settled();
+                        assert.equal(document.querySelector('dialog'), null);
+                        assert(
+                            !document
+                                .getElementById('status')
+                                .textContent.includes(
+                                    initial.fld_review_datetime
+                                )
+                        );
+                        assert.equal(saves().length, 0);
+                        process.env.TZ = 'America/Los_Angeles';
+                    }
+                    dialog = await open();
+                    assert.equal(
+                        dialog.querySelector(
+                            '[data-review-field-id="fld_review_datetime"]'
+                        ).nextElementSibling.textContent,
+                        scenario === 'date-client-unsupported-zone'
+                            ? '2024-07-01 05:00'
+                            : '2026-03-08 03:30'
+                    );
+                    button(dialog, 'Confirm').click();
+                }
+                await waitFor(() => saves().length === 1);
+                assert.deepEqual(
+                    saves()[0].input.formRecord.data,
+                    expectedData
+                );
+                assert.deepEqual(
+                    saves()[0].input.formFieldIdsWithUnsavedChanges,
+                    scenario === 'date-writable' ? ['fld_review_date'] : []
+                );
+                assert.equal(linkedCalls.length, 0);
             } else if (scenario.startsWith('linked-create-')) {
                 let dialog = await open();
                 for (const id of linkedFixture.ids)
@@ -784,6 +971,8 @@ export async function checkBrowserReviewExample({
                         'Zero count',
                         'fld_review_single',
                         'fld_review_multi',
+                        'Date answer',
+                        'Date answer',
                         ...linkedFixture.ids,
                     ]
                 );
@@ -797,6 +986,7 @@ export async function checkBrowserReviewExample({
                         initial.fld_review_url,
                         '0',
                         ...selectRows,
+                        ...dateRows,
                         ...linkedFixture.ids.map(() =>
                             Array(3)
                                 .fill('Selected record — details unavailable')
@@ -1078,6 +1268,8 @@ export async function checkBrowserReviewExample({
                 cause: error,
             });
         } finally {
+            if (previousTZ === undefined) delete process.env.TZ;
+            else process.env.TZ = previousTZ;
             for (const [key, descriptor] of previous) {
                 if (descriptor)
                     Object.defineProperty(globalThis, key, descriptor);

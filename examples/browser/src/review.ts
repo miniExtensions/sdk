@@ -1,3 +1,5 @@
+import moment from 'moment-timezone';
+import { getReadableStringFromAirtableValue } from '@miniextensions/sdk/formulas';
 import {
     AirtableFieldType,
     type AirtableValue,
@@ -31,15 +33,141 @@ const numericTypes = new Set<string>([
 ]);
 function unavailable(): never {
     throw new Error(
-        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox, barcode, select and conservatively presented linked and attachment answers.'
+        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox, barcode, date, dateTime, select and conservatively presented linked and attachment answers.'
     );
 }
+
+/** Browser-local presentation only; never used to normalize native Save data. */
+export type PreparedDateContext = Readonly<{ clientTimeZone: string }>;
+export const captureReviewDateContext = (): PreparedDateContext => {
+    try {
+        return {
+            clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        };
+    } catch {
+        unavailable();
+    }
+};
+const dateFormats = new Map([
+    ['local', 'l'],
+    ['friendly', 'LL'],
+    ['us', 'M/D/YYYY'],
+    ['european', 'D/M/YYYY'],
+    ['iso', 'YYYY-MM-DD'],
+]);
+const timeFormats = new Map([
+    ['12hour', 'h:mma'],
+    ['24hour', 'HH:mm'],
+]);
+const isPair = (
+    value: unknown,
+    pairs: ReadonlyMap<string, string>
+): boolean => {
+    if (value == null || typeof value !== 'object' || Array.isArray(value))
+        return false;
+    const pair = value as { name?: unknown; format?: unknown };
+    return (
+        typeof pair.name === 'string' &&
+        typeof pair.format === 'string' &&
+        pairs.get(pair.name) === pair.format
+    );
+};
+const formatDateAnswer = (
+    field: ReturnType<typeof describeLoadedFormFields>[number],
+    value: unknown,
+    context: PreparedDateContext | undefined
+): string => {
+    if (typeof value !== 'string') unavailable();
+    const config = field.schema.airtableField.config;
+    if (config.type !== 'date' && config.type !== 'dateTime') unavailable();
+    const privacy = field.schema.miniExtConfig;
+    if (privacy != null) {
+        if (typeof privacy !== 'object' || Array.isArray(privacy))
+            unavailable();
+        for (const flag of [
+            'obscurePassword',
+            'displayAsAttachments',
+            'displayAsButton',
+            'renderFormulaAsHTML',
+        ]) {
+            if (flag in privacy) {
+                const value = (privacy as Record<string, unknown>)[flag];
+                // Omitted/optional undefined and explicit false are safe;
+                // active or malformed presentation policy never reveals dates.
+                if (value !== undefined && value !== false) unavailable();
+            }
+        }
+    }
+    if (!isPair(config.options?.dateFormat, dateFormats)) unavailable();
+    // Validate the calendar independently of local civil-time normalization.
+    const calendar = value.slice(0, 10);
+    if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(calendar) ||
+        !moment.utc(calendar, 'YYYY-MM-DD', true).isValid()
+    )
+        unavailable();
+    let detached = structuredClone(config);
+    if (config.type === 'date') {
+        if (
+            value !== calendar ||
+            moment(value, 'YYYY-MM-DD', true).format('YYYY-MM-DD') !== value
+        )
+            unavailable();
+    } else {
+        // Calendar timestamp only: explicit seconds and offset, 0–3 fractional
+        // digits (the dot requires 1–3), no naive/week/ordinal/24:00 parsing.
+        const match =
+            /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|[+-](\d{2}):(\d{2}))$/.exec(
+                value
+            );
+        if (
+            match == null ||
+            match[6] === '-00:00' ||
+            Number(match[2]) > 23 ||
+            Number(match[3]) > 59 ||
+            Number(match[4]) > 59 ||
+            (match[6] !== 'Z' &&
+                (Number(match[7]) > 23 || Number(match[8]) > 59)) ||
+            !moment.parseZone(value, moment.ISO_8601, true).isValid() ||
+            !isPair(config.options.timeFormat, timeFormats)
+        )
+            unavailable();
+        const zone =
+            config.options.timeZone === 'client'
+                ? context?.clientTimeZone
+                : config.options.timeZone;
+        if (typeof zone !== 'string' || moment.tz.zone(zone) == null)
+            unavailable();
+        detached = {
+            ...structuredClone(config),
+            options: {
+                ...structuredClone(config.options),
+                timeZone: zone as typeof config.options.timeZone,
+            },
+        };
+    }
+    try {
+        return getReadableStringFromAirtableValue({
+            value,
+            airtableFieldConfig: detached,
+            source: {
+                type: 'airtableMock',
+                linkedTableStates: {},
+                dateParsing: 'local',
+            },
+            fieldName: 'Date answer',
+        });
+    } catch {
+        unavailable();
+    }
+};
 
 /** A presentation copy only: the complete native snapshot still goes to Save. */
 export const prepareFormReviewRows = (
     page: FormLoadedResult,
     data: Readonly<Record<string, AirtableValue>>,
-    linked?: LinkedReviewSnapshot
+    linked?: LinkedReviewSnapshot,
+    dateContext?: PreparedDateContext
 ): ConfirmationRow[] => {
     if (linked != null && !linked.forPage(page)) unavailable();
     const configuration = settings(page.payload.publicFields);
@@ -60,6 +188,8 @@ export const prepareFormReviewRows = (
             field.isComputed ||
             (!textTypes.has(type) &&
                 !numericTypes.has(type) &&
+                type !== AirtableFieldType.DATE &&
+                type !== AirtableFieldType.DATE_TIME &&
                 type !== AirtableFieldType.SINGLE_SELECT &&
                 type !== AirtableFieldType.MULTIPLE_SELECTS &&
                 type !== AirtableFieldType.MULTIPLE_RECORD_LINKS &&
@@ -100,7 +230,12 @@ export const prepareFormReviewRows = (
         )
             continue;
         let text: string;
-        if (type === AirtableFieldType.MULTIPLE_ATTACHMENTS) {
+        if (
+            type === AirtableFieldType.DATE ||
+            type === AirtableFieldType.DATE_TIME
+        ) {
+            text = formatDateAnswer(field, value, dateContext);
+        } else if (type === AirtableFieldType.MULTIPLE_ATTACHMENTS) {
             let policy;
             try {
                 // Original loaded policy and complete native answer, before

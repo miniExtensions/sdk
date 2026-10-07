@@ -483,10 +483,64 @@ first read. Sort cleanup may precede a separate filter cleanup. Cancellation
 and stale confirmation change nothing. Errors/cancellation require explicit
 read recovery; empty accepted results remain successful results.
 
-Filtering controls remain deferred. Existing typed filter criteria can travel
-unchanged and participate in cleanup. Do not translate select/linked/date or
-computed filters into scalar rules, partially remove unsupported conditions,
-or treat this sorting recipe as complete hosted Portal parity.
+## One direct scalar filter recipe
+
+The installed starter reuses `examples/browser/src/portalFilter.ts`:
+`mountPortalScalarFilterEditor({ portal, portalFieldId, criteria, snapshot,
+isCurrent, onApply })`. This shipped typed DOM recipe is not a public SDK export.
+It edits one direct scalar condition or explicitly clears filters; it does not
+send a request, evaluate record membership or save records. Apply preserves the
+complete owned criteria and retires both sorting and filtering editors, rows,
+Create/Edit, child plans and paging until the next explicit successful Load.
+
+Fields come only from accepted linked-table metadata and the accepted non-hidden
+detail projection. A present empty projection allows the resolved effective
+primary; a missing projection does not. Returned custom detail maps replace the
+legacy loaded map. Missing columns are not recovered from another table or from
+record values. Duplicate labels retain exact IDs. Computed, select, linked,
+relation and date fields are outside this slice. Legacy
+`filteringOnExtensionFields` is not a scalar whitelist in the inspected canonical
+normalizer; a scalar ID in `dropdownFiltersFields` remains eligible when visible.
+
+Configuration preserves property presence: root filtering is enabled only if
+`disableFilteringOnExtension` is absent or exactly false. Own undefined, null or
+true disables it. A custom view replaces that key even when omitted, so it must
+explicitly set false. Omitted whole view config inherits root. Unavailable
+presentation never clears criteria or disables otherwise-allowed ordinary reads.
+A server filtering-disabled error requires manual recovery; it is not cleanup.
+
+The existing strict `/forms` compiler determines supported operator/type pairs.
+Text supports equality/inequality, contains/not-contains, regex, length and
+empty/not-empty; rich text omits equality/inequality. Number, percent, currency
+and rating support numeric comparisons and empty/not-empty. Checkbox supports
+only `is` with an actual boolean. Strings retain exact bytes. Empty equality
+operands are invalid; empty contains/not-contains and syntactically valid empty
+regex follow compiler acceptance. Blank numeric/length entries are rejected
+before Number conversion; numbers must be finite. Percent values use user units
+such as 25; rating emptiness means zero. Length adds no integer/nonnegative rule.
+Compiler literal/reference round-trip or regex failures, and missing-field
+warnings even with a compiled FALSE predicate, prevent Apply.
+
+The AST must also have exactly one supported leaf, a nonempty condition ID, an
+exact ID reference and coherent current field type. Richer groups, name
+references, multiple conditions and unavailable saved fields remain intact until
+Replace existing filters is chosen. Replacement prepares an editor only; Apply
+or Clear is still explicit. No partial dropping or automatic normalization occurs.
+Typed conditions, not compiled formulas, are submitted at the next explicit read.
+Canonical server cleanup remains authoritative and uses the same explicit,
+owner/criteria-bound confirmation lifecycle as sorting.
+
+`isCurrent` must bind collection identity, accepted snapshot and mount/criteria
+epochs, live connected Portal DOM and monotonic session/owner revision. Retire
+both editors before callbacks and abort re-entry, including paging, cleanup,
+child opening and A-to-B-to-A ownership changes. Detached controls cannot change
+an active child's native parent context. These constraints are implemented by
+the actual starter; custom consumers must supply the equivalent owner binding.
+
+This is not a general filter builder or complete hosted Portal parity. Select,
+linked/date/computed filters and nested groups remain deferred. The recipe and
+pinned synthetic comparison fixtures do not prove live-backend persistence or
+complete Airtable regex compatibility.
 
 ## Returned data and cleanup
 

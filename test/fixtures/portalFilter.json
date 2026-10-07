@@ -1,0 +1,4726 @@
+{
+    "provenance": {
+        "revision": "58f73d575ab10baa0a10693660d8002f204368e1",
+        "tree": "b39e58ead46a311c497def57474cf5ca720542ae",
+        "generator": "scripts/generate-portal-filter-fixtures.mjs",
+        "generatorSha256": "07d9954aa1abb2b8c91d0b3632a37de69d93db1e435bffab6b30b124991b509e",
+        "sources": {
+            "types/extensions/conditions/portalEndUserFilters.ts": "203bcddc899e388bc5b74a29ce2b7a409f8db7b510aa3a167c65ac49bdb908e0",
+            "types/extensions/conditions/convertConditionalFields.ts": "397b3a1a35ae07d0235d6477078cc10e7cf02ba00e02269272b4b3946f0dd3e1",
+            "types/extensions/conditions/helpers.ts": "eb12169f432fe5242cdbfa29e03fe2172912c694104176d70b48ba7d6740ed3a",
+            "helpers/getOverriddenMiniExtConfig.ts": "d7990c1528eadfc293158e9b343f1ae210484dfa560563a3616cd342fd8c756f",
+            "types/extensions/miniExt-field-configs/linkedRecordsFieldSections.ts": "4f539cc7ccc2673431788f0a8e687ea51459aefb8299d5bf0881036cc3802b0b",
+            "backend-src/v1/handlers/fetchRecordsForLinkedTableOnPortal/index.ts": "b07a657e0e3df5490a822a20271a4a08339dd3d3c5cbd152bc38096f76f98783"
+        },
+        "enablementExpression": "!(disableFilteringOnExtensionFieldId in overriddenMiniExtConfig) ||\n        overriddenMiniExtConfig.disableFilteringOnExtension === false",
+        "execution": "Pinned canonical normalization, allowed-field, formula and override helpers; AST-selected canonical enablement expression; synthetic inputs only"
+    },
+    "cases": [
+        {
+            "input": {
+                "name": "singleLineText is",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "email is",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "email", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "url is",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "url", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "multilineText is",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "multilineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "phoneNumber is",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "phoneNumber", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "barcode is",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "checkbox is",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "checkbox", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "checkbox",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": false
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "checkbox",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": false
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "singleLineText isNot",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "email isNot",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "email", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "url isNot",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "url", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "multilineText isNot",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "multilineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "phoneNumber isNot",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "phoneNumber", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "barcode isNot",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 'Exact \\'quoted\\' bytes'",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "singleLineText contains",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & ''))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "email contains",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "email", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & ''))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "url contains",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "url", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & ''))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "multilineText contains",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "multilineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & ''))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "phoneNumber contains",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "phoneNumber", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & ''))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "barcode contains",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & ''))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "richText contains",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "richText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & ''))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "singleLineText doesNotContain",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "NOT(FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & '')))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "email doesNotContain",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "email", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "NOT(FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & '')))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "url doesNotContain",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "url", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "NOT(FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & '')))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "multilineText doesNotContain",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "multilineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "NOT(FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & '')))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "phoneNumber doesNotContain",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "phoneNumber", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "NOT(FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & '')))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "barcode doesNotContain",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "NOT(FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & '')))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "richText doesNotContain",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "richText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "NOT(FIND(LOWER('Exact \\'quoted\\' bytes'), LOWER({fld_value} & '')))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "singleLineText matchesRegex",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, 'Exact \\'quoted\\' bytes')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "email matchesRegex",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "email", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, 'Exact \\'quoted\\' bytes')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "url matchesRegex",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "url", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, 'Exact \\'quoted\\' bytes')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "multilineText matchesRegex",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "multilineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, 'Exact \\'quoted\\' bytes')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "phoneNumber matchesRegex",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "phoneNumber", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, 'Exact \\'quoted\\' bytes')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "barcode matchesRegex",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, 'Exact \\'quoted\\' bytes')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "richText matchesRegex",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "richText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "Exact 'quoted' bytes"
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, 'Exact \\'quoted\\' bytes')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "singleLineText isOfLength",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN({fld_value}) = -0.5",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "email isOfLength",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "email", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN({fld_value}) = -0.5",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "url isOfLength",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "url", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN({fld_value}) = -0.5",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "multilineText isOfLength",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "multilineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN({fld_value}) = -0.5",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "phoneNumber isOfLength",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "phoneNumber", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN({fld_value}) = -0.5",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "barcode isOfLength",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN({fld_value}) = -0.5",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "richText isOfLength",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "richText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -0.5
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN({fld_value}) = -0.5",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "singleLineText isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "email isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "email", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "url isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "url", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "multilineText isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "multilineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "phoneNumber isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "phoneNumber", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "barcode isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "richText isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "richText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "number isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "percent isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "percent", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "currency isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "currency", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "rating isEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "rating", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isEmpty",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "singleLineText isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "email isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "email", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "email",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "url isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "url", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "url",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "multilineText isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "multilineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "multilineText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "phoneNumber isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "phoneNumber", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "phoneNumber",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "barcode isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "barcode",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "richText isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "richText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "richText",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "number isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "percent isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "percent", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "currency isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "currency", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN('' & {fld_value}) != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "rating isNotEmpty",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "rating", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNotEmpty",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" }
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 0",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "number equals",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "percent equals",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "percent", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 0.25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "currency equals",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "currency", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "rating equals",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "rating", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "number notEquals",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "notEquals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "notEquals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "percent notEquals",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "percent", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "notEquals",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "notEquals",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 0.25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "currency notEquals",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "currency", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "notEquals",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "notEquals",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "rating notEquals",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "rating", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "notEquals",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "notEquals",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} != 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "number greaterThan",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThan",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThan",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} > 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "percent greaterThan",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "percent", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThan",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThan",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} > 0.25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "currency greaterThan",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "currency", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThan",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThan",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} > 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "rating greaterThan",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "rating", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThan",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThan",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} > 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "number lessThan",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThan",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThan",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} < 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "percent lessThan",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "percent", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThan",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThan",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} < 0.25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "currency lessThan",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "currency", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThan",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThan",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} < 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "rating lessThan",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "rating", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThan",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThan",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} < 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "number greaterThanOrEqualsTo",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThanOrEqualsTo",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThanOrEqualsTo",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} >= 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "percent greaterThanOrEqualsTo",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "percent", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThanOrEqualsTo",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThanOrEqualsTo",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} >= 0.25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "currency greaterThanOrEqualsTo",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "currency", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThanOrEqualsTo",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThanOrEqualsTo",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} >= 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "rating greaterThanOrEqualsTo",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "rating", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThanOrEqualsTo",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "greaterThanOrEqualsTo",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} >= 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "number lessThanOrEqualsTo",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThanOrEqualsTo",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThanOrEqualsTo",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} <= 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "percent lessThanOrEqualsTo",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "percent", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThanOrEqualsTo",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThanOrEqualsTo",
+                                "fieldType": "percent",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} <= 0.25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "currency lessThanOrEqualsTo",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "currency", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThanOrEqualsTo",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThanOrEqualsTo",
+                                "fieldType": "currency",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} <= 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "rating lessThanOrEqualsTo",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "rating", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThanOrEqualsTo",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "lessThanOrEqualsTo",
+                                "fieldType": "rating",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} <= 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "boundary is \"\"",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "is",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": ""
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": null,
+                "issues": ["invalid_value"],
+                "formula": null,
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "boundary isNot \"\"",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isNot",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": ""
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": null,
+                "issues": ["invalid_value"],
+                "formula": null,
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "boundary contains \"\"",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": ""
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "contains",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": ""
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "FIND(LOWER(''), LOWER({fld_value} & ''))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "boundary doesNotContain \"\"",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": ""
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "doesNotContain",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": ""
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "NOT(FIND(LOWER(''), LOWER({fld_value} & '')))",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "boundary matchesRegex \"\"",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": ""
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": ""
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, '')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "boundary matchesRegex \"[\"",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "["
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "matchesRegex",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": "["
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "REGEX_MATCH({fld_value}, '[')",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "boundary isOfLength -2.5",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -2.5
+                            }
+                        }
+                    ]
+                }
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "isOfLength",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": -2.5
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "LEN({fld_value}) = -2.5",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "missing",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "mode": "missing"
+            },
+            "expected": {
+                "filters": null,
+                "issues": ["field_not_found"],
+                "formula": null,
+                "allowedIds": []
+            }
+        },
+        {
+            "input": {
+                "name": "type-changed",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "singleLineText",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "mode": "type-changed"
+            },
+            "expected": {
+                "filters": null,
+                "issues": ["field_type_changed"],
+                "formula": null,
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "not-allowed",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "mode": "not-allowed"
+            },
+            "expected": {
+                "filters": null,
+                "issues": ["field_not_available"],
+                "formula": null,
+                "allowedIds": []
+            }
+        },
+        {
+            "input": {
+                "name": "name-reference",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "name", "name": "Value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "mode": "name-reference"
+            },
+            "expected": {
+                "filters": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "filter_one",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "issues": [],
+                "formula": "{fld_value} = 25",
+                "allowedIds": ["fld_value"]
+            }
+        },
+        {
+            "input": {
+                "name": "empty-id",
+                "field": {
+                    "id": "fld_value",
+                    "name": "Value",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": true,
+                    "config": { "type": "number", "options": null }
+                },
+                "conditions": {
+                    "logicalOperator": "and",
+                    "conditions": [
+                        {
+                            "id": "",
+                            "type": "singleCondition",
+                            "setting": {
+                                "type": "equals",
+                                "fieldType": "number",
+                                "idOrName": { "type": "id", "id": "fld_value" },
+                                "value": 25
+                            }
+                        }
+                    ]
+                },
+                "mode": "empty-id"
+            },
+            "expected": {
+                "filters": null,
+                "issues": ["invalid_condition"],
+                "formula": null,
+                "allowedIds": ["fld_value"]
+            }
+        }
+    ],
+    "settings": [
+        {
+            "input": { "scope": "root", "kind": "absent" },
+            "enabled": true,
+            "hasKey": false
+        },
+        {
+            "input": { "scope": "root", "kind": "undefined" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "root", "kind": "null" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "root", "kind": "true" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "root", "kind": "false" },
+            "enabled": true,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "custom", "kind": "absent" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "custom", "kind": "undefined" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "custom", "kind": "null" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "custom", "kind": "true" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "custom", "kind": "false" },
+            "enabled": true,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "omitted-config", "kind": "absent" },
+            "enabled": true,
+            "hasKey": false
+        },
+        {
+            "input": { "scope": "omitted-config", "kind": "undefined" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "omitted-config", "kind": "null" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "omitted-config", "kind": "true" },
+            "enabled": false,
+            "hasKey": true
+        },
+        {
+            "input": { "scope": "omitted-config", "kind": "false" },
+            "enabled": true,
+            "hasKey": true
+        }
+    ]
+}

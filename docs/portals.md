@@ -555,8 +555,8 @@ child opening and A-to-B-to-A ownership changes. Detached controls cannot change
 an active child's native parent context. These constraints are implemented by
 the actual starter; custom consumers must supply the equivalent owner binding.
 
-This is not a general filter builder or complete hosted Portal parity. Select,
-linked/date/computed filters and nested groups remain deferred. The recipe and
+This is not a general filter builder or complete hosted Portal parity.
+Linked/date/computed filters and nested groups remain deferred. The recipe and
 pinned synthetic comparison fixtures do not prove live-backend persistence or
 complete Airtable regex compatibility.
 

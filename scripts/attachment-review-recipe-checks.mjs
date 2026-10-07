@@ -223,6 +223,7 @@ const responseNames = [
     'baseline',
     'config-aba',
     'draft',
+    'handle',
     'draft-aba',
     'session',
     'session-aba',
@@ -236,6 +237,9 @@ const responseNames = [
     'owner',
     'owner-aba',
     'load',
+    'successor-session',
+    'successor-token',
+    'successor-parent',
 ];
 const uploadScenarios = [
     ...refusalNames.map((name) => `admission-${name}`),
@@ -284,11 +288,14 @@ function configureRefusal(name, page, probe, config) {
 }
 
 function changeResponseScope(name, page, probe, config, observations, window) {
+    const successor = name.startsWith('successor-');
+    if (successor) name = name.slice('successor-'.length);
     if (['type', 'size', 'capacity', 'readonly', 'mode'].includes(name))
         configureRefusal(name, page, probe, config);
     if (name === 'baseline')
         page.payload.persistedAddOnlyAttachmentValuesByFieldId.fld_review_files =
             null;
+    if (name === 'handle') probe.clearDraft();
     if (name === 'draft' || name === 'draft-aba') {
         const old = probe.snapshot().data.fld_review_title;
         probe.write('fld_review_title', 'Changed during upload');
@@ -337,6 +344,7 @@ function changeResponseScope(name, page, probe, config, observations, window) {
             .dispatchEvent(new window.Event('change', { bubbles: true }));
     }
     if (name === 'load') probe.replaceLoad();
+    if (successor) probe.replaceMount();
 }
 
 function assertUploadAdmissionMatrix(admit, append) {
@@ -549,7 +557,7 @@ export async function checkAttachmentReviewRecipe({
                         contents:
                             readFileSync(args.path, 'utf8').replace(
                                 '    const readFilterMetadata = (context:',
-                                '    attachmentUploadProbe = { snapshot: () => visitor.drafts.snapshot(draft), revision: () => visitor.drafts.revision(draft), write: (id: string, value: AirtableValue) => visitor.drafts.write(draft, id, value), attempts: () => (recovery as unknown as {attempts: RecoveryAttempt[]}).attempts, session: (value: RuntimeSession) => formClient!.setSession(value), context: (value: SaveFormInput["context"]) => {visitor.formContext = value;}, malformedReturn: (value: unknown) => {const upload = formClient!.attachments.uploadFile; formClient!.attachments.uploadFile = async (...args) => {await upload(...args); return value as never;};}, presentationThrow: () => {controls.get("fld_review_files")!.write = () => {throw new Error("Synthetic presentation failure");};}, rejectWrite: () => {visitor.drafts.write = () => false;}, replaceLoad: () => {visitor.formLoadVersion++;}, activeRequest: () => {request = new AbortController();}, active: () => activeUpload };\n    attachmentObserveForTest = () => updateFormActivity();\n    attachmentRetainedForTest = () => recovery.unknown(scope.owner).map(a => a.retainedInput);\n    const readFilterMetadata = (context:'
+                                '    attachmentUploadProbe = { snapshot: () => visitor.drafts.snapshot(draft), revision: () => visitor.drafts.revision(draft), write: (id: string, value: AirtableValue) => visitor.drafts.write(draft, id, value), attempts: () => (recovery as unknown as {attempts: RecoveryAttempt[]}).attempts, session: (value: RuntimeSession) => formClient!.setSession(value), context: (value: SaveFormInput["context"]) => {visitor.formContext = value;}, malformedReturn: (value: unknown) => {const upload = formClient!.attachments.uploadFile; formClient!.attachments.uploadFile = async (...args) => {await upload(...args); return value as never;};}, presentationThrow: () => {controls.get("fld_review_files")!.write = () => {throw new Error("Synthetic presentation failure");};}, rejectWrite: () => {visitor.drafts.write = () => false;}, replaceMount: () => {render(); setBusy(false); status("Accepted replacement UI.");}, clearDraft: () => {visitor.drafts.discard(draft);}, replaceLoad: () => {visitor.formLoadVersion++; render(); setBusy(false); status("Accepted replacement load.");}, activeRequest: () => {request = new AbortController();}, active: () => activeUpload };\n    attachmentObserveForTest = () => updateFormActivity();\n    attachmentRetainedForTest = () => recovery.unknown(scope.owner).map(a => a.retainedInput);\n    const readFilterMetadata = (context:'
                             ) +
                             '\nlet attachmentUploadProbe: unknown;\nexport const uploadProbeForTest = () => attachmentUploadProbe;\nlet attachmentObserveForTest: () => void;\nexport const observeAttachmentConfigurationForTest = () => attachmentObserveForTest();\nexport const attachmentPageForTest = () => visitors[activeVisitor].screen;\nlet attachmentRetainedForTest: () => unknown;\nexport const attachmentAttemptsForTest = () => attachmentRetainedForTest();\n',
                     }));
@@ -1051,15 +1059,9 @@ export async function checkAttachmentReviewRecipe({
                         );
                         if (
                             [
-                                'response-session',
-                                'response-session-aba',
-                                'response-session-error',
-                                'response-token',
-                                'response-token-aba',
-                                'response-token-error',
-                                'response-parent',
-                                'response-parent-aba',
-                                'response-parent-error',
+                                'response-successor-session',
+                                'response-successor-token',
+                                'response-successor-parent',
                                 'response-owner',
                                 'response-owner-aba',
                                 'response-load',
@@ -1080,6 +1082,45 @@ export async function checkAttachmentReviewRecipe({
                                     .getElementById('screen')
                                     .getAttribute('aria-busy'),
                                 uiBefore.busy
+                            );
+                        } else {
+                            assert.equal(
+                                document
+                                    .getElementById('screen')
+                                    .getAttribute('aria-busy'),
+                                'false'
+                            );
+                            assert.equal(
+                                document.getElementById('screen').inert,
+                                false
+                            );
+                            assert.equal(
+                                document.getElementById('connection-form')
+                                    .inert,
+                                false
+                            );
+                            assert.equal(
+                                document.getElementById('reload').disabled,
+                                false
+                            );
+                            const recovery = document.querySelector(
+                                '[aria-label="Earlier request recovery"]'
+                            );
+                            assert(
+                                recovery.textContent.includes(
+                                    'Earlier outcome not confirmed'
+                                )
+                            );
+                            assert(
+                                recovery.textContent.includes(
+                                    'will not be uploaded again automatically'
+                                )
+                            );
+                            assert.equal(recovery.closest('[inert]'), null);
+                            assert(
+                                document
+                                    .getElementById('status')
+                                    .textContent.includes('needs inspection')
                             );
                         }
                     }

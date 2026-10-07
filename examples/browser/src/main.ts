@@ -223,7 +223,8 @@ const run = async (
         signal: AbortSignal;
         current(): boolean;
     }) => Promise<void>,
-    ownsUI: () => boolean = () => true
+    ownsUI: () => boolean = () => true,
+    ownsBusyLease: () => boolean = ownsUI
 ): Promise<void> => {
     cancelConfirmation();
     if (request != null) return;
@@ -266,7 +267,7 @@ const run = async (
     } finally {
         if (request === controller) {
             request = null;
-            if (ownsUI()) {
+            if (ownsBusyLease()) {
                 setBusy(false);
                 sessionSummary();
             }
@@ -1340,11 +1341,18 @@ const renderForm = (page: FormLoadedResult): void => {
                     )
                         return;
                     const uploadConfiguration = observeReviewConfiguration();
-                    const ownsUploadUI = (): boolean =>
+                    // Configuration can retire an upload intent without retiring its DOM mount.
+                    const ownsUploadRender = (): boolean =>
                         !formRetired &&
-                        ownsForm() &&
+                        card.isConnected &&
+                        visitors[activeVisitor] === visitor &&
+                        visitor.screen === page &&
+                        visitor.formLoadVersion === loadVersion &&
                         visitor.client === formClient &&
-                        visitor.revision === formRevision &&
+                        visitor.revision === formRevision;
+                    const ownsUploadUI = (): boolean =>
+                        ownsUploadRender() &&
+                        ownsForm() &&
                         formClient != null &&
                         sessionKey(formClient) === formSession &&
                         observeReviewConfiguration() === uploadConfiguration;
@@ -1477,10 +1485,21 @@ const renderForm = (page: FormLoadedResult): void => {
                                 recovery.finishFlight(attempt);
                                 if (activeUpload === attempt)
                                     activeUpload = null;
-                                if (ownsUploadUI()) updateRecovery();
+                                if (ownsUploadRender()) {
+                                    updateRecovery();
+                                    if (
+                                        current() &&
+                                        attempt.outcome === 'unknown'
+                                    )
+                                        status(
+                                            'Upload outcome needs inspection; it was not added to the draft.',
+                                            true
+                                        );
+                                }
                             }
                         },
-                        ownsUploadUI
+                        ownsUploadUI,
+                        ownsUploadRender
                     );
                 })
             );

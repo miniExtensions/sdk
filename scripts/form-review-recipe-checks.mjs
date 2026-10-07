@@ -1,3 +1,4 @@
+import { assertDateReviewMatrix } from './review-date-recipe-checks.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -190,6 +191,10 @@ export async function checkFormReviewRecipe({
         createFormSaveInput,
         evaluateFormFieldVisibility,
     } = await import(pathToFileURL(outfile).href);
+    const dateChecks = assertDateReviewMatrix(prepareFormReviewRows);
+    console.log(
+        `Installed date Review: ${dateChecks} canonical and refusal checks passed.`
+    );
     const require = createRequire(import.meta.url);
     const { Window } = require(happyDomModulePath);
     const fixture = createReviewFixture('review-answers');
@@ -321,7 +326,7 @@ export async function checkFormReviewRecipe({
         ).value,
         'First'
     );
-    for (const type of ['richText', 'date']) {
+    for (const type of ['richText', 'singleCollaborator']) {
         const p = structuredClone(selectPage);
         p.payload.fieldIdsToSchemas.fld_review_single.fieldType = type;
         p.payload.fieldIdsToSchemas.fld_review_single.airtableField.config = {

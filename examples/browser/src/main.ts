@@ -53,7 +53,7 @@ import {
     type FormDraftSnapshot,
     type ParentFormDraftScope,
 } from './drafts.js';
-import { prepareFormReviewRows } from './review.js';
+import { prepareFormReviewRows, captureReviewDateContext } from './review.js';
 import { createPendingFiles } from './pendingFiles.js';
 import { formAttachmentControl } from './attachmentPresentation.js';
 import {
@@ -1932,16 +1932,30 @@ const renderForm = (page: FormLoadedResult): void => {
             )
                 return;
             const linkedSnapshot = linkedPresentation.snapshot();
+            const dateContext = captureReviewDateContext();
             const rows = prepareFormReviewRows(
                 page,
                 snapshot.data,
-                linkedSnapshot
+                linkedSnapshot,
+                dateContext
             );
+            const clientDateZoneRequired = rows.some(({ fieldId }) => {
+                const config =
+                    page.payload.fieldIdsToSchemas[fieldId]?.airtableField
+                        .config;
+                return (
+                    config?.type === 'dateTime' &&
+                    config.options.timeZone === 'client'
+                );
+            });
             const formConnection = connection;
             const parentScope = visitor.formParentScope;
             const capturedConfiguration = observeReviewConfiguration();
             const pendingRevision = pendingFiles.revision();
             const preparedCurrent = (): boolean =>
+                (!clientDateZoneRequired ||
+                    captureReviewDateContext().clientTimeZone ===
+                        dateContext.clientTimeZone) &&
                 ownsLinkedFilters() &&
                 linkedSnapshot.current() &&
                 visitor.formContext === context &&

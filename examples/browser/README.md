@@ -152,7 +152,7 @@ Form, configuration/context, draft handle and actual draft revision. An edit,
 including edit-away-and-back, Reload, Discard, disconnect or owner transition
 invalidates it. Returning to Edit permits fresh typing without repeating an old
 address query. Pages, compute/automatic submission, linked filters,
-lookup/computed fields, dates, rich text and other unsupported complex
+lookup/computed fields, rich text and other unsupported complex
 renderers remain outside this recipe; unavailable review blocks submission
 instead of presenting an incomplete preview.
 
@@ -525,3 +525,9 @@ for exact configuration presence, projection, compiler and replacement rules.
 Apply never reads automatically. Richer criteria remain untouched until explicit
 replacement; cleanup still requires a current explicit confirmation. This slice
 does not edit selects, relations, computed fields or nested condition groups.
+
+Prepared Review also admits bounded date and dateTime native strings. See the
+[date grammar, format and timezone limits](../../docs/ui.md#prepared-form-review-in-the-browser-starter).
+This does not change the date editor or add a localized picker. Date-only skipped
+calendar-day normalization is refused; displayed client-zone dateTime answers
+bind their captured timezone through Confirm. No formatter output replaces Save data.

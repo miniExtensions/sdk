@@ -1,3 +1,4 @@
+import { checkPortalFilterCases } from './browser-portal-filter-checks.mjs';
 import { checkPortalSortCases } from './browser-portal-sort-checks.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -97,7 +98,7 @@ export async function checkBrowserPortalExample({
     const { createMiniExtensionsClient } = consumerRequire(
         '@miniextensions/sdk'
     );
-    for (const name of ['portal', 'main', 'portalSort']) {
+    for (const name of ['portal', 'main', 'portalSort', 'portalFilter']) {
         const bundled = await build({
             absWorkingDir: consumer,
             entryPoints: [join(consumer, 'src', `${name}.ts`)],
@@ -3711,12 +3712,22 @@ export async function checkBrowserPortalExample({
             editablePortal,
         });
         const sortChecks = checks - baselineChecks;
+        const beforeFilters = checks;
+        await checkPortalFilterCases({
+            check,
+            mount,
+            environment,
+            loadExample,
+            editablePortal,
+            consumer,
+        });
+        const filterChecks = checks - beforeFilters;
         if (failures.length)
             throw new AggregateError(
                 failures,
                 'Packed browser Portal example regressions failed.'
             );
-        return { checks: baselineChecks, sortChecks };
+        return { checks: baselineChecks, sortChecks, filterChecks };
     } finally {
         while (environments.length) await environments.pop()();
     }

@@ -1,0 +1,897 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { portalRecipeFixtures as f } from './portal-recipe-checks.mjs';
+const button = (root, label) => {
+    const b = [...root.querySelectorAll('button')].find(
+        (x) => x.textContent.trim() === label
+    );
+    assert(b, label);
+    return b;
+};
+const criteria = () => ({
+    selectedCustomViewId: 'view_example',
+    searchTerm: 'Keep search',
+    sortFieldsByEndUser: [
+        { idOrName: { type: 'id', id: 'fld_title' }, type: 'desc' },
+    ],
+    filtersByEndUser: null,
+    searchParamsMap: { retained: 'Exact' },
+    supportsEndUserSortCleanup: true,
+    supportsEndUserFilterCleanup: true,
+});
+const controls = (root) => {
+    const n = root.matches?.('[aria-label="Portal scalar filtering"]')
+        ? root
+        : root.querySelector('[aria-label="Portal scalar filtering"]');
+    assert(n);
+    const [field, operator, bool] = n.querySelectorAll('select');
+    return {
+        node: n,
+        field,
+        operator,
+        bool,
+        value: n.querySelector('input'),
+        apply: button(n, 'Apply filter'),
+        clear: button(n, 'Clear filter'),
+    };
+};
+const change = (w, n) =>
+    n.dispatchEvent(new w.Event('change', { bubbles: true }));
+const condition = (id, type, operator, value) => ({
+    logicalOperator: 'and',
+    conditions: [
+        {
+            id: 'existing_filter',
+            type: 'singleCondition',
+            setting: {
+                type: operator,
+                idOrName: { type: 'id', id },
+                fieldType: type,
+                value,
+            },
+        },
+    ],
+});
+export async function checkPortalFilterCases({
+    check,
+    mount,
+    environment,
+    loadExample,
+    editablePortal,
+    consumer,
+}) {
+    const fixture = JSON.parse(
+        readFileSync('test/fixtures/portalFilter.json', 'utf8')
+    );
+    const compiler = await import(
+        pathToFileURL(
+            join(
+                consumer,
+                'node_modules/@miniextensions/sdk/dist/esm/forms/index.js'
+            )
+        ).href
+    );
+    const snapshot = () => ({
+        ...f.page([]),
+        criteriaKey: 'fixture',
+        detailFields: [],
+        layoutSettings: {},
+    });
+    const standalone = async (
+        p = editablePortal(),
+        s = snapshot(),
+        c = criteria()
+    ) => {
+        const env = await environment();
+        const { mountPortalScalarFilterEditor } =
+            await loadExample('portalFilter');
+        const changes = [];
+        const editor = mountPortalScalarFilterEditor({
+            portal: p,
+            portalFieldId: 'fld_children',
+            snapshot: s,
+            criteria: c,
+            isCurrent: () => true,
+            onApply: (n) => changes.push(n),
+        });
+        if (editor.type === 'ready')
+            env.window.document.getElementById('screen').append(editor.node);
+        return { ...env, editor, changes };
+    };
+    await check(
+        'scalar recipe executes all87 advertised operator/type pairs against pinned canonical formula and normalization',
+        async () => {
+            assert.equal(
+                fixture.provenance.revision,
+                '58f73d575ab10baa0a10693660d8002f204368e1'
+            );
+            assert.equal(
+                fixture.provenance.tree,
+                'b39e58ead46a311c497def57474cf5ca720542ae'
+            );
+            assert.equal(
+                createHash('sha256')
+                    .update(readFileSync(fixture.provenance.generator))
+                    .digest('hex'),
+                fixture.provenance.generatorSha256
+            );
+            const { window, close } = await environment();
+            const { mountPortalScalarFilterEditor } =
+                await loadExample('portalFilter');
+            let count = 0;
+            for (const { input, expected } of fixture.cases.slice(0, 87)) {
+                assert.deepEqual(expected.issues, [], input.name);
+                const p = editablePortal(),
+                    s = snapshot();
+                p.payload.linkedRecordFieldIdToDetailFields.fld_children = [];
+                s.tableIdsToLinkedTableStates.tbl_children.airtableFields = [
+                    input.field,
+                ];
+                const changes = [];
+                const e = mountPortalScalarFilterEditor({
+                    portal: p,
+                    portalFieldId: 'fld_children',
+                    criteria: criteria(),
+                    snapshot: s,
+                    isCurrent: () => true,
+                    onApply: (n) => changes.push(n),
+                });
+                assert.equal(e.type, 'ready', input.name);
+                window.document.getElementById('screen').append(e.node);
+                const c = controls(e.node),
+                    setting = input.conditions.conditions[0].setting;
+                c.operator.value = setting.type;
+                assert.equal(c.operator.value, setting.type, input.name);
+                change(window, c.operator);
+                c.value.value =
+                    setting.value === undefined ? '' : String(setting.value);
+                c.bool.value = String(setting.value);
+                c.apply.click();
+                assert.equal(changes.length, 1, input.name);
+                const normalized = structuredClone(expected.filters);
+                normalized.conditions[0].id = 'portal_scalar_filter';
+                assert.deepEqual(
+                    changes[0].filtersByEndUser,
+                    normalized,
+                    input.name
+                );
+                const result = compiler.compileRuntimeConditions({
+                    conditions: normalized,
+                    airtableFields: [input.field],
+                    invalidConditionMode: 'strict',
+                    fieldReferenceMode: 'saved',
+                });
+                assert.equal(result.type, 'compiled');
+                assert.equal(result.formula, expected.formula, input.name);
+                assert.deepEqual(result.diagnostics, []);
+                assert.deepEqual(changes[0].searchParamsMap, {
+                    retained: 'Exact',
+                });
+                e.node.remove();
+                count++;
+            }
+            assert.equal(count, 87);
+            await close();
+        }
+    );
+    await check(
+        'canonical boundary normalization fixtures retain exact refusal and conservative compiler differences',
+        async () => {
+            assert.equal(fixture.cases.length, 99);
+            for (const { input, expected } of fixture.cases.slice(87)) {
+                if (
+                    [
+                        'missing',
+                        'type-changed',
+                        'not-allowed',
+                        'empty-id',
+                    ].includes(input.mode)
+                ) {
+                    assert.equal(expected.filters, null, input.name);
+                    assert.deepEqual(expected.issues, [
+                        {
+                            missing: 'field_not_found',
+                            'type-changed': 'field_type_changed',
+                            'not-allowed': 'field_not_available',
+                            'empty-id': 'invalid_condition',
+                        }[input.mode],
+                    ]);
+                } else if (expected.filters == null) {
+                    assert.deepEqual(
+                        expected.issues,
+                        ['invalid_value'],
+                        input.name
+                    );
+                } else {
+                    const compiled = compiler.compileRuntimeConditions({
+                        conditions: expected.filters,
+                        airtableFields: [input.field],
+                        invalidConditionMode: 'strict',
+                        fieldReferenceMode: 'saved',
+                    });
+                    if (
+                        input.conditions.conditions[0].setting.type ===
+                            'matchesRegex' &&
+                        input.conditions.conditions[0].setting.value === '['
+                    ) {
+                        assert.equal(compiled.type, 'invalid');
+                        assert(
+                            compiled.diagnostics.some(
+                                (d) => d.code === 'invalid-regex'
+                            )
+                        );
+                    } else {
+                        assert.equal(compiled.type, 'compiled', input.name);
+                        assert.equal(
+                            compiled.formula,
+                            expected.formula,
+                            input.name
+                        );
+                        assert.deepEqual(compiled.diagnostics, []);
+                    }
+                }
+            }
+        }
+    );
+    await check(
+        'root key presence and custom/omitted-whole-config enablement agree with15 actual canonical cases',
+        async () => {
+            for (const { input, enabled, hasKey } of fixture.settings) {
+                const p = editablePortal(),
+                    root =
+                        p.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
+                delete root.disableFilteringOnExtension;
+                if (input.kind !== 'absent')
+                    root.disableFilteringOnExtension =
+                        input.kind === 'undefined'
+                            ? undefined
+                            : JSON.parse(input.kind);
+                if (input.scope === 'custom') {
+                    root.customViews[0].config = { viewBehavior: 'custom' };
+                    if (input.kind !== 'absent')
+                        root.customViews[0].config.disableFilteringOnExtension =
+                            root.disableFilteringOnExtension;
+                    delete root.disableFilteringOnExtension;
+                } else if (input.scope === 'omitted-config')
+                    delete root.customViews[0].config;
+                const h = await standalone(p);
+                assert.equal(
+                    h.editor.type,
+                    enabled ? 'ready' : 'unavailable',
+                    JSON.stringify(input)
+                );
+                if (input.scope === 'custom') assert(hasKey);
+                await h.close();
+            }
+        }
+    );
+    await check(
+        'missing and empty accepted/legacy projections differ; hidden partial other-table fields never recover',
+        async () => {
+            for (const mode of [
+                'missing-legacy',
+                'empty-legacy',
+                'missing-returned',
+                'empty-returned',
+                'partial',
+                'hidden',
+                'other-table',
+            ]) {
+                const p = editablePortal(),
+                    s = snapshot();
+                if (mode.includes('legacy')) {
+                    if (mode.startsWith('missing'))
+                        delete p.payload.linkedRecordFieldIdToDetailFields
+                            .fld_children;
+                    else
+                        p.payload.linkedRecordFieldIdToDetailFields.fld_children =
+                            [];
+                } else {
+                    s.customViewDetailFields =
+                        mode === 'missing-returned' ? {} : { fld_children: [] };
+                }
+                if (mode === 'partial') {
+                    s.customViewDetailFields.fld_children = [
+                        { fieldId: 'fld_unreturned', isHidden: false },
+                    ];
+                    s.tableIdsToLinkedTableStates.tbl_children.airtableFields.forEach(
+                        (x) => (x.isPrimaryField = false)
+                    );
+                }
+                if (mode === 'hidden') {
+                    s.customViewDetailFields.fld_children = [
+                        { fieldId: 'fld_quantity', isHidden: true },
+                    ];
+                }
+                if (mode === 'other-table') {
+                    delete s.tableIdsToLinkedTableStates.tbl_children;
+                    s.tableIdsToLinkedTableStates.other = f.page(
+                        []
+                    ).tableIdsToLinkedTableStates.tbl_children;
+                }
+                const h = await standalone(p, s);
+                assert.equal(
+                    h.editor.type,
+                    ['empty-legacy', 'empty-returned', 'hidden'].includes(mode)
+                        ? 'ready'
+                        : 'unavailable',
+                    mode
+                );
+                if (h.editor.type === 'ready')
+                    assert.deepEqual(
+                        [...controls(h.editor.node).field.options].map(
+                            (x) => x.value
+                        ),
+                        ['fld_title']
+                    );
+                await h.close();
+            }
+        }
+    );
+    await check(
+        'strict value entry preserves bytes, refuses blank and nonfinite numbers, and retains compiler empty/regex behavior',
+        async () => {
+            for (const [type, op, value, success] of [
+                ['number', 'equals', '', false],
+                ['number', 'equals', '   ', false],
+                ['number', 'equals', 'Infinity', false],
+                ['number', 'equals', '0', true],
+                ['percent', 'equals', '25', true],
+                ['singleLineText', 'isOfLength', '', false],
+                ['singleLineText', 'isOfLength', '-2.5', true],
+                ['singleLineText', 'is', '', false],
+                ['singleLineText', 'isNot', '', false],
+                ['singleLineText', 'contains', '', true],
+                ['singleLineText', 'doesNotContain', '', true],
+                ['singleLineText', 'matchesRegex', '', true],
+                ['singleLineText', 'matchesRegex', '[', false],
+                ['singleLineText', 'contains', '  Exact bytes  ', true],
+            ]) {
+                const p = editablePortal(),
+                    s = snapshot();
+                s.tableIdsToLinkedTableStates.tbl_children.airtableFields = [
+                    {
+                        id: 'fld_value',
+                        name: 'Value',
+                        isComputed: false,
+                        isPrimaryField: true,
+                        config: { type, options: null },
+                    },
+                ];
+                p.payload.linkedRecordFieldIdToDetailFields.fld_children = [];
+                const h = await standalone(p, s);
+                assert.equal(h.editor.type, 'ready');
+                const c = controls(h.editor.node);
+                c.operator.value = op;
+                change(h.window, c.operator);
+                c.value.value = value;
+                c.apply.click();
+                assert.equal(
+                    h.changes.length,
+                    success ? 1 : 0,
+                    [type, op, value].join('/')
+                );
+                if (
+                    success &&
+                    !['number', 'percent'].includes(type) &&
+                    op !== 'isOfLength'
+                )
+                    assert.equal(
+                        h.changes[0].filtersByEndUser.conditions[0].setting
+                            .value,
+                        value
+                    );
+                await h.close();
+            }
+        }
+    );
+    await check(
+        'unsupported rich AST and invalid identities survive until explicit replacement, including missing-field FALSE warning',
+        async () => {
+            const richer = [
+                { logicalOperator: 'and', conditions: [] },
+                {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'group',
+                            type: 'groupCondition',
+                            logicalOperator: 'or',
+                            conditions: [],
+                        },
+                    ],
+                },
+                condition('fld_title', 'singleLineText', 'contains', 'Keep'),
+                condition('fld_missing', 'number', 'equals', 2),
+                condition(
+                    'fld_quantity',
+                    'singleLineText',
+                    'contains',
+                    'Wrong'
+                ),
+            ];
+            richer[2].conditions[0].setting.idOrName = {
+                type: 'name',
+                name: 'Title',
+            };
+            const noId = condition(
+                'fld_title',
+                'singleLineText',
+                'contains',
+                'Keep'
+            );
+            noId.conditions[0].id = '';
+            richer.push(noId);
+            richer.push({
+                logicalOperator: 'and',
+                conditions: [
+                    condition('fld_title', 'singleLineText', 'contains', 'A')
+                        .conditions[0],
+                    condition('fld_title', 'singleLineText', 'contains', 'B')
+                        .conditions[0],
+                ],
+            });
+            for (const saved of richer) {
+                const c = criteria();
+                c.filtersByEndUser = saved;
+                const before = structuredClone(c);
+                const h = await standalone(undefined, undefined, c);
+                assert.equal(h.editor.type, 'ready');
+                const ui = controls(h.editor.node);
+                assert(ui.apply.disabled);
+                ui.apply.click();
+                ui.clear.click();
+                assert.equal(h.changes.length, 0);
+                assert.deepEqual(c, before);
+                button(h.editor.node, 'Replace existing filters').click();
+                assert.equal(h.changes.length, 0);
+                ui.clear.click();
+                assert.equal(h.changes.length, 1);
+                assert.equal(h.changes[0].filtersByEndUser, null);
+                assert.deepEqual(
+                    h.changes[0].sortFieldsByEndUser,
+                    c.sortFieldsByEndUser
+                );
+                await h.close();
+            }
+            const missing = compiler.compileRuntimeConditions({
+                conditions: condition('fld_missing', 'number', 'equals', 2),
+                airtableFields: [],
+                invalidConditionMode: 'strict',
+            });
+            assert.equal(missing.type, 'compiled');
+            assert(missing.diagnostics.some((x) => x.code === 'missing-field'));
+            assert.match(missing.formula, /FALSE/);
+        }
+    );
+    await check(
+        'metadata failures are presentation only; duplicates use IDs, legacy whitelist/dropdown IDs do not restrict scalars',
+        async () => {
+            for (const mode of [
+                'duplicate-label',
+                'legacy-list',
+                'dropdown-scalar',
+                'computed',
+                'malformed',
+                'duplicate-id',
+                'view-array',
+                'view-number',
+                'view-string',
+            ]) {
+                const p = editablePortal(),
+                    s = snapshot(),
+                    root =
+                        p.payload.fieldIdsToSchemas.fld_children.miniExtConfig,
+                    fields =
+                        s.tableIdsToLinkedTableStates.tbl_children
+                            .airtableFields;
+                if (mode === 'duplicate-label') fields[1].name = fields[0].name;
+                if (mode === 'legacy-list')
+                    root.filteringOnExtensionFields = ['fld_unreturned'];
+                if (mode === 'dropdown-scalar')
+                    root.dropdownFiltersFields = ['fld_quantity'];
+                if (mode === 'computed')
+                    fields.forEach((x) => (x.isComputed = true));
+                if (mode === 'malformed') fields[0].isComputed = 'true';
+                if (mode === 'duplicate-id')
+                    fields.push(structuredClone(fields[0]));
+                if (mode.startsWith('view-'))
+                    root.customViews[0].config =
+                        mode === 'view-array'
+                            ? []
+                            : mode === 'view-number'
+                              ? 123
+                              : 'bad';
+                const h = await standalone(p, s);
+                assert.equal(
+                    h.editor.type,
+                    [
+                        'duplicate-label',
+                        'legacy-list',
+                        'dropdown-scalar',
+                    ].includes(mode)
+                        ? 'ready'
+                        : 'unavailable',
+                    mode
+                );
+                if (h.editor.type === 'ready') {
+                    const c = controls(h.editor.node);
+                    assert.deepEqual(
+                        [...c.field.options].map((x) => x.value),
+                        ['fld_title', 'fld_quantity']
+                    );
+                    c.field.value = 'fld_quantity';
+                    change(h.window, c.field);
+                    c.operator.value = 'equals';
+                    c.value.value = '25';
+                    c.apply.click();
+                    assert.equal(
+                        h.changes[0].filtersByEndUser.conditions[0].setting
+                            .idOrName.id,
+                        'fld_quantity'
+                    );
+                }
+                await h.close();
+            }
+        }
+    );
+    await check(
+        'actual starter filter Apply preserves owned criteria and exact request; sort/filter share retirement both directions',
+        async () => {
+            for (const first of ['filter', 'sort']) {
+                let reads = 0;
+                const h = await mount({
+                    initialCriteria: criteria(),
+                    handlers: {
+                        list: ({ input }) => {
+                            reads++;
+                            if (reads === 1)
+                                return f.page(
+                                    [f.record('rec_old', 'Old')],
+                                    'old_cursor'
+                                );
+                            assert.equal(input.airtableOffset, null);
+                            assert.deepEqual(input.searchParamsMap, {
+                                retained: 'Exact',
+                            });
+                            assert.equal(input.searchTerm, 'Keep search');
+                            if (first === 'filter')
+                                assert.equal(
+                                    input.filtersByEndUser.conditions[0].setting
+                                        .value,
+                                    25
+                                );
+                            return f.page([
+                                f.record('rec_z', 'Z'),
+                                f.record('rec_a', 'A'),
+                            ]);
+                        },
+                    },
+                });
+                await h.click('Load records');
+                const fc = controls(h.view.node),
+                    sort = h.view.node.querySelector(
+                        '[aria-label="Portal sorting"]'
+                    ),
+                    heldFilter = fc.apply,
+                    heldSort = button(sort, 'Apply sort');
+                fc.field.value = 'fld_quantity';
+                change(h.window, fc.field);
+                fc.operator.value = 'equals';
+                fc.value.value = '25';
+                if (first === 'filter') fc.apply.click();
+                else {
+                    sort.querySelectorAll('select')[0].value = 'fld_quantity';
+                    heldSort.click();
+                }
+                heldFilter.click();
+                heldSort.click();
+                assert.equal(reads, 1);
+                assert(button(h.view.node, 'Create record').disabled);
+                assert(button(h.view.node, 'Next page').disabled);
+                assert.equal(h.view.node.querySelector('tbody'), null);
+                await h.click('Load records');
+                assert.deepEqual(
+                    [...h.view.node.querySelectorAll('tbody tr')].map(
+                        (x) => x.dataset.recordId
+                    ),
+                    ['rec_z', 'rec_a']
+                );
+                const second =
+                    first === 'filter'
+                        ? button(
+                              h.view.node.querySelector(
+                                  '[aria-label="Portal sorting"]'
+                              ),
+                              'Apply sort'
+                          )
+                        : controls(h.view.node).clear;
+                second.click();
+                assert.equal(reads, 2);
+                await h.click('Load records');
+                assert.equal(reads, 3);
+                if (first === 'filter')
+                    assert.equal(
+                        h.calls.filter((x) => x.operation === 'list').at(-1)
+                            .input.filtersByEndUser.conditions[0].setting.value,
+                        25
+                    );
+                await h.click('Create record');
+                assert.equal(h.handoffs.length, 1);
+                assert.equal(h.handoffs[0][2].recordId, 'rec_user');
+                await h.dispose();
+            }
+        }
+    );
+    await check(
+        'held filter controls retire after paging, child opening and A to B to A',
+        async () => {
+            for (const mode of ['page', 'child', 'aba']) {
+                const h = await mount({
+                    handlers: {
+                        list: () =>
+                            f.page([f.record('rec_one', 'One')], 'cursor'),
+                    },
+                });
+                await h.click('Load records');
+                const c = controls(h.view.node);
+                c.value.value = 'Keep';
+                const held = c.clear;
+                if (mode === 'page') await h.click('Next page');
+                if (mode === 'child') await h.click('Create record');
+                if (mode === 'aba') {
+                    h.switchOwner('B');
+                    h.switchOwner('visitor_A');
+                }
+                const count = h.calls.length;
+                held.click();
+                await h.settle();
+                assert.equal(h.calls.length, count);
+                if (mode === 'child') assert.equal(h.handoffs.length, 1);
+                await h.dispose();
+            }
+        }
+    );
+    await check(
+        'sequential server cleanup preserves filter/sort edits and flags; filtering-disabled errors never clear criteria',
+        async () => {
+            let reads = 0;
+            const initial = criteria();
+            initial.filtersByEndUser = condition(
+                'fld_title',
+                'singleLineText',
+                'contains',
+                'Keep'
+            );
+            const h = await mount({
+                initialCriteria: initial,
+                handlers: {
+                    list: () => {
+                        reads++;
+                        if (reads === 1)
+                            return {
+                                ...f.page([]),
+                                endUserSortCleanup: { sortFields: [] },
+                            };
+                        if (reads === 2)
+                            return {
+                                ...f.page([]),
+                                endUserFilterCleanup: { filters: null },
+                            };
+                        if (reads === 3)
+                            throw new Error(
+                                'portal_records.client_filtering_disabled'
+                            );
+                        return f.page([]);
+                    },
+                },
+            });
+            await h.click('Load records');
+            await h.click('Review criteria cleanup');
+            assert.equal(reads, 1);
+            await h.click('Load records');
+            assert.deepEqual(
+                h.calls.filter((x) => x.operation === 'list')[1].input
+                    .filtersByEndUser,
+                initial.filtersByEndUser
+            );
+            await h.click('Review criteria cleanup');
+            await h.click('Load records');
+            assert.equal(h.failures.length, 1);
+            assert(button(h.view.node, 'Create record').disabled);
+            assert.equal(reads, 3);
+            await h.click('Load records');
+            assert.equal(reads, 4);
+            const req = h.calls
+                .filter((x) => x.operation === 'list')
+                .at(-1).input;
+            assert.deepEqual(req.searchParamsMap, { retained: 'Exact' });
+            assert.deepEqual(req.sortFieldsByEndUser, []);
+            assert.equal(req.filtersByEndUser, null);
+            await h.dispose();
+            const rejected = await mount({
+                initialCriteria: initial,
+                handlers: {
+                    list: () => {
+                        throw new Error(
+                            'portal_records.client_filtering_disabled'
+                        );
+                    },
+                },
+            });
+            await rejected.click('Load records');
+            assert.equal(
+                rejected.calls.filter((x) => x.operation === 'list').length,
+                1
+            );
+            await rejected.click('Load records');
+            assert.deepEqual(
+                rejected.calls.filter((x) => x.operation === 'list')[1].input
+                    .filtersByEndUser,
+                initial.filtersByEndUser
+            );
+            await rejected.dispose();
+        }
+    );
+    await check(
+        'recipe copies inputs/output and retires before callback/disposal reentry',
+        async () => {
+            const env = await environment(),
+                { mountPortalScalarFilterEditor } =
+                    await loadExample('portalFilter');
+            const p = editablePortal(),
+                s = snapshot(),
+                c = criteria();
+            let e,
+                count = 0;
+            const original = structuredClone(c);
+            e = mountPortalScalarFilterEditor({
+                portal: p,
+                portalFieldId: 'fld_children',
+                criteria: c,
+                snapshot: s,
+                isCurrent: () => true,
+                onApply: (n) => {
+                    count++;
+                    controls(e.node).clear.click();
+                    assert.deepEqual(
+                        n.searchParamsMap,
+                        original.searchParamsMap
+                    );
+                    n.searchParamsMap.retained = 'Changed';
+                },
+            });
+            assert.equal(e.type, 'ready');
+            env.window.document.getElementById('screen').append(e.node);
+            c.searchParamsMap.retained = 'Caller changed';
+            p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.disableFilteringOnExtension = true;
+            s.tableIdsToLinkedTableStates.tbl_children.airtableFields.length = 0;
+            const ui = controls(e.node);
+            ui.operator.value = 'contains';
+            ui.value.value = ' Keep ';
+            ui.apply.click();
+            assert.equal(count, 1);
+            assert.equal(c.searchParamsMap.retained, 'Caller changed');
+            await env.close();
+        }
+    );
+    await check(
+        'checkbox true/false, rich text exclusions and deferred physical families use compiler authority',
+        async () => {
+            for (const type of [
+                'checkbox',
+                'richText',
+                'singleSelect',
+                'multipleSelects',
+                'multipleRecordLinks',
+                'date',
+                'dateTime',
+                'multipleLookupValues',
+            ]) {
+                const p = editablePortal(),
+                    s = snapshot();
+                p.payload.linkedRecordFieldIdToDetailFields.fld_children = [];
+                s.tableIdsToLinkedTableStates.tbl_children.airtableFields = [
+                    {
+                        id: 'fld_value',
+                        name: 'Value',
+                        isComputed: false,
+                        isPrimaryField: true,
+                        config: { type, options: null },
+                    },
+                ];
+                const h = await standalone(p, s);
+                assert.equal(
+                    h.editor.type,
+                    ['checkbox', 'richText'].includes(type)
+                        ? 'ready'
+                        : 'unavailable',
+                    type
+                );
+                if (h.editor.type === 'ready') {
+                    const ui = controls(h.editor.node),
+                        ops = [...ui.operator.options].map((x) => x.value);
+                    if (type === 'checkbox') {
+                        assert.deepEqual(ops, ['is']);
+                        ui.bool.value = 'true';
+                        ui.apply.click();
+                        assert.equal(
+                            h.changes[0].filtersByEndUser.conditions[0].setting
+                                .value,
+                            true
+                        );
+                    } else {
+                        assert(!ops.includes('is'));
+                        assert(!ops.includes('isNot'));
+                    }
+                }
+                await h.close();
+            }
+        }
+    );
+    await check(
+        'cancelled cleanup, empty results and stale ownership/disposal leave filter criteria unchanged',
+        async () => {
+            const initial = criteria();
+            initial.filtersByEndUser = condition(
+                'fld_title',
+                'singleLineText',
+                'contains',
+                'Keep'
+            );
+            const h = await mount({
+                initialCriteria: initial,
+                confirm: async () => false,
+                handlers: {
+                    list: () => ({
+                        ...f.page([]),
+                        endUserFilterCleanup: { filters: null },
+                    }),
+                },
+            });
+            await h.click('Load records');
+            await h.click('Review criteria cleanup');
+            assert.equal(
+                h.calls.filter((x) => x.operation === 'list').length,
+                1
+            );
+            assert(button(h.view.node, 'Create record').disabled);
+            assert.deepEqual(
+                initial.filtersByEndUser,
+                condition('fld_title', 'singleLineText', 'contains', 'Keep')
+            );
+            await h.dispose();
+            const empty = await mount({ handlers: { list: () => f.page([]) } });
+            await empty.click('Load records');
+            assert(controls(empty.view.node));
+            assert.equal(empty.view.node.querySelector('tbody tr'), null);
+            await empty.dispose();
+            for (const dispose of [false, true]) {
+                const env = await environment(),
+                    { mountPortalScalarFilterEditor } =
+                        await loadExample('portalFilter');
+                let editor;
+                editor = mountPortalScalarFilterEditor({
+                    portal: editablePortal(),
+                    portalFieldId: 'fld_children',
+                    criteria: criteria(),
+                    snapshot: snapshot(),
+                    isCurrent: () => {
+                        if (dispose) editor.destroy();
+                        return dispose;
+                    },
+                    onApply: () => assert.fail('Stale/disposed callback'),
+                });
+                assert.equal(editor.type, 'ready');
+                env.window.document
+                    .getElementById('screen')
+                    .append(editor.node);
+                controls(editor.node).clear.click();
+                await env.close();
+            }
+        }
+    );
+}

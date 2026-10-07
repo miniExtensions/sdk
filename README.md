@@ -422,3 +422,8 @@ a source review or successful local bundle is not live workflow evidence.
 
 [MIT](LICENSE). Preserve [third-party notices](THIRD_PARTY_NOTICES.md) for adapted
 and bundled code. Runtime dependencies retain their respective licenses.
+
+The shipped browser starter also includes a typed
+[single direct scalar Portal filter recipe](docs/portals.md#one-direct-scalar-filter-recipe),
+reused by its actual controls. It uses the existing condition compiler and owned
+criteria/cleanup lifecycle; it is not a new SDK export or a general filter builder.

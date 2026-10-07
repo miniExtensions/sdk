@@ -263,7 +263,9 @@ is reused by this starter. **Apply sort** preserves owned filters/search and
 retires records, paging and child actions until explicit **Load records**.
 **Use configured order** sends `[]`; richer saved sorts require explicit
 replacement. Eligible fields use accepted visible metadata/effective primary,
-not hidden sort-only fields or guessed schemas. There is no filtering editor.
+not hidden sort-only fields or guessed schemas. The single direct scalar filter
+recipe below shares the same owned criteria lifecycle; richer filtering remains
+outside this editor.
 Only records in its accepted main list can open an edit child. Nested labels
 and cached records do not grant that access.
 
@@ -395,3 +397,13 @@ Use the [runtime guide](../../docs/runtime.md) for full method contracts and
 production application session ownership. Use normal published extension
 configuration to change access; the existing server handlers retain visitor
 permissions and all record, field and action checks.
+
+### One direct scalar Portal filter
+
+The starter reuses the shipped typed `src/portalFilter.ts` recipe alongside
+`src/portalSort.ts`; both own one accepted criteria epoch and retire together.
+See [the scalar filter boundary](../../docs/portals.md#one-direct-scalar-filter-recipe)
+for exact configuration presence, projection, compiler and replacement rules.
+Apply never reads automatically. Richer criteria remain untouched until explicit
+replacement; cleanup still requires a current explicit confirmation. This slice
+does not edit selects, relations, computed fields or nested condition groups.

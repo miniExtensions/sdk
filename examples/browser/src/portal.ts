@@ -1,3 +1,7 @@
+import {
+    mountPortalScalarFilterEditor,
+    type PortalFilterEditor,
+} from './portalFilter.js';
 import { mountPortalSortEditor, type PortalSortEditor } from './portalSort.js';
 import {
     childQuerySnapshots,
@@ -256,6 +260,7 @@ export const createPortalView = (options: {
     const actions = element('div', undefined, 'actions');
     const results = element('div', undefined, 'table-scroll');
     const sorting = element('section');
+    const filtering = element('section');
     const cleanupPanel = element('section');
     cleanupPanel.setAttribute('aria-label', 'Portal criteria cleanup');
     const recoveryPanel = element('section');
@@ -268,7 +273,15 @@ export const createPortalView = (options: {
         editorControl = null;
         editor.replaceChildren();
     };
-    card.append(actions, sorting, cleanupPanel, recoveryPanel, results, editor);
+    card.append(
+        actions,
+        sorting,
+        filtering,
+        cleanupPanel,
+        recoveryPanel,
+        results,
+        editor
+    );
     let data: PortalCollectionSnapshot | null = null;
     let dataScope: PortalOwnerScope | null = null;
     let collection: PortalCollection | null = null;
@@ -279,6 +292,7 @@ export const createPortalView = (options: {
     let criteriaEpoch = 0;
     let mountEpoch = 0;
     let sortEditor: PortalSortEditor | null = null;
+    let filterEditor: PortalFilterEditor | null = null;
     let cleanupRequired = false;
     let criteria: PortalCollectionCriteria = structuredClone(
         options.initialCriteria ?? {
@@ -291,12 +305,16 @@ export const createPortalView = (options: {
             supportsEndUserFilterCleanup: true,
         }
     );
-    const retireSortEditor = (): void => {
+    const retireCriteriaEditors = (): void => {
         mountEpoch += 1;
         const previous = sortEditor;
         sortEditor = null;
         if (previous?.type === 'ready') previous.destroy();
+        const previousFilter = filterEditor;
+        filterEditor = null;
+        if (previousFilter?.type === 'ready') previousFilter.destroy();
         sorting.replaceChildren();
+        filtering.replaceChildren();
     };
     const clearCleanup = (): void => {
         cleanupRequired = false;
@@ -309,7 +327,7 @@ export const createPortalView = (options: {
         readRequired = true;
         next.disabled = true;
         create.disabled = true;
-        retireSortEditor();
+        retireCriteriaEditors();
         clearCleanup();
         previous?.destroy();
     };
@@ -452,8 +470,8 @@ export const createPortalView = (options: {
             )
         );
     };
-    const mountSorting = (): void => {
-        retireSortEditor();
+    const mountCriteriaEditors = (): void => {
+        retireCriteriaEditors();
         if (
             data == null ||
             collection == null ||
@@ -501,6 +519,27 @@ export const createPortalView = (options: {
             sortEditor.type === 'ready'
                 ? sortEditor.node
                 : element('p', sortEditor.diagnostic, 'hint')
+        );
+        filterEditor = mountPortalScalarFilterEditor({
+            portal: page,
+            portalFieldId: fieldSelect.value,
+            criteria,
+            snapshot: acceptedSnapshot,
+            isCurrent: owned,
+            onApply: (nextCriteria) => {
+                if (!owned()) return;
+                criteria = structuredClone(nextCriteria);
+                criteriaEpoch += 1;
+                awaitExplicitRead();
+                status(
+                    'Filter applied. Choose Load records to fetch matching records.'
+                );
+            },
+        });
+        filtering.append(
+            filterEditor.type === 'ready'
+                ? filterEditor.node
+                : element('p', filterEditor.diagnostic, 'hint')
         );
     };
     const proposeCleanup = (
@@ -653,7 +692,7 @@ export const createPortalView = (options: {
                 : 'Loading the authorized record Form…',
             async ({ client, signal, current }) => {
                 const owner = getCollection();
-                retireSortEditor();
+                retireCriteriaEditors();
                 clearCleanup();
                 const plan = owner.childFormRequest({
                     access:
@@ -1262,7 +1301,7 @@ export const createPortalView = (options: {
             'Loading the permitted Portal records…',
             async ({ signal, current }) => {
                 signal.throwIfAborted();
-                retireSortEditor();
+                retireCriteriaEditors();
                 if (!more) {
                     // Fresh first read creates a new immutable collection with owned criteria.
                     retireCollection();
@@ -1300,7 +1339,7 @@ export const createPortalView = (options: {
                     create.disabled = creatingChildId() == null;
                     closeEditor();
                     renderRecords();
-                    mountSorting();
+                    mountCriteriaEditors();
                     status(
                         result == null
                             ? 'This view has no more pages.'

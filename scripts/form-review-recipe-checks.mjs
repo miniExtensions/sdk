@@ -290,6 +290,30 @@ export async function checkFormReviewRecipe({
         );
     }
     const fallback = structuredClone(selectPage);
+    for (const choices of [
+        [
+            { id: 'duplicate', name: 'PrivateFirst' },
+            { id: 'duplicate', name: 'PrivateSecond' },
+        ],
+        [
+            { id: 'one', name: 'PrivateDuplicate' },
+            { id: 'two', name: 'PrivateDuplicate' },
+        ],
+        [null],
+        [{ id: 123, name: 'PrivateMalformed' }],
+        [{ id: 'one', name: null }],
+        { private: 'PrivateContainer' },
+    ]) {
+        const p = structuredClone(selectPage);
+        p.payload.fieldIdsToSchemas.fld_review_single.airtableField.config.options.choices =
+            choices;
+        assert.throws(
+            () => prepareFormReviewRows(p, selectNative),
+            (error) =>
+                error.message.startsWith('Review is unavailable') &&
+                !error.message.includes('Private')
+        );
+    }
     fallback.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig.conditionsForOptions[0].config.name = 123;
     assert.equal(
         prepareFormReviewRows(fallback, selectNative).find(
@@ -344,7 +368,7 @@ export async function checkFormReviewRecipe({
         /Review is unavailable/
     );
     for (const [id, values] of [
-        ['fld_review_single', [1, true, {}, ['First']]],
+        ['fld_review_single', [1, true, {}, [], ['First']]],
         [
             'fld_review_multi',
             [1, true, {}, ['First', null], ['First', 1], [''], new Array(1)],
@@ -360,7 +384,7 @@ export async function checkFormReviewRecipe({
                     !error.message.includes('First')
             );
         }
-    for (const value of [undefined, null, '', '   ', []]) {
+    for (const value of [undefined, null, '', '   ']) {
         const data = {
             ...selectNative,
             fld_review_single: value,
@@ -376,6 +400,25 @@ export async function checkFormReviewRecipe({
                         id.startsWith('fld_review_multi')
                 ),
             []
+        );
+    }
+    assert(
+        !prepareFormReviewRows(selectPage, {
+            ...selectNative,
+            fld_review_multi: [],
+        }).some((row) => row.fieldId === 'fld_review_multi')
+    );
+    for (const id of [
+        'fld_review_readonly',
+        'fld_review_show',
+        'fld_review_barcode',
+        'fld_review_number',
+    ]) {
+        const p = structuredClone(selectPage);
+        p.payload.fieldIdsToSchemas[id].miniExtConfig = { readOnly: true };
+        assert.throws(
+            () => prepareFormReviewRows(p, { ...selectNative, [id]: [] }),
+            /Review is unavailable/
         );
     }
     for (const value of ['sel_first', '<i>Label</i>', 'first', ' First ']) {

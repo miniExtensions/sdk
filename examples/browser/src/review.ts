@@ -81,7 +81,12 @@ export const prepareFormReviewRows = (
         // Canonical emptiness accepts whitespace before field-specific shapes.
         if (value == null || (typeof value === 'string' && value.trim() === ''))
             continue;
-        if (Array.isArray(value) && value.length === 0) continue;
+        if (
+            type === AirtableFieldType.MULTIPLE_SELECTS &&
+            Array.isArray(value) &&
+            value.length === 0
+        )
+            continue;
         let text: string;
         if (
             type === AirtableFieldType.SINGLE_SELECT ||

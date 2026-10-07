@@ -84,11 +84,18 @@ export async function checkBrowserReviewExample({
         'confirmed-logout',
         'confirmed-label-config',
         'confirmed-condition-config',
+        'writable-ineligible-selection',
+        'empty-multi-selection',
         'validation',
         'unknown-transport',
         'cancelled-held',
         'unsupported-section',
         'refused-single-object',
+        'refused-single-array',
+        'refused-scalar-array',
+        'refused-duplicate-choice-id',
+        'refused-duplicate-choice-name',
+        'refused-malformed-choice',
         'refused-multi-null',
         'refused-multi-empty-name',
         'refused-linked-empty',
@@ -106,6 +113,31 @@ export async function checkBrowserReviewExample({
         );
         const form = fixture.page();
         const selectRows = addSelectReviewAnswers(form);
+        if (scenario === 'empty-multi-selection')
+            form.payload.formRecord.data.fld_review_multi = [];
+        if (scenario === 'refused-duplicate-choice-id')
+            form.payload.fieldIdsToSchemas.fld_review_single.airtableField.config.options.choices =
+                [
+                    { id: 'duplicate', name: 'PrivateFirst' },
+                    { id: 'duplicate', name: 'PrivateSecond' },
+                ];
+        if (scenario === 'refused-duplicate-choice-name')
+            form.payload.fieldIdsToSchemas.fld_review_single.airtableField.config.options.choices =
+                [
+                    { id: 'one', name: 'PrivateDuplicate' },
+                    { id: 'two', name: 'PrivateDuplicate' },
+                ];
+        if (scenario === 'refused-malformed-choice')
+            form.payload.fieldIdsToSchemas.fld_review_single.airtableField.config.options.choices =
+                [null];
+        if (scenario === 'writable-ineligible-selection') {
+            form.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig.readOnly = false;
+            form.payload.formRecord.data.fld_review_single = 'Second';
+        }
+        if (scenario === 'refused-single-array')
+            form.payload.formRecord.data.fld_review_single = [];
+        if (scenario === 'refused-scalar-array')
+            form.payload.formRecord.data.fld_review_readonly = [];
         if (scenario === 'refused-single-object')
             form.payload.formRecord.data.fld_review_single = {
                 private: 'PrivateMalformedSelect',
@@ -313,9 +345,74 @@ export async function checkBrowserReviewExample({
                 assert(
                     !document
                         .getElementById('status')
-                        .textContent.includes('PrivateMalformedSelect')
+                        .textContent.includes('Private')
                 );
                 assert.equal(saves().length, 0);
+            } else if (scenario === 'empty-multi-selection') {
+                const dialog = await open();
+                assert.equal(
+                    dialog.querySelector(
+                        '[data-review-field-id="fld_review_multi"]'
+                    ),
+                    null
+                );
+                button(dialog, 'Confirm').click();
+                await waitFor(() => saves().length === 1);
+                assert.deepEqual(saves()[0].input.formRecord.data, initial);
+                assert.deepEqual(
+                    saves()[0].input.formFieldIdsWithUnsavedChanges,
+                    []
+                );
+            } else if (scenario === 'writable-ineligible-selection') {
+                const select = field('fld_review_single');
+                assert.equal(select.disabled, false);
+                assert.equal(select.value, 'Second');
+                const dialog = await open();
+                const label = dialog.querySelector(
+                    '[data-review-field-id="fld_review_single"]'
+                );
+                assert.equal(
+                    label.nextElementSibling.textContent,
+                    '<i>Label</i> (Second)'
+                );
+                button(dialog, 'Confirm').click();
+                await waitFor(
+                    () =>
+                        saves().length === 1 &&
+                        document
+                            .getElementById('screen')
+                            .getAttribute('aria-busy') === 'false'
+                );
+                assert.deepEqual(saves()[0].input.formRecord.data, initial);
+                assert.deepEqual(
+                    saves()[0].input.formFieldIdsWithUnsavedChanges,
+                    []
+                );
+                select.value = 'First';
+                select.dispatchEvent(
+                    new window.Event('change', { bubbles: true })
+                );
+                assert.equal(select.value, 'First');
+                assert(
+                    ![...select.options].some(
+                        (option) => option.value === 'Second'
+                    ),
+                    'ineligible removed selection is not offered as a new choice'
+                );
+                const forbidden = document.createElement('option');
+                forbidden.value = 'Second';
+                forbidden.textContent = 'Crafted unavailable option';
+                select.append(forbidden);
+                select.value = 'Second';
+                select.dispatchEvent(
+                    new window.Event('change', { bubbles: true })
+                );
+                assert.equal(
+                    select.value,
+                    'First',
+                    'actual installed handler rejects newly selecting the restricted name'
+                );
+                assert.equal(saves().length, 1);
             } else if (scenario === 'answers') {
                 edit('fld_review_title', 'SecondExactReviewSecret');
                 edit('fld_review_conditional', 'Edited conditional answer');

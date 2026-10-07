@@ -585,10 +585,17 @@ export async function checkPortalFilterCases({
                 if (first === 'filter') fc.apply.click();
                 else {
                     sort.querySelectorAll('select')[0].value = 'fld_quantity';
+                    sort.querySelectorAll('select')[1].value = 'desc';
                     heldSort.click();
                 }
                 heldFilter.click();
+                heldFilter.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
                 heldSort.click();
+                heldSort.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
                 assert.equal(reads, 1);
                 assert(button(h.view.node, 'Create record').disabled);
                 assert(button(h.view.node, 'Next page').disabled);
@@ -600,25 +607,63 @@ export async function checkPortalFilterCases({
                     ),
                     ['rec_z', 'rec_a']
                 );
-                const second =
-                    first === 'filter'
-                        ? button(
-                              h.view.node.querySelector(
-                                  '[aria-label="Portal sorting"]'
-                              ),
-                              'Apply sort'
-                          )
-                        : controls(h.view.node).clear;
-                second.click();
+                if (first === 'filter') {
+                    const secondSort = h.view.node.querySelector(
+                        '[aria-label="Portal sorting"]'
+                    );
+                    secondSort.querySelectorAll('select')[0].value =
+                        'fld_quantity';
+                    secondSort.querySelectorAll('select')[1].value = 'asc';
+                    button(secondSort, 'Apply sort').click();
+                } else {
+                    const secondFilter = controls(h.view.node);
+                    secondFilter.field.value = 'fld_title';
+                    change(h.window, secondFilter.field);
+                    secondFilter.operator.value = 'contains';
+                    secondFilter.value.value = 'After sort';
+                    secondFilter.apply.click();
+                }
                 assert.equal(reads, 2);
                 await h.click('Load records');
                 assert.equal(reads, 3);
-                if (first === 'filter')
-                    assert.equal(
-                        h.calls.filter((x) => x.operation === 'list').at(-1)
-                            .input.filtersByEndUser.conditions[0].setting.value,
-                        25
-                    );
+                const finalInput = h.calls
+                    .filter((x) => x.operation === 'list')
+                    .at(-1).input;
+                assert.deepEqual(finalInput.sortFieldsByEndUser, [
+                    {
+                        idOrName: { type: 'id', id: 'fld_quantity' },
+                        type: first === 'sort' ? 'desc' : 'asc',
+                    },
+                ]);
+                assert.deepEqual(finalInput.filtersByEndUser, {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'portal_scalar_filter',
+                            type: 'singleCondition',
+                            setting:
+                                first === 'filter'
+                                    ? {
+                                          type: 'equals',
+                                          idOrName: {
+                                              type: 'id',
+                                              id: 'fld_quantity',
+                                          },
+                                          fieldType: 'number',
+                                          value: 25,
+                                      }
+                                    : {
+                                          type: 'contains',
+                                          idOrName: {
+                                              type: 'id',
+                                              id: 'fld_title',
+                                          },
+                                          fieldType: 'singleLineText',
+                                          value: 'After sort',
+                                      },
+                        },
+                    ],
+                });
                 await h.click('Create record');
                 assert.equal(h.handoffs.length, 1);
                 assert.equal(h.handoffs[0][2].recordId, 'rec_user');
@@ -648,6 +693,9 @@ export async function checkPortalFilterCases({
                 }
                 const count = h.calls.length;
                 held.click();
+                held.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
                 await h.settle();
                 assert.equal(h.calls.length, count);
                 if (mode === 'child') assert.equal(h.handoffs.length, 1);
@@ -757,6 +805,9 @@ export async function checkPortalFilterCases({
                 onApply: (n) => {
                     count++;
                     controls(e.node).clear.click();
+                    controls(e.node).clear.dispatchEvent(
+                        new env.window.Event('click', { bubbles: true })
+                    );
                     assert.deepEqual(
                         n.searchParamsMap,
                         original.searchParamsMap
@@ -890,6 +941,9 @@ export async function checkPortalFilterCases({
                     .getElementById('screen')
                     .append(editor.node);
                 controls(editor.node).clear.click();
+                controls(editor.node).clear.dispatchEvent(
+                    new env.window.Event('click', { bubbles: true })
+                );
                 await env.close();
             }
         }

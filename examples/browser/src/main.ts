@@ -56,6 +56,10 @@ import {
 import { prepareFormReviewRows } from './review.js';
 import { createPendingFiles } from './pendingFiles.js';
 import { formAttachmentControl } from './attachmentPresentation.js';
+import {
+    admittedAttachmentValues,
+    appendedAttachmentValues,
+} from './attachmentUpload.js';
 import { createLinkedReviewPresentation } from './linkedReview.js';
 import {
     RecoveryJournal,
@@ -218,7 +222,8 @@ const run = async (
         client: MiniExtensionsClient;
         signal: AbortSignal;
         current(): boolean;
-    }) => Promise<void>
+    }) => Promise<void>,
+    ownsUI: () => boolean = () => true
 ): Promise<void> => {
     cancelConfirmation();
     if (request != null) return;
@@ -243,7 +248,7 @@ const run = async (
     try {
         await action({ visitor, client, signal: controller.signal, current });
     } catch (error) {
-        if (current()) {
+        if (current() && ownsUI()) {
             if (error instanceof SDKError) {
                 status(
                     `${error.message}${error.code == null ? '' : ` (${error.code})`}${error.status == null ? '' : ` · HTTP ${error.status}`}`,
@@ -261,8 +266,10 @@ const run = async (
     } finally {
         if (request === controller) {
             request = null;
-            setBusy(false);
-            sessionSummary();
+            if (ownsUI()) {
+                setBusy(false);
+                sessionSummary();
+            }
         }
     }
 };
@@ -683,6 +690,8 @@ const renderForm = (page: FormLoadedResult): void => {
         );
     let updateComments = (): void => {};
     let reviewPending = false;
+    let formRetired = false;
+    let activeUpload: RecoveryAttempt | null = null;
     const controls = new Map<string, FieldControl>();
     let updateSelectAvailability = (): void => {};
     const linkedFilterViews = new Map<string, ConditionalLinkedFilters>();
@@ -714,6 +723,7 @@ const renderForm = (page: FormLoadedResult): void => {
             visitor.formContext,
             visitor.formParentScope,
             connection,
+            formClient == null ? null : sessionKey(formClient),
         ]);
     let reviewConfiguration = configurationKey();
     let reviewConfigurationRevision = 0;
@@ -837,6 +847,7 @@ const renderForm = (page: FormLoadedResult): void => {
             });
     };
     disposeFormControls = () => {
+        formRetired = true;
         linkedPresentation.retire();
         pendingFiles.retire();
         pendingInputs.clear();
@@ -1320,28 +1331,64 @@ const renderForm = (page: FormLoadedResult): void => {
                 notice,
                 file,
                 button('Upload selected file', () => {
+                    // Refuse before run/begin: retained hidden controls cannot dispatch.
                     if (
-                        !ownsForm() ||
-                        recovery.blocking(scope, recordId) != null ||
-                        (candidate?.outcome === 'unknown' &&
-                            candidate.acknowledgment === 'none')
-                    ) {
-                        status(
-                            'Check the earlier attempt before uploading again.',
-                            true
-                        );
+                        !ownsLinkedFilters() ||
+                        formRetired ||
+                        request != null ||
+                        reviewPending
+                    )
                         return;
-                    }
+                    const uploadConfiguration = observeReviewConfiguration();
+                    const ownsUploadUI = (): boolean =>
+                        !formRetired &&
+                        ownsForm() &&
+                        visitor.client === formClient &&
+                        visitor.revision === formRevision &&
+                        formClient != null &&
+                        sessionKey(formClient) === formSession &&
+                        observeReviewConfiguration() === uploadConfiguration;
                     const selection = pendingFiles.capture(file);
                     if (selection == null) {
-                        status('Choose a file first.', true);
+                        if (ownsUploadUI())
+                            status('Choose a file first.', true);
                         return;
                     }
                     const selected = selection.file;
+                    const nativeRevision = visitor.drafts.revision(draft);
+                    try {
+                        updateFieldVisibility();
+                        const snapshot = visitor.drafts.snapshot(draft);
+                        if (
+                            !ownsUploadUI() ||
+                            snapshot == null ||
+                            fieldVisibility[fieldId]?.type !== 'visible'
+                        )
+                            return;
+                        admittedAttachmentValues(
+                            page,
+                            fieldId,
+                            snapshot.data[fieldId],
+                            selected
+                        );
+                    } catch {
+                        if (ownsUploadUI())
+                            status(
+                                'The attachment cannot be added with the current Form settings.',
+                                true
+                            );
+                        return;
+                    }
                     void run(
                         'Uploading the selected attachment…',
                         async ({ client, signal, current }) => {
-                            if (!ownsForm()) return;
+                            if (
+                                !ownsUploadUI() ||
+                                !current() ||
+                                visitor.drafts.revision(draft) !==
+                                    nativeRevision
+                            )
+                                return;
                             signal.throwIfAborted();
                             const attempt = recovery.begin(
                                 scope,
@@ -1350,10 +1397,24 @@ const renderForm = (page: FormLoadedResult): void => {
                                 loadVersion,
                                 fieldId
                             );
-                            retainInput(attempt, {
-                                fieldId,
-                            });
+                            activeUpload = attempt;
+                            retainInput(attempt, { fieldId });
                             updateRecovery();
+                            const ownsAttempt = (): boolean =>
+                                ownsUploadUI() &&
+                                current() &&
+                                activeUpload === attempt &&
+                                attempt.flight &&
+                                attempt.outcome === 'unknown' &&
+                                attempt.acknowledgment === 'none' &&
+                                attempt.operation === 'upload' &&
+                                attempt.fieldId === fieldId &&
+                                attempt.recordId === recordId &&
+                                attempt.loadVersion === loadVersion &&
+                                recovery.blocking(scope, recordId) ===
+                                    attempt &&
+                                visitor.drafts.revision(draft) ===
+                                    nativeRevision;
                             try {
                                 const attachment =
                                     await client.attachments.uploadFile(
@@ -1367,31 +1428,59 @@ const renderForm = (page: FormLoadedResult): void => {
                                         },
                                         { signal }
                                     );
-                                if (!current() || !ownsForm()) return;
-                                const existing = control.read();
-                                control.write([
-                                    ...(Array.isArray(existing)
-                                        ? existing
-                                        : []),
-                                    attachment,
-                                ]);
-                                visitor.drafts.write(
-                                    draft,
+                                if (!ownsAttempt()) {
+                                    if (ownsUploadUI() && current())
+                                        status(
+                                            'Upload outcome needs inspection; it was not added to the draft.',
+                                            true
+                                        );
+                                    return;
+                                }
+                                const snapshot = visitor.drafts.snapshot(draft);
+                                if (snapshot == null) return;
+                                const next = appendedAttachmentValues(
+                                    page,
                                     fieldId,
-                                    control.read()
+                                    snapshot.data[fieldId],
+                                    selected,
+                                    attachment
                                 );
-                                updateFieldVisibility();
-                                updateSelectAvailability();
-                                pendingFiles.clear(file, selection);
+                                // No await between the final fence and authoritative commit.
+                                if (
+                                    !ownsAttempt() ||
+                                    !visitor.drafts.write(draft, fieldId, next)
+                                )
+                                    return;
                                 recovery.accepted(attempt, 'uploaded');
-                                status(
-                                    'File uploaded. Choose Save to attach it to the record.'
-                                );
+                                // Presentation may throw; it must not turn a committed append unknown.
+                                try {
+                                    control.write(next);
+                                    updateFieldVisibility();
+                                    updateSelectAvailability();
+                                } finally {
+                                    if (ownsUploadUI())
+                                        pendingFiles.clear(file, selection);
+                                }
+                                if (ownsUploadUI())
+                                    status(
+                                        'File uploaded. Choose Save to attach it to the record.'
+                                    );
+                            } catch {
+                                if (ownsUploadUI() && current())
+                                    status(
+                                        attempt.outcome === 'uploaded'
+                                            ? 'The attachment was added to the draft; reopen the Form to refresh its presentation.'
+                                            : 'Upload outcome needs inspection; it was not added to the draft.',
+                                        true
+                                    );
                             } finally {
                                 recovery.finishFlight(attempt);
-                                if (ownsForm()) updateRecovery();
+                                if (activeUpload === attempt)
+                                    activeUpload = null;
+                                if (ownsUploadUI()) updateRecovery();
                             }
-                        }
+                        },
+                        ownsUploadUI
                     );
                 })
             );

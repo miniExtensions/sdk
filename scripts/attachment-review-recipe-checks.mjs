@@ -176,6 +176,289 @@ export function assertAttachmentReviewMatrix(review, createFormSaveInput) {
     return checks + 1;
 }
 
+const malformedReturns = [
+    null,
+    undefined,
+    [],
+    {},
+    { url: '' },
+    { url: 'x', size: NaN },
+    { url: 'x', size: -1 },
+    { url: 'x', filename: null },
+    { url: 'x', type: 1 },
+    { url: 'x', id: {} },
+];
+const refusalNames = [
+    'type',
+    'size',
+    'capacity',
+    'over-capacity',
+    'readonly',
+    'computed',
+    'mode',
+    'signature',
+    'missing-baseline',
+    'bad-baseline',
+    'malformed',
+    'hidden',
+    'blocked',
+    'review',
+    'request',
+    'empty-missing',
+    'empty-null',
+    'empty-blank',
+    'empty-array',
+];
+const responseNames = [
+    'valid',
+    'replacement',
+    'cleared',
+    'presentation-throw',
+    'write-failed',
+    'type',
+    'size',
+    'capacity',
+    'readonly',
+    'mode',
+    'baseline',
+    'config-aba',
+    'draft',
+    'draft-aba',
+    'session',
+    'session-aba',
+    'session-error',
+    'token',
+    'token-aba',
+    'token-error',
+    'parent',
+    'parent-aba',
+    'parent-error',
+    'owner',
+    'owner-aba',
+    'load',
+];
+const uploadScenarios = [
+    ...refusalNames.map((name) => `admission-${name}`),
+    ...responseNames.map((name) => `response-${name}`),
+    ...malformedReturns.map((_, index) => `return-${index}`),
+];
+
+function configureRefusal(name, page, probe, config) {
+    if (name === 'type') config.allowedAttachmentTypes = ['images'];
+    if (name === 'size') config.sizeLimit = 0.000001;
+    if (name === 'capacity') config.allowedFiles = 3;
+    if (name === 'over-capacity') config.allowedFiles = 1;
+    if (name === 'readonly') config.readOnly = true;
+    if (name === 'computed')
+        page.payload.fieldIdsToSchemas.fld_review_files.airtableField.isComputed = true;
+    if (name === 'mode') config.fieldMode = 'upload-url';
+    if (name === 'signature') config.fieldMode = 'hand-signature';
+    if (name === 'missing-baseline')
+        delete page.payload.persistedAddOnlyAttachmentValuesByFieldId;
+    if (name === 'bad-baseline')
+        page.payload.persistedAddOnlyAttachmentValuesByFieldId.fld_review_files =
+            null;
+    if (name === 'malformed') probe.write('fld_review_files', [null]);
+    if (name === 'hidden') {
+        config.conditionalFields = structuredClone(
+            page.payload.fieldIdsToSchemas.fld_review_conditional.miniExtConfig
+                .conditionalFields
+        );
+        probe.write('fld_review_show', false);
+    }
+    if (name === 'blocked')
+        config.conditionalFields = {
+            id: 'invalid',
+            conditions: [{ id: 'invalid' }],
+        };
+    if (name.startsWith('empty-')) {
+        const values = {
+            missing: undefined,
+            null: null,
+            blank: ' \t ',
+            array: [],
+        };
+        probe.write('fld_review_files', values[name.slice(6)]);
+        config.allowedAttachmentTypes = ['images'];
+    }
+}
+
+function changeResponseScope(name, page, probe, config, observations, window) {
+    if (['type', 'size', 'capacity', 'readonly', 'mode'].includes(name))
+        configureRefusal(name, page, probe, config);
+    if (name === 'baseline')
+        page.payload.persistedAddOnlyAttachmentValuesByFieldId.fld_review_files =
+            null;
+    if (name === 'draft' || name === 'draft-aba') {
+        const old = probe.snapshot().data.fld_review_title;
+        probe.write('fld_review_title', 'Changed during upload');
+        if (name === 'draft-aba') probe.write('fld_review_title', old);
+    }
+    if (name.startsWith('session')) {
+        probe.session({ loginToken: 'synthetic-replacement' });
+        observations.observeAttachmentConfigurationForTest();
+        if (name === 'session-aba') probe.session({});
+    }
+    if (name.startsWith('token')) {
+        const old = page.payload.extensionAccessToken;
+        page.payload.extensionAccessToken = 'synthetic-replacement';
+        observations.observeAttachmentConfigurationForTest();
+        if (name === 'token-aba') page.payload.extensionAccessToken = old;
+    }
+    if (name.startsWith('parent')) {
+        probe.context({
+            type: 'modal',
+            prefillData: {
+                toLinkToParent: {
+                    reversedFieldIdToPrefill: 'fld_parent',
+                    parentFormRecordId: 'rec_replacement_parent',
+                },
+                prefillQueryForChildExtension: null,
+            },
+        });
+        observations.observeAttachmentConfigurationForTest();
+        if (name === 'parent-aba') probe.context({ type: 'direct-url' });
+    }
+    if (name === 'config-aba') {
+        config.allowedFiles = 0;
+        observations.observeAttachmentConfigurationForTest();
+        delete config.allowedFiles;
+    }
+    if (name === 'owner' || name === 'owner-aba') {
+        window.document.getElementById('visitor').value = 'B';
+        window.document
+            .getElementById('visitor')
+            .dispatchEvent(new window.Event('change', { bubbles: true }));
+    }
+    if (name === 'owner-aba') {
+        window.document.getElementById('visitor').value = 'A';
+        window.document
+            .getElementById('visitor')
+            .dispatchEvent(new window.Event('change', { bubbles: true }));
+    }
+    if (name === 'load') probe.replaceLoad();
+}
+
+function assertUploadAdmissionMatrix(admit, append) {
+    const page = createReviewFixture('review-answers').page();
+    const { stored, added } = addAttachmentReviewAnswers(page);
+    const id = 'fld_review_files';
+    const value = structuredClone(page.payload.formRecord.data[id]);
+    const descriptor = { type: 'text/plain', size: 3 };
+    const before = structuredClone(page);
+    let checks = 0;
+    assert.deepEqual(admit(page, id, value, descriptor), value);
+    checks++;
+    const complete = append(page, id, value, descriptor, {
+        url: 'https://files.invalid/new',
+        filename: 'exact',
+        type: 'text/plain',
+        size: 3,
+    });
+    assert.deepEqual(complete.slice(0, 3), value);
+    checks++;
+    complete[0].thumbnails.full.url = 'mutated copy';
+    assert.deepEqual(page, before);
+    checks++;
+    for (const empty of [undefined, null, '', ' \t ', []]) {
+        assert.deepEqual(admit(page, id, empty, descriptor), []);
+        checks++;
+    }
+    for (const file of [
+        { type: 1, size: 3 },
+        { type: 'x', size: -1 },
+        { type: 'x', size: Infinity },
+        { type: 'x', size: NaN },
+        { type: 'x', size: '3' },
+    ]) {
+        assert.throws(
+            () => admit(page, id, value, file),
+            /current Form settings/
+        );
+        checks++;
+    }
+    for (const name of refusalNames.filter(
+        (name) => !['review', 'request', 'hidden', 'blocked'].includes(name)
+    )) {
+        const p = structuredClone(page);
+        let native = p.payload.formRecord.data[id];
+        configureRefusal(
+            name,
+            p,
+            {
+                write: (_, v) => {
+                    native = v;
+                },
+            },
+            p.payload.fieldIdsToSchemas[id].miniExtConfig
+        );
+        assert.throws(
+            () => admit(p, id, native, descriptor),
+            /current Form settings/,
+            name
+        );
+        checks++;
+    }
+    for (const returned of malformedReturns) {
+        assert.throws(
+            () => append(page, id, value, descriptor, returned),
+            /current Form settings/
+        );
+        checks++;
+    }
+    for (const value of [false, 1, {}, 'PRIVATE_BAD', [null], new Array(1)]) {
+        assert.throws(
+            () => admit(page, id, value, descriptor),
+            (error) =>
+                error.message ===
+                'The attachment cannot be added with the current Form settings.'
+        );
+        checks++;
+    }
+    for (const [config, file, allowed] of [
+        [
+            { allowedAttachmentTypes: ['images'] },
+            { type: ' IMAGE/PNG ; charset=utf-8 ', size: 0 },
+            true,
+        ],
+        [
+            { allowedAttachmentTypes: ['documents'] },
+            { type: 'application/pdf', size: 0 },
+            true,
+        ],
+        [
+            { allowedAttachmentTypes: ['compressedFiles'] },
+            { type: 'application/zip', size: 0 },
+            true,
+        ],
+        [{ allowedAttachmentTypes: [] }, descriptor, true],
+        [{ sizeLimit: 1 }, { type: '', size: 1048576 }, true],
+        [{ sizeLimit: 1 }, { type: '', size: 1048577 }, false],
+        [{ sizeLimit: 0 }, descriptor, true],
+        [{ sizeLimit: null }, descriptor, true],
+        [{ sizeLimit: -1 }, descriptor, false],
+        [{ sizeLimit: Infinity }, descriptor, false],
+        [{ allowedFiles: 4.9 }, descriptor, true],
+        [{ allowedFiles: 3.9 }, descriptor, false],
+        [{ allowedFiles: null }, descriptor, true],
+        [{ allowedFiles: 0 }, descriptor, false],
+        [{ allowedFiles: Infinity }, descriptor, false],
+    ]) {
+        const p = structuredClone(page);
+        Object.assign(p.payload.fieldIdsToSchemas[id].miniExtConfig, config);
+        if (allowed) assert.deepEqual(admit(p, id, value, file), value);
+        else
+            assert.throws(
+                () => admit(p, id, value, file),
+                /current Form settings/
+            );
+        checks++;
+    }
+    assert.deepEqual(page, before);
+    checks++;
+    return checks;
+}
+
 const waitFor = async (predicate) => {
     for (let i = 0; i < 100; i++) {
         if (predicate()) return;
@@ -198,6 +481,7 @@ export async function checkAttachmentReviewRecipe({
         'review.ts',
         'pendingFiles.ts',
         'attachmentPresentation.ts',
+        'attachmentUpload.ts',
     ])
         assert.deepEqual(
             readFileSync(join(consumer, 'src', name)),
@@ -212,7 +496,7 @@ export async function checkAttachmentReviewRecipe({
     const entry = join(consumer, '.generated/attachment-review-entry.ts');
     writeFileSync(
         entry,
-        "export { prepareFormReviewRows } from '../src/review.js';\nexport { createFormSaveInput } from '@miniextensions/sdk/forms';\nexport { formAttachmentControl } from '../src/attachmentPresentation.js';\n"
+        "export { prepareFormReviewRows } from '../src/review.js';\nexport { createFormSaveInput } from '@miniextensions/sdk/forms';\nexport { formAttachmentControl } from '../src/attachmentPresentation.js';\nexport { admittedAttachmentValues, appendedAttachmentValues } from '../src/attachmentUpload.js';\n"
     );
     const outfile = join(consumer, '.generated/attachment-review-recipe.mjs');
     const recipe = await build({
@@ -235,10 +519,16 @@ export async function checkAttachmentReviewRecipe({
         prepareFormReviewRows,
         createFormSaveInput,
         formAttachmentControl,
+        admittedAttachmentValues,
+        appendedAttachmentValues,
     } = await import(pathToFileURL(outfile).href);
-    const matrixChecks = assertAttachmentReviewMatrix(
+    let matrixChecks = assertAttachmentReviewMatrix(
         prepareFormReviewRows,
         createFormSaveInput
+    );
+    matrixChecks += assertUploadAdmissionMatrix(
+        admittedAttachmentValues,
+        appendedAttachmentValues
     );
     const main = join(consumer, '.generated/attachment-review-main.mjs');
     const bundle = await build({
@@ -259,9 +549,9 @@ export async function checkAttachmentReviewRecipe({
                         contents:
                             readFileSync(args.path, 'utf8').replace(
                                 '    const readFilterMetadata = (context:',
-                                '    attachmentObserveForTest = () => updateFormActivity();\n    attachmentRetainedForTest = () => recovery.unknown(scope.owner).map(a => a.retainedInput);\n    const readFilterMetadata = (context:'
+                                '    attachmentUploadProbe = { snapshot: () => visitor.drafts.snapshot(draft), revision: () => visitor.drafts.revision(draft), write: (id: string, value: AirtableValue) => visitor.drafts.write(draft, id, value), attempts: () => (recovery as unknown as {attempts: RecoveryAttempt[]}).attempts, session: (value: RuntimeSession) => formClient!.setSession(value), context: (value: SaveFormInput["context"]) => {visitor.formContext = value;}, malformedReturn: (value: unknown) => {const upload = formClient!.attachments.uploadFile; formClient!.attachments.uploadFile = async (...args) => {await upload(...args); return value as never;};}, presentationThrow: () => {controls.get("fld_review_files")!.write = () => {throw new Error("Synthetic presentation failure");};}, rejectWrite: () => {visitor.drafts.write = () => false;}, replaceLoad: () => {visitor.formLoadVersion++;}, activeRequest: () => {request = new AbortController();}, active: () => activeUpload };\n    attachmentObserveForTest = () => updateFormActivity();\n    attachmentRetainedForTest = () => recovery.unknown(scope.owner).map(a => a.retainedInput);\n    const readFilterMetadata = (context:'
                             ) +
-                            '\nlet attachmentObserveForTest: () => void;\nexport const observeAttachmentConfigurationForTest = () => attachmentObserveForTest();\nexport const attachmentPageForTest = () => visitors[activeVisitor].screen;\nlet attachmentRetainedForTest: () => unknown;\nexport const attachmentAttemptsForTest = () => attachmentRetainedForTest();\n',
+                            '\nlet attachmentUploadProbe: unknown;\nexport const uploadProbeForTest = () => attachmentUploadProbe;\nlet attachmentObserveForTest: () => void;\nexport const observeAttachmentConfigurationForTest = () => attachmentObserveForTest();\nexport const attachmentPageForTest = () => visitors[activeVisitor].screen;\nlet attachmentRetainedForTest: () => unknown;\nexport const attachmentAttemptsForTest = () => attachmentRetainedForTest();\n',
                     }));
                 },
             },
@@ -275,6 +565,7 @@ export async function checkAttachmentReviewRecipe({
     );
     const { Window } = createRequire(import.meta.url)(happyDomModulePath);
     const scenarios = [
+        ...uploadScenarios,
         'mixed',
         'pending-clear',
         'hidden-clear',
@@ -428,7 +719,12 @@ export async function checkAttachmentReviewRecipe({
                     await uploadGate;
                     if (
                         scenario === 'upload-error' ||
-                        scenario === 'recovery-reload-error'
+                        scenario === 'recovery-reload-error' ||
+                        [
+                            'response-session-error',
+                            'response-token-error',
+                            'response-parent-error',
+                        ].includes(scenario)
                     )
                         throw new Error('Synthetic upload failure');
                     return new Response('', { status: 200 });
@@ -572,6 +868,225 @@ export async function checkAttachmentReviewRecipe({
             ]);
             standalone.refresh();
             assert.equal(standalone.node.textContent, prior);
+            if (uploadScenarios.includes(scenario)) {
+                const uploadProbe = probe.uploadProbeForTest();
+                const currentPage = probe.attachmentPageForTest();
+                const config =
+                    currentPage.payload.fieldIdsToSchemas.fld_review_files
+                        .miniExtConfig;
+                const uploadButton = [
+                    ...file.parentElement.querySelectorAll('button'),
+                ].find((node) => node.textContent === 'Upload selected file');
+                assert(uploadButton);
+                const fire = () =>
+                    uploadButton.dispatchEvent(
+                        new window.Event('click', { bubbles: true })
+                    );
+                const selected = setFile();
+                const beforeState = uploadProbe.snapshot();
+                const beforeAttempts = uploadProbe.attempts().length;
+                if (scenario.startsWith('admission-')) {
+                    configureRefusal(
+                        scenario.slice('admission-'.length),
+                        currentPage,
+                        uploadProbe,
+                        config
+                    );
+                    if (scenario === 'admission-review') {
+                        clear();
+                        await open();
+                    }
+                    if (scenario === 'admission-request')
+                        uploadProbe.activeRequest();
+                    const emptyBefore = uploadProbe.snapshot();
+                    const before = calls.length;
+                    fire();
+                    await settled();
+                    assert.equal(
+                        calls.length,
+                        before,
+                        'Preflight must perform zero I/O.'
+                    );
+                    assert.equal(
+                        uploadProbe.attempts().length,
+                        beforeAttempts,
+                        'Preflight must create no uncertain attempt.'
+                    );
+                    assert.deepEqual(uploadProbe.snapshot(), emptyBefore);
+                    if (scenario !== 'admission-review')
+                        assert.equal(file.files[0], selected);
+                } else {
+                    if (scenario.startsWith('return-'))
+                        uploadProbe.malformedReturn(
+                            malformedReturns[Number(scenario.slice(7))]
+                        );
+                    fire();
+                    fire();
+                    await waitFor(() =>
+                        calls.some((call) => call.route === 'PUT')
+                    );
+                    assert.equal(uploadProbe.active().outcome, 'unknown');
+                    if (scenario === 'response-replacement')
+                        setFile('replacement.txt');
+                    if (scenario === 'response-cleared') clear();
+                    if (scenario === 'response-presentation-throw')
+                        uploadProbe.presentationThrow();
+                    if (scenario === 'response-write-failed')
+                        uploadProbe.rejectWrite();
+                    if (
+                        scenario.startsWith('response-') &&
+                        ![
+                            'response-valid',
+                            'response-replacement',
+                            'response-cleared',
+                            'response-presentation-throw',
+                            'response-write-failed',
+                        ].includes(scenario)
+                    )
+                        changeResponseScope(
+                            scenario.slice('response-'.length),
+                            currentPage,
+                            uploadProbe,
+                            config,
+                            probe,
+                            window
+                        );
+                    const beforeRelease = uploadProbe.snapshot();
+                    const uiBefore = {
+                        status: document.getElementById('status').textContent,
+                        recovery: document.querySelector(
+                            '[aria-label="Earlier request recovery"]'
+                        )?.outerHTML,
+                        busy: document
+                            .getElementById('screen')
+                            .getAttribute('aria-busy'),
+                    };
+                    releaseUpload();
+                    await settled();
+                    assert.equal(
+                        calls.filter(
+                            (call) => call.route === 'createPublicUploadLink'
+                        ).length,
+                        1
+                    );
+                    assert.equal(
+                        calls.filter((call) => call.route === 'PUT').length,
+                        1
+                    );
+                    assert.equal(saves().length, 0);
+                    const accepted = [
+                        'response-valid',
+                        'response-replacement',
+                        'response-cleared',
+                        'response-presentation-throw',
+                    ].includes(scenario);
+                    const attempt = uploadProbe.attempts().at(-1);
+                    assert.equal(
+                        attempt.outcome,
+                        accepted ? 'uploaded' : 'unknown'
+                    );
+                    assert.equal(attempt.flight, false);
+                    if (accepted) {
+                        const appended = {
+                            ...beforeState.data,
+                            fld_review_files: [
+                                ...beforeState.data.fld_review_files,
+                                {
+                                    id: null,
+                                    url: 'https://files.invalid/PRIVATE_UPLOADED',
+                                    filename: selected.name,
+                                    size: selected.size,
+                                    type: selected.type,
+                                },
+                            ],
+                        };
+                        assert.deepEqual(uploadProbe.snapshot().data, appended);
+                        assert.deepEqual(uploadProbe.snapshot().dirtyFieldIds, [
+                            'fld_review_files',
+                        ]);
+                        if (scenario === 'response-replacement')
+                            assert.equal(file.files[0].name, 'replacement.txt');
+                        else assert.equal(file.files.length, 0);
+                        if (scenario === 'response-presentation-throw')
+                            assert(
+                                document
+                                    .getElementById('status')
+                                    .textContent.includes('added to the draft')
+                            );
+                        if (scenario !== 'response-replacement') fire();
+                        await settled();
+                        assert.equal(
+                            calls.filter((call) => call.route === 'PUT').length,
+                            1,
+                            'Committed append must not replay automatically.'
+                        );
+                        if (scenario !== 'response-presentation-throw') {
+                            if (scenario === 'response-replacement') clear();
+                            const dialog = await open();
+                            scan(dialog);
+                            button('Confirm', dialog).click();
+                            await waitFor(() => saves().length === 1);
+                            assert.deepEqual(saves()[0].input.formRecord, {
+                                ...currentPage.payload.formRecord,
+                                data: appended,
+                            });
+                            assert.deepEqual(
+                                saves()[0].input.formFieldIdsWithUnsavedChanges,
+                                ['fld_review_files']
+                            );
+                        }
+                    } else {
+                        assert.deepEqual(
+                            uploadProbe.snapshot(),
+                            beforeRelease,
+                            'Unsafe response must not append.'
+                        );
+                        const beforeRetry = calls.length;
+                        fire();
+                        await settled();
+                        assert.equal(
+                            calls.length,
+                            beforeRetry,
+                            'Unknown outcomes must not replay.'
+                        );
+                        if (
+                            [
+                                'response-session',
+                                'response-session-aba',
+                                'response-session-error',
+                                'response-token',
+                                'response-token-aba',
+                                'response-token-error',
+                                'response-parent',
+                                'response-parent-aba',
+                                'response-parent-error',
+                                'response-owner',
+                                'response-owner-aba',
+                                'response-load',
+                            ].includes(scenario)
+                        ) {
+                            assert.equal(
+                                document.getElementById('status').textContent,
+                                uiBefore.status
+                            );
+                            assert.equal(
+                                document.querySelector(
+                                    '[aria-label="Earlier request recovery"]'
+                                )?.outerHTML,
+                                uiBefore.recovery
+                            );
+                            assert.equal(
+                                document
+                                    .getElementById('screen')
+                                    .getAttribute('aria-busy'),
+                                uiBefore.busy
+                            );
+                        }
+                    }
+                }
+                console.log(`Packed attachment upload: ${scenario} passed`);
+                continue;
+            }
             if (scenario === 'mixed') {
                 for (const patch of [
                     { hideAttachmentName: undefined },

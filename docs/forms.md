@@ -543,12 +543,12 @@ optional editor condition ID. They do not copy operands, record values,
 formulas or exception text. If unsupported and invalid rules coexist, the
 result is `unsupported` and retains the collected diagnostics.
 
-The supported boundary is **87 operator/type pairs**, **14 operators** and
-**12 direct physical field types**. Let T7 mean `singleLineText`, `email`,
+The supported boundary is **99 operator/type pairs**, **20 operators** and
+**14 direct physical field types**. Let T7 mean `singleLineText`, `email`,
 `url`, `multilineText`, `phoneNumber`, `barcode`, `richText`; T6 excludes
 `richText`; N4 means `number`, `percent`, `currency`, `rating`.
 
-| Operators                                                                                       | Direct types      | Pairs |
+| Scalar operators                                                                                | Direct types      | Pairs |
 | ----------------------------------------------------------------------------------------------- | ----------------- | ----: |
 | `matchesRegex`, `contains`, `doesNotContain`, `isOfLength`                                      | T7                |    28 |
 | `is`                                                                                            | T6 and `checkbox` |     7 |
@@ -559,10 +559,38 @@ The supported boundary is **87 operator/type pairs**, **14 operators** and
 Nested groups support the existing `and`/`or` AST. There is no `not` group;
 negative operators generate the canonical `NOT(...)` formula where needed.
 Every saved operator/type pair and matching current physical operator/type
-pair must be in this table. Dates, selects, links, attachments, collaborators,
+pair must be in the scalar table or select list below. Dates, links,
+attachments, collaborators,
 computed formula/lookup/rollup fields and other richer variants block the whole
 definition, including in compatibility mode. The helper does not unwrap a
 computed result type or partially compile richer rules.
+
+Direct select compilation adds exactly twelve pairs: single-select `is`, `isNot`,
+`isAnyOf`, `isNoneOf`, `isEmpty`, `isNotEmpty`; multi-select `hasAnyOf`,
+`hasAllOf`, `hasNoneOf`, `isExactly`, `isEmpty`, `isNotEmpty`.
+Single-select `matchesRegex` remains unsupported. Select operands are exact
+canonical **choice IDs**, not native answer names or display labels. Any saved
+or current select type requires exact physical-type equality; selects cannot
+be silently reinterpreted as text or as the other select family.
+
+Nonempty array operands must be dense arrays of nonempty strings. Choices must
+have unambiguous nonempty IDs and names. IDs resolve to current names, retaining
+insertion-order deduplication. Unknown single equality choices compile to
+`FALSE()`. Any/none operators retain known choices from mixed operands;
+multi-select all/exact returns `FALSE()` if any choice is unknown. All-unknown
+arrays return `FALSE()`. Equality requires one choice-ID string: arrays,
+including `[]`, are invalid in both strict and compatibility modes. Null or
+empty-string equality operands and empty array-operator operands are incomplete;
+use the dedicated emptiness operators. Native multi-select serialization, escaped regex boundaries
+and exact serialized length are preserved. Unsafe literal/regex round trips
+fail closed rather than approximating set membership or splitting commas.
+
+This compiler extension does not expand Form condition drivers, flat/section
+projection, conditional option availability or the shipped Portal editor.
+Those Form consumers inspect the original AST and keep their scalar boundary,
+including select predicates reduced to constant `FALSE()`. Richer saved Portal
+criteria must remain intact until explicit replacement or accepted server
+cleanup; partial known-choice compilation is not permission to drop AST values.
 
 Canonical scalar semantics are retained when both pairs are supported; exact
 saved/current type equality is not required. Numeric comparisons divide the

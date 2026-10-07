@@ -1,3 +1,4 @@
+import { hasSelectCondition } from './scalarConditionBoundary.js';
 import type {
     AirtableValue,
     RuntimeAirtableField,
@@ -211,6 +212,16 @@ export function evaluateFormFieldVisibility(
     );
     if (compiled.type !== 'compiled')
         return { type: 'blocked', code: compiled.type, diagnostics };
+
+    if (
+        hasSelectCondition(
+            config != null && 'conditionalFields' in config
+                ? config.conditionalFields
+                : null,
+            input.airtableFields
+        )
+    )
+        return { type: 'blocked', code: 'unsupported', diagnostics };
 
     try {
         for (const reference of extractIdentifiersFromFormula(

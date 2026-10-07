@@ -328,7 +328,7 @@ filtered-record projection.
 These helpers read the same accepted native draft but use distinct record
 contracts. Field visibility reads the complete unfiltered draft.
 `createScalarFormRecordProjection` supplies a detached conditional-record
-copy for one-page configured choices and scalar/select Review, including canonical
+copy for one-page configured choices and bounded Review, including canonical
 ordered sections with direct scalar drivers. The old flat export is unchanged.
 Every field predicate reads the complete draft before condition-hidden IDs are
 removed from the copy. Hidden native values remain in the draft and Save.

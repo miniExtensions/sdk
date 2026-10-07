@@ -37,7 +37,7 @@ Custom layouts and advanced presentation remain application-owned.
 
 The packaged starter's `src/review.ts` and existing DOM confirmation dialog
 implement the published `promptUserBeforeSubmission` setting for a bounded
-flat, one-page manual Form. This is application code shipped with the example,
+one-page manual Form with supported section conditions. This is application code shipped with the example,
 not a new SDK mutation or a general review renderer.
 
 Supported physical scalar fields are single-line/multiline text, email, URL,
@@ -47,15 +47,56 @@ order; URL text never becomes a link. Semantic field titles still name values
 when their visual titles are hidden. Nonempty single-line password values use
 the fixed `••••••••` mask, while the native password stays unchanged for Save.
 
-The installed `createFlatScalarFormRecordProjection` supplies a separate
-conditional evaluation copy. Review omits its conditionally removed IDs and
-canonically empty answers: null, whitespace strings in every supported scalar
-family, checkbox false, rating zero and blank barcode text. Nonblank values
-must still match their physical field shape. Ordinary numeric zero stays visible.
-Keep the full native snapshot and dirty IDs for `createFormSaveInput`; review is
-not a writable projection. Sections, multipage, compute and automatic submission, linked
-filters, linked/lookup/computed fields, selects, dates, rich text and other
-complex renderers fail closed for this recipe.
+Single- and multi-select answers use the complete `getSelectFieldPolicy(schema).options`
+map, matching exact native names rather than IDs, labels or current availability.
+Selected but currently ineligible choices remain visible. Configured labels and
+duplicate-label disambiguation follow that helper; unknown names keep their
+exact bytes plus ` (unavailable)`, additional starter wording rather than canonical
+presentation. Multi-select lines preserve native order and duplicate occurrences.
+
+Linked answers use detached, already accepted field-specific presentation bound
+to this loaded Form and render scope. Review never hydrates records or guesses
+labels from IDs. Missing, private, rich or ambiguous presentation stays generic;
+only complete authorized plain-scalar primary presentation can supply a label.
+Native linked membership, order and duplicates remain unchanged. Attachment
+answers use `getFormAttachmentPolicy` on the original loaded Form and complete
+native value before readonly presentation: only visible rows appear, filenames
+require explicit `hideAttachmentName: false`, and other rows use generic text.
+Hidden persisted add-only rows expose no lines or counts. Missing required
+persisted baseline or malformed nonempty answers refuse Review. Review supplies
+no attachment URLs, thumbnails, metadata, actions or uploads.
+
+The installed `createScalarFormRecordProjection` supplies a detached conditional
+evaluation copy with canonical ordered section rules, including retained titles
+whose visual header is disabled. Review omits condition-hidden IDs and canonical
+empty answers: null/missing/blank strings, checkbox false, rating zero and blank
+barcode text; empty arrays are omitted only for multi-select, linked and attachment
+answers. Nonempty values still require their supported native shapes; malformed
+scalar or single-select arrays refuse Review. Ordinary numeric zero stays visible.
+Keep the complete native snapshot and dirty IDs for `createFormSaveInput`; Review
+labels, summaries and conditional projection never become Save data. See the
+[section projection contract](forms.md#one-page-conditional-field-visibility)
+and the [starter's rich-answer boundaries](../examples/browser/README.md#form-workflow).
+
+### Review configuration compatibility checklist
+
+- Use one-page manual final Save with `promptUserBeforeSubmission`. Multipage,
+  compute and automatic submission remain unsupported.
+- Answers may be supported physical scalars, single/multi-selects, linked IDs or
+  conservative attachment summaries. Date/time, rich-text, computed/lookup and
+  other unsupported answer types remain refused, even when empty.
+- Conditions must fit the supported direct noncomputed scalar projection;
+  select/linked/attachment and computed/lookup condition drivers and active
+  linked filtering remain unsupported. Sections are supported; section plus
+  active edit-mode empty hiding still blocks presentation and Save. Rich answers
+  do not broaden edit `hideFieldIfEmpty` support.
+- Resolve pending file selections explicitly before Review. Pending selections
+  block it; Review performs no reads, uploads or mutations.
+- Capture current native data and presentation/configuration epochs. Edits,
+  observed configuration/baseline changes, accepted linked-label replacement and
+  owner/session/Form replacement invalidate held Confirm. This does not claim
+  detection of unobserved in-place configuration A→B→A.
+
 Barcode review reads the native text from the starter's existing readonly
 display; it does not add a barcode editor.
 
@@ -374,14 +415,19 @@ Record projection belongs to the caller. Supply the same accepted native
 record and metadata used by your presentation, including any required hidden
 field or linked-value projection. The helper neither reconstructs hidden
 fields nor hydrates linked records. The browser starter supplies
-`createFlatScalarFormRecordProjection` for flat one-page rules with current
-noncomputed direct scalar dependencies. It evaluates field predicates against
-the same complete accepted draft, removes condition-hidden IDs only from an
-independent evaluation copy and recomputes after accepted edits. Hidden values
-remain in the full native Save record. Sections (including retained nonblank
-titles with disabled headers), active linked filters and referenced
-linked/lookup/computed drivers remain unavailable. Native empty hiding and
-readonly display settings do not prune this conditional-record copy. Broader
+`createScalarFormRecordProjection` for one-page rules with current noncomputed
+scalar dependencies and canonical ordered sections. It evaluates every field
+predicate against the same complete accepted draft, then removes condition-hidden
+IDs only from a detached evaluation copy and recomputes after accepted edits.
+Configured choices use this projected record in a separate second phase; the
+adapter retains its configured, noncomputed scalar-driver guards. Hidden values
+remain in the complete native Save record. Active linked filtering and referenced
+linked/lookup/computed drivers remain unavailable; native empty hiding and
+readonly display do not independently prune the conditional copy. Section plus
+active edit empty hiding remains blocked. The older
+`createFlatScalarFormRecordProjection` export retains its flat contract and
+section refusals; the starter opts into the section-capable helper. See the
+[projection rules](forms.md#one-page-conditional-field-visibility); broader
 projection and presentation workflows remain application-owned.
 
 This complete browser recipe mounts one select into an empty host. The caller

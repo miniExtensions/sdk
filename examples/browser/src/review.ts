@@ -86,12 +86,6 @@ export const prepareFormReviewRows = (
         if (projection.hiddenFieldIds.includes(field.fieldId)) continue;
         const type = field.fieldType;
         const value = projection.record.fields[field.fieldId];
-        // Linked membership always requires an array; scalar/select blank rules stay intact.
-        if (
-            type === AirtableFieldType.MULTIPLE_RECORD_LINKS &&
-            !Array.isArray(value)
-        )
-            unavailable();
         // Canonical emptiness accepts whitespace before field-specific shapes.
         if (value == null || (typeof value === 'string' && value.trim() === ''))
             continue;

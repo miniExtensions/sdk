@@ -79,6 +79,11 @@ export async function checkBrowserReviewExample({
     const scenarios = [
         'answers',
         'linked-options',
+        'linked-create-missing',
+        'linked-create-null',
+        'linked-create-empty-string',
+        'linked-create-blank',
+        'linked-create-empty-array',
         'linked-stale-options',
         'linked-presentation-aba',
         'linked-detail-config',
@@ -123,6 +128,24 @@ export async function checkBrowserReviewExample({
             for (const id of linkedFixture.ids)
                 form.payload.fieldIdsToSchemas[id].miniExtConfig.readOnly =
                     false;
+        if (scenario.startsWith('linked-create-')) {
+            const empty = {
+                'linked-create-null': null,
+                'linked-create-empty-string': '',
+                'linked-create-blank': ' \t ',
+                'linked-create-empty-array': [],
+            };
+            form.payload.formRecord = {
+                type: 'create',
+                data:
+                    scenario === 'linked-create-missing'
+                        ? {}
+                        : { fld_review_link: empty[scenario] },
+            };
+            for (const id of linkedFixture.ids)
+                form.payload.fieldIdsToSchemas[id].miniExtConfig.required =
+                    false;
+        }
         if (scenario === 'empty-multi-selection')
             form.payload.formRecord.data.fld_review_multi = [];
         if (scenario === 'refused-duplicate-choice-id')
@@ -229,6 +252,41 @@ export async function checkBrowserReviewExample({
                 linkedCalls.push(JSON.parse(init.body));
                 if (scenario === 'linked-stale-options') await heldLinked;
                 return new Response(JSON.stringify(linkedFixture.options));
+            }
+            if (
+                scenario.startsWith('linked-create-') &&
+                url.searchParams.get('route') === 'saveForm'
+            ) {
+                assert.equal(init.method, 'POST');
+                assert.equal(init.credentials, 'omit');
+                assert.equal(url.origin, 'https://synthetic-sdk.invalid');
+                const native = JSON.parse(init.body);
+                assert.equal(
+                    native.extensionAccessToken,
+                    form.payload.extensionAccessToken
+                );
+                assert.deepEqual(native.formRecord, {
+                    type: 'create',
+                    data: initial,
+                });
+                assert(!Object.hasOwn(native.formRecord, 'tableId'));
+                assert(!Object.hasOwn(native.formRecord, 'recordId'));
+                delete native.miniExtStorageV4;
+                delete native.miniExtSession;
+                fixture.state.calls.push({
+                    route: 'saveForm',
+                    method: init.method,
+                    input: structuredClone(native),
+                    credentialsMode: init.credentials,
+                });
+                return new Response(
+                    JSON.stringify({
+                        type: 'error',
+                        formValidationErrors: [],
+                        formErrors: {},
+                    }),
+                    { headers: { 'Content-Type': 'application/json' } }
+                );
             }
             const response = await fixture.fetch(input, init);
             if (url.searchParams.get('route') === 'fetchExtensionForEndUser')
@@ -383,6 +441,35 @@ export async function checkBrowserReviewExample({
                         .textContent.includes('Private')
                 );
                 assert.equal(saves().length, 0);
+            } else if (scenario.startsWith('linked-create-')) {
+                let dialog = await open();
+                for (const id of linkedFixture.ids)
+                    assert.equal(
+                        dialog.querySelector(`[data-review-field-id="${id}"]`),
+                        null
+                    );
+                assert.equal(linkedCalls.length, 0);
+                button(dialog, 'Edit').click();
+                await settled();
+                assert.equal(saves().length, 0);
+                dialog = await open();
+                dialog.dispatchEvent(
+                    new window.Event('cancel', { cancelable: true })
+                );
+                await settled();
+                assert.equal(saves().length, 0);
+                dialog = await open();
+                button(dialog, 'Confirm').click();
+                await waitFor(() => saves().length === 1);
+                assert.deepEqual(saves()[0].input.formRecord, {
+                    type: 'create',
+                    data: initial,
+                });
+                assert.deepEqual(
+                    saves()[0].input.formFieldIdsWithUnsavedChanges,
+                    []
+                );
+                assert.equal(linkedCalls.length, 0);
             } else if (scenario.startsWith('linked-')) {
                 const generic = 'Selected record — details unavailable';
                 const labels = (dialog) =>
@@ -439,6 +526,32 @@ export async function checkBrowserReviewExample({
                             );
                         }
                     }
+                }
+                const expectedData = structuredClone(initial);
+                if (scenario === 'linked-options') {
+                    const searchButton = [
+                        ...document.querySelectorAll('button'),
+                    ].find((node) => node.textContent === 'Search choices');
+                    const choiceInputs = [
+                        ...searchButton.parentElement.querySelectorAll(
+                            '.choice-list input[type="checkbox"]'
+                        ),
+                    ];
+                    assert.equal(choiceInputs.length, 2);
+                    assert.equal(choiceInputs[1].checked, false);
+                    choiceInputs[1].checked = true;
+                    choiceInputs[1].dispatchEvent(
+                        new window.Event('change', { bubbles: true })
+                    );
+                    expectedData.fld_review_link = [
+                        'rec_original',
+                        'rec_missing',
+                        'rec_new',
+                    ];
+                    assert.deepEqual(
+                        JSON.parse(field('fld_review_link').value),
+                        expectedData.fld_review_link
+                    );
                 }
                 let dialog = await open();
                 const expected =
@@ -523,11 +636,11 @@ export async function checkBrowserReviewExample({
                 await waitFor(() => saves().length === 1);
                 assert.deepEqual(saves()[0].input.formRecord, {
                     ...form.payload.formRecord,
-                    data: initial,
+                    data: expectedData,
                 });
                 assert.deepEqual(
                     saves()[0].input.formFieldIdsWithUnsavedChanges,
-                    []
+                    scenario === 'linked-options' ? ['fld_review_link'] : []
                 );
                 assert.deepEqual(saves()[0].input.context, {
                     type: 'direct-url',

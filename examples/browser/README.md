@@ -179,7 +179,8 @@ label authority. Unfiltered initial selections without an accepted read remain
 A plain-text label requires complete field-specific detail policy, a unique
 configured or physical primary included in those details, unambiguous returned
 metadata and an explicitly supported plain scalar primary. Hidden, missing,
-blank, rich, URL, object or ambiguous presentation remains generic; secondary
+blank, rich (including configured attachment/button display), URL, object or
+ambiguous presentation remains generic; secondary
 fields are never used. Single-line password policy produces a fixed mask before
 reading the value. Labels are detached presentation copies, never draft values.
 This conservative fallback is narrower than canonical rich linked rendering.
@@ -189,8 +190,8 @@ and the captured detail/display configuration, in addition to the existing Form,
 draft, session and owner fences. Configuration/owner replacement retires the
 render scope, including A→B→A; a newly loaded Form must accept its own reads.
 An observed in-place policy change permanently retires old labels until reload.
-Native linked arrays must be dense arrays of nonblank IDs; empty arrays are
-omitted. Linked condition drivers, active linked filters and edit-mode
+Canonical null, missing, blank and empty-array linked answers are omitted;
+nonempty linked values must be dense arrays of nonblank IDs. Linked condition drivers, active linked filters and edit-mode
 `hideFieldIfEmpty` remain unsupported. Save still submits the complete untouched
 native snapshot and dirty IDs, including hidden and unrendered values.
 

@@ -192,9 +192,6 @@ export async function checkLinkedReviewRecipe({ consumerDirectory }) {
     assert.deepEqual(native, before.payload.formRecord.data);
     let checks = 5;
     for (const bad of [
-        null,
-        undefined,
-        '',
         'rec_original',
         {},
         [null],
@@ -221,6 +218,25 @@ export async function checkLinkedReviewRecipe({ consumerDirectory }) {
             scope.snapshot()
         ).some((row) => row.fieldId === 'fld_review_link')
     );
+    for (const empty of [null, undefined, '', ' \t ', []]) {
+        const emptyData = { ...native, fld_review_link: empty };
+        assert(
+            !review(page, emptyData, scope.snapshot()).some(
+                (row) => row.fieldId === 'fld_review_link'
+            )
+        );
+        assert.deepEqual(emptyData.fld_review_link, empty);
+        checks++;
+    }
+    const missing = { ...native };
+    delete missing.fld_review_link;
+    assert(
+        !review(page, missing, scope.snapshot()).some(
+            (row) => row.fieldId === 'fld_review_link'
+        )
+    );
+    assert(!Object.hasOwn(missing, 'fld_review_link'));
+    checks++;
     for (const change of [
         (p) =>
             delete p.payload.linkedRecordFieldIdToDetailFields.fld_review_link,
@@ -323,6 +339,56 @@ export async function checkLinkedReviewRecipe({ consumerDirectory }) {
         privateScope.snapshot().label('fld_review_masked_link', 'rec_original'),
         '••••••••'
     );
+    for (const flag of ['displayAsAttachments', 'displayAsButton']) {
+        const rich = structuredClone(before);
+        rich.payload.linkedRecordFieldIdToDetailFields.fld_review_link[0].miniExtConfig[
+            flag
+        ] = true;
+        rich.payload.linkedRecordFieldIdToDetailFields.fld_review_masked_link[1].miniExtConfig[
+            flag
+        ] = true;
+        const richScope = create(rich, () => true);
+        richScope.acceptOptions('fld_review_link', {
+            ...fixture.options,
+            records: [record],
+        });
+        richScope.acceptOptions('fld_review_masked_link', {
+            ...fixture.options,
+            records: [record],
+        });
+        assert.equal(
+            richScope.snapshot().label('fld_review_link', 'rec_original'),
+            generic
+        );
+        assert.equal(
+            richScope
+                .snapshot()
+                .label('fld_review_masked_link', 'rec_original'),
+            '••••••••',
+            'masking precedes rich-mode fallback without reading raw content'
+        );
+        checks++;
+    }
+    const duplicateLabels = create(before, () => true);
+    duplicateLabels.acceptOptions('fld_review_link', {
+        ...fixture.options,
+        records: ['rec_label_a', 'rec_label_b'].map((id) => ({
+            id,
+            fields: { fld_link_title: 'Same label' },
+        })),
+    });
+    assert.equal(
+        review(
+            before,
+            {
+                ...native,
+                fld_review_link: ['rec_label_b', 'rec_label_a', 'rec_label_b'],
+            },
+            duplicateLabels.snapshot()
+        ).find((row) => row.fieldId === 'fld_review_link').value,
+        'Same label\nSame label\nSame label'
+    );
+    checks++;
     const held = scope.snapshot();
     owner = false;
     scope.acceptOptions('fld_review_link', fixture.options);

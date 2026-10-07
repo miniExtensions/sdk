@@ -180,6 +180,12 @@ export function createLinkedReviewPresentation(
                 next.set(record.id, '••••••••');
                 continue;
             }
+            // Masking has priority; rich presentation never reads a raw URL.
+            if (
+                config.displayAsAttachments === true ||
+                config.displayAsButton === true
+            )
+                continue;
             const value = record.fields[primary.id];
             if (
                 value == null ||

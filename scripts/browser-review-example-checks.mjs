@@ -79,6 +79,7 @@ export async function checkBrowserReviewExample({
     const scenarios = [
         'answers',
         'linked-options',
+        'linked-rich-url',
         'linked-create-missing',
         'linked-create-null',
         'linked-create-empty-string',
@@ -124,10 +125,21 @@ export async function checkBrowserReviewExample({
         const form = fixture.page();
         const selectRows = addSelectReviewAnswers(form);
         const linkedFixture = addLinkedReviewAnswers(form);
-        if (['linked-options', 'linked-stale-options'].includes(scenario))
+        if (
+            [
+                'linked-options',
+                'linked-stale-options',
+                'linked-rich-url',
+            ].includes(scenario)
+        )
             for (const id of linkedFixture.ids)
                 form.payload.fieldIdsToSchemas[id].miniExtConfig.readOnly =
                     false;
+        const richURL = 'https://synthetic-sdk.invalid/PRIVATE_RICH_URL';
+        if (scenario === 'linked-rich-url') {
+            form.payload.linkedRecordFieldIdToDetailFields.fld_review_link[0].miniExtConfig.displayAsAttachments = true;
+            linkedFixture.records[0].fields.fld_link_title = richURL;
+        }
         if (scenario.startsWith('linked-create-')) {
             const empty = {
                 'linked-create-null': null,
@@ -481,7 +493,8 @@ export async function checkBrowserReviewExample({
                     );
                 if (
                     scenario === 'linked-options' ||
-                    scenario === 'linked-stale-options'
+                    scenario === 'linked-stale-options' ||
+                    scenario === 'linked-rich-url'
                 ) {
                     const searchButtons = [
                         ...document.querySelectorAll('button'),
@@ -569,13 +582,33 @@ export async function checkBrowserReviewExample({
                         : Array(3).fill(generic).join('\n'),
                     Array(3).fill(generic).join('\n'),
                 ]);
+                if (scenario === 'linked-rich-url') {
+                    assert(!dialog.textContent.includes(richURL));
+                    for (const node of [
+                        dialog,
+                        ...dialog.querySelectorAll('*'),
+                    ])
+                        for (const attribute of node.attributes)
+                            assert(
+                                !attribute.value.includes(richURL),
+                                'raw rich-display URL is absent from every Review attribute'
+                            );
+                    assert.equal(
+                        dialog.querySelector(
+                            '[data-review-field-id="fld_review_link"]'
+                        ).nextElementSibling.textContent,
+                        Array(3).fill(generic).join('\n')
+                    );
+                }
                 assert(!dialog.textContent.includes('PRIVATE'));
                 assert.equal(dialog.querySelectorAll('b,a,img').length, 0);
                 assert.equal(
                     linkedCalls.length,
                     scenario === 'linked-options'
                         ? 3
-                        : scenario === 'linked-stale-options'
+                        : ['linked-stale-options', 'linked-rich-url'].includes(
+                                scenario
+                            )
                           ? 1
                           : 0,
                     'Review performs zero linked reads'
@@ -649,7 +682,9 @@ export async function checkBrowserReviewExample({
                     linkedCalls.length,
                     scenario === 'linked-options'
                         ? 3
-                        : scenario === 'linked-stale-options'
+                        : ['linked-stale-options', 'linked-rich-url'].includes(
+                                scenario
+                            )
                           ? 1
                           : 0
                 );

@@ -44,6 +44,10 @@ before(async () => {
                         root,
                         'src/portals/index.ts'
                     ),
+                    '@miniextensions/sdk/formulas': join(
+                        root,
+                        'src/formulas/index.ts'
+                    ),
                     '@miniextensions/sdk': join(root, 'src/runtime/index.ts'),
                 },
                 bundle: true,

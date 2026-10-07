@@ -135,7 +135,7 @@ for required, readonly, computed and conditional-field validation.
 This review recipe supports a one-page manual Form with scalar section
 conditions, containing direct
 single-line/multiline text, email, URL, phone, number, currency, percent, rating,
-checkbox, barcode, single-select and multi-select fields, including readonly answers. It presents
+checkbox, barcode, single-select, multi-select and conservatively presented linked-record fields, including readonly answers. It presents
 plain text in published field order, omits canonical empty/conditionally hidden
 answers, and masks nonempty single-line passwords as `••••••••`. A visually
 hidden title retains its semantic accessible name. Numeric zero remains a
@@ -152,7 +152,7 @@ Form, configuration/context, draft handle and actual draft revision. An edit,
 including edit-away-and-back, Reload, Discard, disconnect or owner transition
 invalidates it. Returning to Edit permits fresh typing without repeating an old
 address query. Pages, compute/automatic submission, linked filters,
-linked/lookup/computed fields, dates, rich text and other complex
+lookup/computed fields, dates, rich text, attachments and other complex
 renderers remain outside this recipe; unavailable review blocks submission
 instead of presenting an incomplete preview.
 
@@ -166,6 +166,34 @@ Multi-select answers preserve order and duplicate values, one plain-text line
 per selection. Individual names are never trimmed; malformed nonempty values
 block Review with a generic diagnostic. Review labels never become Save values.
 Select condition drivers and rich edit-empty-hiding remain unsupported.
+
+Linked Review preserves every native selected ID occurrence in order, including
+duplicates. It never derives labels from IDs or option DOM text and makes no
+request. One render-owned presentation scope accepts existing selected-record
+hydration only for each field's original IDs and exact linked table; it accepts
+option records only for the requested field after the adapter's existing owner,
+search, generation and filter checks. The table-wide record cache is never a
+label authority. Unfiltered initial selections without an accepted read remain
+`Selected record — details unavailable` per occurrence.
+
+A plain-text label requires complete field-specific detail policy, a unique
+configured or physical primary included in those details, unambiguous returned
+metadata and an explicitly supported plain scalar primary. Hidden, missing,
+blank, rich (including configured attachment/button display), URL, object or
+ambiguous presentation remains generic; secondary
+fields are never used. Single-line password policy produces a fixed mask before
+reading the value. Labels are detached presentation copies, never draft values.
+This conservative fallback is narrower than canonical rich linked rendering.
+
+Accepted presentation replacement advances an epoch. Confirm checks that epoch
+and the captured detail/display configuration, in addition to the existing Form,
+draft, session and owner fences. Configuration/owner replacement retires the
+render scope, including A→B→A; a newly loaded Form must accept its own reads.
+An observed in-place policy change permanently retires old labels until reload.
+Canonical null, missing, blank and empty-array linked answers are omitted;
+nonempty linked values must be dense arrays of nonblank IDs. Linked condition drivers, active linked filters and edit-mode
+`hideFieldIfEmpty` remain unsupported. Save still submits the complete untouched
+native snapshot and dirty IDs, including hidden and unrendered values.
 
 One-page field conditions use the installed Form visibility helpers with the
 complete accepted native draft. Direct scalar drivers recompute presentation

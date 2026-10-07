@@ -39,6 +39,7 @@ const starterFiles = [
     'src/recovery.ts',
     'src/confirmation.ts',
     'src/review.ts',
+    'src/linkedReview.ts',
     'src/linkedFilters.ts',
     'src/choiceAvailability.ts',
     'src/childQueries.ts',

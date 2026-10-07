@@ -33,6 +33,7 @@ before(async () => {
             '@miniextensions/sdk/ui': entry('ui'),
             '@miniextensions/sdk/forms': entry('forms'),
             '@miniextensions/sdk/portals': entry('portals'),
+            '@miniextensions/sdk/formulas': entry('formulas'),
             '@miniextensions/sdk': entry('runtime'),
         },
         bundle: true,

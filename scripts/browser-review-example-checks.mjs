@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
+import { addSelectReviewAnswers } from './form-review-recipe-checks.mjs';
 import {
     createReviewFixture,
     createHideEmptyReviewFixture,
@@ -39,6 +40,17 @@ export async function checkBrowserReviewExample({
     happyDomModulePath,
 }) {
     const consumer = realpathSync(consumerDirectory);
+    for (const name of ['main.ts', 'review.ts'])
+        assert.deepEqual(
+            readFileSync(join(consumer, 'src', name)),
+            readFileSync(
+                join(
+                    consumer,
+                    'node_modules/@miniextensions/sdk/examples/browser/src',
+                    name
+                )
+            )
+        );
     const require = createRequire(import.meta.url);
     const { Window } = require(happyDomModulePath);
     const outfile = join(consumer, '.generated/review-main-checks.mjs');
@@ -55,6 +67,11 @@ export async function checkBrowserReviewExample({
     await assertBrowserInputs(bundled.metafile, consumer);
     assert(
         Object.keys(bundled.metafile.inputs).some((path) =>
+            path.endsWith('dist/esm/ui/selectPolicy.js')
+        )
+    );
+    assert(
+        Object.keys(bundled.metafile.inputs).some((path) =>
             path.endsWith('src/review.ts')
         )
     );
@@ -63,10 +80,28 @@ export async function checkBrowserReviewExample({
         'confirmed-draft-revision',
         'confirmed-owner-aba',
         'confirmed-reload',
+        'confirmed-select-revision',
+        'confirmed-logout',
+        'confirmed-label-config',
+        'confirmed-condition-config',
+        'writable-ineligible-selection',
+        'empty-multi-selection',
         'validation',
         'unknown-transport',
         'cancelled-held',
         'unsupported-section',
+        'refused-single-object',
+        'refused-single-array',
+        'refused-scalar-array',
+        'refused-duplicate-choice-id',
+        'refused-duplicate-choice-name',
+        'refused-malformed-choice',
+        'refused-multi-null',
+        'refused-multi-empty-name',
+        'refused-linked-empty',
+        'refused-attachment-empty',
+        'refused-select-driver',
+        'refused-select-hide-empty',
     ];
     for (const [revision, scenario] of scenarios.entries()) {
         const fixture = createReviewFixture(
@@ -77,6 +112,78 @@ export async function checkBrowserReviewExample({
                   : 'review-answers'
         );
         const form = fixture.page();
+        const selectRows = addSelectReviewAnswers(form);
+        if (scenario === 'empty-multi-selection')
+            form.payload.formRecord.data.fld_review_multi = [];
+        if (scenario === 'refused-duplicate-choice-id')
+            form.payload.fieldIdsToSchemas.fld_review_single.airtableField.config.options.choices =
+                [
+                    { id: 'duplicate', name: 'PrivateFirst' },
+                    { id: 'duplicate', name: 'PrivateSecond' },
+                ];
+        if (scenario === 'refused-duplicate-choice-name')
+            form.payload.fieldIdsToSchemas.fld_review_single.airtableField.config.options.choices =
+                [
+                    { id: 'one', name: 'PrivateDuplicate' },
+                    { id: 'two', name: 'PrivateDuplicate' },
+                ];
+        if (scenario === 'refused-malformed-choice')
+            form.payload.fieldIdsToSchemas.fld_review_single.airtableField.config.options.choices =
+                [null];
+        if (scenario === 'writable-ineligible-selection') {
+            form.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig.readOnly = false;
+            form.payload.formRecord.data.fld_review_single = 'Second';
+        }
+        if (scenario === 'refused-single-array')
+            form.payload.formRecord.data.fld_review_single = [];
+        if (scenario === 'refused-scalar-array')
+            form.payload.formRecord.data.fld_review_readonly = [];
+        if (scenario === 'refused-single-object')
+            form.payload.formRecord.data.fld_review_single = {
+                private: 'PrivateMalformedSelect',
+            };
+        if (scenario === 'refused-multi-null')
+            form.payload.formRecord.data.fld_review_multi = ['First', null];
+        if (scenario === 'refused-multi-empty-name')
+            form.payload.formRecord.data.fld_review_multi = [''];
+        if (scenario === 'refused-select-hide-empty')
+            form.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig.hideFieldIfEmpty = true;
+        if (scenario === 'refused-select-driver') {
+            const setting =
+                form.payload.fieldIdsToSchemas.fld_review_conditional
+                    .miniExtConfig.conditionalFields.conditions[0].setting;
+            setting.idOrName.id = 'fld_review_single';
+            setting.fieldType = 'singleSelect';
+            setting.value = 'First';
+        }
+        if (
+            ['refused-linked-empty', 'refused-attachment-empty'].includes(
+                scenario
+            )
+        ) {
+            const type =
+                scenario === 'refused-linked-empty'
+                    ? 'multipleRecordLinks'
+                    : 'multipleAttachments';
+            const schema = form.payload.fieldIdsToSchemas.fld_review_multi;
+            schema.fieldType = type;
+            schema.airtableField.config =
+                type === 'multipleRecordLinks'
+                    ? {
+                          type,
+                          options: {
+                              linkedTableId: 'tbl_review_child',
+                              inverseLinkFieldId: 'fld_review_parent',
+                              isReversed: false,
+                              prefersSingleRecordLink: false,
+                          },
+                      }
+                    : { type };
+            form.payload.formRecord.data.fld_review_multi = [];
+        }
+        if (scenario === 'confirmed-select-revision') {
+            form.payload.fieldIdsToSchemas.fld_review_single.miniExtConfig = {};
+        }
         if (scenario === 'unsupported-section') {
             form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.headerSectionTitle =
                 'Retained section';
@@ -121,7 +228,46 @@ export async function checkBrowserReviewExample({
         ]);
         Object.assign(globalThis, globals);
         try {
-            await import(`${pathToFileURL(outfile).href}?review=${revision}`);
+            let sourceProbe;
+            if (scenario.endsWith('-config')) {
+                // Test-only observer; normal starter execution stays unchanged
+                // for every other case. No production test hook is shipped.
+                const probeFile = join(
+                    consumer,
+                    '.generated',
+                    `review-${scenario}.mjs`
+                );
+                const probe = await build({
+                    absWorkingDir: consumer,
+                    entryPoints: [join(consumer, 'src/main.ts')],
+                    bundle: true,
+                    platform: 'browser',
+                    format: 'esm',
+                    outfile: probeFile,
+                    metafile: true,
+                    plugins: [
+                        {
+                            name: 'accepted-page-observer',
+                            setup(build) {
+                                build.onLoad(
+                                    { filter: /\/src\/main\.ts$/ },
+                                    (args) => ({
+                                        loader: 'ts',
+                                        contents:
+                                            readFileSync(args.path, 'utf8') +
+                                            '\nexport const acceptedReviewPageForTest = () => visitors[activeVisitor].screen;\n',
+                                    })
+                                );
+                            },
+                        },
+                    ],
+                });
+                await assertBrowserInputs(probe.metafile, consumer);
+                sourceProbe = await import(pathToFileURL(probeFile).href);
+            } else
+                await import(
+                    `${pathToFileURL(outfile).href}?review=${revision}`
+                );
             const document = window.document;
             const submit = () =>
                 document
@@ -173,17 +319,100 @@ export async function checkBrowserReviewExample({
                     cancelable: true,
                 })
             );
-            await waitFor(() => field('fld_review_title') !== null);
+            await waitFor(
+                () =>
+                    field('fld_review_title') !== null ||
+                    (scenario.startsWith('refused-') &&
+                        document
+                            .getElementById('status')
+                            .classList.contains('error'))
+            );
             assert.equal(saves().length, 0);
-            if (scenario === 'unsupported-section') {
-                submit();
+            if (
+                scenario === 'unsupported-section' ||
+                scenario.startsWith('refused-')
+            ) {
+                // Some malformed native shapes are rejected by existing load
+                // controls before Review can mount; retain that earlier refusal.
+                if (field('fld_review_title')) submit();
                 await settled();
                 assert.equal(document.querySelector('dialog'), null);
-                assert.match(
-                    document.getElementById('status').textContent,
-                    /unavailable|blocked/i
+                assert(
+                    document
+                        .getElementById('status')
+                        .classList.contains('error')
+                );
+                assert(
+                    !document
+                        .getElementById('status')
+                        .textContent.includes('Private')
                 );
                 assert.equal(saves().length, 0);
+            } else if (scenario === 'empty-multi-selection') {
+                const dialog = await open();
+                assert.equal(
+                    dialog.querySelector(
+                        '[data-review-field-id="fld_review_multi"]'
+                    ),
+                    null
+                );
+                button(dialog, 'Confirm').click();
+                await waitFor(() => saves().length === 1);
+                assert.deepEqual(saves()[0].input.formRecord.data, initial);
+                assert.deepEqual(
+                    saves()[0].input.formFieldIdsWithUnsavedChanges,
+                    []
+                );
+            } else if (scenario === 'writable-ineligible-selection') {
+                const select = field('fld_review_single');
+                assert.equal(select.disabled, false);
+                assert.equal(select.value, 'Second');
+                const dialog = await open();
+                const label = dialog.querySelector(
+                    '[data-review-field-id="fld_review_single"]'
+                );
+                assert.equal(
+                    label.nextElementSibling.textContent,
+                    '<i>Label</i> (Second)'
+                );
+                button(dialog, 'Confirm').click();
+                await waitFor(
+                    () =>
+                        saves().length === 1 &&
+                        document
+                            .getElementById('screen')
+                            .getAttribute('aria-busy') === 'false'
+                );
+                assert.deepEqual(saves()[0].input.formRecord.data, initial);
+                assert.deepEqual(
+                    saves()[0].input.formFieldIdsWithUnsavedChanges,
+                    []
+                );
+                select.value = 'First';
+                select.dispatchEvent(
+                    new window.Event('change', { bubbles: true })
+                );
+                assert.equal(select.value, 'First');
+                assert(
+                    ![...select.options].some(
+                        (option) => option.value === 'Second'
+                    ),
+                    'ineligible removed selection is not offered as a new choice'
+                );
+                const forbidden = document.createElement('option');
+                forbidden.value = 'Second';
+                forbidden.textContent = 'Crafted unavailable option';
+                select.append(forbidden);
+                select.value = 'Second';
+                select.dispatchEvent(
+                    new window.Event('change', { bubbles: true })
+                );
+                assert.equal(
+                    select.value,
+                    'First',
+                    'actual installed handler rejects newly selecting the restricted name'
+                );
+                assert.equal(saves().length, 1);
             } else if (scenario === 'answers') {
                 edit('fld_review_title', 'SecondExactReviewSecret');
                 edit('fld_review_conditional', 'Edited conditional answer');
@@ -201,6 +430,8 @@ export async function checkBrowserReviewExample({
                         'Plain readonly answer',
                         'Plain URL answer',
                         'Zero count',
+                        'fld_review_single',
+                        'fld_review_multi',
                     ]
                 );
                 assert.deepEqual(
@@ -212,6 +443,7 @@ export async function checkBrowserReviewExample({
                         initial.fld_review_readonly,
                         initial.fld_review_url,
                         '0',
+                        ...selectRows,
                     ]
                 );
                 assert.equal(
@@ -296,6 +528,29 @@ export async function checkBrowserReviewExample({
                                 new window.Event('change', { bubbles: true })
                             );
                     }
+                } else if (scenario === 'confirmed-select-revision') {
+                    const select =
+                        field('fld_review_single').querySelector('select') ??
+                        field('fld_review_single');
+                    for (const value of ['Second', 'First']) {
+                        select.value = value;
+                        select.dispatchEvent(
+                            new window.Event('change', { bubbles: true })
+                        );
+                    }
+                } else if (scenario === 'confirmed-logout') {
+                    document.getElementById('logout').click();
+                    await settled();
+                    assert.equal(saves().length, 0);
+                    button(document, 'Reload').click();
+                } else if (scenario.endsWith('-config')) {
+                    const config =
+                        sourceProbe.acceptedReviewPageForTest().payload
+                            .fieldIdsToSchemas.fld_review_single.miniExtConfig;
+                    if (scenario === 'confirmed-label-config')
+                        config.conditionsForOptions[0].config.name =
+                            'Updated label';
+                    else config.enableConditionalOptions = false;
                 } else button(document, 'Reload').click();
                 await settled();
                 await waitFor(() => field('fld_review_title') !== null);
@@ -305,20 +560,40 @@ export async function checkBrowserReviewExample({
                     field('fld_review_title').value,
                     initial.fld_review_title
                 );
-                if (scenario !== 'confirmed-draft-revision')
+                if (
+                    ![
+                        'confirmed-draft-revision',
+                        'confirmed-select-revision',
+                    ].includes(scenario) &&
+                    !scenario.endsWith('-config')
+                )
                     assert.notEqual(field('fld_review_title'), originalControl);
                 const fresh = await open();
+                if (scenario.endsWith('-config')) {
+                    const label = fresh.querySelector(
+                        '[data-review-field-id="fld_review_single"]'
+                    );
+                    assert.equal(
+                        label.nextElementSibling.textContent,
+                        scenario === 'confirmed-label-config'
+                            ? 'Updated label'
+                            : 'First'
+                    );
+                }
                 button(fresh, 'Confirm').click();
                 await waitFor(() => saves().length === 1);
                 assert.equal(
                     saves()[0].input.formRecord.data.fld_review_title,
                     initial.fld_review_title
                 );
+                assert.deepEqual(saves()[0].input.formRecord.data, initial);
                 assert.deepEqual(
                     saves()[0].input.formFieldIdsWithUnsavedChanges,
                     scenario === 'confirmed-draft-revision'
                         ? ['fld_review_title']
-                        : []
+                        : scenario === 'confirmed-select-revision'
+                          ? ['fld_review_single']
+                          : []
                 );
             } else if (scenario === 'validation') {
                 const dialog = await open();
@@ -423,7 +698,9 @@ export async function checkBrowserReviewExample({
             assert.equal(
                 fixture.state.calls.filter((call) => call.route !== 'saveForm')
                     .length,
-                scenario === 'confirmed-reload' ? 2 : 1
+                ['confirmed-reload', 'confirmed-logout'].includes(scenario)
+                    ? 2
+                    : 1
             );
             console.log(
                 `[packed review ${revision + 1}/${scenarios.length}] ${scenario}: passed`

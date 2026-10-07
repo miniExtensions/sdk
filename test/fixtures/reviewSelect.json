@@ -1,0 +1,153 @@
+{
+    "provenance": {
+        "revision": "58f73d575ab10baa0a10693660d8002f204368e1",
+        "tree": "b39e58ead46a311c497def57474cf5ca720542ae",
+        "sourcePath": "components/Fields/FieldRenderer/SelectField/optionPresentation.ts",
+        "sourceSHA256": "b146bb5b63ac8f2344315d4bb488320ac9fddd4fd9edf8e97cc3d4021b62301e",
+        "generator": "scripts/generate-review-select-fixtures.mjs",
+        "generatorSHA256": "9813ad358c5452eebd98ff351d28133ca3ef834412465018d4ffaf2570ad7dba"
+    },
+    "cases": [
+        {
+            "choices": [
+                { "id": "one", "name": "First" },
+                { "id": "two", "name": "Second" }
+            ],
+            "config": {},
+            "expected": [
+                {
+                    "id": "one",
+                    "canonicalName": "First",
+                    "displayName": "First"
+                },
+                {
+                    "id": "two",
+                    "canonicalName": "Second",
+                    "displayName": "Second"
+                }
+            ]
+        },
+        {
+            "choices": [
+                { "id": "one", "name": "First" },
+                { "id": "two", "name": "Second" }
+            ],
+            "config": {
+                "enableConditionalOptions": false,
+                "conditionsForOptions": [
+                    {
+                        "config": {
+                            "optionForConditions": "one",
+                            "name": "Changed"
+                        }
+                    }
+                ]
+            },
+            "expected": [
+                {
+                    "id": "one",
+                    "canonicalName": "First",
+                    "displayName": "First"
+                },
+                {
+                    "id": "two",
+                    "canonicalName": "Second",
+                    "displayName": "Second"
+                }
+            ]
+        },
+        {
+            "choices": [
+                { "id": "one", "name": "First" },
+                { "id": "two", "name": "Second" }
+            ],
+            "config": {
+                "enableConditionalOptions": true,
+                "conditionsForOptions": [
+                    {
+                        "config": {
+                            "optionForConditions": "one",
+                            "name": "  Label  "
+                        }
+                    }
+                ]
+            },
+            "expected": [
+                {
+                    "id": "one",
+                    "canonicalName": "First",
+                    "displayName": "Label"
+                },
+                {
+                    "id": "two",
+                    "canonicalName": "Second",
+                    "displayName": "Second"
+                }
+            ]
+        },
+        {
+            "choices": [
+                { "id": "one", "name": "First" },
+                { "id": "two", "name": "Second" }
+            ],
+            "config": {
+                "enableConditionalOptions": true,
+                "conditionsForOptions": [
+                    { "config": { "optionForConditions": "one", "name": "" } }
+                ]
+            },
+            "expected": [
+                {
+                    "id": "one",
+                    "canonicalName": "First",
+                    "displayName": "First"
+                },
+                {
+                    "id": "two",
+                    "canonicalName": "Second",
+                    "displayName": "Second"
+                }
+            ]
+        },
+        {
+            "choices": [
+                { "id": "one", "name": "First" },
+                { "id": "two", "name": "Second" }
+            ],
+            "config": {
+                "enableConditionalOptions": true,
+                "conditionsForOptions": [
+                    {
+                        "config": {
+                            "optionForConditions": "one",
+                            "name": "Same"
+                        }
+                    },
+                    {
+                        "config": {
+                            "optionForConditions": "two",
+                            "name": "Same"
+                        }
+                    }
+                ]
+            },
+            "expected": [
+                {
+                    "id": "one",
+                    "canonicalName": "First",
+                    "displayName": "Same (First)"
+                },
+                {
+                    "id": "two",
+                    "canonicalName": "Second",
+                    "displayName": "Same (Second)"
+                }
+            ]
+        }
+    ],
+    "unknown": {
+        "id": "unavailable:<b>Unknown</b>",
+        "canonicalName": "<b>Unknown</b>",
+        "displayName": "<b>Unknown</b>"
+    }
+}

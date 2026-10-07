@@ -135,7 +135,7 @@ for required, readonly, computed and conditional-field validation.
 This review recipe supports a one-page manual Form with scalar section
 conditions, containing direct
 single-line/multiline text, email, URL, phone, number, currency, percent, rating,
-checkbox and barcode fields, including readonly scalar answers. It presents
+checkbox, barcode, single-select and multi-select fields, including readonly answers. It presents
 plain text in published field order, omits canonical empty/conditionally hidden
 answers, and masks nonempty single-line passwords as `••••••••`. A visually
 hidden title retains its semantic accessible name. Numeric zero remains a
@@ -152,9 +152,20 @@ Form, configuration/context, draft handle and actual draft revision. An edit,
 including edit-away-and-back, Reload, Discard, disconnect or owner transition
 invalidates it. Returning to Edit permits fresh typing without repeating an old
 address query. Pages, compute/automatic submission, linked filters,
-linked/lookup/computed fields, selects, dates, rich text and other complex
+linked/lookup/computed fields, dates, rich text and other complex
 renderers remain outside this recipe; unavailable review blocks submission
 instead of presenting an incomplete preview.
+
+Select Review maps exact native choice names through the complete installed
+`getSelectFieldPolicy(schema).options`, never through current availability,
+IDs or display labels. Known selected choices remain visible when currently
+ineligible. Configured labels and duplicate-label disambiguation follow that
+helper; unknown names retain their exact bytes plus ` (unavailable)` (additional
+starter wording: canonical selected presentation returns the native name alone).
+Multi-select answers preserve order and duplicate values, one plain-text line
+per selection. Individual names are never trimmed; malformed nonempty values
+block Review with a generic diagnostic. Review labels never become Save values.
+Select condition drivers and rich edit-empty-hiding remain unsupported.
 
 One-page field conditions use the installed Form visibility helpers with the
 complete accepted native draft. Direct scalar drivers recompute presentation

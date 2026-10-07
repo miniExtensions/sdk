@@ -83,19 +83,26 @@ normalizes a skipped calendar day (such as Apia's 2011-12-30) causes a generic
 refusal. DateTime accepts exactly `YYYY-MM-DDTHH:mm:ss`, optional 1–3 fractional
 digits, and an explicit uppercase `Z` or `±HH:mm` offset (hours 00–23, minutes
 00–59). Real calendar dates and hours 00–23/minutes/seconds 00–59 are required.
-Naive, week/ordinal, space-separated and 24:00 values are refused. Native bytes
-are never normalized for Save.
+Naive, week/ordinal, space-separated, 24:00 and explicit unknown-offset `-00:00`
+values are refused. The `-00:00` refusal is this recipe's conservative admission
+rule: RFC3339
+[section 4.3](https://www.rfc-editor.org/rfc/rfc3339#section-4.3) defines a known
+UTC instant with an unknown local offset; it is not a wrong-instant finding.
+Native bytes are never normalized for Save.
 
 The loaded physical settings must contain exact canonical name/token pairs:
 `local/l`, `friendly/LL`, `us/M/D/YYYY`, `european/D/M/YYYY`, `iso/YYYY-MM-DD`;
 time is `12hour/h:mma` or `24hour/HH:mm`. Formatting reuses the installed SDK's
 canonical readonly formatter, with its English locale and timezone data.
-Unknown zones are refused rather than falling back. `client` is captured before
+Unknown zones are refused rather than falling back. The runtime Intl timezone
+is captured exactly (never approximated); a zone absent from the installed
+formatter data, such as America/Coyhaique in this pinned version, is refused.
+`client` is captured before
 formatting on a detached configuration; only displayed, nonempty client-zone
 DateTime rows require the same client zone at Confirm. Hidden/empty, date-only
 and fixed-zone answers do not acquire that dependency. The date editor, date
-condition drivers and edit-empty support are unchanged. Unexpected masking or
-rich-display flags on date settings cause generic refusal, not a raw fallback.
+condition drivers and edit-empty support are unchanged. Active or malformed masking/rich-display flags on date settings cause generic
+refusal, not a raw fallback.
 
 ### Review configuration compatibility checklist
 

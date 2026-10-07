@@ -103,7 +103,8 @@ export function assertDateReviewMatrix(prepareFormReviewRows) {
                     '2026-01-01T00:00:60Z',
                     '2026-01-01T00:00:00+24:00',
                     '2026-01-01T00:00:00+01:60',
-                    '2026-01-01T00:00:00.1234Z'
+                    '2026-01-01T00:00:00.1234Z',
+                    '2026-01-01T00:00:00-00:00'
                 );
             else invalid.push('2026-01-01T00:00:00Z');
             for (const value of invalid) {
@@ -134,16 +135,27 @@ export function assertDateReviewMatrix(prepareFormReviewRows) {
                 'obscurePassword',
                 'displayAsAttachments',
                 'displayAsButton',
+                'renderFormulaAsHTML',
             ]) {
-                page.payload.fieldIdsToSchemas[id].miniExtConfig[flag] = true;
-                assert.throws(() =>
-                    prepareFormReviewRows(page, { [id]: good })
-                );
+                for (const value of [true, 'true', 1, null, [], {}]) {
+                    page.payload.fieldIdsToSchemas[id].miniExtConfig[flag] =
+                        value;
+                    assert.throws(
+                        () => prepareFormReviewRows(page, { [id]: good }),
+                        /Review is unavailable/
+                    );
+                    checks++;
+                }
                 delete page.payload.fieldIdsToSchemas[id].miniExtConfig[flag];
-                checks++;
             }
             if (id.endsWith('datetime')) {
-                for (const zone of [null, 'Not/AZone', '', 'client']) {
+                for (const zone of [
+                    null,
+                    'Not/AZone',
+                    'America/Coyhaique',
+                    '',
+                    'client',
+                ]) {
                     page.payload.fieldIdsToSchemas[
                         id
                     ].airtableField.config.options.timeZone = zone;

@@ -39,9 +39,15 @@ function unavailable(): never {
 
 /** Browser-local presentation only; never used to normalize native Save data. */
 export type PreparedDateContext = Readonly<{ clientTimeZone: string }>;
-export const captureReviewDateContext = (): PreparedDateContext => ({
-    clientTimeZone: moment.tz.guess(true),
-});
+export const captureReviewDateContext = (): PreparedDateContext => {
+    try {
+        return {
+            clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        };
+    } catch {
+        unavailable();
+    }
+};
 const dateFormats = new Map([
     ['local', 'l'],
     ['friendly', 'LL'],
@@ -75,14 +81,23 @@ const formatDateAnswer = (
     const config = field.schema.airtableField.config;
     if (config.type !== 'date' && config.type !== 'dateTime') unavailable();
     const privacy = field.schema.miniExtConfig;
-    if (
-        privacy != null &&
-        (('obscurePassword' in privacy && privacy.obscurePassword === true) ||
-            ('displayAsAttachments' in privacy &&
-                privacy.displayAsAttachments === true) ||
-            ('displayAsButton' in privacy && privacy.displayAsButton === true))
-    )
-        unavailable();
+    if (privacy != null) {
+        if (typeof privacy !== 'object' || Array.isArray(privacy))
+            unavailable();
+        for (const flag of [
+            'obscurePassword',
+            'displayAsAttachments',
+            'displayAsButton',
+            'renderFormulaAsHTML',
+        ]) {
+            if (flag in privacy) {
+                const value = (privacy as Record<string, unknown>)[flag];
+                // Omitted/optional undefined and explicit false are safe;
+                // active or malformed presentation policy never reveals dates.
+                if (value !== undefined && value !== false) unavailable();
+            }
+        }
+    }
     if (!isPair(config.options?.dateFormat, dateFormats)) unavailable();
     // Validate the calendar independently of local civil-time normalization.
     const calendar = value.slice(0, 10);
@@ -107,6 +122,7 @@ const formatDateAnswer = (
             );
         if (
             match == null ||
+            match[6] === '-00:00' ||
             Number(match[2]) > 23 ||
             Number(match[3]) > 59 ||
             Number(match[4]) > 59 ||

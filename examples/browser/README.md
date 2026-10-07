@@ -363,7 +363,7 @@ is reused by this starter. **Apply sort** preserves owned filters/search and
 retires records, paging and child actions until explicit **Load records**.
 **Use configured order** sends `[]`; richer saved sorts require explicit
 replacement. Eligible fields use accepted visible metadata/effective primary,
-not hidden sort-only fields or guessed schemas. The single direct scalar filter
+not hidden sort-only fields or guessed schemas. The single direct scalar/select filter
 recipe below shares the same owned criteria lifecycle; richer filtering remains
 outside this editor.
 Only records in its accepted main list can open an edit child. Nested labels
@@ -520,11 +520,17 @@ permissions and all record, field and action checks.
 
 The starter reuses the shipped typed `src/portalFilter.ts` recipe alongside
 `src/portalSort.ts`; both own one accepted criteria epoch and retire together.
-See [the scalar filter boundary](../../docs/portals.md#one-direct-scalar-filter-recipe)
+See [the scalar/select filter boundary](../../docs/portals.md#one-direct-scalar-filter-recipe)
 for exact configuration presence, projection, compiler and replacement rules.
 Apply never reads automatically. Richer criteria remain untouched until explicit
 replacement; cleanup still requires a current explicit confirmation. This slice
-does not edit selects, relations, computed fields or nested condition groups.
+supports single- and multi-select conditions with exact choice IDs and plain
+canonical names, plus scalar answers. It does not edit dates, relations, computed
+fields or nested condition groups. Visible supported fields and configured
+dropdown select fields form a union; hiding quick dropdowns does not change
+condition eligibility. Unknown saved choices preserve the complete original AST
+until explicit replacement or accepted cleanup. The native labeled select
+controls have synthetic DOM coverage; no browser keyboard proof is claimed.
 
 Prepared Review also admits bounded date and dateTime native strings. See the
 [date grammar, format and timezone limits](../../docs/ui.md#prepared-form-review-in-the-browser-starter).

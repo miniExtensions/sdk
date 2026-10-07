@@ -16,7 +16,23 @@ export type PortalFilterEditor =
     | { type: 'unavailable'; diagnostic: string };
 const object = (v: unknown): v is Record<string, unknown> =>
     v != null && typeof v === 'object' && !Array.isArray(v);
-const operators = [
+// Tag values and own object entries so absence never equals an own undefined key.
+const policyEncoding = (value: unknown): unknown => {
+    if (value === undefined) return ['undefined'];
+    if (value === null) return ['null'];
+    if (Array.isArray(value))
+        return ['array', Array.from(value, policyEncoding)];
+    if (object(value))
+        return [
+            'object',
+            Object.entries(value).map(([key, entry]) => [
+                key,
+                policyEncoding(entry),
+            ]),
+        ];
+    return [typeof value, value];
+};
+const textOperators = [
     'is',
     'isNot',
     'contains',
@@ -25,13 +41,56 @@ const operators = [
     'isOfLength',
     'isEmpty',
     'isNotEmpty',
+] as const;
+const numericOperators = [
     'equals',
     'notEquals',
     'greaterThan',
     'lessThan',
     'greaterThanOrEqualsTo',
     'lessThanOrEqualsTo',
+    'isEmpty',
+    'isNotEmpty',
 ] as const;
+const singleOperators = [
+    'is',
+    'isNot',
+    'isAnyOf',
+    'isNoneOf',
+    'isEmpty',
+    'isNotEmpty',
+] as const;
+const multiOperators = [
+    'hasAnyOf',
+    'hasAllOf',
+    'hasNoneOf',
+    'isExactly',
+    'isEmpty',
+    'isNotEmpty',
+] as const;
+const selectType = (type: string) =>
+    type === 'singleSelect' || type === 'multipleSelects';
+// Explicit direct-type capabilities; final proposals still use the strict compiler.
+const capabilities = (type: string): readonly string[] => {
+    if (type === 'singleSelect') return singleOperators;
+    if (type === 'multipleSelects') return multiOperators;
+    if (numeric(type)) return numericOperators;
+    if (type === 'checkbox') return ['is'];
+    if (
+        [
+            'singleLineText',
+            'email',
+            'url',
+            'multilineText',
+            'phoneNumber',
+            'barcode',
+        ].includes(type)
+    )
+        return textOperators;
+    if (type === 'richText')
+        return textOperators.filter((op) => op !== 'is' && op !== 'isNot');
+    return [];
+};
 const numeric = (type: string) =>
     ['number', 'percent', 'currency', 'rating'].includes(type);
 const emptyOperator = (operator: string) =>
@@ -106,6 +165,36 @@ export function mountPortalScalarFilterEditor(options: {
                 return unavailable(
                     'Returned filter fields are malformed or ambiguous.'
                 );
+            if (selectType(f.config.type)) {
+                const choices: unknown =
+                    'options' in f.config &&
+                    object(f.config.options) &&
+                    'choices' in f.config.options
+                        ? f.config.options.choices
+                        : null;
+                if (!Array.isArray(choices))
+                    return unavailable(
+                        'Returned filter choices are malformed.'
+                    );
+                const choiceIds = new Set<string>(),
+                    choiceNames = new Set<string>();
+                for (const choice of Array.from(choices)) {
+                    if (
+                        !object(choice) ||
+                        typeof choice.id !== 'string' ||
+                        !choice.id ||
+                        typeof choice.name !== 'string' ||
+                        !choice.name ||
+                        choiceIds.has(choice.id) ||
+                        choiceNames.has(choice.name)
+                    )
+                        return unavailable(
+                            'Returned filter choices are malformed or ambiguous.'
+                        );
+                    choiceIds.add(choice.id);
+                    choiceNames.add(choice.name);
+                }
+            }
             ids.add(f.id);
         }
         // Missing and explicitly empty projections have different primary eligibility.
@@ -116,12 +205,10 @@ export function mountPortalScalarFilterEditor(options: {
         if (!object(map))
             return unavailable('Filter presentation metadata is unavailable.');
         const projection = map[options.portalFieldId];
-        if (projection == null)
-            return unavailable('This view has no accepted filter projection.');
-        if (!Array.isArray(projection))
+        if (projection != null && !Array.isArray(projection))
             return unavailable('Filter projection is malformed.');
         const visible = new Set<string>();
-        for (const d of projection) {
+        for (const d of projection ?? []) {
             if (
                 !object(d) ||
                 typeof d.fieldId !== 'string' ||
@@ -146,7 +233,34 @@ export function mountPortalScalarFilterEditor(options: {
             return unavailable(
                 'The configured filter primary is not returned.'
             );
-        if (primary) visible.add(primary.id);
+        if (primary && projection != null) visible.add(primary.id);
+        const dropdown = config.dropdownFiltersFields;
+        if (
+            dropdown != null &&
+            (!Array.isArray(dropdown) ||
+                Array.from(dropdown).some(
+                    (id) => typeof id !== 'string' || !id
+                ))
+        )
+            return unavailable('Filter field restrictions are malformed.');
+        const dropdownIds = new Set(
+            dropdown == null
+                ? fields
+                      .filter((f) => selectType(f.config.type))
+                      .map((f) => f.id)
+                : dropdown
+        );
+        const choicesFor = (
+            f: (typeof fields)[number]
+        ): { id: string; name: string }[] => {
+            if (
+                !selectType(f.config.type) ||
+                !object(f.config.options) ||
+                !('choices' in f.config.options)
+            )
+                return [];
+            return f.config.options.choices as { id: string; name: string }[];
+        };
         const make = (
             fieldId: string,
             fieldType: string,
@@ -180,33 +294,23 @@ export function mountPortalScalarFilterEditor(options: {
                 result.type === 'compiled' && result.diagnostics.length === 0
             );
         };
-        const allowedOperators = (field: (typeof fields)[number]) =>
-            operators.filter((op) =>
-                valid(
-                    make(
-                        field.id,
-                        field.config.type,
-                        op,
-                        op === 'isOfLength' || numeric(field.config.type)
-                            ? 1
-                            : field.config.type === 'checkbox'
-                              ? false
-                              : 'probe'
-                    )
-                )
-            );
+        const allowedOperators = (f: (typeof fields)[number]) =>
+            selectType(f.config.type) && choicesFor(f).length === 0
+                ? ['isEmpty', 'isNotEmpty']
+                : capabilities(f.config.type);
         const candidates = fields.filter(
             (f) =>
-                visible.has(f.id) &&
+                (visible.has(f.id) ||
+                    (selectType(f.config.type) && dropdownIds.has(f.id))) &&
                 f.isComputed !== true &&
                 allowedOperators(f).length > 0
         );
         if (!candidates.length)
             return unavailable(
-                'No returned direct scalar fields are available for filtering.'
+                'No returned supported condition fields are available for filtering.'
             );
         const node = element('section');
-        node.setAttribute('aria-label', 'Portal scalar filtering');
+        node.setAttribute('aria-label', 'Portal condition filtering');
         const field = element('select');
         for (const f of candidates)
             field.append(new Option(`${f.name} (${f.id})`, f.id));
@@ -215,15 +319,48 @@ export function mountPortalScalarFilterEditor(options: {
         value.type = 'text';
         const bool = element('select');
         bool.append(new Option('False', 'false'), new Option('True', 'true'));
+        const choices = element('select');
+        const choicesRow = labeled('Filter choices', choices);
         const valueRow = labeled('Filter value', value);
         const boolRow = labeled('Checkbox value', bool);
         const message = element('p', '', 'hint');
         message.setAttribute('role', 'status');
         let retired = false;
+        const policyKey = () =>
+            JSON.stringify(
+                policyEncoding({
+                    schema: options.portal.payload.fieldIdsToSchemas[
+                        options.portalFieldId
+                    ],
+                    fields: options.snapshot.tableIdsToLinkedTableStates[
+                        link.options.linkedTableId
+                    ]?.airtableFields,
+                    map:
+                        options.snapshot.customViewDetailFields === null
+                            ? options.portal.payload
+                                  .linkedRecordFieldIdToDetailFields
+                            : options.snapshot.customViewDetailFields,
+                    criteria: options.criteria,
+                })
+            );
+        const acceptedPolicyKey = policyKey();
         const current = () => {
             if (retired || !node.isConnected) return false;
-            const yes = options.isCurrent();
-            return yes && !retired && node.isConnected;
+            try {
+                if (policyKey() !== acceptedPolicyKey) {
+                    destroy();
+                    return false;
+                }
+                const yes = options.isCurrent();
+                if (policyKey() !== acceptedPolicyKey) {
+                    destroy();
+                    return false;
+                }
+                return yes && !retired && node.isConnected;
+            } catch {
+                destroy();
+                return false;
+            }
         };
         const selected = () => candidates.find((f) => f.id === field.value);
         const renderValue = () => {
@@ -231,14 +368,22 @@ export function mountPortalScalarFilterEditor(options: {
             value.hidden =
                 !f ||
                 emptyOperator(operator.value) ||
-                f.config.type === 'checkbox';
+                f.config.type === 'checkbox' ||
+                selectType(f.config.type);
             bool.hidden =
                 !f ||
                 emptyOperator(operator.value) ||
                 f.config.type !== 'checkbox';
+            choices.hidden =
+                !f ||
+                emptyOperator(operator.value) ||
+                !selectType(f.config.type);
+            choices.multiple =
+                operator.value !== 'is' && operator.value !== 'isNot';
             for (const [row, control] of [
                 [valueRow, value],
                 [boolRow, bool],
+                [choicesRow, choices],
             ] as const) {
                 row.hidden = control.hidden;
                 // The shipped stylesheet gives labels display:grid, overriding
@@ -248,10 +393,15 @@ export function mountPortalScalarFilterEditor(options: {
         };
         const renderOperators = () => {
             operator.replaceChildren();
+            choices.replaceChildren();
             const f = selected();
-            if (f)
+            if (f) {
+                choices.append(new Option('Choose a choice', ''));
+                for (const option of choicesFor(f))
+                    choices.append(new Option(option.name, option.id));
                 for (const op of allowedOperators(f))
                     operator.append(new Option(op, op));
+            }
             renderValue();
         };
         renderOperators();
@@ -290,27 +440,46 @@ export function mountPortalScalarFilterEditor(options: {
                           f.config.type === setting.fieldType
                   )
                 : null;
+        const unresolvedChoice =
+            resolved != null &&
+            setting != null &&
+            selectType(resolved.config.type) &&
+            !emptyOperator(String(setting.type)) &&
+            !Array.from(
+                Array.isArray(setting.value) ? setting.value : [setting.value]
+            ).every((id) =>
+                choicesFor(resolved).some((choice) => choice.id === id)
+            );
         const simple =
-            existing == null || (resolved != null && valid(existing));
+            existing == null ||
+            (resolved != null && !unresolvedChoice && valid(existing));
         let replace = simple;
         const identity = resolved && leaf ? leaf.id : 'portal_scalar_filter';
         if (resolved && setting) {
             field.value = resolved.id;
             renderOperators();
             operator.value = String(setting.type);
+            renderValue();
             value.value =
                 typeof setting.value === 'string' ||
                 typeof setting.value === 'number'
                     ? String(setting.value)
                     : '';
             bool.value = setting.value === true ? 'true' : 'false';
+            const ids = Array.isArray(setting.value)
+                ? setting.value
+                : [setting.value];
+            for (const option of Array.from(choices.options))
+                option.selected = ids.includes(option.value);
             renderValue();
         }
         if (!simple)
             node.append(
                 element(
                     'p',
-                    'Richer or unresolved existing filters are preserved. Choose Replace existing filters before applying or clearing.'
+                    unresolvedChoice
+                        ? 'Some saved choices are unavailable. The entire original filter is preserved. Choose Replace existing filters before applying or clearing.'
+                        : 'Richer or unresolved existing filters are preserved. Choose Replace existing filters before applying or clearing.'
                 )
             );
         const replacement = button('Replace existing filters', () => {
@@ -340,16 +509,29 @@ export function mountPortalScalarFilterEditor(options: {
         const apply = button('Apply filter', () => {
             if (!current() || !replace) return;
             const f = selected();
-            if (
-                !f ||
-                !allowedOperators(f).includes(
-                    operator.value as (typeof operators)[number]
-                )
-            )
-                return;
+            if (!f || !allowedOperators(f).includes(operator.value)) return;
             let operand: unknown;
             if (emptyOperator(operator.value)) operand = undefined;
-            else if (
+            else if (selectType(f.config.type)) {
+                const ids = Array.from(choices.selectedOptions)
+                    .map((option) => option.value)
+                    .filter((id) => id !== '');
+                if (
+                    !ids.length ||
+                    ids.some(
+                        (id) =>
+                            !choicesFor(f).some((choice) => choice.id === id)
+                    )
+                ) {
+                    message.textContent =
+                        'Choose a current choice before applying.';
+                    return;
+                }
+                operand =
+                    operator.value === 'is' || operator.value === 'isNot'
+                        ? ids[0]
+                        : ids;
+            } else if (
                 numeric(f.config.type) ||
                 operator.value === 'isOfLength'
             ) {
@@ -391,6 +573,7 @@ export function mountPortalScalarFilterEditor(options: {
             labeled('Filter operator', operator),
             valueRow,
             boolRow,
+            choicesRow,
             message,
             apply,
             clear

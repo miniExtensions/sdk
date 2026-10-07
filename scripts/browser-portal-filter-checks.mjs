@@ -23,16 +23,17 @@ const criteria = () => ({
     supportsEndUserFilterCleanup: true,
 });
 const controls = (root) => {
-    const n = root.matches?.('[aria-label="Portal scalar filtering"]')
+    const n = root.matches?.('[aria-label="Portal condition filtering"]')
         ? root
-        : root.querySelector('[aria-label="Portal scalar filtering"]');
+        : root.querySelector('[aria-label="Portal condition filtering"]');
     assert(n);
-    const [field, operator, bool] = n.querySelectorAll('select');
+    const [field, operator, bool, choices] = n.querySelectorAll('select');
     return {
         node: n,
         field,
         operator,
         bool,
+        choices,
         value: n.querySelector('input'),
         apply: button(n, 'Apply filter'),
         clear: button(n, 'Clear filter'),
@@ -118,6 +119,492 @@ export async function checkPortalFilterCases({
             env.window.document.getElementById('screen').append(editor.node);
         return { ...env, editor, changes };
     };
+    const selectFields = () =>
+        ['singleSelect', 'multipleSelects'].map((type, i) => ({
+            id: `fld_choice_${i}`,
+            name: 'Same field label',
+            isComputed: false,
+            config: {
+                type,
+                options: {
+                    choices: [
+                        { id: 'sel_a', name: '<b>Alpha</b>' },
+                        { id: 'sel_b', name: 'Beta, "quoted"' },
+                    ],
+                },
+            },
+        }));
+    const selectSnapshot = () => {
+        const s = snapshot();
+        s.tableIdsToLinkedTableStates.tbl_children.airtableFields.push(
+            ...selectFields()
+        );
+        return s;
+    };
+    const choose = (w, ui, id, op, ids = []) => {
+        ui.field.value = id;
+        change(w, ui.field);
+        ui.operator.value = op;
+        change(w, ui.operator);
+        for (const o of ui.choices.options) o.selected = ids.includes(o.value);
+        change(w, ui.choices);
+    };
+    await check(
+        'installed select editor executes all12 exact-ID typed operators without automatic requests',
+        async () => {
+            for (const [type, id, ops] of [
+                [
+                    'singleSelect',
+                    'fld_choice_0',
+                    [
+                        'is',
+                        'isNot',
+                        'isAnyOf',
+                        'isNoneOf',
+                        'isEmpty',
+                        'isNotEmpty',
+                    ],
+                ],
+                [
+                    'multipleSelects',
+                    'fld_choice_1',
+                    [
+                        'hasAnyOf',
+                        'hasAllOf',
+                        'hasNoneOf',
+                        'isExactly',
+                        'isEmpty',
+                        'isNotEmpty',
+                    ],
+                ],
+            ])
+                for (const op of ops) {
+                    const c = criteria(),
+                        before = structuredClone(c);
+                    const h = await standalone(undefined, selectSnapshot(), c);
+                    assert.equal(h.editor.type, 'ready');
+                    const ui = controls(h.editor.node);
+                    const ids = ['is', 'isNot'].includes(op)
+                        ? ['sel_b']
+                        : ['sel_a', 'sel_b'];
+                    choose(h.window, ui, id, op, ids);
+                    assert.equal(h.changes.length, 0);
+                    assert.equal(
+                        ui.choices.closest('label').hidden,
+                        ['isEmpty', 'isNotEmpty'].includes(op)
+                    );
+                    assert.equal(
+                        ui.choices.closest('label').firstChild.textContent,
+                        'Filter choices'
+                    );
+                    assert.equal(
+                        ui.choices.options[1].textContent,
+                        '<b>Alpha</b>'
+                    );
+                    assert.equal(ui.node.querySelector('b'), null);
+                    ui.apply.click();
+                    assert.equal(h.changes.length, 1, op);
+                    const expected = condition(
+                        id,
+                        type,
+                        op,
+                        ['is', 'isNot'].includes(op) ? 'sel_b' : ids
+                    );
+                    expected.conditions[0].id = 'portal_scalar_filter';
+                    if (['isEmpty', 'isNotEmpty'].includes(op))
+                        delete expected.conditions[0].setting.value;
+                    assert.deepEqual(h.changes[0], {
+                        ...before,
+                        filtersByEndUser: expected,
+                    });
+                    assert.deepEqual(c, before);
+                    const compiled = compiler.compileRuntimeConditions({
+                        conditions: expected,
+                        airtableFields: selectFields(),
+                        invalidConditionMode: 'strict',
+                        fieldReferenceMode: 'saved',
+                    });
+                    assert.equal(compiled.type, 'compiled');
+                    assert.deepEqual(compiled.diagnostics, []);
+                    await h.close();
+                }
+        }
+    );
+    await check(
+        'select eligibility is visible UNION dropdown, independent of Form policy and quick dropdown visibility',
+        async () => {
+            for (const [dropdown, visible, expected] of [
+                [null, [], ['fld_choice_0', 'fld_choice_1']],
+                [undefined, [], ['fld_choice_0', 'fld_choice_1']],
+                [[], ['fld_choice_0'], ['fld_choice_0']],
+                [
+                    ['fld_choice_1'],
+                    ['fld_choice_0'],
+                    ['fld_choice_0', 'fld_choice_1'],
+                ],
+                [['fld_deleted'], ['fld_choice_0'], ['fld_choice_0']],
+            ]) {
+                const p = editablePortal(),
+                    s = selectSnapshot(),
+                    root =
+                        p.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
+                root.dropdownFiltersFields = dropdown;
+                root.hideDropdownFilters = true;
+                root.readOnly = true;
+                root.limitLinkedRecordsToAvailableOptions = true;
+                p.payload.linkedRecordFieldIdToDetailFields.fld_children =
+                    visible.map((fieldId) => ({ fieldId, isHidden: false }));
+                const h = await standalone(p, s);
+                assert.equal(h.editor.type, 'ready');
+                assert.deepEqual(
+                    [...controls(h.editor.node).field.options]
+                        .map((o) => o.value)
+                        .filter((id) => id.startsWith('fld_choice')),
+                    expected
+                );
+                await h.close();
+            }
+            for (const custom of [false, true]) {
+                const p = editablePortal(),
+                    s = selectSnapshot(),
+                    root =
+                        p.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
+                root.dropdownFiltersFields = [];
+                root.hideDropdownFilters = true;
+                root.customViews[0].config = custom
+                    ? {
+                          viewBehavior: 'custom',
+                          disableFilteringOnExtension: false,
+                      }
+                    : undefined;
+                const h = await standalone(p, s);
+                assert.equal(h.editor.type, 'ready');
+                assert.deepEqual(
+                    [...controls(h.editor.node).field.options]
+                        .map((o) => o.value)
+                        .filter((id) => id.startsWith('fld_choice')),
+                    custom ? ['fld_choice_0', 'fld_choice_1'] : []
+                );
+                await h.close();
+            }
+            const p = editablePortal(),
+                s = selectSnapshot();
+            s.customViewDetailFields = {};
+            const h = await standalone(p, s);
+            assert.equal(h.editor.type, 'ready');
+            assert.deepEqual(
+                [...controls(h.editor.node).field.options].map((o) => o.value),
+                ['fld_choice_0', 'fld_choice_1']
+            );
+            await h.close();
+        }
+    );
+    await check(
+        'zero choices retain emptiness capabilities and ambiguous choices fail closed',
+        async () => {
+            for (const mode of [
+                'empty',
+                'duplicate-id',
+                'duplicate-name',
+                'null',
+                'sparse',
+            ]) {
+                const s = selectSnapshot(),
+                    fields =
+                        s.tableIdsToLinkedTableStates.tbl_children
+                            .airtableFields;
+                const list = fields.find((f) => f.id === 'fld_choice_0').config
+                    .options.choices;
+                if (mode === 'empty') list.length = 0;
+                if (mode === 'duplicate-id') list[1].id = list[0].id;
+                if (mode === 'duplicate-name') list[1].name = list[0].name;
+                if (mode === 'null') list[1] = null;
+                if (mode === 'sparse') delete list[1];
+                const h = await standalone(undefined, s);
+                if (mode === 'empty') {
+                    assert.equal(h.editor.type, 'ready');
+                    const ui = controls(h.editor.node);
+                    choose(h.window, ui, 'fld_choice_0', 'isEmpty');
+                    assert.deepEqual(
+                        [...ui.operator.options].map((o) => o.value),
+                        ['isEmpty', 'isNotEmpty']
+                    );
+                    ui.apply.click();
+                    assert.equal(h.changes.length, 1);
+                } else {
+                    assert.equal(h.editor.type, 'unavailable');
+                    assert.equal(h.changes.length, 0);
+                }
+                await h.close();
+            }
+        }
+    );
+    await check(
+        'unknown and partially unknown saved operands preserve whole AST until explicit replacement; known arrays restore every ID',
+        async () => {
+            for (const [type, op, value] of [
+                ['singleSelect', 'is', 'sel_deleted'],
+                ['singleSelect', 'isAnyOf', ['sel_a', 'sel_deleted']],
+                ['singleSelect', 'isNoneOf', ['sel_a', 'sel_deleted']],
+                ['multipleSelects', 'hasAnyOf', ['sel_a', 'sel_deleted']],
+                ['multipleSelects', 'hasAllOf', ['sel_a', 'sel_deleted']],
+                ['multipleSelects', 'hasNoneOf', ['sel_a', 'sel_deleted']],
+                ['multipleSelects', 'isExactly', ['sel_a', 'sel_deleted']],
+            ]) {
+                const c = criteria();
+                c.filtersByEndUser = condition(
+                    type === 'singleSelect' ? 'fld_choice_0' : 'fld_choice_1',
+                    type,
+                    op,
+                    value
+                );
+                const before = structuredClone(c),
+                    h = await standalone(undefined, selectSnapshot(), c),
+                    ui = controls(h.editor.node);
+                assert(ui.apply.disabled);
+                assert.match(
+                    ui.node.textContent,
+                    /saved choices are unavailable/
+                );
+                ui.apply.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
+                ui.clear.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
+                assert.equal(h.changes.length, 0);
+                assert.deepEqual(c, before);
+                button(ui.node, 'Replace existing filters').click();
+                assert.equal(h.changes.length, 0);
+                choose(
+                    h.window,
+                    ui,
+                    type === 'singleSelect' ? 'fld_choice_0' : 'fld_choice_1',
+                    op,
+                    ['sel_b']
+                );
+                ui.apply.click();
+                assert.equal(h.changes.length, 1);
+                assert.deepEqual(c, before);
+                await h.close();
+            }
+            for (const [type, op] of [
+                ['singleSelect', 'isAnyOf'],
+                ['multipleSelects', 'isExactly'],
+            ]) {
+                const c = criteria();
+                c.filtersByEndUser = condition(
+                    type === 'singleSelect' ? 'fld_choice_0' : 'fld_choice_1',
+                    type,
+                    op,
+                    ['sel_a', 'sel_b']
+                );
+                const h = await standalone(undefined, selectSnapshot(), c),
+                    ui = controls(h.editor.node);
+                assert.deepEqual(
+                    [...ui.choices.selectedOptions].map((o) => o.value),
+                    ['sel_a', 'sel_b']
+                );
+                ui.apply.click();
+                assert.deepEqual(
+                    h.changes[0].filtersByEndUser,
+                    c.filtersByEndUser
+                );
+                await h.close();
+            }
+        }
+    );
+    await check(
+        'choice/configuration/criteria observed ABA retires held handlers without callbacks',
+        async () => {
+            for (const mode of ['choice', 'config', 'criteria']) {
+                const p = editablePortal(),
+                    s = selectSnapshot(),
+                    c = criteria(),
+                    h = await standalone(p, s, c),
+                    ui = controls(h.editor.node);
+                choose(h.window, ui, 'fld_choice_0', 'is', ['sel_a']);
+                const list =
+                    s.tableIdsToLinkedTableStates.tbl_children.airtableFields.find(
+                        (f) => f.id === 'fld_choice_0'
+                    ).config.options.choices;
+                if (mode === 'choice') list[0].name = 'Renamed';
+                if (mode === 'config')
+                    p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.dropdownFiltersFields =
+                        [];
+                if (mode === 'criteria') c.searchTerm = 'Changed';
+                ui.apply.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
+                if (mode === 'choice') list[0].name = '<b>Alpha</b>';
+                if (mode === 'config')
+                    delete p.payload.fieldIdsToSchemas.fld_children
+                        .miniExtConfig.dropdownFiltersFields;
+                if (mode === 'criteria') c.searchTerm = 'Keep search';
+                ui.apply.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
+                assert.equal(h.changes.length, 0);
+                assert(ui.node.inert);
+                await h.close();
+            }
+        }
+    );
+    await check(
+        'actual copied starter select Apply submits every finite operator only on explicit Load and retires offset/actions',
+        async () => {
+            for (const [type, ops] of [
+                [
+                    'singleSelect',
+                    [
+                        'is',
+                        'isNot',
+                        'isAnyOf',
+                        'isNoneOf',
+                        'isEmpty',
+                        'isNotEmpty',
+                    ],
+                ],
+                [
+                    'multipleSelects',
+                    [
+                        'hasAnyOf',
+                        'hasAllOf',
+                        'hasNoneOf',
+                        'isExactly',
+                        'isEmpty',
+                        'isNotEmpty',
+                    ],
+                ],
+            ])
+                for (const op of ops) {
+                    const id =
+                        type === 'singleSelect'
+                            ? 'fld_choice_0'
+                            : 'fld_choice_1';
+                    let reads = 0;
+                    const h = await mount({
+                        initialCriteria: criteria(),
+                        handlers: {
+                            list: ({ input }) => {
+                                reads++;
+                                const pg = f.page(
+                                    [f.record('rec_old', 'Old')],
+                                    reads === 1 ? 'old_cursor' : null
+                                );
+                                pg.tableIdsToLinkedTableStates.tbl_children.airtableFields.push(
+                                    ...selectFields()
+                                );
+                                if (reads === 2) {
+                                    assert.equal(input.airtableOffset, null);
+                                    assert.equal(
+                                        input.searchTerm,
+                                        'Keep search'
+                                    );
+                                    assert.deepEqual(input.searchParamsMap, {
+                                        retained: 'Exact',
+                                    });
+                                    assert.deepEqual(
+                                        input.sortFieldsByEndUser,
+                                        criteria().sortFieldsByEndUser
+                                    );
+                                    const expected = condition(
+                                        id,
+                                        type,
+                                        op,
+                                        ['is', 'isNot'].includes(op)
+                                            ? 'sel_a'
+                                            : ['sel_a', 'sel_b']
+                                    );
+                                    expected.conditions[0].id =
+                                        'portal_scalar_filter';
+                                    if (['isEmpty', 'isNotEmpty'].includes(op))
+                                        delete expected.conditions[0].setting
+                                            .value;
+                                    assert.deepEqual(
+                                        input.filtersByEndUser,
+                                        expected
+                                    );
+                                }
+                                return pg;
+                            },
+                        },
+                    });
+                    await h.click('Load records');
+                    const ui = controls(h.view.node);
+                    choose(
+                        h.window,
+                        ui,
+                        id,
+                        op,
+                        ['is', 'isNot'].includes(op)
+                            ? ['sel_a']
+                            : ['sel_a', 'sel_b']
+                    );
+                    ui.apply.click();
+                    assert.equal(reads, 1);
+                    assert(button(h.view.node, 'Create record').disabled);
+                    assert(button(h.view.node, 'Next page').disabled);
+                    assert.equal(h.view.node.querySelector('tbody'), null);
+                    ui.apply.dispatchEvent(
+                        new h.window.Event('click', { bubbles: true })
+                    );
+                    assert.equal(reads, 1);
+                    await h.click('Load records');
+                    assert.equal(reads, 2);
+                    await h.dispose();
+                }
+        }
+    );
+    await check(
+        'presence-aware policy rejects absent-to-own-undefined filtering transition before retained Apply',
+        async () => {
+            const p = editablePortal(),
+                s = selectSnapshot(),
+                c = criteria(),
+                before = structuredClone(c);
+            const root = p.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
+            assert.equal(
+                Object.hasOwn(root, 'disableFilteringOnExtension'),
+                false
+            );
+            const h = await standalone(p, s, c),
+                ui = controls(h.editor.node);
+            choose(h.window, ui, 'fld_choice_0', 'is', ['sel_a']);
+            const priorFetch = globalThis.fetch,
+                priorWindowFetch = h.window.fetch;
+            let io = 0;
+            const unexpectedRequest = async () => {
+                io++;
+                throw new Error('Unexpected retained-handler request');
+            };
+            globalThis.fetch = unexpectedRequest;
+            h.window.fetch = unexpectedRequest;
+            try {
+                root.disableFilteringOnExtension = undefined;
+                assert.equal(
+                    Object.hasOwn(root, 'disableFilteringOnExtension'),
+                    true
+                );
+                ui.apply.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
+                assert.equal(h.changes.length, 0);
+                assert.deepEqual(c, before);
+                assert(ui.node.inert);
+                delete root.disableFilteringOnExtension;
+                ui.apply.dispatchEvent(
+                    new h.window.Event('click', { bubbles: true })
+                );
+                assert.equal(h.changes.length, 0);
+                assert.equal(io, 0);
+            } finally {
+                globalThis.fetch = priorFetch;
+                h.window.fetch = priorWindowFetch;
+                await h.close();
+            }
+        }
+    );
     await check(
         'scalar recipe executes all87 advertised operator/type pairs against pinned canonical formula and normalization',
         async () => {
@@ -771,31 +1258,69 @@ export async function checkPortalFilterCases({
         'held filter controls retire after paging, child opening and A to B to A',
         async () => {
             for (const mode of ['page', 'child', 'aba']) {
-                const h = await mount({
-                    handlers: {
-                        list: () =>
-                            f.page([f.record('rec_one', 'One')], 'cursor'),
-                    },
-                });
-                await h.click('Load records');
-                const c = controls(h.view.node);
-                c.value.value = 'Keep';
-                const held = c.clear;
-                if (mode === 'page') await h.click('Next page');
-                if (mode === 'child') await h.click('Create record');
-                if (mode === 'aba') {
-                    h.switchOwner('B');
-                    h.switchOwner('visitor_A');
+                for (const select of [false, true]) {
+                    const h = await mount({
+                        handlers: {
+                            list: () => {
+                                const pg = f.page(
+                                    [f.record('rec_one', 'One')],
+                                    'cursor'
+                                );
+                                if (select)
+                                    pg.tableIdsToLinkedTableStates.tbl_children.airtableFields.push(
+                                        ...selectFields()
+                                    );
+                                return pg;
+                            },
+                        },
+                    });
+                    await h.click('Load records');
+                    const c = controls(h.view.node);
+                    c.value.value = 'Keep';
+                    if (select)
+                        choose(h.window, c, 'fld_choice_0', 'is', ['sel_a']);
+                    const originalParent = structuredClone(
+                        h.portal.payload.formRecord
+                    );
+                    const held = c.clear;
+                    if (mode === 'page') await h.click('Next page');
+                    if (mode === 'child') await h.click('Create record');
+                    if (mode === 'aba') {
+                        h.switchOwner('B');
+                        h.switchOwner('visitor_A');
+                    }
+                    const count = h.calls.length;
+                    held.click();
+                    held.dispatchEvent(
+                        new h.window.Event('click', { bubbles: true })
+                    );
+                    await h.settle();
+                    assert.equal(h.calls.length, count);
+                    if (mode === 'child') {
+                        assert.equal(h.handoffs.length, 1);
+                        assert.deepEqual(h.handoffs[0][1], {
+                            type: 'modal',
+                            prefillData: {
+                                toLinkToParent: {
+                                    reversedFieldIdToPrefill: 'fld_parent',
+                                    parentFormRecordId: 'rec_user',
+                                },
+                                prefillQueryForChildExtension:
+                                    'prefill_Title=Example',
+                            },
+                        });
+                        assert.deepEqual(h.handoffs[0][2], {
+                            portalId: 'portal_example',
+                            recordId: 'rec_user',
+                            portalFieldId: 'fld_children',
+                        });
+                    }
+                    assert.deepEqual(
+                        h.portal.payload.formRecord,
+                        originalParent
+                    );
+                    await h.dispose();
                 }
-                const count = h.calls.length;
-                held.click();
-                held.dispatchEvent(
-                    new h.window.Event('click', { bubbles: true })
-                );
-                await h.settle();
-                assert.equal(h.calls.length, count);
-                if (mode === 'child') assert.equal(h.handoffs.length, 1);
-                await h.dispose();
             }
         }
     );
@@ -913,15 +1438,12 @@ export async function checkPortalFilterCases({
             });
             assert.equal(e.type, 'ready');
             env.window.document.getElementById('screen').append(e.node);
-            c.searchParamsMap.retained = 'Caller changed';
-            p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.disableFilteringOnExtension = true;
-            s.tableIdsToLinkedTableStates.tbl_children.airtableFields.length = 0;
             const ui = controls(e.node);
             ui.operator.value = 'contains';
             ui.value.value = ' Keep ';
             ui.apply.click();
             assert.equal(count, 1);
-            assert.equal(c.searchParamsMap.retained, 'Caller changed');
+            assert.equal(c.searchParamsMap.retained, 'Exact');
             await env.close();
         }
     );

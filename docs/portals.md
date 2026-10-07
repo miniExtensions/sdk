@@ -488,16 +488,22 @@ read recovery; empty accepted results remain successful results.
 The installed starter reuses `examples/browser/src/portalFilter.ts`:
 `mountPortalScalarFilterEditor({ portal, portalFieldId, criteria, snapshot,
 isCurrent, onApply })`. This shipped typed DOM recipe is not a public SDK export.
-It edits one direct scalar condition or explicitly clears filters; it does not
+It edits one direct scalar or select condition or explicitly clears filters; it does not
 send a request, evaluate record membership or save records. Apply preserves the
 complete owned criteria and retires both sorting and filtering editors, rows,
 Create/Edit, child plans and paging until the next explicit successful Load.
 
-Fields come only from accepted linked-table metadata and the accepted non-hidden
-detail projection. A present empty projection allows the resolved effective
+Fields come only from accepted linked-table metadata. Visible eligibility uses
+the accepted non-hidden detail projection; dropdown select eligibility is separate. A present empty projection allows the resolved effective
 primary; a missing projection does not. Returned custom detail maps replace the
 legacy loaded map. Missing columns are not recovered from another table or from
-record values. Duplicate labels retain exact IDs. Computed, select, linked,
+record values. Duplicate field labels retain exact IDs. Select eligibility is the
+union of visible fields and the configured dropdown-select contribution. A null
+or omitted `dropdownFiltersFields` includes returned selects; an empty list removes
+only that contribution, leaving visible selects eligible. `hideDropdownFilters`
+affects quick dropdown UI, not this condition editor. Custom-view replacement
+applies to these keys, including omitted keys. Form choice labels, read-only,
+availability and limits do not determine filter eligibility. Computed, linked,
 relation and date fields are outside this slice. Legacy
 `filteringOnExtensionFields` is not a scalar whitelist in the inspected canonical
 normalizer; a scalar ID in `dropdownFiltersFields` remains eligible when visible.
@@ -520,6 +526,18 @@ before Number conversion; numbers must be finite. Percent values use user units
 such as 25; rating emptiness means zero. Length adds no integer/nonnegative rule.
 Compiler literal/reference round-trip or regex failures, and missing-field
 warnings even with a compiled FALSE predicate, prevent Apply.
+
+Single-select supports `is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty` and
+`isNotEmpty`; multi-select supports `hasAnyOf`, `hasAllOf`, `hasNoneOf`,
+`isExactly`, `isEmpty` and `isNotEmpty`. The native select controls use exact
+choice IDs and plain canonical names from unambiguous returned metadata, without
+Form presentation overrides. Zero-choice fields retain the two emptiness
+operators. Single-select regex remains unsupported. Unknown or partially unknown
+saved operands remain visibly unresolved with the entire original AST preserved,
+even when the compiler can represent a known subset. Only explicit replacement
+or accepted server cleanup may change them. Choice/configuration/criteria changes
+observed by a retained handler retire that editor; unobserved in-place ABA is not
+detected. DOM/synthetic checks do not establish native browser keyboard proof.
 
 The AST must also have exactly one supported leaf, a nonempty condition ID, an
 exact ID reference and coherent current field type. Richer groups, name

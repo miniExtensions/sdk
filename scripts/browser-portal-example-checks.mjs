@@ -1,4 +1,5 @@
 import { checkPortalFilterCases } from './browser-portal-filter-checks.mjs';
+import { checkPortalAttachmentCases } from './browser-portal-attachment-checks.mjs';
 import { checkPortalSortCases } from './browser-portal-sort-checks.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, realpathSync } from 'node:fs';
@@ -1813,7 +1814,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'local invalid Grid values preserve accepted read/child context without dispatch',
+            'readonly attachment preview preserves accepted read/child context without dispatch',
             async () => {
                 const result = page(
                     [
@@ -1841,27 +1842,28 @@ export async function checkBrowserPortalExample({
                 const h = await mount({ handlers: { list: () => result } });
                 await h.click('Load records');
                 button(h.view.node, 'Edit cell').click();
-                const control = h.view.node.querySelector(
-                    'textarea[data-field-id="fld_title"]'
+                const preview = [...h.view.node.querySelectorAll('form')].find(
+                    (form) =>
+                        form.textContent.includes(
+                            'Use the child Form to change attachments.'
+                        )
                 );
-                assert(control);
-                submit(h.window, control.closest('form'));
+                assert(preview);
+                assert.equal(
+                    preview.querySelector('input, textarea, select'),
+                    null
+                );
+                assert.equal(buttons(preview, 'Save cell').length, 0);
+                const calls = h.calls.length;
+                submit(h.window, preview);
                 await h.settle();
                 assert.equal(
                     h.calls.filter((call) => call.operation === 'grid').length,
                     0
                 );
-                assert.equal(h.failures.length, 1);
-                assert.match(
-                    h.failures[0].message,
-                    /Use the child Form for this complex field type/
-                );
-                assert.equal(
-                    h.view.node.querySelector(
-                        'textarea[data-field-id="fld_title"]'
-                    ),
-                    control
-                );
+                assert.equal(h.calls.length, calls);
+                assert.equal(h.failures.length, 0);
+                assert(preview.isConnected);
                 assert.equal(button(h.view.node, 'Next page').disabled, false);
                 assert.equal(
                     button(h.view.node, 'Create record').disabled,
@@ -3712,6 +3714,7 @@ export async function checkBrowserPortalExample({
                 }
             );
         }
+        await checkPortalAttachmentCases({ check, mount, editablePortal });
         const baselineChecks = checks;
         await checkPortalSortCases({
             check,

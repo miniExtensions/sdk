@@ -369,6 +369,24 @@ outside this editor.
 Only records in its accepted main list can open an edit child. Nested labels
 and cached records do not grant that access.
 
+Portal attachment cells and their readonly inline previews use the returned
+detail's display configuration, which already combines child defaults followed
+by published Portal detail overrides. Only `hideAttachmentName: false` opts into
+filenames; absent, null or malformed policy stays generic. Child Form settings
+still govern existing inline write eligibility, and never override that display
+policy to reveal a filename. Returned hidden details are omitted, empty custom
+titles are retained, and details without returned physical schema are skipped.
+The null custom-detail map keeps the legacy projection; a non-null map without
+the selected table key means no details.
+
+These plain-text previews expose no attachment JSON, URLs, thumbnails, metadata
+or Open/Download actions. Malformed answers receive a generic unavailable message.
+Opening or submitting a preview makes no request and provides no **Save cell**;
+use **Close** or the child Form for changes. Native arrays, duplicates, order and
+metadata remain untouched. This is deliberately narrower than canonical rich
+attachment rendering and does not classify persisted add-only rows or synthesize
+a Form policy. Shared renderers and non-attachment inline edits are unchanged.
+
 The table selector also accepts a valid lookup whose result is linked records.
 It uses that result's target table while keeping the outer Portal field ID for
 reads and configured existing-child edits. Lookup tables do not offer create or

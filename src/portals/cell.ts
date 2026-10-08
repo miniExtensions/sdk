@@ -39,6 +39,33 @@ export type PortalCellBinding = {
     destroy(): void;
 };
 
+// Internal provenance reader; deliberately absent from the public Portal entry.
+type PortalCellBindingContext = {
+    input: Omit<UpdateGridCellInput, 'value'>;
+    schema: RuntimeFieldSchema;
+};
+const cellContexts = new WeakMap<
+    PortalCellBinding,
+    PortalCellBindingContext & {
+        client: MiniExtensionsClient;
+        binding: FormFieldBinding;
+    }
+>();
+export function readPortalCellBindingContext(
+    cell: PortalCellBinding,
+    client: MiniExtensionsClient
+): PortalCellBindingContext | null {
+    const context = cellContexts.get(cell);
+    return context?.client === client &&
+        cell.binding === context.binding &&
+        !context.binding.getSnapshot().retired
+        ? {
+              input: structuredClone(context.input),
+              schema: structuredClone(context.schema),
+          }
+        : null;
+}
+
 const gridValue = (
     value: AirtableValue | undefined
 ): UpdateGridCellInput['value'] => {
@@ -251,7 +278,7 @@ export const createPortalCellBinding = (
             'The cell outcome is unknown. Load a fresh Portal before another change.';
         notify();
     };
-    return {
+    const cell: PortalCellBinding = {
         binding,
         save: async (request = {}) => {
             if (
@@ -338,4 +365,6 @@ export const createPortalCellBinding = (
             listeners.clear();
         },
     };
+    cellContexts.set(cell, { client: options.client, input, schema, binding });
+    return cell;
 };

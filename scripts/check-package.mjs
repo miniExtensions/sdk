@@ -4,6 +4,11 @@ import {
     buttonReactTypedConsumer,
 } from './button-consumer-checks.mjs';
 import { rendererTypeConsumer } from './renderer-type-consumer.mjs';
+import {
+    checkRendererConsumer,
+    rendererTypedConsumer,
+    rendererReactTypedConsumer,
+} from './renderer-consumer-checks.mjs';
 import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
@@ -739,6 +744,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         ['browser-consumer.ts', 'ESNext', 'Bundler'],
     ]) {
         writeFileSync(join(temporaryDirectory, filename), declarationConsumer);
+        const rendererFilename = `renderers-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, rendererFilename),
+            rendererTypedConsumer
+        );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
             '--noEmit',
@@ -752,6 +762,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             '--moduleResolution',
             moduleResolution,
             filename,
+            rendererFilename,
             ...formulasGuideSources,
         ]);
     }
@@ -840,6 +851,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         buttonReactTypedConsumer
     );
     reactSources.push('button-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'renderer-react-consumer.tsx'),
+        rendererReactTypedConsumer
+    );
+    reactSources.push('renderer-react-consumer.tsx');
     run(process.execPath, [
         require.resolve('typescript/bin/tsc'),
         '--noEmit',
@@ -869,6 +885,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(buttonProof.checks, 67);
     console.log(
         `Installed Button model and custom React renderers: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
+    );
+    const rendererProof = await checkRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(rendererProof.checks, 14);
+    console.log(
+        `Installed renderer hosts: all 33 slots and ${rendererProof.checks} owner/remount groups passed; synthetic transport only.`
     );
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,

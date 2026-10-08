@@ -62,3 +62,36 @@ export {
     createPortalButtonFieldModel,
 } from './buttonHosts.js';
 export type * from './buttonHosts.js';
+
+export { FIELD_RENDERER_SLOTS, dispatchField } from './rendererRegistry.js';
+export type {
+    FieldKind,
+    FieldSchema,
+    FieldMetadata,
+    FieldConfig,
+    FieldValueMap,
+    FieldReadValue,
+    FieldWriteValue,
+    FieldRendererCapability,
+    FieldRendererProps,
+    FieldRendererPropsUnion,
+    FieldPresentation,
+    FieldRendererSlots,
+    FieldRendererHost,
+    FieldRendererHostSnapshot,
+    ScalarRendererActions,
+    DateRendererActions,
+    SelectionRendererActions,
+    AttachmentRendererActions,
+    ChoiceRendererActions,
+} from './rendererRegistry.js';
+export {
+    createFormFieldRendererHost,
+    createPortalCellRendererHost,
+    createPortalDetailRendererHost,
+} from './rendererHosts.js';
+export type {
+    FormFieldRendererHostOptions,
+    PortalCellRendererHostOptions,
+    PortalDetailRendererHostOptions,
+} from './rendererHosts.js';

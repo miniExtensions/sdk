@@ -391,3 +391,127 @@ The Form adapter derives a current-record source only from an accepted edit Form
 The response is only `{ success: boolean }`. A true result is reported success, not proof of downstream persistence. False may mean refusal or an external failure after dispatch; it remains uncertain and is never described as a safe retry. Transport loss and cancellation after dispatch also retain uncertainty. Proven cancellation before dispatch is recorded as not dispatched. The shared journal gains a distinct Button operation/success disposition; Save, upload and Add Choice outcomes retain their semantics. Journal entries retain no Button label, URL or configured message. Models for the same current recovery relationship observe pending/uncertain guard state and update eligibility on settlement or explicit new intent. They do not copy another model's feedback. A late completion can settle its own original attempt, never publish feedback into a successor. Settled uncertainty requires explicit `acknowledgeNewIntent`; that preserves the original tombstone and performs no retry or request. Pending attempts cannot be acknowledged.
 
 Configured success/error strings use nullish fallback, preserving an intentional empty string. A null feedback text asks the app to supply a localized default. Model disposal clears exposed field data and listeners while preserving journal disposition. Tests use fake transport and installed React custom renderers; they do not establish live cross-origin webhook readiness, native browser interaction or downstream persistence. Grid/List aggregates and default renderer styling remain separate work.
+
+## Typed renderer hosts and named slots
+
+`FieldRendererSlots<Result>` correlates all 33 returned `RuntimeFieldSchema`
+physical kinds with their native metadata, value and optional configuration.
+Slots are named after each physical kind, including `renderCheckboxField`,
+`renderButtonField`, `renderSingleLineTextField` and `renderMultipleRecordLinksField`.
+Use `FIELD_RENDERER_SLOTS` for the exhaustive kind-to-slot mapping, or
+`dispatchField(slots, props, fallback)` outside React. These contracts supply
+behavior and accepted state; applications own markup, layout, CSS and vendor widgets.
+
+Create a host once for an accepted context, independently of renderer mounts:
+
+```ts
+import { createFormFieldRendererHost } from '@miniextensions/sdk/ui';
+import type { FormFieldBindings } from '@miniextensions/sdk/forms';
+
+export function textHost(
+    fields: FormFieldBindings,
+    fieldId: string,
+    isCurrent: () => boolean,
+    configurationRevision: () => number
+) {
+    return createFormFieldRendererHost({
+        fields,
+        fieldId,
+        isCurrent,
+        configurationRevision,
+    });
+}
+```
+
+The optional React dispatcher subscribes and invokes the matching named slot:
+
+```tsx
+import { FieldRenderer } from '@miniextensions/sdk/react';
+import type { FieldRendererHost } from '@miniextensions/sdk/ui';
+
+export function CustomFields({ host }: { host: FieldRendererHost }) {
+    return (
+        <FieldRenderer
+            host={host}
+            renderers={{
+                renderSingleLineTextField: (props) =>
+                    props.capability.type === 'editable' ? (
+                        <input
+                            value={props.value ?? ''}
+                            onChange={(event) =>
+                                props.capability.type === 'editable' &&
+                                props.capability.setValue(
+                                    event.currentTarget.value
+                                )
+                            }
+                        />
+                    ) : (
+                        <span>{props.value ?? ''}</span>
+                    ),
+                renderCheckboxField: (props) => (
+                    <span>
+                        {props.value === true ? 'Checked' : 'Unchecked'}
+                    </span>
+                ),
+            }}
+            fallback={() => <span>Field unavailable.</span>}
+        />
+    );
+}
+```
+
+A Form host adapts an existing `FormFieldBindings` field. Attachment actions use
+that owner's cached controller when `attachmentRecovery` is supplied. Button actions
+use the accepted Button adapter when `button` options are supplied. Without these
+resources, attachment upload actions are omitted and Buttons remain readonly; the
+host never invents upload or webhook actions.
+Capabilities expose guarded actions and detached model state, not raw bindings or
+controllers. Scalar partial input, selection/search state, pending File identities,
+and uncertainty remain owned by the original owners across unmount/remount. Mounting,
+subscribing and rendering cause no reads, Save, upload or webhook dispatch.
+Successful Add Choice metadata accepted by the Form owner refreshes presentation
+without retiring unrelated field hosts. Visitor, token, context and configuration
+replacement still retire the old capabilities. Attachment queue selection remains
+available during an owned upload; it preserves the replacement File and does not
+start another upload. Upload and native-value mutations retain their separate guards.
+
+`createPortalCellRendererHost` adapts an existing SDK cell binding only when its
+client, token, field, record, view and write configuration match the current accepted
+Portal list owner. Returned detail configuration controls display; child Form
+configuration, when present, controls inline writes. Inline-edit empty-value
+suppression and current edit eligibility still apply. A display override cannot grant writes
+against a child Form restriction. Save remains the cell owner's separate explicit action.
+Native barcode and collaborator objects remain readonly in this context because the
+cell-save wire format cannot carry them. Use the configured child Form to edit those
+fields; the host does not advertise an unusable setter or convert their values.
+
+`createPortalDetailRendererHost` projects one accepted listed record for Portal
+cells/lists or a `linked-detail` context. It uses only that view's accepted detail
+projection and physical table metadata. Hidden fields and missing physical schemas
+are omitted; an explicit empty projection remains empty. It never reconstructs fields
+from a global cache or fabricates editable bindings. Optional Button recovery enables
+existing configured actions, whose policy remains the returned detail policy.
+
+`physicalKind` and native metadata remain intact for computed fields. The separate
+presentation descriptor exposes accepted result configuration without changing the
+physical kind or granting edits. No formatter, rich renderer, collaborator picker or
+vendor widget is added here. Malformed or unsupported native/presentation shapes have
+an explicit unavailable fallback; they do not prune the native draft or block unrelated
+Save. Optional configuration, null/missing values, array order and metadata are retained.
+Writable values exclude `undefined`; absence is a read state, not a draft mutation.
+Lookup answers may also retain a top-level native `{ error: string }` when the lookup
+target is unavailable. This remains readonly presentation, not an array conversion.
+
+Advance `configurationRevision` for every observed accepted replacement, including
+A→B→A, and make `isCurrent` include the active mounted context. Every exposed action
+rechecks the host lease before delegating to its existing owner. Cancellation stays
+available during an owned pending operation. Retired callbacks cannot act on a newer
+owner; unobserved in-place A→B→A is not promised. Dispose a host on context retirement,
+not ordinary React unmount. Disposal releases host subscriptions and host-created
+Button models, while existing drafts, cell owners, pending Files and journal entries
+remain owned separately.
+
+Installed proof covers all named-slot types, ESM/CommonJS dispatch, shared custom
+markup across Form, editable cell and read-only detail contexts, and synthetic
+StrictMode/remount and stale-action cases. It is not native-browser, live-backend,
+webhook-delivery or persistence acceptance.

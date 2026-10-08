@@ -467,6 +467,74 @@ export async function checkFormDispositionConsumer({ consumerDirectory }) {
                 controller.destroy();
             }
         }
+        {
+            const f = make();
+            let live = true,
+                armed = false,
+                successor,
+                rejected,
+                release;
+            let scopeState = { ownerId: 'A', revision: 0 };
+            f.client.forms.save = (input) => {
+                f.calls.push(structuredClone(input));
+                return new Promise((resolve) => {
+                    release = resolve;
+                });
+            };
+            const controller = forms.createFormController({
+                ...f.options,
+                getScope: () => {
+                    const captured = { ...scopeState };
+                    if (armed) {
+                        armed = false;
+                        scopeState = { ownerId: 'B', revision: 1 };
+                        const b = structuredClone(f.page);
+                        b.payload.extensionAccessToken = 'token_B';
+                        controller.reset({
+                            ...f.options,
+                            loaded: b,
+                            getScope: () => scopeState,
+                        });
+                        successor = controller.save();
+                        rejected = assert.rejects(successor);
+                    }
+                    return captured;
+                },
+            });
+            try {
+                await assert.rejects(
+                    controller.save({
+                        isCurrent: () => live,
+                        lifecycle: f.lifecycle(() => {
+                            live = false;
+                            armed = true;
+                        }),
+                    })
+                );
+                assert(successor);
+                assert(rejected);
+                assert.equal(f.calls.length, 1);
+                assert.equal(controller.getState().status, 'saving');
+                const native = controller.getState().draft;
+                assert(native);
+                assert.equal(f.attempt.outcome, 'not-dispatched');
+                controller.cancel();
+                assert.equal(controller.getState().status, 'cancelled');
+                release({
+                    type: 'error',
+                    formValidationErrors: [],
+                    formErrors: {},
+                });
+                await rejected;
+                assert.equal(controller.getState().status, 'cancelled');
+                assert.deepEqual(controller.getState().draft, native);
+                assert.equal(f.calls[0].extensionAccessToken, 'token_B');
+                assert.equal(f.calls.length, 1);
+                checks++;
+            } finally {
+                controller.destroy();
+            }
+        }
         console.log(
             `Installed Form disposition: ${checks} checkpoints; synthetic dispatch contrast only.`
         );

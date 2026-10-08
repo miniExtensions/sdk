@@ -331,11 +331,15 @@ export const createFormController = (
         }
     };
     const current = () => {
+        const owner = context;
         try {
             return (
-                sameScope(readScope(context.getScope), context.scope) &&
-                (context.isCurrent?.() ?? true) &&
-                sameSession(context.client.getSession(), context.session)
+                sameScope(readScope(owner.getScope), owner.scope) &&
+                owner === context &&
+                (owner.isCurrent?.() ?? true) &&
+                owner === context &&
+                sameSession(owner.client.getSession(), owner.session) &&
+                owner === context
             );
         } catch {
             return false;
@@ -348,7 +352,18 @@ export const createFormController = (
         );
     const observeScope = () => {
         if (status === 'disposed' || status === 'stale') return false;
-        if (current()) return true;
+        const observed = context;
+        const observedGeneration = generation;
+        const observedSequence = saveSequence;
+        const valid = current();
+        // Caller-controlled scope/session getters may replace the owner while observed.
+        if (
+            observed !== context ||
+            observedGeneration !== generation ||
+            observedSequence !== saveSequence
+        )
+            return false;
+        if (valid) return true;
         const previous = active;
         generation += 1;
         active = null;

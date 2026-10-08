@@ -527,3 +527,68 @@ it('first catch scope observation cannot release a replacement owner cancellatio
     controller.destroy();
     f.controller.destroy();
 });
+
+it('captured old scope result cannot retire a replacement owner or clear its native draft', async () => {
+    const f = fixture();
+    let live = true,
+        armed = false;
+    let scopeState = { ownerId: 'A', revision: 0 };
+    let successor: Promise<unknown> | undefined,
+        rejected: Promise<void> | undefined;
+    let release!: (v: SaveFormResult) => void;
+    f.respond(
+        () =>
+            new Promise((resolve) => {
+                release = resolve;
+            })
+    );
+    const controller = createFormController({
+        ...f.options,
+        getScope: () => {
+            const captured = { ...scopeState };
+            if (armed) {
+                armed = false;
+                scopeState = { ownerId: 'B', revision: 1 };
+                const b = loadedForm();
+                b.payload.extensionAccessToken = 'token_B';
+                b.payload.formRecord.data.fld_title = 'Replacement native';
+                controller.reset({
+                    ...f.options,
+                    loaded: b,
+                    getScope: () => scopeState,
+                });
+                successor = controller.save();
+                rejected = assert.rejects(successor);
+            }
+            return captured;
+        },
+    });
+    await assert.rejects(
+        controller.save({
+            isCurrent: () => live,
+            lifecycle: f.lifecycle(() => {
+                live = false;
+                armed = true;
+            }),
+        })
+    );
+    assert(successor);
+    assert(rejected);
+    assert.equal(f.calls, 1);
+    assert.equal(controller.getState().status, 'saving');
+    assert.equal(
+        controller.getState().draft!.data.fld_title,
+        'Replacement native'
+    );
+    const native = controller.getState().draft;
+    assert.equal(f.attempt!.outcome, 'not-dispatched');
+    controller.cancel();
+    assert.equal(controller.getState().status, 'cancelled');
+    release(savedForm());
+    await rejected;
+    assert.equal(controller.getState().status, 'cancelled');
+    assert.deepEqual(controller.getState().draft, native);
+    assert.equal(f.calls, 1);
+    controller.destroy();
+    f.controller.destroy();
+});

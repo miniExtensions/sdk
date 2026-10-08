@@ -18,7 +18,9 @@ presentation remains application-owned.
 ## Packaged Form quickstart
 
 This guide ships in the SDK archive, so you can follow it without access to the
-private repository. The package has **not been published to npm**. Install the
+private repository. This development preview has **not been published to npm**. Source checkouts
+require [install, check and pack](../README.md#build-an-archive-from-source) before
+TGZ installation. Install the
 archive supplied to you in your own application; replace the path with its
 actual location:
 

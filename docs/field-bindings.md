@@ -1,231 +1,184 @@
-# Headless field bindings: implementation contract
+# Headless field bindings
 
-This slice makes SDK-owned Form state usable with stock or app-supplied rendering.
-It reuses the existing Form controller, native draft store, selection models,
-published policies, projection and loaders. It does not reconstruct backend
-schemas or add a framework dependency to core imports. Optional React components
-consume the same bindings through the separate `/react` entry point. This document describes the approved
-contract and maps the additive `/forms` bindings to the existing authorities.
+Use `@miniextensions/sdk/forms` to keep native Form state and behavior in the SDK
+while your application supplies rendering. One owner combines the existing draft
+store, Form controller, selection policies and request lifecycle. Optional
+`@miniextensions/sdk/react` components use the same bindings; core imports do not
+require React. This is a development preview, not a complete Form/Portal UI.
 
-## Owner and renderer lifetimes
+Install a built SDK TGZ before using these imports. See the
+[archive and source installation instructions](../README.md#install-and-run-the-browser-starter)
+and [Form helpers](forms.md). A source checkout must be built and packed first.
 
-One Form owner holds the controller, draft, field bindings and request generations.
-A renderer subscribes to a binding and returns an unmount function. Unmount only
-removes DOM and subscriptions. It does not destroy the binding, cancel an owned
-operation, clear the draft or mark fields clean. Ordinary rerenders and same-owner
-remounts retain native values and dirty IDs.
+## Create an owner, then mount renderers
 
-The owner retires on visitor, session, client, token, accepted Form, parent/context
-or observed configuration replacement. Retire before abort callbacks can reenter.
-Every retained action checks owner and generation; an observed A-to-B-to-A change
-cannot revive it. Unobserved in-place mutation followed by restoration is not
-claimed to be detectable. Disposed snapshots expose no retired native data.
-
-## Small field contract
+Create the owner for an accepted `FormLoadedResult`, outside ordinary renderer
+mounting. Pass the real client, complete Save options, current owner/revision and
+an accepted-load/configuration guard. The optional write guard can additionally
+block actions during Review, recovery or another application-owned operation.
 
 ```ts
-const owner = createFormFieldBindings({
-    client,
-    loaded,
-    saveOptions,
-    getScope,
-    isCurrent: ownsAcceptedForm,
-    canWrite: mayUseForm,
-});
-const field = owner.field(fieldId);
-const stop = field.subscribe((snapshot) => render(snapshot));
-field.setValue(nativeValue); // { accepted: true } or a generic refusal reason
-// Select/linked fields also expose the existing SelectionModel:
-field.selection?.toggle(nativeChoiceNameOrRecordId);
-stop(); // renderer unmount; owner and draft remain
-// Only the accepted Form lifetime disposes the owner:
-owner.destroy();
+import {
+    createFormFieldBindings,
+    type FormFieldBindings,
+    type FormFieldBindingsOptions,
+    type FormFieldSnapshot,
+} from '@miniextensions/sdk/forms';
+
+export function createFormOwner(options: FormFieldBindingsOptions) {
+    return createFormFieldBindings(options);
+}
+
+export function subscribeField(
+    owner: FormFieldBindings,
+    fieldId: string,
+    render: (snapshot: FormFieldSnapshot) => void
+) {
+    const binding = owner.field(fieldId);
+    const unmount = binding.subscribe(render);
+    return { binding, unmount };
+}
 ```
 
-Snapshots are detached copies: field identity, native value, dirty/revision state,
-visibility (`visible`, `hidden` or `blocked`), read-only state, returned validation
-messages, pending/error/recovery state and optional selection presentation.
-Validation distinguishes local shape/policy refusal from server validation; this
-is not a replacement validation engine. Diagnostics never contain private values.
-Hidden/blocked presentation does not prune the full native Save snapshot.
-Renderers must use privacy-aware presentation; native state is not display text.
+Call `binding.getSnapshot()` for the current detached snapshot. `setValue` accepts
+native values and returns either `{ accepted: true }` or a generic refusal reason.
+Selects use native choice names; linked records use record IDs. Select/linked
+bindings also expose a selection model: guarded `choose`/`toggle` actions write
+native selections. Labels never become Save values. Model `setValue`, `setOptions`
+and `reset` only synchronize presentation; they do not commit native data.
 
-Text, select and linked stock renderers use the same snapshot/actions as the
-custom-renderer example. Rendering contains no independent option-limit or label
-authority. Selection values are native choice names for selects and native record
-IDs for links. Labels never become Save values.
+Snapshots include field identity, native value, dirty/revision state, visibility,
+read-only/editable state, validation, pending/error state and selection
+presentation. Mutating a snapshot cannot change the draft. Hidden or blocked
+presentation does not prune native Save data. A custom renderer must honor
+visibility, read-only and privacy/masking settings before displaying native
+values; a native snapshot is not already-safe display text. Local shape/policy
+refusals and server validation are distinct, not a replacement validation engine.
 
-## Existing logic, moved once
+One owner survives ordinary rerenders and same-owner remounts. Unmount removes
+subscriptions and markup only: do not call `owner.destroy()` for a rerender. Dispose
+the old owner on visitor, session, client, token, accepted Form, parent/context or
+observed configuration replacement. Advance the monotonic scope revision on every
+such transition, including A→B→A. Retire the old operation/owner before callbacks
+can reenter; a stale callback must never retire or clear a newer successor.
+Unobserved in-place changes followed by restoration are not detected.
 
-| Concern                                    | Existing authority                                                        | Binding boundary                                                             |
-| ------------------------------------------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Native draft and dirty IDs                 | `FormDraftStore`, `FormController.write/subscribe`                        | One store/controller; no renderer-owned draft                                |
-| Select labels, retained choices and limits | `getSelectFieldPolicy`, rules currently embedded in `createSelectControl` | One DOM-free select-field model; stock control mounts it                     |
-| Conditional option availability            | `resolveSelectFieldAvailability`                                          | Existing projected-record second phase; no semantic expansion                |
-| Visibility and sections                    | `createScalarFormRecordProjection`, `evaluateFormFieldVisibility`         | Preserve blocked codes, hidden values and current driver restrictions        |
-| Linked requests/search/paging              | `SelectionModel`, Form linked loader, cascade                             | SDK-owned request lifecycle with existing authorized input                   |
-| Validation and Save                        | `createFormSaveInput`, normalization, controller                          | Complete native envelope and dirty IDs; explicit Save only                   |
-| Unknown operations                         | Starter `RecoveryJournal`                                                 | Preserve attempt identity, tombstones, no-replay and explicit acknowledgment |
+## Selects, linked reads and reload
 
-The select extraction preserves configured read-only, allowed IDs, duplicate-label
-handling, selected-but-ineligible values, maximum-selection behavior and reset
-rules. Available-state snapshots expose disabled choices consistently to both
-renderers. Search never narrows the set used to decide whether a choice is valid.
+The shared select model applies configured labels, allowed choice IDs, retained
+ineligible values and selection limits. Stock and custom renderers share that
+policy. Disabled-option decoration is not whole-set validation: `canChoose`
+validates a complete proposed selection, including atomic replacement at a limit.
+Search does not narrow the set used to admit a choice.
 
-## Loading, reload and synchronization
+Mounting and subscribing cause no I/O. Linked search belongs to the model:
+`setSearchInput` changes the query and retires old results/paging without a read;
+`reload()` performs the explicit search. Supply the existing authorized loader
+through `owner.setLinkedLoader`. Recreate it when cascade/filter inputs change,
+because a loader captures its inputs. Preserve selected native IDs while resetting
+option paging. Accept field-specific labels only after current request guards;
+never treat a table-wide record cache as field presentation authority.
 
-Subscriptions and mounts perform no automatic I/O. Explicit SDK owner methods
-own Form loading/reloading, linked search and paging; the app renders their status.
-Latest accepted ownership/generation wins. A reload with dirty data requires an
-explicit keep/discard choice. Keep preserves native edits; revalidation against
-fresh metadata may block actions but cannot silently drop data. Remount is not a
-reload. Recreate linked loaders with fresh detached filter input because existing
-loaders snapshot inputs; reset paging while retaining native selected IDs.
+Form reload is explicit. Call `owner.reload({ dirty: 'keep' | 'discard', read })`
+with a fresh-load function and deliberate dirty-data choice. Keep retains edits;
+new metadata may block actions but must not silently drop native data. A cancelled
+or transport-failed Save retires its operation's bindings. Accepted same-context
+recovery creates new bindings; retained old actions never revive. Recovery does
+not replay Save or acknowledge an uncertain attempt.
 
-At deliberate Save compose fresh save options and cascade maps. Do not mutate the
-controller's originally captured options or derive data from DOM text. Existing
-Review and upload fences remain authoritative; this slice must not weaken them.
+## Explicit Save and uncertainty
 
-## Uncertainty integration
+Only a deliberate `owner.save()` dispatches Save. Supply fresh Save options and
+cascade maps through its `options` parameter; mutating previously supplied options
+does not update the controller's captured copy. Save uses the complete native
+snapshot and dirty IDs, never renderer text or a partial visible-field record.
+Preserve hidden values, metadata, order and configured parent context.
 
-Do not move starter Save to the controller until its operation lifecycle can
-participate in the journal: all preflight refusal precedes begin; dispatch binds
-the exact attempt, native revision and owner; unknown/cancelled outcomes block
-replay; only an accepted owned response or explicit inspection acknowledgment
-unlocks recovery. A presentation exception after accepted commit cannot turn the
-operation back into unknown. Retire the old operation/owner before late callbacks. A stale callback must never
-retire or clear a newer successor.
-Retain privacy scrubbing on Logout/Disconnect and non-sensitive uncertainty
-tombstones. Native upload File objects stay in the existing pending registry.
+Integrate the controller's Save lifecycle with the existing `RecoveryJournal`:
+preflight refusal precedes attempt creation, dispatch binds the exact attempt and
+native revision, and only an accepted owned response settles that attempt. Lost,
+cancelled or stale mutation outcomes remain unknown and block replay. A renderer
+exception after accepted commit cannot turn the mutation back into unknown.
+Inspection/acknowledgment is separate from fresh loading or mounting. See
+[recovery rules](browser-lifecycle.md#inspect-an-unknown-create) and the shipped
+[starter](../examples/browser/README.md#form-workflow) for the composed adapter.
 
-## Required acceptance
+Logout/Disconnect must clear visitor-owned private draft/recovery content while
+retaining non-sensitive uncertainty tombstones and no-replay guards. The journal
+and pending Files are memory-owned; this guide promises no exactly-once mutation
+or persistence across a page refresh.
 
-- Stock text/select/linked and a custom renderer observe the same native writes,
-  dirty IDs, validation, visibility, pending/errors and configured selection rules.
-- Mount, edit, unmount and remount retain the complete draft without network or
-  Save. Mutation of returned snapshots cannot change the owner or another renderer.
-- Unknown Save, cancellation, late responses, stale handlers, callback reentry,
-  owner/session/context replacement and observed A-to-B-to-A retain no-replay.
-- Full Save preserves hidden/native metadata, order, dirty IDs and parent context.
-  Synthetic validation dispatch is not backend persistence proof.
-- SDK explicit search/reload/paging owns loading and error status; no stale response
-  overwrites a newer request. Scalar/select/linked/attachment Review and upload
-  regressions remain intact.
-- One Portal cell integration is added only after this contract is sound. It uses
-  Portal display metadata and existing child-first write authorization separately;
-  it does not fabricate Form policy or prescribe a grid UI.
+## Optional React components
 
-## Separate restoration design: no storage in this slice
+Import `TextField`, `SelectField`, `LinkedField`, `AttachmentField` and
+`AttachmentDialog` from `@miniextensions/sdk/react`. React is an optional peer
+only for this entry point; use the supported React 18.3.1 or React 19 range from
+`package.json`. No UI library is required. Each field supports a `render(state)`
+function replacing its default markup, using the same snapshot/actions.
 
-The draft store remains memory-only. Persisting non-auth state without auth tokens
-does **not** restore authentication after refresh. Authentication restoration needs
-a separate analysis of supported canonical credentials/session flows, expiry and
-storage threats before a user decision or implementation.
+```tsx
+import { TextField, type FieldProps } from '@miniextensions/sdk/react';
 
-An optional draft persistence design must independently specify owner/Form/parent
-scope, version and expiry, sensitive-field exclusions, fresh-load revalidation and
-Logout/Disconnect deletion. No tokens are silently persisted. No local/session
-storage is added by this binding work.
+export function AppTextField({ binding, render }: FieldProps) {
+    // Omit render to use the default; supply privacy-aware app markup to replace it.
+    return <TextField binding={binding} render={render} />;
+}
+```
 
-Email verification retains `AuthFlow` challenge ownership; select filtering retains
-the compiler and owned-criteria/manual-cleanup lifecycle; linked search retains
-authorized loaders and cascade. Their integration outcomes remain separate from
-field-renderer acceptance and do not establish full Form/Portal parity.
+Unmount removes subscriptions, not the owner, draft or pending File identities.
+React reflects the owner-held linked search query on remount and replaces it when
+the binding identity changes. Neither mounting nor StrictMode starts linked reads,
+uploads or Saves.
 
-### Authentication restoration decision (not implemented)
+`AttachmentField` additionally takes the owner's attachment controller. Selection
+and drop run admission without upload; `upload()` is explicit and uploads the first
+queued File only. Status reports phases, not byte progress. Empty chooser completion
+preserves pending Files; Clear removes them explicitly. Cancellation preserves
+uncertainty and never automatically replays Upload. `AttachmentDialog` dismisses
+only when a cancel event originates on the dialog itself. A bubbling file-input
+cancel must not close the dialog, remove Files or change the draft; custom dialog
+shells must preserve that event-target distinction. OS-picker Cancel/Escape,
+focus handoff and screen-reader behavior still require application/browser testing.
 
-The public visitor session helpers in `src/runtime/session.ts` copy explicit
-credentials and reject `miniExtSession`, the hosted Firebase principal. The
-canonical frontend at pinned `58f73d5` stores an encrypted login credential under
-the configured extension/table/login-field key with `never-expires` storage
-(`components/PublicExtension/LoginPage/loginIntoExtensionUsingLoginPage.ts`,
-`loginWithEncryptedLoginToken`). This is credential storage, even though its value
-is encrypted; it is not a non-auth draft. It does not establish an SDK-managed
-expiry or justify copying the hosted Firebase principal.
+## One Portal cell
 
-A future opt-in restoration adapter could retain only the returned public visitor
-credential and its exact configured scope, clear it on explicit Logout/Disconnect,
-and revalidate it by an explicit fresh load before restoring editable data. A
-session-only choice limits persistence to a tab; persistent browser storage also
-makes the credential available to scripts on the same origin and needs an explicit
-retention/expiry decision. Server rejection must clear the remembered credential
-and require login, without a mutation retry. No storage adapter, retention default,
-Firebase restoration, or authentication persistence is included here.
+Use `createPortalCellBinding` from `/portals` for one eligible editable cell, not a
+full grid framework. Pass the accepted cell's canonical request input, physical
+schema, full native value, owner/mount/configuration guard and recovery journal.
+It exposes the same `binding` snapshot/actions for stock, custom or React rendering.
+No Form load or attachment policy is fabricated. Attachments remain readonly
+previews; nonempty conditional field/option or linked-filter configurations require
+the configured child Form instead of inline editing.
 
-## Optional React renderers
+Keep write eligibility and display policy separate: child-first configuration
+remains write authorization; returned Portal detail configuration controls cell
+and preview presentation. Capture record, table, Portal field, view, accepted
+snapshot, token, client session and owner revision. Retire old row/editor actions
+on replacement, including observed A→B→A. Unmount alone preserves the owner;
+explicit editor replacement destroys it.
 
-The optional `@miniextensions/sdk/react` entry point uses React as a peer; core
-imports do not import React. `TextField`, `SelectField` and `LinkedField` take an
-owner-held `binding`. `AttachmentField` additionally takes the owner's attachment
-`controller`. Each accepts a `render(state)` function replacing its default
-markup. The render state carries the same subscribed native snapshot and actions
-used by the default renderer; labels never become native Save values.
+Only explicit cell `save()` calls the existing `portals.updateGridCell` adapter.
+Retire old collection/action eligibility when dispatch begins. Accepted responses
+settle the exact journal attempt before presentation callbacks. Lost/cancelled/stale
+responses remain unknown; opening a new editor alone does not permit replay. Parent
+refresh follows accepted Save separately, and a refresh failure must not make an
+accepted mutation replayable. Linked paging must retain the owner-held unfiltered
+admitted option list, even when displayed search results are filtered. See
+[Portal helpers](portals.md) and [starter Portal controls](../examples/browser/README.md#portal-workflow).
 
-Components remove subscriptions on unmount. They do not dispose the Form owner,
-clear its draft, upload files or initiate linked reads during mounting. The caller
-retires the old owner on visitor/session/context replacement. StrictMode and
-ordinary remounts must retain the owner-held draft and pending File identities.
-There is no refresh persistence or authentication-restoration storage in this slice.
+## Memory and compatibility limits
 
-Attachment selection and drop are admission attempts, not uploads. Upload is
-explicit and reports phases rather than invented byte progress. Empty chooser
-completion preserves the pending queue; Clear removes it explicitly. Cancelling
-an upload preserves its uncertain-operation tombstone and never replays it.
-`AttachmentDialog` dismisses only when a cancel event originates on the dialog:
-a native file input's bubbling cancel does not close it, remove queued files or
-change the draft. Explicit Close remains separate. Custom dialog shells must use
-the same target/currentTarget distinction, without timer heuristics.
+Bindings do not store credentials or drafts in local/session storage. Keeping
+non-auth draft data alone cannot restore authentication after refresh. Any opt-in
+persistence needs explicit owner/Form/parent scoping, expiry/retention decisions,
+sensitive-field exclusions, fresh-load validation and Logout/Disconnect clearing.
+Browser storage is accessible to scripts on its origin; never silently persist
+credentials or copy an administrative session into a public visitor client.
 
-The current React cancellation regression uses synthetic DOM events. It does not
-establish OS-picker Cancel/Escape, browser focus handoff, or screen-reader
-certification. Native evidence remains a separate acceptance gate.
-
-A cancelled or transport-failed Save retires its operation's bindings. The accepted
-owner can still perform an explicit fresh `reload({ dirty: 'keep' | 'discard', read })`.
-Accepted recovery creates new bindings; old actions do not revive. Recovery does
-not replay Save or acknowledge an uncertain journal attempt. The journal's existing
-manual inspection/new-intent gate remains independent of the fresh read.
-
-Linked search input belongs to the selection model. `setSearchInput` replaces the
-query and retires old results/paging without a read; `reload()` performs the explicit
-search. React reflects that query on remount and takes the replacement owner's
-query on context changes. `canChoose` validates a complete proposed selection
-against the model's policy, including atomic replacement at a selection limit;
-decorated disabled-option flags are presentation, not whole-set admission.
-
-## Portal single-cell binding
-
-The Portal cell owner uses the same subscribed field action/snapshot contract as
-Form and React renderers, without fabricating a loaded Form. Its detached native
-draft uses the existing draft store. Child-first detail configuration remains
-write authorization; returned detail display configuration remains cell/preview
-presentation. Attachments continue to be readonly previews, without Save.
-
-A cell captures record, table, Portal field, view, accepted snapshot, token,
-client session and owner revision. Caller `isCurrent` additionally fences the
-mounted editor and observed configuration epoch. Old row entry and old editor
-actions cannot become actions on a new snapshot, including observed A→B→A.
-Ordinary renderer unmount unsubscribes only; explicit editor replacement disposes
-the cell owner.
-
-Only explicit Save invokes the existing `portals.updateGridCell` operation. It
-captures the authoritative native value and dirty revision, begins the existing
-uncertainty journal immediately before dispatch, and retires collection actions.
-Accepted responses settle that exact attempt before renderer callbacks. Lost,
-cancelled or stale responses remain unknown, with no automatic replay. A new
-accepted collection/editor is required for recovery; a new mount alone never
-permits a second mutation. Parent refresh remains an explicit adapter stage after
-accepted cell Save; a failed refresh must not make the accepted cell mutation
-replayable.
-
-Acceptance covers stock/custom/React consumption of the same binding, remount,
-exact native value dispatch, select limits, child/display policy separation,
-held responses across owner/session/view replacement, cancellation and journal
-no-replay. Installed copied-starter tests prove synthetic transport dispatch,
-not backend persistence or native accessibility certification. This is one cell,
-not a grid framework. Session-refresh storage remains design-only.
-
-Model `setValue`, `setOptions` and `reset` synchronize presentation; they are not
-native commits. Custom renderers use `binding.setValue`, or the guarded model
-`choose`/`toggle` user actions. Save always reads the owner-held native draft,
-never a renderer or model-only synchronization value.
+The helpers preserve native data and backend authority; they do not promise full
+Form/Portal parity. Email verification uses the authentication flow's challenge
+ownership, filtering uses its typed compiler and manual cleanup, and linked reads
+use authorized loaders/cascades. Follow the
+[configuration compatibility checklist](ui.md#review-configuration-compatibility-checklist)
+before composing features. Installed synthetic tests exercise native dispatch and
+lifecycle guards, not live persistence, cross-browser or accessibility certification.

@@ -5,7 +5,11 @@ export {
     type AddressAutocompleteOptions,
     type AddressAutocompleteControl,
 } from './addressAutocomplete.js';
-export { createSelectControl, mountSelectionControl } from './controls.js';
+export {
+    createSelectControl,
+    mountSelectControl,
+    mountSelectionControl,
+} from './controls.js';
 export { getSelectFieldPolicy } from './selectPolicy.js';
 export type { SelectFieldPolicy } from './selectPolicy.js';
 export {
@@ -29,3 +33,8 @@ export {
 } from './loaders.js';
 export type * from './types.js';
 export type * from './loaders.js';
+
+export {
+    createSelectFieldModel,
+    type SelectFieldModelOptions,
+} from './selectModel.js';

@@ -23,6 +23,8 @@ export {
     type FormController,
     type FormControllerErrorCode,
     type FormControllerOptions,
+    type FormControllerSaveOptions,
+    type FormSaveLifecycle,
     type FormControllerState,
     type FormControllerStatus,
     type FormOwnerScope,
@@ -66,3 +68,34 @@ export {
     type FormLinkedFilterRead,
     type FormLinkedFilterAcceptance,
 } from './linkedFilters.js';
+
+export {
+    createFormFieldBindings,
+    type FormFieldBindings,
+    type FormFieldBindingsOptions,
+    type FormFieldBinding,
+    type FormFieldSnapshot,
+    type FieldActionResult,
+} from './bindings.js';
+export { formChoiceConditionRecord } from './choiceRecord.js';
+
+export {
+    admittedAttachmentValues,
+    appendedAttachmentValues,
+} from './attachmentUpload.js';
+export {
+    RecoveryJournal,
+    recoveryOwner,
+    sameRecoveryRelationship,
+    type RecoveryScope,
+    type RecoveryAttempt,
+} from './recovery.js';
+
+export {
+    createFormAttachmentController,
+    type FormAttachmentController,
+    type FormAttachmentSnapshot,
+    type FormAttachmentControllerOptions,
+    type AttachmentRecovery,
+    type AttachmentPhase,
+} from './attachmentController.js';

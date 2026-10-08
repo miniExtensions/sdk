@@ -24,13 +24,16 @@ import {
 } from '@miniextensions/sdk/auth';
 import {
     composeFormFieldVisibility,
+    createFormFieldBindings,
     createFormSaveInput,
     normalizeFormSaveResult,
     openLoadedFormDraft,
     type FormFieldVisibility,
+    type FormAttachmentController,
 } from '@miniextensions/sdk/forms';
 import {
     getSelectFieldPolicy,
+    type SelectionLoader,
     resolveSelectFieldAvailability,
 } from '@miniextensions/sdk/ui';
 import {
@@ -41,7 +44,12 @@ import {
     nodeById,
     settings,
 } from './dom.js';
-import { displayValue, formFieldControl, type FieldControl } from './fields.js';
+import {
+    displayValue,
+    formFieldControl,
+    mountBoundFormField,
+    type FieldControl,
+} from './fields.js';
 import { flatChoiceConditionRecord } from './choiceAvailability.js';
 import { createPortalView, type PortalView } from './portal.js';
 import {
@@ -56,10 +64,7 @@ import {
 import { prepareFormReviewRows, captureReviewDateContext } from './review.js';
 import { createPendingFiles } from './pendingFiles.js';
 import { formAttachmentControl } from './attachmentPresentation.js';
-import {
-    admittedAttachmentValues,
-    appendedAttachmentValues,
-} from './attachmentUpload.js';
+import { admittedAttachmentValues } from './attachmentUpload.js';
 import { createLinkedReviewPresentation } from './linkedReview.js';
 import {
     RecoveryJournal,
@@ -699,12 +704,42 @@ const renderForm = (page: FormLoadedResult): void => {
     const formClient = visitor.client;
     const formRevision = visitor.revision;
     const formSession = formClient == null ? null : sessionKey(formClient);
-    const ownsLinkedFilters = (): boolean =>
-        mayUseForm() &&
+    const ownsLinkedRender = (): boolean =>
+        ownsForm() &&
         visitor.client === formClient &&
         visitor.revision === formRevision &&
         formClient != null &&
         sessionKey(formClient) === formSession;
+    const ownsLinkedFilters = (): boolean => mayUseForm() && ownsLinkedRender();
+    // The controller's accepted-render fence must be live before its first snapshot.
+    screenNode.append(card);
+    const bindingOwner =
+        formClient == null || !ownsForm()
+            ? null
+            : createFormFieldBindings({
+                  client: formClient,
+                  loaded: page,
+                  store: visitor.drafts,
+                  parent: visitor.formParentScope,
+                  saveOptions: {
+                      captchaVal: null,
+                      isComputeMode: false,
+                      searchQuery: saveQuery,
+                      context,
+                      conditionalLinkedRecordFieldIdsToFilteringValues: {},
+                  },
+                  getScope: () => ({
+                      ownerId: String(activeVisitor),
+                      revision: visitor.revision,
+                  }),
+                  isCurrent: () =>
+                      ownsForm() &&
+                      !formRetired &&
+                      visitor.client === formClient,
+                  canWrite: mayUseForm,
+                  canWriteField: (id) =>
+                      fieldVisibility[id]?.type === 'visible',
+              });
     const configurationKey = (): string =>
         JSON.stringify([
             page.extensionId,
@@ -740,11 +775,20 @@ const renderForm = (page: FormLoadedResult): void => {
     pendingPanel.setAttribute('aria-label', 'Pending attachment selections');
     const pendingInputs = new Set<HTMLInputElement>();
     const pendingStatuses = new Map<HTMLInputElement, HTMLElement>();
+    const pendingControllers = new Map<
+        HTMLInputElement,
+        FormAttachmentController
+    >();
     const clearPending = button('Clear pending files', () => {
         let cleared = false;
         for (const input of pendingInputs)
-            if (pendingFiles.capture(input) != null)
-                cleared = pendingFiles.clear(input) || cleared;
+            if (
+                pendingFiles.capture(input) != null &&
+                pendingFiles.clear(input)
+            ) {
+                pendingControllers.get(input)?.clear();
+                cleared = true;
+            }
         if (cleared) status('Pending file selections cleared.');
     });
     clearPending.hidden = pendingPanel.hidden = true;
@@ -763,13 +807,18 @@ const renderForm = (page: FormLoadedResult): void => {
                     pendingFiles.capture(input) == null
                         ? 'No file selected.'
                         : 'File selected; upload or clear explicitly.';
+            for (const [input, model] of pendingControllers) {
+                const captured = pendingFiles.capture(input);
+                if (captured == null) model.clear();
+                else model.select([captured.file]);
+            }
             if (reviewPending) cancelConfirmation();
         }
     );
     let metadataPromise: Promise<RuntimeTableStates> | null = null;
     const linkedPresentation = createLinkedReviewPresentation(
         page,
-        ownsLinkedFilters
+        ownsLinkedRender
     );
     const readFilterMetadata = (context: {
         client: MiniExtensionsClient;
@@ -849,6 +898,7 @@ const renderForm = (page: FormLoadedResult): void => {
     };
     disposeFormControls = () => {
         formRetired = true;
+        bindingOwner?.destroy();
         linkedPresentation.retire();
         pendingFiles.retire();
         pendingInputs.clear();
@@ -897,6 +947,7 @@ const renderForm = (page: FormLoadedResult): void => {
             evaluationMode: 'runtime',
             invalidConditionMode: 'strict',
         });
+        bindingOwner?.refresh();
         for (const [fieldId, control] of controls)
             control.node.hidden = fieldVisibility[fieldId]?.type !== 'visible';
         updateFormActivity();
@@ -933,46 +984,65 @@ const renderForm = (page: FormLoadedResult): void => {
                       fieldId,
                       visitor.drafts.read(draft, fieldId)
                   )
-                : formFieldControl(
-                      schema,
-                      visitor.drafts.read(draft, fieldId),
-                      () => {
-                          if (
-                              !mayUseForm() ||
-                              fieldVisibility[fieldId]?.type !== 'visible'
-                          )
-                              return;
-                          if (reviewPending) cancelConfirmation();
-                          try {
-                              visitor.drafts.write(
-                                  draft,
-                                  fieldId,
-                                  control.read()
-                              );
-                              updateFieldVisibility();
-                              updateSelectAvailability();
-                          } catch (error) {
-                              status(
-                                  error instanceof Error
-                                      ? error.message
-                                      : 'Invalid field value.',
-                                  true
-                              );
-                          }
-                      },
-                      false,
-                      formClient == null
-                          ? undefined
-                          : {
-                                extensionAccessToken:
-                                    page.payload.extensionAccessToken,
-                                reads: formClient.addresses,
-                                isCurrent: () =>
-                                    ownsAddressReads() &&
-                                    fieldVisibility[fieldId]?.type ===
-                                        'visible',
+                : bindingOwner == null
+                  ? formFieldControl(
+                        schema,
+                        visitor.drafts.read(draft, fieldId),
+                        () => {},
+                        true
+                    )
+                  : mountBoundFormField(
+                        bindingOwner.field(fieldId),
+                        schema,
+                        () => {
+                            if (
+                                !mayUseForm() ||
+                                fieldVisibility[fieldId]?.type !== 'visible'
+                            )
+                                return;
+                            if (reviewPending) cancelConfirmation();
+                            try {
+                                bindingOwner.refresh();
+                                updateFieldVisibility();
+                                updateSelectAvailability();
+                            } catch (error) {
+                                status(
+                                    error instanceof Error
+                                        ? error.message
+                                        : 'Invalid field value.',
+                                    true
+                                );
                             }
-                  );
+                        },
+                        formClient == null
+                            ? undefined
+                            : {
+                                  extensionAccessToken:
+                                      page.payload.extensionAccessToken,
+                                  reads: formClient.addresses,
+                                  isCurrent: () =>
+                                      ownsAddressReads() &&
+                                      fieldVisibility[fieldId]?.type ===
+                                          'visible',
+                              },
+                        () => {
+                            if (
+                                mayUseForm() &&
+                                fieldVisibility[fieldId]?.type === 'visible' &&
+                                reviewPending
+                            )
+                                cancelConfirmation();
+                        },
+                        (error) => {
+                            if (ownsForm())
+                                status(
+                                    error instanceof Error
+                                        ? error.message
+                                        : 'Invalid field value.',
+                                    true
+                                );
+                        }
+                    );
         controls.set(fieldId, control);
         fields.append(control.node);
         const config = schema.miniExtConfig;
@@ -1120,8 +1190,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                       ]
                                     : result.newChoice.name
                             );
-                            visitor.drafts.write(
-                                draft,
+                            bindingOwner?.controller.write(
                                 fieldId,
                                 control.read()
                             );
@@ -1144,12 +1213,22 @@ const renderForm = (page: FormLoadedResult): void => {
             let generation = 0;
             let requestVersion = 0;
             let conditionalFilters: ConditionalLinkedFilters | null = null;
+            let currentLoader: SelectionLoader | null = null;
+            let loaderInstalled = false;
             const resetChoices = (): void => {
                 generation += 1;
                 requestVersion += 1;
                 offset = null;
                 choices.replaceChildren();
                 moreButton.disabled = true;
+                if (bindingOwner != null) {
+                    bindingOwner.setLinkedLoader(fieldId, (request) => {
+                        if (currentLoader == null)
+                            throw new Error('No linked read is active.');
+                        return currentLoader(request);
+                    });
+                    loaderInstalled = true;
+                }
             };
             const fetchOptions = (more: boolean): void => {
                 if (!ownsLinkedFilters() || (more && offset == null)) return;
@@ -1158,7 +1237,6 @@ const renderForm = (page: FormLoadedResult): void => {
                 const capturedRequest = ++requestVersion;
                 const capturedFilterRevision = conditionalFilters?.revision();
                 const capturedSearch = search.value;
-                const capturedOffset = more ? offset : null;
                 const filterValues = conditionalFilters?.snapshot() ?? {};
                 void run(
                     'Loading allowed linked records…',
@@ -1174,29 +1252,89 @@ const renderForm = (page: FormLoadedResult): void => {
                                 conditionalFilters?.revision() &&
                             capturedSearch === search.value;
                         signal.throwIfAborted();
-                        let result: ListLinkedRecordOptionsResult;
+                        let result: ListLinkedRecordOptionsResult | undefined;
                         try {
-                            result = await client.linkedRecords.listFormOptions(
-                                {
-                                    extensionAccessToken:
-                                        page.payload.extensionAccessToken,
-                                    linkedRecordFieldId: fieldId,
-                                    filter: {
-                                        viewType: 'list',
-                                        searchTerm: capturedSearch,
-                                    },
-                                    offset: capturedOffset,
-                                    conditionalLinkedRecordFilteringValues:
-                                        filterValues,
-                                },
-                                { signal, session: client.getSession() }
-                            );
+                            if (bindingOwner == null) return;
+                            const model =
+                                bindingOwner.field(fieldId).selection!;
+                            currentLoader = async (request) => {
+                                const abort = () => model.cancel();
+                                signal.addEventListener('abort', abort, {
+                                    once: true,
+                                });
+                                try {
+                                    const response =
+                                        await client.linkedRecords.listFormOptions(
+                                            {
+                                                extensionAccessToken:
+                                                    page.payload
+                                                        .extensionAccessToken,
+                                                linkedRecordFieldId: fieldId,
+                                                filter: {
+                                                    viewType: 'list',
+                                                    searchTerm:
+                                                        request.searchTerm,
+                                                },
+                                                offset: request.offset,
+                                                conditionalLinkedRecordFilteringValues:
+                                                    filterValues,
+                                            },
+                                            {
+                                                signal: request.signal,
+                                                session: client.getSession(),
+                                            }
+                                        );
+                                    if (!accepted())
+                                        throw new Error(
+                                            'This linked read is no longer current.'
+                                        );
+                                    result = response;
+                                    return {
+                                        options: response.records.map(
+                                            (record) => ({
+                                                value: record.id,
+                                                label: 'Linked record',
+                                            })
+                                        ),
+                                        offset: response.offset,
+                                    };
+                                } finally {
+                                    signal.removeEventListener('abort', abort);
+                                }
+                            };
+                            if (!loaderInstalled) {
+                                bindingOwner.setLinkedLoader(
+                                    fieldId,
+                                    (request) => {
+                                        if (currentLoader == null)
+                                            throw new Error(
+                                                'No linked read is active.'
+                                            );
+                                        return currentLoader(request);
+                                    }
+                                );
+                                loaderInstalled = true;
+                            }
+                            if (more) await model.loadMore();
+                            else await model.setSearchTerm(capturedSearch);
+                            if (model.getState().error != null)
+                                throw new Error(model.getState().error!);
+                            if (result == null) return;
                         } catch (error) {
                             if (!accepted()) return;
                             throw error;
                         }
                         if (!accepted()) return;
+                        if (result == null) return;
                         linkedPresentation.acceptOptions(fieldId, result);
+                        bindingOwner?.setLinkedOptions(
+                            fieldId,
+                            result.records.map((record) => ({
+                                value: record.id,
+                                label: 'Linked record',
+                            })),
+                            more
+                        );
                         offset = result.offset;
                         for (const record of result.records) {
                             const choice = element('input');
@@ -1240,11 +1378,11 @@ const renderForm = (page: FormLoadedResult): void => {
                                 }
                                 if (choice.checked) selected.add(record.id);
                                 else selected.delete(record.id);
-                                control.write([...selected]);
-                                visitor.drafts.write(
-                                    draft,
-                                    fieldId,
-                                    control.read()
+                                bindingOwner
+                                    ?.field(fieldId)
+                                    .selection?.choose([...selected]);
+                                control.write(
+                                    visitor.drafts.read(draft, fieldId) ?? null
                                 );
                                 updateFieldVisibility();
                                 updateSelectAvailability();
@@ -1318,6 +1456,26 @@ const renderForm = (page: FormLoadedResult): void => {
             const notice = element('p', 'No file selected.');
             notice.setAttribute('role', 'status');
             pendingStatuses.set(file, notice);
+            let uploadAttempt: RecoveryAttempt | null = null;
+            const uploadModel = bindingOwner?.attachment(
+                fieldId,
+                {
+                    journal: recovery,
+                    scope,
+                    loadVersion,
+                },
+                {
+                    getLoaded: () => page,
+                    isCurrent: ownsLinkedRender,
+                    configurationRevision: observeReviewConfiguration,
+                    onAttempt: (attempt) => {
+                        uploadAttempt = activeUpload = attempt;
+                        retainInput(attempt, { fieldId });
+                        updateRecovery();
+                    },
+                }
+            );
+            if (uploadModel != null) pendingControllers.set(file, uploadModel);
             control.node.append(
                 button('Choose a file', () => {
                     if (
@@ -1398,98 +1556,63 @@ const renderForm = (page: FormLoadedResult): void => {
                             )
                                 return;
                             signal.throwIfAborted();
-                            const attempt = recovery.begin(
-                                scope,
-                                recordId,
-                                'upload',
-                                loadVersion,
-                                fieldId
-                            );
-                            activeUpload = attempt;
-                            retainInput(attempt, { fieldId });
-                            updateRecovery();
-                            const ownsAttempt = (): boolean =>
-                                ownsUploadUI() &&
-                                current() &&
-                                activeUpload === attempt &&
-                                attempt.flight &&
-                                attempt.outcome === 'unknown' &&
-                                attempt.acknowledgment === 'none' &&
-                                attempt.operation === 'upload' &&
-                                attempt.fieldId === fieldId &&
-                                attempt.recordId === recordId &&
-                                attempt.loadVersion === loadVersion &&
-                                recovery.blocking(scope, recordId) ===
-                                    attempt &&
-                                visitor.drafts.revision(draft) ===
-                                    nativeRevision;
+                            if (
+                                uploadModel == null ||
+                                !uploadModel.select([selected])
+                            )
+                                return;
+                            const abortUpload = () => uploadModel.cancel();
+                            signal.addEventListener('abort', abortUpload, {
+                                once: true,
+                            });
                             try {
-                                const attachment =
-                                    await client.attachments.uploadFile(
-                                        {
-                                            file: selected,
-                                            filename: selected.name,
-                                            extensionAccessToken:
-                                                page.payload
-                                                    .extensionAccessToken,
-                                            fieldId,
-                                        },
-                                        { signal }
+                                const accepted = await uploadModel.upload();
+                                if (!ownsUploadUI() || !current()) return;
+                                if (!accepted) {
+                                    status(
+                                        'Upload outcome needs inspection; it was not added to the draft.',
+                                        true
                                     );
-                                if (!ownsAttempt()) {
-                                    if (ownsUploadUI() && current())
-                                        status(
-                                            'Upload outcome needs inspection; it was not added to the draft.',
-                                            true
-                                        );
                                     return;
                                 }
-                                const snapshot = visitor.drafts.snapshot(draft);
-                                if (snapshot == null) return;
-                                const next = appendedAttachmentValues(
-                                    page,
-                                    fieldId,
-                                    snapshot.data[fieldId],
-                                    selected,
-                                    attachment
-                                );
-                                // No await between the final fence and authoritative commit.
-                                if (
-                                    !ownsAttempt() ||
-                                    !visitor.drafts.write(draft, fieldId, next)
-                                )
-                                    return;
-                                recovery.accepted(attempt, 'uploaded');
-                                // Presentation may throw; it must not turn a committed append unknown.
+                                // The SDK committed and accepted before any renderer callback.
                                 try {
-                                    control.write(next);
+                                    control.write(
+                                        visitor.drafts.read(draft, fieldId) ??
+                                            null
+                                    );
                                     updateFieldVisibility();
                                     updateSelectAvailability();
                                 } finally {
-                                    if (ownsUploadUI())
-                                        pendingFiles.clear(file, selection);
+                                    if (
+                                        ownsUploadUI() &&
+                                        pendingFiles.clear(file, selection)
+                                    )
+                                        uploadModel.clear();
                                 }
-                                if (ownsUploadUI())
-                                    status(
-                                        'File uploaded. Choose Save to attach it to the record.'
-                                    );
+                                status(
+                                    'File uploaded. Choose Save to attach it to the record.'
+                                );
                             } catch {
                                 if (ownsUploadUI() && current())
                                     status(
-                                        attempt.outcome === 'uploaded'
+                                        uploadAttempt?.outcome === 'uploaded'
                                             ? 'The attachment was added to the draft; reopen the Form to refresh its presentation.'
                                             : 'Upload outcome needs inspection; it was not added to the draft.',
                                         true
                                     );
                             } finally {
-                                recovery.finishFlight(attempt);
-                                if (activeUpload === attempt)
+                                signal.removeEventListener(
+                                    'abort',
+                                    abortUpload
+                                );
+                                if (activeUpload === uploadAttempt)
                                     activeUpload = null;
                                 if (ownsUploadRender()) {
                                     updateRecovery();
                                     if (
                                         current() &&
-                                        attempt.outcome === 'unknown'
+                                        uploadAttempt?.outcome === 'unknown'
                                     )
                                         status(
                                             'Upload outcome needs inspection; it was not added to the draft.',
@@ -1749,7 +1872,7 @@ const renderForm = (page: FormLoadedResult): void => {
     updateRecovery();
     const save = (prepared?: {
         snapshot: FormDraftSnapshot<AirtableValue>;
-        current(): boolean;
+        current(forOwnSave?: boolean): boolean;
     }): Promise<void> =>
         run('Saving the Form…', async ({ client, signal, current }) => {
             // Reject an invalid visible control instead of saving its last
@@ -1795,47 +1918,73 @@ const renderForm = (page: FormLoadedResult): void => {
                 (prepared != null && !prepared.current())
             )
                 return;
-            const attempt = recovery.begin(
-                scope,
-                recordId,
-                'save',
-                loadVersion,
-                null,
-                visitor.preparedAttempt
-            );
-            retainInput(attempt);
-            visitor.preparedAttempt = null;
-            // Retire this scope before dispatch. Only an accepted result or
-            // an accepted result or explicit inspected-outcome acknowledgment can unlock a new operation.
-            visitor.uncertainFormDraftScopes.add(draft.scope);
+            if (bindingOwner == null) return;
             submit.disabled = true;
             discard.disabled = true;
             let normalized: ReturnType<typeof normalizeFormSaveResult>;
+            let dispatched = false;
             try {
-                const rawResult = await client.forms.save(input, { signal });
+                const {
+                    extensionAccessToken: _token,
+                    formRecord: _record,
+                    formFieldIdsWithUnsavedChanges: _dirty,
+                    ...freshOptions
+                } = input;
+                normalized = await bindingOwner.save({
+                    signal,
+                    options: freshOptions,
+                    isCurrent: () =>
+                        current() &&
+                        ownsForm() &&
+                        (prepared?.current(dispatched) ?? true),
+                    lifecycle: {
+                        dispatch: () => {
+                            const attempt = recovery.begin(
+                                scope,
+                                recordId,
+                                'save',
+                                loadVersion,
+                                null,
+                                visitor.preparedAttempt
+                            );
+                            retainInput(attempt);
+                            dispatched = true;
+                            visitor.preparedAttempt = null;
+                            visitor.uncertainFormDraftScopes.add(draft.scope);
+                            return {
+                                accepted: (result) => {
+                                    if (
+                                        result.type !== 'error' &&
+                                        (typeof result.raw.record.id !==
+                                            'string' ||
+                                            result.raw.record.id === '' ||
+                                            (recordId != null &&
+                                                result.raw.record.id !==
+                                                    recordId))
+                                    )
+                                        throw new Error(
+                                            'The save response does not match this request. Check the latest requests.'
+                                        );
+                                    recovery.accepted(
+                                        attempt,
+                                        result.type === 'error'
+                                            ? 'validation-error'
+                                            : 'saved'
+                                    );
+                                },
+                                finish: () => {
+                                    recovery.finishFlight(attempt);
+                                    if (ownsForm()) updateRecovery();
+                                },
+                            };
+                        },
+                    },
+                });
                 if (!current() || !ownsForm()) return;
-                normalized = normalizeFormSaveResult(rawResult, page);
-                if (
-                    normalized.type !== 'error' &&
-                    (typeof normalized.raw.record.id !== 'string' ||
-                        normalized.raw.record.id === '' ||
-                        (recordId != null &&
-                            normalized.raw.record.id !== recordId))
-                )
-                    throw new Error(
-                        'The save response does not match this request. Check the latest requests.'
-                    );
-                recovery.accepted(
-                    attempt,
-                    normalized.type === 'error' ? 'validation-error' : 'saved'
-                );
             } catch (error) {
-                if (current())
+                if (current() && ownsForm())
                     errors.replaceChildren(element('li', uncertainSaveMessage));
                 throw error;
-            } finally {
-                recovery.finishFlight(attempt);
-                if (ownsForm()) updateRecovery();
             }
             visitor.uncertainFormDraftScopes.delete(draft.scope);
             submit.disabled = false;
@@ -1952,11 +2101,11 @@ const renderForm = (page: FormLoadedResult): void => {
             const parentScope = visitor.formParentScope;
             const capturedConfiguration = observeReviewConfiguration();
             const pendingRevision = pendingFiles.revision();
-            const preparedCurrent = (): boolean =>
+            const preparedCurrent = (forOwnSave = false): boolean =>
                 (!clientDateZoneRequired ||
                     captureReviewDateContext().clientTimeZone ===
                         dateContext.clientTimeZone) &&
-                ownsLinkedFilters() &&
+                (forOwnSave ? ownsLinkedRender() : ownsLinkedFilters()) &&
                 linkedSnapshot.current() &&
                 visitor.formContext === context &&
                 visitor.formParentScope === parentScope &&

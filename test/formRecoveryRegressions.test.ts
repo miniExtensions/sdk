@@ -49,6 +49,9 @@ before(async () => {
     });
     await build({
         entryPoints: [join(root, 'examples/browser/src/recovery.ts')],
+        alias: {
+            '@miniextensions/sdk/forms': join(root, 'src/forms/index.ts'),
+        },
         bundle: true,
         platform: 'node',
         format: 'esm',

@@ -19,6 +19,10 @@ published extension loading, passwords/login, query/context and visitor rules.
 These helpers require a real `FormLoadedResult`; first handle any other loaded
 screen or returned redirect. Use Node.js 22+ or your ES2022 browser bundler.
 
+For subscribed stock or app-supplied text/select/linked rendering, see the
+[headless field-binding contract](field-bindings.md). Renderer unmount preserves
+the native draft; owner replacement retires actions and requests.
+
 ## Headless conditional linked-filter cascades
 
 `createFormLinkedFilterModel` provides one network-free cascade per returned

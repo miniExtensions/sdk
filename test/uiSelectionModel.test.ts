@@ -606,3 +606,101 @@ describe('selection model asynchronous pages', () => {
         assert.equal(fixture.requests.length, 1);
     });
 });
+it('owned search input retires paging and late results without dispatch until explicit reload', async () => {
+    const first = deferred<SelectionPage>();
+    const requests: SelectionRequest[] = [];
+    const model = createSelectionModel({
+        multiple: true,
+        value: ['one'],
+        selectedOptions: options,
+        loadOptions: async (request) => {
+            requests.push(request);
+            if (requests.length === 1) return await first.promise;
+            return { options, offset: 'next' };
+        },
+    });
+    model.setSearchInput('Visitor A query');
+    assert.equal(model.getState().searchTerm, 'Visitor A query');
+    assert.equal(requests.length, 0);
+    const reading = model.reload();
+    await Promise.resolve();
+    assert.equal(requests.length, 1);
+    model.setSearchInput('Replacement query');
+    assert.equal(requests[0]!.signal.aborted, true);
+    first.resolve({
+        options: [{ value: 'private', label: 'Late private result' }],
+        offset: 'old-offset',
+    });
+    await reading;
+    assert.equal(model.getState().searchTerm, 'Replacement query');
+    assert.deepEqual(model.getState().options, []);
+    assert.equal(model.getState().offset, null);
+    assert.deepEqual(model.getState().value, ['one']);
+    assert.equal(requests.length, 1);
+    await model.reload();
+    assert.equal(requests[1]!.searchTerm, 'Replacement query');
+    assert.equal(requests[1]!.offset, null);
+    assert.equal(model.getState().offset, 'next');
+    model.setSearchInput('Third query');
+    assert.equal(model.getState().offset, null);
+    assert.equal(requests.length, 2);
+    model.destroy();
+    model.setSearchInput('Retained old query');
+    assert.notEqual(model.getState().searchTerm, 'Retained old query');
+});
+for (const replacement of ['reset', 'destroy'] as const) {
+    it(`search-input abort listener ${replacement} prevents the old setter overwriting successor state`, async () => {
+        const held = deferred<SelectionPage>();
+        let requests = 0;
+        const model = createSelectionModel({
+            multiple: true,
+            value: ['one'],
+            selectedOptions: options,
+            loadOptions: async (request) => {
+                requests++;
+                request.signal.addEventListener(
+                    'abort',
+                    () => {
+                        if (replacement === 'destroy') model.destroy();
+                        else
+                            model.reset({
+                                multiple: true,
+                                options: [
+                                    { value: 'successor', label: 'Successor' },
+                                ],
+                                value: ['successor'],
+                            });
+                    },
+                    { once: true }
+                );
+                return await held.promise;
+            },
+        });
+        const reading = model.reload();
+        await Promise.resolve();
+        assert.equal(requests, 1);
+        model.setSearchInput('OLD PRIVATE QUERY');
+        assert.equal(model.getState().searchTerm, '');
+        if (replacement === 'reset') {
+            assert.deepEqual(model.getState().value, ['successor']);
+            assert.deepEqual(model.getState().options, [
+                { value: 'successor', label: 'Successor' },
+            ]);
+        }
+        held.resolve({
+            options: [{ value: 'private', label: 'OLD PRIVATE LABEL' }],
+            offset: 'old',
+        });
+        await reading;
+        assert.equal(model.getState().searchTerm, '');
+        assert.equal(
+            model
+                .getState()
+                .options.some((option) => option.label === 'OLD PRIVATE LABEL'),
+            false
+        );
+        if (replacement === 'reset')
+            assert.deepEqual(model.getState().value, ['successor']);
+        model.destroy();
+    });
+}

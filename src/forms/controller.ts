@@ -3,6 +3,7 @@ import type {
     FormLoadedResult,
     MiniExtensionsClient,
     RuntimeSession,
+    SaveFormInput,
 } from '../runtime/types.js';
 import {
     type FormDraftHandle,
@@ -30,9 +31,30 @@ export type FormControllerOptions = {
     loaded: FormLoadedResult;
     saveOptions: FormSaveOptions;
     getScope(): FormOwnerScope;
+    /** Additional accepted-load/configuration fence, separate from rendering lifetime. */
+    isCurrent?(): boolean;
     /** One visitor owns a store. Clear it when the visitor or connection changes. */
     store?: FormDraftStore<AirtableValue>;
     parent?: ParentFormDraftScope | null;
+};
+
+export type FormSaveLifecycle = {
+    /** Runs after all preflight checks, immediately before dispatch. */
+    dispatch(
+        input: Readonly<SaveFormInput>,
+        revision: number
+    ): {
+        accepted(result: Readonly<NormalizedFormSaveResult>): void;
+        finish(): void;
+    };
+};
+
+export type FormControllerSaveOptions = {
+    signal?: AbortSignal;
+    /** Fresh explicit options, never mutation of originally captured options. */
+    options?: FormSaveOptions;
+    lifecycle?: FormSaveLifecycle;
+    isCurrent?(): boolean;
 };
 
 export type FormControllerStatus =
@@ -47,6 +69,8 @@ export type FormControllerStatus =
 
 export type FormControllerState = {
     ownerScope: FormOwnerScope;
+    epoch: number;
+    draftRevision: number | null;
     status: FormControllerStatus;
     canSave: boolean;
     fields: LoadedFormFieldDescriptor[];
@@ -81,8 +105,16 @@ export type FormController = {
     getState(): FormControllerState;
     subscribe(listener: (state: FormControllerState) => void): () => void;
     /** Only returned non-computed, non-read-only fields; values stay native. */
-    write(fieldId: string, value: AirtableValue): boolean;
-    save(options?: { signal?: AbortSignal }): Promise<NormalizedFormSaveResult>;
+    /** afterCommit runs before publication. If it throws, native data is still committed;
+     * current-owner observers settle before the error propagates. Never retry that write. */
+    write(
+        fieldId: string,
+        value: AirtableValue,
+        afterCommit?: () => void
+    ): boolean;
+    save(
+        options?: FormControllerSaveOptions
+    ): Promise<NormalizedFormSaveResult>;
     /** Explicit scope changes clear the previous store; same-scope resets retain drafts. */
     reset(options: FormControllerOptions): void;
     /** A dispatched cancelled save has an unknown server outcome; reload before resaving. */
@@ -117,6 +149,7 @@ type Context = {
     loaded: FormLoadedResult;
     saveOptions: FormSaveOptions;
     getScope: () => FormOwnerScope;
+    isCurrent?: () => boolean;
     scope: FormOwnerScope;
     session: RuntimeSession;
     store: FormDraftStore<AirtableValue>;
@@ -162,6 +195,7 @@ const prepare = (options: FormControllerOptions): PreparedContext => {
         loaded,
         saveOptions,
         getScope: options.getScope,
+        isCurrent: options.isCurrent,
         scope,
         session,
         store,
@@ -220,6 +254,8 @@ export const createFormController = (
     const state = (): FormControllerState =>
         structuredClone({
             ownerScope: context.scope,
+            epoch: generation,
+            draftRevision: context.store.revision(context.handle),
             status,
             canSave:
                 (status === 'ready' || status === 'validation-error') &&
@@ -290,6 +326,7 @@ export const createFormController = (
         try {
             return (
                 sameScope(readScope(context.getScope), context.scope) &&
+                (context.isCurrent?.() ?? true) &&
                 sameSession(context.client.getSession(), context.session)
             );
         } catch {
@@ -308,7 +345,10 @@ export const createFormController = (
         generation += 1;
         active = null;
         // An already-expired handle cannot clear a replacement visitor's drafts.
-        if (context.store.snapshot(context.handle) !== null)
+        if (
+            context.isCurrent === undefined &&
+            context.store.snapshot(context.handle) !== null
+        )
             context.store.clear();
         status = 'stale';
         validationErrors = [];
@@ -342,16 +382,22 @@ export const createFormController = (
             listener(state());
             return () => listeners.delete(listener);
         },
-        write: (fieldId, value) => {
+        write: (fieldId, value, afterCommit) => {
             if (!observeScope()) return false;
             const field = context.fields.find(
                 (entry) => entry.fieldId === fieldId
             );
             if (field === undefined || field.readOnly) return false;
+            const owner = context;
+            const writeGeneration = generation;
             if (!context.store.write(context.handle, fieldId, value))
                 return false;
             if (status === 'saved') hasNewerEdits = true;
-            emit();
+            try {
+                afterCommit?.();
+            } finally {
+                if (context === owner && generation === writeGeneration) emit();
+            }
             return true;
         },
         save: async (requestOptions = {}) => {
@@ -386,7 +432,9 @@ export const createFormController = (
             const input = createFormSaveInput({
                 loaded: owner.loaded,
                 draft,
-                options: owner.saveOptions,
+                options: structuredClone(
+                    requestOptions.options ?? owner.saveOptions
+                ),
             });
             const controller = new AbortController();
             const externalSignal = requestOptions.signal;
@@ -394,6 +442,20 @@ export const createFormController = (
             externalSignal?.addEventListener('abort', forwardAbort, {
                 once: true,
             });
+            let operation:
+                | ReturnType<FormSaveLifecycle['dispatch']>
+                | undefined;
+            let acceptedOperation = false;
+            const requireAttempt = () => {
+                if (
+                    saveGeneration !== generation ||
+                    owner !== context ||
+                    !(requestOptions.isCurrent?.() ?? true)
+                )
+                    throw scopeError();
+                controller.signal.throwIfAborted();
+                requireScope();
+            };
             active = controller;
             status = 'saving';
             errorMessage = null;
@@ -401,7 +463,12 @@ export const createFormController = (
             try {
                 // A subscriber may have reset/cancelled during the loading emission.
                 controller.signal.throwIfAborted();
-                requireScope();
+                requireAttempt();
+                operation = requestOptions.lifecycle?.dispatch(
+                    structuredClone(input),
+                    draftRevision
+                );
+                requireAttempt();
                 const response = await owner.client.forms.save(input, {
                     signal: controller.signal,
                     session: { ...owner.session },
@@ -416,6 +483,7 @@ export const createFormController = (
                         'This Form draft is no longer active.'
                     );
                 }
+                requireAttempt();
                 const normalized = normalizeFormSaveResult(
                     response,
                     owner.loaded
@@ -424,6 +492,11 @@ export const createFormController = (
                 if (saveGeneration !== generation || owner !== context)
                     throw scopeError();
                 requireScope();
+                requireAttempt();
+                operation?.accepted(structuredClone(normalized));
+                acceptedOperation = true;
+                // An accepted journal callback may reenter; never touch a successor.
+                requireAttempt();
                 result = normalized;
                 validationErrors = normalized.validationErrors;
                 concurrentEditErrorMessage =
@@ -450,7 +523,8 @@ export const createFormController = (
                 if (
                     saveGeneration === generation &&
                     owner === context &&
-                    active === controller
+                    active === controller &&
+                    !acceptedOperation
                 ) {
                     if (!observeScope()) throw scopeError();
                     status = controller.signal.aborted
@@ -466,6 +540,11 @@ export const createFormController = (
             } finally {
                 externalSignal?.removeEventListener('abort', forwardAbort);
                 if (active === controller) active = null;
+                try {
+                    operation?.finish();
+                } catch {
+                    // Presentation cleanup cannot change an accepted operation outcome.
+                }
             }
         },
         reset: (nextOptions) => {

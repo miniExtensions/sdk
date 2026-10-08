@@ -8,11 +8,14 @@ import {
 } from '@miniextensions/sdk';
 import {
     createSelectControl,
+    mountSelectControl,
+    type SelectionModel,
     createAddressAutocompleteControl,
     AddressAutocompleteConfigurationError,
     type SelectFieldAvailability,
 } from '@miniextensions/sdk/ui';
 import { element, labeled } from './dom.js';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
 
 export type FieldControl = {
     node: HTMLDivElement;
@@ -65,7 +68,8 @@ export const formFieldControl = (
     initialValue: AirtableValue | undefined,
     onChange: () => void,
     forceReadOnly = false,
-    address?: AddressFieldContext
+    address?: AddressFieldContext,
+    binding?: FormFieldBinding
 ): FieldControl => {
     const config = schema.miniExtConfig;
     if (
@@ -148,14 +152,21 @@ export const formFieldControl = (
             onChange,
             forceReadOnly
         );
-    return selectFieldControl(schema, initialValue, onChange, forceReadOnly);
+    return selectFieldControl(
+        schema,
+        initialValue,
+        onChange,
+        forceReadOnly,
+        binding?.selection ?? undefined
+    );
 };
 
 const selectFieldControl = (
     schema: RuntimeFieldSchema,
     initialValue: AirtableValue | undefined,
     onChange: () => void,
-    forceReadOnly = false
+    forceReadOnly = false,
+    boundModel?: SelectionModel
 ): FieldControl => {
     const config = schema.miniExtConfig;
     const title =
@@ -172,15 +183,21 @@ const selectFieldControl = (
     let destroyed = false;
     let availabilityReady = true;
     let eligibleOptions: SelectFieldAvailability['options'] = [];
-    const select = createSelectControl({
-        field: schema,
-        value: initialValue,
-        label: title,
-        readOnly,
-        onChange: () => {
-            if (!destroyed) onChange();
-        },
-    });
+    const select = boundModel
+        ? mountSelectControl(boundModel, { label: title })
+        : createSelectControl({
+              field: schema,
+              value: initialValue,
+              label: title,
+              readOnly,
+              onChange: () => {
+                  if (!destroyed) onChange();
+              },
+          });
+    const change = () => {
+        if (!destroyed) onChange();
+    };
+    if (boundModel) select.element.addEventListener('change', change);
     const input = select.element.querySelector('select');
     if (input != null) input.dataset.fieldId = schema.airtableField.id;
     const node = element('div');
@@ -235,6 +252,7 @@ const selectFieldControl = (
         destroy: () => {
             if (destroyed) return;
             destroyed = true;
+            select.element.removeEventListener('change', change);
             select.destroy();
         },
     };
@@ -417,3 +435,63 @@ export const fieldControl = (
         },
     };
 };
+
+/** Stock renderer for a caller-owned binding; unmount leaves draft/model ownership intact. */
+export function mountBoundFormField(
+    binding: FormFieldBinding,
+    schema: RuntimeFieldSchema,
+    changed: () => void,
+    address?: AddressFieldContext,
+    beforeChange?: () => void,
+    onError?: (error: unknown) => void
+): FieldControl {
+    const initial = binding.getSnapshot();
+    let control: FieldControl;
+    let writingFromControl = false;
+    control = formFieldControl(
+        schema,
+        initial.value,
+        () => {
+            if (binding.getSnapshot().retired) return;
+            beforeChange?.();
+            writingFromControl = true;
+            try {
+                const result = binding.setValue(control.read());
+                if (result.accepted) changed();
+                else control.write(binding.getSnapshot().value ?? null);
+            } catch (error) {
+                status.textContent =
+                    'This field needs a valid value before saving.';
+                onError?.(error);
+            } finally {
+                writingFromControl = false;
+            }
+        },
+        false,
+        address,
+        binding
+    );
+    const status = element('p', '', 'field-hint');
+    status.setAttribute('role', 'status');
+    control.node.append(status);
+    let revision = initial.revision;
+    const stop = binding.subscribe((state) => {
+        control.node.setAttribute('aria-busy', String(state.pending));
+        status.textContent = state.retired
+            ? ''
+            : (state.error ??
+              state.validation.map((error) => error.errorMessage).join('\n'));
+        control.node.hidden = state.visibility.type !== 'visible';
+        control.node.inert = !state.canEdit;
+        if (!state.retired && state.revision !== revision) {
+            revision = state.revision;
+            if (!writingFromControl) control.write(state.value ?? null);
+        }
+    });
+    const destroy = control.destroy;
+    control.destroy = () => {
+        stop();
+        destroy();
+    };
+    return control;
+}

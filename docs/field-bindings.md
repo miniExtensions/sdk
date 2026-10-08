@@ -3,9 +3,9 @@
 This slice makes SDK-owned Form state usable with stock or app-supplied rendering.
 It reuses the existing Form controller, native draft store, selection models,
 published policies, projection and loaders. It does not reconstruct backend
-schemas or add a framework dependency. This document describes the approved
-contract; exports and integration remain under implementation until their tests
-and independent review pass.
+schemas or add a framework dependency to core imports. Optional React components
+consume the same bindings through the separate `/react` entry point. This document describes the approved
+contract and maps the additive `/forms` bindings to the existing authorities.
 
 ## Owner and renderer lifetimes
 
@@ -24,18 +24,22 @@ claimed to be detectable. Disposed snapshots expose no retired native data.
 ## Small field contract
 
 ```ts
-interface FieldBinding {
-    getSnapshot(): FieldSnapshot;
-    subscribe(listener: (snapshot: FieldSnapshot) => void): () => void;
-    setValue(nativeValue: AirtableValue): FieldActionResult;
-    selection?: {
-        choose(values: readonly string[]): FieldActionResult;
-        search(term: string): Promise<void>;
-        reload(): Promise<void>;
-        loadMore(): Promise<void>;
-        cancel(): void;
-    };
-}
+const owner = createFormFieldBindings({
+    client,
+    loaded,
+    saveOptions,
+    getScope,
+    isCurrent: ownsAcceptedForm,
+    canWrite: mayUseForm,
+});
+const field = owner.field(fieldId);
+const stop = field.subscribe((snapshot) => render(snapshot));
+field.setValue(nativeValue); // { accepted: true } or a generic refusal reason
+// Select/linked fields also expose the existing SelectionModel:
+field.selection?.toggle(nativeChoiceNameOrRecordId);
+stop(); // renderer unmount; owner and draft remain
+// Only the accepted Form lifetime disposes the owner:
+owner.destroy();
 ```
 
 Snapshots are detached copies: field identity, native value, dirty/revision state,
@@ -89,7 +93,8 @@ participate in the journal: all preflight refusal precedes begin; dispatch binds
 the exact attempt, native revision and owner; unknown/cancelled outcomes block
 replay; only an accepted owned response or explicit inspection acknowledgment
 unlocks recovery. A presentation exception after accepted commit cannot turn the
-operation back into unknown. Retire successor ownership before late callbacks.
+operation back into unknown. Retire the old operation/owner before late callbacks. A stale callback must never
+retire or clear a newer successor.
 Retain privacy scrubbing on Logout/Disconnect and non-sensitive uncertainty
 tombstones. Native upload File objects stay in the existing pending registry.
 
@@ -126,3 +131,51 @@ Email verification retains `AuthFlow` challenge ownership; select filtering reta
 the compiler and owned-criteria/manual-cleanup lifecycle; linked search retains
 authorized loaders and cascade. Their integration outcomes remain separate from
 field-renderer acceptance and do not establish full Form/Portal parity.
+
+### Authentication restoration decision (not implemented)
+
+The public visitor session helpers in `src/runtime/session.ts` copy explicit
+credentials and reject `miniExtSession`, the hosted Firebase principal. The
+canonical frontend at pinned `58f73d5` stores an encrypted login credential under
+the configured extension/table/login-field key with `never-expires` storage
+(`components/PublicExtension/LoginPage/loginIntoExtensionUsingLoginPage.ts`,
+`loginWithEncryptedLoginToken`). This is credential storage, even though its value
+is encrypted; it is not a non-auth draft. It does not establish an SDK-managed
+expiry or justify copying the hosted Firebase principal.
+
+A future opt-in restoration adapter could retain only the returned public visitor
+credential and its exact configured scope, clear it on explicit Logout/Disconnect,
+and revalidate it by an explicit fresh load before restoring editable data. A
+session-only choice limits persistence to a tab; persistent browser storage also
+makes the credential available to scripts on the same origin and needs an explicit
+retention/expiry decision. Server rejection must clear the remembered credential
+and require login, without a mutation retry. No storage adapter, retention default,
+Firebase restoration, or authentication persistence is included here.
+
+## Optional React renderers
+
+The optional `@miniextensions/sdk/react` entry point uses React as a peer; core
+imports do not import React. `TextField`, `SelectField` and `LinkedField` take an
+owner-held `binding`. `AttachmentField` additionally takes the owner's attachment
+`controller`. Each accepts a `render(state)` function replacing its default
+markup. The render state carries the same subscribed native snapshot and actions
+used by the default renderer; labels never become native Save values.
+
+Components remove subscriptions on unmount. They do not dispose the Form owner,
+clear its draft, upload files or initiate linked reads during mounting. The caller
+retires the old owner on visitor/session/context replacement. StrictMode and
+ordinary remounts must retain the owner-held draft and pending File identities.
+There is no refresh persistence or authentication-restoration storage in this slice.
+
+Attachment selection and drop are admission attempts, not uploads. Upload is
+explicit and reports phases rather than invented byte progress. Empty chooser
+completion preserves the pending queue; Clear removes it explicitly. Cancelling
+an upload preserves its uncertain-operation tombstone and never replays it.
+`AttachmentDialog` dismisses only when a cancel event originates on the dialog:
+a native file input's bubbling cancel does not close it, remove queued files or
+change the draft. Explicit Close remains separate. Custom dialog shells must use
+the same target/currentTarget distinction, without timer heuristics.
+
+The current React cancellation regression uses synthetic DOM events. It does not
+establish OS-picker Cancel/Escape, browser focus handoff, or screen-reader
+certification. Native evidence remains a separate acceptance gate.

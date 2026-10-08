@@ -1,3 +1,5 @@
+import { checkReactBindingConsumer } from './react-binding-consumer-checks.mjs';
+import { checkFieldBindingRecipe } from './field-binding-recipe-checks.mjs';
 import { checkSelectConditions } from './select-condition-checks.mjs';
 import { checkBrowserChildQueryExample } from './browser-child-query-example-checks.mjs';
 import assert from 'node:assert/strict';
@@ -102,6 +104,7 @@ const browserStarterFiles = [
     'dev.mjs',
     'src/main.ts',
     'src/fields.ts',
+    'src/customFieldRenderer.ts',
     'src/portal.ts',
     'src/confirmation.ts',
     'src/review.ts',
@@ -158,6 +161,7 @@ try {
                 path === 'docs/runtime.md' ||
                 path === 'docs/ui.md' ||
                 path === 'docs/forms.md' ||
+                path === 'docs/field-bindings.md' ||
                 path === 'docs/portals.md' ||
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
@@ -799,6 +803,21 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         writeFileSync(join(temporaryDirectory, filename), code);
         return filename;
     });
+    writeFileSync(
+        join(temporaryDirectory, 'field-bindings-react.tsx'),
+        `
+import { TextField, SelectField, LinkedField, AttachmentField, AttachmentDialog } from '@miniextensions/sdk/react';
+import type { FormFieldBinding, FormAttachmentController } from '@miniextensions/sdk/forms';
+export function Fields({binding, attachment}: {binding: FormFieldBinding; attachment: FormAttachmentController}) {
+    return <AttachmentDialog onClose={() => {}}>
+        <TextField binding={binding} render={({snapshot, binding}) => <input value={typeof snapshot.value === 'string' ? snapshot.value : ''} onChange={e => binding.setValue(e.currentTarget.value)} />} />
+        <SelectField binding={binding} /><LinkedField binding={binding} />
+        <AttachmentField binding={binding} controller={attachment} render={({attachment, controller}) => <button disabled={attachment.busy} onClick={() => void controller.upload()}>Upload</button>} />
+    </AttachmentDialog>;
+}
+`
+    );
+    reactSources.push('field-bindings-react.tsx');
     run(process.execPath, [
         require.resolve('typescript/bin/tsc'),
         '--noEmit',
@@ -813,6 +832,12 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         'react-jsx',
         ...reactSources,
     ]);
+
+    const reactBindingProof = await checkReactBindingConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(reactBindingProof.checks, 1);
 
     const authGuide = readFileSync(
         join(installedPackage, 'docs/auth.md'),
@@ -1043,6 +1068,10 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             );
         }
         if (example === 'browser') {
+            await checkFieldBindingRecipe({
+                consumerDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
             const result = await checkBrowserPortalExample({
                 consumerDirectory: directory,
                 happyDomModulePath: require.resolve('happy-dom'),
@@ -1219,7 +1248,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         `${browserCombinedReviewChecks} actual packed browser combined empty-hiding/Review cases`
     );
     console.log(
-        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS, declarations, doc links/recipes (7 UI, 4 Form, ${attachmentRecipe.checks} attachment, ${linkedFilterRecipe.checks} cascade, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserPortalSortChecks} actual installed Portal-sort recipe/starter cases, ${browserPortalFilterChecks} installed scalar-filter groups, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${browserChildQueryChecks} actual packed Portal-child query cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${editHideEmptyRecipe.checks} installed edit empty-hiding checkpoints, ${browserEditHideEmptyChecks} actual packed browser edit empty-hiding cases, ${addressAutocompleteRecipe.checks} actual installed address recipe checkpoints, ${browserAddressChecks} actual packed browser address checkpoints, ${addressCompositionRecipe.checks} actual installed address DOM-composition checkpoints and ${browserAddressCompositionChecks} actual packed browser address DOM-composition checkpoints (no OS IME proof), ${sectionProjectionChecks} canonical/installed section-projection checks, ${attachmentReviewChecks} installed attachment-review checkpoints and ${browserAttachmentReviewChecks} copied-starter attachment-review cases, ${linkedReviewRecipeChecks} installed linked-review checkpoints, ${formReviewRecipeChecks} actual installed prepared-review recipe checkpoints, ${browserReviewChecks} actual packed browser prepared-review cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
+        `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS and optional React renderer consumers, declarations, installed React StrictMode/remount and synthetic picker-cancel group, doc links/recipes (7 UI, 4 Form, ${attachmentRecipe.checks} attachment, ${linkedFilterRecipe.checks} cascade, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserPortalSortChecks} actual installed Portal-sort recipe/starter cases, ${browserPortalFilterChecks} installed scalar-filter groups, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${browserChildQueryChecks} actual packed Portal-child query cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${editHideEmptyRecipe.checks} installed edit empty-hiding checkpoints, ${browserEditHideEmptyChecks} actual packed browser edit empty-hiding cases, ${addressAutocompleteRecipe.checks} actual installed address recipe checkpoints, ${browserAddressChecks} actual packed browser address checkpoints, ${addressCompositionRecipe.checks} actual installed address DOM-composition checkpoints and ${browserAddressCompositionChecks} actual packed browser address DOM-composition checkpoints (no OS IME proof), ${sectionProjectionChecks} canonical/installed section-projection checks, ${attachmentReviewChecks} installed attachment-review checkpoints and ${browserAttachmentReviewChecks} copied-starter attachment-review cases, ${linkedReviewRecipeChecks} installed linked-review checkpoints, ${formReviewRecipeChecks} actual installed prepared-review recipe checkpoints, ${browserReviewChecks} actual packed browser prepared-review cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
     rmSync(temporaryDirectory, { recursive: true, force: true });

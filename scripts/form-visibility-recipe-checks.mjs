@@ -284,6 +284,10 @@ export async function checkBrowserVisibilityExample({
         target.dispatchEvent(new window.Event('input', { bubbles: true }));
         toggle(false);
         assert.equal(shown('fld_title'), false);
+        target.value = 'Retained hidden callback must not write';
+        target.dispatchEvent(new window.Event('input', { bubbles: true }));
+        assert.equal(target.value, 'Accepted packed draft');
+        assert.equal(saves.length, 0);
         driver
             .closest('form')
             .dispatchEvent(

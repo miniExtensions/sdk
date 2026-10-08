@@ -65,6 +65,16 @@
                 "types": "./dist/cjs/formulas/index.d.ts",
                 "default": "./dist/cjs/formulas/index.js"
             }
+        },
+        "./react": {
+            "import": {
+                "types": "./dist/esm/react/index.d.ts",
+                "default": "./dist/esm/react/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/react/index.d.ts",
+                "default": "./dist/cjs/react/index.js"
+            }
         }
     },
     "files": [
@@ -74,6 +84,7 @@
         "docs/runtime.md",
         "docs/ui.md",
         "docs/forms.md",
+        "docs/field-bindings.md",
         "docs/portals.md",
         "docs/auth.md",
         "docs/browser-lifecycle.md",
@@ -121,6 +132,18 @@
         "esbuild": "0.25.10",
         "happy-dom": "20.0.11",
         "prettier": "3.6.2",
-        "typescript": "5.9.3"
+        "typescript": "5.9.3",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "@types/react": "18.3.12",
+        "@types/react-dom": "18.3.1"
+    },
+    "peerDependencies": {
+        "react": "^18.3.1 || ^19.0.0"
+    },
+    "peerDependenciesMeta": {
+        "react": {
+            "optional": true
+        }
     }
 }

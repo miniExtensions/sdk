@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { transform } from 'esbuild';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -254,6 +256,129 @@ export async function checkRendererConsumer({
             typeof consumer('@miniextensions/sdk/react').FieldRenderer,
             'function'
         );
+        const rendererGuide = readFileSync(
+            join(
+                consumerDirectory,
+                'node_modules/@miniextensions/sdk/docs/field-bindings.md'
+            ),
+            'utf8'
+        );
+        const recipeBlocks = [
+            ...rendererGuide.matchAll(/```tsx\n([\s\S]*?)\n```/g),
+        ]
+            .map(([, code]) => code)
+            .filter((code) => code.includes('export function CustomFields('));
+        assert.equal(
+            recipeBlocks.length,
+            1,
+            'Missing unique installed CustomFields recipe'
+        );
+        const recipe = await transform(recipeBlocks[0], {
+            loader: 'tsx',
+            jsx: 'automatic',
+            format: 'esm',
+            target: 'es2022',
+            sourcefile: 'installed-custom-fields.tsx',
+        });
+        const recipePath = join(
+            consumerDirectory,
+            'installed-custom-fields.mjs'
+        );
+        writeFileSync(recipePath, recipe.code);
+        const { CustomFields } = await import(pathToFileURL(recipePath));
+        let recipeSubscriptions = 0,
+            recipeUnsubscriptions = 0,
+            recipeDisposals = 0;
+        const documentedField = {
+            physicalKind: 'singleLineText',
+            fieldId: 'fld_doc',
+            title: 'Documented field',
+            field: {
+                id: 'fld_doc',
+                name: 'Documented field',
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: { type: 'singleLineText', options: null },
+            },
+            displayConfig: undefined,
+            value: 'Documented native leaf',
+            context: 'form',
+            computed: false,
+            dirty: false,
+            pending: false,
+            validation: [],
+            error: null,
+            capability: { type: 'readonly' },
+        };
+        const documentedHost = (snapshot) => ({
+            getSnapshot: () => snapshot,
+            subscribe: () => {
+                recipeSubscriptions++;
+                return () => recipeUnsubscriptions++;
+            },
+            dispose: () => recipeDisposals++,
+        });
+        for (const status of [
+            'ready',
+            'hidden',
+            'retired',
+            'unavailable',
+            'blocked',
+            'missing-renderer',
+        ]) {
+            const snapshot =
+                status === 'ready'
+                    ? { status: 'ready', fields: [documentedField] }
+                    : status === 'missing-renderer'
+                      ? {
+                            status: 'ready',
+                            fields: [
+                                {
+                                    ...documentedField,
+                                    physicalKind: 'number',
+                                    value: 0,
+                                    field: {
+                                        ...documentedField.field,
+                                        config: {
+                                            type: 'number',
+                                            options: { precision: 0 },
+                                        },
+                                    },
+                                },
+                            ],
+                        }
+                      : { status, reason: 'Synthetic documented status' };
+            await act(async () =>
+                root.render(
+                    h(
+                        StrictMode,
+                        null,
+                        h(CustomFields, { host: documentedHost(snapshot) })
+                    )
+                )
+            );
+            if (status === 'hidden' || status === 'retired') {
+                assert.equal(
+                    container.textContent,
+                    '',
+                    `Documented ${status} must stay silent`
+                );
+                assert.equal(container.innerHTML, '', 'No placeholder DOM');
+            } else if (status === 'ready')
+                assert.equal(container.textContent, 'Documented native leaf');
+            else
+                assert.equal(
+                    container.textContent,
+                    'Field unavailable.',
+                    `Documented ${status} must show a visible refusal`
+                );
+            assert.equal(recipeDisposals, 0);
+        }
+        await act(async () => root.render(null));
+        assert.equal(recipeSubscriptions, recipeUnsubscriptions);
+        assert.equal(recipeDisposals, 0);
+        checks++;
         let uploadCalls = 0,
             buttonCalls = 0;
         const uploaded = {

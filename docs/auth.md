@@ -476,6 +476,8 @@ in, supply a factory using `optInRememberedLogin` below. The provisional
 `onPending` renders neutral loading text. Only definitive `login-required`
 publishes login; transport/storage errors use `onRestorationError`, with captured
 explicit Retry and Continue with login actions. Neither action runs automatically.
+Starting Retry immediately retires the previous attempt's error/login controls;
+repeated Retry while that attempt is pending does nothing.
 Handle a rejected initial load separately as an app error, never as proof of logout.
 
 `onLoaded` receives the accepted page, scope, optional authentication adapter and
@@ -683,43 +685,79 @@ export function makeAuthScreenOwner(
             adapter.destroy();
             return;
         }
-        const authentication: Authentication = {
-            flow: adapter.flow,
-            applySession(grant) {
-                if (!current() || remembered !== adapter) return;
-                adapter.applySession(grant);
-                if (contextCurrent() && remembered === adapter)
-                    session = { ...client.getSession() };
-            },
-        };
-        const renderLogin = () => {
-            if (current() && remembered === adapter && adapter.flow.isCurrent())
-                options.onLoaded(page, captured, authentication, current);
+        let restorationAttempt = 0;
+        let restoring = false;
+        const ownsAttempt = (attempt: number) =>
+            attempt === restorationAttempt &&
+            contextCurrent() &&
+            remembered === adapter &&
+            attempt === restorationAttempt;
+        const currentAttempt = (attempt: number) =>
+            ownsAttempt(attempt) &&
+            sameSession(session) &&
+            ownsAttempt(attempt);
+        const renderLogin = (attempt: number) => {
+            const ownsView = () =>
+                !restoring && ownsAttempt(attempt) && !restoring;
+            const currentView = () =>
+                ownsView() && sameSession(session) && ownsView();
+            const authentication: Authentication = {
+                flow: adapter.flow,
+                applySession(grant) {
+                    if (!currentView()) return;
+                    adapter.applySession(grant);
+                    if (ownsView()) {
+                        const next = { ...client.getSession() };
+                        if (ownsView()) session = next;
+                    }
+                },
+            };
+            if (currentView() && adapter.flow.isCurrent() && currentView())
+                options.onLoaded(page, captured, authentication, currentView);
         };
         const resume = async () => {
-            if (!current() || remembered !== adapter) return;
-            options.onPending?.(captured, current);
-            if (!current() || remembered !== adapter) return;
-            const accepted = await adapter.restore();
-            if (!contextCurrent() || remembered !== adapter) return;
-            const state = adapter.getSnapshot();
-            if (accepted && state.phase === 'restored') {
-                session = { ...client.getSession() }; // Handoff verifies the adapter's accepted session.
-                publish(accepted);
-            } else if (current() && state.phase === 'login-required') {
-                renderLogin();
-            } else if (
-                current() &&
-                (state.phase === 'error' ||
-                    state.phase === 'storage-unavailable')
-            ) {
-                options.onRestorationError?.(
-                    state,
-                    resume,
-                    captured,
-                    current,
-                    renderLogin
-                );
+            if (restoring || !current() || remembered !== adapter || restoring)
+                return;
+            const attempt = ++restorationAttempt;
+            restoring = true; // Retire old controls before any callback reentry.
+            const isCurrent = () => currentAttempt(attempt);
+            try {
+                options.onPending?.(captured, isCurrent);
+                if (!isCurrent()) return;
+                const accepted = await adapter.restore();
+                if (!ownsAttempt(attempt)) return;
+                const state = adapter.getSnapshot();
+                if (!ownsAttempt(attempt)) return;
+                restoring = false; // The error callback may explicitly retry.
+                if (accepted && state.phase === 'restored') {
+                    const next = { ...client.getSession() };
+                    if (!ownsAttempt(attempt)) return;
+                    session = next; // Handoff verifies the accepted session.
+                    publish(accepted);
+                } else if (isCurrent() && state.phase === 'login-required') {
+                    renderLogin(attempt);
+                } else if (
+                    isCurrent() &&
+                    (state.phase === 'error' ||
+                        state.phase === 'storage-unavailable')
+                ) {
+                    const errorCurrent = () =>
+                        !restoring && isCurrent() && !restoring;
+                    options.onRestorationError?.(
+                        state,
+                        async () => {
+                            if (errorCurrent()) await resume();
+                        },
+                        captured,
+                        errorCurrent,
+                        () => {
+                            if (errorCurrent())
+                                renderLogin(++restorationAttempt);
+                        }
+                    );
+                }
+            } finally {
+                if (attempt === restorationAttempt) restoring = false;
             }
         };
         await resume(); // One explicit restoration read; the AuthPage stayed private.

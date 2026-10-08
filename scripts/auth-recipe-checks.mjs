@@ -954,6 +954,7 @@ export async function checkAuthRecipe({
             shared = persistentStore(),
             remember = true,
             isCurrent = () => true,
+            onError,
         } = {}
     ) => {
         const client = makeClient({
@@ -1002,7 +1003,11 @@ export async function checkAuthRecipe({
                 scope,
                 guard,
                 continueWithLogin
-            ) =>
+            ) => {
+                if (onError) {
+                    onError({ state, retry, scope, guard, continueWithLogin });
+                    return;
+                }
                 currentWrite(guard, () => {
                     errors.push({
                         state,
@@ -1018,7 +1023,8 @@ export async function checkAuthRecipe({
                             'Restoration ' + state.phase
                         )
                     );
-                }),
+                });
+            },
             onLoaded: (page, scope, authentication, guard) =>
                 currentWrite(guard, () => {
                     published.push({ page, scope, authentication, guard });
@@ -1387,6 +1393,103 @@ export async function checkAuthRecipe({
             assert.equal(ui.button('Log in'), undefined);
             assert.equal(ui.status(), 'Initial load error');
             assert.equal(f.client.sessionWrites, 0);
+        }
+    );
+    await check(
+        'Retained restoration error controls become inert when an explicit retry owns the pending screen',
+        async (ui) => {
+            const shared = persistentStore();
+            await seedRemembered(shared);
+            const f = startup(ui, { shared });
+            const initial = await f.begin();
+            await ui.complete(f.loads[0].response, screen());
+            await ui.React.act(async () =>
+                f.loads[1].response.reject(
+                    Error('Synthetic first validation error')
+                )
+            );
+            assert.deepEqual(await initial.outcome, { ok: true });
+            const old = f.errors[0];
+            assert.equal(old.state.phase, 'error');
+            let retry;
+            await ui.React.act(async () => {
+                retry = old.retry();
+            });
+            assert.equal(f.loads.length, 3);
+            assert.match(ui.status(), /Loading/);
+            assert.equal(
+                old.guard(),
+                false,
+                'The error callback guard belongs only to the failed attempt'
+            );
+            await ui.React.act(async () => {
+                old.continueWithLogin();
+                await old.retry();
+            });
+            assert.equal(f.loads.length, 3);
+            assert.equal(f.errors.length, 1);
+            assert.equal(f.published.length, 0);
+            assert.equal(ui.button('Log in'), undefined);
+            assert.match(ui.status(), /Loading/);
+            assert.equal(f.client.sessionWrites, 0);
+            await ui.complete(f.loads[2].response, screen('portal_loaded'));
+            await retry;
+            assert.equal(f.published.length, 1);
+            assert.equal(f.published[0].page.extensionScreen, 'portal_loaded');
+            assert.equal(f.client.sessionWrites, 1);
+            assert.equal(f.loads.length, 3);
+            assert.match(ui.host.textContent, /Accepted portal_loaded/);
+        }
+    );
+    await check(
+        'A retry started synchronously inside the error callback retires its guard and survives the old continuation',
+        async (ui) => {
+            const shared = persistentStore();
+            await seedRemembered(shared);
+            let errorCalls = 0,
+                oldWrites = 0,
+                retry,
+                oldGuard;
+            const f = startup(ui, {
+                shared,
+                onError: ({ retry: startRetry, guard }) => {
+                    errorCalls++;
+                    retry = startRetry();
+                    oldGuard = guard;
+                    if (guard()) {
+                        oldWrites++;
+                        ui.root.render(
+                            ui.React.createElement(
+                                'p',
+                                { role: 'status' },
+                                'Old restoration error'
+                            )
+                        );
+                    }
+                },
+            });
+            const initial = await f.begin();
+            await ui.complete(f.loads[0].response, screen());
+            await ui.React.act(async () =>
+                f.loads[1].response.reject(
+                    Error('Synthetic validation error callback')
+                )
+            );
+            assert.deepEqual(await initial.outcome, { ok: true });
+            assert.equal(errorCalls, 1);
+            assert.equal(oldGuard(), false);
+            assert.equal(oldWrites, 0);
+            assert.equal(f.loads.length, 3);
+            assert.match(ui.status(), /Loading/);
+            assert.equal(f.loads[2].options.signal.aborted, false);
+            assert.equal(f.published.length, 0);
+            await ui.complete(f.loads[2].response, screen('portal_loaded'));
+            await retry;
+            assert.equal(f.published.length, 1);
+            assert.equal(f.published[0].page.extensionScreen, 'portal_loaded');
+            assert.equal(f.client.sessionWrites, 1);
+            assert.equal(f.loads.length, 3);
+            assert.match(ui.host.textContent, /Accepted portal_loaded/);
         }
     );
     if (failures.length) {

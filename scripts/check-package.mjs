@@ -890,7 +890,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(rendererProof.checks, 14);
+    assert.equal(rendererProof.checks, 15);
     console.log(
         `Installed renderer hosts: all 33 slots and ${rendererProof.checks} owner/remount groups passed; synthetic transport only.`
     );
@@ -937,7 +937,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         guideSources: authGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(authRecipeChecks.checks, 17);
+    assert.equal(authRecipeChecks.checks, 19);
     assert.equal(
         await checkSessionRestoration({
             consumerDirectory: temporaryDirectory,

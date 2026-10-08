@@ -19,7 +19,8 @@ export async function checkFieldBindingRecipe({
         absWorkingDir: consumerDirectory,
         stdin: {
             contents: `
-        export { createFormFieldBindings } from '@miniextensions/sdk/forms';
+        export { createFormFieldBindings, RecoveryJournal } from '@miniextensions/sdk/forms';
+        export { createPortalCellBinding } from '@miniextensions/sdk/portals';
         export { mountBoundFormField } from './src/fields.ts';
         export { mountCustomField } from './src/customFieldRenderer.ts';
     `,
@@ -48,6 +49,8 @@ export async function checkFieldBindingRecipe({
     try {
         const {
             createFormFieldBindings,
+            createPortalCellBinding,
+            RecoveryJournal,
             mountBoundFormField,
             mountCustomField,
         } = await import(pathToFileURL(outfile));
@@ -191,7 +194,96 @@ export async function checkFieldBindingRecipe({
         ])
             renderer.destroy();
         owner.destroy();
-        return { checks: 1 };
+        // Installed Portal owner consumed by the actual shipped stock/custom renderers.
+        const gridCalls = [];
+        const gridClient = {
+            getSession: () => ({}),
+            portals: {
+                updateGridCell: async (input) => {
+                    gridCalls.push(structuredClone(input));
+                    return {
+                        record: {
+                            id: input.recordId,
+                            fields: { [input.recordFieldId]: input.value },
+                        },
+                        auditTrail: null,
+                        auditTrails: [],
+                    };
+                },
+            },
+        };
+        const journal = new RecoveryJournal();
+        const cell = createPortalCellBinding({
+            client: gridClient,
+            input: {
+                portalExtensionAccessToken: 'portal-token',
+                portalFieldId: 'fld_children',
+                recordFieldId: 'fld_title',
+                recordId: 'rec_one',
+                selectedCustomViewId: 'view_example',
+            },
+            schema: loaded.payload.fieldIdsToSchemas.fld_title,
+            value: 'Portal initial',
+            getScope: () => ({ ownerId: 'A', revision: 0 }),
+            isCurrent: () => true,
+            recovery: {
+                journal,
+                scope: {
+                    owner: 'A',
+                    parentFieldId: 'fld_children',
+                    tableId: 'tbl_children',
+                    childExtensionId: '',
+                    context: 'modal',
+                },
+                loadVersion: 1,
+            },
+        });
+        let cellStock = mountBoundFormField(
+            cell.binding,
+            loaded.payload.fieldIdsToSchemas.fld_title,
+            () => {}
+        );
+        let cellCustom = mountCustomField(cell.binding, window.document);
+        window.document.body.append(cellStock.node, cellCustom.node);
+        const cellInput = cellCustom.node.querySelector('input');
+        cellInput.value = 'Portal custom edit';
+        cellInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+        assert.equal(
+            cellStock.node.querySelector('input').value,
+            'Portal custom edit'
+        );
+        cellStock.destroy();
+        cellStock.node.remove();
+        cellCustom.destroy();
+        cellStock = mountBoundFormField(
+            cell.binding,
+            loaded.payload.fieldIdsToSchemas.fld_title,
+            () => {}
+        );
+        cellCustom = mountCustomField(cell.binding, window.document);
+        window.document.body.append(cellStock.node, cellCustom.node);
+        assert.equal(
+            cellCustom.node.querySelector('input').value,
+            'Portal custom edit'
+        );
+        assert.equal(gridCalls.length, 0);
+        await cell.save();
+        assert.deepEqual(gridCalls, [
+            {
+                portalExtensionAccessToken: 'portal-token',
+                portalFieldId: 'fld_children',
+                recordFieldId: 'fld_title',
+                recordId: 'rec_one',
+                selectedCustomViewId: 'view_example',
+                value: 'Portal custom edit',
+            },
+        ]);
+        await assert.rejects(cell.save());
+        assert.equal(gridCalls.length, 1);
+        cellStock.destroy();
+        cellCustom.destroy();
+        cell.destroy();
+        return { checks: 2 };
     } finally {
         window.happyDOM.abort();
         for (const [key, descriptor] of old) {

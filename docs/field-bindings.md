@@ -192,3 +192,40 @@ search. React reflects that query on remount and takes the replacement owner's
 query on context changes. `canChoose` validates a complete proposed selection
 against the model's policy, including atomic replacement at a selection limit;
 decorated disabled-option flags are presentation, not whole-set admission.
+
+## Portal single-cell binding
+
+The Portal cell owner uses the same subscribed field action/snapshot contract as
+Form and React renderers, without fabricating a loaded Form. Its detached native
+draft uses the existing draft store. Child-first detail configuration remains
+write authorization; returned detail display configuration remains cell/preview
+presentation. Attachments continue to be readonly previews, without Save.
+
+A cell captures record, table, Portal field, view, accepted snapshot, token,
+client session and owner revision. Caller `isCurrent` additionally fences the
+mounted editor and observed configuration epoch. Old row entry and old editor
+actions cannot become actions on a new snapshot, including observed A→B→A.
+Ordinary renderer unmount unsubscribes only; explicit editor replacement disposes
+the cell owner.
+
+Only explicit Save invokes the existing `portals.updateGridCell` operation. It
+captures the authoritative native value and dirty revision, begins the existing
+uncertainty journal immediately before dispatch, and retires collection actions.
+Accepted responses settle that exact attempt before renderer callbacks. Lost,
+cancelled or stale responses remain unknown, with no automatic replay. A new
+accepted collection/editor is required for recovery; a new mount alone never
+permits a second mutation. Parent refresh remains an explicit adapter stage after
+accepted cell Save; a failed refresh must not make the accepted cell mutation
+replayable.
+
+Acceptance covers stock/custom/React consumption of the same binding, remount,
+exact native value dispatch, select limits, child/display policy separation,
+held responses across owner/session/view replacement, cancellation and journal
+no-replay. Installed copied-starter tests prove synthetic transport dispatch,
+not backend persistence or native accessibility certification. This is one cell,
+not a grid framework. Session-refresh storage remains design-only.
+
+Model `setValue`, `setOptions` and `reset` synchronize presentation; they are not
+native commits. Custom renderers use `binding.setValue`, or the guarded model
+`choose`/`toggle` user actions. Save always reads the owner-held native draft,
+never a renderer or model-only synchronization value.

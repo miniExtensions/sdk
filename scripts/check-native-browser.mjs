@@ -83,6 +83,7 @@ try {
             'scripts/attachment-review-recipe-checks.mjs',
             'scripts/portal-recipe-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
+        channel: 'chrome',
         chromiumSandbox: true,
         results,
         network,
@@ -236,7 +237,15 @@ try {
             server.listen(0, '127.0.0.1', resolve);
         });
         const origin = `http://127.0.0.1:${server.address().port}`;
+        const executablePath = realpathSync('/opt/google/chrome/chrome');
+        report.browserExecutable = {
+            path: executablePath,
+            version: execFileSync(executablePath, ['--version'], {
+                encoding: 'utf8',
+            }).trim(),
+        };
         browser = await chromium.launch({
+            channel: 'chrome',
             headless: true,
             chromiumSandbox: true,
         });
@@ -412,6 +421,14 @@ try {
             assert.equal(
                 state.calls.filter((c) => c.route === 'saveForm').length,
                 0
+            );
+            await page.locator('#visitor').selectOption('B');
+            await page.locator('#visitor').selectOption('A');
+            await input.waitFor();
+            assert.equal(
+                await input.inputValue(),
+                '7',
+                'Invalid native buffer must not replace the retained draft across a visitor remount'
             );
             await input.fill('9');
             await page

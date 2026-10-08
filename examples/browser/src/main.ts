@@ -896,8 +896,10 @@ const renderForm = (page: FormLoadedResult): void => {
                 value: 'Attachment details are not retained.',
             });
     };
+    const formControlDisposers: Array<() => void> = [];
     disposeFormControls = () => {
         formRetired = true;
+        for (const stop of formControlDisposers) stop();
         bindingOwner?.destroy();
         linkedPresentation.retire();
         pendingFiles.retire();
@@ -1060,151 +1062,107 @@ const renderForm = (page: FormLoadedResult): void => {
         ) {
             const choice = element('input');
             choice.placeholder = 'New choice name';
-            control.node.append(
-                labeled('Add a choice', choice),
-                button('Create choice', () => {
-                    if (
-                        !mayUseForm() ||
-                        !getSelectFieldPolicy(schema).allowAddingNewOptions ||
-                        control.selectAvailabilityReady?.() === false
-                    )
+            choice.setAttribute('aria-label', 'New choice name');
+            const creator = bindingOwner?.selectChoice(
+                fieldId,
+                { journal: recovery, scope, loadVersion },
+                {
+                    getLoaded: () => page,
+                    isCurrent: () =>
+                        ownsLinkedRender() && !reviewPending && !formRetired,
+                    configurationRevision: observeReviewConfiguration,
+                    canAccept: () =>
+                        ownsLinkedRender() &&
+                        !reviewPending &&
+                        !formRetired &&
+                        !(
+                            candidate?.outcome === 'unknown' &&
+                            candidate.acknowledgment === 'none'
+                        ) &&
+                        fieldVisibility[fieldId]?.type === 'visible',
+                    onAttempt: () => updateRecovery(),
+                }
+            );
+            if (creator != null) {
+                const create = button('Create choice', () => {
+                    if (!ownsLinkedRender() || reviewPending || request != null)
                         return;
-                    const policy = getSelectFieldPolicy(schema);
-                    const currentValue = control.read();
-                    if (
-                        schema.fieldType ===
-                            AirtableFieldType.MULTIPLE_SELECTS &&
-                        policy.maxSelections !== null &&
-                        Array.isArray(currentValue) &&
-                        currentValue.length >= policy.maxSelections
-                    ) {
-                        status(
-                            'Remove a selected choice before adding another.',
-                            true
-                        );
-                        return;
-                    }
-                    if (choice.value.trim() === '') {
-                        status('Enter a new choice name.', true);
-                        return;
-                    }
+                    const captured = choice.value;
                     void run(
                         'Creating the configured select choice…',
-                        async ({ client, signal, current }) => {
-                            if (
-                                !mayUseForm() ||
-                                !getSelectFieldPolicy(schema)
-                                    .allowAddingNewOptions ||
-                                control.selectAvailabilityReady?.() === false
-                            )
-                                return;
-                            const dispatchPolicy = getSelectFieldPolicy(schema);
-                            const dispatchValue = control.read();
-                            if (
-                                schema.fieldType ===
-                                    AirtableFieldType.MULTIPLE_SELECTS &&
-                                dispatchPolicy.maxSelections !== null &&
-                                Array.isArray(dispatchValue) &&
-                                dispatchValue.length >=
-                                    dispatchPolicy.maxSelections
-                            )
-                                return;
-                            signal.throwIfAborted();
-                            const result = await client.forms.addSelectOption(
-                                {
-                                    extensionAccessToken:
-                                        page.payload.extensionAccessToken,
-                                    airtableFieldId: fieldId,
-                                    newChoiceText: choice.value,
-                                },
-                                { signal }
-                            );
-                            if (!current() || !mayUseForm()) return;
-                            visitor.drafts.addChoice(
-                                draft,
-                                fieldId,
-                                result.newChoice
-                            );
-                            const fieldConfig = schema.airtableField.config;
-                            if (
-                                fieldConfig.type ===
-                                    AirtableFieldType.SINGLE_SELECT ||
-                                fieldConfig.type ===
-                                    AirtableFieldType.MULTIPLE_SELECTS
-                            ) {
-                                fieldConfig.options = {
-                                    ...fieldConfig.options,
-                                    choices: [
-                                        ...(
-                                            fieldConfig.options?.choices ?? []
-                                        ).filter(
-                                            (option) =>
-                                                option.id !==
-                                                result.newChoice.id
-                                        ),
-                                        result.newChoice,
-                                    ],
-                                };
-                                control.updateSelectChoices?.(
-                                    fieldConfig.options.choices
-                                );
-                                updateFieldVisibility();
-                                updateSelectAvailability();
+                        async ({ signal, current }) => {
+                            const cancel = () => creator.cancel();
+                            signal.addEventListener('abort', cancel, {
+                                once: true,
+                            });
+                            try {
+                                const accepted = await creator.create(captured);
+                                if (!current() || !ownsLinkedRender()) return;
+                                if (accepted) {
+                                    const fresh =
+                                        bindingOwner!.getLoaded().payload
+                                            .fieldIdsToSchemas[fieldId]!;
+                                    const freshConfig =
+                                        fresh.airtableField.config;
+                                    if (
+                                        freshConfig.type !==
+                                            AirtableFieldType.SINGLE_SELECT &&
+                                        freshConfig.type !==
+                                            AirtableFieldType.MULTIPLE_SELECTS
+                                    )
+                                        throw new Error(
+                                            'The returned choice field is unavailable.'
+                                        );
+                                    schema.airtableField.config =
+                                        structuredClone(freshConfig);
+                                    const config = schema.airtableField.config;
+                                    if (
+                                        config.type === 'singleSelect' ||
+                                        config.type === 'multipleSelects'
+                                    )
+                                        control.updateSelectChoices?.(
+                                            config.options?.choices ?? []
+                                        );
+                                    control.write(
+                                        bindingOwner!
+                                            .field(fieldId)
+                                            .getSnapshot().value ?? null
+                                    );
+                                    updateFieldVisibility();
+                                    updateSelectAvailability();
+                                    if (choice.value === captured)
+                                        choice.value = '';
+                                    status(
+                                        creator.getSnapshot().phase ===
+                                            'created-selected'
+                                            ? 'Choice created and selected in the draft. Save to update the record.'
+                                            : 'Choice created but not currently selectable. The record has not been saved.'
+                                    );
+                                } else
+                                    status(
+                                        creator.getSnapshot().error ??
+                                            'This choice cannot be created with the current Form settings.',
+                                        true
+                                    );
+                            } finally {
+                                signal.removeEventListener('abort', cancel);
+                                if (ownsLinkedRender()) updateRecovery();
                             }
-                            if (
-                                control.selectAvailabilityReady?.() === false ||
-                                control.isSelectOptionAvailable?.(
-                                    result.newChoice
-                                ) !== true
-                            ) {
-                                choice.value = '';
-                                status(
-                                    'This choice is not currently selectable.'
-                                );
-                                return;
-                            }
-                            const previous = control.read();
-                            const maximum =
-                                getSelectFieldPolicy(schema).maxSelections;
-                            if (
-                                schema.fieldType ===
-                                    AirtableFieldType.MULTIPLE_SELECTS &&
-                                maximum !== null &&
-                                Array.isArray(previous) &&
-                                previous.length >= maximum
-                            ) {
-                                choice.value = '';
-                                status(
-                                    'Choice created. Remove a selected choice before selecting it.'
-                                );
-                                return;
-                            }
-                            control.write(
-                                schema.fieldType ===
-                                    AirtableFieldType.MULTIPLE_SELECTS
-                                    ? [
-                                          ...(Array.isArray(previous)
-                                              ? previous
-                                              : []),
-                                          result.newChoice.name,
-                                      ]
-                                    : result.newChoice.name
-                            );
-                            bindingOwner?.controller.write(
-                                fieldId,
-                                control.read()
-                            );
-                            updateFieldVisibility();
-                            updateSelectAvailability();
-                            choice.value = '';
-                            status(
-                                'Choice created and selected in the draft. Save to update the record.'
-                            );
-                        }
+                        },
+                        ownsLinkedRender,
+                        ownsLinkedRender
                     );
-                })
-            );
+                });
+                const stop = creator.subscribe((state) => {
+                    if (!ownsLinkedRender()) return;
+                    // Leave a blocked button reachable for explicit refusal/status, as other starter actions do.
+                    create.disabled = state.busy || state.phase === 'retired';
+                });
+                formControlDisposers.push(stop);
+                control.node.append(choice, create);
+            }
         }
+
         if (schema.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS) {
             const search = element('input');
             search.placeholder = 'Search available linked records';
@@ -1804,8 +1762,18 @@ const renderForm = (page: FormLoadedResult): void => {
         if (attempt == null) return;
         recoveryPanel.append(
             element('h3', 'Earlier outcome not confirmed'),
-            element('p', `${attempt.id}: ${uncertainSaveMessage}`)
+            element(
+                'p',
+                `${attempt.id}: ${attempt.operation === 'choice' ? 'Choice creation outcome is unknown; the record has not been saved by this action.' : uncertainSaveMessage}`
+            )
         );
+        if (attempt.operation === 'choice')
+            recoveryPanel.append(
+                element(
+                    'p',
+                    'The choice may have been created. Inspect current choices before acknowledging a new intent; it will not be created again automatically. This is separate from record Save.'
+                )
+            );
         if (attempt.operation === 'upload')
             recoveryPanel.append(
                 element(
@@ -1837,7 +1805,38 @@ const renderForm = (page: FormLoadedResult): void => {
                     'Inspect the outcome through your usual request access or ask the form owner. This standalone form has no authorized request list to check here.'
                 )
             );
+        if (
+            attempt.operation === 'choice' &&
+            !expired &&
+            !attempt.flight &&
+            loadVersion > attempt.loadVersion
+        )
+            recoveryPanel.append(
+                button('Acknowledge inspected choice outcome', async () => {
+                    const observed = observeReviewConfiguration();
+                    if (
+                        !(await confirmCurrent({
+                            title: 'Choices inspected?',
+                            message:
+                                'Inspect the freshly loaded choices first. This acknowledges a separate new intent without declaring the earlier creation failed or retrying it. No choice or record will be created by this acknowledgment.',
+                            confirmLabel: 'Acknowledge inspection',
+                        })) ||
+                        !ownsLinkedRender() ||
+                        observed !== observeReviewConfiguration() ||
+                        attempt.flight ||
+                        recovery.blocking(scope, recordId) !== attempt
+                    )
+                        return;
+                    recovery.acknowledgeNewIntent(attempt);
+                    bindingOwner?.refresh();
+                    updateRecovery();
+                    status(
+                        'Earlier choice outcome remains unknown. Any new creation or Save requires its own explicit action.'
+                    );
+                })
+            );
         const freshKnownRecord =
+            attempt.operation !== 'choice' &&
             !expired &&
             freshInspection &&
             inspectionAttempt === attempt &&

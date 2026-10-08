@@ -30,8 +30,8 @@ npm run dev
 
 The explicit archive argument replaces the starter's checkout-relative SDK
 dependency and updates its local lockfile integrity. Keep that supplied archive
-available when reinstalling this project. The SDK is private and has not been
-published to npm; installing by its package name is not this delivery route.
+available when reinstalling this project. The source repository is public, but
+the SDK has not been published to npm; installing by its package name is not this delivery route.
 
 Open `http://127.0.0.1:34851`. `npm run build` writes a static bundle and assets
 to `.generated` and exits. `npm run dev -- --port 34852` chooses another

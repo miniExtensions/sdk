@@ -16,7 +16,7 @@ configuration property being typed does not mean the starter implements its UI.
 
 ## Install and run the browser starter
 
-This private development preview **has not been published to npm**. Use the exact
+This development preview **has not been published to npm**. Use the exact
 supplied `.tgz`, Node.js 22 or newer and an ES2022-capable browser bundler. ESM,
 CommonJS and TypeScript declarations are included. Direct script-tag/CDN
 imports are not supplied. Runtime browsers need native `fetch`, `TextEncoder`,
@@ -85,10 +85,11 @@ save function to your application's deliberate Save action.
 
 ## Build an archive from source
 
-A Git checkout contains source, not the distributed `dist` modules. Use an
-SDK checkout you are authorized to access, Node.js 22+ and pnpm 10.28.2:
+A Git checkout contains source, not the distributed `dist` modules. Use a
+public SDK checkout, Node.js 22+ and pnpm 10.28.2:
 
 ```sh
+git clone https://github.com/miniExtensions/sdk.git
 cd sdk
 pnpm install --frozen-lockfile
 pnpm check
@@ -137,16 +138,17 @@ The SDK has no administrative workspace/configure/publish API.
 | Import                         | Included behavior                                                                                                                                                     | Guide                                    |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                       | [Runtime](docs/runtime.md)               |
-| `@miniextensions/sdk/forms`    | `FormDraftStore`, field descriptors, `createFormSaveInput`, normalized validation and `createFormController`                                                          | [Form helpers](docs/forms.md)            |
-| `@miniextensions/sdk/portals`  | `createPortalCollection`, accepted first/next reads, returned details and configured child requests for direct links or valid linked-record lookup results            | [Portal helpers](docs/portals.md)        |
-| `@miniextensions/sdk/auth`     | `createAuthFlow`, captured screen/revision, verification challenges, explicit credential application and login presentation helpers                                   | [Authentication](docs/auth.md)           |
+| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                                        | [Form helpers](docs/forms.md)            |
+| `@miniextensions/sdk/portals`  | `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests                  | [Portal helpers](docs/portals.md)        |
+| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                                      | [Authentication](docs/auth.md)           |
 | `@miniextensions/sdk/ui`       | Native selects, static policy and `resolveSelectFieldAvailability`, authorized linked-record loaders, headless selection model and `createAddressAutocompleteControl` | [Selection and address UI](docs/ui.md)   |
 | `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                             | [Formulas](docs/formulas.md)             |
-| `@miniextensions/sdk/react`    | Optional React field components using the same owner-held bindings and replaceable rendering                                                                          | [Field bindings](docs/field-bindings.md) |
+| `@miniextensions/sdk/react`    | Optional React field, Portal list and criteria editor components using owner-held models and replaceable rendering                                                    | [Field bindings](docs/field-bindings.md) |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
 also includes optional DOM controls. The `/react` subpath provides `TextField`, `NumberField`, `CheckboxField`,
-`SelectField`, `LinkedField`, `AttachmentField` and `AttachmentDialog`, with
+`SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
+`DateTimeField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
 [field-binding usage guide](docs/field-bindings.md). The shipped guides also include
@@ -294,9 +296,12 @@ reset obsolete controls, loaders and collections. Ordinary paging belongs to
 the current collection; changed table/view/search criteria retire it.
 
 Authentication returns credentials or a helper grant. Explicitly apply only a
-current result, clear the old UI/drafts, advance scope and reload. The SDK reads
-no persistent store. If your app persists sessions, keep credentials in its
-chosen visitor-scoped store, out of logs, shared storage and DOM attributes.
+current result, clear the old UI/drafts, advance scope and reload. The core
+client is memory-only. The optional, explicitly configured
+[`createSessionRestoration`](docs/auth.md#explicit-refresh-survival) adapter can
+use an app-supplied scoped store and validates remembered credentials with a
+fresh load. Keep credentials out of logs and DOM attributes; review the guide
+for storage sensitivity, scope, logout and cross-tab tradeoffs.
 See [sessions](docs/runtime.md#session-ownership) and
 [owner/disposal rules](docs/browser-lifecycle.md#owner-session-and-disposal).
 
@@ -459,7 +464,9 @@ they do not certify deployment CORS, provider compatibility, production
 durability or every hosted workflow. See [verification limits](docs/browser-lifecycle.md#verification-limits).
 
 For an agent integrating a customer application: install the actual supplied
-archive, read the relevant shipped guides, inspect current loaded schemas,
+archive, start with the [field bindings](docs/field-bindings.md),
+[Portal owners/editors](docs/portals.md) and [authentication](docs/auth.md) guides
+as applicable, and inspect current loaded schemas,
 choose the smallest public operation/helper, retain owner/native-value rules,
 then run that application's typecheck/build and verify deliberate workflows
 against its configured deployment. Report the archive/head and actual results;

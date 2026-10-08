@@ -200,8 +200,9 @@ Attachment Review uses `getFormAttachmentPolicy` on the original loaded Form
 and complete native answer before any readonly presentation override. Canonical
 null/missing/blank/empty-array answers are omitted first. Only visible policy rows
 are shown, in native order with duplicates. `hideAttachmentName: false` explicitly
-enables exact filenames; other settings and blank/missing filenames produce
-`Attachment — filename unavailable`. Hidden persisted add-only rows produce no
+enables exact filenames. Omitted, null or other hiding settings produce
+`Attachment`; only explicit filename display with a blank/missing filename
+produces `Attachment — filename unavailable`. Hidden persisted add-only rows produce no
 lines or counts. Nonempty writable add-only answers without the persisted baseline
 refuse Review, following the opt-in helper's deliberately conservative policy.
 Readonly answers do not acquire add-only restrictions by being reviewed. Existing

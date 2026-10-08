@@ -3,8 +3,8 @@
 `@miniextensions/sdk/auth` binds the existing password, login, verification-code
 and sign-up operations to a loaded authentication screen. It adds no backend
 operation or authorization layer. Importing it requires no DOM or React;
-importing the core client does not import it. Install the supplied private
-archive as shown in the [runtime quickstart](runtime.md#packaged-form-quickstart).
+importing the core client does not import it. Install a supplied built TGZ
+as shown in the [runtime quickstart](runtime.md#packaged-form-quickstart).
 This development preview has not been published to npm. A source checkout must
 be [installed, checked and packed](../README.md#build-an-archive-from-source) before
 installing its built TGZ.
@@ -565,3 +565,115 @@ resends, signs up, applies credentials or reloads automatically. The backend
 remains authoritative for published passwords, login/sign-up rules, verification
 policy, visitor permissions and all subsequent Form/Portal actions. Local
 recipe tests do not establish staging compatibility.
+
+## Explicit refresh survival
+
+The core client remains memory-only. `createSessionRestoration` is an optional
+`/auth` adapter; merely importing or constructing the core does not read storage.
+An application must deliberately choose storage, API origin and canonical hosted
+context (the first pathname segment), and supply the accepted authentication page
+and its root-share load input. Child/token-based loads are not restoration entry
+points. Login-page share identity must match that input.
+
+The adapter owns one `AuthFlow`. Call its `applySession(grant)` with a grant from
+that flow to remember only the accepted **server-encrypted login credential** or
+**server-encrypted extension-password credential**. These are sensitive reusable
+credentials, not transient extension access tokens. Raw passwords, verification
+codes, Firebase principals, access tokens, arbitrary session entries, drafts,
+files and uncertainty journals are not persisted. The namespace includes the
+explicit API origin, context, share and the existing canonical credential key;
+there is no migration or import of a hosted website's storage map.
+
+`restore()` is an explicit read. It supplies a detached candidate session only to
+`loadExtension`, then commits it to the client only if a current fresh response
+loads the same extension's Form or Portal. `restored` establishes current
+server-authorized access, not proof that a particular login identity was used:
+if login requirements changed, use the accepted page's own identity/context,
+never the storage entry or phase alone. Authentication prompts and other
+nonaccepted responses remove only the exact remembered entry used by that read.
+A newer stored credential is preserved even before its cross-tab event arrives. Transport errors leave
+it available for an explicit retry and show generic error state. Construction
+and subscriptions cause no network requests. Render `getSnapshot()` and
+`subscribe()` to show `restoring`, `login-required`, `storage-unavailable`, `error`
+or `retired` without exposing credentials. A returned page still belongs to the
+application's normal accepted-load lifecycle; synchronously retire old drafts,
+mutation owners and renderers before installing it.
+
+```ts
+import {
+    createBrowserSessionStorage,
+    createSessionRestoration,
+    type AuthOwnerScope,
+    type AuthPage,
+} from '@miniextensions/sdk/auth';
+import type {
+    MiniExtensionsClient,
+    LoadExtensionInput,
+} from '@miniextensions/sdk';
+
+export function optInRememberedLogin(
+    client: MiniExtensionsClient,
+    page: AuthPage,
+    rootLoad: Extract<LoadExtensionInput, { shareId: string }>,
+    getScope: () => AuthOwnerScope,
+    apiOrigin: string,
+    context: string,
+    storage: Storage,
+    mode: 'tab' | 'persistent',
+    events: Window
+) {
+    // App choice: sessionStorage for tab lifetime, or localStorage for persistence.
+    const backend = createBrowserSessionStorage(storage, mode, events);
+    return createSessionRestoration({
+        client,
+        page,
+        loadInput: rootLoad,
+        getScope,
+        apiOrigin,
+        context,
+        storage: backend,
+    });
+}
+```
+
+Canonical hosted login storage uses no client expiry for these encrypted
+credentials. This adapter likewise invents no TTL; the fresh server read decides
+whether a credential remains valid. Transient access-token cache expiry is a
+separate concern. The Form `sessionExpiration` keep/logout setting governs
+post-submission navigation, not a stored-credential TTL: the app must call
+`clear()` on its configured logout/disconnect and then replace the visitor scope.
+This adapter does not change that Form behavior or authentication settings.
+
+`clear()` removes the scoped stored credential and its still-owned memory entry.
+Persistent storage must provide cross-tab notifications: external removal,
+clear-all or replacement retires this old owner, aborts its read and clears its
+still-owned memory credential. It never automatically logs into a new identity.
+`destroy()` only retires an unmounted owner; it does not erase the remembered
+credential. Advance the monotonic owner revision on every visitor, session,
+connection and accepted-page replacement, including observed A→B→A. After an accepted root Form/Portal load advances the revision, explicitly call
+`handoff(acceptedPage, capturedScope, isCurrent)` before invoking any old adapter
+method. The app supplies the captured new scope and its accepted-load freshness
+guard. The returned lease owns logout and future accepted-load handoffs; it has
+no authentication or restore actions. Replace your logout owner with this lease.
+Old methods become inert. A changed visitor, session or stale accepted load cannot
+transfer ownership. Call the current lease's `clear()` before replacing its scope
+on logout. No old authentication page needs to remain in the app's render state.
+Old responses cannot clear or retire a successor. Unobserved in-place ABA is not detected.
+
+Persistent local storage survives browser restarts and is readable by scripts on
+the app origin; XSS or another same-origin app can expose or replace it. Tab
+storage limits retention but does not remove that script-access risk. Storage
+may be denied or corrupted. Failed remembering leaves successful login in memory;
+failed clearing reports that storage could not be cleared, even though the owned
+memory credential is removed. Do not promise logout on another device or another
+origin. Cross-tab behavior depends on the explicitly supplied backend's events.
+Removal compares the current stored bytes before deleting; ordinary browser
+storage does not provide an atomic cross-tab compare-and-delete transaction.
+No encryption-at-rest claim is made by the adapter.
+
+Refresh survival restores authentication only. It does not restore drafts or
+uncertain mutation tombstones, and never automatically repeats Save, Upload or
+another mutation. Applications retaining uncertain operation state must apply
+their separate recovery/no-replay policy before permitting mutations. All tests
+for this adapter use synthetic credentials and fresh-load responses; they do not
+establish live backend login, revocation timing or browser storage security.

@@ -38,6 +38,7 @@ import { checkFormAttachmentRecipe } from './form-attachment-recipe-checks.mjs';
 import { checkFormLinkedFilterRecipe } from './form-linked-filter-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
+import { checkSessionRestoration } from './session-restoration-checks.mjs';
 import { checkAdditionalRuntimeOperations } from './additional-runtime-recipe-checks.mjs';
 import { checkFormConditions } from './form-conditions-checks.mjs';
 import { checkScalarVisibilityRecipe } from './scalar-visibility-recipe-checks.mjs';
@@ -870,6 +871,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         guideSources: authGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    assert.equal(
+        await checkSessionRestoration({
+            consumerDirectory: temporaryDirectory,
+            authPage,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        25
+    );
     const authBundled = await build({
         absWorkingDir: temporaryDirectory,
         entryPoints: [join(temporaryDirectory, 'auth-consumer.mjs')],

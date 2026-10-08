@@ -6,21 +6,22 @@ DOM, React or other UI framework dependency and is safe to import on a server.
 The core client does not import it. It uses the existing `forms.save` operation;
 it does not add authentication, backend operations or an authorization layer.
 
-Install the supplied customer archive in your application:
+This is a development preview. Install a built customer TGZ in your application:
 
 ```sh
 npm install /path/to/miniextensions-sdk-0.1.0-alpha.0.tgz
 ```
 
-The package is private and has not been published to npm. Installation by
-package name from npm remains a separate future release decision. The
+The package is private and has not been published to npm. A source checkout has
+no distributed `dist` modules: follow [source install → check → pack](../README.md#build-an-archive-from-source), then install the TGZ. Do not install a bare GitHub
+URL or package name as a substitute. The
 [runtime quickstart](runtime.md#packaged-form-quickstart) covers client setup,
 published extension loading, passwords/login, query/context and visitor rules.
 These helpers require a real `FormLoadedResult`; first handle any other loaded
 screen or returned redirect. Use Node.js 22+ or your ES2022 browser bundler.
 
 For subscribed stock or app-supplied text/select/linked rendering, see the
-[headless field-binding contract](field-bindings.md). Renderer unmount preserves
+[headless field-binding usage guide](field-bindings.md). Renderer unmount preserves
 the native draft; owner replacement retires actions and requests.
 
 ## Headless conditional linked-filter cascades

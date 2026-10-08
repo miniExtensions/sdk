@@ -142,7 +142,10 @@ Generated runtime contracts include type shapes from Node.js type declaration in
 
 ## React, React DOM, and Scheduler
 
-The optional synthetic browser proof bundles React 19.2.0, React DOM 19.2.0, and Scheduler 0.27.0. These three packages share the identical license below. Its linked bundle legal comments are retained.
+Source development and test consumers use React 18.3.1 and React DOM 18.3.1.
+The optional synthetic browser proof bundles React 19.2.0, React DOM 19.2.0,
+and Scheduler 0.27.0. These packages share the identical license below. Linked
+bundle legal comments are retained.
 
 ```text
 MIT License

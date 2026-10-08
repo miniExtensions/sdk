@@ -5,7 +5,9 @@ and sign-up operations to a loaded authentication screen. It adds no backend
 operation or authorization layer. Importing it requires no DOM or React;
 importing the core client does not import it. Install the supplied private
 archive as shown in the [runtime quickstart](runtime.md#packaged-form-quickstart).
-The package has not been published to npm.
+This development preview has not been published to npm. A source checkout must
+be [installed, checked and packed](../README.md#build-an-archive-from-source) before
+installing its built TGZ.
 
 The application owns loading, rendering, visitor identity and credential
 persistence. A successful helper returns an opaque grant, not a public session
@@ -15,8 +17,9 @@ session does not automatically load a Form or Portal.
 
 ## React client panel
 
-This uses your application's React 19 installation; the SDK has no React peer
-dependency. Pass the `ownerScope` captured with this particular loaded `page`,
+This recipe uses your application's React 19 installation. The SDK's `/react`
+components have an optional React peer; core and `/auth` imports do not require
+React. Pass the `ownerScope` captured with this particular loaded `page`,
 plus the owner's live `getScope` function. `onSessionApplied` must synchronously
 advance the revision and clear the old page/drafts. `onReload` is an app-owned
 manual action; also keep a Reload control outside this panel because applying

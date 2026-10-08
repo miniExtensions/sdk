@@ -13,7 +13,9 @@ Install the customer archive in your app first:
 npm install /path/to/miniextensions-sdk-0.1.0-alpha.0.tgz
 ```
 
-This private package has not been published to npm. Installing by package name
+This private development preview has not been published to npm. For a source
+checkout, [install, check and pack](../README.md#build-an-archive-from-source) first,
+then install the built TGZ. Installing by package name
 from npm is a future release decision. Use your existing ES2022 browser bundler
 and Node.js 22+ build environment. The UI module can be imported on a server,
 but creating a DOM control requires a browser `Document`, or an explicitly

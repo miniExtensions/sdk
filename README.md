@@ -1,5 +1,8 @@
 # miniExtensions SDK
 
+**Development preview. Not published to npm.** The APIs and shipped recipes are
+still evolving; check the configuration and lifecycle limits before integration.
+
 Build a custom Form or Portal against an existing published miniExtensions
 configuration. The SDK returns native metadata and provides typed runtime
 operations; the existing server checks visitor, record, field and action access.
@@ -13,7 +16,7 @@ configuration property being typed does not mean the starter implements its UI.
 
 ## Install and run the browser starter
 
-The package is private and **has not been published to npm**. Use the exact
+This private development preview **has not been published to npm**. Use the exact
 supplied `.tgz`, Node.js 22 or newer and an ES2022-capable browser bundler. ESM,
 CommonJS and TypeScript declarations are included. Direct script-tag/CDN
 imports are not supplied. Runtime browsers need native `fetch`, `TextEncoder`,
@@ -80,6 +83,26 @@ complete load-and-save example with editable-schema checks, native values,
 hidden prefills and validation handling. It writes once when run; connect its
 save function to your application's deliberate Save action.
 
+## Build an archive from source
+
+A Git checkout contains source, not the distributed `dist` modules. Use an
+SDK checkout you are authorized to access, Node.js 22+ and pnpm 10.28.2:
+
+```sh
+cd sdk
+pnpm install --frozen-lockfile
+pnpm check
+mkdir -p ../sdk-artifacts
+pnpm pack --pack-destination ../sdk-artifacts
+```
+
+`check` validates and builds the source/package consumers; `pack` runs the build
+and writes `miniextensions-sdk-0.1.0-alpha.0.tgz`. Install that built TGZ using the
+archive instructions above. Do not treat an npm install of a GitHub URL or bare
+package name as the delivery route: the source checkout does not contain built
+module output, and the package is not on npm. Building/packing locally does not
+publish the package or change repository visibility.
+
 ## Obtain the actual runtime configuration
 
 - Publish the Form or Portal through the existing miniExtensions workspace,
@@ -111,17 +134,22 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
-| Import                         | Included behavior                                                                                                                                                     | Guide                                  |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                       | [Runtime](docs/runtime.md)             |
-| `@miniextensions/sdk/forms`    | `FormDraftStore`, field descriptors, `createFormSaveInput`, normalized validation and `createFormController`                                                          | [Form helpers](docs/forms.md)          |
-| `@miniextensions/sdk/portals`  | `createPortalCollection`, accepted first/next reads, returned details and configured child requests for direct links or valid linked-record lookup results            | [Portal helpers](docs/portals.md)      |
-| `@miniextensions/sdk/auth`     | `createAuthFlow`, captured screen/revision, verification challenges, explicit credential application and login presentation helpers                                   | [Authentication](docs/auth.md)         |
-| `@miniextensions/sdk/ui`       | Native selects, static policy and `resolveSelectFieldAvailability`, authorized linked-record loaders, headless selection model and `createAddressAutocompleteControl` | [Selection and address UI](docs/ui.md) |
-| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                             | [Formulas](docs/formulas.md)           |
+| Import                         | Included behavior                                                                                                                                                     | Guide                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                       | [Runtime](docs/runtime.md)               |
+| `@miniextensions/sdk/forms`    | `FormDraftStore`, field descriptors, `createFormSaveInput`, normalized validation and `createFormController`                                                          | [Form helpers](docs/forms.md)            |
+| `@miniextensions/sdk/portals`  | `createPortalCollection`, accepted first/next reads, returned details and configured child requests for direct links or valid linked-record lookup results            | [Portal helpers](docs/portals.md)        |
+| `@miniextensions/sdk/auth`     | `createAuthFlow`, captured screen/revision, verification challenges, explicit credential application and login presentation helpers                                   | [Authentication](docs/auth.md)           |
+| `@miniextensions/sdk/ui`       | Native selects, static policy and `resolveSelectFieldAvailability`, authorized linked-record loaders, headless selection model and `createAddressAutocompleteControl` | [Selection and address UI](docs/ui.md)   |
+| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                             | [Formulas](docs/formulas.md)             |
+| `@miniextensions/sdk/react`    | Optional React field components using the same owner-held bindings and replaceable rendering                                                                          | [Field bindings](docs/field-bindings.md) |
 
-Helpers are optional and headless except for the optional `/ui` controls. The
-SDK requires no React installation. The shipped guides include
+Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
+also includes optional DOM controls. The `/react` subpath provides `TextField`,
+`SelectField`, `LinkedField`, `AttachmentField` and `AttachmentDialog`, with
+app-supplied rendering through render props. React is an optional peer for that
+subpath only; non-React imports require no React installation. See the
+[field-binding usage guide](docs/field-bindings.md). The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
@@ -208,7 +236,8 @@ downstream filters, linked choices and paging while preserving raw link drafts.
 Name references, duplicate IDs, malformed rules and missing metadata make
 filter presentation unavailable; repeated URL values are unsupported.
 Add/remove empty-driver flags remain independent; read-only and stale-owner
-guards remain intact. Portal child URL-prefill propagation is unsupported.
+guards remain intact. Configured Portal child create prefills are supported;
+root/browser query keys are not child authority. Child edit prefills remain empty.
 The opt-in `/forms` cascade model supplies this state; callers keep network,
 rendering and ownership. It adds no backend permission. See
 [Form workflow](examples/browser/README.md#form-workflow).
@@ -237,6 +266,23 @@ identifies `main.ts` for visitor/Form ownership, `portal.ts` for collections and
 actions, `fields.ts` for rendering and `recovery.ts` for operation metadata.
 `examples/ui-selection` is a synthetic source-checkout consumer, not a bundled
 customer application.
+
+## Current compatibility limits
+
+This preview does not promise complete Form/Portal UI parity. The starter's
+prepared Review is one-page and manual-only, with bounded scalar/select/linked/
+attachment answers and a strict supported date/dateTime contract. Rich condition
+drivers, multipage, automatic/compute workflows and other configurations listed
+in the [compatibility checklist](docs/ui.md#review-configuration-compatibility-checklist)
+remain unsupported. Portal filter controls edit one supported condition, not a
+nested filter-builder UI; inline attachments are readonly previews. The backend
+still enforces published access and validation rules.
+
+Mounting a renderer performs no Save, upload or linked search. Visitor state is
+memory-only by default; refresh does not restore authentication or uncertain
+operations. Browser/provider compatibility, CORS and live persistence require
+separate deployment testing. Use the supplied guides rather than interpreting a
+typed configuration property as an implemented control.
 
 ## Keep ownership, native values and results intact
 

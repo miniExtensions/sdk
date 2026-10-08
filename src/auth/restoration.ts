@@ -486,6 +486,8 @@ const createSessionRestorationInternal = (
                     scope.revision === capturedScope.revision
                 );
             };
+            let successor: SessionRestoration | null = null;
+            let adopted = false;
             try {
                 if (
                     !isCurrent() ||
@@ -500,7 +502,7 @@ const createSessionRestorationInternal = (
                     generation !== ticket
                 )
                     return null;
-                const successor = createSessionRestorationInternal(
+                successor = createSessionRestorationInternal(
                     {
                         client,
                         storage,
@@ -516,12 +518,14 @@ const createSessionRestorationInternal = (
                     retired ||
                     generation !== ticket ||
                     !matches() ||
-                    !isCurrent()
-                ) {
-                    successor.destroy();
+                    !isCurrent() ||
+                    !matches() ||
+                    retired ||
+                    generation !== ticket
+                )
                     return null;
-                }
                 retire();
+                adopted = true;
                 return {
                     getSnapshot: successor.getSnapshot,
                     subscribe: successor.subscribe,
@@ -531,6 +535,8 @@ const createSessionRestorationInternal = (
                 };
             } catch {
                 return null;
+            } finally {
+                if (!adopted) successor?.destroy();
             }
         },
         destroy: retire,

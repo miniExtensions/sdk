@@ -48,6 +48,7 @@ export async function checkSessionRestoration({
         const listeners = new Set();
         return {
             data,
+            listenerCount: () => listeners.size,
             storage: {
                 mode: 'persistent',
                 getItem: (key) => data.get(key) ?? null,
@@ -276,6 +277,28 @@ export async function checkSessionRestoration({
         else assert.equal(f.shared.data.size, 0);
         assert.deepEqual(f.client.getSession(), {});
         seed.owner.destroy();
+        checks += 1;
+    }
+    {
+        const f = setup();
+        await remember(f);
+        const scope = f.replace();
+        let calls = 0;
+        assert.equal(
+            f.owner.handoff(accepted, scope, () => {
+                calls += 1;
+                if (calls === 3) throw new Error('guard');
+                return true;
+            }),
+            null
+        );
+        assert.equal(calls, 3);
+        assert.equal(f.shared.listenerCount(), 1);
+        f.owner.destroy();
+        assert.equal(f.shared.listenerCount(), 0);
+        const session = f.client.getSession();
+        f.shared.emit(null);
+        assert.deepEqual(f.client.getSession(), session);
         checks += 1;
     }
     const first = setup();

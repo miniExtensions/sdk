@@ -42,6 +42,7 @@ const memory = (mode: 'tab' | 'persistent' = 'tab') => {
     return {
         storage,
         data,
+        listenerCount: () => listeners.size,
         emit(key: string | null) {
             for (const listener of [...listeners]) listener(key);
         },
@@ -239,6 +240,35 @@ describe('explicit canonical-scoped session restoration', () => {
             assert.deepEqual(f.client.getSession(), {
                 previous: 'encrypted_previous',
             });
+        }
+    });
+    it('unsuccessful handoff destroys provisional subscriptions after guard exception or reentry', async () => {
+        for (const mode of ['throw', 'false', 'dispose'] as const) {
+            const f = setup(memory('persistent'));
+            await remember(f);
+            f.aba();
+            let calls = 0;
+            const result = f.owner.handoff(
+                formResult,
+                { ownerId: 'visitor-a', revision: 2 },
+                () => {
+                    calls += 1;
+                    if (calls === 3) {
+                        if (mode === 'throw') throw new Error('guard');
+                        if (mode === 'false') return false;
+                        f.owner.destroy();
+                    }
+                    return true;
+                }
+            );
+            assert.equal(result, null);
+            assert.equal(calls, 3);
+            assert.equal(f.store.listenerCount(), mode === 'dispose' ? 0 : 1);
+            f.owner.destroy();
+            assert.equal(f.store.listenerCount(), 0);
+            const session = f.client.getSession();
+            f.store.emit(null);
+            assert.deepEqual(f.client.getSession(), session);
         }
     });
     it('logout during held validation removes only the observed remembered envelope', async () => {

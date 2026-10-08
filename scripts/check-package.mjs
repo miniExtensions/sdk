@@ -1,3 +1,4 @@
+import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
 import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
 import { checkReactBindingConsumer } from './react-binding-consumer-checks.mjs';
 import { checkFieldBindingRecipe } from './field-binding-recipe-checks.mjs';
@@ -1086,6 +1087,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     happyDomModulePath: require.resolve('happy-dom'),
                 }),
                 17
+            );
+            assert.equal(
+                await checkExistingAttachmentConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    happyDomModulePath: require.resolve('happy-dom'),
+                }),
+                16
             );
             await checkFieldBindingRecipe({
                 consumerDirectory: directory,

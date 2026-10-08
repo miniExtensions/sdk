@@ -105,6 +105,35 @@ export function AttachmentField({
                 controller.select(Array.from(event.dataTransfer.files));
             },
         },
+        visible
+            ? createElement(
+                  'ul',
+                  null,
+                  ...attachment.rows.map((row) =>
+                      createElement(
+                          'li',
+                          { key: row.nativeIndex },
+                          createElement('span', null, row.label),
+                          createElement(
+                              'button',
+                              {
+                                  type: 'button',
+                                  disabled: !row.removeAllowed,
+                                  onClick: () =>
+                                      controller.remove(
+                                          attachment.valuesRevision,
+                                          row.nativeIndex
+                                      ),
+                              },
+                              'Remove attachment'
+                          )
+                      )
+                  )
+              )
+            : null,
+        visible && attachment.presentation === 'unavailable'
+            ? createElement('p', null, 'Attachment presentation unavailable')
+            : null,
         createElement('input', {
             ref: input,
             type: 'file',

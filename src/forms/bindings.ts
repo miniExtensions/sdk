@@ -139,10 +139,7 @@ export function createFormFieldBindings(
     let contextRevision = controller.getState().contextRevision;
     const attachments = new Map<string, FormAttachmentController>();
     const attachmentBlocked = () =>
-        [...attachments.values()].some((model) => {
-            const state = model.getSnapshot();
-            return state.busy || state.phase === 'uncertain';
-        });
+        [...attachments.values()].some((model) => model.blocksForm());
     let retired = false;
     let disposed = false;
     let syncing = false;

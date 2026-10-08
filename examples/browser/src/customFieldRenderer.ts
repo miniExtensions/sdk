@@ -15,13 +15,18 @@ export function mountCustomField(
     let retired = false;
     input.addEventListener('input', () => {
         if (retired || !binding.getSnapshot().canEdit) return;
-        binding.setValue(input.value || null);
+        if (binding.scalar) {
+            if (binding.scalar.getState().kind === 'checkbox')
+                binding.scalar.setChecked(input.checked);
+            else binding.scalar.setInput(input.value);
+        } else binding.setValue(input.value || null);
     });
     const stop = binding.subscribe((snapshot) => {
         node.hidden = snapshot.visibility.type !== 'visible';
         node.inert = snapshot.retired;
         title.textContent = snapshot.field?.title ?? '';
         status.textContent =
+            snapshot.scalar?.error ??
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n');
         status.setAttribute('aria-busy', String(snapshot.pending));
@@ -52,6 +57,17 @@ export function mountCustomField(
                 });
                 body.append(button);
             }
+        } else if (snapshot.scalar) {
+            input.setAttribute('aria-label', snapshot.field?.title ?? '');
+            input.type =
+                snapshot.scalar.kind === 'checkbox' ? 'checkbox' : 'text';
+            input.inputMode =
+                snapshot.scalar.kind === 'number' ? 'decimal' : '';
+            input.disabled = !snapshot.canEdit;
+            input.checked = snapshot.scalar.checked;
+            input.value = snapshot.scalar.input;
+            input.setAttribute('aria-invalid', String(!snapshot.scalar.valid));
+            if (!body.contains(input)) body.replaceChildren(input);
         } else if (snapshot.field?.fieldType === 'singleLineText') {
             input.setAttribute('aria-label', snapshot.field.title);
             const config = snapshot.field.schema.miniExtConfig;

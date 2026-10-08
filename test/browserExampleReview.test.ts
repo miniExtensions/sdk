@@ -1035,19 +1035,9 @@ describe('actual browser starter prepared review', () => {
         const dialog = await fixture.openReview();
         const stale = fixture.button('Confirm', dialog);
         const number = fixture.field('fld_number');
-        assert.equal(number.type, 'number');
-        const originalValidity = Object.getOwnPropertyDescriptor(
-            number,
-            'validity'
-        );
-        // Happy DOM sanitizes bad text without producing native badInput.
-        // Supply this contract at the existing control boundary; native
-        // keyboard/validity evidence remains a separate Chromium obligation.
-        Object.defineProperty(number, 'validity', {
-            configurable: true,
-            value: { badInput: true, valid: false },
-        });
-        number.value = '';
+        assert.equal(number.type, 'text');
+        assert.equal(number.inputMode, 'decimal');
+        number.value = '-';
         number.dispatchEvent(
             new fixture.window.Event('input', { bubbles: true })
         );
@@ -1058,25 +1048,22 @@ describe('actual browser starter prepared review', () => {
         );
         assert.equal(fixture.saves.length, 0);
         assert.match(
-            fixture.window.document.getElementById('status')?.textContent ?? '',
-            /Count must be a valid number/
+            number.parentElement?.parentElement?.textContent ?? '',
+            /valid finite number/
         );
         stale.click();
         await settled();
         assert.equal(dialog.isConnected, false);
         assert.equal(fixture.saves.length, 0);
         assert.match(
-            fixture.window.document.getElementById('status')?.textContent ?? '',
-            /Count must be a valid number/
+            number.parentElement?.parentElement?.textContent ?? '',
+            /valid finite number/
         );
         assert.equal(fixture.field('fld_title').value, 'Initial title');
         fixture.submit();
         await settled();
         assert.equal(fixture.window.document.querySelector('dialog'), null);
         assert.equal(fixture.saves.length, 0);
-        if (originalValidity == null)
-            Reflect.deleteProperty(number, 'validity');
-        else Object.defineProperty(number, 'validity', originalValidity);
         fixture.edit('fld_number', '8');
         const fresh = await fixture.openReview();
         fixture.button('Confirm', fresh).click();

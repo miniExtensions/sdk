@@ -201,7 +201,8 @@ const status = (snapshot: FormFieldSnapshot) =>
     createElement(
         'p',
         { role: 'status', 'aria-busy': snapshot.pending },
-        snapshot.error ??
+        snapshot.scalar?.error ??
+            snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
 export function TextField({ binding, render }: FieldProps): ReactNode {
@@ -232,6 +233,64 @@ export function TextField({ binding, render }: FieldProps): ReactNode {
         status(snapshot)
     );
 }
+/** Numeric input uses native units, including fractional percent values. */
+export function NumberField({ binding, render }: FieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (
+        snapshot.retired ||
+        snapshot.visibility.type !== 'visible' ||
+        snapshot.scalar?.kind !== 'number'
+    )
+        return null;
+    return createElement(
+        'div',
+        null,
+        createElement(
+            'label',
+            null,
+            snapshot.field?.title,
+            createElement('input', {
+                type: 'text',
+                inputMode: 'decimal',
+                value: snapshot.scalar.input,
+                disabled: !snapshot.canEdit,
+                'aria-invalid': !snapshot.scalar.valid,
+                onChange: (event: ChangeEvent<HTMLInputElement>) =>
+                    binding.scalar?.setInput(event.currentTarget.value),
+            })
+        ),
+        status(snapshot)
+    );
+}
+export function CheckboxField({ binding, render }: FieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (
+        snapshot.retired ||
+        snapshot.visibility.type !== 'visible' ||
+        snapshot.scalar?.kind !== 'checkbox'
+    )
+        return null;
+    return createElement(
+        'div',
+        null,
+        createElement(
+            'label',
+            null,
+            snapshot.field?.title,
+            createElement('input', {
+                type: 'checkbox',
+                checked: snapshot.scalar.checked,
+                disabled: !snapshot.canEdit,
+                onChange: (event: ChangeEvent<HTMLInputElement>) =>
+                    binding.scalar?.setChecked(event.currentTarget.checked),
+            })
+        ),
+        status(snapshot)
+    );
+}
+
 export function SelectField({ binding, render }: FieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });

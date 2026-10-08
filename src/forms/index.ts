@@ -79,6 +79,11 @@ export {
     type FieldActionResult,
 } from './bindings.js';
 export { formChoiceConditionRecord } from './choiceRecord.js';
+export type {
+    FormLinkedRecordsFacet,
+    FormLinkedRecordsSnapshot,
+    FormLinkedRecordDetailFields,
+} from './linkedRecords.js';
 
 export {
     admittedAttachmentValues,

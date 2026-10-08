@@ -23,6 +23,7 @@ export type {
     PortalListOwnerOptions,
     PortalListSnapshot,
     PortalListPhase,
+    PortalRecordPresentation,
 } from './listOwner.js';
 
 export { createPortalSortEditor, createPortalFilterEditor } from './editors.js';

@@ -3,7 +3,12 @@ import type {
     SelectionModelOptions,
     SelectionOption,
     SelectionState,
+    LinkedRecordSelectionPage,
 } from './types.js';
+import {
+    acceptedLinkedRecordPage,
+    linkedRecordPageIsCurrent,
+} from './linkedRecordPages.js';
 
 function uniqueOptions(options: readonly SelectionOption[]): SelectionOption[] {
     const unique = new Map<string, SelectionOption>();
@@ -42,6 +47,7 @@ export function createSelectionModel(
     let pending: Promise<void> | null = null;
     let destroyed = false;
     let stale = false;
+    let linkedRecords: LinkedRecordSelectionPage | null = null;
     const labels = new Map<string, SelectionOption>();
     const listeners = new Set<(state: SelectionState) => void>();
 
@@ -69,6 +75,7 @@ export function createSelectionModel(
         loading = false;
         error = null;
         stale = false;
+        linkedRecords = null;
     }
 
     function getState(): SelectionState {
@@ -94,6 +101,9 @@ export function createSelectionModel(
             error,
             disabled,
             readOnly,
+            ...(linkedRecords
+                ? { linkedRecords: structuredClone(linkedRecords) }
+                : {}),
         };
     }
 
@@ -129,7 +139,9 @@ export function createSelectionModel(
         if (destroyed || stale) return false;
         let matches = false;
         try {
-            matches = configuration.loadOptions?.isCurrent?.() ?? true;
+            matches =
+                (configuration.loadOptions?.isCurrent?.() ?? true) &&
+                (!linkedRecords || linkedRecordPageIsCurrent(linkedRecords));
         } catch {
             // A failed freshness predicate cannot establish the old scope.
         }
@@ -138,6 +150,7 @@ export function createSelectionModel(
         options = [];
         value = [];
         labels.clear();
+        linkedRecords = null;
         searchTerm = '';
         offset = null;
         error =
@@ -165,6 +178,7 @@ export function createSelectionModel(
         if (!append) {
             options = [];
             offset = null;
+            linkedRecords = null;
         }
         const active = () =>
             !destroyed &&
@@ -179,10 +193,18 @@ export function createSelectionModel(
                     offset: requestOffset,
                     signal: requestController.signal,
                 });
-                if (!active() || !current()) return;
-                options = uniqueOptions(
+                if (!active() || !current() || !active()) return;
+                const nextOptions = uniqueOptions(
                     append ? [...options, ...page.options] : page.options
                 );
+                const nextRecords = acceptedLinkedRecordPage(
+                    page,
+                    linkedRecords,
+                    append
+                );
+                if (!active() || !current() || !active()) return;
+                options = nextOptions;
+                linkedRecords = nextRecords;
                 cache(options);
                 offset = page.offset;
             } catch (cause) {
@@ -290,6 +312,7 @@ export function createSelectionModel(
             if (configuration.loadOptions) {
                 options = [];
                 offset = null;
+                linkedRecords = null;
             }
             error = null;
             emit();
@@ -327,6 +350,7 @@ export function createSelectionModel(
         setOptions(next) {
             if (!current()) return;
             options = uniqueOptions(next);
+            linkedRecords = null;
             cache(options);
             emit();
         },
@@ -353,6 +377,7 @@ export function createSelectionModel(
             const cancelGeneration = generation + 1;
             abort();
             if (destroyed || generation !== cancelGeneration) return;
+            linkedRecords = null;
             if (!stale) error = null;
             emit();
         },

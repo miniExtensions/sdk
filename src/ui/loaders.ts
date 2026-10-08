@@ -7,6 +7,7 @@ import type {
     RuntimeSession,
 } from '../runtime/types.js';
 import type { SelectionLoader, SelectionOption } from './types.js';
+import { attachLinkedRecordPage } from './linkedRecordPages.js';
 
 /** Dispose/reset the control and create a loader for the new visitor context. */
 export class SelectionScopeChangedError extends Error {
@@ -182,8 +183,11 @@ const sessionsMatch = (
     );
 };
 
-const createLoader = <Input>(
+const createLoader = <
+    Input extends { extensionAccessToken: string; linkedRecordFieldId: string },
+>(
     options: LoaderOptions<Input>,
+    kind: 'form' | 'portal',
     list: (
         input: Input,
         searchTerm: string,
@@ -213,6 +217,13 @@ const createLoader = <Input>(
         if (!isCurrent()) {
             throw new SelectionScopeChangedError();
         }
+    };
+    const origin = {
+        client: options.client,
+        kind,
+        fieldId: input.linkedRecordFieldId,
+        token: input.extensionAccessToken,
+        isCurrent,
     };
     const loader: SelectionLoader = async (request) => {
         requireScope();
@@ -258,6 +269,15 @@ const createLoader = <Input>(
             ),
             offset: result.offset,
         };
+        attachLinkedRecordPage(
+            page,
+            {
+                linkedTableId,
+                records: result.records,
+                table: table ? { airtableFields: table.airtableFields } : null,
+            },
+            origin
+        );
         // A custom formatter can synchronously change the client's session.
         requireScope();
         request.signal.throwIfAborted();
@@ -282,11 +302,14 @@ export const createFormLinkedRecordLoader = (
         'Linked record field ID'
     );
     const { client } = options;
-    return createLoader(options, (input, searchTerm, offset, signal, session) =>
-        client.linkedRecords.listFormOptions(
-            { ...input, filter: { viewType: 'list', searchTerm }, offset },
-            { signal, session }
-        )
+    return createLoader(
+        options,
+        'form',
+        (input, searchTerm, offset, signal, session) =>
+            client.linkedRecords.listFormOptions(
+                { ...input, filter: { viewType: 'list', searchTerm }, offset },
+                { signal, session }
+            )
     );
 };
 
@@ -306,10 +329,13 @@ export const createPortalLinkedRecordLoader = (
     requireIdentifier(options.input.portalTableId, 'Portal table ID');
     requireIdentifier(options.input.portalFieldId, 'Portal field ID');
     const { client } = options;
-    return createLoader(options, (input, searchTerm, offset, signal, session) =>
-        client.linkedRecords.listPortalOptions(
-            { ...input, filter: { viewType: 'list', searchTerm }, offset },
-            { signal, session }
-        )
+    return createLoader(
+        options,
+        'portal',
+        (input, searchTerm, offset, signal, session) =>
+            client.linkedRecords.listPortalOptions(
+                { ...input, filter: { viewType: 'list', searchTerm }, offset },
+                { signal, session }
+            )
     );
 };

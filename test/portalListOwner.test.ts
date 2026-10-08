@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { createPortalListOwner } from '../src/portals/listOwner.js';
 import type { PortalCollectionCriteria } from '../src/portals/types.js';
-import type { ListPortalLinkedRecordsResult } from '../src/runtime/types.js';
+import type {
+    ListPortalLinkedRecordsResult,
+    RuntimeAirtableField,
+    RuntimeLinkedRecordDetailField,
+} from '../src/runtime/types.js';
 import {
     portalPage,
     portalListPage,
@@ -19,6 +23,61 @@ const criteria = (): PortalCollectionCriteria => ({
     supportsEndUserFilterCleanup: true,
 });
 const readOptions = { pagesToFetch: 1, refreshLoggedInPortalRecord: false };
+const richField: RuntimeAirtableField = {
+    id: 'fld_native',
+    name: 'Native',
+    description: null,
+    isComputed: false,
+    isPrimaryField: false,
+    config: {
+        type: 'multipleRecordLinks',
+        options: {
+            linkedTableId: 'table_nested',
+            isReversed: false,
+            prefersSingleRecordLink: false,
+        },
+    },
+};
+const richDetail: RuntimeLinkedRecordDetailField = {
+    fieldId: 'fld_native',
+    fieldName: 'Native',
+    titleOverride: '',
+    isHidden: false,
+    fieldIsInEditingChildForm: false,
+    childFormField: null,
+    miniExtConfig: undefined,
+};
+const richPage = (projection: 'missing' | 'null' | 'present' = 'present') =>
+    portalListPage({
+        recordIds: ['record_b', 'record_a'],
+        customViewDetailFields:
+            projection === 'null'
+                ? null
+                : projection === 'missing'
+                  ? {}
+                  : { fld_children: [richDetail] },
+        tableIdsToLinkedTableStates: {
+            table_children: {
+                airtableFields: [richField],
+                recordIdsToAirtableRecords: {
+                    record_a: {
+                        id: 'record_a',
+                        fields: {
+                            fld_native: ['nested_a'],
+                            foreign_field: 'Not projected',
+                        },
+                    },
+                    record_b: { id: 'record_b', fields: { fld_native: [] } },
+                },
+            },
+            table_nested: {
+                airtableFields: [],
+                recordIdsToAirtableRecords: {
+                    nested_a: { id: 'nested_a', fields: {} },
+                },
+            },
+        },
+    });
 const rows = (ids: string[], cursor: string | null = null) =>
     portalListPage({
         recordIds: ids,
@@ -36,10 +95,10 @@ const rows = (ids: string[], cursor: string | null = null) =>
         },
     });
 const setup = (
-    read: Parameters<typeof portalFixture>[0] = async () => rows(['record_1'])
+    read: Parameters<typeof portalFixture>[0] = async () => rows(['record_1']),
+    portal = portalPage()
 ) => {
     const api = portalFixture(read);
-    const portal = portalPage();
     let revision = 0,
         configuration = 0;
     const owner = createPortalListOwner({
@@ -378,5 +437,204 @@ it('external cancellation retires an abort-ignoring read and cannot cancel a suc
     next.resolve(rows(['new']));
     assert.equal(await second, true);
     assert.deepEqual(f.owner.getSnapshot().page!.recordIds, ['new']);
+    f.owner.destroy();
+});
+
+it('record presentation is detached, ordered, field/table scoped and does no I/O', async () => {
+    const f = setup(async () => richPage());
+    assert.equal(f.owner.getRecords(0), null);
+    assert.equal(f.calls.length, 0);
+    await f.owner.readFirst(0, readOptions);
+    const revision = f.owner.getSnapshot().revision;
+    const value = f.owner.getRecords(revision)!;
+    assert.deepEqual(
+        value.records.map((record) => record.id),
+        ['record_b', 'record_a']
+    );
+    assert.deepEqual(value.records[1]!.fields, { fld_native: ['nested_a'] });
+    assert.equal(value.portalFieldId, 'fld_children');
+    assert.equal(value.linkedTableId, 'table_children');
+    assert.equal(value.detailProjection, 'present');
+    assert.equal(value.detailFields[0]!.titleOverride, '');
+    assert.deepEqual(
+        Object.keys(value).sort(),
+        [
+            'detailFields',
+            'detailProjection',
+            'linkedTableId',
+            'portalFieldId',
+            'records',
+            'table',
+        ].sort()
+    );
+    value.records[1]!.fields.fld_native = ['mutated'];
+    value.table.airtableFields[0]!.name = 'mutated';
+    value.detailFields[0]!.titleOverride = 'mutated';
+    const again = f.owner.getRecords(revision)!;
+    assert.deepEqual(again.records[1]!.fields.fld_native, ['nested_a']);
+    assert.equal(again.table.airtableFields[0]!.name, 'Native');
+    assert.equal(again.detailFields[0]!.titleOverride, '');
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.mutations, 0);
+    f.owner.destroy();
+    assert.equal(f.owner.getRecords(revision), null);
+});
+
+for (const projection of ['null', 'missing', 'present'] as const) {
+    it(`record presentation preserves ${projection} detail projection`, async () => {
+        const response = richPage(projection);
+        if (projection === 'present')
+            response.customViewDetailFields = { fld_children: [] };
+        const f = setup(async () => response);
+        f.portal.payload.linkedRecordFieldIdToDetailFields.fld_children = [
+            richDetail,
+        ];
+        // Construct an owner after installing accepted legacy metadata.
+        f.owner.destroy();
+        const owner = createPortalListOwner({
+            client: f.client,
+            portal: f.portal,
+            portalFieldId: 'fld_children',
+            criteria: criteria(),
+            getScope: () => ({ ownerId: 'A', revision: 0 }),
+        });
+        await owner.readFirst(0, readOptions);
+        const value = owner.getRecords(owner.getSnapshot().revision)!;
+        assert.equal(value.detailProjection, projection);
+        assert.deepEqual(
+            value.detailFields,
+            projection === 'null' ? [richDetail] : []
+        );
+        assert.equal(f.calls.length, 1);
+        owner.destroy();
+    });
+}
+
+for (const transition of [
+    'criteria',
+    'view',
+    'field',
+    'owner-aba',
+    'session-aba',
+    'configuration-aba',
+] as const) {
+    it(`record presentation retires on ${transition}`, async () => {
+        const portal = portalPage({
+            customViews: [
+                { id: 'view_example', config: { name: 'Example' } },
+                { id: 'other_view', config: { name: 'Other' } },
+            ],
+        });
+        portal.payload.fieldIdsInPortal.push('fld_other');
+        const other = structuredClone(
+            portal.payload.fieldIdsToSchemas.fld_children!
+        );
+        other.airtableField.id = 'fld_other';
+        portal.payload.fieldIdsToSchemas.fld_other = other;
+        const f = setup(async () => richPage(), portal);
+        await f.owner.readFirst(0, readOptions);
+        const revision = f.owner.getSnapshot().revision;
+        assert(f.owner.getRecords(revision));
+        if (transition === 'criteria')
+            f.owner.setCriteria(revision, {
+                ...criteria(),
+                searchTerm: 'Changed',
+            });
+        if (transition === 'view')
+            f.owner.setCriteria(revision, {
+                ...criteria(),
+                selectedCustomViewId: 'other_view',
+            });
+        if (transition === 'field')
+            f.owner.setField(revision, 'fld_other', {
+                ...criteria(),
+                searchTerm: 'Other field lease',
+            });
+        if (transition === 'owner-aba') {
+            f.scope();
+            f.scope();
+        }
+        if (transition === 'configuration-aba') {
+            f.configuration();
+            f.configuration();
+        }
+        if (transition === 'session-aba') {
+            const session = f.client.getSession();
+            f.client.setSession({ visitor: 'B' });
+            f.owner.getRecords(revision);
+            f.client.setSession(session);
+        }
+        assert.equal(f.owner.getRecords(revision), null);
+        assert.equal(f.calls.length, 1);
+        f.owner.destroy();
+    });
+}
+
+for (const invalid of [
+    'missing-record',
+    'duplicate-schema',
+    'missing-schema',
+    'cross-table-record',
+    'malformed-schema',
+] as const) {
+    it(`record presentation refuses ${invalid} without an extra read`, async () => {
+        const response = richPage();
+        const table = response.tableIdsToLinkedTableStates.table_children!;
+        if (invalid === 'missing-record')
+            delete table.recordIdsToAirtableRecords.record_a;
+        if (invalid === 'duplicate-schema')
+            table.airtableFields.push(structuredClone(richField));
+        if (invalid === 'missing-schema') table.airtableFields = [];
+        if (invalid === 'cross-table-record')
+            response.tableIdsToLinkedTableStates.table_nested!.recordIdsToAirtableRecords.record_a =
+                { id: 'record_a', fields: {} };
+        if (invalid === 'malformed-schema')
+            table.airtableFields[0]!.config = {
+                type: 'multipleRecordLinks',
+                options: null,
+            } as never;
+        const f = setup(async () => response);
+        await f.owner.readFirst(0, readOptions);
+        assert.equal(f.owner.getRecords(f.owner.getSnapshot().revision), null);
+        assert.equal(f.calls.length, 1);
+        f.owner.destroy();
+    });
+}
+
+it('record facet cannot accept a cancelled late page or disturb a pending successor', async () => {
+    const old = deferredPortal<ListPortalLinkedRecordsResult>();
+    const next = deferredPortal<ListPortalLinkedRecordsResult>();
+    let count = 0;
+    const f = setup(() => (++count === 1 ? old.promise : next.promise));
+    const first = f.owner.readFirst(0, readOptions);
+    assert.equal(f.owner.getRecords(f.owner.getSnapshot().revision), null);
+    f.owner.cancel(f.owner.getSnapshot().revision);
+    const second = f.owner.readFirst(
+        f.owner.getSnapshot().revision,
+        readOptions
+    );
+    old.resolve(richPage());
+    assert.equal(await first, false);
+    assert.equal(f.owner.getRecords(f.owner.getSnapshot().revision), null);
+    assert.equal(f.owner.getSnapshot().pending, true);
+    next.resolve(richPage());
+    assert.equal(await second, true);
+    assert(f.owner.getRecords(f.owner.getSnapshot().revision));
+    assert.equal(f.calls.length, 2);
+    f.owner.destroy();
+});
+
+it('accepted empty records and explicit empty details stay empty', async () => {
+    const response = richPage();
+    response.recordIds = [];
+    response.customViewDetailFields = { fld_children: [] };
+    const f = setup(async () => response);
+    await f.owner.readFirst(0, readOptions);
+    const value = f.owner.getRecords(f.owner.getSnapshot().revision)!;
+    assert.deepEqual(value.records, []);
+    assert.deepEqual(value.detailFields, []);
+    assert.equal(value.detailProjection, 'present');
+    assert.equal(f.owner.getSnapshot().phase, 'empty');
+    assert.equal(f.calls.length, 1);
     f.owner.destroy();
 });

@@ -406,15 +406,16 @@ try {
             await input.fill('7');
             await input.press('ControlOrMeta+A');
             await input.press('-');
-            assert.equal(
-                await input.evaluate((node) => node.validity.badInput),
-                true
-            );
+            assert.equal(await input.getAttribute('type'), 'text');
+            assert.equal(await input.inputValue(), '-');
+            assert.equal(await input.getAttribute('aria-invalid'), 'true');
             await page
                 .getByRole('button', { name: 'Save', exact: true })
                 .click();
             await idle(page);
             assert.equal(await page.locator('dialog[open]').count(), 0);
+            assert.equal(await input.inputValue(), '-');
+            assert.equal(await input.getAttribute('aria-invalid'), 'true');
             let state = await page.evaluate(() =>
                 window.__privacyBrowserProof.snapshot()
             );

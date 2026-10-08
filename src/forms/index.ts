@@ -95,6 +95,7 @@ export {
     createFormAttachmentController,
     type FormAttachmentController,
     type FormAttachmentSnapshot,
+    type ExistingAttachmentRow,
     type FormAttachmentControllerOptions,
     type AttachmentRecovery,
     type AttachmentPhase,

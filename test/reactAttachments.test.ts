@@ -39,10 +39,17 @@ it('picker cancellation preserves owner-held queue and draft across StrictMode r
         },
     });
     let visible = true;
+    const loaded = loadedForm();
+    const nativeRow = {
+        url: 'https://files.example.test/PRIVATE_url',
+        filename: 'PRIVATE_existing.txt',
+        size: 7,
+    };
+    loaded.payload.formRecord.data.fld_files = [nativeRow, nativeRow];
     const owner = createFormFieldBindings({
         canWriteField: () => visible,
         client,
-        loaded: loadedForm(),
+        loaded,
         saveOptions: formSaveOptions(),
         getScope: () => ({ ownerId: 'A', revision: 0 }),
     });
@@ -68,10 +75,50 @@ it('picker cancellation preserves owner-held queue and draft across StrictMode r
             null,
             createElement(AttachmentDialog, {
                 onClose: () => closes++,
-                children: createElement(AttachmentField, {
-                    binding: owner.field('fld_files'),
-                    controller: attachment,
-                }),
+                children: createElement(
+                    'div',
+                    null,
+                    createElement(AttachmentField, {
+                        binding: owner.field('fld_files'),
+                        controller: attachment,
+                    }),
+                    createElement(AttachmentField, {
+                        binding: owner.field('fld_files'),
+                        controller: attachment,
+                        render: ({ attachment: state, controller }) =>
+                            createElement(
+                                'aside',
+                                null,
+                                createElement(
+                                    'p',
+                                    null,
+                                    state.files.length === 0
+                                        ? 'Custom no pending files'
+                                        : 'Custom pending files'
+                                ),
+                                ...state.rows.map((row) =>
+                                    createElement(
+                                        'div',
+                                        { key: row.nativeIndex },
+                                        createElement('span', null, row.label),
+                                        createElement(
+                                            'button',
+                                            {
+                                                type: 'button',
+                                                disabled: !row.removeAllowed,
+                                                onClick: () =>
+                                                    controller.remove(
+                                                        state.valuesRevision,
+                                                        row.nativeIndex
+                                                    ),
+                                            },
+                                            'Custom remove'
+                                        )
+                                    )
+                                )
+                            ),
+                    })
+                ),
             })
         );
     try {
@@ -80,7 +127,52 @@ it('picker cancellation preserves owner-held queue and draft across StrictMode r
             true
         );
         assert.equal(attachment.select([file as unknown as File]), true);
+        let cleared = false;
+        const stopNested = attachment.subscribe((snapshot) => {
+            if (!cleared && snapshot.rows.length === 1) {
+                cleared = true;
+                attachment.clear();
+            }
+        });
         await act(async () => root.render(render()));
+        const removals = [...window.document.querySelectorAll('button')].filter(
+            (button) => button.textContent === 'Remove attachment'
+        );
+        const stale = removals[1];
+        await act(async () => removals[0].click());
+        assert.deepEqual(owner.field('fld_files').getSnapshot().value, [
+            nativeRow,
+        ]);
+        assert.equal(cleared, true);
+        assert.deepEqual(attachment.getSnapshot().files, []);
+        assert.ok(
+            window.document.body.textContent!.includes('No pending files')
+        );
+        stopNested();
+        await act(async () =>
+            assert.equal(attachment.select([file as unknown as File]), true)
+        );
+        await act(async () =>
+            stale.dispatchEvent(new window.Event('click', { bubbles: true }))
+        );
+        assert.deepEqual(owner.field('fld_files').getSnapshot().value, [
+            nativeRow,
+        ]);
+        const customRemove = [
+            ...window.document.querySelectorAll('button'),
+        ].find((button) => button.textContent === 'Custom remove')!;
+        await act(async () => customRemove.click());
+        assert.deepEqual(owner.field('fld_files').getSnapshot().value, []);
+        assert.equal(owner.field('fld_files').getSnapshot().dirty, true);
+        assert.equal(attachment.getSnapshot().files[0], file);
+        assert.equal(
+            window.document.body.innerHTML.includes('PRIVATE_existing'),
+            false
+        );
+        assert.equal(
+            window.document.body.innerHTML.includes('PRIVATE_url'),
+            false
+        );
         const input = window.document.querySelector('input[type=file]')!;
         await act(async () =>
             input.dispatchEvent(

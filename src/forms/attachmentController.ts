@@ -1,7 +1,10 @@
 import type { MiniExtensionsClient } from '../runtime/types.js';
 import type { FormLoadedResult } from '../runtime/types.js';
 import type { FormFieldBindings } from './bindings.js';
-import { checkFormAttachmentFiles } from './attachments.js';
+import {
+    checkFormAttachmentFiles,
+    getFormAttachmentPolicy,
+} from './attachments.js';
 import {
     admittedAttachmentValues,
     appendedAttachmentValues,
@@ -19,7 +22,18 @@ export type AttachmentPhase =
     | 'accepted'
     | 'uncertain'
     | 'retired';
+export type ExistingAttachmentRow = {
+    nativeIndex: number;
+    label: string;
+    removeAllowed: boolean;
+    openAllowed: boolean;
+    downloadAllowed: boolean;
+};
 export type FormAttachmentSnapshot = {
+    /** Monotonic, observed native/policy revision for guarded local removal. */
+    valuesRevision: number;
+    presentation: 'ready' | 'unavailable';
+    rows: readonly ExistingAttachmentRow[];
     phase: AttachmentPhase;
     /** Original File identities are retained in memory, never serialized. */
     files: readonly File[];
@@ -30,10 +44,14 @@ export type FormAttachmentSnapshot = {
 };
 export type FormAttachmentController = {
     getSnapshot(): FormAttachmentSnapshot;
+    /** Activity-only guard; does not evaluate field presentation. */
+    blocksForm(): boolean;
     subscribe(listener: (snapshot: FormAttachmentSnapshot) => void): () => void;
     /** Replace the pending queue; no upload. Empty chooser completion preserves it. */
     select(files: readonly File[]): boolean;
     clear(): void;
+    /** Remove one native occurrence locally; never deletes remote bytes or clears pending Files. */
+    remove(renderedRevision: number, nativeIndex: number): boolean;
     /** Upload only the first queued file. Every further upload is explicit. */
     upload(): Promise<boolean>;
     cancel(): void;
@@ -68,6 +86,9 @@ export function createFormAttachmentController(
         throw new TypeError('An attachment field is required.');
     let files: File[] = [];
     let revision = 0;
+    let valuesRevision = 0;
+    let emissionGeneration = 0;
+    let observedValues: string | null = null;
     let retired = false;
     let phase: AttachmentPhase = 'idle';
     let error: string | null = null;
@@ -94,31 +115,141 @@ export function createFormAttachmentController(
     };
     const blocked = () =>
         current() && journal.blocking(scope, recordId()) != null;
-    const snapshot = (): FormAttachmentSnapshot => ({
-        phase: retired
-            ? 'retired'
-            : blocked() && active === null
-              ? 'uncertain'
-              : phase,
-        files: retired ? [] : [...files],
-        revision,
-        busy: active !== null,
-        error: retired ? null : error,
-        retired,
-    });
-    const emit = () => {
+    const existing = () => {
+        const unavailable = {
+            presentation: 'unavailable' as const,
+            rows: [] as ExistingAttachmentRow[],
+        };
+        if (!current()) return unavailable;
+        try {
+            const state = form.controller.getState();
+            const loaded = policyLoaded();
+            const value = state.draft!.data[fieldId];
+            const configuration = options.configurationRevision?.();
+            const field = binding.getSnapshot();
+            if (
+                !current() ||
+                form.controller.getState().draftRevision !== state.draftRevision
+            )
+                return unavailable;
+            const key = JSON.stringify([
+                state.draftRevision,
+                loaded.payload.fieldIdsToSchemas[fieldId],
+                loaded.payload.persistedAddOnlyAttachmentValuesByFieldId,
+                configuration,
+                client.getSession(),
+                field.visibility,
+                field.canEdit,
+            ]);
+            if (key !== observedValues) {
+                observedValues = key;
+                valuesRevision++;
+            }
+            if (field.visibility.type !== 'visible')
+                return {
+                    presentation: 'ready' as const,
+                    rows: [] as ExistingAttachmentRow[],
+                };
+            if (
+                value == null ||
+                (typeof value === 'string' && value.trim() === '') ||
+                (Array.isArray(value) && value.length === 0)
+            )
+                return {
+                    presentation: 'ready' as const,
+                    rows: [] as ExistingAttachmentRow[],
+                };
+            const policy = getFormAttachmentPolicy({ loaded, fieldId, value });
+            if (policy.status !== 'ready') return unavailable;
+            const config =
+                loaded.payload.fieldIdsToSchemas[fieldId]?.miniExtConfig;
+            const showNames =
+                config != null &&
+                'hideAttachmentName' in config &&
+                config.hideAttachmentName === false;
+            const masked =
+                config != null &&
+                'obscurePassword' in config &&
+                config.obscurePassword !== undefined &&
+                config.obscurePassword !== false;
+            const editable =
+                binding.getSnapshot().canEdit && active === null && !blocked();
+            return {
+                presentation: 'ready' as const,
+                rows: policy.rows
+                    .filter((row) => row.visible)
+                    .map((row) => ({
+                        nativeIndex: row.nativeIndex,
+                        label: masked
+                            ? 'Attachment'
+                            : showNames
+                              ? typeof row.attachment.filename === 'string' &&
+                                row.attachment.filename.trim() !== ''
+                                  ? row.attachment.filename
+                                  : 'Attachment — filename unavailable'
+                              : 'Attachment',
+                        removeAllowed: editable && row.removeAllowed,
+                        openAllowed: policy.openAllowed,
+                        downloadAllowed: policy.downloadAllowed,
+                    })),
+            };
+        } catch {
+            observedValues = null;
+            valuesRevision++;
+            return unavailable;
+        }
+    };
+    const snapshot = (): FormAttachmentSnapshot => {
+        const presentation = existing();
+        return {
+            ...presentation,
+            valuesRevision,
+            phase: retired
+                ? 'retired'
+                : blocked() && active === null
+                  ? 'uncertain'
+                  : phase,
+            files: retired ? [] : [...files],
+            revision,
+            busy: active !== null,
+            error: retired ? null : error,
+            retired,
+        };
+    };
+    const emit = (notifyAdapter = true) => {
         if (!current()) return;
+        const emission = ++emissionGeneration;
         const next = snapshot();
-        for (const listener of [...listeners])
+        if (emission !== emissionGeneration) return;
+        for (const listener of [...listeners]) {
+            if (
+                !current() ||
+                emission !== emissionGeneration ||
+                revision !== next.revision ||
+                valuesRevision !== next.valuesRevision
+            )
+                break;
             if (listeners.has(listener)) {
                 try {
-                    listener({ ...next, files: [...next.files] });
+                    listener({
+                        ...next,
+                        files: [...next.files],
+                        rows: next.rows.map((row) => ({ ...row })),
+                    });
                 } catch {
                     /* Presentation cannot veto an accepted append. */
                 }
             }
+        }
         try {
-            options.changed?.();
+            if (
+                notifyAdapter &&
+                emission === emissionGeneration &&
+                current() &&
+                revision === next.revision &&
+                valuesRevision === next.valuesRevision
+            )
+                options.changed?.();
         } catch {
             /* Same rule for stock and custom renderers. */
         }
@@ -126,6 +257,7 @@ export function createFormAttachmentController(
     const dispose = () => {
         if (retired) return;
         retired = true;
+        emissionGeneration++;
         revision++;
         files = [];
         const previous = active;
@@ -147,6 +279,15 @@ export function createFormAttachmentController(
         )
             dispose();
     });
+    if (retired) stop();
+    const stopController = stop;
+    const stopBinding = binding.subscribe(() => {
+        if (current()) emit(false);
+    });
+    stop = () => {
+        stopController();
+        stopBinding();
+    };
     if (retired) stop();
     const admission = (candidates: readonly File[]) => {
         if (
@@ -178,6 +319,9 @@ export function createFormAttachmentController(
         );
     };
     return {
+        blocksForm() {
+            return current() && (active !== null || blocked());
+        },
         getSnapshot() {
             if (!current() && !retired) dispose();
             return snapshot();
@@ -249,6 +393,33 @@ export function createFormAttachmentController(
             if (active === null && !blocked()) phase = 'idle';
             error = null;
             emit();
+        },
+        remove(renderedRevision, nativeIndex) {
+            if (!current() || active !== null || blocked()) return false;
+            const rendered = snapshot();
+            if (
+                rendered.valuesRevision !== renderedRevision ||
+                rendered.presentation !== 'ready' ||
+                !Number.isInteger(nativeIndex) ||
+                nativeIndex < 0 ||
+                !rendered.rows.some(
+                    (row) =>
+                        row.nativeIndex === nativeIndex && row.removeAllowed
+                )
+            )
+                return false;
+            const state = form.controller.getState();
+            const value = state.draft?.data[fieldId];
+            if (
+                !Array.isArray(value) ||
+                !current() ||
+                snapshot().valuesRevision !== renderedRevision ||
+                !binding.getSnapshot().canEdit
+            )
+                return false;
+            return binding.setValue(
+                value.filter((_, index) => index !== nativeIndex)
+            ).accepted;
         },
         async upload() {
             const selected = files[0];

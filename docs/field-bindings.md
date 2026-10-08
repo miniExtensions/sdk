@@ -213,3 +213,28 @@ to retain unfinished values rather than browser-sanitizing them to an empty valu
 A custom render prop can supply different markup while using the same scalar
 actions. Installed tests use synthetic DOM events and validation responses; they
 do not certify native keyboard behavior, screen readers or backend persistence.
+
+### Existing attachment values
+
+`owner.attachment(fieldId, recovery)` also owns presentation of existing native
+attachments. `getSnapshot()` returns visible `rows` with generic or explicitly
+permitted filename labels, policy permissions and original `nativeIndex` values.
+Hidden persisted add-only rows remain in the native draft and still count toward
+capacity. The stock `AttachmentField` and custom render props use this same state.
+No URLs or metadata are supplied in these presentation rows; Open/Download flags
+are permissions only, not navigation or rendering capabilities.
+
+Capture `valuesRevision` with each rendered row, then call
+`controller.remove(valuesRevision, row.nativeIndex)`. This action rechecks current
+ownership, visibility, uncertainty and the complete-value attachment policy.
+It rejects stale revisions after native-array or observed configuration changes.
+It removes exactly one occurrence locally, preserving all remaining metadata,
+order and duplicates; only an explicit Form Save dispatches the changed answer.
+It does not delete remote bytes, clear pending Files, cancel an upload, or replay
+an uncertain operation. Remounts keep the owner-held native answer and pending
+queue. Unobserved in-place configuration A→B→A is not detected by this contract.
+
+Missing add-only baseline or malformed presentation yields generic unavailable
+state and no removal. Canonical empty values remain untouched. Filenames require
+explicit `hideAttachmentName: false`; otherwise rows say `Attachment`. Explicit
+filename opt-in with no filename says `Attachment — filename unavailable`.

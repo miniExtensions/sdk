@@ -111,30 +111,29 @@ function editorLease<S>(options: PortalEditorOptions, snapshot: () => S) {
             emit();
         }
     };
-    const current = (): boolean => {
-        if (retired) return false;
+    // Publication is separately guarded after retirement subscribers may reenter.
+    const externalCurrent = (): boolean => {
         try {
             if (
                 key() !== accepted ||
                 options.configurationRevision?.() !== configuration
-            ) {
-                destroy();
+            )
                 return false;
-            }
             const yes = options.isCurrent();
-            if (
-                !yes ||
-                key() !== accepted ||
-                options.configurationRevision?.() !== configuration
-            ) {
-                destroy();
-                return false;
-            }
-            return !retired;
+            return (
+                yes &&
+                key() === accepted &&
+                options.configurationRevision?.() === configuration
+            );
         } catch {
-            destroy();
             return false;
         }
+    };
+    const current = (): boolean => {
+        if (retired) return false;
+        const yes = externalCurrent();
+        if (!yes) destroy();
+        return yes && !retired;
     };
     const emit = () => {
         const id = ++delivery;
@@ -149,6 +148,7 @@ function editorLease<S>(options: PortalEditorOptions, snapshot: () => S) {
     };
     return {
         current,
+        canPublish: externalCurrent,
         emit,
         destroy,
         retired: () => retired,
@@ -402,6 +402,7 @@ export function createPortalSortEditor(
             const next = structuredClone(criteria);
             next.sortFieldsByEndUser = sort;
             lease.destroy();
+            if (!lease.canPublish()) return false;
             options.onApply(next);
             return true;
         };
@@ -777,6 +778,7 @@ export function createPortalFilterEditor(
             const next = structuredClone(criteria);
             next.filtersByEndUser = filters;
             lease.destroy();
+            if (!lease.canPublish()) return false;
             options.onApply(next);
             return true;
         };

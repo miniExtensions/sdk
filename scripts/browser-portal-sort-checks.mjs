@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures as f } from './portal-recipe-checks.mjs';
 
 const button = (root, label) => {
@@ -10,6 +12,8 @@ const button = (root, label) => {
     assert(b, `Missing sorting button ${label}`);
     return b;
 };
+const change = (window, control) =>
+    control.dispatchEvent(new window.Event('change', { bubbles: true }));
 const tick = () => new Promise((r) => setImmediate(r));
 const wait = async (predicate) => {
     for (let i = 0; i < 100; i++) {
@@ -65,6 +69,7 @@ export async function checkPortalSortCases({
     environment,
     loadExample,
     editablePortal,
+    consumer,
 }) {
     await check(
         'sort applies exact descending criteria, resets offset and preserves server row order and child context',
@@ -686,7 +691,7 @@ export async function checkPortalSortCases({
         }
     );
     await check(
-        'installed standalone sorting recipe copies inputs/outputs and retires before callback reentry',
+        'installed stock/headless sorting leases agree on original metadata and criteria changes; copies stay isolated',
         async () => {
             const { window } = await environment();
             const { mountPortalSortEditor } = await loadExample('portalSort');
@@ -719,9 +724,6 @@ export async function checkPortalSortCases({
             });
             assert.equal(result.type, 'ready');
             window.document.body.append(result.node);
-            own.searchParamsMap.preserved = 'mutated';
-            snapshot.tableIdsToLinkedTableStates.tbl_children.airtableFields[0].id =
-                'mutated';
             const c = controls(window.document.body);
             c.field.value = 'fld_quantity';
             c.direction.value = 'desc';
@@ -744,6 +746,65 @@ export async function checkPortalSortCases({
             result.destroy();
             c.apply.dispatchEvent(new window.Event('click'));
             assert.equal(calls, 1);
+            result.node.remove();
+            const { createPortalSortEditor } = await import(
+                pathToFileURL(
+                    join(
+                        consumer,
+                        'node_modules/@miniextensions/sdk/dist/esm/portals/index.js'
+                    )
+                ).href
+            );
+            for (const changeKind of ['metadata', 'criteria']) {
+                const originalCriteria = criteria(),
+                    source = editablePortal(),
+                    returned = {
+                        ...f.page([]),
+                        detailFields:
+                            source.payload.linkedRecordFieldIdToDetailFields
+                                .fld_children,
+                        criteriaKey: 'fixture',
+                        layoutSettings: {},
+                    };
+                let stockCalls = 0,
+                    headlessCalls = 0;
+                const common = {
+                    portal: source,
+                    portalFieldId: 'fld_children',
+                    criteria: originalCriteria,
+                    snapshot: returned,
+                    isCurrent: () => true,
+                };
+                const stock = mountPortalSortEditor({
+                    ...common,
+                    onApply: () => stockCalls++,
+                });
+                const headless = createPortalSortEditor({
+                    ...common,
+                    onApply: () => headlessCalls++,
+                });
+                assert.equal(stock.type, 'ready');
+                assert.equal(headless.type, 'ready');
+                window.document.body.append(stock.node);
+                const retained = controls(window.document.body);
+                retained.field.value = 'fld_quantity';
+                change(window, retained.field);
+                headless.model.setField('fld_quantity');
+                if (changeKind === 'metadata')
+                    returned.tableIdsToLinkedTableStates.tbl_children.airtableFields =
+                        returned.tableIdsToLinkedTableStates.tbl_children.airtableFields.filter(
+                            (field) => field.id !== 'fld_quantity'
+                        );
+                else originalCriteria.searchTerm = 'Changed original search';
+                retained.apply.dispatchEvent(new window.Event('click'));
+                assert.equal(headless.model.apply(), false);
+                assert.equal(headless.model.getSnapshot().retired, true);
+                assert.equal(stockCalls, 0);
+                assert.equal(headlessCalls, 0);
+                assert.equal(retained.apply.disabled, true);
+                stock.destroy();
+                stock.node.remove();
+            }
         }
     );
     await check(

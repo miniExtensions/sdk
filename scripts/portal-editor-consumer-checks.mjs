@@ -141,6 +141,29 @@ export async function checkPortalEditorConsumer({
         assert.equal(old.applied.length, 0);
         checks++;
     }
+    for (const kind of ['sort', 'filter']) {
+        for (const outcome of ['withdraw', 'self-reentry']) {
+            const x = fixture(),
+                result =
+                    kind === 'sort'
+                        ? api.createPortalSortEditor(x.options)
+                        : api.createPortalFilterEditor(x.options);
+            assert.equal(result.type, 'ready');
+            const model = result.model;
+            if (kind === 'filter') model.setOperand('Exact');
+            const repeats = [];
+            model.subscribe((state) => {
+                if (!state.retired) return;
+                if (outcome === 'withdraw') x.retire();
+                else repeats.push(model.apply(), model.clear());
+            });
+            assert.equal(model.apply(), outcome !== 'withdraw');
+            assert.equal(x.applied.length, outcome === 'withdraw' ? 0 : 1);
+            if (outcome === 'self-reentry')
+                assert.deepEqual(repeats, [false, false]);
+            checks++;
+        }
+    }
     const { Window } = createRequire(import.meta.url)(happyDomModulePath),
         window = new Window();
     const keys = [
@@ -291,7 +314,7 @@ export async function checkPortalEditorConsumer({
         });
         await window.happyDOM.close();
     }
-    assert.equal(checks, 12);
+    assert.equal(checks, 16);
     console.log(
         `Installed Portal editors: ${checks} checkpoints; renderer/criteria preparation only, no network.`
     );

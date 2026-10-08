@@ -15,8 +15,6 @@ export function mountPortalSortEditor(
     let mounted = false;
     const result = createPortalSortEditor({
         ...options,
-        snapshot: structuredClone(options.snapshot),
-        criteria: structuredClone(options.criteria),
         isCurrent: () => (!mounted || node.isConnected) && options.isCurrent(),
     });
     if (result.type === 'unavailable') return result;

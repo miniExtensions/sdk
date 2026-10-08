@@ -321,3 +321,59 @@ it('reentrant ownership withdrawal or disposal cannot publish a prepared replace
         assert.equal(f.applied.length, 0);
     }
 });
+it('retirement subscribers withdrawing ownership suppress Apply publication for both editors', () => {
+    for (const kind of ['sort', 'filter']) {
+        const f = editorFixture(),
+            r =
+                kind === 'sort'
+                    ? createPortalSortEditor(f.options)
+                    : createPortalFilterEditor(f.options);
+        if (r.type !== 'ready') throw Error(r.diagnostic);
+        if (kind === 'filter')
+            'setOperand' in r.model && r.model.setOperand('Exact');
+        r.model.subscribe((s) => {
+            if (s.retired) f.retire();
+        });
+        assert.equal(r.model.apply(), false);
+        assert.equal(f.applied.length, 0);
+        assert.equal(r.model.getSnapshot().retired, true);
+    }
+});
+it('retirement subscriber self-reentry cannot duplicate Apply or Clear publication', () => {
+    for (const kind of ['sort', 'filter']) {
+        const f = editorFixture(),
+            r =
+                kind === 'sort'
+                    ? createPortalSortEditor(f.options)
+                    : createPortalFilterEditor(f.options);
+        if (r.type !== 'ready') throw Error(r.diagnostic);
+        if (kind === 'filter')
+            'setOperand' in r.model && r.model.setOperand('Exact');
+        const repeats: boolean[] = [];
+        r.model.subscribe((s) => {
+            if (s.retired) {
+                repeats.push(r.model.apply(), r.model.clear());
+            }
+        });
+        assert.equal(r.model.apply(), true);
+        assert.deepEqual(repeats, [false, false]);
+        assert.equal(f.applied.length, 1);
+    }
+});
+it('original returned sort metadata and criteria mutations retire the headless lease', () => {
+    for (const kind of ['metadata', 'criteria']) {
+        const f = editorFixture(),
+            r = createPortalSortEditor(f.options);
+        if (r.type !== 'ready') throw Error(r.diagnostic);
+        r.model.setField('fld_number');
+        if (kind === 'metadata')
+            f.options.snapshot.tableIdsToLinkedTableStates.table_children.airtableFields =
+                f.options.snapshot.tableIdsToLinkedTableStates.table_children.airtableFields.filter(
+                    (field) => field.id !== 'fld_number'
+                );
+        else f.options.criteria.searchTerm = 'Changed';
+        assert.equal(r.model.apply(), false);
+        assert.equal(f.applied.length, 0);
+        assert.equal(r.model.getSnapshot().retired, true);
+    }
+});

@@ -3949,6 +3949,7 @@ export async function checkBrowserPortalExample({
             environment,
             loadExample,
             editablePortal,
+            consumer,
         });
         const sortChecks = checks - baselineChecks;
         const beforeFilters = checks;

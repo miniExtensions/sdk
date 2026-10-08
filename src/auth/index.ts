@@ -1,4 +1,14 @@
 export { createAuthFlow, AuthFlowError } from './flow.js';
+export {
+    createSessionRestoration,
+    createBrowserSessionStorage,
+} from './restoration.js';
+export type {
+    SessionRestoration,
+    SessionRestorationOptions,
+    SessionRestorationSnapshot,
+    SessionRestorationStorage,
+} from './restoration.js';
 export type {
     AuthCredentialGrant,
     AuthVerificationChallenge,

@@ -1,0 +1,31 @@
+{
+    "canonicalRevision": "58f73d575ab10baa0a10693660d8002f204368e1",
+    "sources": [
+        {
+            "path": "components/PublicExtension/helpers/generateStorageKeyForCredentials.ts",
+            "sha256": "e7c5fde94d31049e0e678dc99e799023d07af8106f10897201ed925951e1e376"
+        },
+        {
+            "path": "types/executeApiRequest/miniExtLocalStorage.ts",
+            "sha256": "f4cfa8d2a70cf7255ebb9d072db8da9ca8a7abae1916c6d6f68f957202fe1532"
+        }
+    ],
+    "generatorSha256": "9827663245ed332282ef755693a412c429cf28be4ad82613278cd1b9524df518",
+    "execution": "Canonical key/storage helpers executed with synthetic in-memory storage; frontend-only assertion stubbed. No hosted login/backend execution.",
+    "input": {
+        "extensionId": "extension_example",
+        "tableId": "table_example",
+        "fieldNames": ["Émail", "Password"]
+    },
+    "result": {
+        "key": "UGFzc3dvcmTDiW1haWx0YWJsZV9leGFtcGxlZXh0ZW5zaW9uX2V4YW1wbGU%3D",
+        "remembered": {
+            "UGFzc3dvcmTDiW1haWx0YWJsZV9leGFtcGxlZXh0ZW5zaW9uX2V4YW1wbGU%3D": "SYNTHETIC_ENCRYPTED_LOGIN"
+        },
+        "otherContext": {},
+        "afterExpired": {
+            "UGFzc3dvcmTDiW1haWx0YWJsZV9leGFtcGxlZXh0ZW5zaW9uX2V4YW1wbGU%3D": "SYNTHETIC_ENCRYPTED_LOGIN"
+        },
+        "afterLogout": {}
+    }
+}

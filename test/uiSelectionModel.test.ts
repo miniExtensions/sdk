@@ -648,3 +648,59 @@ it('owned search input retires paging and late results without dispatch until ex
     model.setSearchInput('Retained old query');
     assert.notEqual(model.getState().searchTerm, 'Retained old query');
 });
+for (const replacement of ['reset', 'destroy'] as const) {
+    it(`search-input abort listener ${replacement} prevents the old setter overwriting successor state`, async () => {
+        const held = deferred<SelectionPage>();
+        let requests = 0;
+        const model = createSelectionModel({
+            multiple: true,
+            value: ['one'],
+            selectedOptions: options,
+            loadOptions: async (request) => {
+                requests++;
+                request.signal.addEventListener(
+                    'abort',
+                    () => {
+                        if (replacement === 'destroy') model.destroy();
+                        else
+                            model.reset({
+                                multiple: true,
+                                options: [
+                                    { value: 'successor', label: 'Successor' },
+                                ],
+                                value: ['successor'],
+                            });
+                    },
+                    { once: true }
+                );
+                return await held.promise;
+            },
+        });
+        const reading = model.reload();
+        await Promise.resolve();
+        assert.equal(requests, 1);
+        model.setSearchInput('OLD PRIVATE QUERY');
+        assert.equal(model.getState().searchTerm, '');
+        if (replacement === 'reset') {
+            assert.deepEqual(model.getState().value, ['successor']);
+            assert.deepEqual(model.getState().options, [
+                { value: 'successor', label: 'Successor' },
+            ]);
+        }
+        held.resolve({
+            options: [{ value: 'private', label: 'OLD PRIVATE LABEL' }],
+            offset: 'old',
+        });
+        await reading;
+        assert.equal(model.getState().searchTerm, '');
+        assert.equal(
+            model
+                .getState()
+                .options.some((option) => option.label === 'OLD PRIVATE LABEL'),
+            false
+        );
+        if (replacement === 'reset')
+            assert.deepEqual(model.getState().value, ['successor']);
+        model.destroy();
+    });
+}

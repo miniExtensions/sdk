@@ -588,3 +588,57 @@ it('cancel recovery retains the unknown journal gate until an explicit new-inten
     owner.destroy();
     f.owner.destroy();
 });
+it('retained A cannot recover or dispose a reset successor B after B Save cancellation', async () => {
+    const held = deferred<SaveFormResult>();
+    const f = fixture(() => held.promise);
+    const old = f.owner.field('fld_title');
+    const originalContext = f.owner.controller.getState().contextRevision;
+    const loaded = loadedForm();
+    loaded.payload.formRecord.data.fld_title = 'Successor B';
+    f.owner.controller.reset({
+        ...f.options,
+        loaded,
+        getScope: () => ({ ownerId: 'B', revision: 1 }),
+    });
+    const successorContext = f.owner.controller.getState().contextRevision;
+    assert.notEqual(successorContext, originalContext);
+    const saving = f.owner.controller.save();
+    const rejected = assert.rejects(saving);
+    f.owner.controller.cancel();
+    held.reject(new Error('Unknown B outcome'));
+    await rejected;
+    assert.equal(
+        f.owner.controller.getState().contextRevision,
+        successorContext,
+        'cancellation retires a request, not its context'
+    );
+    let reads = 0;
+    assert.equal(
+        await f.owner.reload({
+            dirty: 'keep',
+            read: async () => {
+                reads++;
+                return loadedForm();
+            },
+        }),
+        false
+    );
+    assert.equal(reads, 0);
+    assert.equal(f.owner.controller.getState().ownerScope.ownerId, 'B');
+    assert.equal(
+        f.owner.controller.getState().draft?.data.fld_title,
+        'Successor B'
+    );
+    assert.equal(old.setValue('Late A').accepted, false);
+    f.owner.destroy();
+    assert.equal(
+        f.owner.controller.getState().status,
+        'cancelled',
+        'old owner teardown cannot dispose the successor'
+    );
+    assert.equal(
+        f.owner.controller.getState().draft?.data.fld_title,
+        'Successor B'
+    );
+    f.owner.controller.destroy();
+});

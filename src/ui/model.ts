@@ -283,7 +283,9 @@ export function createSelectionModel(
         },
         setSearchInput(next) {
             if (!current()) return;
+            const expectedGeneration = generation + 1;
             abort();
+            if (destroyed || generation !== expectedGeneration) return;
             searchTerm = next;
             if (configuration.loadOptions) {
                 options = [];

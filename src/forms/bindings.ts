@@ -132,6 +132,7 @@ export function createFormFieldBindings(
     let loaded = structuredClone(initial.loaded);
     const controller = createFormController({ ...initial, loaded, store });
     let epoch = controller.getState().epoch;
+    let contextRevision = controller.getState().contextRevision;
     const attachments = new Map<string, FormAttachmentController>();
     const attachmentBlocked = () =>
         [...attachments.values()].some((model) => {
@@ -162,7 +163,12 @@ export function createFormFieldBindings(
     };
     const current = () => {
         const state = controller.getState();
-        if (retired || state.epoch !== epoch || state.draft === null)
+        if (
+            retired ||
+            state.epoch !== epoch ||
+            state.contextRevision !== contextRevision ||
+            state.draft === null
+        )
             return false;
         return true;
     };
@@ -173,6 +179,7 @@ export function createFormFieldBindings(
         return (
             !disposed &&
             state.draft !== null &&
+            state.contextRevision === contextRevision &&
             (state.status === 'cancelled' ||
                 state.status === 'transport-error') &&
             (options.isCurrent?.() ?? true)
@@ -194,7 +201,12 @@ export function createFormFieldBindings(
         syncing = true;
         try {
             const state = controller.getState();
-            if (retired || state.epoch !== epoch || state.draft === null) {
+            if (
+                retired ||
+                state.epoch !== epoch ||
+                state.contextRevision !== contextRevision ||
+                state.draft === null
+            ) {
                 retired = true;
                 retireEntries();
                 visibility = {};
@@ -660,8 +672,15 @@ export function createFormFieldBindings(
                 attachments.clear();
                 syncing = true;
                 try {
+                    const nextContextRevision = contextRevision + 1;
                     controller.reset({ ...options, store });
+                    if (
+                        controller.getState().contextRevision !==
+                        nextContextRevision
+                    )
+                        return false;
                     epoch = controller.getState().epoch;
+                    contextRevision = nextContextRevision;
                     retired = false;
                 } finally {
                     syncing = false;
@@ -698,7 +717,8 @@ export function createFormFieldBindings(
             for (const model of attachments.values()) model.dispose();
             attachments.clear();
             retireEntries();
-            controller.destroy();
+            if (controller.getState().contextRevision === contextRevision)
+                controller.destroy();
             notify();
             for (const entry of entries.values()) entry.listeners.clear();
             previous?.abort();

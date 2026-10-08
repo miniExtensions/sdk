@@ -70,6 +70,8 @@ export type FormControllerStatus =
 export type FormControllerState = {
     ownerScope: FormOwnerScope;
     epoch: number;
+    /** Reset-only ownership identity; mutation cancellation does not replace context. */
+    contextRevision: number;
     draftRevision: number | null;
     status: FormControllerStatus;
     canSave: boolean;
@@ -248,6 +250,7 @@ export const createFormController = (
     let active: AbortController | null = null;
     const listeners = new Set<(state: FormControllerState) => void>();
     let emitting = false;
+    let contextRevision = 0;
     let pendingEmission = false;
     let emissionRevision = 0;
 
@@ -255,6 +258,7 @@ export const createFormController = (
         structuredClone({
             ownerScope: context.scope,
             epoch: generation,
+            contextRevision,
             draftRevision: context.store.revision(context.handle),
             status,
             canSave:
@@ -576,6 +580,7 @@ export const createFormController = (
             generation += 1;
             active = null;
             context = openContext(prepared);
+            contextRevision += 1;
             status = 'ready';
             validationErrors = formValidationMessages(
                 context.loaded.payload.formErrors,

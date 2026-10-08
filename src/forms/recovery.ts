@@ -14,13 +14,14 @@ export type RecoveryAttempt = {
     recordId: string | null;
     fieldId: string | null;
     loadVersion: number;
-    operation: 'save' | 'upload';
+    operation: 'save' | 'upload' | 'choice';
     outcome:
         | 'not-submitted'
         | 'unknown'
         | 'saved'
         | 'validation-error'
-        | 'uploaded';
+        | 'uploaded'
+        | 'choice-created';
     flight: boolean;
     acknowledgment: 'none' | 'existing-request' | 'new-intent';
     associatedRecordId: string | null;
@@ -125,7 +126,7 @@ export class RecoveryJournal {
     }
     accepted(
         attempt: RecoveryAttempt,
-        outcome: 'saved' | 'validation-error' | 'uploaded'
+        outcome: 'saved' | 'validation-error' | 'uploaded' | 'choice-created'
     ): void {
         attempt.outcome = outcome;
         attempt.flight = false;

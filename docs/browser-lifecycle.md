@@ -209,3 +209,24 @@ static assets, and exercises synthetic Portal/recovery scenarios. These checks
 do not certify a particular deployment, visitor, CORS origin or all configured
 features. Validate your selected live workflow and record the exact package,
 backend and app versions plus the disposition of only your owned test data.
+
+The standard `ubuntu-latest` Node24 CI lane separately runs
+`pnpm check:browser` against those emitted package and fixture artifacts. The
+emitted host is checked against the installed SDK declarations before launch,
+including a missing-owner-scope rejection regression. The bounded Chromium suite uses the runner's preinstalled stable Chrome through
+Playwright's supported `chrome` channel, retaining Ubuntu's installed sandbox
+policy without changing system settings. Its actual version is recorded rather
+than assumed pinned. The suite covers visitor teardown, invalid numeric input,
+attachment picker empty completion and draft preservation, late Portal results,
+and explicitly opted-in fake remembered login. It enables Chromium's sandbox,
+serves only on loopback, blocks requests outside that origin, and retains
+per-case screenshots, accessibility-tree snapshots, hashes and cleanup receipts,
+and attempts the same captures on failures. Artifact-preflight failures retain a
+failure receipt. Node22 retains the package checks without another browser run.
+
+This is real Chromium execution with synthetic transport, not live authentication,
+backend persistence, OS-picker cancellation, cross-browser or screen-reader
+certification. Picker empty completion and a synthetic bubbling cancel event
+are reported separately. It covers representative cases, not every route in the
+manual fixture inventory. No customer credentials or automatic mutation retries
+are used.

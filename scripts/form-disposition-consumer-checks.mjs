@@ -340,6 +340,133 @@ export async function checkFormDispositionConsumer({ consumerDirectory }) {
             stop();
             checks++;
         }
+        {
+            const f = make();
+            let live = true,
+                successor;
+            f.client.forms.save = () => {
+                f.calls.push('successor invoked');
+                throw Error('Successor transport failed');
+            };
+            const states = [];
+            const stop = f.owner.controller.subscribe((state) =>
+                states.push(state.status)
+            );
+            const base = f.lifecycle(() => {
+                live = false;
+            });
+            await assert.rejects(
+                f.owner.save({
+                    isCurrent: () => live,
+                    lifecycle: {
+                        dispatch() {
+                            const operation = base.dispatch();
+                            return {
+                                ...operation,
+                                finish(disposition) {
+                                    operation.finish(disposition);
+                                    successor = assert.rejects(
+                                        f.owner.save({
+                                            lifecycle: f.lifecycle(),
+                                        })
+                                    );
+                                },
+                            };
+                        },
+                    },
+                })
+            );
+            assert(successor);
+            await successor;
+            assert.equal(f.calls.length, 1);
+            assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
+            assert.deepEqual(states, [
+                'ready',
+                'saving',
+                'saving',
+                'transport-error',
+            ]);
+            assert.equal(
+                f.owner.controller.getState().status,
+                'transport-error'
+            );
+            assert.equal(f.owner.controller.getState().canSave, false);
+            assert.equal(
+                f.owner.controller.getState().errorMessage,
+                'Successor transport failed'
+            );
+            assert.equal(f.attempt.outcome, 'unknown');
+            assert.equal(f.journal.blocking(scope, null), f.attempt);
+            await assert.rejects(f.owner.save());
+            assert.equal(f.calls.length, 1);
+            stop();
+            checks++;
+        }
+        {
+            const f = make();
+            let live = true,
+                armed = false,
+                successor,
+                rejected,
+                release;
+            let scopeState = { ownerId: 'A', revision: 0 };
+            f.client.forms.save = (input) => {
+                f.calls.push(structuredClone(input));
+                return new Promise((resolve) => {
+                    release = resolve;
+                });
+            };
+            const controller = forms.createFormController({
+                ...f.options,
+                getScope: () => {
+                    if (armed) {
+                        armed = false;
+                        scopeState = { ownerId: 'B', revision: 1 };
+                        const b = structuredClone(f.page);
+                        b.payload.extensionAccessToken = 'token_B';
+                        controller.reset({
+                            ...f.options,
+                            loaded: b,
+                            getScope: () => scopeState,
+                        });
+                        successor = controller.save();
+                        rejected = assert.rejects(successor);
+                    }
+                    return scopeState;
+                },
+            });
+            try {
+                await assert.rejects(
+                    controller.save({
+                        isCurrent: () => live,
+                        lifecycle: f.lifecycle(() => {
+                            live = false;
+                            armed = true;
+                        }),
+                    })
+                );
+                assert(successor);
+                assert(rejected);
+                assert.equal(f.calls.length, 1);
+                assert.equal(controller.getState().status, 'saving');
+                assert.equal(f.attempt.outcome, 'not-dispatched');
+                controller.cancel();
+                assert.equal(controller.getState().status, 'cancelled');
+                release({
+                    type: 'error',
+                    formValidationErrors: [],
+                    formErrors: {},
+                });
+                await rejected;
+                assert.equal(controller.getState().status, 'cancelled');
+                assert.equal(controller.getState().canSave, false);
+                assert.equal(f.calls[0].extensionAccessToken, 'token_B');
+                assert.equal(f.calls.length, 1);
+                checks++;
+            } finally {
+                controller.destroy();
+            }
+        }
         console.log(
             `Installed Form disposition: ${checks} checkpoints; synthetic dispatch contrast only.`
         );

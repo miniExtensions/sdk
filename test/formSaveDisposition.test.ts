@@ -359,3 +359,171 @@ it('no-dispatch finish callback can start a successor without old readiness publ
     assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
     f.controller.destroy();
 });
+
+it('completed synchronous successor failure cannot be overwritten by old no-dispatch cleanup', async () => {
+    const f = fixture();
+    let live = true,
+        invocations = 0;
+    let successor: Promise<unknown> | undefined;
+    f.client.forms.save = () => {
+        invocations++;
+        throw Error('Successor transport failed');
+    };
+    const states: Array<string> = [];
+    const stop = f.controller.subscribe((state) => states.push(state.status));
+    const base = f.lifecycle(() => {
+        live = false;
+    });
+    await assert.rejects(
+        f.controller.save({
+            isCurrent: () => live,
+            lifecycle: {
+                dispatch() {
+                    const operation = base.dispatch();
+                    return {
+                        ...operation,
+                        finish(disposition: FormSaveDisposition) {
+                            operation.finish(disposition);
+                            successor = assert.rejects(
+                                f.controller.save({ lifecycle: f.lifecycle() })
+                            );
+                        },
+                    };
+                },
+            },
+        })
+    );
+    assert(successor);
+    await successor;
+    assert.equal(invocations, 1);
+    assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
+    assert.deepEqual(states, ['ready', 'saving', 'saving', 'transport-error']);
+    assert.equal(f.controller.getState().status, 'transport-error');
+    assert.equal(f.controller.getState().canSave, false);
+    assert.equal(
+        f.controller.getState().errorMessage,
+        'Successor transport failed'
+    );
+    assert.equal(f.attempt!.outcome, 'unknown');
+    assert.equal(f.journal.blocking(scope, null), f.attempt);
+    await assert.rejects(f.controller.save());
+    assert.equal(invocations, 1);
+    stop();
+    f.controller.destroy();
+});
+it('scope observation reentry cannot publish old readiness over a completed successor', async () => {
+    const f = fixture();
+    let live = true,
+        armed = false,
+        invocations = 0;
+    let successor: Promise<unknown> | undefined;
+    f.client.forms.save = () => {
+        invocations++;
+        throw Error('Observed successor failed');
+    };
+    const controller = createFormController({
+        ...f.options,
+        getScope: () => {
+            if (armed) {
+                armed = false;
+                successor = assert.rejects(
+                    controller.save({ lifecycle: f.lifecycle() })
+                );
+            }
+            return { ownerId: 'A', revision: 0 };
+        },
+    });
+    const states: Array<string> = [];
+    const stop = controller.subscribe((state) => states.push(state.status));
+    const base = f.lifecycle(() => {
+        live = false;
+    });
+    await assert.rejects(
+        controller.save({
+            isCurrent: () => live,
+            lifecycle: {
+                dispatch() {
+                    const operation = base.dispatch();
+                    return {
+                        ...operation,
+                        finish(disposition: FormSaveDisposition) {
+                            operation.finish(disposition);
+                            armed = true;
+                        },
+                    };
+                },
+            },
+        })
+    );
+    assert(successor);
+    await successor;
+    assert.equal(invocations, 1);
+    assert.deepEqual(states, ['ready', 'saving', 'saving', 'transport-error']);
+    assert.equal(controller.getState().status, 'transport-error');
+    assert.equal(controller.getState().canSave, false);
+    assert.equal(f.attempt!.outcome, 'unknown');
+    assert.equal(f.journal.blocking(scope, null), f.attempt);
+    stop();
+    controller.destroy();
+    f.controller.destroy();
+});
+
+it('first catch scope observation cannot release a replacement owner cancellation lease', async () => {
+    const f = fixture();
+    let live = true,
+        armed = false;
+    let scopeState = { ownerId: 'A', revision: 0 };
+    let successor: Promise<unknown> | undefined,
+        rejected: Promise<void> | undefined;
+    let release!: (v: SaveFormResult) => void;
+    f.respond(
+        () =>
+            new Promise((resolve) => {
+                release = resolve;
+            })
+    );
+    const controller = createFormController({
+        ...f.options,
+        getScope: () => {
+            if (armed) {
+                armed = false;
+                scopeState = { ownerId: 'B', revision: 1 };
+                const b = loadedForm();
+                b.payload.extensionAccessToken = 'token_B';
+                b.payload.formRecord.data.fld_title = 'Replacement';
+                controller.reset({
+                    ...f.options,
+                    loaded: b,
+                    getScope: () => scopeState,
+                });
+                successor = controller.save();
+                rejected = assert.rejects(successor);
+            }
+            return scopeState;
+        },
+    });
+    await assert.rejects(
+        controller.save({
+            isCurrent: () => live,
+            lifecycle: f.lifecycle(() => {
+                live = false;
+                armed = true;
+            }),
+        })
+    );
+    assert(successor);
+    assert(rejected);
+    assert.equal(f.calls, 1);
+    assert.equal(controller.getState().status, 'saving');
+    assert.equal(f.attempt!.outcome, 'not-dispatched');
+    controller.cancel();
+    assert.equal(controller.getState().status, 'cancelled');
+    release(savedForm());
+    await rejected;
+    assert.equal(controller.getState().status, 'cancelled');
+    assert.equal(controller.getState().draft!.data.fld_title, 'Replacement');
+    assert.equal(controller.getState().canSave, false);
+    assert.equal(f.calls, 1);
+    controller.destroy();
+    f.controller.destroy();
+});

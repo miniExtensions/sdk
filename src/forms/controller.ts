@@ -240,6 +240,7 @@ export const createFormController = (
     let context = openContext(prepare(options));
     let generation = 0;
     let status: FormControllerStatus = 'ready';
+    let saveSequence = 0;
     let validationErrors = formValidationMessages(
         context.loaded.payload.formErrors,
         [],
@@ -466,6 +467,7 @@ export const createFormController = (
                     // Cleanup cannot change an operation outcome or a successor owner.
                 }
             };
+            const attemptSequence = ++saveSequence;
             const requireAttempt = () => {
                 if (
                     saveGeneration !== generation ||
@@ -548,30 +550,40 @@ export const createFormController = (
                     !acceptedOperation
                 ) {
                     if (!observeScope()) throw scopeError();
+                    if (
+                        saveGeneration !== generation ||
+                        owner !== context ||
+                        attemptSequence !== saveSequence ||
+                        active !== controller
+                    )
+                        throw error;
                     if (!transportInvoked) {
                         // Publish readiness only after releasing this operation and its journal lease.
                         active = null;
                         finishOperation();
                     }
-                    if (
+                    const ownsPublication = () =>
                         saveGeneration === generation &&
                         owner === context &&
+                        attemptSequence === saveSequence &&
                         (transportInvoked
                             ? active === controller
-                            : active === null)
-                    ) {
+                            : active === null);
+                    if (ownsPublication()) {
                         if (!observeScope()) throw scopeError();
-                        status = !transportInvoked
-                            ? 'ready'
-                            : controller.signal.aborted
-                              ? 'cancelled'
-                              : 'transport-error';
-                        errorMessage = !transportInvoked
-                            ? 'The Form Save was not dispatched. Check the current owner before a new explicit Save.'
-                            : error instanceof Error
-                              ? error.message
-                              : 'The Form save failed.';
-                        emit();
+                        if (ownsPublication()) {
+                            status = !transportInvoked
+                                ? 'ready'
+                                : controller.signal.aborted
+                                  ? 'cancelled'
+                                  : 'transport-error';
+                            errorMessage = !transportInvoked
+                                ? 'The Form Save was not dispatched. Check the current owner before a new explicit Save.'
+                                : error instanceof Error
+                                  ? error.message
+                                  : 'The Form save failed.';
+                            emit();
+                        }
                     }
                 }
                 throw error;

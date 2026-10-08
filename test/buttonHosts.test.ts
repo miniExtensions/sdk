@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { createMiniExtensionsClient } from '../src/runtime/client.js';
+import type { ButtonMiniExtConfig } from '../src/runtime/rendererTypes.js';
 import type {
     TriggerConfiguredButtonWebhookInput,
     RuntimeLinkedRecordDetailField,
@@ -51,7 +52,12 @@ function clientFixture() {
     };
     return { client, calls, io };
 }
-function formFixture(edit: boolean, hidden = false, api = clientFixture()) {
+function formFixture(
+    edit: boolean,
+    hidden = false,
+    api = clientFixture(),
+    config: ButtonMiniExtConfig = { openLinkType: 'triggerWebhookPOST' }
+) {
     const loaded = loadedForm();
     loaded.payload.fieldIdsInForm = ['fld_button'];
     loaded.payload.fieldIdsToSchemas = {
@@ -59,7 +65,7 @@ function formFixture(edit: boolean, hidden = false, api = clientFixture()) {
             fieldType: 'button',
             airtableField: field,
             miniExtConfig: {
-                openLinkType: 'triggerWebhookPOST',
+                ...config,
                 hideFieldIfEmpty: hidden,
             },
         },
@@ -560,3 +566,118 @@ it('Portal and linked Form refuse a foreign client or structurally copied owner 
         assert.equal(f.calls.length + foreignApi.calls.length, 0);
     }
 });
+
+for (const [returned, child] of [
+    ['_blank', 'triggerWebhookPOST'],
+    ['triggerWebhookPOST', '_blank'],
+] as const) {
+    it(`linked Form returned ${returned} overrides child ${child}`, async () => {
+        const f = await portalFixture(false, (detail) => {
+            detail.miniExtConfig = { openLinkType: returned };
+            detail.childFormField!.config = {
+                type: 'button',
+                config: { openLinkType: child },
+            };
+        });
+        const form = formFixture(false, false, f, { openLinkType: child });
+        const m = createFormButtonFieldModel({
+            ...form.options,
+            acceptedLinkedContext: {
+                owner: f.owner,
+                portal: f.options.portal,
+                revision: f.owner.getSnapshot().revision,
+                recordId: 'rec_linked',
+            },
+        });
+        assert.equal(m.getSnapshot().config?.openLinkType, returned);
+        assert.equal(m.getSnapshot().canLink, returned === '_blank');
+        assert.equal(m.getSnapshot().canTrigger, returned !== '_blank');
+        const before = { ...f.io };
+        if (returned === '_blank') {
+            assert.equal(m.getRenderProps().prepareLink()?.target, '_blank');
+            assert.equal(
+                (await m.getRenderProps().triggerWebhook()).type,
+                'refused'
+            );
+            assert.equal(f.calls.length, 0);
+        } else {
+            assert.equal(m.getRenderProps().prepareLink(), null);
+            assert.equal(
+                (await m.getRenderProps().triggerWebhook()).type,
+                'reported-success'
+            );
+            assert.equal(
+                f.calls[0].extensionAccessToken,
+                f.options.portal.payload.extensionAccessToken
+            );
+            assert.equal(f.calls[0].source.type, 'linked-record');
+        }
+        assert.deepEqual(f.io, before);
+        // Ordinary Form actions retain their own accepted child policy.
+        const ordinary = createFormButtonFieldModel({
+            ...form.options,
+            recovery: recovery(),
+        });
+        assert.equal(ordinary.getSnapshot().config?.openLinkType, child);
+    });
+}
+for (const success of [true, false]) {
+    it(`linked Form uses returned ${success ? 'success' : 'error'} message over child message`, async () => {
+        const returned = {
+            openLinkType: 'triggerWebhookGET' as const,
+            triggerWebhookSuccessMessage: 'Parent success',
+            triggerWebhookErrorMessage: 'Parent error',
+        };
+        const child = {
+            openLinkType: 'triggerWebhookPOST' as const,
+            triggerWebhookSuccessMessage: 'Child success',
+            triggerWebhookErrorMessage: 'Child error',
+        };
+        const f = await portalFixture(false, (detail) => {
+            detail.miniExtConfig = returned;
+            detail.childFormField!.config = { type: 'button', config: child };
+        });
+        const form = formFixture(false, false, f, child);
+        f.client.buttons.triggerWebhook = async (input) => {
+            f.calls.push(structuredClone(input));
+            return { success };
+        };
+        const m = createFormButtonFieldModel({
+            ...form.options,
+            acceptedLinkedContext: {
+                owner: f.owner,
+                portal: f.options.portal,
+                revision: f.owner.getSnapshot().revision,
+                recordId: 'rec_linked',
+            },
+        });
+        assert.equal(m.getSnapshot().config?.openLinkType, 'triggerWebhookGET');
+        assert.equal(
+            (await m.getRenderProps().triggerWebhook()).type,
+            success ? 'reported-success' : 'uncertain'
+        );
+        assert.deepEqual(
+            m.getSnapshot().feedback,
+            success
+                ? { kind: 'success', text: 'Parent success' }
+                : { kind: 'error', text: 'Parent error' }
+        );
+        assert.equal(
+            f.calls[0].extensionAccessToken,
+            f.options.portal.payload.extensionAccessToken
+        );
+        assert.equal(f.calls[0].source.type, 'linked-record');
+        const ordinary = createFormButtonFieldModel({
+            ...form.options,
+            recovery: recovery(),
+        });
+        assert.equal(
+            ordinary.getSnapshot().config?.triggerWebhookSuccessMessage,
+            'Child success'
+        );
+        assert.equal(
+            ordinary.getSnapshot().config?.triggerWebhookErrorMessage,
+            'Child error'
+        );
+    });
+}

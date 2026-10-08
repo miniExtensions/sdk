@@ -211,7 +211,24 @@ export function createFormButtonFieldModel(
                 return {
                     field: schema.airtableField as AirtableButtonField,
                     value: buttonValue(snapshot.value),
-                    config: schema.miniExtConfig as ButtonMiniExtConfig,
+                    config: linked
+                        ? {
+                              ...(schema.miniExtConfig as ButtonMiniExtConfig),
+                              // Policy follows the accepted parent token/source.
+                              openLinkType: (
+                                  linked.detail
+                                      .miniExtConfig as ButtonMiniExtConfig
+                              )?.openLinkType,
+                              triggerWebhookSuccessMessage: (
+                                  linked.detail
+                                      .miniExtConfig as ButtonMiniExtConfig
+                              )?.triggerWebhookSuccessMessage,
+                              triggerWebhookErrorMessage: (
+                                  linked.detail
+                                      .miniExtConfig as ButtonMiniExtConfig
+                              )?.triggerWebhookErrorMessage,
+                          }
+                        : (schema.miniExtConfig as ButtonMiniExtConfig),
                     language: now.language,
                     // Linked sources resolve against the parent Portal extension.
                     extensionAccessToken: linked

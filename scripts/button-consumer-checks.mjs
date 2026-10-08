@@ -689,6 +689,209 @@ export async function checkButtonConsumer({
             acceptedOwner.destroy();
             checks++;
         }
+        if (api === esm) {
+            for (const scenario of [
+                {
+                    name: 'returned-link',
+                    returned: '_blank',
+                    child: 'triggerWebhookPOST',
+                },
+                {
+                    name: 'returned-webhook',
+                    returned: 'triggerWebhookGET',
+                    child: '_blank',
+                },
+                {
+                    name: 'returned-success',
+                    returned: 'triggerWebhookPOST',
+                    child: 'triggerWebhookGET',
+                },
+                {
+                    name: 'returned-error',
+                    returned: 'triggerWebhookPOST',
+                    child: 'triggerWebhookGET',
+                },
+            ]) {
+                const accepted = structuredClone(portal);
+                const returnedConfig = {
+                    openLinkType: scenario.returned,
+                    triggerWebhookSuccessMessage: 'Linked returned success',
+                    triggerWebhookErrorMessage: '',
+                };
+                const childConfig = {
+                    openLinkType: scenario.child,
+                    triggerWebhookSuccessMessage: 'Linked child success',
+                    triggerWebhookErrorMessage: 'Linked child error',
+                };
+                const detail =
+                    accepted.payload.linkedRecordFieldIdToDetailFields
+                        .fld_children[0];
+                detail.miniExtConfig = returnedConfig;
+                detail.childFormField = {
+                    idOrName: { type: 'id', id: 'fld_button' },
+                    config: { type: 'button', config: childConfig },
+                };
+                const calls = [];
+                let throwResponse = false;
+                const client = {
+                    ...portalClient,
+                    buttons: {
+                        triggerWebhook: async (input) => {
+                            calls.push(structuredClone(input));
+                            assert.equal(admitsLinked(input), true);
+                            if (throwResponse)
+                                throw Error('Synthetic lost linked response');
+                            return {
+                                success: scenario.name !== 'returned-error',
+                            };
+                        },
+                    },
+                };
+                const acceptedOwner = api.portals.createPortalListOwner({
+                    client,
+                    portal: accepted,
+                    portalFieldId: 'fld_children',
+                    criteria,
+                    getScope: () => ({ ownerId: 'A', revision: 0 }),
+                });
+                assert.equal(
+                    await acceptedOwner.readFirst(0, {
+                        pagesToFetch: 1,
+                        refreshLoggedInPortalRecord: false,
+                    }),
+                    true
+                );
+                const loaded = portalRecipeFixtures.makeForm({
+                    childExtensionInfo: { accessType: { type: 'create' } },
+                });
+                loaded.payload.publicFields = {
+                    type: 'form',
+                    state: { formFields: null, tableId: 'tbl_children' },
+                };
+                loaded.payload.fieldIdsInForm = ['fld_button'];
+                loaded.payload.fieldIdsToSchemas = {
+                    fld_button: {
+                        fieldType: 'button',
+                        airtableField: nativeField(),
+                        miniExtConfig: childConfig,
+                    },
+                };
+                loaded.payload.formRecord = {
+                    type: 'create',
+                    data: {
+                        fld_button: structuredClone(
+                            page.tableIdsToLinkedTableStates.tbl_children
+                                .recordIdsToAirtableRecords.rec_child.fields
+                                .fld_button
+                        ),
+                    },
+                };
+                const fields = api.forms.createFormFieldBindings({
+                    client,
+                    loaded,
+                    getScope: () => ({ ownerId: 'A', revision: 0 }),
+                    saveOptions: {
+                        captchaVal: null,
+                        isComputeMode: false,
+                        context: { type: 'direct-url' },
+                        searchQuery: {},
+                        conditionalLinkedRecordFieldIdsToFilteringValues: {},
+                    },
+                });
+                const before = fields.field('fld_button').getSnapshot();
+                const model = api.ui.createFormButtonFieldModel({
+                    ...portalOptions,
+                    client,
+                    fields,
+                    recovery: {
+                        ...portalOptions.recovery,
+                        journal: new api.forms.RecoveryJournal(),
+                    },
+                    acceptedLinkedContext: {
+                        owner: acceptedOwner,
+                        portal: accepted,
+                        revision: acceptedOwner.getSnapshot().revision,
+                        recordId: 'rec_child',
+                    },
+                });
+                try {
+                    const props = model.getRenderProps();
+                    assert.equal(props.config.openLinkType, scenario.returned);
+                    assert.equal(
+                        props.config.triggerWebhookSuccessMessage,
+                        'Linked returned success'
+                    );
+                    assert.equal(props.config.triggerWebhookErrorMessage, '');
+                    if (scenario.name === 'returned-link') {
+                        assert.equal(props.canLink, true);
+                        assert.equal(props.canTrigger, false);
+                        assert.deepEqual(props.prepareLink(), {
+                            href: 'https://portal.example.test/action',
+                            target: '_blank',
+                            rel: 'noreferrer',
+                        });
+                        assert.equal(
+                            (await props.triggerWebhook()).type,
+                            'refused'
+                        );
+                        assert.equal(calls.length, 0);
+                    } else {
+                        assert.equal(props.canLink, false);
+                        assert.equal(props.canTrigger, true);
+                        assert.equal(props.prepareLink(), null);
+                        const result = await props.triggerWebhook();
+                        assert.equal(
+                            result.type,
+                            scenario.name === 'returned-error'
+                                ? 'uncertain'
+                                : 'reported-success'
+                        );
+                        assert.deepEqual(calls, [linkedInput]);
+                        assert.deepEqual(
+                            model.getSnapshot().feedback,
+                            scenario.name === 'returned-error'
+                                ? { kind: 'error', text: '' }
+                                : {
+                                      kind: 'success',
+                                      text: 'Linked returned success',
+                                  }
+                        );
+                        if (scenario.name === 'returned-error') {
+                            assert.equal(
+                                (await model.getRenderProps().triggerWebhook())
+                                    .type,
+                                'refused'
+                            );
+                            assert.equal(calls.length, 1);
+                            assert.equal(
+                                model.getRenderProps().acknowledgeNewIntent(),
+                                true
+                            );
+                            throwResponse = true;
+                            assert.equal(
+                                (await model.getRenderProps().triggerWebhook())
+                                    .type,
+                                'uncertain'
+                            );
+                            assert.deepEqual(calls, [linkedInput, linkedInput]);
+                            assert.deepEqual(model.getSnapshot().feedback, {
+                                kind: 'error',
+                                text: '',
+                            });
+                        }
+                    }
+                    const after = fields.field('fld_button').getSnapshot();
+                    assert.deepEqual(after.value, before.value);
+                    assert.equal(after.dirty, before.dirty);
+                    assert.equal(after.canEdit, false);
+                    checks++;
+                } finally {
+                    model.dispose();
+                    fields.destroy();
+                    acceptedOwner.destroy();
+                }
+            }
+        }
         const missing = api.ui.createPortalButtonFieldModel({
             ...portalOptions,
             recordId: 'unlisted',

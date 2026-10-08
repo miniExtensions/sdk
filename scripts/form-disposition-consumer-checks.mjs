@@ -535,6 +535,120 @@ export async function checkFormDispositionConsumer({ consumerDirectory }) {
                 controller.destroy();
             }
         }
+        // Actual installed owner: fresh server dirtiness must survive retained edits.
+        for (const dirty of ['keep', 'discard']) {
+            const f = make();
+            assert.equal(
+                f.owner.field('fld_title').setValue('Local').accepted,
+                true
+            );
+            const fresh = structuredClone(f.page);
+            fresh.payload.formRecord.data.fld_title = 'Server';
+            fresh.payload.formRecord.data.fld_server = {
+                text: 'Native metadata',
+            };
+            fresh.payload.formRecord.data.fld_prefill = false;
+            fresh.payload.formFieldIdsWithUnsavedChanges = [
+                'fld_server',
+                'fld_title',
+                'fld_server',
+            ];
+            fresh.payload.urlPrefilledFieldIds = ['fld_prefill', 'fld_title'];
+            const oldDirty = f.owner.controller.getState().draft.dirtyFieldIds;
+            const untouched = structuredClone(fresh);
+            assert.equal(
+                await f.owner.reload({ dirty, read: async () => fresh }),
+                true
+            );
+            assert.equal(f.calls.length, 0);
+            await f.owner.save();
+            assert.deepEqual(f.calls, [
+                {
+                    ...f.options.saveOptions,
+                    extensionAccessToken: fresh.payload.extensionAccessToken,
+                    formRecord: {
+                        ...fresh.payload.formRecord,
+                        data: {
+                            ...fresh.payload.formRecord.data,
+                            fld_title: dirty === 'keep' ? 'Local' : 'Server',
+                        },
+                    },
+                    formFieldIdsWithUnsavedChanges: [
+                        ...new Set([
+                            'fld_server',
+                            'fld_title',
+                            ...(dirty === 'keep' ? oldDirty : []),
+                            'fld_prefill',
+                        ]),
+                    ],
+                },
+            ]);
+            assert.deepEqual(fresh, untouched);
+            checks++;
+        }
+        {
+            const f = make();
+            let release;
+            const loading = f.owner.reload({
+                dirty: 'keep',
+                read: () =>
+                    new Promise((resolve) => {
+                        release = resolve;
+                    }),
+            });
+            const stale = structuredClone(f.page);
+            stale.payload.formFieldIdsWithUnsavedChanges = ['fld_stale'];
+            stale.payload.formRecord.data.fld_stale = 'Stale';
+            const fresh = structuredClone(f.page);
+            fresh.payload.formFieldIdsWithUnsavedChanges = ['fld_successor'];
+            fresh.payload.formRecord.data.fld_successor = 'Current';
+            assert.equal(
+                await f.owner.reload({
+                    dirty: 'keep',
+                    read: async () => fresh,
+                }),
+                true
+            );
+            release(stale);
+            assert.equal(await loading, false);
+            await f.owner.save();
+            assert.equal(f.calls.length, 1);
+            assert.equal(f.calls[0].formRecord.data.fld_stale, undefined);
+            assert(
+                !f.calls[0].formFieldIdsWithUnsavedChanges.includes('fld_stale')
+            );
+            assert(
+                f.calls[0].formFieldIdsWithUnsavedChanges.includes(
+                    'fld_successor'
+                )
+            );
+            checks++;
+        }
+        {
+            const f = make();
+            let release;
+            const loading = f.owner.reload({
+                dirty: 'keep',
+                read: () =>
+                    new Promise((resolve) => {
+                        release = resolve;
+                    }),
+            });
+            const successor = structuredClone(f.page);
+            successor.payload.extensionAccessToken =
+                'synthetic_successor_token';
+            f.owner.controller.reset({ ...f.options, loaded: successor });
+            const before = f.owner.controller.getState();
+            release(f.page);
+            assert.equal(await loading, false);
+            assert.deepEqual(f.owner.controller.getState().draft, before.draft);
+            assert.equal(
+                f.owner.controller.getState().contextRevision,
+                before.contextRevision
+            );
+            assert.equal(f.calls.length, 0);
+            checks++;
+        }
         console.log(
             `Installed Form disposition: ${checks} checkpoints; synthetic dispatch contrast only.`
         );

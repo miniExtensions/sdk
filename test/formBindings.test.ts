@@ -228,6 +228,80 @@ describe('Form field binding ownership', () => {
         );
         f.owner.destroy();
     });
+    for (const dirty of ['keep', 'discard'] as const) {
+        it(`${dirty} reload preserves fresh dirty IDs, URL prefills and the exact native Save envelope`, async () => {
+            const f = fixture();
+            f.owner.field('fld_title').setValue('Local');
+            const fresh = structuredClone(f.loaded);
+            fresh.payload.formRecord.data.fld_title = 'Server';
+            fresh.payload.formRecord.data.fld_server_changed = 'Fresh native';
+            fresh.payload.formRecord.data.fld_new_prefill = false;
+            fresh.payload.formFieldIdsWithUnsavedChanges = [
+                'fld_server_changed',
+                'fld_title',
+                'fld_server_changed',
+            ];
+            fresh.payload.urlPrefilledFieldIds = [
+                'fld_new_prefill',
+                'fld_title',
+            ];
+            const untouched = structuredClone(fresh);
+            assert.equal(
+                await f.owner.reload({ dirty, read: async () => fresh }),
+                true
+            );
+            assert.equal(f.calls.length, 0);
+            await f.owner.save();
+            assert.deepEqual(f.calls, [
+                {
+                    ...f.options.saveOptions,
+                    extensionAccessToken: fresh.payload.extensionAccessToken,
+                    formRecord: {
+                        ...fresh.payload.formRecord,
+                        data: {
+                            ...fresh.payload.formRecord.data,
+                            fld_title: dirty === 'keep' ? 'Local' : 'Server',
+                        },
+                    },
+                    formFieldIdsWithUnsavedChanges:
+                        dirty === 'keep'
+                            ? [
+                                  'fld_server_changed',
+                                  'fld_title',
+                                  'fld_parent',
+                                  'fld_prefill',
+                                  'fld_new_prefill',
+                              ]
+                            : [
+                                  'fld_server_changed',
+                                  'fld_title',
+                                  'fld_new_prefill',
+                              ],
+                },
+            ]);
+            assert.deepEqual(fresh, untouched);
+            f.owner.destroy();
+        });
+    }
+    it('replaced owner rejects a held keep reload without accepting its values or dirty IDs', async () => {
+        const f = fixture();
+        const held = deferred<FormLoadedResult>();
+        const old = f.owner.field('fld_title');
+        const loading = f.owner.reload({
+            dirty: 'keep',
+            read: () => held.promise,
+        });
+        f.setScope({ ownerId: 'B', revision: 1 });
+        const fresh = structuredClone(f.loaded);
+        fresh.payload.formFieldIdsWithUnsavedChanges = ['fld_stale'];
+        fresh.payload.formRecord.data.fld_stale = 'Stale';
+        held.resolve(fresh);
+        assert.equal(await loading, false);
+        assert.equal(old.getSnapshot().retired, true);
+        await assert.rejects(f.owner.save());
+        assert.equal(f.calls.length, 0);
+        f.owner.destroy();
+    });
     it('explicit keep reload preserves edits and invalidates held old bindings without retiring successor', async () => {
         const f = fixture();
         const old = f.owner.field('fld_title');

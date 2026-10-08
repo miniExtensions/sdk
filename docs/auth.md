@@ -5,7 +5,9 @@ and sign-up operations to a loaded authentication screen. It adds no backend
 operation or authorization layer. Importing it requires no DOM or React;
 importing the core client does not import it. Install the supplied private
 archive as shown in the [runtime quickstart](runtime.md#packaged-form-quickstart).
-The package has not been published to npm.
+This development preview has not been published to npm. A source checkout must
+be [installed, checked and packed](../README.md#build-an-archive-from-source) before
+installing its built TGZ.
 
 The application owns loading, rendering, visitor identity and credential
 persistence. A successful helper returns an opaque grant, not a public session
@@ -15,8 +17,9 @@ session does not automatically load a Form or Portal.
 
 ## React client panel
 
-This uses your application's React installation through the SDK's optional peer
-dependency. Non-React imports remain independent. Pass the `ownerScope` captured with this particular loaded `page`,
+This recipe uses your application's React 19 installation. The SDK's `/react`
+components have an optional React peer; core and `/auth` imports do not require
+React. Pass the `ownerScope` captured with this particular loaded `page`,
 plus the owner's live `getScope` function. `onSessionApplied` must synchronously
 advance the revision and clear the old page/drafts. `onReload` is an app-owned
 manual action; also keep a Reload control outside this panel because applying
@@ -587,7 +590,8 @@ loads the same extension's Form or Portal. `restored` establishes current
 server-authorized access, not proof that a particular login identity was used:
 if login requirements changed, use the accepted page's own identity/context,
 never the storage entry or phase alone. Authentication prompts and other
-nonaccepted responses clear the scoped remembered entry. Transport errors leave
+nonaccepted responses remove only the exact remembered entry used by that read.
+A newer stored credential is preserved even before its cross-tab event arrives. Transport errors leave
 it available for an explicit retry and show generic error state. Construction
 and subscriptions cause no network requests. Render `getSnapshot()` and
 `subscribe()` to show `restoring`, `login-required`, `storage-unavailable`, `error`
@@ -615,10 +619,11 @@ export function optInRememberedLogin(
     apiOrigin: string,
     context: string,
     storage: Storage,
+    mode: 'tab' | 'persistent',
     events: Window
 ) {
     // App choice: sessionStorage for tab lifetime, or localStorage for persistence.
-    const backend = createBrowserSessionStorage(storage, 'persistent', events);
+    const backend = createBrowserSessionStorage(storage, mode, events);
     return createSessionRestoration({
         client,
         page,
@@ -645,8 +650,15 @@ clear-all or replacement retires this old owner, aborts its read and clears its
 still-owned memory credential. It never automatically logs into a new identity.
 `destroy()` only retires an unmounted owner; it does not erase the remembered
 credential. Advance the monotonic owner revision on every visitor, session,
-connection and accepted-page replacement, including observed A→B→A. Old responses
-cannot clear or retire a successor. Unobserved in-place ABA is not detected.
+connection and accepted-page replacement, including observed A→B→A. After an accepted root Form/Portal load advances the revision, explicitly call
+`handoff(acceptedPage, capturedScope, isCurrent)` before invoking any old adapter
+method. The app supplies the captured new scope and its accepted-load freshness
+guard. The returned lease owns logout and future accepted-load handoffs; it has
+no authentication or restore actions. Replace your logout owner with this lease.
+Old methods become inert. A changed visitor, session or stale accepted load cannot
+transfer ownership. Call the current lease's `clear()` before replacing its scope
+on logout. No old authentication page needs to remain in the app's render state.
+Old responses cannot clear or retire a successor. Unobserved in-place ABA is not detected.
 
 Persistent local storage survives browser restarts and is readable by scripts on
 the app origin; XSS or another same-origin app can expose or replace it. Tab
@@ -655,6 +667,8 @@ may be denied or corrupted. Failed remembering leaves successful login in memory
 failed clearing reports that storage could not be cleared, even though the owned
 memory credential is removed. Do not promise logout on another device or another
 origin. Cross-tab behavior depends on the explicitly supplied backend's events.
+Removal compares the current stored bytes before deleting; ordinary browser
+storage does not provide an atomic cross-tab compare-and-delete transaction.
 No encryption-at-rest claim is made by the adapter.
 
 Refresh survival restores authentication only. It does not restore drafts or

@@ -8,7 +8,9 @@ not add a renderer or framework dependency to the SDK's public exports.
 
 ## Copy and run
 
-Use Node.js 22+ and the exact archive supplied to you. Replace the absolute
+Use Node.js 22+ and the exact built development-preview archive supplied to you.
+If starting from source, [install, check and pack](../README.md#build-an-archive-from-source)
+first. Replace the absolute
 path below. Extract the starter and documentation together so its
 `../../docs` links still resolve; the root SDK source and build output are not
 needed in this copied project.

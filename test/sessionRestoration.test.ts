@@ -83,6 +83,209 @@ const remember = async (fixture: ReturnType<typeof setup>) => {
 };
 
 describe('explicit canonical-scoped session restoration', () => {
+    it('setter clear/destroy reentry cannot publish restored or remember after retirement', async () => {
+        for (const action of ['clear', 'destroy'] as const) {
+            for (const operation of ['apply', 'restore'] as const) {
+                const original = setup();
+                await remember(original);
+                const f = setup(original.store);
+                f.client.loadExtension = async () =>
+                    structuredClone(formResult);
+                const setter = f.client.setSession;
+                let entered = false;
+                f.client.setSession = (next) => {
+                    setter(next);
+                    if (!entered) {
+                        entered = true;
+                        f.owner[action]();
+                    }
+                };
+                if (operation === 'restore')
+                    assert.equal(await f.owner.restore(), null);
+                else {
+                    f.client.auth.login = async () => ({
+                        type: 'found-record',
+                        encryptedLoginToken: 'SYNTHETIC_NEW_CREDENTIAL',
+                    });
+                    if (f.owner.flow.screen !== 'login_page') throw new Error();
+                    const result = await f.owner.flow.login({
+                        loginCredentials: { Password: 'SYNTHETIC' },
+                    });
+                    if (result.type !== 'found-record') throw new Error();
+                    f.owner.applySession(result.grant);
+                }
+                assert.equal(f.owner.getSnapshot().phase, 'retired');
+                if (action === 'clear') {
+                    assert.equal(f.store.data.size, 0);
+                    assert.deepEqual(f.client.getSession(), {
+                        previous: 'encrypted_previous',
+                    });
+                } else assert.equal(f.store.data.size, 1);
+            }
+        }
+    });
+    it('logout clears its written credential even when write verification failed', async () => {
+        const seed = setup();
+        await remember(seed);
+        const f = setup(seed.store);
+        f.client.auth.login = async () => ({
+            type: 'found-record',
+            encryptedLoginToken: 'SYNTHETIC_NEW_CREDENTIAL',
+        });
+        const get = f.store.storage.getItem;
+        const set = f.store.storage.setItem;
+        let deny = false;
+        f.store.storage.getItem = (k) => {
+            if (deny) throw new Error('denied');
+            return get(k);
+        };
+        f.store.storage.setItem = (k, v) => {
+            set(k, v);
+            deny = true;
+        };
+        if (f.owner.flow.screen !== 'login_page') throw new Error();
+        const result = await f.owner.flow.login({
+            loginCredentials: { Password: 'SYNTHETIC' },
+        });
+        if (result.type !== 'found-record') throw new Error();
+        f.owner.applySession(result.grant);
+        assert.equal(f.owner.getSnapshot().phase, 'storage-unavailable');
+        deny = false;
+        f.owner.clear();
+        assert.equal(f.store.data.size, 0);
+        assert.deepEqual(f.client.getSession(), {
+            previous: 'encrypted_previous',
+        });
+    });
+    it('accepted root handoff preserves logout while retained old methods cannot touch the successor', async () => {
+        const fixture = authFixture();
+        const store = memory();
+        let scope = { ownerId: 'visitor-a', revision: 0 };
+        const owner = createSessionRestoration({
+            client: fixture.client,
+            page: loginPage(),
+            loadInput,
+            apiOrigin: 'https://sdk.example.test',
+            context: 'share_example',
+            storage: store.storage,
+            getScope: () => scope,
+        });
+        if (owner.flow.screen !== 'login_page') throw new Error();
+        const result = await owner.flow.login({
+            loginCredentials: { Password: 'SYNTHETIC' },
+        });
+        if (result.type !== 'found-record') throw new Error();
+        owner.applySession(result.grant);
+        scope = { ownerId: 'visitor-a', revision: 1 };
+        assert.equal(
+            owner.handoff(formResult, scope, () => false),
+            null
+        );
+        const successor = owner.handoff(formResult, { ...scope }, () => true);
+        assert.ok(successor);
+        owner.clear();
+        owner.destroy();
+        assert.equal(store.data.size, 1);
+        assert.equal(successor.getSnapshot().phase, 'idle');
+        successor.clear();
+        assert.equal(store.data.size, 0);
+        assert.deepEqual(fixture.client.getSession(), {
+            previous: 'encrypted_previous',
+        });
+        assert.equal(await setup(store).owner.restore(), null);
+    });
+    it('accepted-load handoff retains exact storage ownership after denied remembering', async () => {
+        for (const replace of [false, true]) {
+            const seed = setup();
+            await remember(seed);
+            const f = authFixture();
+            let scope = { ownerId: 'a', revision: 0 };
+            const owner = createSessionRestoration({
+                client: f.client,
+                page: loginPage(),
+                loadInput,
+                apiOrigin: 'https://sdk.example.test',
+                context: 'share_example',
+                storage: seed.store.storage,
+                getScope: () => scope,
+            });
+            f.client.auth.login = async () => ({
+                type: 'found-record',
+                encryptedLoginToken: 'SYNTHETIC_NEW_CREDENTIAL',
+            });
+            const set = seed.store.storage.setItem;
+            seed.store.storage.setItem = () => {
+                throw new Error('denied');
+            };
+            if (owner.flow.screen !== 'login_page') throw new Error();
+            const result = await owner.flow.login({
+                loginCredentials: { Password: 'SYNTHETIC' },
+            });
+            if (result.type !== 'found-record') throw new Error();
+            owner.applySession(result.grant);
+            seed.store.storage.setItem = set;
+            scope = { ownerId: 'a', revision: 1 };
+            const lease = owner.handoff(formResult, { ...scope }, () => true);
+            assert.ok(lease);
+            const key = [...seed.store.data.keys()][0];
+            const newer = JSON.stringify({
+                version: 1,
+                credential: 'SYNTHETIC_THIRD',
+            });
+            if (replace) seed.store.data.set(key, newer);
+            lease.clear();
+            if (replace) assert.equal(seed.store.data.get(key), newer);
+            else assert.equal(seed.store.data.size, 0);
+            assert.deepEqual(f.client.getSession(), {
+                previous: 'encrypted_previous',
+            });
+        }
+    });
+    it('logout during held validation removes only the observed remembered envelope', async () => {
+        for (const replace of [false, true]) {
+            const original = setup();
+            await remember(original);
+            const f = setup(original.store);
+            const held = deferred<typeof formResult>();
+            f.client.loadExtension = async () => held.promise;
+            const pending = f.owner.restore();
+            const key = [...f.store.data.keys()][0];
+            const newer = JSON.stringify({
+                version: 1,
+                credential: 'SYNTHETIC_NEWER',
+            });
+            if (replace) f.store.data.set(key, newer);
+            f.owner.clear();
+            held.resolve(structuredClone(formResult));
+            assert.equal(await pending, null);
+            assert.equal(f.owner.getSnapshot().phase, 'retired');
+            assert.deepEqual(f.client.getSession(), {
+                previous: 'encrypted_previous',
+            });
+            if (replace) assert.equal(f.store.data.get(key), newer);
+            else assert.equal(f.store.data.size, 0);
+        }
+    });
+    it('rejected restoration preserves a newer stored credential before its cross-tab event', async () => {
+        const original = setup();
+        await remember(original);
+        const f = setup(original.store);
+        const key = [...f.store.data.keys()][0];
+        const replacement = JSON.stringify({
+            version: 1,
+            credential: 'SYNTHETIC_SUCCESSOR',
+        });
+        f.client.loadExtension = async () => {
+            f.store.data.set(key, replacement);
+            return loginPage();
+        };
+        assert.equal(await f.owner.restore(), null);
+        assert.equal(f.store.data.get(key), replacement);
+        assert.deepEqual(f.client.getSession(), {
+            previous: 'encrypted_previous',
+        });
+    });
+
     it('matches the executed pinned canonical key and committed expiry/logout provenance', () => {
         const fixture = JSON.parse(
             readFileSync(

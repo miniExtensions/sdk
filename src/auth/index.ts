@@ -6,6 +6,7 @@ export {
 export type {
     SessionRestoration,
     SessionRestorationOptions,
+    SessionRestorationLease,
     SessionRestorationSnapshot,
     SessionRestorationStorage,
 } from './restoration.js';

@@ -877,7 +877,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             authPage,
             happyDomModulePath: require.resolve('happy-dom'),
         }),
-        13
+        24
     );
     const authBundled = await build({
         absWorkingDir: temporaryDirectory,

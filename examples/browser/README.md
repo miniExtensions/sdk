@@ -7,7 +7,8 @@ source-code dependency.
 
 ## Run from the supplied archive
 
-This complete example ships in the SDK archive. Follow the
+This development-preview example ships in the built SDK TGZ; it is not an npm
+release. A source checkout must be [installed, checked and packed](../../README.md#build-an-archive-from-source) first. Follow the
 [copy and run instructions](../../docs/browser-lifecycle.md#copy-and-run) to
 extract `examples/browser` and `docs` into the same customer project, then run:
 

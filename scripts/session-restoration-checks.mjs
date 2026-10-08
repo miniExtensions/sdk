@@ -102,6 +102,7 @@ export async function checkSessionRestoration({
             reads: () => reads,
             replace() {
                 scope = { ownerId: 'a', revision: 2 };
+                return { ...scope };
             },
         };
     };
@@ -116,6 +117,167 @@ export async function checkSessionRestoration({
         });
     };
     let checks = 0;
+    for (const action of ['clear', 'destroy']) {
+        for (const operation of ['apply', 'restore']) {
+            const seed = setup();
+            await remember(seed);
+            const f = setup(seed.shared);
+            const setter = f.client.setSession;
+            let entered = false;
+            f.client.setSession = (value) => {
+                setter(value);
+                if (!entered) {
+                    entered = true;
+                    f.owner[action]();
+                }
+            };
+            if (operation === 'restore')
+                assert.equal(await f.owner.restore(), null);
+            else {
+                f.client.auth.login = async () => ({
+                    type: 'found-record',
+                    encryptedLoginToken: 'SYNTHETIC_NEW_CREDENTIAL',
+                });
+                const result = await f.owner.flow.login({
+                    loginCredentials: { Password: 'SYNTHETIC' },
+                });
+                f.owner.applySession(result.grant);
+            }
+            assert.equal(f.owner.getSnapshot().phase, 'retired');
+            if (action === 'clear') {
+                assert.equal(f.shared.data.size, 0);
+                assert.deepEqual(f.client.getSession(), {});
+            } else assert.equal(f.shared.data.size, 1);
+            seed.owner.destroy();
+            f.owner.destroy();
+            checks += 1;
+        }
+    }
+    {
+        const f = setup();
+        await remember(f);
+        const scope = f.replace();
+        const successor = f.owner.handoff(accepted, scope, () => true);
+        assert.ok(successor);
+        f.owner.clear();
+        f.owner.destroy();
+        assert.equal(f.shared.data.size, 1);
+        successor.clear();
+        assert.equal(f.shared.data.size, 0);
+        assert.deepEqual(f.client.getSession(), {});
+        assert.equal(await setup(f.shared).owner.restore(), null);
+        checks += 1;
+    }
+    {
+        const seed = setup();
+        await remember(seed);
+        const f = setup(seed.shared);
+        const key = [...f.shared.data.keys()][0];
+        const replacement = JSON.stringify({
+            version: 1,
+            credential: 'SYNTHETIC_NEWER',
+        });
+        f.client.loadExtension = async () => {
+            f.shared.data.set(key, replacement);
+            return page;
+        };
+        assert.equal(await f.owner.restore(), null);
+        assert.equal(f.shared.data.get(key), replacement);
+        assert.deepEqual(f.client.getSession(), {});
+        seed.owner.destroy();
+        f.owner.destroy();
+        checks += 1;
+    }
+
+    for (const replace of [false, true]) {
+        const seed = setup();
+        await remember(seed);
+        const f = setup(seed.shared);
+        let resolve;
+        f.client.loadExtension = () =>
+            new Promise((done) => {
+                resolve = done;
+            });
+        const pending = f.owner.restore();
+        const key = [...f.shared.data.keys()][0];
+        const newer = JSON.stringify({
+            version: 1,
+            credential: 'SYNTHETIC_NEWER',
+        });
+        if (replace) f.shared.data.set(key, newer);
+        f.owner.clear();
+        resolve(accepted);
+        assert.equal(await pending, null);
+        assert.equal(f.owner.getSnapshot().phase, 'retired');
+        assert.deepEqual(f.client.getSession(), {});
+        if (replace) assert.equal(f.shared.data.get(key), newer);
+        else assert.equal(f.shared.data.size, 0);
+        seed.owner.destroy();
+        checks += 1;
+    }
+    {
+        const seed = setup();
+        await remember(seed);
+        const f = setup(seed.shared);
+        f.client.auth.login = async () => ({
+            type: 'found-record',
+            encryptedLoginToken: 'SYNTHETIC_NEW_CREDENTIAL',
+        });
+        const get = f.shared.storage.getItem,
+            set = f.shared.storage.setItem;
+        let deny = false;
+        f.shared.storage.getItem = (k) => {
+            if (deny) throw new Error('denied');
+            return get(k);
+        };
+        f.shared.storage.setItem = (k, v) => {
+            set(k, v);
+            deny = true;
+        };
+        const result = await f.owner.flow.login({
+            loginCredentials: { Password: 'SYNTHETIC' },
+        });
+        f.owner.applySession(result.grant);
+        assert.equal(f.owner.getSnapshot().phase, 'storage-unavailable');
+        deny = false;
+        f.owner.clear();
+        assert.equal(f.shared.data.size, 0);
+        assert.deepEqual(f.client.getSession(), {});
+        seed.owner.destroy();
+        checks += 1;
+    }
+    for (const replace of [false, true]) {
+        const seed = setup();
+        await remember(seed);
+        const f = setup(seed.shared);
+        f.client.auth.login = async () => ({
+            type: 'found-record',
+            encryptedLoginToken: 'SYNTHETIC_NEW_CREDENTIAL',
+        });
+        const set = f.shared.storage.setItem;
+        f.shared.storage.setItem = () => {
+            throw new Error('denied');
+        };
+        const result = await f.owner.flow.login({
+            loginCredentials: { Password: 'SYNTHETIC' },
+        });
+        f.owner.applySession(result.grant);
+        f.shared.storage.setItem = set;
+        const lease = f.owner.handoff(accepted, f.replace(), () => true);
+        assert.ok(lease);
+        const key = [...f.shared.data.keys()][0],
+            newer = JSON.stringify({
+                version: 1,
+                credential: 'SYNTHETIC_THIRD',
+            });
+        if (replace) f.shared.data.set(key, newer);
+        lease.clear();
+        if (replace) assert.equal(f.shared.data.get(key), newer);
+        else assert.equal(f.shared.data.size, 0);
+        assert.deepEqual(f.client.getSession(), {});
+        seed.owner.destroy();
+        checks += 1;
+    }
     const first = setup();
     await remember(first);
     checks += 1;

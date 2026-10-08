@@ -47,6 +47,17 @@ export type SessionRestorationOptions = {
     getScope(): AuthOwnerScope;
     storage: SessionRestorationStorage;
 };
+export type SessionRestorationLease = {
+    getSnapshot(): SessionRestorationSnapshot;
+    subscribe(listener: () => void): () => void;
+    clear(): void;
+    destroy(): void;
+    handoff(
+        page: LoadExtensionResult,
+        scope: AuthOwnerScope,
+        isCurrent: () => boolean
+    ): SessionRestorationLease | null;
+};
 export type SessionRestoration = {
     readonly flow: AuthFlow;
     getSnapshot(): SessionRestorationSnapshot;
@@ -57,6 +68,12 @@ export type SessionRestoration = {
     restore(): Promise<LoadExtensionResult | null>;
     /** Logout/disconnect: remove the scoped stored credential and its still-owned memory entry. */
     clear(): void;
+    /** Explicit accepted-root-load ownership transfer; old methods become inert. */
+    handoff(
+        page: LoadExtensionResult,
+        scope: AuthOwnerScope,
+        isCurrent: () => boolean
+    ): SessionRestorationLease | null;
     /** Unmount alone does not log out. */
     destroy(): void;
 };
@@ -65,10 +82,12 @@ const sameSession = (a: RuntimeSession, b: RuntimeSession) =>
     Object.keys(a).length === Object.keys(b).length &&
     Object.keys(a).every((key) => a[key] === b[key] && Object.hasOwn(b, key));
 
-export const createSessionRestoration = (
-    options: SessionRestorationOptions
+const createSessionRestorationInternal = (
+    options: SessionRestorationOptions,
+    inheritedStored?: { observed: string | null; attempted: string | null }
 ): SessionRestoration => {
     const { client, storage, getScope } = options;
+    const context = options.context;
     const page = structuredClone(options.page);
     const input = structuredClone(options.loadInput);
     if (
@@ -110,7 +129,6 @@ export const createSessionRestoration = (
         initialScope.revision < 0
     )
         throw new TypeError('An owner and monotonic revision are required.');
-    const flow = createAuthFlow({ client, page, getScope });
     const placeholder =
         page.extensionScreen === 'login_page'
             ? withLoginToken(
@@ -130,9 +148,11 @@ export const createSessionRestoration = (
                   }
               );
     const credentialKey = Object.keys(placeholder)[0];
-    const storageKey = `miniExtensions-sdk-session-v1:${JSON.stringify([origin.origin, options.context, input.shareId, credentialKey])}`;
+    const storageKey = `miniExtensions-sdk-session-v1:${JSON.stringify([origin.origin, context, input.shareId, credentialKey])}`;
     let expectedSession = copyVisitorSession(client.getSession());
     let ownedCredential: string | null = expectedSession[credentialKey] ?? null;
+    let observedStored: string | null = inheritedStored?.observed ?? null;
+    let attemptedStored: string | null = inheritedStored?.attempted ?? null;
     let retired = false;
     let generation = 0;
     let request: AbortController | null = null;
@@ -142,6 +162,20 @@ export const createSessionRestoration = (
     let unsubscribe = () => {};
     let snapshot: SessionRestorationSnapshot = { phase: 'idle', message: null };
     const listeners = new Set<() => void>();
+    // Establish ownership before an app-provided setter can synchronously reenter.
+    const flow = createAuthFlow({
+        client: {
+            ...client,
+            getSession: () => client.getSession(),
+            setSession(next) {
+                expectedSession = copyVisitorSession(next);
+                ownedCredential = expectedSession[credentialKey] ?? null;
+                client.setSession(next);
+            },
+        },
+        page,
+        getScope,
+    });
     const publish = (
         phase: SessionRestorationSnapshot['phase'],
         message: string | null = null
@@ -209,9 +243,20 @@ export const createSessionRestoration = (
             'storage-unavailable',
             'Remembered login storage is unavailable. Continue with an explicit login.'
         );
-    const removeStored = () => {
+    const removeStored = (
+        expected: string | null | readonly (string | null)[]
+    ) => {
         writing = true;
         try {
+            const actual = storage.getItem(storageKey);
+            if (!current()) return false;
+            if (
+                actual !== null &&
+                !(Array.isArray(expected)
+                    ? expected.includes(actual)
+                    : actual === expected)
+            )
+                return true;
             storage.removeItem(storageKey);
             return true;
         } catch {
@@ -229,8 +274,9 @@ export const createSessionRestoration = (
         ) {
             const next = session;
             delete next[credentialKey];
+            expectedSession = copyVisitorSession(next);
+            ownedCredential = null;
             client.setSession(next);
-            expectedSession = next;
         }
         ownedCredential = null;
     };
@@ -270,6 +316,13 @@ export const createSessionRestoration = (
                     'A current idle restoration owner is required.'
                 );
             const ticket = generation;
+            // Remember the old envelope before setter reentry can request logout.
+            try {
+                observedStored = storage.getItem(storageKey);
+            } catch {
+                /* Memory login remains available. */
+            }
+            if (!current() || generation !== ticket) return;
             const next = flow.applySession(grant);
             if (retired || generation !== ticket) return;
             expectedSession = copyVisitorSession(next);
@@ -283,6 +336,7 @@ export const createSessionRestoration = (
             let stored = false;
             try {
                 if (storageReady) {
+                    attemptedStored = serialized;
                     storage.setItem(storageKey, serialized);
                     stored = storage.getItem(storageKey) === serialized;
                 }
@@ -292,8 +346,10 @@ export const createSessionRestoration = (
                 writing = false;
             }
             if (!current()) return;
-            if (stored) publish('restored');
-            else storageFailure();
+            if (stored) {
+                observedStored = serialized;
+                publish('restored');
+            } else storageFailure();
         },
         async restore() {
             if (!current() || request) return null;
@@ -309,6 +365,7 @@ export const createSessionRestoration = (
                 return null;
             }
             if (!current()) return null;
+            observedStored = raw;
             if (raw === null) {
                 publish('login-required');
                 return null;
@@ -330,7 +387,7 @@ export const createSessionRestoration = (
                     throw new Error();
                 credential = (data as { credential: string }).credential;
             } catch {
-                const removed = removeStored();
+                const removed = removeStored(raw);
                 if (current()) {
                     if (removed)
                         publish(
@@ -367,15 +424,16 @@ export const createSessionRestoration = (
                     result.extensionId === page.extensionId
                 ) {
                     // Commit only after this read accepts the encrypted credential.
-                    client.setSession(candidate);
                     expectedSession = copyVisitorSession(candidate);
                     ownedCredential = credential;
+                    client.setSession(candidate);
+                    if (!owns()) return null;
                     request = null;
                     flow.destroy();
                     publish('restored');
                     return current() ? result : null;
                 }
-                const removed = removeStored();
+                const removed = removeStored(raw);
                 if (owns()) {
                     if (removed)
                         publish(
@@ -398,15 +456,90 @@ export const createSessionRestoration = (
         },
         clear() {
             if (!current()) return;
-            const removed = removeStored();
+            const removed = removeStored([
+                observedStored,
+                attemptedStored,
+                ownedCredential === null ? null : encode(ownedCredential),
+            ]);
             if (!current()) return;
             clearOwnedMemory();
             retire();
             if (!removed) storageFailure();
         },
+        handoff(acceptedPage, capturedScope, isCurrent) {
+            if (
+                retired ||
+                request ||
+                checkingFreshness ||
+                (acceptedPage.extensionScreen !== 'form_loaded' &&
+                    acceptedPage.extensionScreen !== 'portal_loaded') ||
+                acceptedPage.extensionId !== page.extensionId ||
+                capturedScope.ownerId !== initialScope.ownerId ||
+                capturedScope.revision <= initialScope.revision
+            )
+                return null;
+            const ticket = generation;
+            const matches = () => {
+                const scope = { ...getScope() };
+                return (
+                    scope.ownerId === capturedScope.ownerId &&
+                    scope.revision === capturedScope.revision
+                );
+            };
+            try {
+                if (
+                    !isCurrent() ||
+                    !matches() ||
+                    !sameSession(
+                        expectedSession,
+                        copyVisitorSession(client.getSession())
+                    ) ||
+                    !matches() ||
+                    !isCurrent() ||
+                    retired ||
+                    generation !== ticket
+                )
+                    return null;
+                const successor = createSessionRestorationInternal(
+                    {
+                        client,
+                        storage,
+                        getScope,
+                        apiOrigin: origin.origin,
+                        context,
+                        page,
+                        loadInput: input,
+                    },
+                    { observed: observedStored, attempted: attemptedStored }
+                );
+                if (
+                    retired ||
+                    generation !== ticket ||
+                    !matches() ||
+                    !isCurrent()
+                ) {
+                    successor.destroy();
+                    return null;
+                }
+                retire();
+                return {
+                    getSnapshot: successor.getSnapshot,
+                    subscribe: successor.subscribe,
+                    clear: successor.clear,
+                    destroy: successor.destroy,
+                    handoff: successor.handoff,
+                };
+            } catch {
+                return null;
+            }
+        },
         destroy: retire,
     };
 };
+
+export const createSessionRestoration = (
+    options: SessionRestorationOptions
+): SessionRestoration => createSessionRestorationInternal(options);
 
 /** Browser bridge without reading globals: choose localStorage or sessionStorage explicitly. */
 export const createBrowserSessionStorage = (

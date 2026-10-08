@@ -38,6 +38,8 @@ export type FormControllerOptions = {
     parent?: ParentFormDraftScope | null;
 };
 
+export type FormSaveDisposition = 'not-dispatched' | 'dispatched';
+
 export type FormSaveLifecycle = {
     /** Runs after all preflight checks, immediately before dispatch. */
     dispatch(
@@ -45,7 +47,8 @@ export type FormSaveLifecycle = {
         revision: number
     ): {
         accepted(result: Readonly<NormalizedFormSaveResult>): void;
-        finish(): void;
+        /** Final transport disposition; invoked once even if a post-hook guard rejects. */
+        finish(disposition: FormSaveDisposition): void;
     };
 };
 
@@ -237,6 +240,7 @@ export const createFormController = (
     let context = openContext(prepare(options));
     let generation = 0;
     let status: FormControllerStatus = 'ready';
+    let saveSequence = 0;
     let validationErrors = formValidationMessages(
         context.loaded.payload.formErrors,
         [],
@@ -327,11 +331,15 @@ export const createFormController = (
         }
     };
     const current = () => {
+        const owner = context;
         try {
             return (
-                sameScope(readScope(context.getScope), context.scope) &&
-                (context.isCurrent?.() ?? true) &&
-                sameSession(context.client.getSession(), context.session)
+                sameScope(readScope(owner.getScope), owner.scope) &&
+                owner === context &&
+                (owner.isCurrent?.() ?? true) &&
+                owner === context &&
+                sameSession(owner.client.getSession(), owner.session) &&
+                owner === context
             );
         } catch {
             return false;
@@ -344,7 +352,18 @@ export const createFormController = (
         );
     const observeScope = () => {
         if (status === 'disposed' || status === 'stale') return false;
-        if (current()) return true;
+        const observed = context;
+        const observedGeneration = generation;
+        const observedSequence = saveSequence;
+        const valid = current();
+        // Caller-controlled scope/session getters may replace the owner while observed.
+        if (
+            observed !== context ||
+            observedGeneration !== generation ||
+            observedSequence !== saveSequence
+        )
+            return false;
+        if (valid) return true;
         const previous = active;
         generation += 1;
         active = null;
@@ -450,6 +469,20 @@ export const createFormController = (
                 | ReturnType<FormSaveLifecycle['dispatch']>
                 | undefined;
             let acceptedOperation = false;
+            let transportInvoked = false;
+            let operationFinished = false;
+            const finishOperation = () => {
+                if (operationFinished || operation === undefined) return;
+                operationFinished = true;
+                try {
+                    operation.finish(
+                        transportInvoked ? 'dispatched' : 'not-dispatched'
+                    );
+                } catch {
+                    // Cleanup cannot change an operation outcome or a successor owner.
+                }
+            };
+            const attemptSequence = ++saveSequence;
             const requireAttempt = () => {
                 if (
                     saveGeneration !== generation ||
@@ -473,6 +506,7 @@ export const createFormController = (
                     draftRevision
                 );
                 requireAttempt();
+                transportInvoked = true;
                 const response = await owner.client.forms.save(input, {
                     signal: controller.signal,
                     session: { ...owner.session },
@@ -531,24 +565,47 @@ export const createFormController = (
                     !acceptedOperation
                 ) {
                     if (!observeScope()) throw scopeError();
-                    status = controller.signal.aborted
-                        ? 'cancelled'
-                        : 'transport-error';
-                    errorMessage =
-                        error instanceof Error
-                            ? error.message
-                            : 'The Form save failed.';
-                    emit();
+                    if (
+                        saveGeneration !== generation ||
+                        owner !== context ||
+                        attemptSequence !== saveSequence ||
+                        active !== controller
+                    )
+                        throw error;
+                    if (!transportInvoked) {
+                        // Publish readiness only after releasing this operation and its journal lease.
+                        active = null;
+                        finishOperation();
+                    }
+                    const ownsPublication = () =>
+                        saveGeneration === generation &&
+                        owner === context &&
+                        attemptSequence === saveSequence &&
+                        (transportInvoked
+                            ? active === controller
+                            : active === null);
+                    if (ownsPublication()) {
+                        if (!observeScope()) throw scopeError();
+                        if (ownsPublication()) {
+                            status = !transportInvoked
+                                ? 'ready'
+                                : controller.signal.aborted
+                                  ? 'cancelled'
+                                  : 'transport-error';
+                            errorMessage = !transportInvoked
+                                ? 'The Form Save was not dispatched. Check the current owner before a new explicit Save.'
+                                : error instanceof Error
+                                  ? error.message
+                                  : 'The Form save failed.';
+                            emit();
+                        }
+                    }
                 }
                 throw error;
             } finally {
                 externalSignal?.removeEventListener('abort', forwardAbort);
                 if (active === controller) active = null;
-                try {
-                    operation?.finish();
-                } catch {
-                    // Presentation cleanup cannot change an accepted operation outcome.
-                }
+                finishOperation();
             }
         },
         reset: (nextOptions) => {

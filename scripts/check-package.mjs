@@ -1,4 +1,5 @@
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
+import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
@@ -936,6 +937,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 ),
         });
         if (example === 'browser') {
+            assert.equal(
+                await checkFormDispositionConsumer({
+                    consumerDirectory: temporaryDirectory,
+                }),
+                12
+            );
             // A customer copies only the shipped starter and documentation,
             // then installs the supplied TGZ. No checkout source/dist is copied.
             const copiedDocs = packed.files

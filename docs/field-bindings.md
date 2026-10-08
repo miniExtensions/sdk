@@ -131,6 +131,17 @@ preflight refusal precedes attempt creation, dispatch binds the exact attempt an
 native revision, and only an accepted owned response settles that attempt. Lost,
 cancelled or stale mutation outcomes remain unknown and block replay. A renderer
 exception after accepted commit cannot turn the mutation back into unknown.
+The returned lifecycle operation receives `finish(disposition)` exactly once.
+`not-dispatched` means the controller never invoked `forms.save`; settle the exact
+journal attempt with `journal.notDispatched(attempt)`. This terminal outcome is
+neither saved nor a human acknowledgment. Keep the full native draft and require
+another explicit user action; never retry automatically. `dispatched` is
+conservative once transport has been invoked, including synchronous transport
+errors, cancellation and lost/stale responses. Keep those unknown unless an
+accepted owned response proves the result. A hook must return its operation for
+this final callback to be delivered; a throwing hook cannot expose an operation
+it never returned. Cleanup failures must not overwrite a successor owner.
+
 Inspection/acknowledgment is separate from fresh loading or mounting. See
 [recovery rules](browser-lifecycle.md#inspect-an-unknown-create) and the shipped
 [starter](../examples/browser/README.md#form-workflow) for the composed adapter.

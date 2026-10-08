@@ -752,6 +752,35 @@ export function createFormFieldBindings(
             const generation = ++readGeneration;
             const capturedEpoch = epoch;
             const capturedControllerEpoch = controller.getState().epoch;
+            const capturedContextRevision =
+                controller.getState().contextRevision;
+            // Retirement itself changes this owner’s presentation state. Observe
+            // controller identity separately before disposing or replacing drafts.
+            const ownsReplacement = () => {
+                const sameController = () => {
+                    const state = controller.getState();
+                    return (
+                        state.epoch === capturedControllerEpoch &&
+                        state.contextRevision === capturedContextRevision &&
+                        state.draft !== null &&
+                        state.status !== 'stale' &&
+                        state.status !== 'disposed'
+                    );
+                };
+                const sameRead = () =>
+                    !disposed &&
+                    generation === readGeneration &&
+                    capturedEpoch === epoch &&
+                    pendingRead === abort &&
+                    !abort.signal.aborted;
+                return (
+                    sameRead() &&
+                    sameController() &&
+                    (options.isCurrent?.() ?? true) &&
+                    sameController() &&
+                    sameRead()
+                );
+            };
             const ownsRead = () =>
                 capturedControllerEpoch === controller.getState().epoch &&
                 (current() || recoverable());
@@ -800,9 +829,17 @@ export function createFormFieldBindings(
                 retired = true;
                 retireEntries();
                 notify();
+                // Subscribers may synchronously replace the controller or dispose
+                // this owner. The old reload must not discard a successor draft.
+                if (!ownsReplacement()) return false;
                 // Retire old bindings, not successor state, before replacing the owner epoch.
                 for (const entry of entries.values()) entry.listeners.clear();
                 entries.clear();
+                for (const model of attachments.values()) model.dispose();
+                attachments.clear();
+                for (const model of choiceCreators.values()) model.dispose();
+                choiceCreators.clear();
+                if (!ownsReplacement()) return false;
                 const handle = openLoadedFormDraft({
                     store,
                     loaded,
@@ -815,10 +852,6 @@ export function createFormFieldBindings(
                     loaded,
                     saveOptions: request.saveOptions ?? options.saveOptions,
                 };
-                for (const model of attachments.values()) model.dispose();
-                attachments.clear();
-                for (const model of choiceCreators.values()) model.dispose();
-                choiceCreators.clear();
                 syncing = true;
                 try {
                     const nextContextRevision = contextRevision + 1;

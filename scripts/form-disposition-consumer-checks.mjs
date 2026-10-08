@@ -649,6 +649,78 @@ export async function checkFormDispositionConsumer({ consumerDirectory }) {
             assert.equal(f.calls.length, 0);
             checks++;
         }
+        for (const cancelSuccessor of [false, true]) {
+            const f = make();
+            const old = f.owner.field('fld_title');
+            let replaced = false;
+            let expected;
+            let rejected;
+            let release;
+            old.subscribe((state) => {
+                if (!state.retired || replaced) return;
+                replaced = true;
+                const b = structuredClone(f.page);
+                b.payload.extensionAccessToken = 'synthetic_B';
+                f.owner.controller.reset({ ...f.options, loaded: b });
+                assert.equal(
+                    f.owner.controller.write('fld_title', 'B dirty'),
+                    true
+                );
+                if (cancelSuccessor) {
+                    f.client.forms.save = async (input) => {
+                        f.calls.push(structuredClone(input));
+                        return new Promise((resolve) => {
+                            release = resolve;
+                        });
+                    };
+                    rejected = assert.rejects(f.owner.controller.save());
+                    f.owner.controller.cancel();
+                }
+                expected = f.owner.controller.getState();
+            });
+            assert.equal(
+                await f.owner.reload({
+                    dirty: 'keep',
+                    read: async () => f.page,
+                }),
+                false
+            );
+            assert(replaced);
+            assert.deepEqual(f.owner.controller.getState(), expected);
+            assert.equal(f.calls.length, cancelSuccessor ? 1 : 0);
+            assert.equal(old.setValue('Late A').accepted, false);
+            if (cancelSuccessor) {
+                release({
+                    type: 'error',
+                    formErrors: {},
+                    formValidationErrors: [],
+                });
+                await rejected;
+                assert.deepEqual(f.owner.controller.getState(), expected);
+            }
+            checks++;
+        }
+        {
+            const f = make();
+            const old = f.owner.field('fld_title');
+            let disposed = false;
+            old.subscribe((state) => {
+                if (state.retired && !disposed) {
+                    disposed = true;
+                    f.owner.destroy();
+                }
+            });
+            assert.equal(
+                await f.owner.reload({
+                    dirty: 'discard',
+                    read: async () => f.page,
+                }),
+                false
+            );
+            assert.equal(f.owner.controller.getState().status, 'disposed');
+            assert.equal(f.calls.length, 0);
+            checks++;
+        }
         console.log(
             `Installed Form disposition: ${checks} checkpoints; synthetic dispatch contrast only.`
         );

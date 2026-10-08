@@ -229,6 +229,9 @@ export async function checkAuthRecipe({
     const { makeAuthScreenOwner } = await import(
         pathToFileURL(compiledOwner).href
     );
+    const { createSessionRestoration } = await import(
+        pathToFileURL(join(installedRoot, 'dist/esm/auth/index.js')).href
+    );
     const { Window } = await import(pathToFileURL(happyDomModulePath).href);
     let React;
     let createRoot;
@@ -239,6 +242,7 @@ export async function checkAuthRecipe({
         const window = new Window({ url: 'https://example.test/' });
         const restoreGlobals = installGlobals(window);
         const roots = [];
+        const cleanups = [];
         const reactErrors = [];
         try {
             // ReactDOM's initial browser capability checks need DOM globals first.
@@ -322,6 +326,7 @@ export async function checkAuthRecipe({
                 status,
                 input,
                 unmount,
+                cleanup: (fn) => cleanups.push(fn),
             });
             assert.equal(
                 reactErrors.length,
@@ -334,6 +339,8 @@ export async function checkAuthRecipe({
         } finally {
             try {
                 if (React) {
+                    for (const clean of cleanups.reverse())
+                        await React.act(async () => clean());
                     for (const root of roots)
                         await React.act(async () => root.unmount());
                 }
@@ -866,6 +873,520 @@ export async function checkAuthRecipe({
                     await Promise.all(observed);
                 }
             }
+        }
+    );
+    const rootInput = {
+        shareId: 'share_example',
+        recordId: null,
+        query: {},
+        context: { type: 'direct-url' },
+    };
+    const persistentStore = () => {
+        const data = new Map(),
+            listeners = new Set();
+        let denied = false,
+            removals = 0;
+        return {
+            data,
+            get removals() {
+                return removals;
+            },
+            deny(value) {
+                denied = value;
+            },
+            emit(key) {
+                for (const listener of [...listeners]) listener(key);
+            },
+            listenerCount: () => listeners.size,
+            storage: {
+                mode: 'persistent',
+                getItem: (key) => {
+                    if (denied) throw Error('Synthetic denied storage');
+                    return data.get(key) ?? null;
+                },
+                setItem: (key, value) => {
+                    if (denied) throw Error('Synthetic denied storage');
+                    data.set(key, value);
+                },
+                removeItem: (key) => {
+                    if (denied) throw Error('Synthetic denied storage');
+                    removals++;
+                    data.delete(key);
+                },
+                subscribe: (listener) => {
+                    listeners.add(listener);
+                    return () => listeners.delete(listener);
+                },
+            },
+        };
+    };
+    const seedRemembered = async (shared) => {
+        const seedClient = makeClient({
+            login: () => ({
+                type: 'found-record',
+                encryptedLoginToken: 'SYNTHETIC_ENCRYPTED_LOGIN',
+            }),
+        });
+        const adapter = createSessionRestoration({
+            client: seedClient,
+            page: screen(),
+            apiOrigin: 'https://sdk.example.test',
+            context: '',
+            loadInput: rootInput,
+            getScope: () => ({ ownerId: 'seed', revision: 0 }),
+            storage: shared.storage,
+        });
+        const result = await adapter.flow.login({
+            loginCredentials: { Email: 'synthetic@example.test' },
+        });
+        assert.equal(result.type, 'found-record');
+        adapter.applySession(result.grant);
+        adapter.destroy();
+        assert.equal(shared.data.size, 1);
+        assert.deepEqual(JSON.parse([...shared.data.values()][0]), {
+            version: 1,
+            credential: 'SYNTHETIC_ENCRYPTED_LOGIN',
+        });
+    };
+    const startup = (
+        ui,
+        {
+            shared = persistentStore(),
+            remember = true,
+            isCurrent = () => true,
+        } = {}
+    ) => {
+        const client = makeClient({
+            login: () => ({
+                type: 'found-record',
+                encryptedLoginToken: 'SYNTHETIC_MANUAL_LOGIN',
+            }),
+        });
+        const loads = [],
+            published = [],
+            errors = [],
+            pending = [],
+            clears = [],
+            adapters = [];
+        let owner, lastAuthentication, lastAuthProps;
+        client.loadExtension = (input, options) => {
+            const response = deferred();
+            loads.push({ input: structuredClone(input), options, response });
+            return response.promise;
+        };
+        const currentWrite = (guard, write) => {
+            if (guard()) write();
+        };
+        owner = makeAuthScreenOwner(client, {
+            initialOwnerId: 'visitor_example',
+            isCurrent,
+            clearVisitorState: (scope, guard) =>
+                currentWrite(guard, () => {
+                    clears.push(scope);
+                    ui.root.render(null);
+                }),
+            onPending: (scope, guard) =>
+                currentWrite(guard, () => {
+                    pending.push(scope);
+                    ui.root.render(
+                        ui.React.createElement(
+                            'p',
+                            { role: 'status' },
+                            'Loading authentication'
+                        )
+                    );
+                }),
+            onRestorationError: (
+                state,
+                retry,
+                scope,
+                guard,
+                continueWithLogin
+            ) =>
+                currentWrite(guard, () => {
+                    errors.push({
+                        state,
+                        retry,
+                        scope,
+                        guard,
+                        continueWithLogin,
+                    });
+                    ui.root.render(
+                        ui.React.createElement(
+                            'p',
+                            { role: 'status' },
+                            'Restoration ' + state.phase
+                        )
+                    );
+                }),
+            onLoaded: (page, scope, authentication, guard) =>
+                currentWrite(guard, () => {
+                    published.push({ page, scope, authentication, guard });
+                    lastAuthentication = authentication;
+                    if (
+                        page.extensionScreen === 'login_page' ||
+                        page.extensionScreen === 'password'
+                    ) {
+                        lastAuthProps = props(client, page, {
+                            ownerScope: scope,
+                            getScope: owner.getScope,
+                            authentication,
+                            onSessionApplied: owner.sessionApplied,
+                            onReload: () => {},
+                        });
+                        ui.root.render(
+                            ui.React.createElement(
+                                ui.React.StrictMode,
+                                null,
+                                ui.React.createElement(AuthPanel, lastAuthProps)
+                            )
+                        );
+                    } else
+                        ui.root.render(
+                            ui.React.createElement(
+                                'p',
+                                { 'data-startup-accepted': true },
+                                'Accepted ' + page.extensionScreen
+                            )
+                        );
+                }),
+            ...(remember
+                ? {
+                      remember: (page, input, getScope) => {
+                          const adapter = createSessionRestoration({
+                              client,
+                              page,
+                              apiOrigin: 'https://sdk.example.test',
+                              context: '',
+                              loadInput: input,
+                              getScope,
+                              storage: shared.storage,
+                          });
+                          adapters.push(adapter);
+                          return adapter;
+                      },
+                  }
+                : {}),
+        });
+        ui.cleanup(() => owner.destroy());
+        const begin = async () => {
+            let outcome;
+            await ui.React.act(async () => {
+                outcome = owner.load(rootInput).then(
+                    () => ({ ok: true }),
+                    (error) => ({ error })
+                );
+            });
+            return { outcome };
+        };
+        return {
+            owner,
+            client,
+            loads,
+            published,
+            errors,
+            pending,
+            clears,
+            adapters,
+            shared,
+            begin,
+            get authentication() {
+                return lastAuthentication;
+            },
+            get authProps() {
+                return lastAuthProps;
+            },
+        };
+    };
+    await check(
+        'Startup holds a slow remembered validation without flashing AuthPanel',
+        async (ui) => {
+            const shared = persistentStore();
+            await seedRemembered(shared);
+            const f = startup(ui, { shared });
+            const run = await f.begin();
+            assert.equal(f.loads.length, 1);
+            assert.equal(ui.button('Log in'), undefined);
+            await ui.complete(f.loads[0].response, screen());
+            assert.equal(f.loads.length, 2);
+            assert.equal(f.published.length, 0);
+            assert.equal(ui.button('Log in'), undefined);
+            assert.match(ui.status(), /Loading/);
+            assert.equal(f.adapters[0].getSnapshot().phase, 'restoring');
+            assert.equal(f.client.sessionWrites, 0);
+            assert(
+                Object.values(f.loads[1].options.session).includes(
+                    'SYNTHETIC_ENCRYPTED_LOGIN'
+                )
+            );
+            await ui.complete(f.loads[1].response, screen('portal_loaded'));
+            assert.deepEqual(await run.outcome, { ok: true });
+            assert.equal(f.published.length, 1);
+            assert.equal(f.published[0].page.extensionScreen, 'portal_loaded');
+            assert.equal(ui.button('Log in'), undefined);
+            assert.match(ui.host.textContent, /Accepted portal_loaded/);
+            assert.equal(f.client.sessionWrites, 1);
+            await ui.React.act(async () =>
+                assert.equal(f.owner.logout(f.owner.getScope()), true)
+            );
+            assert.equal(shared.data.size, 0);
+            assert.deepEqual(f.client.getSession(), {});
+            assert.equal(f.loads.length, 2);
+        }
+    );
+    await check(
+        'No remembered credential or explicit opt-out publishes only the accepted login page',
+        async (ui) => {
+            for (const remember of [true, false]) {
+                const f = startup(ui, { remember });
+                const run = await f.begin();
+                assert.equal(ui.button('Log in'), undefined);
+                await ui.complete(f.loads[0].response, screen());
+                assert.deepEqual(await run.outcome, { ok: true });
+                assert.equal(f.loads.length, 1);
+                assert.equal(f.published.length, 1);
+                assert(ui.button('Log in'));
+                assert.equal(f.client.calls.length, 0);
+                assert.equal(f.client.sessionWrites, 0);
+                assert.equal(f.adapters.length, remember ? 1 : 0);
+                await ui.React.act(async () => f.owner.destroy());
+            }
+        }
+    );
+    await check(
+        'Storage and validation transport failures remain explicit startup errors',
+        async (ui) => {
+            for (const failure of ['storage', 'transport']) {
+                const shared = persistentStore();
+                await seedRemembered(shared);
+                if (failure === 'storage') shared.deny(true);
+                const f = startup(ui, { shared });
+                const run = await f.begin();
+                await ui.complete(f.loads[0].response, screen());
+                if (failure === 'transport')
+                    await ui.React.act(async () =>
+                        f.loads[1].response.reject(
+                            Error('Synthetic validation interruption')
+                        )
+                    );
+                assert.deepEqual(await run.outcome, { ok: true });
+                assert.equal(f.errors.length, 1);
+                assert.equal(
+                    f.errors[0].state.phase,
+                    failure === 'storage' ? 'storage-unavailable' : 'error'
+                );
+                assert.equal(f.published.length, 0);
+                assert.equal(ui.button('Log in'), undefined);
+                assert.match(ui.status(), /Restoration/);
+                assert.equal(f.client.sessionWrites, 0);
+                assert.equal(shared.data.size, 1);
+                assert.equal(shared.removals, 0);
+                assert.equal(f.loads.length, failure === 'storage' ? 1 : 2);
+                if (failure === 'storage') {
+                    assert.equal(
+                        typeof f.errors[0].continueWithLogin,
+                        'function'
+                    );
+                    await ui.React.act(async () =>
+                        f.errors[0].continueWithLogin()
+                    );
+                    assert(ui.button('Log in'));
+                    assert.equal(f.loads.length, 1);
+                    assert.equal(f.client.calls.length, 0);
+                    ui.input('Email', 'Login').value = 'synthetic@example.test';
+                    await ui.click('Log in');
+                    await ui.click('Apply session');
+                    assert(
+                        Object.values(f.client.getSession()).includes(
+                            'SYNTHETIC_MANUAL_LOGIN'
+                        )
+                    );
+                    assert.equal(f.client.calls.length, 1);
+                    assert.equal(f.loads.length, 1);
+                    const reload = await f.begin();
+                    await ui.complete(
+                        f.loads[1].response,
+                        screen('portal_loaded')
+                    );
+                    assert.deepEqual(await reload.outcome, { ok: true });
+                    await ui.React.act(async () =>
+                        assert.equal(f.owner.logout(f.owner.getScope()), true)
+                    );
+                    assert.deepEqual(f.client.getSession(), {});
+                    assert.equal(shared.removals, 0);
+                    assert.equal(shared.data.size, 1);
+                } else {
+                    let retry;
+                    await ui.React.act(async () => {
+                        retry = f.errors[0].retry();
+                    });
+                    assert.equal(f.loads.length, 3);
+                    await ui.complete(
+                        f.loads[2].response,
+                        screen('portal_loaded')
+                    );
+                    await retry;
+                    assert.equal(f.published.length, 1);
+                    assert.equal(
+                        f.published[0].page.extensionScreen,
+                        'portal_loaded'
+                    );
+                }
+                shared.deny(false);
+                await ui.React.act(async () => f.owner.destroy());
+            }
+        }
+    );
+    await check(
+        'Late startup validation cannot publish or clear a successor after visitor configuration or session replacement',
+        async (ui) => {
+            for (const transition of ['visitor', 'configuration', 'session']) {
+                const shared = persistentStore();
+                await seedRemembered(shared);
+                const f = startup(ui, { shared });
+                const old = await f.begin();
+                await ui.complete(f.loads[0].response, screen());
+                assert.equal(f.loads.length, 2);
+                await ui.React.act(async () => {
+                    if (transition === 'session')
+                        f.client.setSession({
+                            successor: 'SYNTHETIC_SUCCESSOR_SESSION',
+                        });
+                    f.owner.changeOwner(
+                        transition === 'visitor'
+                            ? 'visitor_other'
+                            : 'visitor_example'
+                    );
+                });
+                assert(
+                    f.loads[1].options.signal.aborted,
+                    'Owner replacement aborts the captured restoration read'
+                );
+                const next = await f.begin();
+                assert.equal(f.loads.length, 3);
+                await ui.complete(f.loads[2].response, screen('portal_loaded'));
+                assert.deepEqual(await next.outcome, { ok: true });
+                const before = {
+                    published: f.published.length,
+                    clears: f.clears.length,
+                    session: f.client.getSession(),
+                    stored: [...shared.data],
+                };
+                await ui.complete(f.loads[1].response, screen('portal_loaded'));
+                await old.outcome;
+                assert.equal(f.published.length, before.published);
+                assert.equal(f.clears.length, before.clears);
+                assert.deepEqual(f.client.getSession(), before.session);
+                assert.deepEqual([...shared.data], before.stored);
+                assert.match(ui.host.textContent, /Accepted portal_loaded/);
+                assert.equal(f.loads.length, 3);
+                await ui.React.act(async () => f.owner.destroy());
+            }
+        }
+    );
+    await check(
+        'Remembered AuthPanel survives StrictMode and remount and hands logout to the accepted root load',
+        async (ui) => {
+            const f = startup(ui);
+            const first = await f.begin();
+            await ui.complete(f.loads[0].response, screen());
+            assert.deepEqual(await first.outcome, { ok: true });
+            const ownedFlow = f.authentication.flow;
+            assert(ownedFlow.isCurrent());
+            await ui.React.act(async () => ui.root.render(null));
+            assert(ownedFlow.isCurrent());
+            await ui.render(f.authProps);
+            assert(ownedFlow.isCurrent());
+            assert.equal(f.loads.length, 1);
+            assert.equal(f.client.calls.length, 0);
+            ui.input('Email', 'Login').value = 'synthetic@example.test';
+            await ui.click('Log in');
+            await ui.click('Apply session');
+            assert.equal(f.shared.data.size, 1);
+            assert.equal(f.client.calls.length, 1);
+            assert.equal(f.loads.length, 1);
+            const stale = f.published[0].scope;
+            const reload = await f.begin();
+            await ui.complete(f.loads[1].response, screen('portal_loaded'));
+            assert.deepEqual(await reload.outcome, { ok: true });
+            assert.equal(
+                f.published.at(-1).page.extensionScreen,
+                'portal_loaded'
+            );
+            assert.equal(f.owner.logout(stale), false);
+            assert.equal(f.shared.data.size, 1);
+            await ui.React.act(async () => ui.root.render(null));
+            await ui.React.act(async () =>
+                assert.equal(f.owner.logout(f.owner.getScope()), true)
+            );
+            assert.equal(f.shared.data.size, 0);
+            assert.deepEqual(f.client.getSession(), {});
+            assert.equal(f.loads.length, 2);
+        }
+    );
+    await check(
+        'External persistent replacement retires old remembered ownership without removing successor credentials',
+        async (ui) => {
+            const shared = persistentStore();
+            await seedRemembered(shared);
+            const f = startup(ui, { shared });
+            const run = await f.begin();
+            await ui.complete(f.loads[0].response, screen());
+            const oldScope = f.owner.getScope(),
+                key = [...shared.data.keys()][0];
+            shared.data.set(
+                key,
+                JSON.stringify({
+                    version: 1,
+                    credential: 'SYNTHETIC_OTHER_VISITOR',
+                })
+            );
+            await ui.React.act(async () => shared.emit(key));
+            assert.equal(f.adapters[0].getSnapshot().phase, 'retired');
+            assert(f.loads[1].options.signal.aborted);
+            await ui.complete(f.loads[1].response, screen('portal_loaded'));
+            await run.outcome;
+            assert.equal(f.published.length, 0);
+            assert.equal(f.client.sessionWrites, 0);
+            await ui.React.act(async () =>
+                f.owner.changeOwner('visitor_other')
+            );
+            assert.equal(f.owner.logout(oldScope), false);
+            assert.equal(
+                JSON.parse(shared.data.get(key)).credential,
+                'SYNTHETIC_OTHER_VISITOR'
+            );
+            assert.equal(shared.removals, 0);
+            assert.equal(ui.button('Log in'), undefined);
+        }
+    );
+    await check(
+        'A failed initial read remains an application error without a fabricated logged-out screen',
+        async (ui) => {
+            const f = startup(ui);
+            const run = await f.begin();
+            await ui.React.act(async () =>
+                f.loads[0].response.reject(
+                    Error('Synthetic root load interruption')
+                )
+            );
+            const outcome = await run.outcome;
+            assert(outcome.error);
+            await ui.React.act(async () =>
+                ui.root.render(
+                    ui.React.createElement(
+                        'p',
+                        { role: 'status' },
+                        'Initial load error'
+                    )
+                )
+            );
+            assert.equal(f.published.length, 0);
+            assert.equal(f.errors.length, 0);
+            assert.equal(f.loads.length, 1);
+            assert.equal(ui.button('Log in'), undefined);
+            assert.equal(ui.status(), 'Initial load error');
+            assert.equal(f.client.sessionWrites, 0);
         }
     );
     if (failures.length) {

@@ -57,6 +57,7 @@ import {
     type AuthFlow as Flow,
     type AuthCredentialGrant as Grant,
     type AuthVerificationChallenge as Challenge,
+    type SessionRestoration,
 } from '@miniextensions/sdk/auth';
 type Props = {
     client: MiniExtensionsClient;
@@ -66,9 +67,11 @@ type Props = {
     onSessionApplied: () => void;
     onReload: () => void;
     signUpFieldNames?: readonly string[];
+    authentication?: Pick<SessionRestoration, 'flow' | 'applySession'>;
 };
 type Entry = {
     flow: Flow;
+    authentication: Props['authentication'];
     page: Props['page'];
     client: MiniExtensionsClient;
     scope: Scope;
@@ -111,6 +114,7 @@ export function AuthPanel(props: Props) {
             e.generation !== generation ||
             p.page !== e.page ||
             p.client !== e.client ||
+            p.authentication !== e.authentication ||
             p.ownerScope.ownerId !== e.scope.ownerId ||
             p.ownerScope.revision !== e.scope.revision
         )
@@ -138,11 +142,14 @@ export function AuthPanel(props: Props) {
         )
             return;
         const e: Entry = {
-            flow: createAuthFlow({
-                client: props.client,
-                page: props.page,
-                getScope: () => latest.current.getScope(),
-            }),
+            flow:
+                props.authentication?.flow ??
+                createAuthFlow({
+                    client: props.client,
+                    page: props.page,
+                    getScope: () => latest.current.getScope(),
+                }),
+            authentication: props.authentication,
             page: props.page,
             client: props.client,
             scope: { ...props.ownerScope },
@@ -160,12 +167,13 @@ export function AuthPanel(props: Props) {
             e.generation++;
             e.grant = null;
             e.challenge = null;
-            e.flow.destroy();
+            if (!e.authentication) e.flow.destroy();
             if (entry.current === e) entry.current = null;
         };
     }, [
         props.client,
         props.page,
+        props.authentication,
         props.ownerScope.ownerId,
         props.ownerScope.revision,
     ]);
@@ -303,7 +311,8 @@ export function AuthPanel(props: Props) {
         const e = entry.current;
         if (!e || !current(e) || !e.grant || e.busy) return;
         try {
-            e.flow.applySession(e.grant); // Never expose the returned session.
+            if (e.authentication) e.authentication.applySession(e.grant);
+            else e.flow.applySession(e.grant); // Never expose the returned session.
             const owned = owns(e);
             e.grant = null;
             e.challenge = null;
@@ -454,12 +463,29 @@ A successful `{ok}` sign-up response is not authentication.
 
 ## App-owned load and revision
 
-Use this owner outside React, or keep it in an application ref. `onLoaded`
-receives the actual guarded result and its captured scope; render an
-`AuthPanel` only for `password`/`login_page`, and route other results in your app.
-`clearVisitorState` must remove the previous page/drafts and clear their stores.
-Bind `owner.sessionApplied` to `onSessionApplied`, and a deliberate Reload
-button to `owner.load(input)` with your app's error handling.
+Keep this owner outside React, or in an application ref. Call `load(input)` once
+at your app's explicit startup and again only for a deliberate Reload. Supply
+`isCurrent` from your app's active owner identity. Each callback receives its
+captured scope and freshness guard: check that guard immediately before changing
+the screen or clearing drafts, including after callback reentry. Retired cleanup
+must never clear a successor's stores.
+
+Without `remember`, the existing load path publishes its guarded result. To opt
+in, supply a factory using `optInRememberedLogin` below. The provisional
+`password`/`login_page` stays private until one restoration read settles.
+`onPending` renders neutral loading text. Only definitive `login-required`
+publishes login; transport/storage errors use `onRestorationError`, with captured
+explicit Retry and Continue with login actions. Neither action runs automatically.
+Handle a rejected initial load separately as an app error, never as proof of logout.
+
+`onLoaded` receives the accepted page, scope, optional authentication adapter and
+guard. For an auth page, pass that `authentication` to `AuthPanel`; it uses the
+adapter's own flow and apply method. Guard `onSessionApplied` before calling
+`owner.sessionApplied()`, and guard Reload before calling `owner.load(input)`.
+Accepted Form/Portal restoration hands off logout ownership before publication.
+Bind Logout to `owner.logout(capturedScope)`; an old scope cannot clear a newer
+lease. Ordinary React unmount unsubscribes from the UI without destroying that
+external authentication owner. Dispose it only when replacing the app owner.
 
 ```ts
 import type {
@@ -467,15 +493,42 @@ import type {
     LoadExtensionResult,
     MiniExtensionsClient,
 } from '@miniextensions/sdk';
+import type {
+    AuthOwnerScope,
+    AuthPage,
+    SessionRestoration,
+    SessionRestorationLease,
+    SessionRestorationSnapshot,
+} from '@miniextensions/sdk/auth';
 
+type Authentication = Pick<SessionRestoration, 'flow' | 'applySession'>;
 export function makeAuthScreenOwner(
     client: MiniExtensionsClient,
     options: {
         initialOwnerId: string;
-        clearVisitorState: () => void;
+        isCurrent?: () => boolean; // App's active owner identity, outside React.
+        clearVisitorState: (
+            scope: AuthOwnerScope,
+            isCurrent: () => boolean
+        ) => void;
+        onPending?: (scope: AuthOwnerScope, isCurrent: () => boolean) => void;
         onLoaded: (
             page: LoadExtensionResult,
-            scope: { ownerId: string; revision: number }
+            scope: AuthOwnerScope,
+            authentication: Authentication | undefined,
+            isCurrent: () => boolean
+        ) => void;
+        remember?: (
+            page: AuthPage,
+            input: Extract<LoadExtensionInput, { shareId: string }>,
+            getScope: () => AuthOwnerScope
+        ) => SessionRestoration;
+        onRestorationError?: (
+            state: SessionRestorationSnapshot,
+            retry: () => Promise<void>,
+            scope: AuthOwnerScope,
+            isCurrent: () => boolean,
+            continueWithLogin?: () => void
         ) => void;
     }
 ) {
@@ -483,70 +536,230 @@ export function makeAuthScreenOwner(
     let generation = 0;
     let active: AbortController | null = null;
     let disposed = false;
-    const invalidate = (ownerId = scope.ownerId) => {
+    let remembered: SessionRestoration | SessionRestorationLease | null = null;
+    const getScope = () => ({ ...scope });
+    const sameScope = (captured: AuthOwnerScope) =>
+        scope.ownerId === captured.ownerId &&
+        scope.revision === captured.revision;
+    const owns = (captured: AuthOwnerScope, version: number) =>
+        !disposed &&
+        generation === version &&
+        sameScope(captured) &&
+        (options.isCurrent?.() ?? true) &&
+        !disposed &&
+        generation === version &&
+        sameScope(captured);
+    const sameSession = (expected: ReturnType<typeof client.getSession>) => {
+        const now = client.getSession();
+        return (
+            Object.keys(now).length === Object.keys(expected).length &&
+            Object.keys(expected).every(
+                (key) => Object.hasOwn(now, key) && now[key] === expected[key]
+            )
+        );
+    };
+    const invalidate = (ownerId = scope.ownerId, keepRemembered = false) => {
         if (disposed) throw new Error('Owner disposed');
         const previous = active;
+        keepRemembered =
+            keepRemembered && remembered?.getSnapshot().phase !== 'restoring';
+        const oldRemembered = keepRemembered ? null : remembered;
+        if (!keepRemembered) remembered = null;
         active = null;
         scope = { ownerId, revision: scope.revision + 1 };
+        const captured = getScope();
         const version = ++generation;
+        const current = () => owns(captured, version);
         try {
-            options.clearVisitorState();
+            if (current()) options.clearVisitorState(captured, current);
         } finally {
+            oldRemembered?.destroy(); // Retire only the captured old lease.
             previous?.abort();
         }
         return version;
     };
-    return {
-        getScope: () => ({ ...scope }),
-        // A → B → A gets increasing revisions even if final credentials match.
-        // Also call for same-owner connection/session/token/context changes.
-        changeOwner: invalidate,
-        sessionApplied: () => invalidate(), // Explicit apply callback; no reload.
-        async load(input: LoadExtensionInput) {
-            const version = invalidate(); // Explicit Reload retires the old page.
-            if (disposed || generation !== version || active !== null)
-                throw new Error('A newer load owns this screen.');
-            const controller = new AbortController();
-            active = controller;
-            const captured = { ...scope };
-            const session = { ...client.getSession() };
-            controller.signal.throwIfAborted();
-            if (disposed || active !== controller || generation !== version)
-                throw new Error('A newer load owns this screen.');
-            const page = await client.loadExtension(input, {
-                session,
-                signal: controller.signal,
-            });
-            controller.signal.throwIfAborted();
-            const now = client.getSession();
-            if (
-                disposed ||
-                active !== controller ||
-                generation !== version ||
-                scope.ownerId !== captured.ownerId ||
-                scope.revision !== captured.revision ||
-                Object.keys(now).length !== Object.keys(session).length ||
-                !Object.keys(session).every(
-                    (key) =>
-                        Object.hasOwn(now, key) && now[key] === session[key]
-                )
-            ) {
-                throw new Error('Visitor/context changed; discard this load.');
+    const load = async (input: LoadExtensionInput) => {
+        const rootInput = structuredClone(input);
+        const version = invalidate(scope.ownerId, true);
+        if (disposed || generation !== version || active !== null)
+            throw new Error('A newer load owns this screen.');
+        const controller = new AbortController();
+        active = controller;
+        const captured = getScope();
+        let session = { ...client.getSession() };
+        const contextCurrent = () =>
+            owns(captured, version) &&
+            active === controller &&
+            !controller.signal.aborted;
+        const current = () =>
+            contextCurrent() && sameSession(session) && contextCurrent();
+        if (current()) options.onPending?.(captured, current);
+        if (!current()) throw new Error('A newer load owns this screen.');
+        const page = await client.loadExtension(rootInput, {
+            session,
+            signal: controller.signal,
+        });
+        if (!current())
+            throw new Error('Visitor/context changed; discard this load.');
+        const publish = (accepted: LoadExtensionResult) => {
+            if (!contextCurrent()) return;
+            const held = remembered;
+            if (!held) {
+                if (current())
+                    options.onLoaded(accepted, captured, undefined, current);
+                return;
             }
-            controller.signal.throwIfAborted();
-            options.onLoaded(page, captured); // Only this guarded result renders.
+            scope = { ...scope, revision: scope.revision + 1 };
+            const acceptedScope = getScope();
+            const acceptedCurrent = () =>
+                owns(acceptedScope, version) &&
+                active === controller &&
+                sameSession(session) &&
+                owns(acceptedScope, version);
+            const lease = held.handoff(
+                accepted,
+                acceptedScope,
+                acceptedCurrent
+            );
+            if (!acceptedCurrent() || remembered !== held) {
+                lease?.destroy();
+                return;
+            }
+            if (!lease) {
+                remembered = null;
+                held.destroy();
+                if (acceptedCurrent())
+                    options.onRestorationError?.(
+                        {
+                            phase: 'error',
+                            message:
+                                'Session ownership changed. Reload explicitly.',
+                        },
+                        async () => {
+                            if (acceptedCurrent()) await load(rootInput);
+                        },
+                        acceptedScope,
+                        acceptedCurrent
+                    );
+                return;
+            }
+            remembered = lease; // Install logout ownership before rendering.
+            options.onLoaded(
+                accepted,
+                acceptedScope,
+                undefined,
+                acceptedCurrent
+            );
+        };
+        if (
+            (page.extensionScreen !== 'password' &&
+                page.extensionScreen !== 'login_page') ||
+            !options.remember ||
+            !('shareId' in rootInput) ||
+            rootInput.context.type !== 'direct-url'
+        ) {
+            if (
+                page.extensionScreen === 'form_loaded' ||
+                page.extensionScreen === 'portal_loaded'
+            )
+                publish(page);
+            else if (current())
+                options.onLoaded(page, captured, undefined, current);
+            return;
+        }
+        const adapter = options.remember(
+            page,
+            structuredClone(rootInput),
+            getScope
+        );
+        if (!current()) {
+            adapter.destroy();
+            return;
+        }
+        const oldRemembered = remembered;
+        remembered = adapter;
+        oldRemembered?.destroy();
+        if (!current() || remembered !== adapter) {
+            adapter.destroy();
+            return;
+        }
+        const authentication: Authentication = {
+            flow: adapter.flow,
+            applySession(grant) {
+                if (!current() || remembered !== adapter) return;
+                adapter.applySession(grant);
+                if (contextCurrent() && remembered === adapter)
+                    session = { ...client.getSession() };
+            },
+        };
+        const renderLogin = () => {
+            if (current() && remembered === adapter && adapter.flow.isCurrent())
+                options.onLoaded(page, captured, authentication, current);
+        };
+        const resume = async () => {
+            if (!current() || remembered !== adapter) return;
+            options.onPending?.(captured, current);
+            if (!current() || remembered !== adapter) return;
+            const accepted = await adapter.restore();
+            if (!contextCurrent() || remembered !== adapter) return;
+            const state = adapter.getSnapshot();
+            if (accepted && state.phase === 'restored') {
+                session = { ...client.getSession() }; // Handoff verifies the adapter's accepted session.
+                publish(accepted);
+            } else if (current() && state.phase === 'login-required') {
+                renderLogin();
+            } else if (
+                current() &&
+                (state.phase === 'error' ||
+                    state.phase === 'storage-unavailable')
+            ) {
+                options.onRestorationError?.(
+                    state,
+                    resume,
+                    captured,
+                    current,
+                    renderLogin
+                );
+            }
+        };
+        await resume(); // One explicit restoration read; the AuthPage stayed private.
+    };
+    return {
+        getScope,
+        changeOwner: (ownerId = scope.ownerId) => invalidate(ownerId),
+        sessionApplied: () => invalidate(scope.ownerId, true), // No automatic Reload.
+        load,
+        logout(captured: AuthOwnerScope) {
+            const version = generation;
+            if (!owns(captured, version)) return false;
+            const held = remembered;
+            held?.clear(); // Before advancing the scope; never clear a successor.
+            if (!owns(captured, version) || remembered !== held) return false;
+            invalidate();
+            return true;
         },
         destroy() {
             if (disposed) return;
-            disposed = true;
-            scope = { ...scope, revision: scope.revision + 1 };
-            generation++;
+            const captured = getScope();
+            const version = generation;
+            const clear = () =>
+                generation === version &&
+                sameScope(captured) &&
+                (options.isCurrent?.() ?? true) &&
+                generation === version &&
+                sameScope(captured);
             const previous = active;
+            const held = remembered;
             active = null;
+            remembered = null;
+            disposed = true;
             try {
-                options.clearVisitorState();
+                if (clear()) options.clearVisitorState(captured, clear);
             } finally {
+                held?.destroy();
                 previous?.abort();
+                scope = { ...scope, revision: scope.revision + 1 };
+                generation++;
             }
         },
     };
@@ -554,9 +767,12 @@ export function makeAuthScreenOwner(
 ```
 
 Advance the revision on every visitor, connection, session, token or context
-transition, including anonymous visitors and A → B → A. Dispose the old flow
-and create a fresh one for the next loaded screen. Credential equality alone
-cannot identify those transitions.
+transition, including anonymous visitors and A → B → A. `changeOwner` retires the
+captured old remembered owner; explicit Reload cancels a pending restoration.
+An applied adapter or accepted lease remains outside the renderer for the next
+accepted-load handoff and scoped logout. Credential equality alone cannot
+identify transitions. This recipe composes existing SDK phases; it adds no auth
+engine, storage policy or automatic mutation recovery.
 
 Cancellation does not roll back verification delivery or sign-up. After an
 uncertain result, inspect the account/delivery outcome and explicitly Reload

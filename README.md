@@ -83,6 +83,10 @@ complete load-and-save example with editable-schema checks, native values,
 hidden prefills and validation handling. It writes once when run; connect its
 save function to your application's deliberate Save action.
 
+For an authenticated app, follow [startup and restoration ownership](docs/auth.md#app-owned-load-and-revision)
+before rendering login: the shipped recipe keeps a provisional authentication
+page private while an explicitly opted-in remembered session is validated.
+
 ## Build an archive from source
 
 A Git checkout contains source, not the distributed `dist` modules. Use a
@@ -151,7 +155,10 @@ also includes optional DOM controls. The `/react` subpath provides `TextField`, 
 `DateTimeField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
-[field-binding usage guide](docs/field-bindings.md). The shipped guides also include
+[field-binding usage guide](docs/field-bindings.md) and
+[typed renderer hosts, `FieldRenderer` and named slots](docs/field-bindings.md#typed-renderer-hosts-and-named-slots).
+Keep these owners outside renderer mounts; React is optional, and remounting a
+renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.

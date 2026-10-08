@@ -937,6 +937,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         guideSources: authGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    assert.equal(authRecipeChecks.checks, 17);
     assert.equal(
         await checkSessionRestoration({
             consumerDirectory: temporaryDirectory,

@@ -185,7 +185,14 @@ export function createFormFieldBindings(
     let linkedRecordsOwner: ReturnType<
         typeof createFormLinkedRecordsOwner
     > | null = null;
-    const replacingLinkedOptions = new Set<string>();
+    const linkedOptionRevisions = new Map<string, number>();
+    const replacingLinkedOptions = new Map<string, number>();
+    const beginLinkedReplacement = (id: string) => {
+        const ticket = (linkedOptionRevisions.get(id) ?? 0) + 1;
+        linkedOptionRevisions.set(id, ticket);
+        replacingLinkedOptions.set(id, ticket);
+        return ticket;
+    };
     const entries = new Map<
         string,
         {
@@ -730,43 +737,67 @@ export function createFormFieldBindings(
             });
         },
         setLinkedOptions: (id, supplied, append = false) => {
-            if (!current()) return;
-            const binding = field(id);
-            if (
-                binding.getSnapshot().field?.fieldType !== 'multipleRecordLinks'
-            )
-                throw new TypeError('A linked field is required.');
-            replacingLinkedOptions.add(id);
+            const ticket = beginLinkedReplacement(id);
             try {
+                if (!current()) return;
+                const binding = field(id);
+                const model = binding.selection;
+                const fieldEpoch = epoch;
+                const owns = () =>
+                    linkedOptionRevisions.get(id) === ticket &&
+                    current() &&
+                    epoch === fieldEpoch &&
+                    entries.get(id)?.binding === binding &&
+                    linkedOptionRevisions.get(id) === ticket;
+                if (
+                    binding.getSnapshot().field?.fieldType !==
+                        'multipleRecordLinks' ||
+                    !model
+                )
+                    throw new TypeError('A linked field is required.');
+                if (!owns()) return;
                 linkedRecordsOwner?.clearOptions(id);
-                const existing = append
-                    ? binding.selection!.getState().options
-                    : [];
-                binding.selection!.setOptions([
-                    ...existing,
-                    ...structuredClone(supplied),
-                ]);
+                if (!owns()) return;
+                const existing = append ? model.getState().options : [];
+                const next = [...existing, ...structuredClone(supplied)];
+                if (!owns()) return;
+                // A static replacement must also retire any older option read.
+                // Cancellation retains native selection and invokes no request.
+                model.cancel();
+                if (!owns()) return;
+                model.setOptions(next);
             } finally {
-                replacingLinkedOptions.delete(id);
+                if (replacingLinkedOptions.get(id) === ticket)
+                    replacingLinkedOptions.delete(id);
             }
         },
         setLinkedLoader: (id, loader) => {
-            if (!current()) return;
-            const binding = field(id);
-            if (
-                binding.getSnapshot().field?.fieldType !== 'multipleRecordLinks'
-            )
-                throw new TypeError('A linked field is required.');
-            const schema = binding.getSnapshot().field!.schema;
-            if (schema.airtableField.config.type !== 'multipleRecordLinks')
-                throw new TypeError('A linked field is required.');
-            const linkedTableId =
-                schema.airtableField.config.options.linkedTableId;
-            const token = loaded.payload.extensionAccessToken;
-            replacingLinkedOptions.add(id);
+            const ticket = beginLinkedReplacement(id);
             try {
+                if (!current()) return;
+                const binding = field(id);
+                const model = binding.selection;
+                const fieldEpoch = epoch;
+                const owns = () =>
+                    linkedOptionRevisions.get(id) === ticket &&
+                    current() &&
+                    epoch === fieldEpoch &&
+                    entries.get(id)?.binding === binding &&
+                    linkedOptionRevisions.get(id) === ticket;
+                const descriptor = binding.getSnapshot().field;
+                if (descriptor?.fieldType !== 'multipleRecordLinks' || !model)
+                    throw new TypeError('A linked field is required.');
+                const schema = descriptor.schema;
+                if (schema.airtableField.config.type !== 'multipleRecordLinks')
+                    throw new TypeError('A linked field is required.');
+                const linkedTableId =
+                    schema.airtableField.config.options.linkedTableId;
+                const token = loaded.payload.extensionAccessToken;
+                if (!owns()) return;
                 linkedRecordsOwner?.clearOptions(id);
-                const state = binding.selection!.getState();
+                if (!owns()) return;
+                const state = model.getState();
+                if (!owns()) return;
                 const wrapped: SelectionLoader = Object.assign(
                     async (request: Parameters<SelectionLoader>[0]) => {
                         if (!current())
@@ -791,7 +822,8 @@ export function createFormFieldBindings(
                             current() && (loader.isCurrent?.() ?? true),
                     }
                 );
-                binding.selection!.reset({
+                if (!owns()) return;
+                model.reset({
                     ...state,
                     selectedOptions: state.selectedOptions,
                     loadOptions: wrapped,
@@ -801,7 +833,8 @@ export function createFormFieldBindings(
                     },
                 });
             } finally {
-                replacingLinkedOptions.delete(id);
+                if (replacingLinkedOptions.get(id) === ticket)
+                    replacingLinkedOptions.delete(id);
             }
         },
         reload: async (request) => {

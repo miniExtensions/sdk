@@ -113,6 +113,80 @@ const deferred = () => {
 };
 
 describe('linked record UI loaders', () => {
+    it('keeps paged records and native choices while refusing conflicting common metadata', async () => {
+        const f = fixture(async ({ input }) => {
+            const page = result();
+            page.records = input.offset ? [records[1]] : [records[0]];
+            page.offset = input.offset ? null : 'next_page';
+            if (input.offset)
+                page.tableIdsToLinkedTableStates.table_projects.airtableFields[0].name =
+                    'Changed title';
+            return page;
+        });
+        const model = createSelectionModel({
+            multiple: true,
+            loadOptions: createFormLinkedRecordLoader({
+                client: f.client,
+                input: formInput,
+                linkedTableId: 'table_projects',
+            }),
+        });
+        await model.reload();
+        model.choose(['record_first']);
+        await model.loadMore();
+        assert.deepEqual(model.getState().linkedRecords!.records, records);
+        assert.equal(model.getState().linkedRecords!.table, null);
+        assert.equal(model.getState().offset, null);
+        assert.deepEqual(model.getState().value, ['record_first']);
+        assert.equal(model.canChoose(['record_first', 'record_second']), true);
+        model.choose(['record_first', 'record_second']);
+        assert.deepEqual(model.getState().value, [
+            'record_first',
+            'record_second',
+        ]);
+        model.destroy();
+    });
+
+    it('ignores metadata from pagination sources that contribute no retained records', async () => {
+        for (const mode of [
+            'empty-first',
+            'empty-next',
+            'all-replaced',
+        ] as const) {
+            const f = fixture(async ({ input }) => {
+                const page = result();
+                const next = input.offset !== null;
+                page.offset = next ? null : 'next_page';
+                page.records =
+                    (mode === 'empty-first' && !next) ||
+                    (mode === 'empty-next' && next)
+                        ? []
+                        : [records[0]];
+                if (next)
+                    page.tableIdsToLinkedTableStates.table_projects.airtableFields[0].name =
+                        'Latest title';
+                return page;
+            });
+            const model = createSelectionModel({
+                loadOptions: createFormLinkedRecordLoader({
+                    client: f.client,
+                    input: formInput,
+                    linkedTableId: 'table_projects',
+                }),
+            });
+            await model.reload();
+            await model.loadMore();
+            assert.deepEqual(model.getState().linkedRecords!.records, [
+                records[0],
+            ]);
+            assert.equal(
+                model.getState().linkedRecords!.table!.airtableFields[0].name,
+                mode === 'empty-next' ? 'Title' : 'Latest title'
+            );
+            model.destroy();
+        }
+    });
+
     it('rejects a cached SDK page replayed through a custom loader after visitor replacement', async () => {
         const f = fixture();
         const loader = createFormLinkedRecordLoader({

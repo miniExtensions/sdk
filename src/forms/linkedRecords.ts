@@ -7,6 +7,7 @@ import type {
     RuntimeAirtableField,
 } from '../runtime/types.js';
 import type { FormFieldBinding } from './bindings.js';
+import { sameLinkedRecordTable } from '../ui/linkedRecordPages.js';
 
 export type FormLinkedRecordDetailFields =
     FormLoadedResult['payload']['linkedRecordFieldIdToDetailFields'][string];
@@ -270,8 +271,11 @@ export function createFormLinkedRecordsOwner(options: {
             reasons.push('selected-sort');
         let stopped = false;
         let stop = () => {};
-        const selectedOptions = new Map<string, AirtableRecord>();
-        let selectedOptionFields: readonly RuntimeAirtableField[] | null = null;
+        type Table = FormLinkedRecordsSnapshot['table'];
+        const selectedOptions = new Map<
+            string,
+            { record: AirtableRecord; table: Table }
+        >();
         const listeners = new Set<
             (snapshot: FormLinkedRecordsSnapshot) => void
         >();
@@ -293,6 +297,25 @@ export function createFormLinkedRecordsOwner(options: {
                 reasons: [...reasons],
             },
         });
+        const captureSelection = () => {
+            if (stopped || !current()) return;
+            const state = binding.getSnapshot();
+            if (state.retired || !current()) return;
+            const nativeIds = ids(state.value);
+            if (!nativeIds) return;
+            const rich = binding.selection?.getState().linkedRecords;
+            if (!current() || stopped) return;
+            const selected = new Set(nativeIds);
+            for (const id of selectedOptions.keys())
+                if (!selected.has(id)) selectedOptions.delete(id);
+            if (rich?.linkedTableId === linkedTableId)
+                for (const record of rich.records)
+                    if (selected.has(record.id))
+                        selectedOptions.set(
+                            record.id,
+                            structuredClone({ record, table: rich.table })
+                        );
+        };
         const snapshot = (): FormLinkedRecordsSnapshot => {
             if (stopped || !current()) return empty('retired');
             const state = binding.getSnapshot();
@@ -308,28 +331,49 @@ export function createFormLinkedRecordsOwner(options: {
             const candidates =
                 rich?.linkedTableId === linkedTableId ? rich.records : [];
             if (!current() || stopped) return empty('retired');
-            const selected = new Set(nativeIds);
-            for (const id of selectedOptions.keys())
-                if (!selected.has(id)) selectedOptions.delete(id);
-            for (const record of candidates)
-                if (selected.has(record.id))
-                    selectedOptions.set(record.id, structuredClone(record));
-            if (rich?.linkedTableId === linkedTableId && rich.table)
-                selectedOptionFields = structuredClone(
-                    rich.table.airtableFields
-                );
             const hydrated = accepted?.[linkedTableId];
             const selectedRecords: AirtableRecord[] = [];
             const unresolvedSelectedIds: string[] = [];
+            const contributingTables: Table[] = [];
+            if (candidates.length !== 0)
+                contributingTables.push(rich?.table ?? null);
             for (const id of nativeIds) {
+                const option = selectedOptions.get(id);
                 const record =
-                    selectedOptions.get(id) ??
+                    option?.record ??
                     (originalIds.has(id)
                         ? hydrated?.recordIdsToAirtableRecords[id]
                         : undefined);
                 if (!record) unresolvedSelectedIds.push(id);
-                else if (reasons.length === 0) selectedRecords.push(record);
+                else if (reasons.length === 0) {
+                    selectedRecords.push(record);
+                    contributingTables.push(
+                        option
+                            ? option.table
+                            : hydrated
+                              ? { airtableFields: hydrated.airtableFields }
+                              : null
+                    );
+                }
             }
+            const commonTable =
+                contributingTables.length === 0
+                    ? rich?.linkedTableId === linkedTableId && rich.table
+                        ? rich.table
+                        : hydrated
+                          ? { airtableFields: hydrated.airtableFields }
+                          : null
+                    : contributingTables[0] &&
+                        contributingTables.every(
+                            (table) =>
+                                table !== null &&
+                                sameLinkedRecordTable(
+                                    contributingTables[0],
+                                    table
+                                )
+                        )
+                      ? contributingTables[0]
+                      : null;
             return structuredClone({
                 phase,
                 pending: phase === 'loading',
@@ -338,17 +382,16 @@ export function createFormLinkedRecordsOwner(options: {
                 selectedRecords,
                 unresolvedSelectedIds,
                 candidateRecords: candidates,
-                table: hydrated
-                    ? { airtableFields: hydrated.airtableFields }
-                    : selectedOptionFields
-                      ? { airtableFields: selectedOptionFields }
-                      : null,
+                table: commonTable,
                 detailFields,
                 detailProjection,
                 selectedPolicy: { supported: reasons.length === 0, reasons },
             });
         };
         const notify = () => {
+            // Accepted selection changes update owner-held data even when no
+            // renderer is mounted or reading this facet.
+            captureSelection();
             for (const listener of [...listeners])
                 if (listeners.has(listener)) {
                     try {
@@ -379,7 +422,6 @@ export function createFormLinkedRecordsOwner(options: {
                 if (stopped) return;
                 stopped = true;
                 selectedOptions.clear();
-                selectedOptionFields = null;
                 stop();
                 notify();
                 listeners.clear();

@@ -1,5 +1,70 @@
 import type { LinkedRecordSelectionPage, SelectionPage } from './types.js';
-import type { MiniExtensionsClient } from '../runtime/types.js';
+import type {
+    MiniExtensionsClient,
+    RuntimeAirtableField,
+} from '../runtime/types.js';
+
+type LinkedRecordTable = {
+    airtableFields: readonly RuntimeAirtableField[];
+} | null;
+
+/** Internal equality for detached JSON-like metadata, including own undefined keys. */
+export function sameLinkedRecordTable(
+    left: LinkedRecordTable,
+    right: LinkedRecordTable
+): boolean {
+    const ancestors = new Set<object>();
+    const equal = (a: unknown, b: unknown): boolean => {
+        if (a === null || b === null) return a === b;
+        if (typeof a !== typeof b) return false;
+        if (typeof a !== 'object')
+            return (
+                ['undefined', 'string', 'boolean', 'number'].includes(
+                    typeof a
+                ) &&
+                (typeof a !== 'number' || Number.isFinite(a)) &&
+                Object.is(a, b)
+            );
+        if (Array.isArray(a) !== Array.isArray(b)) return false;
+        if (
+            (!Array.isArray(a) &&
+                (Object.getPrototypeOf(a) !== Object.prototype ||
+                    Object.getPrototypeOf(b) !== Object.prototype)) ||
+            ancestors.has(a) ||
+            ancestors.has(b as object)
+        )
+            return false;
+        if (Array.isArray(a) && a.length !== (b as unknown[]).length)
+            return false;
+        const keys = Object.keys(a);
+        if (
+            keys.length !== Object.keys(b as object).length ||
+            Reflect.ownKeys(a).some((key) => typeof key !== 'string') ||
+            Reflect.ownKeys(b as object).some((key) => typeof key !== 'string')
+        )
+            return false;
+        ancestors.add(a);
+        ancestors.add(b as object);
+        try {
+            return keys.every(
+                (key) =>
+                    Object.hasOwn(b as object, key) &&
+                    equal(
+                        (a as Record<string, unknown>)[key],
+                        (b as Record<string, unknown>)[key]
+                    )
+            );
+        } finally {
+            ancestors.delete(a);
+            ancestors.delete(b as object);
+        }
+    };
+    try {
+        return equal(left, right);
+    } catch {
+        return false;
+    }
+}
 
 // Request-local payloads are not presentation state. Only SelectionModel may
 // promote this data after its generation, abort and loader scope checks pass.
@@ -108,8 +173,21 @@ export function acceptedLinkedRecordPage(
         const records = new Map(
             previous.records.map((record) => [record.id, record])
         );
+        const nextIds = new Set(next.records.map((record) => record.id));
+        const previousContributes = previous.records.some(
+            (record) => !nextIds.has(record.id)
+        );
+        const nextContributes = next.records.length !== 0;
         for (const record of next.records) records.set(record.id, record);
         next.records = structuredClone([...records.values()]);
+        if (previousContributes && !nextContributes)
+            next.table = structuredClone(previous.table);
+        else if (
+            previousContributes &&
+            nextContributes &&
+            !sameLinkedRecordTable(previous.table, next.table)
+        )
+            next.table = null;
     }
     origins.set(next, payload.origin);
     return next;

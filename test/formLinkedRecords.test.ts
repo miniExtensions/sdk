@@ -595,3 +595,164 @@ it('linked native blank values remain empty in the rich facet without normalizin
         f.fields.destroy();
     }
 });
+
+const installCandidateLoader = (f: ReturnType<typeof fixture>) =>
+    f.fields.setLinkedLoader(
+        'fld_a',
+        createFormLinkedRecordLoader({
+            client: f.client,
+            linkedTableId: 'tbl_linked',
+            input: {
+                extensionAccessToken:
+                    f.fields.getLoaded().payload.extensionAccessToken,
+                linkedRecordFieldId: 'fld_a',
+                conditionalLinkedRecordFilteringValues: {},
+            },
+        })
+    );
+
+it('selected option records survive search without any renderer snapshot or active subscriber', async () => {
+    for (const mountedThenUnmounted of [false, true]) {
+        const f = fixture();
+        installCandidateLoader(f);
+        const facet = f.fields.linkedRecords('fld_a');
+        if (mountedThenUnmounted) facet.subscribe(() => {})();
+        const binding = f.fields.field('fld_a');
+        await binding.selection!.reload();
+        binding.selection!.choose(['rec_candidate']);
+        binding.selection!.setSearchInput('new query');
+        const snapshot = facet.getSnapshot();
+        assert.deepEqual(
+            snapshot.selectedRecords.map((r) => r.id),
+            ['rec_candidate']
+        );
+        assert.deepEqual(snapshot.candidateRecords, []);
+        assert.deepEqual(snapshot.unresolvedSelectedIds, []);
+        assert.deepEqual(binding.getSnapshot().value, ['rec_candidate']);
+        f.replace();
+        assert.equal(facet.getSnapshot().phase, 'retired');
+        assert.deepEqual(facet.getSnapshot().selectedRecords, []);
+        assert.deepEqual(binding.getSnapshot().value, ['rec_candidate']);
+        f.fields.destroy();
+    }
+});
+
+it('empty original hydration metadata cannot replace the metadata of accepted option records', async () => {
+    const loaded = richForm();
+    loaded.payload.formRecord.data.fld_a = [];
+    const f = fixture(loaded, async () => ({
+        tbl_linked: { airtableFields: [], recordIdsToAirtableRecords: {} },
+    }));
+    installCandidateLoader(f);
+    const facet = f.fields.linkedRecords('fld_a'),
+        binding = f.fields.field('fld_a');
+    assert.equal(await facet.readSelected(), true);
+    await binding.selection!.reload();
+    binding.selection!.choose(['rec_candidate']);
+    assert.deepEqual(facet.getSnapshot().table?.airtableFields, [metadata]);
+    assert.deepEqual(
+        facet.getSnapshot().selectedRecords.map((r) => r.id),
+        ['rec_candidate']
+    );
+    binding.selection!.setSearchInput('after selection');
+    assert.deepEqual(facet.getSnapshot().table?.airtableFields, [metadata]);
+    f.fields.destroy();
+});
+
+it('a common table is unavailable when projected hydration and option metadata disagree', async () => {
+    const hydrated = table([record('rec_a')]);
+    hydrated.airtableFields = [{ ...metadata, name: 'Hydrated field name' }];
+    const f = fixture(richForm(), async () => ({ tbl_linked: hydrated }));
+    installCandidateLoader(f);
+    const facet = f.fields.linkedRecords('fld_a'),
+        binding = f.fields.field('fld_a');
+    assert.equal(await facet.readSelected(), true);
+    await binding.selection!.reload();
+    const snapshot = facet.getSnapshot();
+    assert.deepEqual(
+        snapshot.selectedRecords.map((r) => r.id),
+        ['rec_a', 'rec_a']
+    );
+    assert.deepEqual(
+        snapshot.candidateRecords.map((r) => r.id),
+        ['rec_candidate']
+    );
+    assert.equal(snapshot.table, null);
+    assert.deepEqual(binding.getSnapshot().value, ['rec_a', 'rec_a']);
+    binding.selection!.choose(['rec_candidate']);
+    assert.deepEqual(facet.getSnapshot().table?.airtableFields, [metadata]);
+    f.fields.destroy();
+});
+
+it('a later query cannot relabel an older selected option with its metadata', async () => {
+    const loaded = richForm();
+    loaded.payload.formRecord.data.fld_a = [];
+    const f = fixture(loaded);
+    let reads = 0;
+    f.client.linkedRecords.listFormOptions = async () => {
+        const first = ++reads === 1;
+        const candidate = record(first ? 'rec_old' : 'rec_new');
+        const candidateTable = table([candidate]);
+        candidateTable.airtableFields = [
+            {
+                ...metadata,
+                name: first ? 'Old accepted name' : 'New accepted name',
+            },
+        ];
+        return {
+            records: [candidate],
+            offset: null,
+            tableIdsToLinkedTableStates: { tbl_linked: candidateTable },
+            linkedRecordFieldIdToDetailFields: null,
+        };
+    };
+    installCandidateLoader(f);
+    const facet = f.fields.linkedRecords('fld_a'),
+        binding = f.fields.field('fld_a');
+    await binding.selection!.reload();
+    binding.selection!.choose(['rec_old']);
+    binding.selection!.setSearchInput('new query');
+    await binding.selection!.reload();
+    const snapshot = facet.getSnapshot();
+    assert.deepEqual(
+        snapshot.selectedRecords.map((r) => r.id),
+        ['rec_old']
+    );
+    assert.deepEqual(
+        snapshot.candidateRecords.map((r) => r.id),
+        ['rec_new']
+    );
+    assert.deepEqual(snapshot.unresolvedSelectedIds, []);
+    assert.equal(snapshot.table, null);
+    assert.deepEqual(binding.getSnapshot().value, ['rec_old']);
+    binding.selection!.setSearchInput('no active candidates');
+    assert.equal(
+        facet.getSnapshot().table?.airtableFields[0].name,
+        'Old accepted name'
+    );
+    f.fields.destroy();
+});
+
+it('missing metadata from a contributing candidate source stays unavailable', async () => {
+    const f = fixture();
+    f.client.linkedRecords.listFormOptions = async () => ({
+        records: [record('rec_candidate')],
+        offset: null,
+        tableIdsToLinkedTableStates: {},
+        linkedRecordFieldIdToDetailFields: null,
+    });
+    installCandidateLoader(f);
+    const facet = f.fields.linkedRecords('fld_a');
+    assert.equal(await facet.readSelected(), true);
+    await f.fields.field('fld_a').selection!.reload();
+    assert.deepEqual(
+        facet.getSnapshot().selectedRecords.map((r) => r.id),
+        ['rec_a', 'rec_a']
+    );
+    assert.deepEqual(
+        facet.getSnapshot().candidateRecords.map((r) => r.id),
+        ['rec_candidate']
+    );
+    assert.equal(facet.getSnapshot().table, null);
+    f.fields.destroy();
+});

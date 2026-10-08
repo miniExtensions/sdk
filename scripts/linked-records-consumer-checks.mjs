@@ -187,6 +187,42 @@ export async function checkLinkedRecordsConsumer({ consumerDirectory }) {
                 model.getState().linkedRecords.records.map((r) => r.id),
                 ['rec_one', 'rec_two']
             );
+            const paged = api.ui.createSelectionModel({
+                multiple: true,
+                loadOptions: loader(),
+            });
+            resources.push(() => paged.destroy());
+            optionsHandler = async () => optionPage([row('rec_m1')], 'more');
+            await paged.reload();
+            optionsHandler = async () =>
+                optionPage(
+                    [row('rec_m2')],
+                    null,
+                    physical.map((field) => ({
+                        ...field,
+                        name: `${field.name} changed`,
+                    }))
+                );
+            await paged.loadMore();
+            assert.deepEqual(
+                paged
+                    .getState()
+                    .linkedRecords.records.map((record) => record.id),
+                ['rec_m1', 'rec_m2']
+            );
+            assert.equal(paged.getState().linkedRecords.table, null);
+            paged.choose(['rec_m1', 'rec_m2']);
+            assert.deepEqual(paged.getState().value, ['rec_m1', 'rec_m2']);
+            optionsHandler = async () => optionPage([], 'more', []);
+            await paged.setSearchTerm('empty first');
+            optionsHandler = async () => optionPage([row('rec_after_empty')]);
+            await paged.loadMore();
+            assert.deepEqual(
+                paged.getState().linkedRecords.table.airtableFields,
+                physical,
+                'Unused empty first-page metadata does not override subsequent record source'
+            );
+            assert.deepEqual(paged.getState().value, ['rec_m1', 'rec_m2']);
             optionsHandler = async () => ({
                 records: [row('rec_no_metadata')],
                 offset: null,
@@ -400,6 +436,176 @@ export async function checkLinkedRecordsConsumer({ consumerDirectory }) {
                 candidateFields.field('fld_parent').getSnapshot().dirty,
                 true
             );
+            for (const observer of ['never-mounted', 'unmounted']) {
+                const retainedFields = makeFields();
+                retainedFields.setLinkedLoader('fld_parent', loader());
+                const retainedFacet =
+                    retainedFields.linkedRecords('fld_parent');
+                if (observer === 'unmounted')
+                    retainedFacet.subscribe(() => {})();
+                const selection = retainedFields.field('fld_parent').selection;
+                await selection.reload();
+                selection.choose(['rec_candidate']);
+                selection.setSearchInput('next query');
+                assert.deepEqual(
+                    retainedFacet.getSnapshot().selectedRecords,
+                    [row('rec_candidate', 'Candidate detail')],
+                    `${observer}: selected rich data survives candidate-query retirement without a snapshot read`
+                );
+                assert.deepEqual(
+                    retainedFields.field('fld_parent').getSnapshot().value,
+                    ['rec_candidate']
+                );
+                retainedFields.destroy();
+                assert.equal(retainedFacet.getSnapshot().phase, 'retired');
+                assert.deepEqual(
+                    retainedFacet.getSnapshot().selectedRecords,
+                    []
+                );
+            }
+            for (const replacement of ['loader', 'static']) {
+                const replacedFields = makeFields();
+                const oldFacet = replacedFields.linkedRecords('fld_parent');
+                let installed = false;
+                const newer = [{ value: 'rec_c', label: 'Newer C' }];
+                oldFacet.subscribe((state) => {
+                    if (state.phase !== 'retired' || installed) return;
+                    installed = true;
+                    if (replacement === 'loader')
+                        replacedFields.setLinkedLoader(
+                            'fld_parent',
+                            async () => ({ options: newer, offset: null })
+                        );
+                    else replacedFields.setLinkedOptions('fld_parent', newer);
+                });
+                if (replacement === 'loader') {
+                    replacedFields.setLinkedLoader('fld_parent', async () => ({
+                        options: [{ value: 'rec_b', label: 'Older B' }],
+                        offset: null,
+                    }));
+                    await replacedFields.field('fld_parent').selection.reload();
+                } else
+                    replacedFields.setLinkedOptions('fld_parent', [
+                        { value: 'rec_b', label: 'Older B' },
+                    ]);
+                assert.equal(installed, true);
+                assert.deepEqual(
+                    replacedFields.field('fld_parent').selection.getState()
+                        .options,
+                    newer,
+                    'Reentrant newer replacement wins over interrupted older replacement'
+                );
+            }
+            const staticFields = makeFields();
+            const oldStaticRead = fixtures.deferred();
+            let oldSignal,
+                oldDispatches = 0;
+            staticFields.setLinkedLoader('fld_parent', (request) => {
+                oldDispatches++;
+                oldSignal = request.signal;
+                return oldStaticRead.promise;
+            });
+            const staticSelection = staticFields.field('fld_parent').selection;
+            const oldStaticFlight = staticSelection.reload();
+            await tick();
+            const staticNative = structuredClone(
+                staticFields.field('fld_parent').getSnapshot().value
+            );
+            const staticOptions = [
+                { value: 'rec_static_c', label: 'Static C' },
+            ];
+            staticFields.setLinkedOptions('fld_parent', staticOptions);
+            assert.equal(oldSignal.aborted, true);
+            assert.deepEqual(staticSelection.getState().options, staticOptions);
+            assert.deepEqual(
+                staticFields.field('fld_parent').getSnapshot().value,
+                staticNative
+            );
+            oldStaticRead.resolve({
+                options: [{ value: 'rec_old', label: 'Old' }],
+                offset: null,
+            });
+            await oldStaticFlight;
+            assert.deepEqual(staticSelection.getState().options, staticOptions);
+            assert.deepEqual(
+                staticFields.field('fld_parent').getSnapshot().value,
+                staticNative
+            );
+            assert.equal(
+                oldDispatches,
+                1,
+                'Static replacement performs no automatic read or save'
+            );
+            const emptyOriginal = formFixture();
+            emptyOriginal.payload.formRecord.data.fld_parent = [];
+            const emptyFields = makeFields(emptyOriginal);
+            emptyFields.setLinkedLoader('fld_parent', loader());
+            const emptyFacet = emptyFields.linkedRecords('fld_parent');
+            selectedHandler = async () => ({ tbl_children: table([], []) });
+            assert.equal(await emptyFacet.readSelected(), true);
+            optionsHandler = async () => optionPage([row('rec_metadata')]);
+            await emptyFields.field('fld_parent').selection.reload();
+            assert.deepEqual(
+                emptyFacet.getSnapshot().table.airtableFields,
+                physical,
+                'Empty original hydration cannot override returned candidate metadata'
+            );
+
+            const metadataM2 = physical.map((field) => ({
+                ...field,
+                name: `${field.name} changed`,
+            }));
+            const mixedFields = makeFields();
+            mixedFields.setLinkedLoader('fld_parent', loader());
+            const mixedFacet = mixedFields.linkedRecords('fld_parent');
+            selectedHandler = async () => ({
+                tbl_children: table([row('rec_one', 'M1 selected')]),
+            });
+            assert.equal(await mixedFacet.readSelected(), true);
+            optionsHandler = async () =>
+                optionPage([row('rec_m2', 'M2 candidate')], null, metadataM2);
+            await mixedFields.field('fld_parent').selection.reload();
+            assert.deepEqual(
+                mixedFacet
+                    .getSnapshot()
+                    .selectedRecords.map((record) => record.fields.fld_title),
+                ['M1 selected', 'M1 selected']
+            );
+            assert.equal(
+                mixedFacet.getSnapshot().table,
+                null,
+                'Conflicting selected and candidate source metadata cannot be paired'
+            );
+
+            const retainedMetadataFields = makeFields(emptyOriginal);
+            retainedMetadataFields.setLinkedLoader('fld_parent', loader());
+            const retainedMetadataFacet =
+                retainedMetadataFields.linkedRecords('fld_parent');
+            const retainedMetadataSelection =
+                retainedMetadataFields.field('fld_parent').selection;
+            optionsHandler = async () =>
+                optionPage([row('rec_m1', 'M1 retained')]);
+            await retainedMetadataSelection.reload();
+            retainedMetadataSelection.choose(['rec_m1']);
+            optionsHandler = async () =>
+                optionPage([row('rec_m2', 'M2 search')], null, metadataM2);
+            await retainedMetadataSelection.setSearchTerm('M2');
+            assert.deepEqual(
+                retainedMetadataFacet.getSnapshot().selectedRecords,
+                [row('rec_m1', 'M1 retained')]
+            );
+            assert.equal(
+                retainedMetadataFacet.getSnapshot().table,
+                null,
+                'A later search cannot relabel a retained selected record with unrelated source metadata'
+            );
+            assert.deepEqual(
+                retainedMetadataFields.field('fld_parent').getSnapshot().value,
+                ['rec_m1']
+            );
+            selectedHandler = async () => ({
+                tbl_children: table([row('rec_one', 'Hydrated')]),
+            });
             checks++;
 
             for (const [projection, expected] of [

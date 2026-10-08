@@ -16,3 +16,11 @@ export type {
 
 export { createPortalCellBinding } from './cell.js';
 export type { PortalCellBinding, PortalCellBindingOptions } from './cell.js';
+
+export { createPortalListOwner } from './listOwner.js';
+export type {
+    PortalListOwner,
+    PortalListOwnerOptions,
+    PortalListSnapshot,
+    PortalListPhase,
+} from './listOwner.js';

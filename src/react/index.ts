@@ -452,3 +452,97 @@ export function LinkedField({ binding, render }: FieldProps): ReactNode {
         status(snapshot)
     );
 }
+
+/** Optional subscription bridge. Mount/StrictMode/remount never reads. */
+export function usePortalListOwner(
+    owner: import('../portals/listOwner.js').PortalListOwner
+): import('../portals/listOwner.js').PortalListSnapshot {
+    const store = useMemo(() => {
+        let snapshot = owner.getSnapshot();
+        return {
+            getSnapshot: () => snapshot,
+            subscribe: (notify: () => void) =>
+                owner.subscribe((next) => {
+                    snapshot = next;
+                    notify();
+                }),
+        };
+    }, [owner]);
+    return useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+}
+export type PortalListProps = {
+    owner: import('../portals/listOwner.js').PortalListOwner;
+    readOptions: import('../portals/types.js').PortalReadOptions;
+    render?(state: {
+        snapshot: import('../portals/listOwner.js').PortalListSnapshot;
+        owner: import('../portals/listOwner.js').PortalListOwner;
+    }): ReactNode;
+};
+/** Safe default list shell: app renderers own privacy-aware cell presentation, not state. */
+export function PortalList({
+    owner,
+    readOptions,
+    render,
+}: PortalListProps): ReactNode {
+    const snapshot = usePortalListOwner(owner);
+    if (render) return render({ snapshot, owner });
+    if (snapshot.phase === 'retired') return null;
+    return createElement(
+        'section',
+        { 'aria-label': 'Portal records' },
+        createElement(
+            'p',
+            { role: 'status', 'aria-busy': snapshot.pending },
+            snapshot.error ??
+                (snapshot.phase === 'empty'
+                    ? 'No records returned.'
+                    : snapshot.phase === 'cleanup'
+                      ? 'The server proposed criteria cleanup. Inspect replacements before acceptance.'
+                      : snapshot.pending
+                        ? 'Loading records…'
+                        : '')
+        ),
+        createElement(
+            'button',
+            {
+                type: 'button',
+                disabled: snapshot.pending || snapshot.phase === 'cleanup',
+                onClick: () => {
+                    void owner.readFirst(snapshot.revision, readOptions);
+                },
+            },
+            'Load records'
+        ),
+        createElement(
+            'button',
+            {
+                type: 'button',
+                disabled: snapshot.pending || !snapshot.hasNext,
+                onClick: () => {
+                    void owner.readNext(snapshot.revision, readOptions);
+                },
+            },
+            'Next page'
+        ),
+        createElement(
+            'button',
+            {
+                type: 'button',
+                disabled: !snapshot.pending,
+                onClick: () => owner.cancel(snapshot.revision),
+            },
+            'Cancel read'
+        ),
+        createElement(
+            'ol',
+            null,
+            ...(snapshot.page?.recordIds ?? []).map((id, index) =>
+                createElement('li', { key: id }, `Record ${index + 1}`)
+            )
+        )
+    );
+}

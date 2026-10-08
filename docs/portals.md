@@ -636,3 +636,38 @@ After success, failure or cancellation, inspect the outcome and explicitly
 reload the Portal for a fresh token before another action. Cancellation cannot
 undo a committed unlink or Form save. There are no mutation retries, automatic
 reloads, Grid/Kanban writes, or inferred authorization rules in this helper.
+
+## Subscribed list ownership and React rendering
+
+`createPortalListOwner` from `/portals` owns an explicit collection read, its
+complete criteria, accepted ordered rows and returned detail columns. It reuses
+`createPortalCollection`; mounting or subscribing performs no request. Keep one
+owner for an accepted Portal lifetime. Pass the existing visitor/session scope,
+and advance `configurationRevision` whenever accepted configuration changes.
+Destroy the old owner on replacement, logout or disposal. Ordinary React remounts
+reuse the same owner and preserve its accepted page.
+
+Every action accepts the current snapshot revision. `setCriteria` replaces the
+complete criteria and `setField` selects another returned outer field; both retire
+rows, paging, cell guards and child-plan eligibility without reading. Search,
+view, sort and filter edits therefore require a subsequent explicit `readFirst`.
+`readNext` preserves server order through the existing collection merger. A
+cancelled read retires its request context and leaves a fresh explicit Load
+available; late old responses cannot replace newer state.
+
+A cleanup proposal exposes the server replacements. Inspect them, then explicitly
+call `acceptCleanup` or `dismissCleanup` at that revision. Acceptance patches only
+returned sort/filter properties, preserves other criteria and performs no read.
+Errors and empty results are separate snapshot phases. Child plans use
+`childFormRequest(revision, options)`; compose existing cell bindings with
+`isCurrent: () => owner.isCurrent(revision)` to retire retained cell actions.
+
+The optional `/react` `PortalList` component consumes the same subscribed owner.
+Its stock shell supplies explicit Load, Next and Cancel actions and generic row
+numbers. Supply `render={({ snapshot, owner }) => ...}` for custom markup, or use
+`usePortalListOwner(owner)`. React remains an optional peer. Neither stock nor
+custom rendering adds automatic reads, mutations, persistence or mutation retry.
+The snapshot is a detached copy containing complete native records, **not safe
+cell text**: custom renderers must honor returned detail display/privacy policy
+and must never derive Save data from presentation. This is list/table ownership,
+not a complete grid editor or support for every Portal layout.

@@ -202,6 +202,7 @@ export function createDateFieldModel(
                         config.type === 'date'
                             ? moment
                                   .utc(seen, 'YYYY-MM-DD', true)
+                                  .locale('en')
                                   .format(config.options.dateFormat.format)
                             : getReadableStringFromAirtableValue({
                                   value: seen,

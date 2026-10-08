@@ -275,10 +275,12 @@ export const createPortalCellBinding = (
             try {
                 request.dispatched?.();
                 notify();
+                const dateValid = binding.date?.getState().valid !== false;
                 if (
+                    !dateValid ||
                     !current() ||
-                    abort.signal.aborted ||
-                    binding.date?.getState().valid === false
+                    active !== abort ||
+                    abort.signal.aborted
                 )
                     throw new Error('The cell owner changed before dispatch.');
                 attempt = recovery.journal.begin(

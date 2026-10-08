@@ -110,6 +110,17 @@ export async function checkDateBindingConsumer({
                     assert.equal(model.getState().input, value);
                     model.destroy();
                 }
+                const moment = require(require.resolve('moment-timezone', {paths:[require.resolve('@miniextensions/sdk/ui')]}));
+                moment.defineLocale('date-proof', {parentLocale:'en', longDateFormat:{L:'YYYY',LL:'[CUSTOM] YYYY'}});
+                moment.locale('date-proof');
+                const friendly = createDateFieldModel({
+                    kind:'date',getValue:()=> '2024-02-29',
+                    getConfig:()=>({type:'date',options:{dateFormat:{name:'friendly',format:'LL'}}}),
+                    canEdit:()=>true,isCurrent:()=>true,write:()=>{throw Error('No write');}
+                });
+                assert.equal(friendly.getState().display, 'February 29, 2024');
+                assert.equal(moment.locale(), 'date-proof');
+                friendly.destroy();
                 assert.equal(Intl.DateTimeFormat().resolvedOptions().timeZone, process.env.TZ);
             `,
                 ],
@@ -504,6 +515,77 @@ export async function checkDateBindingConsumer({
                     },
                 })
             );
+            assert.equal(dispatches, 0);
+            assert.equal(
+                journal.blocking(recovery.scope, 'rec_one'),
+                undefined
+            );
+            assert.equal(cell.binding.getSnapshot().pending, false);
+            cell.destroy();
+            checks++;
+        }
+        // App-provided zone observation may synchronously cancel the active Save.
+        {
+            let armed = false,
+                dispatches = 0,
+                cancellations = 0;
+            const journal = new forms.RecoveryJournal();
+            const schema = structuredClone(
+                page.payload.fieldIdsToSchemas.fld_time
+            );
+            schema.airtableField.config = config('dateTime', 'client');
+            const recovery = {
+                journal,
+                scope: {
+                    owner: 'A',
+                    parentFieldId: 'fld_children',
+                    tableId: 'table_example',
+                    childExtensionId: '',
+                    context: 'modal',
+                },
+                loadVersion: 1,
+            };
+            const cell = portals.createPortalCellBinding({
+                client: {
+                    ...client,
+                    portals: {
+                        ...client.portals,
+                        updateGridCell: async () => {
+                            dispatches++;
+                            throw Error('No dispatch');
+                        },
+                    },
+                },
+                input: {
+                    portalExtensionAccessToken: 'token_example',
+                    portalFieldId: 'fld_children',
+                    recordFieldId: 'fld_time',
+                    recordId: 'rec_one',
+                    selectedCustomViewId: 'view_example',
+                },
+                schema,
+                value: '2024-07-01T12:00:00Z',
+                getClientTimeZone: () => {
+                    if (armed) {
+                        armed = false;
+                        cancellations++;
+                        cell.cancel();
+                    }
+                    return 'America/Los_Angeles';
+                },
+                getScope: () => ({ ownerId: 'A', revision: 0 }),
+                isCurrent: () => true,
+                recovery,
+            });
+            cell.binding.getSnapshot();
+            await assert.rejects(
+                cell.save({
+                    dispatched() {
+                        armed = true;
+                    },
+                })
+            );
+            assert.equal(cancellations, 1);
             assert.equal(dispatches, 0);
             assert.equal(
                 journal.blocking(recovery.scope, 'rec_one'),

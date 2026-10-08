@@ -1095,7 +1095,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     starterDirectory: directory,
                     happyDomModulePath: require.resolve('happy-dom'),
                 }),
-                17
+                18
             );
             assert.equal(
                 await checkScalarBindingConsumer({

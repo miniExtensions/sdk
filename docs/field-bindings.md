@@ -454,11 +454,20 @@ export function CustomFields({ host }: { host: FieldRendererHost }) {
                     </span>
                 ),
             }}
-            fallback={() => <span>Field unavailable.</span>}
+            fallback={(state) =>
+                state.status === 'hidden' ||
+                state.status === 'retired' ? null : (
+                    <span>Field unavailable.</span>
+                )
+            }
         />
     );
 }
 ```
+
+A hidden or retired host renders nothing in this recipe. The visible fallback
+is reserved for unavailable, blocked or missing-renderer states; applications
+can customize that messaging without changing the host's accepted state.
 
 A Form host adapts an existing `FormFieldBindings` field. Attachment actions use
 that owner's cached controller when `attachmentRecovery` is supplied. Button actions

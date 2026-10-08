@@ -1,3 +1,4 @@
+import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
 import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
@@ -843,6 +844,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(reactBindingProof.checks, 1);
+    const portalOwnerProof = await checkPortalOwnerConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(portalOwnerProof.checks, 19);
+    console.log('Installed Portal owner checkpoints: 19');
 
     const authGuide = readFileSync(
         join(installedPackage, 'docs/auth.md'),

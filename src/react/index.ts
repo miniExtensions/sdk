@@ -1,6 +1,7 @@
 import {
     createElement,
     useMemo,
+    useState,
     useRef,
     useEffect,
     useSyncExternalStore,
@@ -322,6 +323,9 @@ export function CheckboxField({ binding, render }: FieldProps): ReactNode {
 
 export function SelectField({ binding, render }: FieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
+    // Renderer-local text is not native data; replacement owners get a fresh input.
+    const [intent, setIntent] = useState({ binding, name: '' });
+    const name = intent.binding === binding ? intent.name : '';
     if (render) return render({ snapshot, binding });
     if (
         snapshot.retired ||
@@ -375,6 +379,75 @@ export function SelectField({ binding, render }: FieldProps): ReactNode {
                 )
             )
         ),
+        snapshot.choiceCreation != null
+            ? createElement(
+                  'div',
+                  null,
+                  createElement(
+                      'label',
+                      null,
+                      'New choice name',
+                      createElement('input', {
+                          value: name,
+                          disabled: !snapshot.choiceCreation.canCreate,
+                          onChange: (event: ChangeEvent<HTMLInputElement>) =>
+                              setIntent({
+                                  binding,
+                                  name: event.currentTarget.value,
+                              }),
+                      })
+                  ),
+                  createElement(
+                      'button',
+                      {
+                          type: 'button',
+                          disabled:
+                              !snapshot.choiceCreation.canCreate ||
+                              name.trim() === '',
+                          onClick: () => {
+                              const captured = name;
+                              void binding.choiceCreation
+                                  ?.create(captured)
+                                  .then((accepted) => {
+                                      if (accepted)
+                                          setIntent((now) =>
+                                              now.binding === binding &&
+                                              now.name === captured
+                                                  ? { binding, name: '' }
+                                                  : now
+                                          );
+                                  });
+                          },
+                      },
+                      'Create choice'
+                  ),
+                  createElement(
+                      'button',
+                      {
+                          type: 'button',
+                          disabled: !snapshot.choiceCreation.busy,
+                          onClick: () => binding.choiceCreation?.cancel(),
+                      },
+                      'Cancel choice creation'
+                  ),
+                  createElement(
+                      'p',
+                      {
+                          role: 'status',
+                          'aria-busy': snapshot.choiceCreation.busy,
+                      },
+                      snapshot.choiceCreation.error ??
+                          (snapshot.choiceCreation.phase === 'created-selected'
+                              ? 'Choice created and selected in the draft. Save to update the record.'
+                              : snapshot.choiceCreation.phase ===
+                                  'created-not-selected'
+                                ? 'Choice created but not currently selectable. The record has not been saved.'
+                                : snapshot.choiceCreation.busy
+                                  ? 'Creating choice…'
+                                  : '')
+                  )
+              )
+            : null,
         status(snapshot)
     );
 }

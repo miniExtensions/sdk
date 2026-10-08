@@ -100,3 +100,11 @@ export {
     type AttachmentRecovery,
     type AttachmentPhase,
 } from './attachmentController.js';
+
+export type {
+    FormSelectChoiceController,
+    FormSelectChoiceSnapshot,
+    SelectChoiceRecovery,
+    SelectChoiceAdapter,
+    SelectChoicePhase,
+} from './selectChoiceController.js';

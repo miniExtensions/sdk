@@ -1,3 +1,4 @@
+import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
 import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
 import { checkReactBindingConsumer } from './react-binding-consumer-checks.mjs';
@@ -1094,6 +1095,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     happyDomModulePath: require.resolve('happy-dom'),
                 }),
                 16
+            );
+            assert.equal(
+                await checkSelectChoiceConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    happyDomModulePath: require.resolve('happy-dom'),
+                }),
+                25
             );
             await checkFieldBindingRecipe({
                 consumerDirectory: directory,

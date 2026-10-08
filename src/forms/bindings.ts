@@ -1,3 +1,10 @@
+import {
+    createFormSelectChoiceController,
+    type FormSelectChoiceController,
+    type FormSelectChoiceSnapshot,
+    type SelectChoiceRecovery,
+    type SelectChoiceAdapter,
+} from './selectChoiceController.js';
 import type { ScalarFieldModel, ScalarFieldState } from '../ui/scalarModels.js';
 import { createFieldBinding } from './fieldBinding.js';
 import {
@@ -60,6 +67,7 @@ export type FormFieldSnapshot = {
     selection: SelectionState | null;
     scalar?: ScalarFieldState | null;
     retired: boolean;
+    choiceCreation?: FormSelectChoiceSnapshot | null;
 };
 export type FormFieldBinding = {
     getSnapshot(): FormFieldSnapshot;
@@ -68,6 +76,7 @@ export type FormFieldBinding = {
     /** Renderer-neutral model; native data is written only through its user actions. */
     selection: SelectionModel | null;
     scalar: ScalarFieldModel | null;
+    readonly choiceCreation?: FormSelectChoiceController | null;
 };
 export type FormFieldBindingsOptions = FormControllerOptions & {
     /** Additional explicit UI/recovery lease. It never clears native data. */
@@ -86,6 +95,11 @@ export type FormFieldBindings = {
             'getLoaded' | 'isCurrent' | 'configurationRevision' | 'onAttempt'
         >
     ): FormAttachmentController;
+    selectChoice(
+        fieldId: string,
+        recovery: SelectChoiceRecovery,
+        adapter?: SelectChoiceAdapter
+    ): FormSelectChoiceController;
     field(fieldId: string): FormFieldBinding;
     refresh(): void;
     setLinkedLoader(fieldId: string, loader: SelectionLoader): void;
@@ -137,6 +151,9 @@ export function createFormFieldBindings(
     const controller = createFormController({ ...initial, loaded, store });
     let epoch = controller.getState().epoch;
     let contextRevision = controller.getState().contextRevision;
+    const choiceCreators = new Map<string, FormSelectChoiceController>();
+    const choiceBlocked = () =>
+        [...choiceCreators.values()].some((model) => model.blocksForm());
     const attachments = new Map<string, FormAttachmentController>();
     const attachmentBlocked = () =>
         [...attachments.values()].some((model) => model.blocksForm());
@@ -305,6 +322,7 @@ export function createFormFieldBindings(
                         pendingRead !== null ||
                         !(options.canWrite?.() ?? true) ||
                         attachmentBlocked() ||
+                        choiceBlocked() ||
                         !(options.canWriteField?.(id) ?? true) ||
                         state.status === 'saving' ||
                         state.status === 'cancelled' ||
@@ -326,6 +344,7 @@ export function createFormFieldBindings(
             pendingRead !== null ||
             !(options.canWrite?.() ?? true) ||
             attachmentBlocked() ||
+            choiceBlocked() ||
             !(options.canWriteField?.(id) ?? true) ||
             state.status === 'saving' ||
             state.status === 'cancelled' ||
@@ -402,8 +421,20 @@ export function createFormFieldBindings(
                 const now = controller.getState();
                 return structuredClone({
                     field: live
-                        ? (now.fields.find((field) => field.fieldId === id) ??
-                          null)
+                        ? (() => {
+                              const descriptor = now.fields.find(
+                                  (field) => field.fieldId === id
+                              );
+                              return descriptor == null
+                                  ? null
+                                  : {
+                                        ...descriptor,
+                                        schema:
+                                            loaded.payload.fieldIdsToSchemas[
+                                                id
+                                            ] ?? descriptor.schema,
+                                    };
+                          })()
                         : null,
                     value: live ? now.draft?.data[id] : undefined,
                     dirty:
@@ -422,6 +453,7 @@ export function createFormFieldBindings(
                         visibility[id]?.type === 'visible' &&
                         (options.canWrite?.() ?? true) &&
                         !attachmentBlocked() &&
+                        !choiceBlocked() &&
                         (options.canWriteField?.(id) ?? true) &&
                         pendingRead === null &&
                         (now.status === 'ready' ||
@@ -445,6 +477,9 @@ export function createFormFieldBindings(
                         : [],
                     selection: live ? (model?.getState() ?? null) : null,
                     retired: !live,
+                    choiceCreation: live
+                        ? (choiceCreators.get(id)?.getSnapshot() ?? null)
+                        : null,
                 });
             },
             subscribe: (listener) => {
@@ -452,6 +487,10 @@ export function createFormFieldBindings(
                 listener(binding.getSnapshot());
                 return () => listeners.delete(listener);
             },
+        });
+        Object.defineProperty(binding, 'choiceCreation', {
+            get: () =>
+                ownsBinding() ? (choiceCreators.get(id) ?? null) : null,
         });
         entries.set(id, {
             binding,
@@ -489,6 +528,125 @@ export function createFormFieldBindings(
             }
             return model;
         },
+        selectChoice: (id, recovery, adapter = {}) => {
+            if (!current()) throw new Error('This Form owner is retired.');
+            let model = choiceCreators.get(id);
+            if (model != null) return model;
+            const binding = field(id);
+            const type = binding.getSnapshot().field?.fieldType;
+            if (type !== 'singleSelect' && type !== 'multipleSelects')
+                throw new TypeError('A select field is required.');
+            model = createFormSelectChoiceController({
+                ...recovery,
+                ...adapter,
+                form: owner,
+                fieldId: id,
+                client: options.client,
+                getLoaded: () => {
+                    const page = structuredClone(
+                        adapter.getLoaded?.() ?? loaded
+                    );
+                    const schema = page.payload.fieldIdsToSchemas[id];
+                    const config = schema?.airtableField.config;
+                    if (
+                        config?.type === 'singleSelect' ||
+                        config?.type === 'multipleSelects'
+                    ) {
+                        const handle = openLoadedFormDraft({
+                            store,
+                            loaded,
+                            parent: options.parent,
+                        });
+                        const additions = store.choices(handle, id);
+                        config.options = {
+                            ...config.options,
+                            choices: [
+                                ...(config.options?.choices ?? []),
+                                ...additions.filter(
+                                    (choice) =>
+                                        !(config.options?.choices ?? []).some(
+                                            (item) => item.id === choice.id
+                                        )
+                                ),
+                            ],
+                        };
+                    }
+                    return page;
+                },
+                canWrite: () =>
+                    current() &&
+                    !choiceBlocked() &&
+                    !attachmentBlocked() &&
+                    pendingRead === null &&
+                    (options.canWrite?.() ?? true) &&
+                    (options.canWriteField?.(id) ?? true) &&
+                    visibility[id]?.type === 'visible',
+                canAccept: () =>
+                    current() &&
+                    !attachmentBlocked() &&
+                    pendingRead === null &&
+                    (options.canWriteField?.(id) ?? true) &&
+                    (adapter.canAccept?.() ?? options.canWrite?.() ?? true) &&
+                    visibility[id]?.type === 'visible' &&
+                    ['ready', 'saved', 'validation-error'].includes(
+                        controller.getState().status
+                    ),
+                changed: refresh,
+                install: (choice, selected, accepted) => {
+                    if (!current()) return false;
+                    const state = controller.getState();
+                    const schema = loaded.payload.fieldIdsToSchemas[id]!;
+                    const config = schema.airtableField.config;
+                    if (
+                        config.type !== 'singleSelect' &&
+                        config.type !== 'multipleSelects'
+                    )
+                        return false;
+                    const handle = openLoadedFormDraft({
+                        store,
+                        loaded,
+                        parent: options.parent,
+                    });
+                    const install = () => {
+                        store.addChoice(handle, id, choice);
+                        config.options = {
+                            ...config.options,
+                            choices: [
+                                ...(config.options?.choices ?? []).filter(
+                                    (item) => item.id !== choice.id
+                                ),
+                                structuredClone(choice),
+                            ],
+                        };
+                        accepted();
+                    };
+                    const native = state.draft!.data[id];
+                    const alreadySelected =
+                        type === 'multipleSelects'
+                            ? Array.isArray(native) &&
+                              native.includes(choice.name)
+                            : native === choice.name;
+                    if (selected && !alreadySelected) {
+                        const value =
+                            type === 'multipleSelects'
+                                ? [
+                                      ...(Array.isArray(state.draft!.data[id])
+                                          ? (state.draft!.data[id] as string[])
+                                          : []),
+                                      choice.name,
+                                  ]
+                                : choice.name;
+                        return controller.write(id, value, install);
+                    }
+                    install();
+                    refresh();
+                    return true;
+                },
+            });
+            choiceCreators.set(id, model);
+            refresh();
+            return model;
+        },
         field,
         refresh,
         save: (supplied) => {
@@ -499,6 +657,7 @@ export function createFormFieldBindings(
                 ) ||
                 !(options.canWrite?.() ?? true) ||
                 attachmentBlocked() ||
+                choiceBlocked() ||
                 !current() ||
                 [...entries.values()].some((entry) => {
                     const state = entry.binding.getSnapshot();
@@ -631,6 +790,8 @@ export function createFormFieldBindings(
                 };
                 for (const model of attachments.values()) model.dispose();
                 attachments.clear();
+                for (const model of choiceCreators.values()) model.dispose();
+                choiceCreators.clear();
                 syncing = true;
                 try {
                     const nextContextRevision = contextRevision + 1;
@@ -677,6 +838,8 @@ export function createFormFieldBindings(
             unsubscribe();
             for (const model of attachments.values()) model.dispose();
             attachments.clear();
+            for (const model of choiceCreators.values()) model.dispose();
+            choiceCreators.clear();
             retireEntries();
             if (controller.getState().contextRevision === contextRevision)
                 controller.destroy();

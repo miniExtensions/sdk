@@ -71,6 +71,38 @@ policy. Disabled-option decoration is not whole-set validation: `canChoose`
 validates a complete proposed selection, including atomic replacement at a limit.
 Search does not narrow the set used to admit a choice.
 
+Configured Add Choice is explicit. Attach `owner.selectChoice(fieldId, recovery,
+adapter)` with the same `RecoveryJournal`, accepted scope and load version as
+Save/upload. This owner-held controller also appears as `binding.choiceCreation`
+and `snapshot.choiceCreation`; optional React `SelectField` stock markup and a
+custom `render` consume the same state/actions. Mounting never creates a choice.
+
+`create(name)` reuses configured permission, visibility, selection limits and
+conditional availability. Refused preflight creates no request or journal attempt.
+Only validated current returned metadata is installed: IDs remain metadata and
+canonical names remain native values. `created-selected` means selected in the
+local draft; `created-not-selected` means metadata was created but current
+availability prevented selection. Neither means the record was saved.
+
+Use `cancel()` for the explicit request. Lost/cancelled/stale responses or
+conflicting metadata remain uncertain and block mutation replay/Save through the
+journal. Inspect current choices before explicitly acknowledging a new intent;
+there is no automatic retry or rollback of a remotely created choice. Journal
+entries retain no entered choice name. Acknowledgment does not claim creation
+failed. Refresh the owner after acknowledgment to update renderer availability.
+
+The adapter supplies fresh accepted `getLoaded`, `isCurrent` ownership and a
+monotonic `configurationRevision` for observed replacements (including A→B→A).
+The current guard must include owner/context replacement. The owner also
+rechecks current field visibility and field write eligibility before accepting a
+response. By default it rechecks `canWrite`. If that broad guard intentionally
+blocks its own journal-pending attempt, supply `adapter.canAccept()` as an explicit
+own-response write lease; it must retain all genuine UI/permission restrictions
+(for example Review) while excluding only that attempt's journal block. Native draft revision, token, session and controller context are also
+fenced. Unobserved in-place changes followed by restoration are not detected.
+Returned choice additions survive same-owner renderer remount; dispose the owner
+on replacement. Portal inline Add Choice is outside this helper.
+
 Mounting and subscribing cause no I/O. Linked search belongs to the model:
 `setSearchInput` changes the query and retires old results/paging without a read;
 `reload()` performs the explicit search. Supply the existing authorized loader

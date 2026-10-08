@@ -377,3 +377,41 @@ it('original returned sort metadata and criteria mutations retire the headless l
         assert.equal(r.model.getSnapshot().retired, true);
     }
 });
+
+it('malformed saved select operands have generic typed presentation while preserving the entire unresolved AST', () => {
+    for (const value of [
+        [42],
+        ['choice_a', null],
+        { unsupported: 'value' },
+        Array(1),
+    ]) {
+        const f = editorFixture();
+        f.options.criteria.filtersByEndUser = {
+            logicalOperator: 'and',
+            conditions: [
+                {
+                    id: 'saved',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'isAnyOf',
+                        fieldType: 'singleSelect',
+                        idOrName: { type: 'id', id: 'fld_choice' },
+                        value,
+                    },
+                },
+            ],
+        } as unknown as NonNullable<
+            PortalCollectionCriteria['filtersByEndUser']
+        >;
+        const original = structuredClone(f.options.criteria);
+        const result = createPortalFilterEditor(f.options);
+        if (result.type !== 'ready') throw Error(result.diagnostic);
+        const state = result.model.getSnapshot();
+        assert.equal(state.unresolved, true);
+        assert.deepEqual(state.operand, []);
+        assert.deepEqual(state.originalCriteria, original);
+        assert.equal(result.model.apply(), false);
+        assert.equal(f.applied.length, 0);
+        assert.deepEqual(f.options.criteria, original);
+    }
+});

@@ -847,7 +847,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
             happyDomModulePath: require.resolve('happy-dom'),
         }),
-        16
+        17
     );
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,

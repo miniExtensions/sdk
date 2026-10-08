@@ -712,7 +712,11 @@ export function createPortalFilterEditor(
             resolved && setting
                 ? selectType(resolved.config.type)
                     ? Array.isArray(setting.value)
-                        ? [...setting.value]
+                        ? Array.from(setting.value).every(
+                              (value) => typeof value === 'string'
+                          )
+                            ? [...setting.value]
+                            : []
                         : typeof setting.value === 'string'
                           ? [setting.value]
                           : []

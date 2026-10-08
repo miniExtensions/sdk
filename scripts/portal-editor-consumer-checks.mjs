@@ -141,6 +141,40 @@ export async function checkPortalEditorConsumer({
         assert.equal(old.applied.length, 0);
         checks++;
     }
+    for (const value of [
+        [42],
+        ['a', null],
+        { unsupported: 'value' },
+        Array(1),
+    ]) {
+        const x = fixture();
+        x.options.criteria.filtersByEndUser = {
+            logicalOperator: 'and',
+            conditions: [
+                {
+                    id: 'saved',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'hasAnyOf',
+                        fieldType: 'multipleSelects',
+                        idOrName: { type: 'id', id: 'fld_choice' },
+                        value,
+                    },
+                },
+            ],
+        };
+        const original = structuredClone(x.options.criteria),
+            result = api.createPortalFilterEditor(x.options);
+        assert.equal(result.type, 'ready');
+        const state = result.model.getSnapshot();
+        assert.equal(state.unresolved, true);
+        assert.deepEqual(state.operand, []);
+        assert.deepEqual(state.originalCriteria, original);
+        assert.equal(result.model.apply(), false);
+        assert.equal(x.applied.length, 0);
+        assert.deepEqual(x.options.criteria, original);
+    }
+    checks++;
     for (const kind of ['sort', 'filter']) {
         for (const outcome of ['withdraw', 'self-reentry']) {
             const x = fixture(),
@@ -314,7 +348,7 @@ export async function checkPortalEditorConsumer({
         });
         await window.happyDOM.close();
     }
-    assert.equal(checks, 16);
+    assert.equal(checks, 17);
     console.log(
         `Installed Portal editors: ${checks} checkpoints; renderer/criteria preparation only, no network.`
     );

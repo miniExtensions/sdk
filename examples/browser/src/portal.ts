@@ -14,13 +14,14 @@ import {
     type MiniExtensionsClient,
     type PortalLoadedResult,
     type RuntimeAirtableField,
-    type RuntimeGridCellValue,
     type RuntimeLinkedRecordDetailField,
     type RuntimeFieldSchema,
     type SaveFormInput,
 } from '@miniextensions/sdk';
 import {
     createPortalCollection,
+    createPortalCellBinding,
+    type PortalCellBinding,
     getPortalLinkedRecordFieldConfig,
     type PortalCollection,
     type PortalCollectionSnapshot,
@@ -28,11 +29,15 @@ import {
     type PortalOwnerScope,
 } from '@miniextensions/sdk/portals';
 import { button, element, labeled } from './dom.js';
-import { displayValue, fieldControl, type FieldControl } from './fields.js';
+import {
+    displayValue,
+    mountBoundFormField,
+    type FieldControl,
+} from './fields.js';
 import type { ParentFormDraftScope } from './drafts.js';
 import {
     sameRecoveryRelationship,
-    type RecoveryJournal,
+    RecoveryJournal,
     type RecoveryScope,
     type RecoveryAttempt,
 } from './recovery.js';
@@ -213,23 +218,6 @@ const detailFields = (
         ];
     });
 };
-const gridValue = (value: AirtableValue): RuntimeGridCellValue => {
-    if (value == null) return null;
-    if (
-        typeof value === 'string' ||
-        typeof value === 'boolean' ||
-        typeof value === 'number'
-    )
-        return value;
-    if (
-        Array.isArray(value) &&
-        value.every((entry) => typeof entry === 'string')
-    )
-        return value.filter(
-            (entry): entry is string => typeof entry === 'string'
-        );
-    throw new Error('Use the child Form for this complex field type.');
-};
 
 export const createPortalView = (options: {
     page: PortalLoadedResult;
@@ -307,7 +295,11 @@ export const createPortalView = (options: {
     recoveryPanel.setAttribute('aria-live', 'polite');
     const editor = element('section');
     let editorControl: FieldControl | null = null;
+    let cellOwner: PortalCellBinding | null = null;
+    const cellJournal = options.recovery?.journal ?? new RecoveryJournal();
     const closeEditor = (): void => {
+        cellOwner?.destroy();
+        cellOwner = null;
         editorControl?.destroy();
         editorControl = null;
         editor.replaceChildren();
@@ -888,21 +880,62 @@ export const createPortalView = (options: {
             );
             return;
         }
-        const control = fieldControl(
+        const cellSchema = {
+            fieldType: recordField.config.type,
+            airtableField: recordField,
+            miniExtConfig,
+        } as RuntimeFieldSchema;
+        let policyRetired = false;
+        let mounting = true;
+        const capturedPolicy = JSON.stringify([
             recordField,
             miniExtConfig,
+            displayConfig,
+        ]);
+        const editorIsCurrent = (): boolean => {
+            if (
+                JSON.stringify([recordField, miniExtConfig, displayConfig]) !==
+                capturedPolicy
+            )
+                policyRetired = true;
+            return (
+                !policyRetired &&
+                !destroyed &&
+                (mounting || (form.isConnected && editorControl === control)) &&
+                sameOwner() &&
+                data === acceptedData &&
+                fieldSelect.value === portalFieldId &&
+                viewSelect.value === selectedCustomViewId
+            );
+        };
+        const cell = createPortalCellBinding({
+            client: options.client,
+            input: {
+                portalExtensionAccessToken: page.payload.extensionAccessToken,
+                portalFieldId,
+                recordFieldId: recordField.id,
+                recordId,
+                selectedCustomViewId,
+            },
+            schema: cellSchema,
             value,
-            () => {}
-        );
+            getScope: options.getScope,
+            isCurrent: editorIsCurrent,
+            recovery: {
+                journal: cellJournal,
+                scope: {
+                    owner: options.recovery?.owner ?? owner.ownerId,
+                    parentFieldId: portalFieldId,
+                    tableId: tableId(),
+                    childExtensionId: '',
+                    context: 'modal',
+                },
+                loadVersion: owner.revision,
+            },
+        });
+        const control = mountBoundFormField(cell.binding, cellSchema, () => {});
+        cellOwner = cell;
         editorControl = control;
-        const editorIsCurrent = (): boolean =>
-            !destroyed &&
-            form.isConnected &&
-            editorControl === control &&
-            sameOwner() &&
-            data === acceptedData &&
-            fieldSelect.value === portalFieldId &&
-            viewSelect.value === selectedCustomViewId;
         form.append(element('h3', `Edit ${recordField.name}`), control.node);
         if (
             recordField.config.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
@@ -911,10 +944,18 @@ export const createPortalView = (options: {
             search.placeholder = 'Search permitted linked records';
             const choices = element('div', undefined, 'choice-list');
             let offset: string | null = null;
+            let optionGeneration = 0;
             const fetchOptions = (more: boolean): void => {
+                const expectedGeneration = ++optionGeneration;
+                const query = search.value;
                 void run(
                     'Loading permitted linked choices…',
                     async ({ client, signal, current }) => {
+                        if (
+                            !editorIsCurrent() ||
+                            !cell.binding.getSnapshot().canEdit
+                        )
+                            return;
                         const portalTableId = tableId();
                         if (portalTableId == null) return;
                         const result =
@@ -927,15 +968,31 @@ export const createPortalView = (options: {
                                     portalFieldId: fieldSelect.value,
                                     filter: {
                                         viewType: 'list',
-                                        searchTerm: search.value,
+                                        searchTerm: query,
                                     },
                                     offset: more ? offset : null,
                                 },
                                 { signal }
                             );
-                        if (!current()) return;
+                        if (
+                            !current() ||
+                            !editorIsCurrent() ||
+                            optionGeneration !== expectedGeneration ||
+                            search.value !== query
+                        )
+                            return;
                         if (!more) choices.replaceChildren();
                         offset = result.offset;
+                        const previousOptions = more
+                            ? (cell.binding.selection?.getState().options ?? [])
+                            : [];
+                        cell.binding.selection?.setOptions([
+                            ...previousOptions,
+                            ...result.records.map((option) => ({
+                                value: option.id,
+                                label: 'Linked record',
+                            })),
+                        ]);
                         for (const option of result.records) {
                             const checkbox = element('input');
                             checkbox.type = 'checkbox';
@@ -944,7 +1001,13 @@ export const createPortalView = (options: {
                                 Array.isArray(currentValue) &&
                                 currentValue.includes(option.id);
                             checkbox.addEventListener('change', () => {
-                                const previous = control.read();
+                                if (
+                                    !editorIsCurrent() ||
+                                    !cell.binding.getSnapshot().canEdit
+                                )
+                                    return;
+                                const previous =
+                                    cell.binding.getSnapshot().value;
                                 const selected = new Set(
                                     Array.isArray(previous)
                                         ? previous.filter(
@@ -955,7 +1018,7 @@ export const createPortalView = (options: {
                                 );
                                 if (checkbox.checked) selected.add(option.id);
                                 else selected.delete(option.id);
-                                control.write([...selected]);
+                                cell.binding.setValue([...selected]);
                             });
                             const linkedTableId =
                                 recordField.config.type ===
@@ -988,6 +1051,11 @@ export const createPortalView = (options: {
             const moreButton = button('More choices', () => fetchOptions(true));
             moreButton.disabled = true;
             search.addEventListener('input', () => {
+                if (!editorIsCurrent() || !cell.binding.getSnapshot().canEdit)
+                    return;
+                optionGeneration += 1;
+                cell.binding.selection?.setSearchInput(search.value);
+                choices.replaceChildren();
                 offset = null;
                 moreButton.disabled = true;
             });
@@ -1022,23 +1090,13 @@ export const createPortalView = (options: {
                         throw new Error(
                             'Reload the Portal before saving another cell.'
                         );
-                    const input = {
-                        portalExtensionAccessToken:
-                            page.payload.extensionAccessToken,
-                        portalFieldId,
-                        recordFieldId: recordField.id,
-                        recordId,
-                        value: gridValue(control.read()),
-                        selectedCustomViewId,
-                    };
                     signal.throwIfAborted();
-                    // Once dispatched, even cancellation or a lost response
-                    // can leave changed parent data on the server. Keep the
-                    // inline draft, but retire its captured child/read context.
-                    retireCollection();
-                    needsRefresh = true;
-                    const result = await client.portals.updateGridCell(input, {
+                    const result = await cell.save({
                         signal,
+                        dispatched: () => {
+                            retireCollection();
+                            needsRefresh = true;
+                        },
                     });
                     if (!current()) return;
                     const linkedTableId = tableId();
@@ -1082,6 +1140,7 @@ export const createPortalView = (options: {
             );
         });
         editor.append(form);
+        mounting = false;
         control.node
             .querySelector('input, select, textarea')
             ?.scrollIntoView({ block: 'nearest' });
@@ -1164,10 +1223,7 @@ export const createPortalView = (options: {
                             // Attachment entry carries a captured display policy.
                             // A retained row must never promote it into a newer
                             // snapshot/owner with the same native record ID.
-                            if (
-                                recordField.config.type ===
-                                AirtableFieldType.MULTIPLE_ATTACHMENTS
-                            ) {
+                            {
                                 const owner = options.getScope();
                                 if (
                                     destroyed ||

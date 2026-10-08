@@ -3711,6 +3711,82 @@ export async function checkBrowserPortalExample({
                 }
             );
         }
+        await check(
+            'shared Portal binding retains native edited text and rejects old row entry across view/owner replacement',
+            async () => {
+                for (const replacement of ['view', 'owner']) {
+                    const h = await mount({
+                        handlers: {
+                            list: () =>
+                                page([record('rec_one', 'Original', 1)]),
+                            grid: ({ input }) => ({
+                                record: {
+                                    id: input.recordId,
+                                    fields: { fld_title: input.value },
+                                },
+                                auditTrail: null,
+                                auditTrails: [],
+                            }),
+                        },
+                    });
+                    await h.click('Load records');
+                    const oldEdit = button(h.view.node, 'Edit cell');
+                    oldEdit.click();
+                    const input = h.view.node.querySelector(
+                        'input[data-field-id="fld_title"]'
+                    );
+                    input.value = 'Bound cell edit';
+                    change(h.window, input, 'input');
+                    assert.equal(input.value, 'Bound cell edit');
+                    assert.equal(
+                        h.calls.filter((c) => c.operation === 'grid').length,
+                        0
+                    );
+                    if (replacement === 'owner') h.switchOwner('visitor_B');
+                    else {
+                        const view = [
+                            ...h.view.node.querySelectorAll('select'),
+                        ].find((s) =>
+                            [...s.options].some((o) => o.value === 'view_other')
+                        );
+                        view.value = 'view_other';
+                        change(h.window, view);
+                    }
+                    await h.click('Load records');
+                    oldEdit.dispatchEvent(
+                        new h.window.Event('click', { bubbles: true })
+                    );
+                    assert.equal(
+                        h.view.node.querySelector(
+                            'input[data-field-id="fld_title"]'
+                        ),
+                        null,
+                        'Retained row must not open an editor on the successor.'
+                    );
+                    submit(h.window, input.closest('form'));
+                    await h.settle();
+                    assert.equal(
+                        h.calls.filter((c) => c.operation === 'grid').length,
+                        0
+                    );
+                    button(h.view.node, 'Edit cell').click();
+                    const fresh = h.view.node.querySelector(
+                        'input[data-field-id="fld_title"]'
+                    );
+                    fresh.value = 'Successor edit';
+                    change(h.window, fresh, 'input');
+                    submit(h.window, fresh.closest('form'));
+                    await h.settle();
+                    assert.deepEqual(
+                        h.calls
+                            .filter((c) => c.operation === 'grid')
+                            .map((c) => c.input.value),
+                        ['Successor edit']
+                    );
+                    await h.dispose();
+                }
+            }
+        );
         await checkPortalAttachmentCases({ check, mount, editablePortal });
         const baselineChecks = checks;
         await checkPortalSortCases({

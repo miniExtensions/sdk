@@ -1,3 +1,4 @@
+import { createFieldBinding } from './fieldBinding.js';
 import {
     createFormAttachmentController,
     type FormAttachmentController,
@@ -392,55 +393,11 @@ export function createFormFieldBindings(
             epoch === fieldEpoch &&
             entries.get(id)?.binding === binding;
         const listeners = new Set<(state: FormFieldSnapshot) => void>();
-        const binding: FormFieldBinding = {
-            selection: model,
-            setValue: (value) => {
-                if (!ownsBinding())
-                    return { accepted: false, reason: 'retired' };
-                if (!binding.getSnapshot().canEdit)
-                    return { accepted: false, reason: 'blocked' };
-                if (model) {
-                    let values: string[] | null;
-                    if (descriptor.fieldType === 'multipleRecordLinks')
-                        values = linkedValues(value);
-                    else if (descriptor.fieldType === 'singleSelect')
-                        values =
-                            value == null
-                                ? []
-                                : typeof value === 'string'
-                                  ? value === ''
-                                      ? []
-                                      : [value]
-                                  : null;
-                    else
-                        values =
-                            Array.isArray(value) &&
-                            Array.from(value).every(
-                                (item, index) =>
-                                    Object.hasOwn(value, index) &&
-                                    typeof item === 'string' &&
-                                    item !== ''
-                            )
-                                ? ([...value] as string[])
-                                : value == null
-                                  ? []
-                                  : null;
-                    if (values === null)
-                        return { accepted: false, reason: 'invalid-value' };
-                    if (!model.canChoose(values))
-                        return { accepted: false, reason: 'invalid-value' };
-                    model.choose(values);
-                    return model.getState().value.length ===
-                        new Set(values).size &&
-                        values.every((item) =>
-                            model.getState().value.includes(item)
-                        )
-                        ? { accepted: true }
-                        : { accepted: false, reason: 'invalid-value' };
-                }
-                return setValue(id, value);
-            },
-            getSnapshot: () => {
+        const binding: FormFieldBinding = createFieldBinding({
+            fieldType: descriptor.fieldType,
+            model,
+            write: (value) => setValue(id, value),
+            snapshot: () => {
                 const live = ownsBinding();
                 const now = controller.getState();
                 return structuredClone({
@@ -495,7 +452,7 @@ export function createFormFieldBindings(
                 listener(binding.getSnapshot());
                 return () => listeners.delete(listener);
             },
-        };
+        });
         entries.set(id, {
             binding,
             listeners,

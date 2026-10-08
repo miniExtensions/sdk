@@ -43,6 +43,9 @@ export async function checkReactBindingConsumer({
     const forms = await import(
         pathToFileURL(join(packageRoot, 'dist/esm/forms/index.js'))
     );
+    const portals = await import(
+        pathToFileURL(join(packageRoot, 'dist/esm/portals/index.js'))
+    );
     const cjs = consumer('@miniextensions/sdk/react');
     for (const name of [
         'TextField',
@@ -405,6 +408,99 @@ export async function checkReactBindingConsumer({
         );
         assert.equal(writes, 1);
         returned.destroy();
+        // The same optional React renderer consumes a Portal cell binding, without a Form load.
+        const gridCalls = [];
+        const portalClient = {
+            getSession: () => ({}),
+            portals: {
+                updateGridCell: async (input) => {
+                    gridCalls.push(structuredClone(input));
+                    return {
+                        record: {
+                            id: input.recordId,
+                            fields: { [input.recordFieldId]: input.value },
+                        },
+                        auditTrail: null,
+                        auditTrails: [],
+                    };
+                },
+            },
+        };
+        const cell = portals.createPortalCellBinding({
+            client: portalClient,
+            schema: loaded.payload.fieldIdsToSchemas.fld_title,
+            value: 'Cell initial',
+            input: {
+                portalExtensionAccessToken: 'portal-token',
+                portalFieldId: 'fld_children',
+                recordFieldId: 'fld_title',
+                recordId: 'rec_one',
+                selectedCustomViewId: 'view_example',
+            },
+            getScope: () => ({ ownerId: 'A', revision: 0 }),
+            isCurrent: () => true,
+            recovery: {
+                journal: new forms.RecoveryJournal(),
+                scope: {
+                    owner: 'A',
+                    parentFieldId: 'fld_children',
+                    tableId: 'tbl_children',
+                    childExtensionId: '',
+                    context: 'modal',
+                },
+                loadVersion: 1,
+            },
+        });
+        await act(async () =>
+            root.render(
+                createElement(
+                    StrictMode,
+                    {},
+                    createElement(api.TextField, { binding: cell.binding })
+                )
+            )
+        );
+        await act(async () => cell.binding.setValue('Cell custom edit'));
+        assert.equal(
+            container.querySelector('input').value,
+            'Cell custom edit'
+        );
+        await act(async () => root.render(null));
+        await act(async () =>
+            root.render(
+                createElement(api.TextField, {
+                    binding: cell.binding,
+                    render: ({ snapshot, binding }) =>
+                        createElement(
+                            'button',
+                            {
+                                onClick: () =>
+                                    binding.setValue('Cell render-prop edit'),
+                            },
+                            snapshot.value
+                        ),
+                })
+            )
+        );
+        assert.equal(
+            container.querySelector('button').textContent,
+            'Cell custom edit'
+        );
+        await act(async () => container.querySelector('button').click());
+        assert.equal(cell.binding.getSnapshot().value, 'Cell render-prop edit');
+        assert.equal(gridCalls.length, 0);
+        await act(async () => cell.save());
+        assert.deepEqual(gridCalls, [
+            {
+                portalExtensionAccessToken: 'portal-token',
+                portalFieldId: 'fld_children',
+                recordFieldId: 'fld_title',
+                recordId: 'rec_one',
+                selectedCustomViewId: 'view_example',
+                value: 'Cell render-prop edit',
+            },
+        ]);
+        cell.destroy();
         return {
             checks: 1,
             reactVersion: react.version,

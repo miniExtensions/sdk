@@ -13,3 +13,6 @@ export type {
     PortalCollectionErrorCode,
     PortalCollection,
 } from './types.js';
+
+export { createPortalCellBinding } from './cell.js';
+export type { PortalCellBinding, PortalCellBindingOptions } from './cell.js';

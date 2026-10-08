@@ -1,3 +1,8 @@
+import {
+    checkButtonConsumer,
+    buttonTypedConsumer,
+    buttonReactTypedConsumer,
+} from './button-consumer-checks.mjs';
 import { rendererTypeConsumer } from './renderer-type-consumer.mjs';
 import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
@@ -545,6 +550,7 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
     const declarationConsumer =
         consumer +
         rendererTypeConsumer +
+        buttonTypedConsumer +
         `
 import type { ListConditionalFilterPrimaryValuesInput, ConditionalFilterPrimaryValue, ConditionalFilterData, ListAddressPredictionsInput, AddressPrediction, GetFormattedAddressInput, TriggerConfiguredButtonWebhookInput, ConfiguredButtonWebhookSource, TriggerConfiguredButtonWebhookResult } from '@miniextensions/sdk';
 export async function checkAdditionalRuntimeTypes(client: MiniExtensionsClient, signal: AbortSignal) {
@@ -829,6 +835,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
 `
     );
     reactSources.push('field-bindings-react.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'button-react-consumer.tsx'),
+        buttonReactTypedConsumer
+    );
+    reactSources.push('button-react-consumer.tsx');
     run(process.execPath, [
         require.resolve('typescript/bin/tsc'),
         '--noEmit',
@@ -850,6 +861,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             happyDomModulePath: require.resolve('happy-dom'),
         }),
         17
+    );
+    const buttonProof = await checkButtonConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(buttonProof.checks, 67);
+    console.log(
+        `Installed Button model and custom React renderers: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
     );
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,

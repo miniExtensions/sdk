@@ -14,7 +14,7 @@ export type RecoveryAttempt = {
     recordId: string | null;
     fieldId: string | null;
     loadVersion: number;
-    operation: 'save' | 'upload' | 'choice';
+    operation: 'save' | 'upload' | 'choice' | 'button';
     outcome:
         | 'not-submitted'
         | 'not-dispatched'
@@ -22,7 +22,8 @@ export type RecoveryAttempt = {
         | 'saved'
         | 'validation-error'
         | 'uploaded'
-        | 'choice-created';
+        | 'choice-created'
+        | 'webhook-success';
     flight: boolean;
     acknowledgment: 'none' | 'existing-request' | 'new-intent';
     associatedRecordId: string | null;
@@ -51,6 +52,37 @@ export const sameRecoveryRelationship = (
     left.parentFieldId === right.parentFieldId &&
     left.tableId === right.tableId &&
     left.context === right.context;
+/** Internal observation for owner-held Button models; no retained input is exposed. */
+type RecoveryChange = {
+    scope: RecoveryScope;
+    recordId: string | null;
+};
+const observers = new WeakMap<
+    RecoveryJournal,
+    Set<(change: RecoveryChange) => void>
+>();
+export function subscribeRecoveryJournal(
+    journal: RecoveryJournal,
+    listener: (change: RecoveryChange) => void
+): () => void {
+    let listeners = observers.get(journal);
+    if (!listeners) observers.set(journal, (listeners = new Set()));
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+}
+const notifyRecoveryChange = (
+    journal: RecoveryJournal,
+    attempt: RecoveryAttempt
+) => {
+    for (const listener of [...(observers.get(journal) ?? [])]) {
+        try {
+            listener({
+                scope: { ...attempt.scope },
+                recordId: attempt.recordId,
+            });
+        } catch {}
+    }
+};
 /** Operation guards survive in-page teardown; a document reload loses the journal. */
 export class RecoveryJournal {
     private attempts: RecoveryAttempt[] = [];
@@ -120,6 +152,7 @@ export class RecoveryJournal {
         attempt.loadVersion = loadVersion;
         attempt.outcome = 'unknown';
         attempt.flight = true;
+        notifyRecoveryChange(this, attempt);
         return attempt;
     }
     /** Only a proven pre-transport disposition may settle the exact active journal attempt. */
@@ -134,27 +167,38 @@ export class RecoveryJournal {
         attempt.outcome = 'not-dispatched';
         attempt.flight = false;
         attempt.retainedInput = [];
+        notifyRecoveryChange(this, attempt);
         return true;
     }
     finishFlight(attempt: RecoveryAttempt): void {
+        const wasFlying = attempt.flight;
         attempt.flight = false;
+        if (wasFlying) notifyRecoveryChange(this, attempt);
     }
     accepted(
         attempt: RecoveryAttempt,
-        outcome: 'saved' | 'validation-error' | 'uploaded' | 'choice-created'
+        outcome:
+            | 'saved'
+            | 'validation-error'
+            | 'uploaded'
+            | 'choice-created'
+            | 'webhook-success'
     ): void {
         attempt.outcome = outcome;
         attempt.flight = false;
+        notifyRecoveryChange(this, attempt);
     }
     acknowledgeExisting(attempt: RecoveryAttempt, recordId: string): void {
         this.assertSettled(attempt);
         attempt.acknowledgment = 'existing-request';
         attempt.associatedRecordId = recordId;
+        notifyRecoveryChange(this, attempt);
         // A human association is NOT proof the attempt created or updated this record.
     }
     acknowledgeNewIntent(attempt: RecoveryAttempt): void {
         this.assertSettled(attempt);
         attempt.acknowledgment = 'new-intent';
+        notifyRecoveryChange(this, attempt);
         // Original outcome remains unknown. It is never replayed or marked failed.
     }
     private assertSettled(attempt: RecoveryAttempt): void {

@@ -324,3 +324,70 @@ public text. Stock date controls honor password masking and do not add rich HTML
 links or automatic formatting back into native values. Stock controls use text
 inputs so partial input and explicit offsets remain visible; no native date-picker
 or accessibility certification is claimed by synthetic consumer tests.
+
+## Configured Button actions
+
+Button values are computed or readonly native values, but value editability does not decide whether a configured action is available. The SDK owns action state; the app owns markup, navigation and localized fallback feedback. There is no default visual Button component in this slice.
+
+```ts
+import { createFormButtonFieldModel } from '@miniextensions/sdk/ui';
+import type {
+    FormFieldBindings,
+    RecoveryScope,
+    RecoveryJournal,
+} from '@miniextensions/sdk/forms';
+import type { MiniExtensionsClient } from '@miniextensions/sdk';
+
+declare const fields: FormFieldBindings;
+declare const client: MiniExtensionsClient;
+declare const journal: RecoveryJournal;
+declare const scope: RecoveryScope;
+declare const loadVersion: number;
+declare function ownsAcceptedForm(): boolean;
+declare function configurationRevision(): number;
+
+export const button = createFormButtonFieldModel({
+    fields,
+    client,
+    fieldId: 'fld_button',
+    recovery: { journal, scope, loadVersion },
+    isCurrent: ownsAcceptedForm,
+    configurationRevision,
+});
+// No request here. A deliberate user action uses revision-bound render props.
+export const prepareButtonLink = () => button.getRenderProps().prepareLink();
+```
+
+`createButtonFieldModel`, `createFormButtonFieldModel`, `createPortalButtonFieldModel` and their option/state/render-prop types are exported by `/ui`. `useButtonField(model)` is exported only by the optional `/react` entry. The app keeps the model with its accepted host; ordinary React remounts unsubscribe without canceling or disposing it. Retire the model when replacing that host.
+
+```tsx
+import { createElement } from 'react';
+import { useButtonField } from '@miniextensions/sdk/react';
+import type { ButtonFieldModel } from '@miniextensions/sdk/ui';
+
+export function AppButton({ model }: { model: ButtonFieldModel }) {
+    const props = useButtonField(model);
+    return createElement(
+        'button',
+        {
+            type: 'button',
+            disabled: !props.canTrigger,
+            'aria-busy': props.busy,
+            onClick: () => {
+                void props.triggerWebhook();
+            },
+        },
+        props.value?.label ?? 'Action'
+    );
+}
+```
+
+Render props contain detached native metadata/value, effective configuration, language, phase, eligibility and feedback, plus bound `prepareLink`, `triggerWebhook`, `cancel` and `acknowledgeNewIntent` actions. They contain no token, webhook source, Redux session ID or source override. Retained actions reject stale revisions. Link descriptors use `_self`, `_blank` or `_parent` (missing mode defaults to `_blank`) and the established protocol-prefix behavior: HTTP(S), mailto, tel and leading `/` are preserved; other strings receive `https://`. The app decides whether and how to navigate; preparation performs no I/O.
+
+The Form adapter derives a current-record source only from an accepted edit Form. An unsaved create Form has no fabricated record source. `acceptedLinkedContext` can instead bind a Form to an accepted Portal row, even in create context: it requires the SDK list owner/revision, the same client, that owner’s accepted loaded Portal and exact record ID, with matching native table/field metadata. A copied owner or unrelated loaded Portal is refused. This linked source is paired with the accepted parent Portal token and uses that row’s returned Portal detail mode and feedback messages; a current-record source uses the accepted edit Form token and Form action configuration. The Portal adapter requires accepted listed membership, unique physical Button metadata and a visible returned detail. Returned detail configuration controls Button action settings as well as display policy. It already includes accepted upstream child settings and any custom detail overrides; the adapter does not merge child action settings again. Readonly or computed flags do not grant or deny backend action permission. Neither adapter uses inline cell Save to trigger a Button.
+
+`triggerWebhookGET` and `triggerWebhookPOST` call only `client.buttons.triggerWebhook` with the captured field/token/source. The backend resolves the configured URL, method and permission. The model claims singleflight before host callbacks and rechecks its lease before dispatch. Observe accepted configuration changes through a monotonic `configurationRevision`; owner/session/token/source or metadata replacement retires the old model. These fences cover observed changes, not an unobserved in-place A→B→A.
+
+The response is only `{ success: boolean }`. A true result is reported success, not proof of downstream persistence. False may mean refusal or an external failure after dispatch; it remains uncertain and is never described as a safe retry. Transport loss and cancellation after dispatch also retain uncertainty. Proven cancellation before dispatch is recorded as not dispatched. The shared journal gains a distinct Button operation/success disposition; Save, upload and Add Choice outcomes retain their semantics. Journal entries retain no Button label, URL or configured message. Models for the same current recovery relationship observe pending/uncertain guard state and update eligibility on settlement or explicit new intent. They do not copy another model's feedback. A late completion can settle its own original attempt, never publish feedback into a successor. Settled uncertainty requires explicit `acknowledgeNewIntent`; that preserves the original tombstone and performs no retry or request. Pending attempts cannot be acknowledged.
+
+Configured success/error strings use nullish fallback, preserving an intentional empty string. A null feedback text asks the app to supply a localized default. Model disposal clears exposed field data and listeners while preserving journal disposition. Tests use fake transport and installed React custom renderers; they do not establish live cross-origin webhook readiness, native browser interaction or downstream persistence. Grid/List aggregates and default renderer styling remain separate work.

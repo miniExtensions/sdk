@@ -1,4 +1,8 @@
-import type { ListPortalLinkedRecordsResult } from '../runtime/types.js';
+import type {
+    ListPortalLinkedRecordsResult,
+    MiniExtensionsClient,
+    PortalLoadedResult,
+} from '../runtime/types.js';
 import { createPortalCollection, PortalCollectionError } from './collection.js';
 import { captureCriteria } from './helpers.js';
 import type {
@@ -62,6 +66,27 @@ export type PortalListOwner = {
     cancel(revision: number): void;
     destroy(): void;
 };
+
+// Internal host-adapter provenance. Credentials stay out of renderer snapshots
+// and this reader is deliberately not exported by the public /portals entry.
+const ownerContexts = new WeakMap<
+    PortalListOwner,
+    {
+        client: MiniExtensionsClient;
+        portal: PortalLoadedResult;
+        isCurrent(revision: number): boolean;
+    }
+>();
+export function readPortalListOwnerContext(
+    owner: PortalListOwner,
+    revision: number,
+    client: MiniExtensionsClient
+): PortalLoadedResult | null {
+    const context = ownerContexts.get(owner);
+    if (!context || context.client !== client || !context.isCurrent(revision))
+        return null;
+    return structuredClone(context.portal);
+}
 
 /** Read-only list/table ownership. Rendering, mutations and visitor storage remain separate. */
 export function createPortalListOwner(
@@ -301,7 +326,7 @@ export function createPortalListOwner(
             }
         }
     };
-    return {
+    const owner: PortalListOwner = {
         getSnapshot: () => {
             current();
             return snapshot();
@@ -391,4 +416,13 @@ export function createPortalListOwner(
             listeners.clear();
         },
     };
+    ownerContexts.set(owner, {
+        client: options.client,
+        portal,
+        isCurrent: (expected) =>
+            owned(expected) &&
+            active === null &&
+            (phase === 'ready' || phase === 'empty'),
+    });
+    return owner;
 }

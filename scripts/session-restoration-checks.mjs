@@ -118,6 +118,84 @@ export async function checkSessionRestoration({
         });
     };
     let checks = 0;
+    const rootSeed = setup(store(), { context: '' });
+    await remember(rootSeed);
+    const rootKey = [...rootSeed.shared.data.keys()][0];
+    assert.equal(JSON.parse(rootKey.slice(rootKey.indexOf(':') + 1))[1], '');
+    const rootFresh = setup(rootSeed.shared, { context: '' });
+    assert.equal(rootFresh.reads(), 0);
+    assert.deepEqual(await rootFresh.owner.restore(), accepted);
+    assert.equal(rootFresh.reads(), 1);
+    assert.ok(
+        Object.values(rootFresh.client.getSession()).includes(
+            'SYNTHETIC_ENCRYPTED_LOGIN'
+        )
+    );
+    checks++;
+    for (const override of [
+        { context: 'global' },
+        { context: 'other' },
+        { apiOrigin: 'https://other.example.test' },
+        {
+            page: {
+                ...page,
+                payload: { ...page.payload, shareId: 'other_share' },
+            },
+            loadInput: { ...input, shareId: 'other_share' },
+        },
+        {
+            page: {
+                ...page,
+                payload: { ...page.payload, loginFieldNames: ['Other'] },
+            },
+        },
+    ]) {
+        const otherRoot = setup(rootSeed.shared, { context: '', ...override });
+        assert.equal(await otherRoot.owner.restore(), null);
+        assert.equal(otherRoot.reads(), 0);
+        assert.equal(rootSeed.shared.data.size, 1);
+        otherRoot.owner.destroy();
+        checks++;
+    }
+    for (const context of [undefined, null, false, 0, {}, []]) {
+        const shared = store();
+        assert.throws(
+            () => setup(shared, { context }),
+            /explicit string context/
+        );
+        assert.equal(shared.data.size, 0);
+        assert.equal(shared.listenerCount(), 0);
+        checks++;
+    }
+    const omittedStorage = store();
+    const omittedClient = runtime.createMiniExtensionsClient({
+        apiOrigin: 'https://sdk.example.test',
+        fetch: async () => {
+            throw Error('No load before explicit context');
+        },
+    });
+    assert.throws(
+        () =>
+            auth.createSessionRestoration({
+                client: omittedClient,
+                page,
+                apiOrigin: 'https://sdk.example.test',
+                loadInput: input,
+                storage: omittedStorage.storage,
+                getScope: () => ({ ownerId: 'a', revision: 0 }),
+            }),
+        /explicit string context/
+    );
+    assert.equal(omittedStorage.data.size, 0);
+    assert.equal(omittedStorage.listenerCount(), 0);
+    checks++;
+    rootFresh.owner.clear();
+    assert.equal(rootSeed.shared.data.size, 0);
+    assert.deepEqual(rootFresh.client.getSession(), {});
+    rootSeed.owner.destroy();
+    rootFresh.owner.destroy();
+    checks++;
+
     for (const action of ['clear', 'destroy']) {
         for (const operation of ['apply', 'restore']) {
             const seed = setup();

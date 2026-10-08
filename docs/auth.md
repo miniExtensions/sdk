@@ -575,6 +575,14 @@ context (the first pathname segment), and supply the accepted authentication pag
 and its root-share load input. Child/token-based loads are not restoration entry
 points. Login-page share identity must match that input.
 
+A root-hosted app at `/` has the explicit context `''`. Pass that empty string
+verbatim; it is valid and distinct from `'global'`, a share ID, and other path
+contexts. For a URL, `new URL(url).pathname.split('/')[1] ?? ''` obtains the
+first pathname segment without substituting another namespace. Missing, null
+and non-string context values are rejected. Remembered entries remain scoped
+to the exact API origin, context, root share and canonical credential key.
+The empty context changes no credential, fresh-validation or logout rules.
+
 The adapter owns one `AuthFlow`. Call its `applySession(grant)` with a grant from
 that flow to remember only the accepted **server-encrypted login credential** or
 **server-encrypted extension-password credential**. These are sensitive reusable

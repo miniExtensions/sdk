@@ -2761,7 +2761,7 @@ function installProofInspection(fixture, kind) {
     const banner = document.createElement('section');
     banner.className = 'proof-banner';
     banner.innerHTML =
-        '<h1>Synthetic packed SDK privacy proof</h1><p>Manual or separately authorized hosted W3C browser exercise. No backend, real credentials, network fallback or permission grant. Refreshing this document resets synthetic state.</p><p><a href="../index.html">All scenarios</a></p><button type="button">Inspect current trace and UI</button><pre hidden></pre>';
+        '<h1>Synthetic packed SDK privacy proof</h1><p>Manual or separately authorized automated synthetic browser exercise. No backend, real credentials, network fallback or permission grant. Refreshing this document resets synthetic state.</p><p><a href="../index.html">All scenarios</a></p><button type="button">Inspect current trace and UI</button><pre hidden></pre>';
     document.body.prepend(banner);
     const snapshot = () => {
         const application =
@@ -3434,7 +3434,11 @@ renderPanel();
             );
         const readme = `# Manual packed SDK privacy browser proof
 
-This kit needs only a static server. Serve this directory as its root and open index.html in normal Chrome with certificate verification enabled. The separately authorized hosted W3C proof may consume these exact immutable assets; label its result automated synthetic UI evidence, never independent manual exploration. Do not use CDP, certificate exceptions or changes to existing trust stores/browser profiles. The approved hosted route uses a fresh profile strictly inside its owned disposable work root and audits that concrete path's absence after cleanup. A browser/sandbox/TLS startup failure is a capability blocker, not a successful UI result. The generator installs nothing, starts no server, launches no browser and repacks no package.
+For manual exploration, serve this directory as a static-server root and open index.html in normal Chrome with certificate verification enabled. The generator installs nothing, starts no server, launches no browser and repacks no package.
+
+The current automated CI lane uses Playwright with the runner-installed official Chrome, an enabled Chromium sandbox, normal browser security defaults and a restricted loopback server. It verifies these immutable assets and the original packed SDK before execution. Its receipts establish browser.close completion and server/consumer cleanup; they do not establish a concrete browser-profile path absence audit. Label this automated synthetic UI evidence, never independent manual exploration or live-backend acceptance.
+
+Historical separately authorized hosted W3C exercises used different instructions: no CDP, a fresh profile inside an owned disposable root and a concrete profile-path cleanup audit. Those route-specific requirements are not evidence for the current Playwright lane. Neither route permits certificate exceptions, trust-store changes or sandbox/security bypasses. A browser/sandbox/TLS startup failure is a capability blocker, not a successful UI result.
 
 Package SHA256: ${packageSha256}
 Source commit: ${source.commit}

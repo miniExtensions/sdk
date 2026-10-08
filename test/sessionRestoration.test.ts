@@ -48,7 +48,11 @@ const memory = (mode: 'tab' | 'persistent' = 'tab') => {
         },
     };
 };
-const setup = (store = memory(), page = loginPage()) => {
+const setup = (
+    store = memory(),
+    page = loginPage(),
+    context = 'share_example'
+) => {
     const fixture = authFixture();
     let scope = { ownerId: 'visitor-a', revision: 0 };
     const owner = createSessionRestoration({
@@ -56,7 +60,7 @@ const setup = (store = memory(), page = loginPage()) => {
         page,
         loadInput,
         apiOrigin: 'https://sdk.example.test',
-        context: 'share_example',
+        context,
         storage: store.storage,
         getScope: () => scope,
     });
@@ -84,6 +88,137 @@ const remember = async (fixture: ReturnType<typeof setup>) => {
 };
 
 describe('explicit canonical-scoped session restoration', () => {
+    it('remembers and freshly validates the explicit root context without using global', async () => {
+        const root = setup(memory(), loginPage(), '');
+        await remember(root);
+        const key = [...root.store.data.keys()][0];
+        assert.equal(JSON.parse(key.slice(key.indexOf(':') + 1))[1], '');
+        const fresh = setup(root.store, loginPage(), '');
+        const previousSession = { ...fresh.client.getSession() };
+        let reads = 0;
+        fresh.client.loadExtension = async (actual, options) => {
+            reads++;
+            assert.deepEqual(actual, loadInput);
+            assert.ok(
+                Object.values(options?.session ?? {}).includes(
+                    'encrypted_login_example'
+                )
+            );
+            return structuredClone(formResult);
+        };
+        assert.equal(reads, 0);
+        assert.deepEqual(await fresh.owner.restore(), formResult);
+        assert.equal(reads, 1);
+        assert.ok(
+            Object.values(fresh.client.getSession()).includes(
+                'encrypted_login_example'
+            )
+        );
+        const global = setup(root.store, loginPage(), 'global');
+        assert.equal(await global.owner.restore(), null);
+        assert.equal(global.loads, 0);
+        assert.equal(root.store.data.size, 1);
+        fresh.owner.clear();
+        assert.equal(root.store.data.size, 0);
+        assert.deepEqual(fresh.client.getSession(), previousSession);
+        root.owner.destroy();
+        fresh.owner.destroy();
+        global.owner.destroy();
+    });
+    it('root namespaces retain exact origin, share, context and canonical credential-key isolation', async () => {
+        const root = setup(memory(), loginPage(), '');
+        await remember(root);
+        for (const override of [
+            { context: 'global' },
+            { context: 'other' },
+            { apiOrigin: 'https://other.example.test' },
+            {
+                page: {
+                    ...loginPage(),
+                    payload: { ...loginPage().payload, shareId: 'other_share' },
+                },
+                loadInput: { ...loadInput, shareId: 'other_share' },
+            },
+            {
+                page: {
+                    ...loginPage(),
+                    payload: {
+                        ...loginPage().payload,
+                        loginFieldNames: ['Other'],
+                    },
+                },
+            },
+        ]) {
+            const f = authFixture();
+            const owner = createSessionRestoration({
+                client: f.client,
+                page: loginPage(),
+                loadInput,
+                apiOrigin: 'https://sdk.example.test',
+                context: '',
+                storage: root.store.storage,
+                getScope: () => ({ ownerId: 'a', revision: 0 }),
+                ...override,
+            });
+            assert.equal(await owner.restore(), null);
+            assert.equal(f.loads, 0);
+            assert.equal(root.store.data.size, 1);
+            owner.destroy();
+        }
+        root.owner.destroy();
+    });
+    it('missing, null and nonstring contexts still refuse before storage or loading', () => {
+        const missing = authFixture();
+        const untouched = memory();
+        assert.throws(
+            () =>
+                createSessionRestoration({
+                    client: missing.client,
+                    page: loginPage(),
+                    loadInput,
+                    apiOrigin: 'https://sdk.example.test',
+                    storage: untouched.storage,
+                    getScope: () => ({ ownerId: 'a', revision: 0 }),
+                } as never),
+            /explicit string context/
+        );
+        assert.equal(missing.loads, 0);
+        assert.equal(untouched.listenerCount(), 0);
+        assert.equal(untouched.data.size, 0);
+
+        for (const context of [undefined, null, false, 0, {}, []]) {
+            const f = authFixture();
+            let storageCalls = 0;
+            assert.throws(
+                () =>
+                    createSessionRestoration({
+                        client: f.client,
+                        page: loginPage(),
+                        loadInput,
+                        apiOrigin: 'https://sdk.example.test',
+                        context: context as never,
+                        storage: {
+                            mode: 'tab',
+                            getItem: () => {
+                                storageCalls++;
+                                return null;
+                            },
+                            setItem: () => {
+                                storageCalls++;
+                            },
+                            removeItem: () => {
+                                storageCalls++;
+                            },
+                        },
+                        getScope: () => ({ ownerId: 'a', revision: 0 }),
+                    }),
+                /explicit string context/
+            );
+            assert.equal(storageCalls, 0);
+            assert.equal(f.loads, 0);
+        }
+    });
+
     it('setter clear/destroy reentry cannot publish restored or remember after retirement', async () => {
         for (const action of ['clear', 'destroy'] as const) {
             for (const operation of ['apply', 'restore'] as const) {

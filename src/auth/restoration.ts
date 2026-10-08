@@ -41,7 +41,7 @@ export type SessionRestorationOptions = {
     page: AuthPage;
     /** Origin used to construct this client; the caller must supply it accurately. */
     apiOrigin: string;
-    /** Canonical hosted context (first pathname segment), supplied explicitly by the app. */
+    /** Canonical first pathname segment, explicitly supplied; root path uses the empty string. */
     context: string;
     loadInput: Extract<LoadExtensionInput, { shareId: string }>;
     getScope(): AuthOwnerScope;
@@ -107,11 +107,10 @@ const createSessionRestorationInternal = (
     if (
         origin.origin !== options.apiOrigin ||
         !['http:', 'https:'].includes(origin.protocol) ||
-        typeof options.context !== 'string' ||
-        options.context.length === 0
+        typeof options.context !== 'string'
     )
         throw new TypeError(
-            'An exact API origin and explicit nonempty context are required.'
+            'An exact API origin and explicit string context are required.'
         );
     if (
         !['tab', 'persistent'].includes(storage.mode) ||

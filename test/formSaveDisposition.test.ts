@@ -44,16 +44,17 @@ const fixture = () => {
     let attempt: RecoveryAttempt | undefined;
     const lifecycle = (hook: () => void = () => {}) => ({
         dispatch() {
-            attempt = journal.begin(scope, null, 'save', 1);
-            attempt.retainedInput = [{ title: 'Reference', value: 'Draft' }];
+            const captured = journal.begin(scope, null, 'save', 1);
+            attempt = captured;
+            captured.retainedInput = [{ title: 'Reference', value: 'Draft' }];
             hook();
             return {
-                accepted: () => journal.accepted(attempt!, 'saved'),
+                accepted: () => journal.accepted(captured, 'saved'),
                 finish: (disposition: FormSaveDisposition) => {
                     dispositions.push(disposition);
                     if (disposition === 'not-dispatched')
-                        journal.notDispatched(attempt!);
-                    else journal.finishFlight(attempt!);
+                        journal.notDispatched(captured);
+                    else journal.finishFlight(captured);
                 },
             };
         },
@@ -235,4 +236,126 @@ it('journal disposition fails closed for foreign, settled, acknowledged or compl
     assert.equal(a.notDispatched(noSend), false);
     const next = a.begin(scope, null, 'save', 4, null, noSend);
     assert.notEqual(next.id, noSend.id);
+});
+it('subscribers receive usable readiness only after known-no-dispatch cleanup settles', async () => {
+    const f = fixture();
+    let live = true,
+        started = false;
+    const observed: Array<{
+        status: string;
+        canSave: boolean;
+        blocked: boolean;
+    }> = [];
+    const stop = f.controller.subscribe((state) => {
+        observed.push({
+            status: state.status,
+            canSave: state.canSave,
+            blocked: f.journal.blocking(scope, null) !== undefined,
+        });
+        if (state.status === 'saving') started = true;
+    });
+    await assert.rejects(
+        f.controller.save({
+            isCurrent: () => live,
+            lifecycle: f.lifecycle(() => {
+                live = false;
+            }),
+        })
+    );
+    assert.equal(started, true);
+    assert.deepEqual(
+        observed.map((s) => [s.status, s.canSave]),
+        [
+            ['ready', true],
+            ['saving', false],
+            ['ready', true],
+        ]
+    );
+    assert.equal(observed.at(-1)!.blocked, false);
+    assert.equal(f.calls, 0);
+    assert.deepEqual(f.dispositions, ['not-dispatched']);
+    stop();
+    f.controller.destroy();
+});
+it('restored-readiness subscriber can begin a successor Save which old finally cannot clear', async () => {
+    const f = fixture();
+    let live = true,
+        armed = false;
+    let successor: Promise<unknown> | undefined;
+    let release!: (v: SaveFormResult) => void;
+    f.respond(
+        () =>
+            new Promise((resolve) => {
+                release = resolve;
+            })
+    );
+    const stop = f.controller.subscribe((state) => {
+        if (armed && state.status === 'ready' && state.canSave) {
+            armed = false;
+            successor = f.controller.save({ lifecycle: f.lifecycle() });
+        }
+    });
+    await assert.rejects(
+        f.controller.save({
+            isCurrent: () => live,
+            lifecycle: f.lifecycle(() => {
+                live = false;
+                armed = true;
+            }),
+        })
+    );
+    assert(successor);
+    assert.equal(f.calls, 1);
+    assert.equal(f.controller.getState().status, 'saving');
+    assert.equal(f.controller.getState().canSave, false);
+    assert.deepEqual(f.dispositions, ['not-dispatched']);
+    release(savedForm());
+    await successor;
+    assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
+    assert.equal(f.controller.getState().status, 'saved');
+    stop();
+    f.controller.destroy();
+});
+it('no-dispatch finish callback can start a successor without old readiness publication', async () => {
+    const f = fixture();
+    let live = true;
+    let successor: Promise<unknown> | undefined;
+    let release!: (v: SaveFormResult) => void;
+    f.respond(
+        () =>
+            new Promise((resolve) => {
+                release = resolve;
+            })
+    );
+    const base = f.lifecycle(() => {
+        live = false;
+    });
+    await assert.rejects(
+        f.controller.save({
+            isCurrent: () => live,
+            lifecycle: {
+                dispatch() {
+                    const operation = base.dispatch();
+                    return {
+                        ...operation,
+                        finish(disposition: FormSaveDisposition) {
+                            operation.finish(disposition);
+                            successor = f.controller.save({
+                                lifecycle: f.lifecycle(),
+                            });
+                        },
+                    };
+                },
+            },
+        })
+    );
+    assert(successor);
+    assert.equal(f.calls, 1);
+    assert.equal(f.controller.getState().status, 'saving');
+    assert.equal(f.controller.getState().canSave, false);
+    release(savedForm());
+    await successor;
+    assert.equal(f.controller.getState().status, 'saved');
+    assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
+    f.controller.destroy();
 });

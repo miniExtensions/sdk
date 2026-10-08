@@ -454,6 +454,18 @@ export const createFormController = (
                 | undefined;
             let acceptedOperation = false;
             let transportInvoked = false;
+            let operationFinished = false;
+            const finishOperation = () => {
+                if (operationFinished || operation === undefined) return;
+                operationFinished = true;
+                try {
+                    operation.finish(
+                        transportInvoked ? 'dispatched' : 'not-dispatched'
+                    );
+                } catch {
+                    // Cleanup cannot change an operation outcome or a successor owner.
+                }
+            };
             const requireAttempt = () => {
                 if (
                     saveGeneration !== generation ||
@@ -536,29 +548,37 @@ export const createFormController = (
                     !acceptedOperation
                 ) {
                     if (!observeScope()) throw scopeError();
-                    status = !transportInvoked
-                        ? 'ready'
-                        : controller.signal.aborted
-                          ? 'cancelled'
-                          : 'transport-error';
-                    errorMessage = !transportInvoked
-                        ? 'The Form Save was not dispatched. Check the current owner before a new explicit Save.'
-                        : error instanceof Error
-                          ? error.message
-                          : 'The Form save failed.';
-                    emit();
+                    if (!transportInvoked) {
+                        // Publish readiness only after releasing this operation and its journal lease.
+                        active = null;
+                        finishOperation();
+                    }
+                    if (
+                        saveGeneration === generation &&
+                        owner === context &&
+                        (transportInvoked
+                            ? active === controller
+                            : active === null)
+                    ) {
+                        if (!observeScope()) throw scopeError();
+                        status = !transportInvoked
+                            ? 'ready'
+                            : controller.signal.aborted
+                              ? 'cancelled'
+                              : 'transport-error';
+                        errorMessage = !transportInvoked
+                            ? 'The Form Save was not dispatched. Check the current owner before a new explicit Save.'
+                            : error instanceof Error
+                              ? error.message
+                              : 'The Form save failed.';
+                        emit();
+                    }
                 }
                 throw error;
             } finally {
                 externalSignal?.removeEventListener('abort', forwardAbort);
                 if (active === controller) active = null;
-                try {
-                    operation?.finish(
-                        transportInvoked ? 'dispatched' : 'not-dispatched'
-                    );
-                } catch {
-                    // Presentation cleanup cannot change an accepted operation outcome.
-                }
+                finishOperation();
             }
         },
         reset: (nextOptions) => {

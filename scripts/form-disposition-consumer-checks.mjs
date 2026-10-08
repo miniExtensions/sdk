@@ -62,16 +62,17 @@ export async function checkFormDispositionConsumer({ consumerDirectory }) {
         let attempt;
         const lifecycle = (hook = () => {}) => ({
             dispatch() {
-                attempt = journal.begin(scope, null, 'save', 1);
+                const captured = journal.begin(scope, null, 'save', 1);
+                attempt = captured;
                 hook();
                 return {
                     accepted: () =>
-                        journal.accepted(attempt, 'validation-error'),
+                        journal.accepted(captured, 'validation-error'),
                     finish(disposition) {
                         dispositions.push(disposition);
                         if (disposition === 'not-dispatched')
-                            journal.notDispatched(attempt);
-                        else journal.finishFlight(attempt);
+                            journal.notDispatched(captured);
+                        else journal.finishFlight(captured);
                     },
                 };
             },
@@ -259,6 +260,84 @@ export async function checkFormDispositionConsumer({ consumerDirectory }) {
                 f.owner.controller.getState().draft.data,
                 b.payload.formRecord.data
             );
+            checks++;
+        }
+        {
+            const f = make();
+            let live = true;
+            const states = [],
+                fields = [];
+            const stop = f.owner.controller.subscribe((state) =>
+                states.push([state.status, state.canSave])
+            );
+            const field = f.owner.field('fld_title');
+            const stopField = field.subscribe((state) =>
+                fields.push([state.pending, state.canEdit])
+            );
+            await assert.rejects(
+                f.owner.save({
+                    isCurrent: () => live,
+                    lifecycle: f.lifecycle(() => {
+                        live = false;
+                    }),
+                })
+            );
+            assert.deepEqual(states, [
+                ['ready', true],
+                ['saving', false],
+                ['ready', true],
+            ]);
+            assert.deepEqual(fields.at(-1), [false, true]);
+            assert.equal(f.journal.blocking(scope, null), undefined);
+            assert.equal(f.calls.length, 0);
+            stop();
+            stopField();
+            checks++;
+        }
+        {
+            const f = make();
+            let live = true,
+                armed = false,
+                successor,
+                release;
+            f.client.forms.save = (input) => {
+                f.calls.push(structuredClone(input));
+                return new Promise((resolve) => {
+                    release = resolve;
+                });
+            };
+            const stop = f.owner.controller.subscribe((state) => {
+                if (armed && state.status === 'ready' && state.canSave) {
+                    armed = false;
+                    successor = f.owner.save({ lifecycle: f.lifecycle() });
+                }
+            });
+            await assert.rejects(
+                f.owner.save({
+                    isCurrent: () => live,
+                    lifecycle: f.lifecycle(() => {
+                        live = false;
+                        armed = true;
+                    }),
+                })
+            );
+            assert(successor);
+            assert.equal(f.calls.length, 1);
+            assert.equal(f.owner.controller.getState().status, 'saving');
+            assert.equal(f.owner.controller.getState().canSave, false);
+            assert.deepEqual(f.dispositions, ['not-dispatched']);
+            release({
+                type: 'error',
+                formValidationErrors: [],
+                formErrors: {},
+            });
+            await successor;
+            assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
+            assert.equal(
+                f.owner.controller.getState().status,
+                'validation-error'
+            );
+            stop();
             checks++;
         }
         console.log(

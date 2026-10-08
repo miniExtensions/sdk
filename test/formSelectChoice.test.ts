@@ -20,7 +20,12 @@ const deferred = <T>() => {
     });
     return { promise, resolve, reject };
 };
-const fixture = (configure: (page: FormLoadedResult) => void = () => {}) => {
+const fixture = (
+    configure: (page: FormLoadedResult) => void = () => {},
+    onAttempt?: (
+        attempt: import('../src/forms/recovery.js').RecoveryAttempt
+    ) => void
+) => {
     const page = loadedForm();
     page.payload.fieldIdsInForm.push('fld_choice');
     page.payload.fieldIdsToSchemas.fld_choice = {
@@ -75,6 +80,7 @@ const fixture = (configure: (page: FormLoadedResult) => void = () => {}) => {
         {
             getLoaded: () => page,
             configurationRevision: () => configuration,
+            onAttempt,
         }
     );
     let calls = 0;
@@ -388,3 +394,49 @@ for (const selected of [true, false]) {
         f.owner.destroy();
     });
 }
+
+for (const exit of ['revoke', 'throw', 'cancel'] as const) {
+    it(`pre-dispatch ${exit} remains not-submitted and cannot block Save`, async () => {
+        const f = fixture(
+            () => {},
+            (attempt) => {
+                assert.equal(attempt.outcome, 'not-submitted');
+                if (exit === 'revoke') f.revoke();
+                if (exit === 'cancel') f.creator.cancel();
+                if (exit === 'throw') throw Error('callback');
+            }
+        );
+        assert.equal(await f.creator.create('Beta'), false);
+        assert.equal(f.calls(), 0);
+        assert.deepEqual(f.journal.unknown('A'), []);
+        assert.equal(f.creator.blocksForm(), false);
+        assert.equal(f.creator.getSnapshot().phase, 'idle');
+        if (exit !== 'revoke') {
+            let saves = 0;
+            f.client.forms.save = async () => {
+                saves++;
+                return invalidForm();
+            };
+            await f.owner.save();
+            assert.equal(saves, 1);
+        }
+        f.owner.destroy();
+    });
+}
+it('accepted publication cannot be cancelled back into uncertainty by a field subscriber', async () => {
+    const f = fixture();
+    const stop = f.owner.field('fld_choice').subscribe((state) => {
+        if (state.choiceCreation?.phase === 'created-selected')
+            f.creator.cancel();
+    });
+    assert.equal(await f.creator.create('Beta'), true);
+    assert.equal(f.creator.getSnapshot().phase, 'created-selected');
+    assert.deepEqual(f.owner.field('fld_choice').getSnapshot().value, [
+        'Alpha',
+        'Beta',
+    ]);
+    assert.deepEqual(f.journal.unknown('A'), []);
+    assert.equal(f.calls(), 1);
+    stop();
+    f.owner.destroy();
+});

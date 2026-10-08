@@ -295,13 +295,13 @@ export function createFormSelectChoiceController(
             const abort = new AbortController();
             let attempt: RecoveryAttempt;
             try {
-                attempt = journal.begin(
+                attempt = journal.prepare(
                     scope,
                     recordId(),
-                    'choice',
-                    options.loadVersion,
-                    fieldId
+                    options.loadVersion
                 );
+                attempt.operation = 'choice';
+                attempt.fieldId = fieldId;
             } catch {
                 return false;
             }
@@ -322,16 +322,26 @@ export function createFormSelectChoiceController(
                     revision === capturedRevision &&
                     now.key === captured.key &&
                     now.state.draftRevision === captured.state.draftRevision &&
-                    attempt.flight &&
-                    attempt.outcome === 'unknown' &&
                     attempt.acknowledgment === 'none' &&
-                    journal.blocking(scope, recordId()) === attempt
+                    (attempt.outcome === 'not-submitted'
+                        ? journal.blocking(scope, recordId()) === undefined
+                        : attempt.flight &&
+                          attempt.outcome === 'unknown' &&
+                          journal.blocking(scope, recordId()) === attempt)
                 );
             };
             try {
                 options.onAttempt?.(attempt);
                 emit();
                 if (!ownsAttempt()) return false;
+                journal.begin(
+                    scope,
+                    recordId(),
+                    'choice',
+                    options.loadVersion,
+                    fieldId,
+                    attempt
+                );
                 const result = await client.forms.addSelectOption(
                     {
                         extensionAccessToken:
@@ -408,6 +418,8 @@ export function createFormSelectChoiceController(
                     selected,
                     () => {
                         journal.accepted(attempt, 'choice-created');
+                        // Settle the operation before subscriber or renderer re-entry.
+                        if (active === abort) active = null;
                         choice = structuredClone(returned);
                         phase = selected
                             ? 'created-selected'
@@ -422,7 +434,10 @@ export function createFormSelectChoiceController(
                 journal.finishFlight(attempt);
                 if (active === abort) active = null;
                 if (current()) {
-                    if (attempt.outcome === 'unknown') {
+                    if (attempt.outcome === 'not-submitted') {
+                        phase = 'idle';
+                        error = null;
+                    } else if (attempt.outcome === 'unknown') {
                         phase = 'uncertain';
                         error =
                             'Choice creation outcome needs inspection. It will not be retried automatically.';

@@ -49,7 +49,12 @@ export async function checkSelectChoiceConsumer({
         const api = await esm('react');
         const { createElement, StrictMode, act } = require('react');
         const { createRoot } = require('react-dom/client');
-        const fixture = (config = {}, single = false) => {
+        const fixture = (
+            config = {},
+            single = false,
+            adapter = {},
+            module = forms
+        ) => {
             const page = portalRecipeFixtures.makeForm({
                 childExtensionInfo: { accessType: { type: 'create' } },
             });
@@ -73,12 +78,20 @@ export async function checkSelectChoiceConsumer({
                 miniExtConfig: { allowAddingNewOptions: true, ...config },
             };
             page.payload.fieldIdsInForm = ['fld_choice'];
+            const titleSchema = page.payload.fieldIdsToSchemas.fld_title;
             page.payload.fieldIdsToSchemas = { fld_choice: schema };
+            if (config.enableConditionalOptions) {
+                page.payload.fieldIdsInForm.push('fld_title');
+                page.payload.fieldIdsToSchemas.fld_title = titleSchema;
+            }
             page.payload.formRecord = {
                 type: 'create',
                 data: {
                     fld_choice: single ? 'Alpha' : ['Alpha'],
                     fld_hidden: 'Retained native',
+                    ...(config.enableConditionalOptions
+                        ? { fld_title: 'Present' }
+                        : {}),
                 },
             };
             page.payload.formFieldIdsWithUnsavedChanges = ['fld_hidden'];
@@ -106,7 +119,7 @@ export async function checkSelectChoiceConsumer({
                     formErrors: {},
                 };
             };
-            owner = forms.createFormFieldBindings({
+            owner = module.createFormFieldBindings({
                 client,
                 loaded: page,
                 saveOptions: {
@@ -118,7 +131,7 @@ export async function checkSelectChoiceConsumer({
                 },
                 getScope: () => ({ ownerId: 'A', revision: ownerRevision }),
             });
-            const journal = new forms.RecoveryJournal();
+            const journal = new module.RecoveryJournal();
             const scope = {
                 owner: 'A',
                 parentFieldId: null,
@@ -132,6 +145,7 @@ export async function checkSelectChoiceConsumer({
                 {
                     getLoaded: () => page,
                     configurationRevision: () => configuration,
+                    ...adapter,
                 }
             );
             return {
@@ -257,6 +271,77 @@ export async function checkSelectChoiceConsumer({
             checks++;
             owner.destroy();
         }
+        for (const ending of ['throw', 'cancel', 'revoke']) {
+            const f = fixture({}, false, {
+                onAttempt: (attempt) => {
+                    assert.equal(attempt.outcome, 'not-submitted');
+                    if (ending === 'throw') throw Error('callback');
+                    if (ending === 'cancel') f.creator.cancel();
+                    if (ending === 'revoke') {
+                        f.page.payload.fieldIdsToSchemas.fld_choice.miniExtConfig.allowAddingNewOptions = false;
+                        f.creator.getSnapshot();
+                    }
+                },
+            });
+            assert.equal(await f.creator.create('Beta'), false);
+            assert.equal(f.calls(), 0);
+            assert.deepEqual(f.journal.unknown('A'), []);
+            assert.equal(f.creator.blocksForm(), false);
+            await owner.save();
+            assert.equal(f.saves.length, 1);
+            owner.destroy();
+            checks++;
+        }
+        {
+            const f = fixture();
+            const stop = owner.field('fld_choice').subscribe((state) => {
+                if (state.choiceCreation?.phase === 'created-selected')
+                    f.creator.cancel();
+            });
+            assert.equal(await f.creator.create('Beta'), true);
+            assert.equal(f.creator.getSnapshot().phase, 'created-selected');
+            assert.deepEqual(f.journal.unknown('A'), []);
+            assert.equal(f.calls(), 1);
+            stop();
+            owner.destroy();
+            checks++;
+        }
+        for (const returned of [
+            null,
+            { id: '', name: 'Beta' },
+            { id: 'sel_alpha', name: 'Conflict' },
+        ]) {
+            const f = fixture();
+            let calls = 0;
+            f.client.forms.addSelectOption = async () => {
+                calls++;
+                return { newChoice: returned };
+            };
+            assert.equal(await f.creator.create('Beta'), false);
+            assert.equal(calls, 1);
+            assert.equal(f.journal.unknown('A').length, 1);
+            assert.deepEqual(owner.field('fld_choice').getSnapshot().value, [
+                'Alpha',
+            ]);
+            owner.destroy();
+            checks++;
+        }
+        {
+            const f = fixture(
+                {},
+                false,
+                {},
+                require('@miniextensions/sdk/forms')
+            );
+            assert.equal(await f.creator.create('CJS explicit intent'), true);
+            assert.equal(f.calls(), 1);
+            assert.deepEqual(owner.field('fld_choice').getSnapshot().value, [
+                'Alpha',
+                'Beta',
+            ]);
+            owner.destroy();
+            checks++;
+        }
         const f = fixture();
         const binding = owner.field('fld_choice');
         let heldCustom;
@@ -381,11 +466,67 @@ export async function checkSelectChoiceConsumer({
         assert.equal(await oldAction(), false);
         assert.equal(count, 2);
         checks++;
-        // CJS shares the same owner/action contract; imports do not request anything.
-        assert.equal(
-            typeof require('@miniextensions/sdk/forms').createFormFieldBindings,
-            'function'
+        const unselected = fixture({
+            enableConditionalOptions: true,
+            conditionsForOptions: [
+                {
+                    id: 'rule_beta',
+                    config: {
+                        optionForConditions: 'sel_beta',
+                        conditionsForOption: {
+                            logicalOperator: 'and',
+                            conditions: [
+                                {
+                                    id: 'false_rule',
+                                    type: 'singleCondition',
+                                    setting: {
+                                        type: 'is',
+                                        fieldType: 'singleLineText',
+                                        idOrName: {
+                                            type: 'id',
+                                            id: 'fld_title',
+                                        },
+                                        value: 'Other',
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            ],
+        });
+        const unselectedBinding = owner.field('fld_choice');
+        await act(async () =>
+            root.render(
+                createElement(
+                    'div',
+                    null,
+                    createElement(api.SelectField, {
+                        binding: unselectedBinding,
+                    }),
+                    createElement(api.SelectField, {
+                        binding: unselectedBinding,
+                        render: ({ snapshot }) =>
+                            createElement(
+                                'p',
+                                null,
+                                `Custom ${snapshot.choiceCreation?.phase}`
+                            ),
+                    })
+                )
+            )
         );
+        await act(async () => {
+            assert.equal(await unselected.creator.create('Beta'), true);
+        });
+        assert.equal(unselected.calls(), 1);
+        assert(
+            container.textContent.includes(
+                'Choice created but not currently selectable'
+            )
+        );
+        assert(container.textContent.includes('Custom created-not-selected'));
+        assert.deepEqual(unselectedBinding.getSnapshot().value, ['Alpha']);
         checks++;
         console.log(
             `[installed Add Choice] ${checks} checkpoints passed; synthetic dispatch only`

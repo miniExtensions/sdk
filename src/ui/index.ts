@@ -46,3 +46,11 @@ export {
     type ScalarFieldState,
     type ScalarFieldModelOptions,
 } from './scalarModels.js';
+
+export {
+    createDateFieldModel,
+    isDateFieldNativeValue,
+    type DateFieldModel,
+    type DateFieldState,
+    type DateFieldModelOptions,
+} from './dateModel.js';

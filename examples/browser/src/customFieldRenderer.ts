@@ -15,7 +15,8 @@ export function mountCustomField(
     let retired = false;
     input.addEventListener('input', () => {
         if (retired || !binding.getSnapshot().canEdit) return;
-        if (binding.scalar) {
+        if (binding.date) binding.date.setInput(input.value);
+        else if (binding.scalar) {
             if (binding.scalar.getState().kind === 'checkbox')
                 binding.scalar.setChecked(input.checked);
             else binding.scalar.setInput(input.value);
@@ -26,6 +27,7 @@ export function mountCustomField(
         node.inert = snapshot.retired;
         title.textContent = snapshot.field?.title ?? '';
         status.textContent =
+            snapshot.date?.error ??
             snapshot.scalar?.error ??
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n');
@@ -57,6 +59,20 @@ export function mountCustomField(
                 });
                 body.append(button);
             }
+        } else if (snapshot.date) {
+            input.setAttribute('aria-label', snapshot.field?.title ?? '');
+            const config = snapshot.field?.schema.miniExtConfig;
+            input.type =
+                config &&
+                'obscurePassword' in config &&
+                config.obscurePassword === true
+                    ? 'password'
+                    : 'text';
+            input.inputMode = '';
+            input.disabled = !snapshot.date.canEdit;
+            input.value = snapshot.date.input;
+            input.setAttribute('aria-invalid', String(!snapshot.date.valid));
+            if (!body.contains(input)) body.replaceChildren(input);
         } else if (snapshot.scalar) {
             input.setAttribute('aria-label', snapshot.field?.title ?? '');
             input.type =

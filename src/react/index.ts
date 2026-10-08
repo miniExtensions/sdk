@@ -625,3 +625,65 @@ export function PortalList({
         )
     );
 }
+
+/** Calendar-only date or explicit-offset dateTime; no browser local-time conversion. */
+export function DateField({ binding, render }: FieldProps): ReactNode {
+    useFieldBinding(binding);
+    // Date context can change independently of a native write; observe it on rerender.
+    const snapshot = binding.getSnapshot();
+    if (render) return render({ snapshot, binding });
+    if (
+        snapshot.retired ||
+        snapshot.visibility.type !== 'visible' ||
+        snapshot.date == null
+    )
+        return null;
+    if (snapshot.date.retired)
+        return createElement(
+            'p',
+            { role: 'status' },
+            'Load a fresh Form before editing this date.'
+        );
+    const privacy = snapshot.field?.schema.miniExtConfig;
+    const masked =
+        privacy != null &&
+        'obscurePassword' in privacy &&
+        privacy.obscurePassword === true;
+    return createElement(
+        'div',
+        null,
+        createElement(
+            'label',
+            null,
+            snapshot.field?.title,
+            createElement('input', {
+                type: masked ? 'password' : 'text',
+                value: snapshot.date.input,
+                disabled: !snapshot.date.canEdit,
+                'aria-invalid': !snapshot.date.valid,
+                placeholder:
+                    snapshot.date.kind === 'date'
+                        ? 'YYYY-MM-DD'
+                        : 'YYYY-MM-DDTHH:mm:ssZ',
+                onChange: (event: ChangeEvent<HTMLInputElement>) =>
+                    binding.date?.setInput(event.currentTarget.value),
+            })
+        ),
+        createElement(
+            'p',
+            { role: 'status' },
+            snapshot.date.error ?? snapshot.error ?? ''
+        ),
+        createElement(
+            'button',
+            {
+                type: 'button',
+                disabled: !snapshot.date.canEdit,
+                onClick: () => binding.date?.clear(),
+            },
+            'Clear date'
+        )
+    );
+}
+/** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
+export const DateTimeField = DateField;

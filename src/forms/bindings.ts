@@ -1,3 +1,4 @@
+import type { DateFieldModel, DateFieldState } from '../ui/dateModel.js';
 import {
     createFormSelectChoiceController,
     type FormSelectChoiceController,
@@ -66,6 +67,7 @@ export type FormFieldSnapshot = {
     validation: FormValidationMessage[];
     selection: SelectionState | null;
     scalar?: ScalarFieldState | null;
+    date?: DateFieldState | null;
     retired: boolean;
     choiceCreation?: FormSelectChoiceSnapshot | null;
 };
@@ -76,9 +78,12 @@ export type FormFieldBinding = {
     /** Renderer-neutral model; native data is written only through its user actions. */
     selection: SelectionModel | null;
     scalar: ScalarFieldModel | null;
+    date: DateFieldModel | null;
     readonly choiceCreation?: FormSelectChoiceController | null;
 };
 export type FormFieldBindingsOptions = FormControllerOptions & {
+    /** Explicit client zone for dateTime presentation; never a local-time parser. */
+    getClientTimeZone?(): string;
     /** Additional explicit UI/recovery lease. It never clears native data. */
     canWrite?(): boolean;
     /** Additional accepted-render field lease; refusal never prunes native data. */
@@ -177,6 +182,7 @@ export function createFormFieldBindings(
         for (const entry of entries.values()) {
             entry.stop?.();
             entry.model?.destroy();
+            entry.binding.date?.destroy();
         }
     };
     const current = () => {
@@ -413,6 +419,7 @@ export function createFormFieldBindings(
             entries.get(id)?.binding === binding;
         const listeners = new Set<(state: FormFieldSnapshot) => void>();
         const binding: FormFieldBinding = createFieldBinding({
+            getClientTimeZone: options.getClientTimeZone,
             fieldType: descriptor.fieldType,
             model,
             write: (value) => setValue(id, value),
@@ -661,7 +668,11 @@ export function createFormFieldBindings(
                 !current() ||
                 [...entries.values()].some((entry) => {
                     const state = entry.binding.getSnapshot();
-                    return state.canEdit && state.scalar?.valid === false;
+                    return (
+                        state.canEdit &&
+                        (state.scalar?.valid === false ||
+                            state.date?.valid === false)
+                    );
                 })
             )
                 return Promise.reject(

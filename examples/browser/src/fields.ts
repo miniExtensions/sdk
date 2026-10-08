@@ -446,14 +446,28 @@ export function mountBoundFormField(
     onError?: (error: unknown) => void
 ): FieldControl {
     const initial = binding.getSnapshot();
-    if (binding.scalar) {
+    if (binding.scalar || binding.date) {
         const node = element('div');
         const input = element('input');
         const status = element('p', '', 'field-hint');
         status.setAttribute('role', 'status');
         input.type = initial.scalar?.kind === 'checkbox' ? 'checkbox' : 'text';
         input.dataset.fieldId = initial.field?.fieldId ?? '';
-        if (input.type === 'text') input.inputMode = 'decimal';
+        if (input.type === 'text' && binding.scalar)
+            input.inputMode = 'decimal';
+        if (binding.date) {
+            const privacy = schema.miniExtConfig;
+            if (
+                privacy &&
+                'obscurePassword' in privacy &&
+                privacy.obscurePassword === true
+            )
+                input.type = 'password';
+            input.placeholder =
+                initial.date?.kind === 'date'
+                    ? 'YYYY-MM-DD'
+                    : 'YYYY-MM-DDTHH:mm:ssZ';
+        }
         node.append(labeled(initial.field?.title ?? '', input), status);
         let destroyed = false;
         const change = () => {
@@ -462,7 +476,9 @@ export function mountBoundFormField(
             const accepted =
                 input.type === 'checkbox'
                     ? binding.scalar!.setChecked(input.checked)
-                    : binding.scalar!.setInput(input.value);
+                    : binding.date
+                      ? binding.date.setInput(input.value)
+                      : binding.scalar!.setInput(input.value);
             if (accepted) changed();
         };
         input.addEventListener('input', change);
@@ -471,15 +487,18 @@ export function mountBoundFormField(
             const state = binding.getSnapshot();
             node.hidden = state.visibility.type !== 'visible';
             node.inert = !state.canEdit;
-            input.disabled = !state.canEdit;
+            input.disabled = !state.canEdit || state.date?.canEdit === false;
             input.checked = state.scalar?.checked ?? false;
-            input.value = state.scalar?.input ?? '';
+            input.value = state.date?.input ?? state.scalar?.input ?? '';
             input.setAttribute(
                 'aria-invalid',
-                String(state.scalar?.valid === false)
+                String(
+                    state.scalar?.valid === false || state.date?.valid === false
+                )
             );
             node.setAttribute('aria-busy', String(state.pending));
             status.textContent =
+                state.date?.error ??
                 state.scalar?.error ??
                 state.error ??
                 state.validation.map((error) => error.errorMessage).join('\n');
@@ -490,7 +509,10 @@ export function mountBoundFormField(
             editable: !initial.readOnly,
             read() {
                 const state = binding.getSnapshot();
-                if (state.scalar?.valid === false)
+                if (
+                    state.scalar?.valid === false ||
+                    state.date?.valid === false
+                )
                     throw new Error(
                         'This field needs a valid value before saving.'
                     );

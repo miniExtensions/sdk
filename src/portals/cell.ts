@@ -15,6 +15,7 @@ import { RecoveryJournal, type RecoveryScope } from '../forms/recovery.js';
 import type { PortalOwnerScope } from './types.js';
 
 export type PortalCellBindingOptions = {
+    getClientTimeZone?(): string;
     client: MiniExtensionsClient;
     input: Omit<UpdateGridCellInput, 'value'>;
     schema: RuntimeFieldSchema;
@@ -230,6 +231,7 @@ export const createPortalCellBinding = (
         });
     }
     const binding = createFieldBinding({
+        getClientTimeZone: options.getClientTimeZone,
         fieldType: schema.fieldType,
         model,
         snapshot,
@@ -254,7 +256,8 @@ export const createPortalCellBinding = (
         save: async (request = {}) => {
             if (
                 !snapshot().canEdit ||
-                binding.scalar?.getState().valid === false
+                binding.scalar?.getState().valid === false ||
+                binding.date?.getState().valid === false
             )
                 throw new Error('Load a fresh Portal before saving this cell.');
             const value = gridValue(store.read(handle, input.recordFieldId));
@@ -321,6 +324,7 @@ export const createPortalCellBinding = (
             busy = false;
             stop?.();
             model?.destroy();
+            binding.date?.destroy();
             store.clear();
             notify();
             listeners.clear();

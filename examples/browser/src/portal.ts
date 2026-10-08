@@ -945,6 +945,8 @@ export const createPortalView = (options: {
             const choices = element('div', undefined, 'choice-list');
             let offset: string | null = null;
             let optionGeneration = 0;
+            // Paging admission uses the accepted unfiltered list, never a searched snapshot.
+            let loadedOptions: { value: string; label: string }[] = [];
             const fetchOptions = (more: boolean): void => {
                 const expectedGeneration = ++optionGeneration;
                 const query = search.value;
@@ -983,16 +985,14 @@ export const createPortalView = (options: {
                             return;
                         if (!more) choices.replaceChildren();
                         offset = result.offset;
-                        const previousOptions = more
-                            ? (cell.binding.selection?.getState().options ?? [])
-                            : [];
-                        cell.binding.selection?.setOptions([
-                            ...previousOptions,
+                        loadedOptions = [
+                            ...(more ? loadedOptions : []),
                             ...result.records.map((option) => ({
                                 value: option.id,
                                 label: 'Linked record',
                             })),
-                        ]);
+                        ];
+                        cell.binding.selection?.setOptions(loadedOptions);
                         for (const option of result.records) {
                             const checkbox = element('input');
                             checkbox.type = 'checkbox';
@@ -1056,6 +1056,7 @@ export const createPortalView = (options: {
                 optionGeneration += 1;
                 cell.binding.selection?.setSearchInput(search.value);
                 choices.replaceChildren();
+                loadedOptions = [];
                 offset = null;
                 moreButton.disabled = true;
             });

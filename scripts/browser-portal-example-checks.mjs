@@ -3712,6 +3712,160 @@ export async function checkBrowserPortalExample({
             );
         }
         await check(
+            'searched linked-cell paging retains page-one native admission and rejects stale owner/criteria actions',
+            async () => {
+                const linked = {
+                    id: 'fld_links',
+                    name: 'Linked choices',
+                    isComputed: false,
+                    config: {
+                        type: 'multipleRecordLinks',
+                        options: {
+                            linkedTableId: 'tbl_targets',
+                            isReversed: false,
+                            prefersSingleRecordLink: false,
+                        },
+                    },
+                };
+                const details = [
+                    {
+                        fieldId: 'fld_links',
+                        fieldName: 'Linked choices',
+                        isHidden: false,
+                        miniExtConfig: {},
+                        childFormField: {
+                            idOrName: { type: 'id', id: 'fld_links' },
+                            config: { type: 'multipleRecordLinks', config: {} },
+                        },
+                        fieldIsInEditingChildForm: true,
+                    },
+                ];
+                for (const stale of [null, 'owner', 'criteria']) {
+                    const portal = editablePortal();
+                    portal.payload.linkedRecordFieldIdToDetailFields.fld_children =
+                        details;
+                    const loaded = page([record('rec_one', 'Original', 1)]);
+                    loaded.tableIdsToLinkedTableStates.tbl_children.airtableFields.push(
+                        linked
+                    );
+                    loaded.tableIdsToLinkedTableStates.tbl_children.recordIdsToAirtableRecords.rec_one.fields.fld_links =
+                        [];
+                    const h = await mount({
+                        portal,
+                        handlers: {
+                            list: () => loaded,
+                            grid: ({ input }) => ({
+                                record: {
+                                    id: input.recordId,
+                                    fields: { fld_links: input.value },
+                                },
+                                auditTrail: null,
+                                auditTrails: [],
+                            }),
+                        },
+                    });
+                    const optionCalls = [];
+                    h.client.linkedRecords.listPortalOptions = async (
+                        input
+                    ) => {
+                        optionCalls.push(structuredClone(input));
+                        return {
+                            records: [
+                                {
+                                    id: input.offset
+                                        ? 'rec_page_two'
+                                        : 'rec_page_one',
+                                    fields: {
+                                        fld_name: input.offset
+                                            ? 'Acme Two'
+                                            : 'Acme One',
+                                    },
+                                },
+                            ],
+                            offset: input.offset ? null : 'next',
+                            tableIdsToLinkedTableStates: {
+                                tbl_targets: {
+                                    airtableFields: [
+                                        {
+                                            id: 'fld_name',
+                                            name: 'Name',
+                                            isPrimaryField: true,
+                                            isComputed: false,
+                                            config: { type: 'singleLineText' },
+                                        },
+                                    ],
+                                    recordIdsToAirtableRecords: {},
+                                },
+                            },
+                        };
+                    };
+                    await h.click('Load records');
+                    button(h.view.node, 'Edit cell').click();
+                    const search = h.view.node.querySelector(
+                        'input[placeholder="Search permitted linked records"]'
+                    );
+                    assert(search);
+                    search.value = 'Acme';
+                    change(h.window, search, 'input');
+                    await h.click('Search choices');
+                    const first = h.view.node.querySelector(
+                        '.choice-list input[type=checkbox]'
+                    );
+                    assert(first);
+                    assert.equal(first.checked, false);
+                    await h.click('More choices');
+                    assert.equal(
+                        h.view.node.querySelectorAll(
+                            '.choice-list input[type=checkbox]'
+                        ).length,
+                        2
+                    );
+                    assert.deepEqual(
+                        optionCalls.map((c) => [c.filter.searchTerm, c.offset]),
+                        [
+                            ['Acme', null],
+                            ['Acme', 'next'],
+                        ]
+                    );
+                    const form = first.closest('form');
+                    if (stale === 'owner') h.switchOwner('visitor_B');
+                    else if (stale === 'criteria') {
+                        const view = [
+                            ...h.view.node.querySelectorAll('select'),
+                        ].find((s) =>
+                            [...s.options].some((o) => o.value === 'view_other')
+                        );
+                        view.value = 'view_other';
+                        change(h.window, view);
+                    }
+                    first.checked = true;
+                    change(h.window, first);
+                    submit(h.window, form);
+                    await h.settle();
+                    const writes = h.calls.filter(
+                        (c) => c.operation === 'grid'
+                    );
+                    if (stale) assert.equal(writes.length, 0);
+                    else
+                        assert.deepEqual(
+                            writes.map((c) => c.input),
+                            [
+                                {
+                                    portalExtensionAccessToken:
+                                        'portal_access_example',
+                                    portalFieldId: 'fld_children',
+                                    recordFieldId: 'fld_links',
+                                    recordId: 'rec_one',
+                                    value: ['rec_page_one'],
+                                    selectedCustomViewId: 'view_example',
+                                },
+                            ]
+                        );
+                    await h.dispose();
+                }
+            }
+        );
+        await check(
             'shared Portal binding retains native edited text and rejects old row entry across view/owner replacement',
             async () => {
                 for (const replacement of ['view', 'owner']) {

@@ -848,8 +848,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(portalOwnerProof.checks, 13);
-    console.log('Installed Portal owner checkpoints: 13');
+    assert.equal(portalOwnerProof.checks, 19);
+    console.log('Installed Portal owner checkpoints: 19');
 
     const authGuide = readFileSync(
         join(installedPackage, 'docs/auth.md'),

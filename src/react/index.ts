@@ -533,7 +533,13 @@ export function usePortalListOwner(
     const store = useMemo(() => {
         let snapshot = owner.getSnapshot();
         return {
-            getSnapshot: () => snapshot,
+            getSnapshot: () => {
+                // Observe session/configuration retirement on same-owner rerenders.
+                // Cache by revision so useSyncExternalStore retains stable identity.
+                const next = owner.getSnapshot();
+                if (next.revision !== snapshot.revision) snapshot = next;
+                return snapshot;
+            },
             subscribe: (notify: () => void) =>
                 owner.subscribe((next) => {
                     snapshot = next;

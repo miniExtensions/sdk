@@ -235,7 +235,14 @@ export function createPortalListOwner(
             generation === entry.generation &&
             collection === entry.collection &&
             !abort.signal.aborted;
-        const cancelled = () => abort.abort();
+        const cancelled = () => {
+            if (
+                current() &&
+                active === entry &&
+                generation === entry.generation
+            )
+                replace(revision, fieldId, criteria, 'error');
+        };
         supplied.signal?.addEventListener('abort', cancelled, { once: true });
         if (supplied.signal?.aborted) cancelled();
         emit();
@@ -307,6 +314,7 @@ export function createPortalListOwner(
             } catch {
                 /* Renderer exceptions do not own list state. */
             }
+            if (!retired) current();
             return () => listeners.delete(listener);
         },
         isCurrent: (expected) =>

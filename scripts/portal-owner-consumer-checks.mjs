@@ -258,6 +258,169 @@ export async function checkPortalOwnerConsumer({
             replacement.destroy();
             checks++;
         }
+        for (const ending of ['session', 'owner']) {
+            let session = {},
+                scopeRevision = 0;
+            const client = {
+                getSession: () => ({ ...session }),
+                portals: {
+                    listLinkedRecords: async () =>
+                        fixtures.page([
+                            fixtures.record('rec_private', 'PRIVATE_SUBSCRIBE'),
+                        ]),
+                },
+            };
+            const accepted = createPortalListOwner({
+                client,
+                portal: fixtures.makePortal(),
+                portalFieldId: 'fld_children',
+                criteria,
+                getScope: () => ({ ownerId: 'A', revision: scopeRevision }),
+            });
+            await act(async () =>
+                renderer.render(
+                    h(PortalList, {
+                        owner: accepted,
+                        readOptions,
+                        render: ({ snapshot }) =>
+                            h(
+                                'p',
+                                null,
+                                snapshot.page
+                                    ? JSON.stringify(
+                                          snapshot.page
+                                              .tableIdsToLinkedTableStates
+                                      )
+                                    : snapshot.phase
+                            ),
+                    })
+                )
+            );
+            await act(async () => {
+                assert.equal(
+                    await accepted.readFirst(
+                        accepted.getSnapshot().revision,
+                        readOptions
+                    ),
+                    true
+                );
+            });
+            assert(host.textContent.includes('PRIVATE_SUBSCRIBE'));
+            let stop;
+            await act(async () => {
+                stop = accepted.subscribe((state) => {
+                    if (state.phase === 'ready') {
+                        if (ending === 'session') session = { visitor: 'B' };
+                        else scopeRevision++;
+                    }
+                });
+            });
+            assert.equal(host.textContent, 'retired');
+            assert(!host.innerHTML.includes('PRIVATE_SUBSCRIBE'));
+            stop();
+            accepted.destroy();
+            checks++;
+        }
+        {
+            const held = fixtures.deferred();
+            let count = 0;
+            const client = {
+                getSession: () => ({}),
+                portals: {
+                    listLinkedRecords: async () =>
+                        ++count === 1
+                            ? held.promise
+                            : fixtures.page([
+                                  fixtures.record('rec_new', 'new'),
+                              ]),
+                },
+            };
+            const accepted = createPortalListOwner({
+                client,
+                portal: fixtures.makePortal(),
+                portalFieldId: 'fld_children',
+                criteria,
+                getScope: () => ({ ownerId: 'A', revision: 0 }),
+            });
+            const external = new AbortController();
+            const old = accepted.readFirst(accepted.getSnapshot().revision, {
+                ...readOptions,
+                signal: external.signal,
+            });
+            external.abort();
+            assert.equal(accepted.getSnapshot().pending, false);
+            assert.equal(
+                await accepted.readFirst(
+                    accepted.getSnapshot().revision,
+                    readOptions
+                ),
+                true
+            );
+            held.resolve(fixtures.page([fixtures.record('rec_old', 'old')]));
+            assert.equal(await old, false);
+            assert.deepEqual(accepted.getSnapshot().page.recordIds, [
+                'rec_new',
+            ]);
+            accepted.destroy();
+            checks++;
+        }
+        for (const ending of ['session', 'owner', 'configuration']) {
+            let session = {},
+                scopeRevision = 0,
+                configuration = 0;
+            const client = {
+                getSession: () => ({ ...session }),
+                portals: {
+                    listLinkedRecords: async () =>
+                        fixtures.page([
+                            fixtures.record('rec_private', 'PRIVATE_RERENDER'),
+                        ]),
+                },
+            };
+            const accepted = createPortalListOwner({
+                client,
+                portal: fixtures.makePortal(),
+                portalFieldId: 'fld_children',
+                criteria,
+                getScope: () => ({ ownerId: 'A', revision: scopeRevision }),
+                configurationRevision: () => configuration,
+            });
+            const render = () =>
+                h(PortalList, {
+                    owner: accepted,
+                    readOptions,
+                    render: ({ snapshot }) =>
+                        h(
+                            'p',
+                            null,
+                            snapshot.page
+                                ? JSON.stringify(
+                                      snapshot.page.tableIdsToLinkedTableStates
+                                  )
+                                : snapshot.phase
+                        ),
+                });
+            await act(async () => renderer.render(render()));
+            await act(async () => {
+                assert.equal(
+                    await accepted.readFirst(
+                        accepted.getSnapshot().revision,
+                        readOptions
+                    ),
+                    true
+                );
+            });
+            assert(host.textContent.includes('PRIVATE_RERENDER'));
+            if (ending === 'session') session = { visitor: 'B' };
+            else if (ending === 'owner') scopeRevision++;
+            else configuration++;
+            // No owner action: React itself must observe withdrawal on rerender.
+            await act(async () => renderer.render(render()));
+            assert.equal(host.textContent, 'retired');
+            assert(!host.innerHTML.includes('PRIVATE_RERENDER'));
+            accepted.destroy();
+            checks++;
+        }
         return { checks };
     } finally {
         await act(async () => renderer.unmount());

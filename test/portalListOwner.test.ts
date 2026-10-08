@@ -329,3 +329,54 @@ for (const ending of ['session', 'owner'] as const) {
         f.owner.destroy();
     });
 }
+
+for (const ending of ['session', 'owner'] as const) {
+    it(`immediate accepted-page subscription ${ending} change retires existing renderers`, async () => {
+        const f = setup();
+        let rendered = f.owner.getSnapshot();
+        const first = f.owner.subscribe((state) => {
+            rendered = state;
+        });
+        assert.equal(
+            await f.owner.readFirst(rendered.revision, readOptions),
+            true
+        );
+        assert.equal(rendered.phase, 'ready');
+        const second = f.owner.subscribe((state) => {
+            if (state.phase === 'ready') {
+                if (ending === 'session') f.client.setSession({ visitor: 'B' });
+                else f.scope();
+            }
+        });
+        assert.equal(rendered.phase, 'retired');
+        assert.equal(rendered.page, null);
+        first();
+        second();
+        f.owner.destroy();
+    });
+}
+it('external cancellation retires an abort-ignoring read and cannot cancel a successor', async () => {
+    const old = deferredPortal<ListPortalLinkedRecordsResult>();
+    const next = deferredPortal<ListPortalLinkedRecordsResult>();
+    let count = 0;
+    const f = setup(async () => (++count === 1 ? old.promise : next.promise));
+    const signal = new AbortController();
+    const first = f.owner.readFirst(f.owner.getSnapshot().revision, {
+        ...readOptions,
+        signal: signal.signal,
+    });
+    signal.abort();
+    assert.equal(f.owner.getSnapshot().pending, false);
+    const second = f.owner.readFirst(
+        f.owner.getSnapshot().revision,
+        readOptions
+    );
+    assert.equal(count, 2);
+    old.resolve(rows(['old']));
+    assert.equal(await first, false);
+    assert.equal(f.owner.getSnapshot().pending, true);
+    next.resolve(rows(['new']));
+    assert.equal(await second, true);
+    assert.deepEqual(f.owner.getSnapshot().page!.recordIds, ['new']);
+    f.owner.destroy();
+});

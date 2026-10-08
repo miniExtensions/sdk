@@ -791,7 +791,10 @@ export function createFormFieldBindings(
                                 snapshot.data[id]
                             );
                     fresh.payload.formFieldIdsWithUnsavedChanges = [
-                        ...snapshot.dirtyFieldIds,
+                        ...new Set([
+                            ...fresh.payload.formFieldIdsWithUnsavedChanges,
+                            ...snapshot.dirtyFieldIds,
+                        ]),
                     ];
                 }
                 retired = true;

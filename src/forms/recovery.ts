@@ -14,7 +14,7 @@ export type RecoveryAttempt = {
     recordId: string | null;
     fieldId: string | null;
     loadVersion: number;
-    operation: 'save' | 'upload' | 'choice';
+    operation: 'save' | 'upload' | 'choice' | 'button';
     outcome:
         | 'not-submitted'
         | 'not-dispatched'
@@ -22,7 +22,8 @@ export type RecoveryAttempt = {
         | 'saved'
         | 'validation-error'
         | 'uploaded'
-        | 'choice-created';
+        | 'choice-created'
+        | 'webhook-success';
     flight: boolean;
     acknowledgment: 'none' | 'existing-request' | 'new-intent';
     associatedRecordId: string | null;
@@ -141,7 +142,12 @@ export class RecoveryJournal {
     }
     accepted(
         attempt: RecoveryAttempt,
-        outcome: 'saved' | 'validation-error' | 'uploaded' | 'choice-created'
+        outcome:
+            | 'saved'
+            | 'validation-error'
+            | 'uploaded'
+            | 'choice-created'
+            | 'webhook-success'
     ): void {
         attempt.outcome = outcome;
         attempt.flight = false;

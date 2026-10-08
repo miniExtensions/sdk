@@ -764,3 +764,54 @@ export function PortalFilterEditor({
     );
     return render({ snapshot, model });
 }
+
+/** Optional React subscription; the host owns model disposal, not a renderer remount. */
+export function useButtonField(
+    model: import('../ui/buttonModel.js').ButtonFieldModel
+): import('../ui/buttonModel.js').ButtonFieldRenderProps {
+    const store = useMemo(() => {
+        let snapshot = model.getSnapshot();
+        let key = JSON.stringify(snapshot);
+        return {
+            getSnapshot: () => {
+                const next = model.getSnapshot();
+                const nextKey = JSON.stringify(next);
+                if (nextKey !== key) {
+                    snapshot = next;
+                    key = nextKey;
+                }
+                return snapshot;
+            },
+            subscribe: (notify: () => void) => {
+                const stop = model.subscribe((next) => {
+                    snapshot = next;
+                    key = JSON.stringify(next);
+                    notify();
+                });
+                const next = model.getSnapshot();
+                if (JSON.stringify(next) !== key) {
+                    snapshot = next;
+                    key = JSON.stringify(next);
+                    notify();
+                }
+                return stop;
+            },
+        };
+    }, [model]);
+    const snapshot = useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+    return useMemo(
+        () => ({
+            ...snapshot,
+            prepareLink: () => model.prepareLink(snapshot.revision),
+            triggerWebhook: () => model.triggerWebhook(snapshot.revision),
+            cancel: () => model.cancel(snapshot.revision),
+            acknowledgeNewIntent: () =>
+                model.acknowledgeNewIntent(snapshot.revision),
+        }),
+        [model, snapshot]
+    );
+}

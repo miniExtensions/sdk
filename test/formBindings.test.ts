@@ -324,6 +324,94 @@ describe('Form field binding ownership', () => {
         assert.equal(successor.getSnapshot().value, 'Successor');
         f.owner.destroy();
     });
+    it('retirement notification cannot overwrite a controller successor or its dirty draft', async () => {
+        const f = fixture();
+        const old = f.owner.field('fld_title');
+        let successor:
+            | ReturnType<typeof f.owner.controller.getState>
+            | undefined;
+        let replaced = false;
+        old.subscribe((state) => {
+            if (!state.retired || replaced) return;
+            replaced = true;
+            const b = structuredClone(f.loaded);
+            b.payload.extensionAccessToken = 'synthetic_B';
+            b.payload.formRecord.data.fld_title = 'B initial';
+            f.owner.controller.reset({ ...f.options, loaded: b });
+            assert.equal(
+                f.owner.controller.write('fld_title', 'B dirty'),
+                true
+            );
+            successor = f.owner.controller.getState();
+        });
+        const a = structuredClone(f.loaded);
+        a.payload.formRecord.data.fld_title = 'A stale response';
+        assert.equal(
+            await f.owner.reload({ dirty: 'keep', read: async () => a }),
+            false
+        );
+        assert(replaced);
+        assert.deepEqual(f.owner.controller.getState(), successor);
+        assert.equal(f.calls.length, 0);
+        assert.equal(old.setValue('Late A').accepted, false);
+        f.owner.destroy();
+    });
+    it('retirement callback successor cancellation keeps its epoch and unknown outcome', async () => {
+        const held = deferred<SaveFormResult>();
+        const f = fixture(() => held.promise);
+        const old = f.owner.field('fld_title');
+        let replaced = false;
+        let expected:
+            | ReturnType<typeof f.owner.controller.getState>
+            | undefined;
+        let rejected: Promise<void> | undefined;
+        old.subscribe((state) => {
+            if (!state.retired || replaced) return;
+            replaced = true;
+            const b = structuredClone(f.loaded);
+            b.payload.extensionAccessToken = 'synthetic_B';
+            f.owner.controller.reset({ ...f.options, loaded: b });
+            assert(f.owner.controller.write('fld_title', 'B dirty'));
+            rejected = assert.rejects(f.owner.controller.save());
+            f.owner.controller.cancel();
+            expected = f.owner.controller.getState();
+        });
+        assert.equal(
+            await f.owner.reload({
+                dirty: 'discard',
+                read: async () => f.loaded,
+            }),
+            false
+        );
+        assert(replaced);
+        assert.deepEqual(f.owner.controller.getState(), expected);
+        held.resolve(invalidForm());
+        await rejected;
+        assert.deepEqual(f.owner.controller.getState(), expected);
+        assert.equal(f.calls.length, 1);
+        assert.equal(f.calls[0]!.extensionAccessToken, 'synthetic_B');
+        f.owner.destroy();
+    });
+    it('retirement notification disposal rejects old reload without reviving the controller', async () => {
+        const f = fixture();
+        const old = f.owner.field('fld_title');
+        let disposed = false;
+        old.subscribe((state) => {
+            if (state.retired && !disposed) {
+                disposed = true;
+                f.owner.destroy();
+            }
+        });
+        assert.equal(
+            await f.owner.reload({
+                dirty: 'discard',
+                read: async () => f.loaded,
+            }),
+            false
+        );
+        assert.equal(f.owner.controller.getState().status, 'disposed');
+        assert.equal(f.calls.length, 0);
+    });
     it('an old overlapping reload success/error cannot clear successor state', async () => {
         const f = fixture();
         const slow = deferred<FormLoadedResult>();

@@ -10,6 +10,8 @@ import type {
 } from '../runtime/types.js';
 import {
     RecoveryJournal,
+    subscribeRecoveryJournal,
+    sameRecoveryRelationship,
     type RecoveryScope,
     type RecoveryAttempt,
 } from '../forms/recovery.js';
@@ -165,16 +167,29 @@ export function createButtonFieldModel(
         dispatched: boolean;
     } | null = null;
     let lastAttempt: RecoveryAttempt | null = null;
+    let changingJournal = false;
     let stop: (() => void) | undefined;
     const listeners = new Set<(state: ButtonFieldState) => void>();
     try {
+        // Capture identity before reading host data or accepting any owner callback.
+        sessionKey = identity(client.getSession());
         configuration = adapter.configurationRevision();
         const read = adapter.read();
         if (!valid(read) || !adapter.isCurrent())
             throw new Error('Unavailable Button.');
         data = structuredClone(read);
         dataKey = identity(data);
-        sessionKey = identity(client.getSession());
+        // A callback can return A data after moving the host to B. Two bounded
+        // observations reject one-shot changes in the final lease callback as well.
+        for (let pass = 0; pass < 2; pass++) {
+            if (
+                identity(adapter.read()) !== dataKey ||
+                !adapter.isCurrent() ||
+                adapter.configurationRevision() !== configuration ||
+                identity(client.getSession()) !== sessionKey
+            )
+                throw new Error('Unavailable Button.');
+        }
     } catch {
         retired = true;
         phase = 'retired';
@@ -189,38 +204,62 @@ export function createButtonFieldModel(
         active?.abort.abort();
         publish();
     };
+    let checking = false;
     const current = (): boolean => {
         if (retired) return false;
+        // Nested actions fail closed. Explicit cancellation has a separate local guard.
+        if (checking) return false;
+        checking = true;
         try {
-            if (
-                !adapter.isCurrent() ||
-                adapter.configurationRevision() !== configuration ||
-                identity(client.getSession()) !== sessionKey ||
-                identity(adapter.read()) !== dataKey
-            )
-                retire();
+            for (let pass = 0; pass < 2 && !retired; pass++) {
+                // Read first, then validate the whole lease after each host observation.
+                if (
+                    identity(adapter.read()) !== dataKey ||
+                    !adapter.isCurrent() ||
+                    adapter.configurationRevision() !== configuration ||
+                    identity(client.getSession()) !== sessionKey
+                )
+                    retire();
+            }
         } catch {
             retire();
+        } finally {
+            checking = false;
         }
+        if (retired) publish();
         return !retired;
     };
-    const blocking = () =>
-        data &&
-        journal.blocking(
-            recovery.scope,
-            data.source?.type === 'current-record'
-                ? data.source.recordId
-                : (data.source?.linkedRecordId ?? null)
-        );
-    const snapshot = (): ButtonFieldState => {
-        const present = !retired && data?.visible === true;
+    const recordId = () =>
+        data?.source?.type === 'current-record'
+            ? data.source.recordId
+            : (data?.source?.linkedRecordId ?? null);
+    const blocking = () => data && journal.blocking(recovery.scope, recordId());
+    const journalState = () => {
+        const attempt = blocking();
+        return JSON.stringify([!!attempt, attempt?.flight === true]);
+    };
+    let observedJournalState = journalState();
+    const snapshot = (redacted = false): ButtonFieldState => {
+        const present = !retired && !redacted && data?.visible === true;
+        const guard = blocking();
+        const sharedAttempt =
+            !retired && !active && guard !== lastAttempt ? guard : null;
         const mode = data?.config?.openLinkType ?? '_blank';
         const webhook =
             mode === 'triggerWebhookGET' || mode === 'triggerWebhookPOST';
         return {
             revision,
-            phase,
-            busy: !retired && active !== null,
+            phase: redacted
+                ? 'retired'
+                : sharedAttempt
+                  ? sharedAttempt.flight
+                      ? 'pending'
+                      : 'uncertain'
+                  : phase,
+            busy:
+                !retired &&
+                !redacted &&
+                (active !== null || sharedAttempt?.flight === true),
             canLink:
                 present &&
                 data?.value !== null &&
@@ -234,23 +273,41 @@ export function createButtonFieldModel(
                 data?.source != null &&
                 active === null &&
                 !blocking(),
-            feedback: retired ? null : structuredClone(feedback),
+            feedback:
+                retired || redacted || sharedAttempt
+                    ? null
+                    : structuredClone(feedback),
             field: present ? structuredClone(data!.field) : null,
             value: present ? structuredClone(data!.value) : null,
             config: present ? structuredClone(data!.config) : undefined,
             language: present ? data!.language : null,
         };
     };
+    let emitting = false;
     const emit = () => {
-        const id = ++delivery,
-            state = snapshot();
-        for (const listener of [...listeners]) {
-            if (id !== delivery || revision !== state.revision) break;
-            if (listeners.has(listener)) {
-                try {
-                    listener(structuredClone(state));
-                } catch {}
+        ++delivery;
+        observedJournalState = journalState();
+        if (emitting || checking) return;
+        emitting = true;
+        try {
+            // One bounded refresh delivers a reentrant change, including redacted retirement.
+            // Further listener mutations invalidate delivery without recursive publication.
+            for (let pass = 0; pass < 2; pass++) {
+                const id = delivery,
+                    state = snapshot();
+                for (const listener of [...listeners]) {
+                    current();
+                    if (id !== delivery || revision !== state.revision) break;
+                    if (listeners.has(listener)) {
+                        try {
+                            listener(structuredClone(state));
+                        } catch {}
+                    }
+                }
+                if (id === delivery && revision === state.revision) break;
             }
+        } finally {
+            emitting = false;
         }
     };
     publish = emit;
@@ -259,8 +316,32 @@ export function createButtonFieldModel(
         current();
     };
     stop = adapter.subscribe?.(observe);
+    const stopJournal = subscribeRecoveryJournal(journal, (change) => {
+        if (
+            retired ||
+            !sameRecoveryRelationship(change.scope, recovery.scope) ||
+            change.recordId !== recordId()
+        )
+            return;
+        if (!current()) return;
+        const next = journalState();
+        if (active || changingJournal || next === observedJournalState) {
+            observedJournalState = next;
+            return;
+        }
+        if (
+            lastAttempt?.acknowledgment === 'new-intent' &&
+            phase === 'uncertain'
+        ) {
+            phase = 'idle';
+            feedback = null;
+        }
+        revision++;
+        emit();
+    });
     const model: ButtonFieldModel = {
         getSnapshot() {
+            if (checking) return snapshot(true);
             observe();
             return snapshot();
         },
@@ -408,7 +489,13 @@ export function createButtonFieldModel(
             }
         },
         cancel(expected) {
-            if (!check(expected) || !active) return false;
+            if (
+                retired ||
+                expected !== revision ||
+                (!checking && !current()) ||
+                !active
+            )
+                return false;
             active.abort.abort();
             phase = active.dispatched ? 'uncertain' : 'idle';
             revision++;
@@ -416,22 +503,23 @@ export function createButtonFieldModel(
             return true;
         },
         acknowledgeNewIntent(expected) {
-            if (
-                !check(expected) ||
-                active ||
-                !(lastAttempt ?? blocking()) ||
-                (lastAttempt ?? blocking())!.outcome !== 'unknown' ||
-                (lastAttempt ?? blocking())!.flight
-            )
-                return false;
-            const attempt = lastAttempt ?? blocking();
+            if (!check(expected) || active) return false;
+            const attempt = blocking();
             if (
                 !attempt ||
                 attempt.operation !== 'button' ||
-                attempt.fieldId !== data?.field.id
+                attempt.fieldId !== data?.field.id ||
+                attempt.outcome !== 'unknown' ||
+                attempt.flight ||
+                attempt.acknowledgment !== 'none'
             )
                 return false;
-            journal.acknowledgeNewIntent(attempt);
+            changingJournal = true;
+            try {
+                journal.acknowledgeNewIntent(attempt);
+            } finally {
+                changingJournal = false;
+            }
             phase = 'idle';
             feedback = null;
             revision++;
@@ -441,6 +529,7 @@ export function createButtonFieldModel(
         dispose() {
             retire();
             stop?.();
+            stopJournal();
             stop = undefined;
             listeners.clear();
         },

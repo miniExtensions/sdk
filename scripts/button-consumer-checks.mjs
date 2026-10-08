@@ -221,12 +221,96 @@ export async function checkButtonConsumer({
             checks++;
         }
 
+        for (const changed of ['session', 'configuration', 'owner']) {
+            const f = makeCore(api.ui, api.forms);
+            let armed = false,
+                current = true,
+                configuration = 1;
+            f.options.adapter.isCurrent = () => current;
+            f.options.adapter.configurationRevision = () => configuration;
+            f.options.adapter.read = () => {
+                if (armed) {
+                    armed = false;
+                    if (changed === 'session')
+                        f.client.setSession({ visitor: 'B' });
+                    if (changed === 'configuration') configuration++;
+                    if (changed === 'owner') current = false;
+                }
+                return f.data;
+            };
+            const props = f.model.getRenderProps();
+            f.model.subscribe((state) => {
+                if (state.phase === 'pending') armed = true;
+            });
+            assert.equal((await props.triggerWebhook()).type, 'refused');
+            assert.equal(f.calls.length, 0);
+            assert.equal(f.model.getSnapshot().phase, 'retired');
+            f.model.dispose();
+            checks++;
+        }
+        {
+            const f = makeCore(api.ui, api.forms, (data) => {
+                data.value.label = 'PRIVATE_VISITOR_A';
+            });
+            const received = [];
+            f.model.subscribe((state) => {
+                if (state.phase === 'pending')
+                    f.client.setSession({ visitor: 'B' });
+            });
+            f.model.subscribe((state) => received.push(state));
+            assert.equal(
+                (await f.model.getRenderProps().triggerWebhook()).type,
+                'refused'
+            );
+            assert(received.length > 0);
+            assert.equal(
+                JSON.stringify(received).includes('PRIVATE_VISITOR_A'),
+                false
+            );
+            assert(
+                received.every(
+                    (state) => state.value === null && state.field === null
+                )
+            );
+            assert.equal(f.calls.length, 0);
+            f.model.dispose();
+            checks++;
+        }
+        {
+            const f = makeCore(api.ui, api.forms);
+            f.model.dispose();
+            let first = true;
+            f.options.adapter.isCurrent = () => {
+                if (first) {
+                    first = false;
+                    f.client.setSession({ visitor: 'B' });
+                }
+                return true;
+            };
+            const model = api.ui.createButtonFieldModel(f.options);
+            assert.equal(model.getSnapshot().phase, 'retired');
+            assert.equal(
+                (await model.getRenderProps().triggerWebhook()).type,
+                'refused'
+            );
+            assert.equal(f.calls.length, 0);
+            model.dispose();
+            checks++;
+        }
+
         const formClient = {
             getSession: () => ({ visitor: 'A' }),
             buttons: {
                 triggerWebhook: async (input) => {
                     formCalls.push(structuredClone(input));
-                    return { success: true };
+                    return {
+                        success:
+                            input.extensionAccessToken ===
+                                'child_access_example' &&
+                            input.fieldId === 'fld_button' &&
+                            input.source.type === 'current-record' &&
+                            input.source.recordId === 'rec_edit',
+                    };
                 },
             },
             forms: {
@@ -360,15 +444,29 @@ export async function checkButtonConsumer({
             nativeField(),
         ];
         const portalCalls = [];
+        const admitsLinked = (input) =>
+            input.extensionAccessToken ===
+                portal.payload.extensionAccessToken &&
+            input.fieldId === 'fld_button' &&
+            input.source.type === 'linked-record' &&
+            input.source.linkedRecordId === 'rec_child' &&
+            input.source.linkedTableId === 'tbl_children' &&
+            input.source.parentLinkedRecordFieldId === 'fld_children' &&
+            input.source.selectedCustomViewId === 'view_example';
         const portalClient = {
             getSession: () => ({ visitor: 'A' }),
             buttons: {
                 triggerWebhook: async (input) => {
                     portalCalls.push(structuredClone(input));
-                    return { success: true };
+                    return { success: admitsLinked(input) };
                 },
             },
             portals: { listLinkedRecords: async () => page },
+            forms: {
+                save: async () => {
+                    throw Error('No implicit Form save');
+                },
+            },
         };
         const criteria = {
             selectedCustomViewId: 'view_example',
@@ -432,6 +530,165 @@ export async function checkButtonConsumer({
                 },
             },
         ]);
+        const linkedInput = portalCalls[0];
+        assert.equal(
+            admitsLinked({
+                ...linkedInput,
+                extensionAccessToken: 'child_access_example',
+            }),
+            false
+        );
+        for (const type of ['create', 'edit']) {
+            const loaded = portalRecipeFixtures.makeForm({
+                childExtensionInfo: { accessType: { type: 'create' } },
+            });
+            loaded.payload.publicFields = {
+                type: 'form',
+                state: { formFields: null, tableId: 'tbl_children' },
+            };
+            loaded.payload.fieldIdsInForm = ['fld_button'];
+            loaded.payload.fieldIdsToSchemas = {
+                fld_button: {
+                    fieldType: 'button',
+                    airtableField: nativeField(),
+                    miniExtConfig: { openLinkType: 'triggerWebhookPOST' },
+                },
+            };
+            loaded.payload.formRecord =
+                type === 'create'
+                    ? {
+                          type,
+                          data: {
+                              fld_button:
+                                  page.tableIdsToLinkedTableStates.tbl_children
+                                      .recordIdsToAirtableRecords.rec_child
+                                      .fields.fld_button,
+                          },
+                      }
+                    : {
+                          type,
+                          tableId: 'tbl_children',
+                          recordId: 'rec_child',
+                          data: {
+                              fld_button:
+                                  page.tableIdsToLinkedTableStates.tbl_children
+                                      .recordIdsToAirtableRecords.rec_child
+                                      .fields.fld_button,
+                          },
+                      };
+            const fields = api.forms.createFormFieldBindings({
+                client: portalClient,
+                loaded,
+                getScope: () => ({ ownerId: 'A', revision: 0 }),
+                saveOptions: {
+                    captchaVal: null,
+                    isComputeMode: false,
+                    context: { type: 'direct-url' },
+                    searchQuery: {},
+                    conditionalLinkedRecordFieldIdsToFilteringValues: {},
+                },
+            });
+            const model = api.ui.createFormButtonFieldModel({
+                ...portalOptions,
+                fields,
+                acceptedLinkedContext: {
+                    owner,
+                    portal,
+                    revision: owner.getSnapshot().revision,
+                    recordId: 'rec_child',
+                },
+            });
+            assert.equal(
+                (await model.getRenderProps().triggerWebhook()).type,
+                'reported-success'
+            );
+            assert.deepEqual(portalCalls.at(-1), linkedInput);
+            assert.deepEqual(
+                fields.field('fld_button').getSnapshot().value,
+                loaded.payload.formRecord.data.fld_button
+            );
+            model.dispose();
+            fields.destroy();
+            checks++;
+        }
+        for (const swapped of ['token', 'parent', 'extension', 'client']) {
+            const supplied = structuredClone(portal);
+            let client = portalClient;
+            if (swapped === 'token')
+                supplied.payload.extensionAccessToken = 'other_fake_token';
+            if (swapped === 'parent')
+                supplied.payload.formRecord.recordId = 'rec_other_parent';
+            if (swapped === 'extension') supplied.extensionId = 'other_portal';
+            if (swapped === 'client') client = { ...portalClient };
+            const model = api.ui.createPortalButtonFieldModel({
+                ...portalOptions,
+                portal: supplied,
+                client,
+            });
+            const before = portalCalls.length;
+            assert.equal(model.getSnapshot().phase, 'retired');
+            assert.equal(
+                (await model.getRenderProps().triggerWebhook()).type,
+                'refused'
+            );
+            assert.equal(portalCalls.length, before);
+            model.dispose();
+            checks++;
+        }
+        for (const [returned, child] of [
+            ['_blank', 'triggerWebhookPOST'],
+            ['triggerWebhookGET', '_blank'],
+            ['triggerWebhookPOST', 'triggerWebhookGET'],
+        ]) {
+            const accepted = structuredClone(portal);
+            const detail =
+                accepted.payload.linkedRecordFieldIdToDetailFields
+                    .fld_children[0];
+            detail.miniExtConfig = {
+                openLinkType: returned,
+                triggerWebhookSuccessMessage: 'Returned success',
+                triggerWebhookErrorMessage: '',
+            };
+            detail.childFormField = {
+                idOrName: { type: 'id', id: 'fld_button' },
+                config: {
+                    type: 'button',
+                    config: {
+                        openLinkType: child,
+                        triggerWebhookSuccessMessage: 'Child success',
+                        triggerWebhookErrorMessage: 'Child error',
+                    },
+                },
+            };
+            const acceptedOwner = api.portals.createPortalListOwner({
+                client: portalClient,
+                portal: accepted,
+                portalFieldId: 'fld_children',
+                criteria,
+                getScope: () => ({ ownerId: 'A', revision: 0 }),
+            });
+            await acceptedOwner.readFirst(0, {
+                pagesToFetch: 1,
+                refreshLoggedInPortalRecord: false,
+            });
+            const model = api.ui.createPortalButtonFieldModel({
+                ...portalOptions,
+                portal: accepted,
+                owner: acceptedOwner,
+            });
+            const state = model.getSnapshot();
+            assert.equal(state.config.openLinkType, returned);
+            assert.equal(
+                state.config.triggerWebhookSuccessMessage,
+                'Returned success'
+            );
+            assert.equal(state.config.triggerWebhookErrorMessage, '');
+            assert.equal(state.canLink, returned === '_blank');
+            assert.equal(state.canTrigger, returned !== '_blank');
+            model.dispose();
+            acceptedOwner.destroy();
+            checks++;
+        }
         const missing = api.ui.createPortalButtonFieldModel({
             ...portalOptions,
             recordId: 'unlisted',
@@ -440,7 +697,7 @@ export async function checkButtonConsumer({
             (await missing.getRenderProps().triggerWebhook()).type,
             'refused'
         );
-        assert.equal(portalCalls.length, 1);
+        assert.equal(portalCalls.length, 3);
         const retained = portalModel.getRenderProps();
         owner.setCriteria(owner.getSnapshot().revision, {
             ...criteria,
@@ -448,7 +705,7 @@ export async function checkButtonConsumer({
         });
         assert.equal((await retained.triggerWebhook()).type, 'refused');
         assert.equal(portalModel.getSnapshot().phase, 'retired');
-        assert.equal(portalCalls.length, 1);
+        assert.equal(portalCalls.length, 3);
         missing.dispose();
         portalModel.dispose();
         owner.destroy();
@@ -600,6 +857,151 @@ export async function checkButtonConsumer({
         );
         assert.equal(successor.calls.length, 1);
         checks++;
+        for (const success of [true, false]) {
+            const shared = makeCore(esm.ui, esm.forms, (data) => {
+                data.config.triggerWebhookSuccessMessage =
+                    'Original-only success';
+                data.config.triggerWebhookErrorMessage = 'Original-only error';
+            });
+            models.push(shared.model);
+            const response = deferred();
+            shared.client.buttons.triggerWebhook = (input) => {
+                shared.calls.push(input);
+                return response.promise;
+            };
+            await act(async () => root.render(tree(shared.model)));
+            await act(async () => container.querySelector('button').click());
+            const originalAction = lastAction;
+            const remounted = esm.ui.createButtonFieldModel(shared.options);
+            models.push(remounted);
+            await act(async () => root.render(tree(remounted)));
+            assert.equal(
+                container.querySelector('section').dataset.phase,
+                'pending'
+            );
+            assert.equal(container.querySelector('button').disabled, true);
+            assert.equal(remounted.getSnapshot().busy, true);
+            assert.equal(shared.calls.length, 1);
+            await act(async () => {
+                response.resolve({ success });
+                await originalAction;
+            });
+            assert.equal(
+                container.querySelector('section').dataset.phase,
+                success ? 'idle' : 'uncertain'
+            );
+            assert.equal(container.querySelector('button').disabled, !success);
+            assert.equal(container.querySelector('output').textContent, '');
+            assert.equal(remounted.getSnapshot().busy, false);
+            assert.equal(shared.calls.length, 1);
+            if (!success) {
+                await act(async () => {
+                    assert.equal(
+                        remounted.getRenderProps().acknowledgeNewIntent(),
+                        true
+                    );
+                });
+                assert.equal(
+                    container.querySelector('section').dataset.phase,
+                    'idle'
+                );
+                assert.equal(container.querySelector('button').disabled, false);
+                assert.equal(shared.calls.length, 1);
+                assert.equal(
+                    shared.journal.unknown('A')[0].acknowledgment,
+                    'new-intent'
+                );
+            }
+            checks++;
+        }
+        for (const firstSucceeded of [true, false]) {
+            const previous = makeCore(esm.ui, esm.forms);
+            models.push(previous.model);
+            previous.client.buttons.triggerWebhook = async (input) => {
+                previous.calls.push(input);
+                return { success: firstSucceeded };
+            };
+            await act(async () => {
+                await previous.model.getRenderProps().triggerWebhook();
+                if (!firstSucceeded)
+                    assert.equal(
+                        previous.model.getRenderProps().acknowledgeNewIntent(),
+                        true
+                    );
+            });
+            const next = esm.ui.createButtonFieldModel(previous.options);
+            models.push(next);
+            previous.client.buttons.triggerWebhook = async (input) => {
+                previous.calls.push(input);
+                return { success: false };
+            };
+            await act(async () => root.render(tree(previous.model)));
+            await act(async () => {
+                await next.getRenderProps().triggerWebhook();
+            });
+            assert.equal(
+                container.querySelector('section').dataset.phase,
+                'uncertain'
+            );
+            assert.equal(container.querySelector('button').disabled, true);
+            await act(async () => {
+                assert.equal(
+                    previous.model.getRenderProps().acknowledgeNewIntent(),
+                    true
+                );
+            });
+            assert.equal(
+                container.querySelector('section').dataset.phase,
+                'idle'
+            );
+            assert.equal(container.querySelector('button').disabled, false);
+            assert.equal(
+                previous.journal.blocking(
+                    previous.options.recovery.scope,
+                    'rec_current'
+                ),
+                undefined
+            );
+            assert.equal(next.getSnapshot().canTrigger, true);
+            assert.equal(previous.calls.length, 2);
+            assert.equal(
+                previous.model.getRenderProps().acknowledgeNewIntent(),
+                false
+            );
+            checks++;
+        }
+        {
+            const privateOwner = makeCore(esm.ui, esm.forms, (data) => {
+                data.value.label = 'PRIVATE_REACT_VISITOR_A';
+                data.config.triggerWebhookSuccessMessage =
+                    'PRIVATE_REACT_FEEDBACK_A';
+            });
+            models.push(privateOwner.model);
+            privateOwner.model.subscribe((state) => {
+                if (state.phase === 'pending')
+                    privateOwner.client.setSession({ visitor: 'B' });
+            });
+            await act(async () => root.render(tree(privateOwner.model)));
+            assert(container.textContent.includes('PRIVATE_REACT_VISITOR_A'));
+            await act(async () => {
+                container.querySelector('button').click();
+                await lastAction;
+            });
+            assert.equal(
+                container.querySelector('section').dataset.phase,
+                'retired'
+            );
+            assert.equal(
+                container.textContent.includes('PRIVATE_REACT_VISITOR_A'),
+                false
+            );
+            assert.equal(
+                container.textContent.includes('PRIVATE_REACT_FEEDBACK_A'),
+                false
+            );
+            assert.equal(privateOwner.calls.length, 0);
+            checks++;
+        }
         return {
             checks,
             reactVersion: react.version,

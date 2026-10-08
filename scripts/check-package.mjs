@@ -866,7 +866,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert(buttonProof.checks >= 24);
+    assert.equal(buttonProof.checks, 63);
     console.log(
         `Installed Button model and custom React renderers: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
     );

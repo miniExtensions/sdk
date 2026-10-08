@@ -357,8 +357,16 @@ for (const change of [
         await running;
         assert.equal(f.model.getSnapshot().phase, 'retired');
         const after = successor.getSnapshot();
-        assert.equal(after.phase, before.phase);
-        assert.equal(after.revision, before.revision);
+        // A related successor observes settlement of the shared guard, but receives
+        // none of the predecessor's private feedback or captured metadata.
+        assert.equal(
+            after.phase,
+            before.phase === 'pending' ? 'idle' : before.phase
+        );
+        assert.equal(
+            after.revision,
+            before.revision + (before.phase === 'pending' ? 1 : 0)
+        );
         assert.deepEqual(after.feedback, before.feedback);
         assert.deepEqual(after.field, before.field);
         assert.deepEqual(after.value, before.value);
@@ -583,5 +591,339 @@ for (const callback of [
         assert.equal(f.model.getSnapshot().busy, false);
         stop();
         f.model.dispose();
+    });
+}
+
+for (const change of ['session', 'configuration', 'owner'] as const) {
+    it(`a final read callback changing ${change} cannot dispatch old lease data`, async () => {
+        const f = fixture();
+        const expected = f.model.getSnapshot().revision;
+        let armed = false;
+        f.model.subscribe((state) => {
+            if (state.phase === 'pending') armed = true;
+        });
+        const original = f.options.adapter.read;
+        f.options.adapter.read = () => {
+            const old = original();
+            if (armed) {
+                armed = false;
+                if (change === 'session') f.client.setSession({ visitor: 'B' });
+                if (change === 'configuration') f.configuration(2);
+                if (change === 'owner') f.stale();
+            }
+            return old;
+        };
+        assert.equal((await f.model.triggerWebhook(expected)).type, 'refused');
+        assert.equal(f.inputs.length, 0);
+        assert.equal(f.journal.entries.length, 1);
+        assert.equal(f.journal.entries[0]!.outcome, 'not-dispatched');
+        assert.equal(f.journal.entries[0]!.flight, false);
+        assert.equal(f.model.getSnapshot().phase, 'retired');
+        f.model.dispose();
+    });
+}
+
+for (const change of [
+    'session',
+    'configuration',
+    'owner',
+    'dispose',
+] as const) {
+    for (const publication of ['pending', 'reported-success'] as const) {
+        it(`listener ${change} during ${publication} delivers only redacted retirement to later listeners`, async () => {
+            const f = fixture((data) => {
+                data.config!.triggerWebhookSuccessMessage =
+                    'Private A feedback';
+            });
+            const later: ReturnType<typeof f.model.getSnapshot>[] = [];
+            let changed = false;
+            f.model.subscribe((state) => {
+                if (state.phase !== publication || changed) return;
+                changed = true;
+                if (change === 'session') f.client.setSession({ visitor: 'B' });
+                if (change === 'configuration') f.configuration(2);
+                if (change === 'owner') f.stale();
+                if (change === 'dispose') f.model.dispose();
+            });
+            f.model.subscribe((state) => {
+                later.push(state);
+                // Reentrant observation and retirement must remain bounded.
+                f.model.getSnapshot();
+                if (state.phase === 'retired') f.notify();
+            });
+            await f.model.triggerWebhook(f.model.getSnapshot().revision);
+            assert.equal(changed, true);
+            assert.equal(f.model.getSnapshot().phase, 'retired');
+            assert.equal(f.inputs.length, publication === 'pending' ? 0 : 1);
+            assert.equal(
+                later.some((state) => state.phase === publication),
+                false
+            );
+            if (change !== 'dispose') {
+                const retired = later.filter(
+                    (state) => state.phase === 'retired'
+                );
+                assert.equal(retired.length, 1);
+                assert.equal(retired[0]!.field, null);
+                assert.equal(retired[0]!.value, null);
+                assert.equal(retired[0]!.config, undefined);
+                assert.equal(retired[0]!.language, null);
+                assert.equal(retired[0]!.feedback, null);
+            }
+            f.model.dispose();
+        });
+    }
+}
+
+it('reentrant reads and cancellation invoke host lease callbacks without recursion', async () => {
+    const f = fixture();
+    const original = f.options.adapter.read;
+    let reads = 0;
+    f.options.adapter.read = () => {
+        reads++;
+        assert.ok(reads < 20);
+        f.model.getSnapshot();
+        return original();
+    };
+    f.model.subscribe((state) => {
+        if (state.phase === 'pending') f.model.cancel(state.revision);
+    });
+    assert.equal(
+        (await f.model.triggerWebhook(f.model.getSnapshot().revision)).type,
+        'refused'
+    );
+    assert.equal(f.inputs.length, 0);
+    assert.equal(f.journal.entries[0]!.outcome, 'not-dispatched');
+    f.model.dispose();
+});
+
+for (const change of ['session', 'configuration', 'owner'] as const) {
+    it(`constructor rejects ${change} replacement inside initial owner callback`, async () => {
+        const f = fixture();
+        f.model.dispose();
+        const original = f.options.adapter.isCurrent;
+        let first = true;
+        f.options.adapter.isCurrent = () => {
+            const result = original();
+            if (first) {
+                first = false;
+                if (change === 'session') f.client.setSession({ visitor: 'B' });
+                if (change === 'configuration') f.configuration(2);
+                if (change === 'owner') f.stale();
+            }
+            return result;
+        };
+        const model = createButtonFieldModel(f.options);
+        const state = model.getSnapshot();
+        assert.equal(state.phase, 'retired');
+        assert.equal(state.field, null);
+        assert.equal(state.value, null);
+        assert.equal(state.feedback, null);
+        assert.equal(
+            (await model.triggerWebhook(state.revision)).type,
+            'refused'
+        );
+        assert.equal(f.inputs.length, 0);
+        assert.equal(f.journal.entries.length, 0);
+        model.dispose();
+    });
+}
+
+for (const callback of [
+    'isCurrent',
+    'configurationRevision',
+    'session',
+] as const) {
+    it(`bounded final ${callback} observations reject changes to an earlier lease predicate`, async () => {
+        const f = fixture();
+        const expected = f.model.getSnapshot().revision;
+        let armed = false;
+        f.model.subscribe((state) => {
+            if (state.phase === 'pending') armed = true;
+        });
+        const mutate = () => {
+            if (!armed) return;
+            armed = false;
+            if (callback === 'isCurrent') f.data().extensionAccessToken = 'B';
+            if (callback === 'configurationRevision') f.stale();
+            if (callback === 'session') f.configuration(2);
+        };
+        if (callback === 'isCurrent') {
+            const original = f.options.adapter.isCurrent;
+            f.options.adapter.isCurrent = () => {
+                const result = original();
+                mutate();
+                return result;
+            };
+        } else if (callback === 'configurationRevision') {
+            const original = f.options.adapter.configurationRevision;
+            f.options.adapter.configurationRevision = () => {
+                const result = original();
+                mutate();
+                return result;
+            };
+        } else {
+            const original = f.client.getSession;
+            f.client.getSession = () => {
+                const result = original();
+                mutate();
+                return result;
+            };
+        }
+        assert.equal((await f.model.triggerWebhook(expected)).type, 'refused');
+        assert.equal(f.inputs.length, 0);
+        assert.equal(f.journal.entries[0]!.outcome, 'not-dispatched');
+        assert.equal(f.model.getSnapshot().phase, 'retired');
+        f.model.dispose();
+    });
+}
+
+for (const ending of [
+    'success',
+    'unknown',
+    'cancel-before-dispatch',
+] as const) {
+    it(`related Button models observe shared ${ending} journal changes without copying feedback`, async () => {
+        const f = fixture((data) => {
+            data.config!.triggerWebhookSuccessMessage =
+                'Private predecessor feedback';
+            data.config!.triggerWebhookErrorMessage =
+                'Private predecessor error';
+        });
+        const other = createButtonFieldModel(f.options);
+        const unrelated = createButtonFieldModel({
+            ...f.options,
+            recovery: {
+                ...f.options.recovery,
+                scope: { ...f.scope, tableId: 'other' },
+            },
+        });
+        const states: ReturnType<typeof other.getSnapshot>[] = [];
+        let unrelatedEmissions = 0;
+        other.subscribe((state) => states.push(state));
+        unrelated.subscribe(() => unrelatedEmissions++);
+        const held = deferred<{ success: boolean }>();
+        f.client.buttons.triggerWebhook = (input) => {
+            f.inputs.push(input);
+            return held.promise;
+        };
+        if (ending === 'cancel-before-dispatch') {
+            f.model.subscribe((state) => {
+                if (state.phase === 'pending') f.model.cancel(state.revision);
+            });
+        }
+        const running = f.model.triggerWebhook(f.model.getSnapshot().revision);
+        assert.equal(states[0]!.phase, 'pending');
+        assert.equal(states[0]!.busy, true);
+        assert.equal(states[0]!.canTrigger, false);
+        assert.equal(states[0]!.feedback, null);
+        if (ending !== 'cancel-before-dispatch') {
+            assert.equal(
+                (await other.triggerWebhook(other.getSnapshot().revision)).type,
+                'refused'
+            );
+            held.resolve({ success: ending === 'success' });
+        }
+        await running;
+        const latest = () => states.at(-1)!;
+        assert.equal(
+            latest().phase,
+            ending === 'unknown' ? 'uncertain' : 'idle'
+        );
+        assert.equal(latest().busy, false);
+        assert.equal(latest().canTrigger, ending !== 'unknown');
+        assert.equal(latest().feedback, null);
+        assert.equal(unrelatedEmissions, 0);
+        if (ending === 'unknown') {
+            const stale = other.getRenderProps();
+            assert.equal(other.acknowledgeNewIntent(stale.revision), true);
+            assert.equal(latest().phase, 'idle');
+            assert.equal(latest().canTrigger, true);
+            assert.equal((await stale.triggerWebhook()).type, 'refused');
+            assert.equal(f.model.getSnapshot().phase, 'idle');
+        }
+        assert.equal(
+            f.inputs.length,
+            ending === 'cancel-before-dispatch' ? 0 : 1
+        );
+        const count = states.length;
+        other.dispose();
+        assert.equal(states.length, count + 1);
+        f.model.dispose();
+        unrelated.dispose();
+    });
+}
+
+it('host-reentrant snapshots redact private metadata and nested actions fail closed', async () => {
+    const f = fixture((data) => {
+        data.config = {};
+    });
+    const expected = f.model.getSnapshot().revision;
+    const original = f.options.adapter.read;
+    const nested: ReturnType<typeof f.model.getSnapshot>[] = [];
+    const actions: Promise<unknown>[] = [];
+    let reads = 0;
+    f.options.adapter.read = () => {
+        assert.ok(++reads <= 2);
+        nested.push(f.model.getSnapshot());
+        assert.equal(f.model.prepareLink(expected), null);
+        actions.push(f.model.triggerWebhook(expected));
+        return original();
+    };
+    assert.ok(f.model.prepareLink(expected));
+    assert.equal(reads, 2);
+    for (const state of nested) {
+        assert.equal(state.field, null);
+        assert.equal(state.value, null);
+        assert.equal(state.config, undefined);
+        assert.equal(state.language, null);
+        assert.equal(state.feedback, null);
+        assert.equal(state.canTrigger, false);
+        assert.equal(state.canLink, false);
+    }
+    for (const action of await Promise.all(actions))
+        assert.equal((action as { type: string }).type, 'refused');
+    assert.equal(f.inputs.length, 0);
+    assert.equal(f.journal.entries.length, 0);
+    f.model.dispose();
+});
+
+for (const firstSucceeded of [true, false]) {
+    it(`acknowledges the current shared attempt after prior ${firstSucceeded ? 'success' : 'acknowledged uncertainty'}`, async () => {
+        const a = fixture();
+        a.client.buttons.triggerWebhook = async (input) => {
+            a.inputs.push(structuredClone(input));
+            return { success: firstSucceeded };
+        };
+        await a.model.getRenderProps().triggerWebhook();
+        if (!firstSucceeded)
+            assert.equal(a.model.getRenderProps().acknowledgeNewIntent(), true);
+        const historical = structuredClone(a.journal.entries[0]);
+        const b = createButtonFieldModel(a.options);
+        a.client.buttons.triggerWebhook = async (input) => {
+            a.inputs.push(structuredClone(input));
+            return { success: false };
+        };
+        assert.equal(
+            (await b.getRenderProps().triggerWebhook()).type,
+            'uncertain'
+        );
+        assert.equal(a.model.getSnapshot().phase, 'uncertain');
+        assert.equal(
+            a.journal.blocking(a.scope, 'rec_current')?.id,
+            a.journal.entries[1].id
+        );
+        assert.equal(a.model.getRenderProps().acknowledgeNewIntent(), true);
+        assert.equal(a.journal.entries[1].acknowledgment, 'new-intent');
+        assert.deepEqual(a.journal.entries[0], historical);
+        assert.equal(a.journal.blocking(a.scope, 'rec_current'), undefined);
+        assert.equal(a.model.getSnapshot().phase, 'idle');
+        assert.equal(b.getSnapshot().phase, 'idle');
+        assert.equal(a.model.getSnapshot().canTrigger, true);
+        assert.equal(b.getSnapshot().canTrigger, true);
+        assert.equal(a.model.getRenderProps().acknowledgeNewIntent(), false);
+        assert.equal(a.inputs.length, 2);
+        a.model.dispose();
+        b.dispose();
     });
 }

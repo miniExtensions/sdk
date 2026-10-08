@@ -1,5 +1,8 @@
 import type { FormFieldBindings } from '../forms/bindings.js';
-import type { PortalListOwner } from '../portals/listOwner.js';
+import {
+    readPortalListOwnerContext,
+    type PortalListOwner,
+} from '../portals/listOwner.js';
 import { getPortalLinkedRecordFieldConfig } from '../portals/helpers.js';
 import type {
     MiniExtensionsClient,
@@ -56,7 +59,17 @@ const buttonValue = (value: unknown): AirtableButtonValue | null => {
     return { url: value.url, label: value.label };
 };
 
-function linkedData(context: AcceptedButtonLinkedContext, fieldId: string) {
+function linkedData(
+    context: AcceptedButtonLinkedContext,
+    fieldId: string,
+    client: MiniExtensionsClient
+) {
+    const portal = readPortalListOwnerContext(
+        context.owner,
+        context.revision,
+        client
+    );
+    if (!portal || key(context.portal) !== key(portal)) return null;
     const state = context.owner.getSnapshot();
     if (
         !context.owner.isCurrent(context.revision) ||
@@ -70,11 +83,11 @@ function linkedData(context: AcceptedButtonLinkedContext, fieldId: string) {
         return null;
     const outerId = state.portalFieldId;
     if (
-        context.portal.payload.fieldIdsInPortal.filter((id) => id === outerId)
+        portal.payload.fieldIdsInPortal.filter((id) => id === outerId)
             .length !== 1
     )
         return null;
-    const outer = context.portal.payload.fieldIdsToSchemas[outerId];
+    const outer = portal.payload.fieldIdsToSchemas[outerId];
     if (
         !outer ||
         outer.airtableField.id !== outerId ||
@@ -124,7 +137,7 @@ function linkedData(context: AcceptedButtonLinkedContext, fieldId: string) {
         parentLinkedRecordFieldId: outerId,
         selectedCustomViewId: state.criteria.selectedCustomViewId,
     };
-    return { field, row, detail, source };
+    return { field, row, detail, source, portal };
 }
 
 /** Form value editability does not govern configured Button actions. */
@@ -168,7 +181,11 @@ export function createFormButtonFieldModel(
                     (!context ||
                         (key(options.acceptedLinkedContext!.portal) ===
                             linkedPortalKey &&
-                            linkedData(context, options.fieldId) !== null))
+                            linkedData(
+                                context,
+                                options.fieldId,
+                                options.client
+                            ) !== null))
                 );
             },
             read: (): ButtonFieldData | null => {
@@ -184,7 +201,7 @@ export function createFormButtonFieldModel(
                 )
                     return null;
                 const linked = context
-                    ? linkedData(context, options.fieldId)
+                    ? linkedData(context, options.fieldId, options.client)
                     : null;
                 if (
                     context &&
@@ -196,7 +213,10 @@ export function createFormButtonFieldModel(
                     value: buttonValue(snapshot.value),
                     config: schema.miniExtConfig as ButtonMiniExtConfig,
                     language: now.language,
-                    extensionAccessToken: now.payload.extensionAccessToken,
+                    // Linked sources resolve against the parent Portal extension.
+                    extensionAccessToken: linked
+                        ? linked.portal.payload.extensionAccessToken
+                        : now.payload.extensionAccessToken,
                     visible: snapshot.visibility.type === 'visible',
                     source:
                         linked?.source ??
@@ -220,7 +240,7 @@ export function createFormButtonFieldModel(
     });
 }
 
-/** Returned list details own display policy; an accepted child Button may supply action policy. */
+/** Returned list details own both display and action policy. */
 export function createPortalButtonFieldModel(
     options: PortalButtonFieldModelOptions
 ) {
@@ -244,7 +264,11 @@ export function createPortalButtonFieldModel(
                 options.owner.isCurrent(revision),
             subscribe: (listener) => options.owner.subscribe(listener),
             read: () => {
-                const linked = linkedData(context, options.fieldId);
+                const linked = linkedData(
+                    context,
+                    options.fieldId,
+                    options.client
+                );
                 if (!linked) return null;
                 const detailConfig = linked.detail.miniExtConfig;
                 const child = linked.detail.childFormField;
@@ -255,29 +279,21 @@ export function createPortalButtonFieldModel(
                         child.config.type !== 'button')
                 )
                     return null;
-                // Explicit mapping: broader detail presentation stays intact; only the three
-                // canonical Button action properties inherit from an accepted child config.
-                const action =
-                    (child?.config.type === 'button'
-                        ? child.config.config
-                        : undefined) ?? (detailConfig as ButtonMiniExtConfig);
+                // The returned detail config already includes accepted upstream child
+                // settings and custom-detail overrides. Do not merge the child again.
                 const config: ButtonMiniExtConfig = {
                     ...(detailConfig as ButtonMiniExtConfig),
                     title:
                         linked.detail.titleOverride ?? linked.detail.fieldName,
-                    openLinkType: action?.openLinkType,
-                    triggerWebhookSuccessMessage:
-                        action?.triggerWebhookSuccessMessage,
-                    triggerWebhookErrorMessage:
-                        action?.triggerWebhookErrorMessage,
                 };
                 return {
                     field: linked.field,
                     value: buttonValue(linked.row.fields[options.fieldId]),
                     config,
-                    language: portal.language,
+                    language: linked.portal.language,
                     source: linked.source,
-                    extensionAccessToken: portal.payload.extensionAccessToken,
+                    extensionAccessToken:
+                        linked.portal.payload.extensionAccessToken,
                     visible: true,
                 };
             },

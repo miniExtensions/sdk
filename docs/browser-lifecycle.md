@@ -212,7 +212,8 @@ backend and app versions plus the disposition of only your owned test data.
 
 The standard `ubuntu-latest` Node24 CI lane separately runs
 `pnpm check:browser` against those emitted package and fixture artifacts. The
-bounded Chromium suite uses the runner's preinstalled stable Chrome through
+emitted host is checked against the installed SDK declarations before launch,
+including a missing-owner-scope rejection regression. The bounded Chromium suite uses the runner's preinstalled stable Chrome through
 Playwright's supported `chrome` channel, retaining Ubuntu's installed sandbox
 policy without changing system settings. Its actual version is recorded rather
 than assumed pinned. The suite covers visitor teardown, invalid numeric input,

@@ -106,6 +106,8 @@ try {
                     '@miniextensions/sdk': `file:${archive}`,
                     react: '19.2.0',
                     'react-dom': '19.2.0',
+                    '@types/react': '18.3.12',
+                    '@types/react-dom': '18.3.1',
                 },
             })
         );
@@ -152,6 +154,76 @@ try {
         };
         const entry = join(temporary, 'native-browser-fixture.mjs');
         writeFileSync(entry, regular('scripts/native-browser-fixture.mjs'));
+        const globals = join(temporary, 'native-fixture-globals.d.ts');
+        writeFileSync(
+            globals,
+            `declare const __FIXTURES__: {
+            form: import('@miniextensions/sdk').FormLoadedResult;
+            auth: import('@miniextensions/sdk').LoginPageResult;
+            portal: import('@miniextensions/sdk').PortalLoadedResult;
+            oldPage: import('@miniextensions/sdk').ListPortalLinkedRecordsResult;
+            newPage: import('@miniextensions/sdk').ListPortalLinkedRecordsResult;
+            criteria: import('@miniextensions/sdk/portals').PortalCollectionCriteria;
+        };
+        interface Window { __nativeProbe: { snapshot(): any }; }
+`
+        );
+        const compiler = realpathSync('node_modules/typescript/bin/tsc');
+        const checkFixture = (path) =>
+            execFileSync(
+                process.execPath,
+                [
+                    compiler,
+                    '--allowJs',
+                    '--checkJs',
+                    '--noEmit',
+                    '--skipLibCheck',
+                    '--module',
+                    'NodeNext',
+                    '--moduleResolution',
+                    'NodeNext',
+                    '--target',
+                    'ES2022',
+                    path,
+                    globals,
+                ],
+                { cwd: temporary, stdio: 'pipe' }
+            );
+        checkFixture(entry);
+        const malformedEntry = join(
+            temporary,
+            'native-browser-fixture-missing-scope.mjs'
+        );
+        const source = regular(entry).toString();
+        const scopeLine = '        getScope: () => ({ ...scope }),\n';
+        assert.equal(
+            source.split(scopeLine).length,
+            2,
+            'Exactly one Portal scope insertion expected'
+        );
+        writeFileSync(malformedEntry, source.replace(scopeLine, ''));
+        let rejectedScope = false;
+        try {
+            checkFixture(malformedEntry);
+        } catch (error) {
+            rejectedScope = String(error.stdout).includes(
+                "Property 'getScope' is missing"
+            );
+        }
+        assert(
+            rejectedScope,
+            'Installed declaration check must reject missing Portal getScope'
+        );
+        report.fixtureDeclarationCheck = {
+            status: 'passed',
+            compilerVersion: JSON.parse(
+                regular(realpathSync('node_modules/typescript/package.json'))
+            ).version,
+            compilerEntrySha256: hash(regular(compiler)),
+            missingScopeRegression: 'rejected',
+            globalsSha256: hash(regular(globals)),
+        };
+        console.log('Installed native fixture declaration check: passed');
         const bundled = await build({
             absWorkingDir: temporary,
             entryPoints: [entry],
@@ -451,8 +523,19 @@ try {
                 )
             );
         });
+        const nativeSetup = async (page, origin, mode) => {
+            await page.goto(`${origin}/native.html?mode=${mode}`);
+            await page.waitForFunction(
+                () => window.__nativeProbe !== undefined
+            );
+            assert.deepEqual(
+                (await page.evaluate(() => window.__nativeProbe.snapshot()))
+                    .errors,
+                []
+            );
+        };
         await run('attachment-picker', async (page, origin) => {
-            await page.goto(`${origin}/native.html?mode=attachment`);
+            await nativeSetup(page, origin, 'attachment');
             await page.locator('dialog[open]').waitFor();
             const text = page.locator('dialog input[type=password]');
             await text.fill('Retained dirty text');
@@ -517,7 +600,7 @@ try {
             );
         });
         await run('portal-late-criteria', async (page, origin) => {
-            await page.goto(`${origin}/native.html?mode=portal`);
+            await nativeSetup(page, origin, 'portal');
             await page.getByRole('button', { name: 'Load records' }).click();
             await page.waitForFunction(
                 () => window.__nativeProbe.snapshot().calls.length === 1
@@ -533,6 +616,18 @@ try {
             await page
                 .getByRole('button', { name: 'Release old response' })
                 .click();
+            await page.waitForFunction(() =>
+                window.__nativeProbe
+                    .snapshot()
+                    .events.some((event) => event.type === 'read-settled')
+            );
+            assert.equal(
+                (
+                    await page.evaluate(() => window.__nativeProbe.snapshot())
+                ).events.find((event) => event.type === 'read-settled')
+                    .accepted,
+                false
+            );
             assert.equal(await page.locator('li').count(), 0);
             await page.getByRole('button', { name: 'Load records' }).click();
             await page.getByText('rec_new', { exact: true }).waitFor();
@@ -542,6 +637,10 @@ try {
             assert.equal(state.calls.length, 2);
             assert.equal(state.calls[1].input.searchTerm, 'new query');
             assert.equal(state.calls[1].input.airtableOffset, null);
+            for (const key of Object.keys(data.criteria).filter(
+                (key) => key !== 'searchTerm'
+            ))
+                assert.deepEqual(state.calls[1].input[key], data.criteria[key]);
             assert.deepEqual(state.state.page.recordIds, ['rec_new']);
             await page.getByRole('button', { name: 'Replace visitor' }).click();
             await page.getByRole('button', { name: 'Load records' }).click();
@@ -551,7 +650,7 @@ try {
         });
         for (const mode of ['session-off', 'session-on'])
             await run(mode, async (page, origin) => {
-                await page.goto(`${origin}/native.html?mode=${mode}`);
+                await nativeSetup(page, origin, mode);
                 await page
                     .getByRole('button', { name: 'Login fake visitor' })
                     .click();
@@ -634,6 +733,7 @@ try {
     } catch (error) {
         report.status = 'failed';
         report.error = error.message;
+        if (error.stdout) report.validationOutput = String(error.stdout);
         process.exitCode = 1;
         console.error(error);
     } finally {

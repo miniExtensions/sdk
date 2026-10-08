@@ -1,3 +1,4 @@
+// @ts-check
 // Verification-only host. The packed SDK owns all behavior; this file supplies
 // fake responses, explicit controls and read-only inspection, never app logic.
 import React, { createElement as h, useState } from 'react';
@@ -84,25 +85,26 @@ if (mode === 'attachment') {
             null,
             button('Open attachment editor', () => setOpen(true)),
             open
-                ? h(
-                      AttachmentDialog,
-                      {
-                          onClose: () => {
-                              events.push('closed');
-                              setOpen(false);
-                          },
+                ? h(AttachmentDialog, {
+                      onClose: () => {
+                          events.push('closed');
+                          setOpen(false);
                       },
-                      h(TextField, {
-                          binding: owner.field('fld_review_title'),
-                      }),
-                      h(AttachmentField, {
-                          binding: owner.field('fld_review_files'),
-                          controller: model,
-                      }),
-                      button('Save synthetic Form', () => {
-                          void owner.save();
-                      })
-                  )
+                      children: h(
+                          React.Fragment,
+                          null,
+                          h(TextField, {
+                              binding: owner.field('fld_review_title'),
+                          }),
+                          h(AttachmentField, {
+                              binding: owner.field('fld_review_files'),
+                              controller: model,
+                          }),
+                          button('Save synthetic Form', () => {
+                              void owner.save();
+                          })
+                      ),
+                  })
                 : null
         );
     }
@@ -112,7 +114,10 @@ if (mode === 'attachment') {
         (event) =>
             events.push({
                 type: 'cancel',
-                target: event.target.tagName,
+                target:
+                    event.target instanceof HTMLElement
+                        ? event.target.tagName
+                        : 'unknown',
                 trusted: event.isTrusted,
             }),
         true
@@ -132,6 +137,7 @@ if (mode === 'attachment') {
         portal: data.portal,
         portalFieldId: 'fld_children',
         criteria: data.criteria,
+        getScope: () => ({ ...scope }),
         isCurrent: () => scope.revision === 0,
     });
     snapshot = () => ({ state: owner.getSnapshot(), calls, events, errors });
@@ -146,7 +152,11 @@ if (mode === 'attachment') {
                     null,
                     h('p', { role: 'status' }, state.phase),
                     button('Load records', () => {
-                        void owner.readFirst(state.revision, readOptions);
+                        void owner
+                            .readFirst(state.revision, readOptions)
+                            .then((accepted) =>
+                                events.push({ type: 'read-settled', accepted })
+                            );
                     }),
                     button('Apply new search', () =>
                         owner.setCriteria(state.revision, {
@@ -185,10 +195,11 @@ if (mode === 'attachment') {
             ),
         });
         return structuredClone({
-            ...data.auth,
-            extensionScreen: 'portal_loaded',
+            ...data.portal,
+            extensionId: data.auth.extensionId,
         });
     };
+    /** @type {import('@miniextensions/sdk/auth').SessionRestorationStorage} */
     const storage = {
         mode: 'persistent',
         getItem: (key) => localStorage.getItem(key),
@@ -237,13 +248,15 @@ if (mode === 'attachment') {
             null,
             h('p', { role: 'status' }, status),
             button('Login fake visitor', async () => {
+                if (flow.screen !== 'login_page')
+                    throw Error('Expected synthetic login screen');
                 const result = await flow.login({
                     loginCredentials: {
                         [data.auth.payload.loginFieldNames[0]]:
                             'FAKE_RAW_NOT_PERSISTED',
                     },
                 });
-                if (result.grant) {
+                if (result.type === 'found-record') {
                     (owner ?? flow).applySession(result.grant);
                     setStatus('Fake session applied');
                 }

@@ -179,3 +179,16 @@ the same target/currentTarget distinction, without timer heuristics.
 The current React cancellation regression uses synthetic DOM events. It does not
 establish OS-picker Cancel/Escape, browser focus handoff, or screen-reader
 certification. Native evidence remains a separate acceptance gate.
+
+A cancelled or transport-failed Save retires its operation's bindings. The accepted
+owner can still perform an explicit fresh `reload({ dirty: 'keep' | 'discard', read })`.
+Accepted recovery creates new bindings; old actions do not revive. Recovery does
+not replay Save or acknowledge an uncertain journal attempt. The journal's existing
+manual inspection/new-intent gate remains independent of the fresh read.
+
+Linked search input belongs to the selection model. `setSearchInput` replaces the
+query and retires old results/paging without a read; `reload()` performs the explicit
+search. React reflects that query on remount and takes the replacement owner's
+query on context changes. `canChoose` validates a complete proposed selection
+against the model's policy, including atomic replacement at a selection limit;
+decorated disabled-option flags are presentation, not whole-set admission.

@@ -456,3 +456,135 @@ it('an old commit hook cannot publish bookkeeping over a reset successor', () =>
     assert.equal(f.calls.length, 0);
     f.owner.destroy();
 });
+for (const outcome of ['cancelled', 'transport-error'] as const) {
+    it(`${outcome} Save permits explicit fresh recovery without reviving old bindings or replaying`, async () => {
+        const held = deferred<SaveFormResult>();
+        const f = fixture(() => held.promise);
+        const old = f.owner.field('fld_title');
+        assert.equal(old.setValue('Retained dirty input').accepted, true);
+        const saving = f.owner.save();
+        const rejected = assert.rejects(saving);
+        if (outcome === 'cancelled') f.owner.controller.cancel();
+        held.reject(new Error('Unknown remote outcome'));
+        await rejected;
+        assert.equal(f.owner.controller.getState().status, outcome);
+        assert.equal(f.calls.length, 1);
+        let reads = 0;
+        assert.equal(
+            await f.owner.reload({
+                dirty: 'keep',
+                read: async () => {
+                    reads++;
+                    return loadedForm();
+                },
+            }),
+            true
+        );
+        const fresh = f.owner.field('fld_title');
+        assert.equal(reads, 1);
+        assert.equal(f.calls.length, 1, 'recovery never replays Save');
+        assert.equal(fresh.getSnapshot().retired, false);
+        assert.equal(fresh.getSnapshot().value, 'Retained dirty input');
+        assert.equal(old.getSnapshot().retired, true);
+        assert.equal(old.setValue('Late old edit').accepted, false);
+        assert.equal(fresh.setValue('New explicit edit').accepted, true);
+        assert.equal(fresh.getSnapshot().value, 'New explicit edit');
+        f.owner.destroy();
+    });
+}
+it('atomic replacement obeys select model limits rather than decorated option flags', () => {
+    const f = fixture();
+    const loaded = loadedForm();
+    loaded.payload.fieldIdsInForm.push('fld_choices');
+    loaded.payload.fieldIdsToSchemas.fld_choices = {
+        fieldType: 'multipleSelects',
+        airtableField: {
+            id: 'fld_choices',
+            name: 'Choices',
+            isComputed: false,
+            isPrimaryField: false,
+            description: null,
+            config: {
+                type: 'multipleSelects',
+                options: {
+                    choices: [
+                        { id: 'a', name: 'Alpha' },
+                        { id: 'b', name: 'Beta' },
+                    ],
+                },
+            },
+        },
+        miniExtConfig: { maxNumberOfSelections: 1 },
+    };
+    loaded.payload.formRecord.data.fld_choices = ['Alpha'];
+    const owner = createFormFieldBindings({ ...f.options, loaded });
+    const field = owner.field('fld_choices');
+    assert.equal(
+        field
+            .getSnapshot()
+            .selection!.options.find((option) => option.value === 'Beta')!
+            .disabled,
+        true
+    );
+    assert.equal(field.setValue(['Beta']).accepted, true);
+    assert.deepEqual(field.getSnapshot().value, ['Beta']);
+    assert.equal(field.setValue(['Alpha', 'Beta']).accepted, false);
+    assert.deepEqual(field.getSnapshot().value, ['Beta']);
+    assert.equal(field.setValue(['Alpha', 'Unknown']).accepted, false);
+    assert.deepEqual(field.getSnapshot().value, ['Beta']);
+    field.selection!.choose(['Alpha']);
+    assert.deepEqual(field.getSnapshot().value, ['Alpha']);
+    owner.destroy();
+    f.owner.destroy();
+});
+it('cancel recovery retains the unknown journal gate until an explicit new-intent acknowledgment', async () => {
+    const { RecoveryJournal } = await import('../src/forms/recovery.js');
+    const held = deferred<SaveFormResult>();
+    const f = fixture(() => held.promise);
+    const journal = new RecoveryJournal();
+    const scope = {
+        owner: 'A',
+        parentFieldId: null,
+        tableId: null,
+        childExtensionId: 'form',
+        context: 'modal' as const,
+    };
+    const owner = createFormFieldBindings({
+        ...f.options,
+        canWrite: () => journal.blocking(scope, null) == null,
+    });
+    const saving = owner.save({
+        lifecycle: {
+            dispatch: () => {
+                const attempt = journal.begin(scope, null, 'save', 1);
+                return {
+                    accepted: () =>
+                        journal.accepted(attempt, 'validation-error'),
+                    finish: () => journal.finishFlight(attempt),
+                };
+            },
+        },
+    });
+    const rejected = assert.rejects(saving);
+    owner.controller.cancel();
+    held.reject(new Error('Unknown outcome'));
+    await rejected;
+    assert.equal(
+        await owner.reload({ dirty: 'keep', read: async () => loadedForm() }),
+        true
+    );
+    const fresh = owner.field('fld_title');
+    assert.equal(fresh.getSnapshot().retired, false);
+    assert.equal(fresh.getSnapshot().canEdit, false);
+    await assert.rejects(owner.save());
+    assert.equal(f.calls.length, 1);
+    const unknown = journal.unknown('A');
+    assert.equal(unknown.length, 1);
+    journal.acknowledgeNewIntent(unknown[0]!);
+    owner.refresh();
+    assert.equal(fresh.getSnapshot().canEdit, true);
+    assert.equal(unknown[0]!.outcome, 'unknown');
+    assert.equal(f.calls.length, 1);
+    owner.destroy();
+    f.owner.destroy();
+});

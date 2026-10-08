@@ -2,6 +2,7 @@ import {
     createFormAttachmentController,
     type FormAttachmentController,
     type AttachmentRecovery,
+    type FormAttachmentControllerOptions,
 } from './attachmentController.js';
 import type { AirtableValue, FormLoadedResult } from '../runtime/types.js';
 import { createSelectionModel } from '../ui/model.js';
@@ -75,7 +76,11 @@ export type FormFieldBindings = {
     getLoaded(): FormLoadedResult;
     attachment(
         fieldId: string,
-        recovery: AttachmentRecovery
+        recovery: AttachmentRecovery,
+        adapter?: Pick<
+            FormAttachmentControllerOptions,
+            'getLoaded' | 'isCurrent' | 'configurationRevision' | 'onAttempt'
+        >
     ): FormAttachmentController;
     field(fieldId: string): FormFieldBinding;
     refresh(): void;
@@ -160,6 +165,18 @@ export function createFormFieldBindings(
         if (retired || state.epoch !== epoch || state.draft === null)
             return false;
         return true;
+    };
+    // A cancelled mutation retires its old bindings, but not the accepted owner
+    // of an explicit recovery read. Replaced/disposed owners cannot recover here.
+    const recoverable = () => {
+        const state = controller.getState();
+        return (
+            !disposed &&
+            state.draft !== null &&
+            (state.status === 'cancelled' ||
+                state.status === 'transport-error') &&
+            (options.isCurrent?.() ?? true)
+        );
     };
     const notify = () => {
         for (const entry of entries.values())
@@ -398,19 +415,7 @@ export function createFormFieldBindings(
                                   : null;
                     if (values === null)
                         return { accepted: false, reason: 'invalid-value' };
-                    const available = model.getState();
-                    const selected = new Set(available.value);
-                    const allowed = new Set(
-                        available.options
-                            .filter((option) => option.disabled !== true)
-                            .map((option) => option.value)
-                    );
-                    if (
-                        values.some(
-                            (value) =>
-                                !selected.has(value) && !allowed.has(value)
-                        )
-                    )
+                    if (!model.canChoose(values))
                         return { accepted: false, reason: 'invalid-value' };
                     model.choose(values);
                     return model.getState().value.length ===
@@ -499,12 +504,13 @@ export function createFormFieldBindings(
             if (!current()) throw new Error('This Form owner is retired.');
             return structuredClone(loaded);
         },
-        attachment: (id, recovery) => {
+        attachment: (id, recovery, adapter) => {
             if (!current()) throw new Error('This Form owner is retired.');
             let model = attachments.get(id);
             if (model == null) {
                 model = createFormAttachmentController({
                     ...recovery,
+                    ...adapter,
                     form: owner,
                     fieldId: id,
                     client: options.client,
@@ -582,10 +588,17 @@ export function createFormFieldBindings(
                 throw new TypeError(
                     'Reload requires an explicit keep or discard choice.'
                 );
-            if (!current() || controller.getState().status === 'saving')
+            if (
+                (!current() && !recoverable()) ||
+                controller.getState().status === 'saving'
+            )
                 return false;
             const generation = ++readGeneration;
             const capturedEpoch = epoch;
+            const capturedControllerEpoch = controller.getState().epoch;
+            const ownsRead = () =>
+                capturedControllerEpoch === controller.getState().epoch &&
+                (current() || recoverable());
             const previous = pendingRead;
             const abort = new AbortController();
             pendingRead = abort;
@@ -598,7 +611,7 @@ export function createFormFieldBindings(
                 if (
                     generation !== readGeneration ||
                     capturedEpoch !== epoch ||
-                    !current() ||
+                    !ownsRead() ||
                     abort.signal.aborted
                 )
                     return false;
@@ -660,7 +673,7 @@ export function createFormFieldBindings(
                 if (
                     generation === readGeneration &&
                     capturedEpoch === epoch &&
-                    current()
+                    ownsRead()
                 ) {
                     readError =
                         'The Form could not be reloaded. Retry explicitly.';

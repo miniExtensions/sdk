@@ -98,6 +98,18 @@ export const createSelectFieldModel = (
     const setOptions = model.setOptions;
     const setReadOnly = model.setReadOnly;
     const choose = model.choose;
+    const canChoose = model.canChoose;
+    model.canChoose = (next) => {
+        if (!canChoose(next)) return false;
+        const state = model.getState();
+        const unique = [...new Set(next)];
+        return (
+            !multiple ||
+            policy.maxSelections === null ||
+            unique.length <= policy.maxSelections ||
+            unique.every((value) => state.value.includes(value))
+        );
+    };
     model.choose = (next): void => {
         const state = model.getState();
         const available = new Map(

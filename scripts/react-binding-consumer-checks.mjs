@@ -197,7 +197,7 @@ export async function checkReactBindingConsumer({
                         {
                             type: 'button',
                             'data-custom-select': true,
-                            onClick: () => binding.selection.choose(['Beta']),
+                            onClick: () => binding.setValue(['Beta']),
                         },
                         'Choose Beta'
                     ),
@@ -273,6 +273,18 @@ export async function checkReactBindingConsumer({
             )
         );
         assert.equal(closes, 1);
+        const stockSelect = container.querySelector('select');
+        await act(async () => {
+            [...stockSelect.options].forEach((option) => {
+                option.selected = option.value === 'Alpha';
+            });
+            stockSelect.dispatchEvent(
+                new window.Event('change', { bubbles: true })
+            );
+        });
+        assert.deepEqual(owner.field('fld_choices').getSnapshot().value, [
+            'Alpha',
+        ]);
         await act(async () =>
             container.querySelector('[data-custom-select]').click()
         );
@@ -316,6 +328,83 @@ export async function checkReactBindingConsumer({
             saves[0].formFieldIdsWithUnsavedChanges.includes('fld_parent'),
             true
         );
+        const oldLinked = owner.field('fld_parent');
+        await act(async () =>
+            oldLinked.selection.setSearchInput('PRIVATE visitor A query')
+        );
+        assert.equal(
+            container.querySelector('fieldset input:not([type=checkbox])')
+                .value,
+            'PRIVATE visitor A query'
+        );
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await act(async () => root.render(tree()));
+        assert.equal(
+            container.querySelector('fieldset input:not([type=checkbox])')
+                .value,
+            'PRIVATE visitor A query'
+        );
+        owner.destroy();
+        const successor = forms.createFormFieldBindings({
+            loaded,
+            client,
+            getScope: () => ({ ownerId: 'B', revision: 1 }),
+            saveOptions: {
+                captchaVal: null,
+                isComputeMode: false,
+                context: { type: 'direct-url' },
+                searchQuery: {},
+                conditionalLinkedRecordFieldIdsToFilteringValues: {},
+            },
+        });
+        await act(async () =>
+            root.render(
+                createElement(api.LinkedField, {
+                    binding: successor.field('fld_parent'),
+                })
+            )
+        );
+        assert.equal(
+            container.querySelector('fieldset input:not([type=checkbox])')
+                .value,
+            ''
+        );
+        await act(async () =>
+            oldLinked.selection.setSearchInput('Late old A query')
+        );
+        assert.equal(
+            container.querySelector('fieldset input:not([type=checkbox])')
+                .value,
+            ''
+        );
+        successor.destroy();
+        const returned = forms.createFormFieldBindings({
+            loaded,
+            client,
+            getScope: () => ({ ownerId: 'A', revision: 2 }),
+            saveOptions: {
+                captchaVal: null,
+                isComputeMode: false,
+                context: { type: 'direct-url' },
+                searchQuery: {},
+                conditionalLinkedRecordFieldIdsToFilteringValues: {},
+            },
+        });
+        await act(async () =>
+            root.render(
+                createElement(api.LinkedField, {
+                    binding: returned.field('fld_parent'),
+                })
+            )
+        );
+        assert.equal(
+            container.querySelector('fieldset input:not([type=checkbox])')
+                .value,
+            ''
+        );
+        assert.equal(writes, 1);
+        returned.destroy();
         return {
             checks: 1,
             reactVersion: react.version,

@@ -606,3 +606,45 @@ describe('selection model asynchronous pages', () => {
         assert.equal(fixture.requests.length, 1);
     });
 });
+it('owned search input retires paging and late results without dispatch until explicit reload', async () => {
+    const first = deferred<SelectionPage>();
+    const requests: SelectionRequest[] = [];
+    const model = createSelectionModel({
+        multiple: true,
+        value: ['one'],
+        selectedOptions: options,
+        loadOptions: async (request) => {
+            requests.push(request);
+            if (requests.length === 1) return await first.promise;
+            return { options, offset: 'next' };
+        },
+    });
+    model.setSearchInput('Visitor A query');
+    assert.equal(model.getState().searchTerm, 'Visitor A query');
+    assert.equal(requests.length, 0);
+    const reading = model.reload();
+    await Promise.resolve();
+    assert.equal(requests.length, 1);
+    model.setSearchInput('Replacement query');
+    assert.equal(requests[0]!.signal.aborted, true);
+    first.resolve({
+        options: [{ value: 'private', label: 'Late private result' }],
+        offset: 'old-offset',
+    });
+    await reading;
+    assert.equal(model.getState().searchTerm, 'Replacement query');
+    assert.deepEqual(model.getState().options, []);
+    assert.equal(model.getState().offset, null);
+    assert.deepEqual(model.getState().value, ['one']);
+    assert.equal(requests.length, 1);
+    await model.reload();
+    assert.equal(requests[1]!.searchTerm, 'Replacement query');
+    assert.equal(requests[1]!.offset, null);
+    assert.equal(model.getState().offset, 'next');
+    model.setSearchInput('Third query');
+    assert.equal(model.getState().offset, null);
+    assert.equal(requests.length, 2);
+    model.destroy();
+    model.setSearchInput('Retained old query');
+    assert.notEqual(model.getState().searchTerm, 'Retained old query');
+});

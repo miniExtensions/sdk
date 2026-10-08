@@ -1,8 +1,8 @@
 import {
     createElement,
     useMemo,
-    useState,
     useRef,
+    useEffect,
     useSyncExternalStore,
     type ReactNode,
     type ChangeEvent,
@@ -29,10 +29,17 @@ export function AttachmentDialog({
     children: ReactNode;
     onClose(): void;
 }): ReactNode {
+    const dialog = useRef<HTMLDialogElement>(null);
+    useEffect(() => {
+        const node = dialog.current;
+        if (node == null) return;
+        node.showModal();
+        return () => node.close();
+    }, []);
     return createElement(
         'dialog',
         {
-            open: true,
+            ref: dialog,
             onCancel: (
                 event: import('react').SyntheticEvent<HTMLDialogElement>
             ) => {
@@ -285,7 +292,6 @@ export function SelectField({ binding, render }: FieldProps): ReactNode {
 }
 export function LinkedField({ binding, render }: FieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
-    const [search, setSearch] = useState('');
     if (render) return render({ snapshot, binding });
     if (
         snapshot.retired ||
@@ -309,9 +315,13 @@ export function LinkedField({ binding, render }: FieldProps): ReactNode {
             null,
             'Search linked records',
             createElement('input', {
-                value: search,
-                onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                    setSearch(event.currentTarget.value),
+                value: state.searchTerm,
+                onChange: (event: ChangeEvent<HTMLInputElement>) => {
+                    if (binding.getSnapshot().canEdit)
+                        binding.selection?.setSearchInput(
+                            event.currentTarget.value
+                        );
+                },
             })
         ),
         createElement(
@@ -321,7 +331,7 @@ export function LinkedField({ binding, render }: FieldProps): ReactNode {
                 disabled: state.loading,
                 onClick: () => {
                     if (binding.getSnapshot().canEdit)
-                        void binding.selection?.setSearchTerm(search);
+                        void binding.selection?.reload();
                 },
             },
             'Search'

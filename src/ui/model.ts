@@ -238,6 +238,22 @@ export function createSelectionModel(
     replace(initial);
     return {
         getState,
+        canChoose(next) {
+            if (!current() || disabled || readOnly || !Array.isArray(next))
+                return false;
+            if (!multiple && new Set(next).size > 1) return false;
+            const available = new Map(
+                options.map((option) => [option.value, option])
+            );
+            return Array.from(next).every(
+                (id, index) =>
+                    Object.hasOwn(next, index) &&
+                    typeof id === 'string' &&
+                    (value.includes(id) ||
+                        (available.has(id) &&
+                            available.get(id)?.disabled !== true))
+            );
+        },
         subscribe(listener) {
             if (destroyed) return () => {};
             current();
@@ -264,6 +280,17 @@ export function createSelectionModel(
             error = null;
             emit();
             return Promise.resolve();
+        },
+        setSearchInput(next) {
+            if (!current()) return;
+            abort();
+            searchTerm = next;
+            if (configuration.loadOptions) {
+                options = [];
+                offset = null;
+            }
+            error = null;
+            emit();
         },
         reload() {
             if (!current()) return Promise.resolve();

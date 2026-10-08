@@ -52,6 +52,8 @@ export type FormAttachmentControllerOptions = AttachmentRecovery & {
     isCurrent?(): boolean;
     getLoaded?(): FormLoadedResult;
     configurationRevision?(): string | number;
+    /** Adapter may capture unrelated reference input; it must not dispatch or mutate native data. */
+    onAttempt?(attempt: RecoveryAttempt): void;
 };
 
 /** Shared admission, generation and uncertainty state; rendering never owns the queue. */
@@ -293,7 +295,6 @@ export function createFormAttachmentController(
             phase = 'uploading';
             error = null;
             attempted.add(selected);
-            emit();
             const ownsAttempt = () => {
                 const state = form.controller.getState();
                 const now = client.getSession();
@@ -316,6 +317,8 @@ export function createFormAttachmentController(
                 );
             };
             try {
+                options.onAttempt?.(attempt);
+                emit();
                 if (!ownsAttempt()) return false;
                 const returned = await client.attachments.uploadFile(
                     {
@@ -346,6 +349,7 @@ export function createFormAttachmentController(
                 // Accepted before any presentation/queue update; never replay after a renderer exception.
                 attempted.delete(selected);
                 if (!current()) return true;
+                attempted.delete(selected);
                 phase = 'accepted';
                 if (revision === capturedRevision && files[0] === selected) {
                     files = files.slice(1);

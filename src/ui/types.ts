@@ -53,10 +53,14 @@ export type SelectionModel = {
     /** Emits immediately; returns an unsubscribe function. */
     subscribe(listener: (state: SelectionState) => void): () => void;
     setSearchTerm(searchTerm: string): Promise<void>;
+    /** Update the owned query and retire prior paging without dispatching a read. */
+    setSearchInput(searchTerm: string): void;
     reload(): Promise<void>;
     loadMore(): Promise<void>;
     /** Atomic user change; ignores unknown or disabled new choices. */
     choose(value: readonly string[]): void;
+    /** Validate the whole proposed set against model authority, not decorated UI flags. */
+    canChoose(value: readonly string[]): boolean;
     toggle(value: string): void;
     clear(): void;
     setValue(

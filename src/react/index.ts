@@ -687,3 +687,80 @@ export function DateField({ binding, render }: FieldProps): ReactNode {
 }
 /** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
 export const DateTimeField = DateField;
+
+import type {
+    PortalSortEditorModel,
+    PortalSortEditorSnapshot,
+    PortalFilterEditorModel,
+    PortalFilterEditorSnapshot,
+} from '../portals/editors.js';
+/** Unmount only removes a subscription; the accepted Portal owner retains prepared state. */
+export function PortalSortEditor({
+    model,
+    render,
+}: {
+    model: PortalSortEditorModel;
+    render(state: {
+        snapshot: PortalSortEditorSnapshot;
+        model: PortalSortEditorModel;
+    }): ReactNode;
+}): ReactNode {
+    const store = useMemo(() => {
+        let value = model.getSnapshot();
+        return {
+            getSnapshot: () => value,
+            subscribe: (notify: () => void) => {
+                const stop = model.subscribe((next) => {
+                    value = next;
+                    notify();
+                });
+                // A child layout effect may have changed the model after render.
+                // Refresh once on subscription; getSnapshot remains reference-stable.
+                value = model.getSnapshot();
+                notify();
+                return stop;
+            },
+        };
+    }, [model]);
+    const snapshot = useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+    return render({ snapshot, model });
+}
+/** Custom markup uses the same explicit replacement/Apply/Clear actions as stock DOM. */
+export function PortalFilterEditor({
+    model,
+    render,
+}: {
+    model: PortalFilterEditorModel;
+    render(state: {
+        snapshot: PortalFilterEditorSnapshot;
+        model: PortalFilterEditorModel;
+    }): ReactNode;
+}): ReactNode {
+    const store = useMemo(() => {
+        let value = model.getSnapshot();
+        return {
+            getSnapshot: () => value,
+            subscribe: (notify: () => void) => {
+                const stop = model.subscribe((next) => {
+                    value = next;
+                    notify();
+                });
+                // A child layout effect may have changed the model after render.
+                // Refresh once on subscription; getSnapshot remains reference-stable.
+                value = model.getSnapshot();
+                notify();
+                return stop;
+            },
+        };
+    }, [model]);
+    const snapshot = useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+    return render({ snapshot, model });
+}

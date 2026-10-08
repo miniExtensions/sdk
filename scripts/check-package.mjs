@@ -1,3 +1,4 @@
+import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
@@ -841,6 +842,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         ...reactSources,
     ]);
 
+    assert.equal(
+        await checkPortalEditorConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        12
+    );
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),

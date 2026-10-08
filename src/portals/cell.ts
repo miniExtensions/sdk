@@ -263,14 +263,7 @@ export const createPortalCellBinding = (
             const value = gridValue(store.read(handle, input.recordFieldId));
             request.signal?.throwIfAborted();
             const revision = store.revision(handle)!;
-            const attempt = recovery.journal.begin(
-                recovery.scope,
-                input.recordId,
-                'save',
-                recovery.loadVersion,
-                input.recordFieldId
-            );
-            submitted = true;
+            let attempt: ReturnType<typeof recovery.journal.begin> | undefined;
             busy = true;
             error = null;
             const abort = new AbortController();
@@ -282,8 +275,20 @@ export const createPortalCellBinding = (
             try {
                 request.dispatched?.();
                 notify();
-                if (!current() || abort.signal.aborted)
+                if (
+                    !current() ||
+                    abort.signal.aborted ||
+                    binding.date?.getState().valid === false
+                )
                     throw new Error('The cell owner changed before dispatch.');
+                attempt = recovery.journal.begin(
+                    recovery.scope,
+                    input.recordId,
+                    'save',
+                    recovery.loadVersion,
+                    input.recordFieldId
+                );
+                submitted = true;
                 const result = await options.client.portals.updateGridCell(
                     { ...input, value },
                     { signal: abort.signal }
@@ -303,12 +308,13 @@ export const createPortalCellBinding = (
                 return result;
             } catch (cause) {
                 if (current())
-                    error =
-                        'The cell outcome is unknown. Load fresh records; do not repeat this Save.';
+                    error = attempt
+                        ? 'The cell outcome is unknown. Load fresh records; do not repeat this Save.'
+                        : 'The cell owner changed before dispatch. Load fresh records.';
                 throw cause;
             } finally {
                 request.signal?.removeEventListener('abort', externalAbort);
-                recovery.journal.finishFlight(attempt);
+                if (attempt) recovery.journal.finishFlight(attempt);
                 if (active === abort) {
                     active = null;
                     busy = false;

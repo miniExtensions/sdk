@@ -198,26 +198,31 @@ export function createDateFieldModel(
             ) {
                 try {
                     const config = captured.config;
-                    display = getReadableStringFromAirtableValue({
-                        value: seen,
-                        airtableFieldConfig:
-                            config.type === 'dateTime'
-                                ? {
-                                      ...config,
-                                      options: {
-                                          ...config.options,
-                                          timeZone:
-                                              captured.zone as typeof config.options.timeZone,
-                                      },
-                                  }
-                                : config,
-                        source: {
-                            type: 'airtableMock',
-                            linkedTableStates: {},
-                            dateParsing: 'utc',
-                        },
-                        fieldName: 'Date',
-                    });
+                    display =
+                        config.type === 'date'
+                            ? moment
+                                  .utc(seen, 'YYYY-MM-DD', true)
+                                  .format(config.options.dateFormat.format)
+                            : getReadableStringFromAirtableValue({
+                                  value: seen,
+                                  airtableFieldConfig:
+                                      config.type === 'dateTime'
+                                          ? {
+                                                ...config,
+                                                options: {
+                                                    ...config.options,
+                                                    timeZone:
+                                                        captured.zone as typeof config.options.timeZone,
+                                                },
+                                            }
+                                          : config,
+                                  source: {
+                                      type: 'airtableMock',
+                                      linkedTableStates: {},
+                                      dateParsing: 'utc',
+                                  },
+                                  fieldName: 'Date',
+                              });
                 } catch {
                     display = null;
                 }

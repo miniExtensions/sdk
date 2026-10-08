@@ -680,7 +680,20 @@ export function createFormFieldBindings(
                         'This Form is unavailable until its explicit load completes.'
                     )
                 );
-            return controller.save(supplied);
+            return controller.save({
+                ...supplied,
+                isCurrent: () =>
+                    (supplied?.isCurrent?.() ?? true) &&
+                    [...entries.values()].every((entry) => {
+                        const state = entry.binding.getSnapshot();
+                        return (
+                            state.visibility.type !== 'visible' ||
+                            state.readOnly ||
+                            !entry.binding.date ||
+                            entry.binding.date.getState().valid
+                        );
+                    }),
+            });
         },
         setLinkedOptions: (id, supplied, append = false) => {
             if (!current()) return;

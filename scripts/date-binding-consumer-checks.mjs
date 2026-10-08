@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -88,6 +89,38 @@ export async function checkDateBindingConsumer({
         assert.equal(cjsModel.setInput('2011-12-30'), true);
         assert.equal(native, '2011-12-30');
         cjsModel.destroy();
+        checks++;
+        // Real host TZ processes, not injected client-zone callbacks: calendar formatting must not shift.
+        for (const zone of ['UTC', 'America/Los_Angeles', 'Pacific/Apia']) {
+            const probe = spawnSync(
+                process.execPath,
+                [
+                    '-e',
+                    `
+                const assert = require('node:assert/strict');
+                const { createDateFieldModel } = require('@miniextensions/sdk/ui');
+                for (const value of ['2024-02-29', '2011-12-30']) {
+                    const model = createDateFieldModel({
+                        kind: 'date', getValue: () => value,
+                        getConfig: () => ({type:'date', options:{dateFormat:{name:'iso',format:'YYYY-MM-DD'}}}),
+                        canEdit: () => true, isCurrent: () => true,
+                        write: () => { throw Error('Formatting must not write'); }
+                    });
+                    assert.equal(model.getState().display, value);
+                    assert.equal(model.getState().input, value);
+                    model.destroy();
+                }
+                assert.equal(Intl.DateTimeFormat().resolvedOptions().timeZone, process.env.TZ);
+            `,
+                ],
+                {
+                    cwd: consumerDirectory,
+                    env: { ...process.env, TZ: zone },
+                    encoding: 'utf8',
+                }
+            );
+            assert.equal(probe.status, 0, `${zone}: ${probe.stderr}`);
+        }
         checks++;
         const pinned = JSON.parse(
             readFileSync(
@@ -366,6 +399,118 @@ export async function checkDateBindingConsumer({
             assert.equal(saves.length, 1);
             await act(async () => renderer.unmount());
             fresh.destroy();
+            checks++;
+        }
+        // A pending subscriber can withdraw the client-zone context before transport.
+        {
+            let clientZone = 'America/Los_Angeles',
+                dispatches = 0,
+                attempts = 0;
+            const freshPage = structuredClone(page);
+            freshPage.payload.fieldIdsToSchemas.fld_time.airtableField.config =
+                config('dateTime', 'client');
+            const freshClient = {
+                ...client,
+                forms: {
+                    ...client.forms,
+                    save: async () => {
+                        dispatches++;
+                        throw Error('No dispatch');
+                    },
+                },
+            };
+            const fresh = forms.createFormFieldBindings({
+                ...options,
+                client: freshClient,
+                loaded: freshPage,
+                getClientTimeZone: () => clientZone,
+            });
+            const binding = fresh.field('fld_time');
+            binding.getSnapshot();
+            const stop = binding.subscribe((state) => {
+                if (state.pending) {
+                    clientZone = 'Asia/Kathmandu';
+                    binding.getSnapshot();
+                }
+            });
+            await assert.rejects(
+                fresh.save({
+                    lifecycle: {
+                        dispatch() {
+                            attempts++;
+                            throw Error('No journal attempt');
+                        },
+                    },
+                })
+            );
+            assert.equal(dispatches, 0);
+            assert.equal(attempts, 0);
+            assert.equal(binding.date.getState().retired, true);
+            stop();
+            fresh.destroy();
+            checks++;
+        }
+        // The Portal dispatched callback is still preflight: no journal or transport on withdrawal.
+        {
+            let clientZone = 'America/Los_Angeles',
+                dispatches = 0;
+            const journal = new forms.RecoveryJournal();
+            const schema = structuredClone(
+                page.payload.fieldIdsToSchemas.fld_time
+            );
+            schema.airtableField.config = config('dateTime', 'client');
+            const recovery = {
+                journal,
+                scope: {
+                    owner: 'A',
+                    parentFieldId: 'fld_children',
+                    tableId: 'table_example',
+                    childExtensionId: '',
+                    context: 'modal',
+                },
+                loadVersion: 1,
+            };
+            const cell = portals.createPortalCellBinding({
+                client: {
+                    ...client,
+                    portals: {
+                        ...client.portals,
+                        updateGridCell: async () => {
+                            dispatches++;
+                            throw Error('No dispatch');
+                        },
+                    },
+                },
+                input: {
+                    portalExtensionAccessToken: 'token_example',
+                    portalFieldId: 'fld_children',
+                    recordFieldId: 'fld_time',
+                    recordId: 'rec_one',
+                    selectedCustomViewId: 'view_example',
+                },
+                schema,
+                value: '2024-07-01T12:00:00Z',
+                getClientTimeZone: () => clientZone,
+                getScope: () => ({ ownerId: 'A', revision: 0 }),
+                isCurrent: () => true,
+                recovery,
+            });
+            cell.binding.getSnapshot();
+            await assert.rejects(
+                cell.save({
+                    dispatched() {
+                        clientZone = 'Asia/Kathmandu';
+                        cell.binding.getSnapshot();
+                    },
+                })
+            );
+            assert.equal(dispatches, 0);
+            assert.equal(
+                journal.blocking(recovery.scope, 'rec_one'),
+                undefined
+            );
+            assert.equal(cell.binding.getSnapshot().pending, false);
+            cell.destroy();
             checks++;
         }
         const journal = new forms.RecoveryJournal();

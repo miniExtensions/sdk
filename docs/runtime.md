@@ -838,3 +838,47 @@ Keep one client/session per visitor and discard stale UI responses after a
 visitor, connection, record, or configuration change. Treat Form validation
 as a normal result, transport failures as exceptions, and cancellation as an
 uncertain write outcome. The SDK never automatically repeats a mutation.
+
+## Renderer data types
+
+Renderer ports can import exact generated payload aliases from the package root. These are types only: they do not grant write access, choose a display policy, or replace the Form/Portal owners.
+
+```ts
+import type {
+    AirtableButtonField,
+    AirtableButtonValue,
+    FormFieldsMiniExtConfigButtonField,
+    ButtonMiniExtConfig,
+} from '@miniextensions/sdk';
+
+export type ButtonRendererData = {
+    field: AirtableButtonField;
+    value: AirtableButtonValue | null;
+    configuredField: FormFieldsMiniExtConfigButtonField;
+    config: ButtonMiniExtConfig;
+};
+```
+
+- Native metadata uses the `Airtable*Field` family: SingleLineText, Email, URL, MultilineText, Numeric (number/percent), Currency, Select (single/multiple), Collaborator (single/multiple and its inherited createdBy discriminator), LinkedRecord, Date, DateTime, PhoneNumber, Attachments, Checkbox, Formula, CreatedTime, Rollup, Count, Lookup, AutoNumber, Barcode, Rating, RichText, Duration, LastModifiedTime, CreatedBy, LastModifiedBy, Button, ExternalSyncSource and Ai. Manual-sort metadata remains available through `AirtableField`; it has no renderer alias in this slice.
+- `FormFieldsMiniExtFieldWithConfig` is the exact configured Form field envelope. The 33 `FormFieldsMiniExtConfig*Field` aliases select its original discriminators, including separate Number/Percent, SingleSelect/MultipleSelects and SingleCollaborator/MultipleCollaborators envelopes. Their `config` remains optional. `RuntimeFieldSchema.miniExtConfig` is broader and must not be treated as this Form-only type.
+- `AirtableButtonValue` requires native `url: string` and `label: string`. It is distinct from the formula interpreter's nullable-URL value. `NonArrayAirtableValue` excludes native array answers. Neither alias validates a URL or authorizes a webhook.
+- `LinkedRecordsMiniExtConfig` is the non-undefined union of configured Form and Portal linked-field settings; it is not a login/custom-detail configuration.
+
+Existing `RuntimeLanguage`, `ConfiguredButtonWebhookSource`, `RuntimeLinkedRecordDetailField(s)`, `RuntimeSortFields`, `RuntimeConditionsDefinition` and `RuntimeTableState` already cover the corresponding portable contracts. Internal application state, session IDs, widget props and renderer callbacks are intentionally separate. React components stay in the optional [`/react` subpath](field-bindings.md); this type mapping adds no React dependency to the core.
+
+Form-only aliases do not describe every renderer host. Use the accepted Portal payload's configured field envelope for Portal settings and its returned detail policy for cells, lists and readonly previews; do not substitute child Form configuration for a Portal display override. The existing aliases expose those contexts without copying schemas:
+
+```ts
+import type {
+    PortalLoadedPayload,
+    RuntimeLinkedRecordDetailField,
+} from '@miniextensions/sdk';
+
+export type PortalConfiguredField = NonNullable<
+    PortalLoadedPayload['publicFields']['state']['portalFields']
+>[number];
+export type PortalDetailDisplayConfig =
+    RuntimeLinkedRecordDetailField['miniExtConfig'];
+```
+
+These payload types cover data, not a complete field-by-host renderer contract. Editable Form fields, Portal cells and linked-record hosts still need their respective SDK owners/capabilities; a native `readOnly` or computed flag alone does not authorize a Button action. Grid/List aggregates and per-kind host action props are separate work.

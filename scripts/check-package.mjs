@@ -1,3 +1,4 @@
+import { rendererTypeConsumer } from './renderer-type-consumer.mjs';
 import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
@@ -543,6 +544,7 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
 
     const declarationConsumer =
         consumer +
+        rendererTypeConsumer +
         `
 import type { ListConditionalFilterPrimaryValuesInput, ConditionalFilterPrimaryValue, ConditionalFilterData, ListAddressPredictionsInput, AddressPrediction, GetFormattedAddressInput, TriggerConfiguredButtonWebhookInput, ConfiguredButtonWebhookSource, TriggerConfiguredButtonWebhookResult } from '@miniextensions/sdk';
 export async function checkAdditionalRuntimeTypes(client: MiniExtensionsClient, signal: AbortSignal) {

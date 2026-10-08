@@ -252,7 +252,10 @@ export const createPortalCellBinding = (
     return {
         binding,
         save: async (request = {}) => {
-            if (!snapshot().canEdit)
+            if (
+                !snapshot().canEdit ||
+                binding.scalar?.getState().valid === false
+            )
                 throw new Error('Load a fresh Portal before saving this cell.');
             const value = gridValue(store.read(handle, input.recordFieldId));
             request.signal?.throwIfAborted();

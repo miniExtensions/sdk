@@ -145,7 +145,7 @@ The SDK has no administrative workspace/configure/publish API.
 | `@miniextensions/sdk/react`    | Optional React field components using the same owner-held bindings and replaceable rendering                                                                          | [Field bindings](docs/field-bindings.md) |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`,
+also includes optional DOM controls. The `/react` subpath provides `TextField`, `NumberField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField` and `AttachmentDialog`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the

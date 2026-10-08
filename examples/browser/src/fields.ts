@@ -446,6 +446,68 @@ export function mountBoundFormField(
     onError?: (error: unknown) => void
 ): FieldControl {
     const initial = binding.getSnapshot();
+    if (binding.scalar) {
+        const node = element('div');
+        const input = element('input');
+        const status = element('p', '', 'field-hint');
+        status.setAttribute('role', 'status');
+        input.type = initial.scalar?.kind === 'checkbox' ? 'checkbox' : 'text';
+        input.dataset.fieldId = initial.field?.fieldId ?? '';
+        if (input.type === 'text') input.inputMode = 'decimal';
+        node.append(labeled(initial.field?.title ?? '', input), status);
+        let destroyed = false;
+        const change = () => {
+            if (destroyed || !binding.getSnapshot().canEdit) return;
+            beforeChange?.();
+            const accepted =
+                input.type === 'checkbox'
+                    ? binding.scalar!.setChecked(input.checked)
+                    : binding.scalar!.setInput(input.value);
+            if (accepted) changed();
+        };
+        input.addEventListener('input', change);
+        input.addEventListener('change', change);
+        const render = () => {
+            const state = binding.getSnapshot();
+            node.hidden = state.visibility.type !== 'visible';
+            node.inert = !state.canEdit;
+            input.disabled = !state.canEdit;
+            input.checked = state.scalar?.checked ?? false;
+            input.value = state.scalar?.input ?? '';
+            input.setAttribute(
+                'aria-invalid',
+                String(state.scalar?.valid === false)
+            );
+            node.setAttribute('aria-busy', String(state.pending));
+            status.textContent =
+                state.scalar?.error ??
+                state.error ??
+                state.validation.map((error) => error.errorMessage).join('\n');
+        };
+        const stop = binding.subscribe(render);
+        return {
+            node,
+            editable: !initial.readOnly,
+            read() {
+                const state = binding.getSnapshot();
+                if (state.scalar?.valid === false)
+                    throw new Error(
+                        'This field needs a valid value before saving.'
+                    );
+                return state.value ?? null;
+            },
+            write() {
+                if (!destroyed) render();
+            },
+            destroy() {
+                if (destroyed) return;
+                destroyed = true;
+                stop();
+                input.removeEventListener('input', change);
+                input.removeEventListener('change', change);
+            },
+        };
+    }
     let control: FieldControl;
     let writingFromControl = false;
     control = formFieldControl(

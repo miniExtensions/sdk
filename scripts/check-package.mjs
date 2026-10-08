@@ -1,3 +1,4 @@
+import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
 import { checkReactBindingConsumer } from './react-binding-consumer-checks.mjs';
 import { checkFieldBindingRecipe } from './field-binding-recipe-checks.mjs';
 import { checkSelectConditions } from './select-condition-checks.mjs';
@@ -807,11 +808,12 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
     writeFileSync(
         join(temporaryDirectory, 'field-bindings-react.tsx'),
         `
-import { TextField, SelectField, LinkedField, AttachmentField, AttachmentDialog } from '@miniextensions/sdk/react';
+import { TextField, NumberField, CheckboxField, SelectField, LinkedField, AttachmentField, AttachmentDialog } from '@miniextensions/sdk/react';
 import type { FormFieldBinding, FormAttachmentController } from '@miniextensions/sdk/forms';
 export function Fields({binding, attachment}: {binding: FormFieldBinding; attachment: FormAttachmentController}) {
     return <AttachmentDialog onClose={() => {}}>
         <TextField binding={binding} render={({snapshot, binding}) => <input value={typeof snapshot.value === 'string' ? snapshot.value : ''} onChange={e => binding.setValue(e.currentTarget.value)} />} />
+        <NumberField binding={binding} /><CheckboxField binding={binding} />
         <SelectField binding={binding} /><LinkedField binding={binding} />
         <AttachmentField binding={binding} controller={attachment} render={({attachment, controller}) => <button disabled={attachment.busy} onClick={() => void controller.upload()}>Upload</button>} />
     </AttachmentDialog>;
@@ -1077,6 +1079,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             );
         }
         if (example === 'browser') {
+            assert.equal(
+                await checkScalarBindingConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    starterDirectory: directory,
+                    happyDomModulePath: require.resolve('happy-dom'),
+                }),
+                17
+            );
             await checkFieldBindingRecipe({
                 consumerDirectory: directory,
                 happyDomModulePath: require.resolve('happy-dom'),

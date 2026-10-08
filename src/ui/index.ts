@@ -38,3 +38,11 @@ export {
     createSelectFieldModel,
     type SelectFieldModelOptions,
 } from './selectModel.js';
+
+export {
+    createNumberFieldModel,
+    createCheckboxFieldModel,
+    type ScalarFieldModel,
+    type ScalarFieldState,
+    type ScalarFieldModelOptions,
+} from './scalarModels.js';

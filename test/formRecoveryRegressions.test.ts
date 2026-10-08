@@ -400,14 +400,8 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
         const number = card.querySelector('input[data-field-id="fld_title"]');
         assert.ok(number instanceof window.HTMLInputElement);
         assert.equal(number.value, '7');
-        // HappyDOM does not reproduce browsers' badInput state for number
-        // text. Supply the native-invalid contract explicitly, as the shipped
-        // form recipe checks do; this test makes no live browser claim.
-        number.value = '';
-        Object.defineProperty(number, 'validity', {
-            configurable: true,
-            value: { badInput: true, valid: false },
-        });
+        assert.equal(number.type, 'text');
+        number.value = '-';
         number.dispatchEvent(new window.Event('input', { bubbles: true }));
         submit(window, card);
         await waitFor(
@@ -417,9 +411,22 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
                     ?.getAttribute('aria-busy') === 'false'
         );
         assert.equal(saves.length, 0);
-        Reflect.deleteProperty(number, 'validity');
-        // No input event: the unchanged last valid draft must still be 7.
+        // Correcting local invalid text must retain the unchanged native draft.
         number.value = '7';
+        submit(window, card);
+        await waitFor(
+            () =>
+                window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+        assert.equal(
+            saves.length,
+            0,
+            'Untracked DOM changes cannot clear model validation'
+        );
+        number.value = '7';
+        number.dispatchEvent(new window.Event('input', { bubbles: true }));
         submit(window, card);
         await waitFor(
             () =>
@@ -431,7 +438,7 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
         assert.equal(saves[0].formRecord.data.fld_title, 7);
         assert.equal(
             saves[0].formFieldIdsWithUnsavedChanges.includes('fld_title'),
-            false
+            true
         );
         number.value = '1.5';
         number.dispatchEvent(new window.Event('input', { bubbles: true }));

@@ -1,3 +1,4 @@
+import type { ScalarFieldModel, ScalarFieldState } from '../ui/scalarModels.js';
 import { createFieldBinding } from './fieldBinding.js';
 import {
     createFormAttachmentController,
@@ -57,6 +58,7 @@ export type FormFieldSnapshot = {
     error: string | null;
     validation: FormValidationMessage[];
     selection: SelectionState | null;
+    scalar?: ScalarFieldState | null;
     retired: boolean;
 };
 export type FormFieldBinding = {
@@ -65,6 +67,7 @@ export type FormFieldBinding = {
     setValue(value: AirtableValue): FieldActionResult;
     /** Renderer-neutral model; native data is written only through its user actions. */
     selection: SelectionModel | null;
+    scalar: ScalarFieldModel | null;
 };
 export type FormFieldBindingsOptions = FormControllerOptions & {
     /** Additional explicit UI/recovery lease. It never clears native data. */
@@ -499,7 +502,11 @@ export function createFormFieldBindings(
                 ) ||
                 !(options.canWrite?.() ?? true) ||
                 attachmentBlocked() ||
-                !current()
+                !current() ||
+                [...entries.values()].some((entry) => {
+                    const state = entry.binding.getSnapshot();
+                    return state.canEdit && state.scalar?.valid === false;
+                })
             )
                 return Promise.reject(
                     new Error(

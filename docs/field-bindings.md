@@ -110,7 +110,7 @@ or persistence across a page refresh.
 
 ## Optional React components
 
-Import `TextField`, `SelectField`, `LinkedField`, `AttachmentField` and
+Import `TextField`, `NumberField`, `CheckboxField`, `SelectField`, `LinkedField`, `AttachmentField` and
 `AttachmentDialog` from `@miniextensions/sdk/react`. React is an optional peer
 only for this entry point; use the supported React 18.3.1 or React 19 range from
 `package.json`. No UI library is required. Each field supports a `render(state)`
@@ -182,3 +182,34 @@ use authorized loaders/cascades. Follow the
 [configuration compatibility checklist](ui.md#review-configuration-compatibility-checklist)
 before composing features. Installed synthetic tests exercise native dispatch and
 lifecycle guards, not live persistence, cross-browser or accessibility certification.
+
+## Checkbox and numeric inputs
+
+`binding.scalar` is the renderer-neutral model for checkbox, number, currency,
+percent, duration and rating fields. Its snapshot is `snapshot.scalar`; stock
+`CheckboxField`/`NumberField` components and the shipped vanilla/custom renderers
+use the same model. Keep the binding owner outside ordinary render/mount lifetimes
+to preserve both native drafts and unfinished numeric input.
+
+Use `binding.scalar.setChecked(boolean)` for checkbox actions and
+`binding.scalar.setInput(string)` for numeric text. An empty numeric input commits
+`null`; decimal/exponent syntax must produce a finite number. Incomplete or invalid
+text remains in the model with a generic error, without overwriting the last valid
+native value. Explicit `owner.save()` refuses invalid editable visible inputs
+before journal dispatch or network I/O. Repair the text, or explicitly use
+`binding.setValue(number | null)` to replace it. Direct `FormController` operations
+are lower-level primitives and do not inspect renderer input models.
+
+Percent values use native fractions: `0.25` means 25 percent. These controls do not
+convert display units or add range, precision, integer or rating-limit rules;
+canonical Save remains authoritative. A checkbox's initial native `null` is kept
+until an explicit action writes `true` or `false`. Configured read-only, hidden,
+blocked and retired bindings reject writes. Accepted explicit reload replaces the
+models; old actions cannot edit the replacement. Ordinary remount does not reload
+or Save.
+
+The stock numeric React/vanilla renderer uses a text input with decimal input mode
+to retain unfinished values rather than browser-sanitizing them to an empty value.
+A custom render prop can supply different markup while using the same scalar
+actions. Installed tests use synthetic DOM events and validation responses; they
+do not certify native keyboard behavior, screen readers or backend persistence.

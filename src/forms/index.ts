@@ -25,6 +25,7 @@ export {
     type FormControllerOptions,
     type FormControllerSaveOptions,
     type FormSaveLifecycle,
+    type FormSaveDisposition,
     type FormControllerState,
     type FormControllerStatus,
     type FormOwnerScope,

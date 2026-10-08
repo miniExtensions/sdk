@@ -1922,6 +1922,7 @@ const renderForm = (page: FormLoadedResult): void => {
             discard.disabled = true;
             let normalized: ReturnType<typeof normalizeFormSaveResult>;
             let dispatched = false;
+            let knownNotDispatched = false;
             try {
                 const {
                     extensionAccessToken: _token,
@@ -1971,8 +1972,17 @@ const renderForm = (page: FormLoadedResult): void => {
                                             : 'saved'
                                     );
                                 },
-                                finish: () => {
-                                    recovery.finishFlight(attempt);
+                                finish: (disposition) => {
+                                    if (
+                                        disposition === 'not-dispatched' &&
+                                        recovery.notDispatched(attempt)
+                                    ) {
+                                        dispatched = false;
+                                        knownNotDispatched = true;
+                                        visitor.uncertainFormDraftScopes.delete(
+                                            draft.scope
+                                        );
+                                    } else recovery.finishFlight(attempt);
                                     if (ownsForm()) updateRecovery();
                                 },
                             };
@@ -1982,7 +1992,14 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (!current() || !ownsForm()) return;
             } catch (error) {
                 if (current() && ownsForm())
-                    errors.replaceChildren(element('li', uncertainSaveMessage));
+                    errors.replaceChildren(
+                        element(
+                            'li',
+                            knownNotDispatched
+                                ? 'The Save was not sent. Check the current Form before a new explicit Save.'
+                                : uncertainSaveMessage
+                        )
+                    );
                 throw error;
             }
             visitor.uncertainFormDraftScopes.delete(draft.scope);

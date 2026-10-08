@@ -17,6 +17,7 @@ export type RecoveryAttempt = {
     operation: 'save' | 'upload' | 'choice';
     outcome:
         | 'not-submitted'
+        | 'not-dispatched'
         | 'unknown'
         | 'saved'
         | 'validation-error'
@@ -120,6 +121,20 @@ export class RecoveryJournal {
         attempt.outcome = 'unknown';
         attempt.flight = true;
         return attempt;
+    }
+    /** Only a proven pre-transport disposition may settle the exact active journal attempt. */
+    notDispatched(attempt: RecoveryAttempt): boolean {
+        if (
+            !this.attempts.includes(attempt) ||
+            attempt.outcome !== 'unknown' ||
+            !attempt.flight ||
+            attempt.acknowledgment !== 'none'
+        )
+            return false;
+        attempt.outcome = 'not-dispatched';
+        attempt.flight = false;
+        attempt.retainedInput = [];
+        return true;
     }
     finishFlight(attempt: RecoveryAttempt): void {
         attempt.flight = false;

@@ -38,6 +38,8 @@ export type FormControllerOptions = {
     parent?: ParentFormDraftScope | null;
 };
 
+export type FormSaveDisposition = 'not-dispatched' | 'dispatched';
+
 export type FormSaveLifecycle = {
     /** Runs after all preflight checks, immediately before dispatch. */
     dispatch(
@@ -45,7 +47,8 @@ export type FormSaveLifecycle = {
         revision: number
     ): {
         accepted(result: Readonly<NormalizedFormSaveResult>): void;
-        finish(): void;
+        /** Final transport disposition; invoked once even if a post-hook guard rejects. */
+        finish(disposition: FormSaveDisposition): void;
     };
 };
 
@@ -450,6 +453,7 @@ export const createFormController = (
                 | ReturnType<FormSaveLifecycle['dispatch']>
                 | undefined;
             let acceptedOperation = false;
+            let transportInvoked = false;
             const requireAttempt = () => {
                 if (
                     saveGeneration !== generation ||
@@ -473,6 +477,7 @@ export const createFormController = (
                     draftRevision
                 );
                 requireAttempt();
+                transportInvoked = true;
                 const response = await owner.client.forms.save(input, {
                     signal: controller.signal,
                     session: { ...owner.session },
@@ -531,13 +536,16 @@ export const createFormController = (
                     !acceptedOperation
                 ) {
                     if (!observeScope()) throw scopeError();
-                    status = controller.signal.aborted
-                        ? 'cancelled'
-                        : 'transport-error';
-                    errorMessage =
-                        error instanceof Error
-                            ? error.message
-                            : 'The Form save failed.';
+                    status = !transportInvoked
+                        ? 'ready'
+                        : controller.signal.aborted
+                          ? 'cancelled'
+                          : 'transport-error';
+                    errorMessage = !transportInvoked
+                        ? 'The Form Save was not dispatched. Check the current owner before a new explicit Save.'
+                        : error instanceof Error
+                          ? error.message
+                          : 'The Form save failed.';
                     emit();
                 }
                 throw error;
@@ -545,7 +553,9 @@ export const createFormController = (
                 externalSignal?.removeEventListener('abort', forwardAbort);
                 if (active === controller) active = null;
                 try {
-                    operation?.finish();
+                    operation?.finish(
+                        transportInvoked ? 'dispatched' : 'not-dispatched'
+                    );
                 } catch {
                     // Presentation cleanup cannot change an accepted operation outcome.
                 }

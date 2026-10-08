@@ -3,8 +3,8 @@
 `@miniextensions/sdk/auth` binds the existing password, login, verification-code
 and sign-up operations to a loaded authentication screen. It adds no backend
 operation or authorization layer. Importing it requires no DOM or React;
-importing the core client does not import it. Install the supplied private
-archive as shown in the [runtime quickstart](runtime.md#packaged-form-quickstart).
+importing the core client does not import it. Install a supplied built TGZ
+as shown in the [runtime quickstart](runtime.md#packaged-form-quickstart).
 This development preview has not been published to npm. A source checkout must
 be [installed, checked and packed](../README.md#build-an-archive-from-source) before
 installing its built TGZ.

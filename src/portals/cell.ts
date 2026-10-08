@@ -15,6 +15,7 @@ import { RecoveryJournal, type RecoveryScope } from '../forms/recovery.js';
 import type { PortalOwnerScope } from './types.js';
 
 export type PortalCellBindingOptions = {
+    getClientTimeZone?(): string;
     client: MiniExtensionsClient;
     input: Omit<UpdateGridCellInput, 'value'>;
     schema: RuntimeFieldSchema;
@@ -230,6 +231,7 @@ export const createPortalCellBinding = (
         });
     }
     const binding = createFieldBinding({
+        getClientTimeZone: options.getClientTimeZone,
         fieldType: schema.fieldType,
         model,
         snapshot,
@@ -254,20 +256,14 @@ export const createPortalCellBinding = (
         save: async (request = {}) => {
             if (
                 !snapshot().canEdit ||
-                binding.scalar?.getState().valid === false
+                binding.scalar?.getState().valid === false ||
+                binding.date?.getState().valid === false
             )
                 throw new Error('Load a fresh Portal before saving this cell.');
             const value = gridValue(store.read(handle, input.recordFieldId));
             request.signal?.throwIfAborted();
             const revision = store.revision(handle)!;
-            const attempt = recovery.journal.begin(
-                recovery.scope,
-                input.recordId,
-                'save',
-                recovery.loadVersion,
-                input.recordFieldId
-            );
-            submitted = true;
+            let attempt: ReturnType<typeof recovery.journal.begin> | undefined;
             busy = true;
             error = null;
             const abort = new AbortController();
@@ -279,8 +275,22 @@ export const createPortalCellBinding = (
             try {
                 request.dispatched?.();
                 notify();
-                if (!current() || abort.signal.aborted)
+                const dateValid = binding.date?.getState().valid !== false;
+                if (
+                    !dateValid ||
+                    !current() ||
+                    active !== abort ||
+                    abort.signal.aborted
+                )
                     throw new Error('The cell owner changed before dispatch.');
+                attempt = recovery.journal.begin(
+                    recovery.scope,
+                    input.recordId,
+                    'save',
+                    recovery.loadVersion,
+                    input.recordFieldId
+                );
+                submitted = true;
                 const result = await options.client.portals.updateGridCell(
                     { ...input, value },
                     { signal: abort.signal }
@@ -300,12 +310,13 @@ export const createPortalCellBinding = (
                 return result;
             } catch (cause) {
                 if (current())
-                    error =
-                        'The cell outcome is unknown. Load fresh records; do not repeat this Save.';
+                    error = attempt
+                        ? 'The cell outcome is unknown. Load fresh records; do not repeat this Save.'
+                        : 'The cell owner changed before dispatch. Load fresh records.';
                 throw cause;
             } finally {
                 request.signal?.removeEventListener('abort', externalAbort);
-                recovery.journal.finishFlight(attempt);
+                if (attempt) recovery.journal.finishFlight(attempt);
                 if (active === abort) {
                     active = null;
                     busy = false;
@@ -321,6 +332,7 @@ export const createPortalCellBinding = (
             busy = false;
             stop?.();
             model?.destroy();
+            binding.date?.destroy();
             store.clear();
             notify();
             listeners.clear();

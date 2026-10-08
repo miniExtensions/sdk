@@ -270,3 +270,46 @@ Missing add-only baseline or malformed presentation yields generic unavailable
 state and no removal. Canonical empty values remain untouched. Filenames require
 explicit `hideAttachmentName: false`; otherwise rows say `Attachment`. Explicit
 filename opt-in with no filename says `Attachment — filename unavailable`.
+
+### Calendar dates and explicit-offset dateTimes
+
+`binding.date` owns the date editor's input, validity, error and formatted preview.
+`DateField` and `DateTimeField` from the optional `/react` entry use that same
+model; their `render` prop supports custom markup without custom conversion.
+The copied starter's stock and custom adapters also use this model. Keep the
+binding owner through ordinary remounts; dispose it on visitor/context replacement.
+
+Dates accept only valid calendar `YYYY-MM-DD` strings. Calendar parsing and
+preview avoid a local-midnight or implicit UTC shift, including skipped civil
+calendar days. DateTime editing accepts only
+`YYYY-MM-DDTHH:mm:ss[.S|.SS|.SSS](Z|±HH:mm)`: seconds and an explicit offset are
+required. Naive/local timestamps, week/ordinal dates, space separators, `24:00`,
+leap seconds and the conservative unknown-local-offset `-00:00` are refused.
+An explicit offset defines the instant; the SDK never guesses an ambiguous or
+nonexistent local time from DST rules. Natural-language and date-picker behavior
+remain outside this slice.
+
+Accepted native strings are preserved byte-for-byte. `setInput` retains partial
+or invalid text separately from the last accepted native answer. An editable
+invalid date model blocks the owner's deliberate Form/cell Save, without an
+automatic request. `clear()` or an explicit empty input writes `null`; untouched
+loaded missing/null/blank answers are not normalized. Hidden/read-only native
+values remain in the full Save snapshot. Backend validation stays authoritative.
+
+Preview uses the returned canonical date/time format name-and-token pairs and
+installed timezone data. `getClientTimeZone` on Form/cell owners optionally supplies
+an exact client zone; otherwise the browser's exact Intl zone is used. Unknown
+zones are unavailable, never guessed or substituted. Only original-client
+DateTime models depend on the client zone; fixed-zone DateTime and calendar date
+models do not. An observed configuration/client-zone change retires the old model;
+load/reset a fresh owner. This does not detect unobserved in-place A→B→A.
+Calendar preview is a narrower calendar-preserving contract, not a claim of
+canonical local-normalization parity. Review's independently documented admission,
+condition-driver, hide-empty, computed-field and multipage limits are unchanged.
+
+Renderers still honor field visibility, masking and returned display policy.
+Snapshots contain complete native data for application logic, not universally safe
+public text. Stock date controls honor password masking and do not add rich HTML,
+links or automatic formatting back into native values. Stock controls use text
+inputs so partial input and explicit offsets remain visible; no native date-picker
+or accessibility certification is claimed by synthetic consumer tests.

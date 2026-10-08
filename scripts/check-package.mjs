@@ -1,3 +1,4 @@
+import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
@@ -1088,6 +1089,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             );
         }
         if (example === 'browser') {
+            assert.equal(
+                await checkDateBindingConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    starterDirectory: directory,
+                    happyDomModulePath: require.resolve('happy-dom'),
+                }),
+                18
+            );
             assert.equal(
                 await checkScalarBindingConsumer({
                     consumerDirectory: temporaryDirectory,

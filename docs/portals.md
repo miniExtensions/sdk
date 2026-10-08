@@ -5,7 +5,7 @@ child Form metadata. It has no DOM, React, renderer, or storage. Readable
 child-prefill formatting reuses the formulas formatter and its runtime
 dependencies. This is a development preview: use a built TGZ, or
 [install, check and pack a source checkout](../README.md#build-an-archive-from-source).
-Install the supplied private archive using the
+Install the supplied built archive using the
 [runtime quickstart](runtime.md#packaged-form-quickstart); this package has not
 been published to npm. The core client uses the existing miniExtensions APIs
 and the visitor's current session; the server retains authorization.

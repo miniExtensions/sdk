@@ -25,6 +25,29 @@ jobs:
                   SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            - name: Install sandboxed Chromium
+              if: matrix.node == 24
+              run: pnpm exec playwright install --with-deps chromium
+            - name: Execute packed native Chromium proof
+              if: matrix.node == 24
+              timeout-minutes: 10
+              run: pnpm check:browser
+              env:
+                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
+                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
+            - name: Retain native Chromium receipt and failure evidence
+              if: always() && matrix.node == 24 && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: sdk-native-browser-results-attempt-${{ github.run_attempt }}
+                  path: ${{ runner.temp }}/sdk-native-browser-results/
+                  if-no-files-found: warn
+                  retention-days: 7
+                  compression-level: 0
+                  archive: true
+                  overwrite: false
+                  include-hidden-files: false
             - name: Retain tested customer package
               if: success() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -58,5 +81,6 @@ jobs:
               env:
                   SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
+                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
               run: |
-                  node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"
+                  node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR', 'SDK_NATIVE_RESULT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"

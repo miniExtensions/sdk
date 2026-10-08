@@ -113,6 +113,7 @@
         "build": "node scripts/build.mjs",
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "tsc --project tsconfig.test.json && node --test --test-concurrency=1 dist/test/test/*.test.js",
+        "check:browser": "node scripts/check-native-browser.mjs",
         "check:package": "node --test scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
@@ -129,14 +130,15 @@
     "devDependencies": {
         "@types/moment-duration-format": "2.2.6",
         "@types/node": "22.20.5",
+        "@types/react": "18.3.12",
+        "@types/react-dom": "18.3.1",
         "esbuild": "0.25.10",
         "happy-dom": "20.0.11",
+        "playwright": "1.64.0",
         "prettier": "3.6.2",
-        "typescript": "5.9.3",
         "react": "18.3.1",
         "react-dom": "18.3.1",
-        "@types/react": "18.3.12",
-        "@types/react-dom": "18.3.1"
+        "typescript": "5.9.3"
     },
     "peerDependencies": {
         "react": "^18.3.1 || ^19.0.0"

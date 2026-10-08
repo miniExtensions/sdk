@@ -1,5 +1,6 @@
 import {
     createElement,
+    Fragment,
     useMemo,
     useState,
     useRef,
@@ -8,6 +9,7 @@ import {
     type ReactNode,
     type ChangeEvent,
 } from 'react';
+import { dispatchField } from '../ui/rendererRegistry.js';
 import type { FormFieldBinding, FormFieldSnapshot } from '../forms/bindings.js';
 import type {
     FormAttachmentController,
@@ -813,5 +815,87 @@ export function useButtonField(
                 model.acknowledgeNewIntent(snapshot.revision),
         }),
         [model, snapshot]
+    );
+}
+
+export type FieldRendererFallback =
+    | Exclude<
+          import('../ui/rendererRegistry.js').FieldRendererHostSnapshot,
+          { status: 'ready' }
+      >
+    | {
+          status: 'missing-renderer';
+          physicalKind: import('../ui/rendererRegistry.js').FieldKind;
+      };
+export type FieldRendererProps = {
+    host: import('../ui/rendererRegistry.js').FieldRendererHost;
+    renderers: import('../ui/rendererRegistry.js').FieldRendererSlots<ReactNode>;
+    fallback?(state: FieldRendererFallback): ReactNode;
+};
+
+/** Subscription only: the supplied owner retains drafts, input buffers, Files and uncertainty. */
+export function useFieldRendererHost(
+    host: import('../ui/rendererRegistry.js').FieldRendererHost
+): import('../ui/rendererRegistry.js').FieldRendererHostSnapshot {
+    const store = useMemo(() => {
+        let value = host.getSnapshot();
+        let key = JSON.stringify(value);
+        const read = () => {
+            const next = host.getSnapshot();
+            const nextKey = JSON.stringify(next);
+            if (nextKey !== key) {
+                value = next;
+                key = nextKey;
+            }
+            return value;
+        };
+        return {
+            getSnapshot: read,
+            subscribe: (notify: () => void) => {
+                const stop = host.subscribe(() => {
+                    const before = value;
+                    read();
+                    if (value !== before) notify();
+                });
+                const before = value;
+                read();
+                if (value !== before) notify();
+                return stop;
+            },
+        };
+    }, [host]);
+    return useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+}
+
+/** Named per-kind slots; no default markup, owner disposal, or automatic I/O. */
+export function FieldRenderer({
+    host,
+    renderers,
+    fallback,
+}: FieldRendererProps): ReactNode {
+    const snapshot = useFieldRendererHost(host);
+    if (snapshot.status !== 'ready') return fallback?.(snapshot) ?? null;
+    return createElement(
+        Fragment,
+        null,
+        ...snapshot.fields.map((field) =>
+            createElement(
+                Fragment,
+                { key: field.fieldId },
+                dispatchField(
+                    renderers,
+                    field,
+                    (missing) =>
+                        fallback?.({
+                            status: 'missing-renderer',
+                            physicalKind: missing.physicalKind,
+                        }) ?? null
+                )
+            )
+        )
     );
 }

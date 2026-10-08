@@ -1,3 +1,7 @@
+import {
+    normalizeFormLeaseLoaded,
+    normalizeFormLeaseField,
+} from './formLease.js';
 import type {
     FormFieldBindings,
     FormFieldBinding,
@@ -179,7 +183,7 @@ function host(
         } catch {
             retired = true;
         }
-        return !retired;
+        return !disposed && !retired;
     };
     const snapshot = (): FieldRendererHostSnapshot => {
         if (accepted === null && !disposed && !retired) return unavailable();
@@ -258,7 +262,10 @@ function capability(
     )
         return { type: 'readonly' };
     const editable = () =>
-        current() && editAllowed() && binding.getSnapshot().canEdit;
+        current() &&
+        editAllowed() &&
+        binding.getSnapshot().canEdit &&
+        current();
     const scalar = binding.scalar,
         date = binding.date,
         selection = binding.selection,
@@ -312,6 +319,17 @@ function capability(
             },
         };
     if (attachment) {
+        const queueEditable = () => {
+            if (!current() || !editAllowed()) return false;
+            const now = binding.getSnapshot();
+            return (
+                !now.retired &&
+                !now.readOnly &&
+                !now.field?.isComputed &&
+                now.visibility.type === 'visible' &&
+                current()
+            );
+        };
         const captured = attachment.getSnapshot();
         result.attachment = {
             state: {
@@ -319,7 +337,7 @@ function capability(
                 rows: structuredClone(captured.rows),
                 files: [...captured.files],
             },
-            select: (files) => editable() && attachment.select(files),
+            select: (files) => queueEditable() && attachment.select(files),
             clear: () => {
                 if (current()) attachment.clear();
             },
@@ -414,8 +432,8 @@ export function createFormFieldRendererHost(
                   state.epoch,
                   state.contextRevision,
                   state.ownerScope,
-                  options.fields.getLoaded(),
-                  snapshot.field,
+                  normalizeFormLeaseLoaded(options.fields.getLoaded()),
+                  normalizeFormLeaseField(snapshot.field),
               ];
     };
     let attachment: FormAttachmentController | undefined,
@@ -672,6 +690,17 @@ export function createPortalCellRendererHost(
     const canEditDisplay = () => {
         const accepted = authority();
         if (!accepted) return false;
+        // Canonical inline writes carry only scalar or string-array values.
+        // Object-valued native fields require the accepted child Form.
+        if (
+            [
+                'barcode',
+                'singleCollaborator',
+                'multipleCollaborators',
+                'multipleAttachments',
+            ].includes(accepted.cell.schema.fieldType)
+        )
+            return false;
         const config = accepted.data.detail.miniExtConfig;
         const metadata = capturePortalMetadata(
             accepted.context.portal,

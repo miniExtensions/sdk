@@ -469,6 +469,11 @@ Capabilities expose guarded actions and detached model state, not raw bindings o
 controllers. Scalar partial input, selection/search state, pending File identities,
 and uncertainty remain owned by the original owners across unmount/remount. Mounting,
 subscribing and rendering cause no reads, Save, upload or webhook dispatch.
+Successful Add Choice metadata accepted by the Form owner refreshes presentation
+without retiring unrelated field hosts. Visitor, token, context and configuration
+replacement still retire the old capabilities. Attachment queue selection remains
+available during an owned upload; it preserves the replacement File and does not
+start another upload. Upload and native-value mutations retain their separate guards.
 
 `createPortalCellRendererHost` adapts an existing SDK cell binding only when its
 client, token, field, record, view and write configuration match the current accepted
@@ -476,6 +481,9 @@ Portal list owner. Returned detail configuration controls display; child Form
 configuration, when present, controls inline writes. Inline-edit empty-value
 suppression and current edit eligibility still apply. A display override cannot grant writes
 against a child Form restriction. Save remains the cell owner's separate explicit action.
+Native barcode and collaborator objects remain readonly in this context because the
+cell-save wire format cannot carry them. Use the configured child Form to edit those
+fields; the host does not advertise an unusable setter or convert their values.
 
 `createPortalDetailRendererHost` projects one accepted listed record for Portal
 cells/lists or a `linked-detail` context. It uses only that view's accepted detail
@@ -491,6 +499,8 @@ vendor widget is added here. Malformed or unsupported native/presentation shapes
 an explicit unavailable fallback; they do not prune the native draft or block unrelated
 Save. Optional configuration, null/missing values, array order and metadata are retained.
 Writable values exclude `undefined`; absence is a read state, not a draft mutation.
+Lookup answers may also retain a top-level native `{ error: string }` when the lookup
+target is unavailable. This remains readonly presentation, not an array conversion.
 
 Advance `configurationRevision` for every observed accepted replacement, including
 A→B→A, and make `isCurrent` include the active mounted context. Every exposed action

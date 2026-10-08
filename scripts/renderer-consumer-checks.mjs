@@ -59,7 +59,8 @@ const nativeTypes = {
     button: '{url:string;label:string}',
     formula: 'AirtableValue',
     rollup: 'AirtableValue',
-    multipleLookupValues: 'Extract<AirtableValue, readonly unknown[]>',
+    multipleLookupValues:
+        'Extract<AirtableValue, readonly unknown[] | {error:string}>',
     aiText: 'Extract<AirtableValue,{state:string;value:string;isStale:boolean}>',
 };
 const completeField = (field) => ({
@@ -82,7 +83,7 @@ const slot = (kind) => `render${kind[0].toUpperCase()}${kind.slice(1)}Field`;
 
 // Compiled before installing React: every callback is contextually correlated by physical kind.
 export const rendererTypedConsumer = `
-import type { AirtableValue, AirtableCollaborator, AirtableAttachment, AirtableBarcodeValue } from '@miniextensions/sdk';
+import type { AirtableValue, AirtableCollaborator, AirtableAttachment, AirtableBarcodeValue, UploadFileResult } from '@miniextensions/sdk';
 import type { FieldKind, FieldSchema, FieldMetadata, FieldConfig, FieldReadValue, FieldRendererCapability, FieldRendererProps, FieldRendererPropsUnion, FieldRendererSlots } from '@miniextensions/sdk/ui';
 import { FIELD_RENDERER_SLOTS, dispatchField } from '@miniextensions/sdk/ui';
 const slots: Required<FieldRendererSlots<string>> = {
@@ -102,6 +103,13 @@ ${kinds
 const exhaustive: Record<FieldKind, keyof typeof slots> = FIELD_RENDERER_SLOTS;
 declare const props: FieldRendererPropsUnion;
 const rendered: string = dispatchField(slots, props, () => 'fallback');
+declare const attachment: FieldRendererProps<'multipleAttachments'>;
+if(attachment.capability.type==='editable' && attachment.capability.attachment){
+ const selected:boolean=attachment.capability.attachment.select([] as readonly File[]);
+ const uploading:Promise<boolean>=attachment.capability.attachment.upload();
+ attachment.capability.attachment.cancel();
+ void [selected,uploading];
+}
 declare const checkbox: FieldRendererProps<'checkbox'>;
 if (checkbox.capability.type === 'editable') {
  checkbox.capability.setValue(false);
@@ -115,6 +123,15 @@ declare const formula: FieldRendererProps<'formula'>;
 // @ts-expect-error computed fields expose no write operation
 formula.capability.setValue(1);
 const absentConfig: FieldConfig<'checkbox'> = undefined;
+const lookupError: FieldReadValue<'multipleLookupValues'> = {error:'#REF!'};
+// @ts-expect-error top-level lookup errors carry native string errors
+const malformedLookupError: FieldReadValue<'multipleLookupValues'> = {error:1};
+const upload: UploadFileResult = {id:null,url:'https://files.example.invalid/upload',filename:'synthetic.txt',size:15,type:'text/plain'};
+const uploadedNative: FieldReadValue<'multipleAttachments'> = [upload];
+// @ts-expect-error attachment filenames may be omitted but cannot be null
+const nullAttachmentFilename: FieldReadValue<'multipleAttachments'> = [{url:'https://files.example.invalid',filename:null}];
+// @ts-expect-error attachment media types may be omitted but cannot be null
+const nullAttachmentType: FieldReadValue<'multipleAttachments'> = [{url:'https://files.example.invalid',type:null}];
 const richTextConfig: FieldConfig<'richText'> = { addOnlyMode: true };
 // @ts-expect-error addOnlyMode belongs to the generated rich-text config, not checkbox config
 const checkboxWithRichTextOption: FieldConfig<'checkbox'> = { addOnlyMode: true };
@@ -125,7 +142,7 @@ declare const number: FieldMetadata<'number'>;
 declare const percent: FieldMetadata<'percent'>;
 const numberMetadata: FieldMetadata<'number'> = percent;
 const percentMetadata: FieldMetadata<'percent'> = number;
-void [rendered,exhaustive,absentConfig,nullConfig,richTextConfig,checkboxWithRichTextOption,numberMetadata,percentMetadata];
+void [lookupError,malformedLookupError,upload,uploadedNative,nullAttachmentFilename,nullAttachmentType,rendered,exhaustive,absentConfig,nullConfig,richTextConfig,checkboxWithRichTextOption,numberMetadata,percentMetadata];
 `;
 export const rendererReactTypedConsumer = `
 import { createElement, type ReactNode } from 'react';
@@ -237,6 +254,15 @@ export async function checkRendererConsumer({
             typeof consumer('@miniextensions/sdk/react').FieldRenderer,
             'function'
         );
+        let uploadCalls = 0,
+            buttonCalls = 0;
+        const uploaded = {
+            id: null,
+            url: 'https://files.example.invalid/upload',
+            filename: 'synthetic.txt',
+            size: 15,
+            type: 'text/plain',
+        };
         let io = 0,
             current = true,
             configRevision = 0;
@@ -283,6 +309,15 @@ export async function checkRendererConsumer({
             schema.airtableField = completeField(schema.airtableField);
         const client = {
             getSession: () => ({}),
+            attachments: {
+                uploadFile: async (input) => {
+                    io++;
+                    uploadCalls++;
+                    assert.equal(input.fieldId, 'fld_files');
+                    assert.equal(input.filename, 'synthetic.txt');
+                    return { ...uploaded };
+                },
+            },
             forms: {
                 save: async () => {
                     io++;
@@ -631,6 +666,21 @@ export async function checkRendererConsumer({
         );
         assert.deepEqual(fields.field('fld_files').getSnapshot().value, []);
         assert.equal(io, 1);
+        assert.equal(uploadCalls, 0);
+        await act(async () =>
+            assert.equal(await fileProps.capability.attachment.upload(), true)
+        );
+        assert.equal(uploadCalls, 1);
+        assert.equal(io, 2);
+        assert.equal(fileHost.getSnapshot().status, 'ready');
+        assert.equal(fileProps.capability.type, 'editable');
+        assert.deepEqual(fileProps.value, [uploaded]);
+        assert.equal(fileProps.value[0].id, null);
+        assert.equal(typeof fileProps.capability.attachment.select, 'function');
+        assert.equal(fileProps.capability.attachment.state.files.length, 0);
+        assert.deepEqual(fields.field('fld_files').getSnapshot().value, [
+            uploaded,
+        ]);
         checks++;
         const buttonLoaded = structuredClone(loaded);
         buttonLoaded.payload.publicFields = {
@@ -666,6 +716,7 @@ export async function checkRendererConsumer({
         client.buttons = {
             triggerWebhook: async () => {
                 io++;
+                buttonCalls++;
                 return { success: false };
             },
         };
@@ -735,7 +786,7 @@ export async function checkRendererConsumer({
                 'uncertain'
             )
         );
-        assert.equal(io, 2);
+        assert.equal(io, 3);
         assert.equal(buttonJournal.unknown('visitor').length, 1);
         await act(async () => root.unmount());
         root = createRoot(container);
@@ -750,7 +801,8 @@ export async function checkRendererConsumer({
             )
         );
         assert.equal(buttonJournal.unknown('visitor').length, 1);
-        assert.equal(io, 2);
+        assert.equal(buttonCalls, 1);
+        assert.equal(io, 3);
         checks++;
         const oldForm = retained.get('form').capability,
             oldCell = retained.get('portal-cell').capability;
@@ -791,7 +843,563 @@ export async function checkRendererConsumer({
         );
         assert.equal(cell.binding.getSnapshot().retired, true);
         assert.equal(cell.binding.getSnapshot().value, undefined);
-        assert.equal(io, 2);
+        assert.equal(io, 3);
+        checks++;
+        const choiceLoaded = structuredClone(loaded);
+        choiceLoaded.payload.fieldIdsInForm = ['fld_title', 'fld_choices'];
+        choiceLoaded.payload.fieldIdsToSchemas = {
+            fld_title: choiceLoaded.payload.fieldIdsToSchemas.fld_title,
+            fld_choices: choiceLoaded.payload.fieldIdsToSchemas.fld_choices,
+        };
+        choiceLoaded.payload.fieldIdsToSchemas.fld_choices.airtableField.config.options.choices =
+            [{ id: 'a', name: 'Alpha' }];
+        choiceLoaded.payload.fieldIdsToSchemas.fld_choices.miniExtConfig = {
+            allowAddingNewOptions: true,
+        };
+        choiceLoaded.payload.formRecord = {
+            type: 'create',
+            data: { fld_title: 'Choice owner text', fld_choices: ['Alpha'] },
+        };
+        let choiceCalls = 0,
+            choiceSaves = 0;
+        const choiceClient = {
+            getSession: () => ({}),
+            forms: {
+                addSelectOption: async () => {
+                    choiceCalls++;
+                    return { newChoice: { id: 'b', name: 'Beta' } };
+                },
+                save: async () => {
+                    choiceSaves++;
+                    throw Error('No automatic choice Save');
+                },
+            },
+        };
+        const choiceFields = forms.createFormFieldBindings({
+            loaded: choiceLoaded,
+            client: choiceClient,
+            getScope: () => ({ ownerId: 'choice-visitor', revision: 0 }),
+            saveOptions: {
+                captchaVal: null,
+                isComputeMode: false,
+                context: { type: 'direct-url' },
+                searchQuery: {},
+                conditionalLinkedRecordFieldIdsToFilteringValues: {},
+            },
+        });
+        resources.push(() => choiceFields.destroy());
+        choiceFields.selectChoice('fld_choices', {
+            journal: new forms.RecoveryJournal(),
+            loadVersion: 1,
+            scope: {
+                owner: 'choice-visitor',
+                parentFieldId: null,
+                tableId: null,
+                childExtensionId: choiceLoaded.extensionId,
+                context: 'direct-url',
+            },
+        });
+        const choiceTextHost = ui.createFormFieldRendererHost({
+            fields: choiceFields,
+            fieldId: 'fld_title',
+            isCurrent: () => true,
+            configurationRevision: () => 0,
+        });
+        resources.push(() => choiceTextHost.dispose());
+        const choiceSelectHost = ui.createFormFieldRendererHost({
+            fields: choiceFields,
+            fieldId: 'fld_choices',
+            isCurrent: () => true,
+            configurationRevision: () => 0,
+        });
+        resources.push(() => choiceSelectHost.dispose());
+        let ownedChoiceProps, ownedTextProps;
+        const choiceRenderers = {
+            renderSingleLineTextField: (props) => {
+                ownedTextProps = props;
+                return h('span', { 'data-choice-text': true }, props.value);
+            },
+            renderMultipleSelectsField: (props) => {
+                ownedChoiceProps = props;
+                return h(
+                    'span',
+                    { 'data-choice-options': true },
+                    props.field.config.options.choices
+                        .map((choice) => choice.name)
+                        .join(',')
+                );
+            },
+        };
+        const choiceTree = () =>
+            h(
+                StrictMode,
+                null,
+                h(reactApi.FieldRenderer, {
+                    host: choiceTextHost,
+                    renderers: choiceRenderers,
+                    fallback: () => null,
+                }),
+                h(reactApi.FieldRenderer, {
+                    host: choiceSelectHost,
+                    renderers: choiceRenderers,
+                    fallback: () => null,
+                })
+            );
+        await act(async () => root.render(choiceTree()));
+        assert.equal(choiceCalls, 0);
+        assert.equal(choiceSaves, 0);
+        assert.equal(ownedChoiceProps.capability.type, 'editable');
+        const retainedTextAction = ownedTextProps.capability.setValue;
+        await act(async () =>
+            assert.equal(
+                await ownedChoiceProps.capability.choice.create('Beta'),
+                true
+            )
+        );
+        assert.equal(choiceCalls, 1);
+        assert.equal(choiceSaves, 0);
+        assert.deepEqual(
+            choiceFields.field('fld_choices').getSnapshot().value,
+            ['Alpha', 'Beta']
+        );
+        assert.equal(choiceSelectHost.getSnapshot().status, 'ready');
+        assert.equal(choiceTextHost.getSnapshot().status, 'ready');
+        assert.deepEqual(
+            ownedChoiceProps.field.config.options.choices.map(
+                (choice) => choice.name
+            ),
+            ['Alpha', 'Beta']
+        );
+        await act(async () =>
+            assert.deepEqual(retainedTextAction('Still editable'), {
+                accepted: true,
+            })
+        );
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await act(async () => root.render(choiceTree()));
+        assert.equal(
+            container.querySelector('[data-choice-options]').textContent,
+            'Alpha,Beta'
+        );
+        assert.equal(
+            container.querySelector('[data-choice-text]').textContent,
+            'Still editable'
+        );
+        assert.deepEqual(ownedChoiceProps.value, ['Alpha', 'Beta']);
+        assert.deepEqual(ownedChoiceProps.capability.selection.state.value, [
+            'Alpha',
+            'Beta',
+        ]);
+        assert.equal(choiceCalls, 1);
+        assert.equal(choiceSaves, 0);
+        checks++;
+        const acceptedPortal = async (fields, values, portalApi) => {
+            const accepted = fixtures.makePortal();
+            Object.values(accepted.payload.fieldIdsToSchemas).forEach(
+                (schema) => {
+                    schema.airtableField = completeField(schema.airtableField);
+                }
+            );
+            const linkConfig =
+                accepted.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
+            linkConfig.disableInlineEdit = false;
+            linkConfig.customViews[0].config = {
+                ...linkConfig.customViews[0].config,
+                layout: 'grid',
+                disableInlineEdit: false,
+            };
+            accepted.payload.initialLinkedTableStates.tbl_children.airtableFields =
+                fields;
+            accepted.payload.linkedRecordFieldIdToDetailFields.fld_children =
+                fields.map((field) => ({
+                    fieldId: field.id,
+                    fieldName: field.name,
+                    titleOverride: null,
+                    isHidden: false,
+                    fieldIsInEditingChildForm: true,
+                    childFormField: null,
+                }));
+            let reads = 0,
+                writes = 0;
+            const acceptedClient = {
+                getSession: () => ({}),
+                portals: {
+                    listLinkedRecords: async () => {
+                        reads++;
+                        const page = fixtures.page([
+                            { id: 'rec_one', fields: values },
+                        ]);
+                        page.tableIdsToLinkedTableStates.tbl_children.airtableFields =
+                            fields;
+                        return page;
+                    },
+                    updateGridCell: async () => {
+                        writes++;
+                        throw Error('Readonly native cells cannot Save');
+                    },
+                },
+            };
+            const acceptedOwner = portalApi.createPortalListOwner({
+                client: acceptedClient,
+                portal: accepted,
+                portalFieldId: 'fld_children',
+                criteria,
+                getScope: () => ({ ownerId: 'native-owner', revision: 0 }),
+                isCurrent: () => true,
+                configurationRevision: () => 0,
+            });
+            resources.push(() => acceptedOwner.destroy());
+            assert.equal(reads, 0);
+            assert.equal(
+                await acceptedOwner.readFirst(
+                    acceptedOwner.getSnapshot().revision,
+                    { pagesToFetch: 1, refreshLoggedInPortalRecord: false }
+                ),
+                true
+            );
+            return {
+                owner: acceptedOwner,
+                client: acceptedClient,
+                counts: () => ({ reads, writes }),
+            };
+        };
+        for (const [portalApi, uiApi] of [
+            [portals, ui],
+            [consumer('@miniextensions/sdk/portals'), cjs],
+        ]) {
+            const lookupField = completeField({
+                id: 'fld_lookup',
+                name: 'Lookup',
+                isComputed: true,
+                config: {
+                    type: 'multipleLookupValues',
+                    options: {
+                        isValid: false,
+                        recordLinkFieldId: 'fld_parent',
+                        fieldIdInLinkedTable: 'fld_title',
+                        result: null,
+                    },
+                },
+            });
+            const nativeError = { error: '#REF!' };
+            const accepted = await acceptedPortal(
+                [lookupField],
+                { fld_lookup: nativeError },
+                portalApi
+            );
+            const lookupHost = uiApi.createPortalDetailRendererHost({
+                owner: accepted.owner,
+                client: accepted.client,
+                recordId: 'rec_one',
+                isCurrent: () => true,
+                configurationRevision: () => 0,
+            });
+            resources.push(() => lookupHost.dispose());
+            const snapshot = lookupHost.getSnapshot();
+            assert.equal(snapshot.status, 'ready');
+            assert.equal(snapshot.fields.length, 1);
+            const props = snapshot.fields[0];
+            assert.equal(props.physicalKind, 'multipleLookupValues');
+            assert.deepEqual(props.value, nativeError);
+            assert.equal(Array.isArray(props.value), false);
+            assert.equal(props.capability.type, 'readonly');
+            assert.equal('setValue' in props.capability, false);
+            assert.equal(
+                uiApi.dispatchField(
+                    {
+                        renderMultipleLookupValuesField: (received) =>
+                            received.value,
+                    },
+                    props,
+                    () => assert.fail('lookup errored')
+                ),
+                props.value
+            );
+            assert.deepEqual(accepted.counts(), { reads: 1, writes: 0 });
+        }
+        checks++;
+        const nativePerson = {
+            id: 'usr_alpha',
+            name: 'Alpha',
+            email: 'alpha@example.invalid',
+        };
+        const nativeCases = [
+            [
+                'barcode',
+                { text: '012345', type: 'code128' },
+                { type: 'barcode', options: null },
+            ],
+            [
+                'singleCollaborator',
+                nativePerson,
+                {
+                    type: 'singleCollaborator',
+                    options: { choices: [nativePerson] },
+                },
+            ],
+            [
+                'multipleCollaborators',
+                [nativePerson],
+                {
+                    type: 'multipleCollaborators',
+                    options: { choices: [nativePerson] },
+                },
+            ],
+        ];
+        const nativeFields = nativeCases.map(([kind, , config]) =>
+            completeField({ id: 'fld_' + kind, name: kind, config })
+        );
+        const nativeValues = Object.fromEntries(
+            nativeCases.map(([kind, value]) => ['fld_' + kind, value])
+        );
+        const nativeAccepted = await acceptedPortal(
+            nativeFields,
+            nativeValues,
+            portals
+        );
+        for (const [index, [kind, value]] of nativeCases.entries()) {
+            const nativeCell = portals.createPortalCellBinding({
+                client: nativeAccepted.client,
+                schema: { fieldType: kind, airtableField: nativeFields[index] },
+                value,
+                input: {
+                    portalExtensionAccessToken: 'portal_access_example',
+                    portalFieldId: 'fld_children',
+                    recordFieldId: 'fld_' + kind,
+                    recordId: 'rec_one',
+                    selectedCustomViewId: 'view_example',
+                },
+                getScope: () => ({ ownerId: 'native-owner', revision: 0 }),
+                isCurrent: () => true,
+                recovery: {
+                    journal: new forms.RecoveryJournal(),
+                    scope: {
+                        owner: 'native-owner',
+                        parentFieldId: 'fld_children',
+                        tableId: 'tbl_children',
+                        childExtensionId: '',
+                        context: 'modal',
+                    },
+                    loadVersion: 1,
+                },
+            });
+            resources.push(() => nativeCell.destroy());
+            const nativeHost = ui.createPortalCellRendererHost({
+                cell: nativeCell,
+                owner: nativeAccepted.owner,
+                client: nativeAccepted.client,
+                recordId: 'rec_one',
+                fieldId: 'fld_' + kind,
+                isCurrent: () => true,
+                configurationRevision: () => 0,
+            });
+            resources.push(() => nativeHost.dispose());
+            const snapshot = nativeHost.getSnapshot();
+            assert.equal(snapshot.status, 'ready');
+            assert.equal(snapshot.fields[0].capability.type, 'readonly');
+            assert.equal('setValue' in snapshot.fields[0].capability, false);
+            assert.deepEqual(snapshot.fields[0].value, value);
+            assert.deepEqual(nativeCell.binding.getSnapshot().value, value);
+        }
+        assert.deepEqual(nativeAccepted.counts(), { reads: 1, writes: 0 });
+        checks++;
+        let disposeOnCheck = false,
+            disposalHost;
+        disposalHost = ui.createFormFieldRendererHost({
+            fields: choiceFields,
+            fieldId: 'fld_title',
+            isCurrent: () => {
+                if (disposeOnCheck) disposalHost.dispose();
+                return true;
+            },
+            configurationRevision: () => 0,
+        });
+        resources.push(() => disposalHost.dispose());
+        let disposalProps;
+        await act(async () =>
+            root.render(
+                h(reactApi.FieldRenderer, {
+                    host: disposalHost,
+                    renderers: {
+                        renderSingleLineTextField: (props) => {
+                            disposalProps = props;
+                            return h('span', null, props.value);
+                        },
+                    },
+                    fallback: () => null,
+                })
+            )
+        );
+        const beforeDisposal = choiceFields
+            .field('fld_title')
+            .getSnapshot().value;
+        const retainedDisposalAction = disposalProps.capability.setValue;
+        disposeOnCheck = true;
+        assert.deepEqual(
+            retainedDisposalAction('Must not write after disposal'),
+            { accepted: false, reason: 'retired' }
+        );
+        assert.equal(
+            choiceFields.field('fld_title').getSnapshot().value,
+            beforeDisposal
+        );
+        assert.equal(disposalHost.getSnapshot().status, 'retired');
+        assert.equal(choiceCalls, 1);
+        assert.equal(choiceSaves, 0);
+        checks++;
+        const busyLoaded = structuredClone(loaded);
+        busyLoaded.payload.fieldIdsInForm = ['fld_files'];
+        busyLoaded.payload.fieldIdsToSchemas = {
+            fld_files: busyLoaded.payload.fieldIdsToSchemas.fld_files,
+        };
+        busyLoaded.payload.formRecord = {
+            type: 'create',
+            data: { fld_files: [] },
+        };
+        let busyCalls = 0,
+            busySaves = 0;
+        const uploadResolvers = [];
+        const busyClient = {
+            getSession: () => ({}),
+            forms: {
+                save: async () => {
+                    busySaves++;
+                    throw Error('No automatic busy Save');
+                },
+            },
+            attachments: {
+                uploadFile: (input) => {
+                    busyCalls++;
+                    return new Promise((resolve) =>
+                        uploadResolvers.push(() =>
+                            resolve({
+                                id: null,
+                                url:
+                                    'https://files.example.invalid/' +
+                                    input.filename,
+                                filename: input.filename,
+                                size: input.file.size,
+                                type: input.file.type,
+                            })
+                        )
+                    );
+                },
+            },
+        };
+        const busyFields = forms.createFormFieldBindings({
+            loaded: busyLoaded,
+            client: busyClient,
+            getScope: () => ({ ownerId: 'busy-owner', revision: 0 }),
+            saveOptions: {
+                captchaVal: null,
+                isComputeMode: false,
+                context: { type: 'direct-url' },
+                searchQuery: {},
+                conditionalLinkedRecordFieldIdsToFilteringValues: {},
+            },
+        });
+        resources.push(() => busyFields.destroy());
+        const busyJournal = new forms.RecoveryJournal();
+        const busyRecovery = {
+            journal: busyJournal,
+            loadVersion: 1,
+            scope: {
+                owner: 'busy-owner',
+                parentFieldId: null,
+                tableId: null,
+                childExtensionId: busyLoaded.extensionId,
+                context: 'direct-url',
+            },
+        };
+        const busyHost = ui.createFormFieldRendererHost({
+            fields: busyFields,
+            fieldId: 'fld_files',
+            isCurrent: () => true,
+            configurationRevision: () => 0,
+            attachmentRecovery: busyRecovery,
+        });
+        resources.push(() => busyHost.dispose());
+        let busyProps;
+        const busyTree = () =>
+            h(
+                StrictMode,
+                null,
+                h(reactApi.FieldRenderer, {
+                    host: busyHost,
+                    renderers: {
+                        renderMultipleAttachmentsField: (props) => {
+                            busyProps = props;
+                            return h(
+                                'span',
+                                null,
+                                props.capability.type === 'editable'
+                                    ? String(
+                                          props.capability.attachment.state
+                                              .files.length
+                                      )
+                                    : 'readonly'
+                            );
+                        },
+                    },
+                    fallback: () => null,
+                })
+            );
+        await act(async () => root.render(busyTree()));
+        assert.equal(busyCalls, 0);
+        const fileA = new window.File(['A'], 'A.txt', { type: 'text/plain' }),
+            fileB = new window.File(['B'], 'B.txt', { type: 'text/plain' });
+        await act(async () =>
+            assert.equal(busyProps.capability.attachment.select([fileA]), true)
+        );
+        let flightA;
+        await act(async () => {
+            flightA = busyProps.capability.attachment.upload();
+        });
+        assert.equal(busyCalls, 1);
+        await act(async () =>
+            assert.equal(busyProps.capability.attachment.select([fileB]), true)
+        );
+        assert.equal(busyProps.capability.attachment.state.files[0], fileB);
+        await act(async () => {
+            uploadResolvers[0]();
+            assert.equal(await flightA, true);
+        });
+        assert.equal(busyHost.getSnapshot().status, 'ready');
+        assert.equal(busyProps.capability.attachment.state.files[0], fileB);
+        assert.equal(busyProps.capability.attachment.state.files.length, 1);
+        assert.equal(
+            busyFields.field('fld_files').getSnapshot().value[0].filename,
+            'A.txt'
+        );
+        assert.equal(
+            busyFields.field('fld_files').getSnapshot().value.length,
+            1
+        );
+        await act(async () => root.unmount());
+        root = createRoot(container);
+        await act(async () => root.render(busyTree()));
+        assert.equal(busyProps.capability.attachment.state.files[0], fileB);
+        assert.equal(busyCalls, 1);
+        assert.equal(busySaves, 0);
+        let flightB;
+        await act(async () => {
+            flightB = busyProps.capability.attachment.upload();
+        });
+        assert.equal(busyCalls, 2);
+        await act(async () => busyProps.capability.attachment.cancel());
+        assert.equal(busyJournal.unknown('busy-owner').length, 1);
+        assert.equal(busyProps.capability.attachment.state.files[0], fileB);
+        await act(async () => {
+            uploadResolvers[1]();
+            assert.equal(await flightB, false);
+        });
+        await act(async () =>
+            assert.equal(await busyProps.capability.attachment.upload(), false)
+        );
+        assert.equal(busyCalls, 2);
+        assert.equal(busySaves, 0);
+        assert.equal(busyProps.capability.attachment.state.files[0], fileB);
         checks++;
         return {
             checks,

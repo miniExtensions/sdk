@@ -44,7 +44,10 @@ export type FieldValueMap = {
     createdTime: string;
     rollup: AirtableValue;
     count: number;
-    multipleLookupValues: Extract<AirtableValue, readonly unknown[]>;
+    multipleLookupValues: Extract<
+        AirtableValue,
+        readonly unknown[] | { error: string }
+    >;
     autoNumber: number;
     barcode: AirtableBarcodeValue;
     rating: number;
@@ -302,7 +305,8 @@ const thumbnail = (value: unknown) =>
 const attachment = (value: unknown) =>
     object(value) &&
     text(value.url) &&
-    ['id', 'filename', 'type'].every((key) => optional(value, key, text)) &&
+    optional(value, 'id', (id) => id === null || text(id)) &&
+    ['filename', 'type'].every((key) => optional(value, key, text)) &&
     optional(value, 'size', finite) &&
     optional(
         value,
@@ -390,7 +394,10 @@ export function isFieldReadValue<K extends FieldKind>(
         case 'rollup':
             return nativeMember(value) || dense(value, nativeMember);
         case 'multipleLookupValues':
-            return dense(value, nativeMember);
+            return (
+                (object(value) && text(value.error)) ||
+                dense(value, nativeMember)
+            );
         default:
             return text(value);
     }

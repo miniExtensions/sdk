@@ -1,3 +1,4 @@
+import { normalizeFormLeaseLoaded } from './formLease.js';
 import type { FormFieldBindings } from '../forms/bindings.js';
 import {
     readPortalListOwnerContext,
@@ -146,7 +147,7 @@ export function createFormButtonFieldModel(
 ) {
     const binding = options.fields.field(options.fieldId);
     const accepted = options.fields.controller.getState();
-    const loaded = options.fields.getLoaded();
+    const loaded = normalizeFormLeaseLoaded(options.fields.getLoaded());
     const context = options.acceptedLinkedContext
         ? {
               ...options.acceptedLinkedContext,
@@ -197,7 +198,7 @@ export function createFormButtonFieldModel(
                     schema.fieldType !== 'button' ||
                     schema.airtableField.config.type !== 'button' ||
                     schema.airtableField.id !== options.fieldId ||
-                    key(now) !== key(loaded)
+                    key(normalizeFormLeaseLoaded(now)) !== key(loaded)
                 )
                     return null;
                 const linked = context

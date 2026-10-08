@@ -24,3 +24,14 @@ export type {
     PortalListSnapshot,
     PortalListPhase,
 } from './listOwner.js';
+
+export { createPortalSortEditor, createPortalFilterEditor } from './editors.js';
+export type {
+    PortalEditorOptions,
+    PortalEditorField,
+    PortalEditorResult,
+    PortalSortEditorModel,
+    PortalSortEditorSnapshot,
+    PortalFilterEditorModel,
+    PortalFilterEditorSnapshot,
+} from './editors.js';

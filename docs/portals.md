@@ -671,3 +671,38 @@ The snapshot is a detached copy containing complete native records, **not safe
 cell text**: custom renderers must honor returned detail display/privacy policy
 and must never derive Save data from presentation. This is list/table ownership,
 not a complete grid editor or support for every Portal layout.
+
+### Renderer-neutral bounded criteria editors
+
+`createPortalSortEditor` and `createPortalFilterEditor` from `/portals` prepare
+one sort field/direction or one supported scalar/select condition. The shipped
+stock recipes consume these same models. They do not read, evaluate record
+membership, grant access or write records. Date, linked/computed filters and
+nested groups remain outside this editor.
+
+Pass the exact accepted Portal, collection snapshot and complete criteria, plus
+an `isCurrent` guard bound to the list owner's accepted revision. Advance
+`configurationRevision` on accepted configuration replacement. Each snapshot is
+a detached copy; `subscribe` reports editor changes. Custom renderers use
+`setField`, `setDirection` (sort), or `setOperator`/`setOperand` (filter), followed
+by explicit `apply` or `clear`. Text/number operands use strings, checkbox uses
+a boolean, and select operands use exact current choice-ID arrays. The model
+uses the existing strict compiler, preserving text bytes and generic diagnostics.
+
+Unrecognized/richer saved criteria and unknown saved choices remain in
+`originalCriteria`; filter Apply/Clear requires `prepareReplacement` first.
+Sort's explicit Apply replaces unresolved sorts. Editing alone changes no
+committed criteria. Apply/Clear retires that model before `onApply` re-entry;
+the callback must retire both editors and pass the complete criteria to
+`PortalListOwner.setCriteria` for the accepted revision. Old rows, offset,
+actions and paging then remain unavailable until a separate explicit Load.
+Search, unrelated filters/sorts, flags and parent native data are preserved.
+Server cleanup remains separately explicit and server-authoritative.
+
+Optional `/react` `PortalSortEditor` and `PortalFilterEditor` accept an
+owner-held `model` and a `render({ snapshot, model })` prop. Unmount removes the
+subscription, not the prepared editor state; retain the model across ordinary
+remounts. Destroy it on owner/page/criteria replacement or editor cancellation.
+Retained handlers fail closed after observed owner/configuration changes,
+including observed A→B→A; unobserved in-place restoration is not detectable.
+The core subpath has no React dependency.

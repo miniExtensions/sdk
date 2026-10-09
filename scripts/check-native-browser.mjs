@@ -29,7 +29,7 @@ const createFileChooserOwner = async (
     timers = { setTimeout, clearTimeout }
 ) => {
     assert.equal(page.listenerCount('filechooser'), 0);
-    const session = await page.context().newCDPSession(page);
+    let session;
     let retired = false;
     let active;
     let failure;
@@ -37,6 +37,25 @@ const createFileChooserOwner = async (
     let sequence = 0;
     evidence.events = [];
     evidence.cleanup = {};
+    // Setup and each cleanup command have a separate 5s budget. Expiry does
+    // not cancel a dispatched CDP command; its late result cannot revive us.
+    const bounded = async (label, operation) => {
+        let timer;
+        const deadline = new Promise((_, reject) => {
+            timer = timers.setTimeout(() => {
+                retired = true;
+                reject(new Error(`${label} timed out after 5000ms`));
+            }, 5000);
+        });
+        try {
+            return await Promise.race([
+                Promise.resolve().then(operation),
+                deadline,
+            ]);
+        } finally {
+            timers.clearTimeout(timer);
+        }
+    };
     const fail = (error) => {
         failure ??= error;
         active?.reject?.(failure);
@@ -102,6 +121,32 @@ const createFileChooserOwner = async (
             mode: actual.multiple ? 'selectMultiple' : 'selectSingle',
         };
     };
+    const cleanupSession = async (target) => {
+        const errors = [];
+        // Remove the listener before awaiting disable. Even a held/rejected
+        // disable cannot skip detach, which has its own bounded attempt.
+        for (const [name, cleanup] of [
+            ['listener', () => target.off('Page.fileChooserOpened', onChooser)],
+            [
+                'interception',
+                () =>
+                    target.send('Page.setInterceptFileChooserDialog', {
+                        enabled: false,
+                    }),
+            ],
+            ['session', () => target.detach()],
+        ]) {
+            try {
+                await bounded(`Chooser cleanup ${name}`, cleanup);
+                evidence.cleanup[name] = 'completed';
+            } catch (error) {
+                evidence.cleanup[name] = { error: error.message };
+                errors.push(error);
+            }
+        }
+        if (errors.length)
+            throw new AggregateError(errors, 'Chooser cleanup failed');
+    };
     const dispose = () => {
         if (disposal) return disposal;
         retired = true;
@@ -109,39 +154,32 @@ const createFileChooserOwner = async (
             timers.clearTimeout(active.timer);
             active.reject?.(new Error('Chooser owner disposed'));
         }
-        disposal = (async () => {
-            const errors = [];
-            for (const [name, cleanup] of [
-                [
-                    'interception',
-                    () =>
-                        session.send('Page.setInterceptFileChooserDialog', {
-                            enabled: false,
-                        }),
-                ],
-                [
-                    'listener',
-                    () => session.off('Page.fileChooserOpened', onChooser),
-                ],
-                ['session', () => session.detach()],
-            ]) {
-                try {
-                    await cleanup();
-                    evidence.cleanup[name] = 'completed';
-                } catch (error) {
-                    evidence.cleanup[name] = { error: error.message };
-                    errors.push(error);
-                }
-            }
-            if (errors.length)
-                throw new AggregateError(errors, 'Chooser cleanup failed');
-        })();
+        // Memoize before cleanup callbacks run, including reentrant disposal.
+        disposal = Promise.resolve().then(() => {
+            if (session) return cleanupSession(session);
+        });
         return disposal;
     };
     try {
-        session.on('Page.fileChooserOpened', onChooser);
-        await session.send('Page.enable', {
-            enableFileChooserOpenedEvent: true,
+        await bounded('Chooser setup', async () => {
+            const acquired = await page.context().newCDPSession(page);
+            if (retired) {
+                // Acquisition can complete after the setup deadline. It never
+                // installs a listener or enables interception; clean it too.
+                try {
+                    await cleanupSession(acquired);
+                } catch (error) {
+                    evidence.lateSetupCleanup = { error: error.message };
+                    throw error;
+                }
+                return;
+            }
+            session = acquired;
+            session.on('Page.fileChooserOpened', onChooser);
+            await session.send('Page.enable', {
+                enableFileChooserOpenedEvent: true,
+            });
+            assert(!retired, 'Chooser setup retired');
         });
     } catch (error) {
         try {
@@ -211,15 +249,22 @@ const createFileChooserOwner = async (
                 ticket.reject?.(new Error('Chooser activation settled'));
                 if (!retired) {
                     try {
-                        await session.send(
-                            'Page.setInterceptFileChooserDialog',
-                            { enabled: false }
+                        await bounded('Chooser activation disable', () =>
+                            session.send('Page.setInterceptFileChooserDialog', {
+                                enabled: false,
+                            })
                         );
                         // Same-session response fence drains earlier received
                         // callbacks while unarmed; it is not an activation ID.
-                        await session.send('Page.getFrameTree');
+                        await bounded('Chooser activation drain', () =>
+                            session.send('Page.getFrameTree')
+                        );
                     } catch (cleanupError) {
                         fail(cleanupError);
+                        retired = true;
+                        evidence.activationCleanup = {
+                            error: cleanupError.message,
+                        };
                         error = error
                             ? new AggregateError(
                                   [error, cleanupError],
@@ -295,7 +340,16 @@ const checkFileChooserOwner = async () => {
             assert.equal(listeners.size, 0);
             assert.equal(detachCalls, 1);
         };
-        return { page, input, emit, listeners, sent, completed, cleaned };
+        return {
+            page,
+            input,
+            emit,
+            listeners,
+            sent,
+            completed,
+            cleaned,
+            session,
+        };
     };
     const groups = [];
     {
@@ -623,14 +677,17 @@ const checkFileChooserOwner = async () => {
                 )
                 .catch((error) => error);
             await held.promise;
-            assert.equal(scheduled.length, 1);
-            assert.equal(scheduled[0].milliseconds, 30000);
+            const activationTimers = scheduled.filter(
+                (timer) => timer.milliseconds === 30000
+            );
+            assert.equal(activationTimers.length, 1);
+            assert.equal(activationTimers[0].milliseconds, 30000);
             assert.equal(activations, heldPhase === 'activation' ? 1 : 0);
-            scheduled[0].callback();
+            activationTimers[0].callback();
             const error = await pending;
             assert.match(error.message, /timed out after 30000ms/);
             assert.deepEqual(f.completed, []);
-            assert(cleared.includes(scheduled[0]));
+            assert(cleared.includes(activationTimers[0]));
             let successor = 0;
             await assert.rejects(
                 owner.choose(
@@ -643,7 +700,11 @@ const checkFileChooserOwner = async () => {
                 /timed out after 30000ms/
             );
             assert.equal(successor, 0);
-            assert.equal(scheduled.length, 1);
+            assert.equal(
+                scheduled.filter((timer) => timer.milliseconds === 30000)
+                    .length,
+                1
+            );
             await owner.dispose();
             const eventCount = evidence.events.length;
             const enables = f.sent.filter(
@@ -674,6 +735,228 @@ const checkFileChooserOwner = async () => {
         groups.push(
             `exact 30000ms deadline rejects held ${heldPhase} without late continuation`
         );
+    }
+    const fakeClock = () => {
+        const scheduled = [];
+        return {
+            scheduled,
+            setTimeout(callback, milliseconds) {
+                const timer = { callback, milliseconds, cleared: false };
+                scheduled.push(timer);
+                return timer;
+            },
+            clearTimeout(timer) {
+                if (timer) timer.cleared = true;
+            },
+            expire(milliseconds) {
+                const active = scheduled.filter((timer) => !timer.cleared);
+                assert.equal(active.length, 1, 'Exactly one current deadline');
+                assert.equal(active[0].milliseconds, milliseconds);
+                active[0].callback();
+            },
+        };
+    };
+    const drainMicrotasks = async () => {
+        for (let turn = 0; turn < 12; turn++) await Promise.resolve();
+    };
+    for (const heldPhase of [
+        'setup-enable',
+        'acquisition',
+        'activation-disable',
+        'activation-drain',
+        'dispose-disable',
+        'dispose-detach',
+    ]) {
+        const reached = deferred(),
+            release = deferred(),
+            lateCleanup = deferred();
+        const clock = fakeClock(),
+            evidence = {};
+        let heldOnce = false,
+            frameReads = 0;
+        let f;
+        f = make(async (method, params) => {
+            if (method === 'Page.getFrameTree') frameReads++;
+            const selected =
+                (heldPhase === 'setup-enable' && method === 'Page.enable') ||
+                (heldPhase === 'activation-disable' &&
+                    method === 'Page.setInterceptFileChooserDialog' &&
+                    !params.enabled &&
+                    f.completed.length === 1) ||
+                (heldPhase === 'activation-drain' &&
+                    method === 'Page.getFrameTree' &&
+                    frameReads === 3) ||
+                (heldPhase === 'dispose-disable' &&
+                    method === 'Page.setInterceptFileChooserDialog' &&
+                    !params.enabled) ||
+                (heldPhase === 'dispose-detach' && method === 'detach');
+            if (selected && !heldOnce) {
+                heldOnce = true;
+                reached.resolve();
+                await release.promise;
+            }
+            if (method === 'detach') lateCleanup.resolve();
+        });
+        if (heldPhase === 'acquisition')
+            f.page.context = () => ({
+                newCDPSession: async () => {
+                    reached.resolve();
+                    await release.promise;
+                    return f.session;
+                },
+            });
+        let owner, pending;
+        try {
+            if (heldPhase === 'setup-enable' || heldPhase === 'acquisition') {
+                pending = createFileChooserOwner(f.page, evidence, clock).catch(
+                    (error) => error
+                );
+            } else {
+                owner = await createFileChooserOwner(f.page, evidence, clock);
+                pending = (
+                    heldPhase.startsWith('dispose-')
+                        ? owner.dispose()
+                        : owner.choose(f.input, async () => f.emit(), [])
+                ).catch((error) => error);
+            }
+            await reached.promise;
+            clock.expire(5000);
+            const error = await pending;
+            const expectedLabel =
+                heldPhase === 'setup-enable' || heldPhase === 'acquisition'
+                    ? 'Chooser setup'
+                    : heldPhase === 'activation-disable'
+                      ? 'Chooser activation disable'
+                      : heldPhase === 'activation-drain'
+                        ? 'Chooser activation drain'
+                        : 'Chooser cleanup failed';
+            assert.match(error.message, new RegExp(expectedLabel));
+            if (heldPhase.startsWith('dispose-')) {
+                assert(error instanceof AggregateError);
+                assert.match(error.errors[0].message, /timed out after 5000ms/);
+            } else assert.match(error.message, /timed out after 5000ms/);
+            if (owner && heldPhase.startsWith('activation-')) {
+                let successor = 0;
+                await assert.rejects(
+                    owner.choose(
+                        f.input,
+                        async () => {
+                            successor++;
+                        },
+                        []
+                    ),
+                    /Only one chooser activation allowed/
+                );
+                assert.equal(successor, 0);
+                await owner.dispose();
+            }
+            const completed = structuredClone(f.completed),
+                events = evidence.events.length;
+            const cleanup = JSON.stringify(evidence.cleanup);
+            const enables = f.sent.filter(
+                (call) =>
+                    call.method === 'Page.setInterceptFileChooserDialog' &&
+                    call.enabled
+            ).length;
+            release.resolve();
+            if (heldPhase === 'acquisition') await lateCleanup.promise;
+            await drainMicrotasks();
+            assert.deepEqual(f.completed, completed);
+            assert.equal(evidence.events.length, events);
+            assert.equal(
+                f.sent.filter(
+                    (call) =>
+                        call.method === 'Page.setInterceptFileChooserDialog' &&
+                        call.enabled
+                ).length,
+                enables
+            );
+            if (heldPhase !== 'acquisition')
+                assert.equal(
+                    JSON.stringify(evidence.cleanup),
+                    cleanup,
+                    'Late completion preserves recorded cleanup outcome'
+                );
+            if (heldPhase === 'acquisition') {
+                assert.equal(
+                    f.sent.some((call) => call.method === 'Page.enable'),
+                    false
+                );
+                assert.deepEqual(evidence.cleanup, {
+                    listener: 'completed',
+                    interception: 'completed',
+                    session: 'completed',
+                });
+            }
+            f.cleaned();
+        } finally {
+            release.resolve();
+            if (owner) await owner.dispose().catch(() => {});
+            if (pending) await pending;
+        }
+        groups.push(
+            `exact 5000ms bound for held ${heldPhase} and late completion`
+        );
+    }
+    {
+        const clock = fakeClock(),
+            evidence = {},
+            reached = deferred(),
+            release = deferred();
+        const f = make(async (method, params) => {
+            if (method === 'Page.enable')
+                throw Error('controlled setup primary failure');
+            if (
+                method === 'Page.setInterceptFileChooserDialog' &&
+                !params.enabled
+            ) {
+                reached.resolve();
+                await release.promise;
+            }
+        });
+        const pending = createFileChooserOwner(f.page, evidence, clock).catch(
+            (error) => error
+        );
+        try {
+            await reached.promise;
+            clock.expire(5000);
+            const error = await pending;
+            assert(error instanceof AggregateError);
+            assert.equal(
+                error.errors[0].message,
+                'controlled setup primary failure'
+            );
+            assert(error.errors[1] instanceof AggregateError);
+            assert.match(
+                error.errors[1].errors[0].message,
+                /cleanup interception timed out after 5000ms/
+            );
+            f.cleaned();
+            const cleanup = JSON.stringify(evidence.cleanup);
+            release.resolve();
+            await drainMicrotasks();
+            assert.equal(JSON.stringify(evidence.cleanup), cleanup);
+        } finally {
+            release.resolve();
+            await pending;
+        }
+        groups.push('setup primary error and cleanup timeout both surface');
+    }
+    {
+        let owner, reentrant;
+        const f = make();
+        const off = f.session.off;
+        f.session.off = (event, listener) => {
+            reentrant = owner.dispose();
+            off(event, listener);
+        };
+        owner = await createFileChooserOwner(f.page, {});
+        const first = owner.dispose();
+        await first;
+        assert.equal(reentrant, first);
+        assert.equal(owner.dispose(), first);
+        f.cleaned();
+        groups.push('synchronous cleanup reentry returns memoized disposal');
     }
     return {
         checks: groups.length,

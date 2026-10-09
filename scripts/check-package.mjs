@@ -967,7 +967,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         await checkFormCompositionConsumer({
             consumerDirectory: temporaryDirectory,
         }),
-        22
+        26
     );
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,

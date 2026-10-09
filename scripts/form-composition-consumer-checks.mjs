@@ -447,6 +447,70 @@ export async function checkFormCompositionConsumer({ consumerDirectory }) {
                 );
                 checks++;
             }
+            for (const borrowed of [false, true]) {
+                const f = fixture();
+                const stops = new Set();
+                let live = 0,
+                    armed = false,
+                    p;
+                // Arm only after the page owner's final field subscription exists.
+                // This targets scope initialization without depending on read counts.
+                const track = (target, arm = false) => {
+                    const subscribe = target.subscribe;
+                    target.subscribe = function (...args) {
+                        const originalStop = subscribe.apply(this, args);
+                        live++;
+                        let active = true;
+                        const stop = () => {
+                            if (!active) return;
+                            active = false;
+                            live--;
+                            stops.delete(stop);
+                            originalStop();
+                        };
+                        stops.add(stop);
+                        if (arm) armed = true;
+                        return stop;
+                    };
+                };
+                track(f.fields.controller);
+                for (const id of ['a', 'b', 'c'])
+                    track(f.fields.field(id), id === 'c');
+                const failure = new Error('Scope initial configuration failed');
+                try {
+                    if (borrowed) p = forms.createFormPageOwner(f.options);
+                    assert.throws(
+                        () =>
+                            ui.createFormRenderScope({
+                                ...f.options,
+                                ...(borrowed ? { pages: p } : {}),
+                                configurationRevision: () => {
+                                    if (armed) throw failure;
+                                    return f.options.configurationRevision();
+                                },
+                            }),
+                        (error) => error === failure
+                    );
+                    assert.equal(armed, true);
+                    assert.equal(live, borrowed ? 4 : 0);
+                    if (borrowed) {
+                        assert.equal(p.getSnapshot().status, 'ready');
+                        const s = scope(f, { pages: p });
+                        assert.equal(s.pages, p);
+                        assert(s.getSnapshot().actions.next().accepted);
+                        s.destroy();
+                        assert.equal(p.getSnapshot().status, 'ready');
+                        assert.equal(live, 4);
+                        p.dispose();
+                        assert.equal(live, 0);
+                    }
+                    assert.equal(f.calls.length, 0);
+                    checks++;
+                } finally {
+                    p?.dispose();
+                    for (const stop of [...stops]) stop();
+                }
+            }
             {
                 const f = fixture(),
                     s = scope(f);

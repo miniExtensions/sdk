@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
 import { createFormPageOwner } from '../src/forms/pages.js';
-import { createFormRenderScope } from '../src/ui/formRenderScope.js';
+import { createFormRenderScope } from '../src/ui/index.js';
 import {
     createMiniExtensionsClient,
     type FormLoadedResult,
@@ -119,7 +119,108 @@ const hiddenCondition = {
     ],
 };
 
+const trackSubscriptions = () => {
+    let live = 0;
+    const stops: (() => void)[] = [];
+    const restores: (() => void)[] = [];
+    return {
+        count: () => live,
+        wrap<S>(
+            target: { subscribe(listener: (state: S) => void): () => void },
+            after?: () => void
+        ) {
+            const original = target.subscribe;
+            target.subscribe = (listener) => {
+                const stop = original.call(target, listener);
+                let active = true;
+                live++;
+                const trackedStop = () => {
+                    if (!active) return;
+                    active = false;
+                    live--;
+                    stop();
+                };
+                stops.push(trackedStop);
+                after?.();
+                return trackedStop;
+            };
+            restores.push(() => {
+                target.subscribe = original;
+            });
+        },
+        cleanup() {
+            stops.forEach((stop) => stop());
+            restores.forEach((restore) => restore());
+        },
+    };
+};
+
 describe('Form render composition scope', () => {
+    for (const phase of ['configuration', 'getState'] as const) {
+        for (const borrowed of [false, true]) {
+            it(`releases only owned page subscriptions after initial ${phase} failure (borrowed=${borrowed})`, () => {
+                const f = fixture(),
+                    tracking = trackSubscriptions();
+                let armed = false;
+                const originalState = f.fields.controller.getState;
+                const failure = Error('Constructor probe');
+                let pages: ReturnType<typeof createFormPageOwner> | undefined;
+                try {
+                    tracking.wrap(f.fields.controller);
+                    for (const id of ['a', 'b', 'c'])
+                        tracking.wrap(
+                            f.fields.field(id),
+                            id === 'c'
+                                ? () => {
+                                      armed = true;
+                                  }
+                                : undefined
+                        );
+                    if (borrowed) pages = createFormPageOwner(f.options);
+                    if (phase === 'getState')
+                        f.fields.controller.getState = () => {
+                            if (armed) throw failure;
+                            return originalState();
+                        };
+                    const configurationRevision = () => {
+                        if (phase === 'configuration' && armed) throw failure;
+                        return 0;
+                    };
+                    assert.throws(
+                        () =>
+                            createFormRenderScope({
+                                ...f.options,
+                                pages,
+                                configurationRevision,
+                            }),
+                        failure
+                    );
+                    assert.equal(tracking.count(), borrowed ? 4 : 0);
+                    armed = false;
+                    if (pages) {
+                        assert.equal(pages.getSnapshot().status, 'ready');
+                        assert.equal(
+                            pages.next(pages.getSnapshot().revision).accepted,
+                            true
+                        );
+                        pages.dispose();
+                        assert.equal(tracking.count(), 0);
+                    }
+                    assert.equal(
+                        f.fields.field('a').setValue('Still owned').accepted,
+                        true
+                    );
+                    assert.equal(f.calls.length, 0);
+                } finally {
+                    armed = false;
+                    f.fields.controller.getState = originalState;
+                    pages?.dispose();
+                    tracking.cleanup();
+                    f.fields.destroy();
+                }
+            });
+        }
+    }
     it('uses the exact supplied owner and follows its configured field order without I/O', () => {
         const f = fixture();
         const pages = createFormPageOwner(f.options);

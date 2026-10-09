@@ -67,6 +67,22 @@ export function createFormRenderScope(
         );
     const pages = options.pages ?? createFormPageOwner(options);
     const ownsPages = options.pages === undefined;
+    try {
+        return initializeFormRenderScope(options, pages, ownsPages);
+    } catch (error) {
+        // Acquisition precedes every scope read/callback. Even an initial
+        // controller/configuration/snapshot failure must release owned pages.
+        if (ownsPages) pages.dispose();
+        throw error;
+    }
+}
+
+function initializeFormRenderScope(
+    options: FormRenderScopeOptions,
+    pages: FormPageOwner,
+    ownsPages: boolean
+): FormRenderScope {
+    const { fields } = options;
     const initial = fields.controller.getState();
     const configuration = options.configurationRevision();
     const hosts = new Map<string, FieldRendererHost>();
@@ -254,10 +270,8 @@ export function createFormRenderScope(
                 // A missing field remains the existing page owner's diagnostic.
             }
         }
-        stops.push(
-            pages.subscribe(notify),
-            fields.controller.subscribe(notify)
-        );
+        stops.push(pages.subscribe(notify));
+        stops.push(fields.controller.subscribe(notify));
     } catch (error) {
         retired = true;
         release();

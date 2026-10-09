@@ -688,7 +688,7 @@ the previous section, even if it retains the propagation flag without a
 predicate. This frontend compositor does not produce the backend's filtered
 record projection for conditional select options or other consumers.
 
-`createScalarFormRecordProjection` supplies a detached deep copy for one-page
+`createScalarFormRecordProjection` supplies a detached deep copy for
 conditional evaluation with supported direct scalar predicates and canonical
 ordered sections. Pass `fieldIdsInForm` verbatim: the input cannot prove order
 completeness. Duplicate IDs, nonstrings and sparse entries block. Duplicate
@@ -717,8 +717,12 @@ empty hiding still blocks presentation and the starter Save gate.
 The existing `createFlatScalarFormRecordProjection` retains its types, blocked
 codes and behavior, including scanning schemas outside the supplied order and
 rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
-adapter and one-page Review opt into the new helper, retaining their
-one-page and supported-driver checks. Review accepts scalar/select answers and conservative linked/attachment summaries;
+adapter and Form field bindings use this helper for supported one-page and
+multipage scalar conditional choices. Inactive-page drivers remain in the
+evaluation record; conditionally hidden drivers are removed only from that
+detached projection. Eligibility changes never remove native selected values.
+One-page Review retains its separate page-mode and supported-driver checks.
+Review accepts scalar/select answers and conservative linked/attachment summaries;
 selects do not become supported condition drivers or edit-empty-hiding types.
 The shipped Review recipe maps native names through complete select policy
 metadata, preserves selected-but-ineligible values and ordered duplicates,
@@ -749,7 +753,8 @@ export function sectionProjection(
         'multiPageFormMode' in state
             ? state.multiPageFormMode
             : undefined;
-    if (mode != null && mode !== 'one-page') return null;
+    if (mode != null && mode !== 'one-page' && mode !== 'multi-page')
+        return null;
     return createScalarFormRecordProjection({
         fieldIds: loaded.payload.fieldIdsInForm,
         fieldIdsToSchemas: loaded.payload.fieldIdsToSchemas,

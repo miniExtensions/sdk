@@ -41,7 +41,12 @@ export function formChoiceConditionRecord(
         const schemas = Object.values(page.payload.fieldIdsToSchemas);
         const configured = new Set(page.payload.fieldIdsInForm);
         const pageMode = settings(page.payload.publicFields).multiPageFormMode;
-        if (pageMode != null && pageMode !== 'one-page') return null;
+        if (
+            pageMode != null &&
+            pageMode !== 'one-page' &&
+            pageMode !== 'multi-page'
+        )
+            return null;
         const projection = createScalarFormRecordProjection({
             fieldIds: page.payload.fieldIdsInForm,
             fieldIdsToSchemas: page.payload.fieldIdsToSchemas,

@@ -73,6 +73,14 @@ import {
    [Explicit reload](#selects-linked-reads-and-reload) is separate from remounting
    and never replays an uncertain Save.
 
+Configured conditional select choices use the complete ordered native Form
+record in both supported page modes. A scalar driver on another page remains
+available to the option predicate; a conditionally hidden driver is removed
+only from its evaluation copy. Back/Next does not delete values, and a selected
+native choice remains retained when it stops being eligible as a new choice.
+Unknown page modes and unsupported condition dependencies still refuse
+availability. See [the scalar projection boundary](forms.md#one-page-conditional-field-visibility).
+
 Use the existing field-specific instructions instead of duplicating policy:
 
 | Field behavior                                        | Existing authority and rendering path                                                                                                                                                                                                                                                                                                                  |

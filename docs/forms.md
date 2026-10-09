@@ -1368,3 +1368,103 @@ owner remains responsible for clearing a supplied visitor store.
 This module is client-side presentation and draft management. Local tests and
 packed-consumer checks prove these helper contracts; they do not prove a
 specific staging deployment, extension or backend compatibility.
+
+## Bounded multipage ownership
+
+`createFormPageOwner` owns local page navigation around an existing
+`createFormFieldBindings` owner. It reads the accepted load through
+`fields.getLoaded()`; do not supply another Form or create another draft store.
+Keep both owners outside renderer mount lifetimes. Page disposal unsubscribes and
+retires only page actions, never the shared bindings or native draft.
+
+```ts
+import {
+    createFormPageOwner,
+    type FormFieldBindings,
+    type FormSaveLifecycle,
+    type FormPageSnapshot,
+} from '@miniextensions/sdk/forms';
+
+// App-provided existing owner, observed configuration lease and renderer.
+declare const fields: FormFieldBindings;
+declare const lifecycle: FormSaveLifecycle;
+declare const acceptedConfigurationRevision: number;
+declare function acceptedFormOwnerIsCurrent(): boolean;
+declare function renderPages(snapshot: FormPageSnapshot): void;
+
+// fields is the current FormFieldBindings owner. Increment the configuration
+// revision for every accepted replacement, including changes later restored.
+const pages = createFormPageOwner({
+    fields,
+    isCurrent: () => acceptedFormOwnerIsCurrent(),
+    configurationRevision: () => acceptedConfigurationRevision,
+});
+const unsubscribe = pages.subscribe((snapshot) => renderPages(snapshot));
+// Use the revision captured with each rendered action.
+const snapshot = pages.getSnapshot();
+pages.next(snapshot.revision);
+// At the final visible page, deliberate submit delegates to fields.save().
+// Supply the same uncertainty-journal lifecycle as an ordinary binding Save.
+const submit = () => pages.submit(pages.getSnapshot().revision, { lifecycle });
+// Wire submit to an explicit user action; do not invoke it on mount.
+unsubscribe(); // ordinary unmount; retain pages/fields for remount
+```
+
+Pages follow returned `fieldIdsInForm` order and enabled nonblank frontend section
+headers. Leading fields form one unnamed page. A disabled retained header title
+never starts a page. Multipage navigation applies only when the configured mode
+is `multi-page` and there are more than one structural pages; otherwise all fields
+remain on one page. A page is hidden only when all members are hidden. A blocked
+visibility result is not hidden. If the active page becomes hidden, normalize to
+the first visible page. Empty/all-hidden Forms expose no submission action.
+
+Back changes only the page index; it does not validate, write native values, or dispatch requests. Next checks only the current page's supported ordinary
+rules and unfinished scalar/date input, with zero requests or journal writes.
+Required checks use canonical emptiness, including blank strings, null/missing,
+empty/all-null arrays, unchecked checkbox, rating zero and empty barcode text.
+Required exemptions apply to hidden/read-only fields. Character limits exempt
+hidden/read-only fields; negative-number rules exempt read-only but **not hidden**
+fields. Select validity/count and linked maximum have neither exemption; linked
+minimum exempts hidden fields only. Initial loaded values are the detached
+persisted baseline for grandfathered select values; presentation is never data.
+
+This first validator supports ordinary text, number/currency, select and linked
+limits plus required checks for the documented scalar/date/attachment types.
+Writable nonempty email/URL validation is explicitly unsupported, except URL
+configuration that permits invalid URLs; readonly email/URL answers do not run
+those validators. Computed fields and canonical pass-through types such as rich text and buttons
+do not add ordinary frontend validation. Existing visibility refusals still apply;
+lookup presentation requires an explicit `hideFieldIfEmpty: false`. Nonempty collaborator answers and other
+unimplemented validation types remain explicit refusals.
+Effective advanced conditional validation and `requireOpenLinkedRecords` without
+review tracking remain blocked when their page is relevant. Unsupported field rules
+on a future page do not block Next on an earlier page; reaching that page exposes
+the refusal. Final submission checks rules across all pages, including answers
+changed after leaving an earlier page. Existing blocked visibility results remain
+blocked. There is no approximation of backend uniqueness, authentication or
+permission validation.
+
+Configured prepared Review, compute and automatic submission remain unsupported
+by this owner and block navigation globally. It never bypasses them. After full
+page validation, final submission delegates to the existing `fields.save`,
+refusing an effective compute Save input before journal creation or transport,
+and retaining the complete native envelope, dirty-ID union, pending-file and
+uncertainty gates; backend validation remains authoritative. A cancelled/unknown
+Save retires the old page actions. An explicit fresh binding reload/reset requires
+a new page owner; no old action is revived or mutation retried.
+
+Snapshots are detached copies. Their revision covers navigation, conditional
+page normalization, native draft changes, unfinished input and blocked-state
+changes. Pass an exact owner/session/token/parent lease and a monotonic observed
+configuration revision. An observed mismatch permanently retires old actions,
+including observed A→B→A. Accepted AddChoice metadata updates stay within the
+existing Form owner and do not retire page navigation. A current-owner predicate
+that synchronously disposes the page owner cannot authorize a subsequent action.
+Unobserved in-place replacement is not detected. A stale
+callback never disposes shared or successor bindings.
+
+Pinned fixtures classify 118 ordinary-rule cases for exact canonical comparison
+and 28 cases as conservative unsupported-validation refusals. Executable installed
+ESM/CJS tests prove bounded local
+navigation and synthetic validation-response dispatch, not live persistence or
+complete hosted multipage parity. Live acceptance remains separately tracked.

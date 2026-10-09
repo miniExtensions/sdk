@@ -114,3 +114,14 @@ export type {
     SelectChoiceAdapter,
     SelectChoicePhase,
 } from './selectChoiceController.js';
+
+export {
+    createFormPageOwner,
+    FormPageError,
+    type FormPageOwner,
+    type FormPageOwnerOptions,
+    type FormPageDescriptor,
+    type FormPageSnapshot,
+    type FormPageAction,
+} from './pages.js';
+export type { FormPageProblem } from './pageValidation.js';

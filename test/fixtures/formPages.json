@@ -1,0 +1,3562 @@
+{
+    "provenance": {
+        "revision": "58f73d575ab10baa0a10693660d8002f204368e1",
+        "tree": "b39e58ead46a311c497def57474cf5ca720542ae",
+        "generator": "scripts/generate-form-page-fixtures.mjs",
+        "generatorSha256": "76df45876d6c8b6e4f46df567f74aac1173a4ce660a19563ce4d4ca414018d83",
+        "casesSourceSha256": "0a2b117def7286f42f0a942e7bc7e07f99bc1c2e3d2d765353ec60c5b0979529",
+        "sources": {
+            "ordinary-validation": "4cd7da6d3f7ccb44fe23f46ecf96ebeb8844bb9236c3a3cf33ab8e42113556d9",
+            "value-emptiness": "0d4c94bfeeb88d2d180957861d8e1d34f40eeee64d921ba26b9aa5cf16a2785d",
+            "select-option-policy": "081fe8f9a968b5e189fb86a86922aabaf4eeb6b2b7a15a6759bdf5b8ceea7e0f",
+            "section-grouping": "bd127e74177448e81ee99cdd086b304d54bb51aa837d6ce121d32244d3b8e076",
+            "page-navigation": "3c7fb6dd111835a24e666fd687487220cd295a866919f9ba2b2b9df07b02efea",
+            "form-orchestration": "810b89b525ddfa05d520d2f7044f2304c320ff3b0884e810f408ba8ca06518b1",
+            "navigation-dispatch": "83d76714a265ccef980773b9df031bcbc074b56a742a447de551d6f8f5ac8f56"
+        },
+        "execution": "pinned ordinary validation, section grouping and navigation; synthetic values only"
+    },
+    "validation": [
+        {
+            "name": "required-null-false-false",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "required-null-false-true",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "required-null-true-false",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-null-true-true",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-blank-false-false",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "required-blank-false-true",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "required-blank-true-false",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-blank-true-true",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-all-null-false-false",
+            "schema": {
+                "fieldType": "multipleAttachments",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleAttachments", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": [null],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "required-all-null-false-true",
+            "schema": {
+                "fieldType": "multipleAttachments",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleAttachments", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": [null],
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "required-all-null-true-false",
+            "schema": {
+                "fieldType": "multipleAttachments",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleAttachments", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": [null],
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-all-null-true-true",
+            "schema": {
+                "fieldType": "multipleAttachments",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleAttachments", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": [null],
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-unchecked-false-false",
+            "schema": {
+                "fieldType": "checkbox",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "checkbox", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": false,
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "required-unchecked-false-true",
+            "schema": {
+                "fieldType": "checkbox",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "checkbox", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": false,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "required-unchecked-true-false",
+            "schema": {
+                "fieldType": "checkbox",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "checkbox", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": false,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-unchecked-true-true",
+            "schema": {
+                "fieldType": "checkbox",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "checkbox", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": false,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-zero-rating-false-false",
+            "schema": {
+                "fieldType": "rating",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "rating", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": 0,
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "required-zero-rating-false-true",
+            "schema": {
+                "fieldType": "rating",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "rating", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": 0,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "required-zero-rating-true-false",
+            "schema": {
+                "fieldType": "rating",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "rating", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": 0,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-zero-rating-true-true",
+            "schema": {
+                "fieldType": "rating",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "rating", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": 0,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-empty-barcode-false-false",
+            "schema": {
+                "fieldType": "barcode",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": { "text": " " },
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "required-empty-barcode-false-true",
+            "schema": {
+                "fieldType": "barcode",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": { "text": " " },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "required-empty-barcode-true-false",
+            "schema": {
+                "fieldType": "barcode",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": { "text": " " },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "required-empty-barcode-true-true",
+            "schema": {
+                "fieldType": "barcode",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "barcode", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": { "text": " " },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "length-false-false",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "characterLimit": 2, "readOnly": false }
+            },
+            "value": "long",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "negative-false-false",
+            "schema": {
+                "fieldType": "number",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "number", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": -1,
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "select-invalid-false-false",
+            "schema": {
+                "fieldType": "singleSelect",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleSelect",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": "Unknown",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "select-count-false-false",
+            "schema": {
+                "fieldType": "multipleSelects",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleSelects",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": {
+                    "readOnly": false,
+                    "maxNumberOfSelections": 1
+                }
+            },
+            "value": ["Alpha", "Beta"],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "linked-min-false-false",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": {
+                    "readOnly": false,
+                    "customMinimumRecordsToSelect": 1
+                }
+            },
+            "value": [],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "linked-max-false-false",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": {
+                    "readOnly": false,
+                    "customMaxRecordsToSelect": 1
+                }
+            },
+            "value": ["rec_a", "rec_b"],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "length-false-true",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "characterLimit": 2, "readOnly": true }
+            },
+            "value": "long",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "negative-false-true",
+            "schema": {
+                "fieldType": "number",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "number", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": -1,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "select-invalid-false-true",
+            "schema": {
+                "fieldType": "singleSelect",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleSelect",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": "Unknown",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "select-count-false-true",
+            "schema": {
+                "fieldType": "multipleSelects",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleSelects",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": {
+                    "readOnly": true,
+                    "maxNumberOfSelections": 1
+                }
+            },
+            "value": ["Alpha", "Beta"],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "linked-min-false-true",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": {
+                    "readOnly": true,
+                    "customMinimumRecordsToSelect": 1
+                }
+            },
+            "value": [],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "linked-max-false-true",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": {
+                    "readOnly": true,
+                    "customMaxRecordsToSelect": 1
+                }
+            },
+            "value": ["rec_a", "rec_b"],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "length-true-false",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "characterLimit": 2, "readOnly": false }
+            },
+            "value": "long",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "negative-true-false",
+            "schema": {
+                "fieldType": "number",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "number", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": -1,
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "select-invalid-true-false",
+            "schema": {
+                "fieldType": "singleSelect",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleSelect",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": "Unknown",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "select-count-true-false",
+            "schema": {
+                "fieldType": "multipleSelects",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleSelects",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": {
+                    "readOnly": false,
+                    "maxNumberOfSelections": 1
+                }
+            },
+            "value": ["Alpha", "Beta"],
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "linked-min-true-false",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": {
+                    "readOnly": false,
+                    "customMinimumRecordsToSelect": 1
+                }
+            },
+            "value": [],
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "linked-max-true-false",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": {
+                    "readOnly": false,
+                    "customMaxRecordsToSelect": 1
+                }
+            },
+            "value": ["rec_a", "rec_b"],
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "length-true-true",
+            "schema": {
+                "fieldType": "singleLineText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "singleLineText", "options": null }
+                },
+                "miniExtConfig": { "characterLimit": 2, "readOnly": true }
+            },
+            "value": "long",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "negative-true-true",
+            "schema": {
+                "fieldType": "number",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "number", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": -1,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "select-invalid-true-true",
+            "schema": {
+                "fieldType": "singleSelect",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleSelect",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": "Unknown",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "select-count-true-true",
+            "schema": {
+                "fieldType": "multipleSelects",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleSelects",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": {
+                    "readOnly": true,
+                    "maxNumberOfSelections": 1
+                }
+            },
+            "value": ["Alpha", "Beta"],
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "linked-min-true-true",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": {
+                    "readOnly": true,
+                    "customMinimumRecordsToSelect": 1
+                }
+            },
+            "value": [],
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "linked-max-true-true",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": {
+                    "readOnly": true,
+                    "customMaxRecordsToSelect": 1
+                }
+            },
+            "value": ["rec_a", "rec_b"],
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "stored-unknown",
+            "schema": {
+                "fieldType": "singleSelect",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleSelect",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "Legacy",
+            "stored": "Legacy",
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "limited-stored",
+            "schema": {
+                "fieldType": "multipleSelects",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleSelects",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": {
+                    "singleOrMultiSelectLimitSelectionOptions": ["a"]
+                }
+            },
+            "value": ["Beta"],
+            "stored": ["Beta"],
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "limited-new",
+            "schema": {
+                "fieldType": "multipleSelects",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleSelects",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": {
+                    "singleOrMultiSelectLimitSelectionOptions": ["a"]
+                }
+            },
+            "value": ["Beta"],
+            "stored": [],
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "add-new",
+            "schema": {
+                "fieldType": "singleSelect",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleSelect",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "allowAddingNewOptions": true }
+            },
+            "value": "New",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "restricted-add-new",
+            "schema": {
+                "fieldType": "singleSelect",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleSelect",
+                        "options": {
+                            "choices": [
+                                { "id": "a", "name": "Alpha" },
+                                { "id": "b", "name": "Beta" }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": {
+                    "allowAddingNewOptions": true,
+                    "singleOrMultiSelectLimitSelectionOptions": ["a"]
+                }
+            },
+            "value": "New",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "negative-allowed",
+            "schema": {
+                "fieldType": "currency",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "currency", "options": null }
+                },
+                "miniExtConfig": { "allowNegativeNumbers": true }
+            },
+            "value": -2,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "linked-single-max",
+            "schema": {
+                "fieldType": "multipleRecordLinks",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "multipleRecordLinks", "options": null }
+                },
+                "miniExtConfig": { "maxRecordsToSelectOrCreate": "1" }
+            },
+            "value": ["rec_a", "rec_b"],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "checkbox-true",
+            "schema": {
+                "fieldType": "checkbox",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "checkbox", "options": null }
+                },
+                "miniExtConfig": { "required": true }
+            },
+            "value": true,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "rating-one",
+            "schema": {
+                "fieldType": "rating",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "rating", "options": null }
+                },
+                "miniExtConfig": { "required": true }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "percent-zero",
+            "schema": {
+                "fieldType": "percent",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "percent", "options": null }
+                },
+                "miniExtConfig": { "required": true }
+            },
+            "value": 0,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "email-invalid-false-false",
+            "schema": {
+                "fieldType": "email",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "email", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-invalid-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-invalid-allowed-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false, "allowInvalidUrls": true }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "rich-text-required-false-false",
+            "schema": {
+                "fieldType": "richText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "richText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "email-invalid-false-true",
+            "schema": {
+                "fieldType": "email",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "email", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-invalid-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-invalid-allowed-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true, "allowInvalidUrls": true }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "rich-text-required-false-true",
+            "schema": {
+                "fieldType": "richText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "richText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "email-invalid-true-false",
+            "schema": {
+                "fieldType": "email",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "email", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-invalid-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-invalid-allowed-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false, "allowInvalidUrls": true }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "rich-text-required-true-false",
+            "schema": {
+                "fieldType": "richText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "richText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "email-invalid-true-true",
+            "schema": {
+                "fieldType": "email",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "email", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-invalid-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-invalid-allowed-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true, "allowInvalidUrls": true }
+            },
+            "value": "invalid",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "rich-text-required-true-true",
+            "schema": {
+                "fieldType": "richText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "richText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-formula-false-false",
+            "schema": {
+                "fieldType": "formula",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "formula", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "Computed",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-formula-false-true",
+            "schema": {
+                "fieldType": "formula",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "formula", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "Computed",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-formula-true-false",
+            "schema": {
+                "fieldType": "formula",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "formula", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "Computed",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-formula-true-true",
+            "schema": {
+                "fieldType": "formula",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "formula", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "Computed",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-rollup-false-false",
+            "schema": {
+                "fieldType": "rollup",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "rollup", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-rollup-false-true",
+            "schema": {
+                "fieldType": "rollup",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "rollup", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-rollup-true-false",
+            "schema": {
+                "fieldType": "rollup",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "rollup", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-rollup-true-true",
+            "schema": {
+                "fieldType": "rollup",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "rollup", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-multipleLookupValues-false-false",
+            "schema": {
+                "fieldType": "multipleLookupValues",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleLookupValues",
+                        "options": null
+                    }
+                },
+                "miniExtConfig": {
+                    "required": true,
+                    "readOnly": false,
+                    "hideFieldIfEmpty": false
+                }
+            },
+            "value": ["Computed"],
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-multipleLookupValues-false-true",
+            "schema": {
+                "fieldType": "multipleLookupValues",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleLookupValues",
+                        "options": null
+                    }
+                },
+                "miniExtConfig": {
+                    "required": true,
+                    "readOnly": true,
+                    "hideFieldIfEmpty": false
+                }
+            },
+            "value": ["Computed"],
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-multipleLookupValues-true-false",
+            "schema": {
+                "fieldType": "multipleLookupValues",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleLookupValues",
+                        "options": null
+                    }
+                },
+                "miniExtConfig": {
+                    "required": true,
+                    "readOnly": false,
+                    "hideFieldIfEmpty": false
+                }
+            },
+            "value": ["Computed"],
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-multipleLookupValues-true-true",
+            "schema": {
+                "fieldType": "multipleLookupValues",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleLookupValues",
+                        "options": null
+                    }
+                },
+                "miniExtConfig": {
+                    "required": true,
+                    "readOnly": true,
+                    "hideFieldIfEmpty": false
+                }
+            },
+            "value": ["Computed"],
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-count-false-false",
+            "schema": {
+                "fieldType": "count",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "count", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-count-false-true",
+            "schema": {
+                "fieldType": "count",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "count", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-count-true-false",
+            "schema": {
+                "fieldType": "count",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "count", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-count-true-true",
+            "schema": {
+                "fieldType": "count",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "count", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-autoNumber-false-false",
+            "schema": {
+                "fieldType": "autoNumber",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "autoNumber", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-autoNumber-false-true",
+            "schema": {
+                "fieldType": "autoNumber",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "autoNumber", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-autoNumber-true-false",
+            "schema": {
+                "fieldType": "autoNumber",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "autoNumber", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-autoNumber-true-true",
+            "schema": {
+                "fieldType": "autoNumber",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "autoNumber", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": 1,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-createdTime-false-false",
+            "schema": {
+                "fieldType": "createdTime",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "createdTime", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "2026-01-01T00:00:00.000Z",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-createdTime-false-true",
+            "schema": {
+                "fieldType": "createdTime",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "createdTime", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "2026-01-01T00:00:00.000Z",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-createdTime-true-false",
+            "schema": {
+                "fieldType": "createdTime",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "createdTime", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "2026-01-01T00:00:00.000Z",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-createdTime-true-true",
+            "schema": {
+                "fieldType": "createdTime",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "createdTime", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "2026-01-01T00:00:00.000Z",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-lastModifiedTime-false-false",
+            "schema": {
+                "fieldType": "lastModifiedTime",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "lastModifiedTime", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "2026-01-01T00:00:00.000Z",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-lastModifiedTime-false-true",
+            "schema": {
+                "fieldType": "lastModifiedTime",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "lastModifiedTime", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "2026-01-01T00:00:00.000Z",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-lastModifiedTime-true-false",
+            "schema": {
+                "fieldType": "lastModifiedTime",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "lastModifiedTime", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "2026-01-01T00:00:00.000Z",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-lastModifiedTime-true-true",
+            "schema": {
+                "fieldType": "lastModifiedTime",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "lastModifiedTime", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "2026-01-01T00:00:00.000Z",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-createdBy-false-false",
+            "schema": {
+                "fieldType": "createdBy",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "createdBy", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": {
+                "id": "usr_example",
+                "email": "synthetic@example.test",
+                "name": "Example"
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-createdBy-false-true",
+            "schema": {
+                "fieldType": "createdBy",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "createdBy", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": {
+                "id": "usr_example",
+                "email": "synthetic@example.test",
+                "name": "Example"
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-createdBy-true-false",
+            "schema": {
+                "fieldType": "createdBy",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "createdBy", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": {
+                "id": "usr_example",
+                "email": "synthetic@example.test",
+                "name": "Example"
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-createdBy-true-true",
+            "schema": {
+                "fieldType": "createdBy",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "createdBy", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": {
+                "id": "usr_example",
+                "email": "synthetic@example.test",
+                "name": "Example"
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-lastModifiedBy-false-false",
+            "schema": {
+                "fieldType": "lastModifiedBy",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "lastModifiedBy", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": {
+                "id": "usr_example",
+                "email": "synthetic@example.test",
+                "name": "Example"
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-lastModifiedBy-false-true",
+            "schema": {
+                "fieldType": "lastModifiedBy",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "lastModifiedBy", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": {
+                "id": "usr_example",
+                "email": "synthetic@example.test",
+                "name": "Example"
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-lastModifiedBy-true-false",
+            "schema": {
+                "fieldType": "lastModifiedBy",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "lastModifiedBy", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": {
+                "id": "usr_example",
+                "email": "synthetic@example.test",
+                "name": "Example"
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-lastModifiedBy-true-true",
+            "schema": {
+                "fieldType": "lastModifiedBy",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "lastModifiedBy", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": {
+                "id": "usr_example",
+                "email": "synthetic@example.test",
+                "name": "Example"
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-externalSyncSource-false-false",
+            "schema": {
+                "fieldType": "externalSyncSource",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "externalSyncSource", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "Synthetic source",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-externalSyncSource-false-true",
+            "schema": {
+                "fieldType": "externalSyncSource",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "externalSyncSource", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "Synthetic source",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-externalSyncSource-true-false",
+            "schema": {
+                "fieldType": "externalSyncSource",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "externalSyncSource", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "Synthetic source",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-externalSyncSource-true-true",
+            "schema": {
+                "fieldType": "externalSyncSource",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "externalSyncSource", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "Synthetic source",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-aiText-false-false",
+            "schema": {
+                "fieldType": "aiText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "aiText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": {
+                "state": "generated",
+                "value": "Synthetic",
+                "isStale": false
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-aiText-false-true",
+            "schema": {
+                "fieldType": "aiText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "aiText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": {
+                "state": "generated",
+                "value": "Synthetic",
+                "isStale": false
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-aiText-true-false",
+            "schema": {
+                "fieldType": "aiText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "aiText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": {
+                "state": "generated",
+                "value": "Synthetic",
+                "isStale": false
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "computed-pass-aiText-true-true",
+            "schema": {
+                "fieldType": "aiText",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": true,
+                    "isPrimaryField": false,
+                    "config": { "type": "aiText", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": {
+                "state": "generated",
+                "value": "Synthetic",
+                "isStale": false
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "button-pass-false-false",
+            "schema": {
+                "fieldType": "button",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "button", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": { "url": "https://example.test", "label": "Synthetic" },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "button-pass-false-true",
+            "schema": {
+                "fieldType": "button",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "button", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": { "url": "https://example.test", "label": "Synthetic" },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "button-pass-true-false",
+            "schema": {
+                "fieldType": "button",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "button", "options": null }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": { "url": "https://example.test", "label": "Synthetic" },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "button-pass-true-true",
+            "schema": {
+                "fieldType": "button",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "button", "options": null }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": { "url": "https://example.test", "label": "Synthetic" },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-singleCollaborator-allowed-false-false",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": {
+                "id": "usr_allowed",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-singleCollaborator-unknown-false-false",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "collaborator-singleCollaborator-stored-false-false",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-singleCollaborator-allowed-false-true",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": {
+                "id": "usr_allowed",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-singleCollaborator-unknown-false-true",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "collaborator-singleCollaborator-stored-false-true",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-singleCollaborator-allowed-true-false",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": {
+                "id": "usr_allowed",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-singleCollaborator-unknown-true-false",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "collaborator-singleCollaborator-stored-true-false",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-singleCollaborator-allowed-true-true",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": {
+                "id": "usr_allowed",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-singleCollaborator-unknown-true-true",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "collaborator-singleCollaborator-stored-true-true",
+            "schema": {
+                "fieldType": "singleCollaborator",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "singleCollaborator",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "stored": {
+                "id": "usr_legacy",
+                "email": "synthetic@example.test",
+                "name": "Synthetic"
+            },
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-multipleCollaborators-allowed-false-false",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": [
+                {
+                    "id": "usr_allowed",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-multipleCollaborators-unknown-false-false",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "collaborator-multipleCollaborators-stored-false-false",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-multipleCollaborators-allowed-false-true",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": [
+                {
+                    "id": "usr_allowed",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-multipleCollaborators-unknown-false-true",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "collaborator-multipleCollaborators-stored-false-true",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-multipleCollaborators-allowed-true-false",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": [
+                {
+                    "id": "usr_allowed",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-multipleCollaborators-unknown-true-false",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "collaborator-multipleCollaborators-stored-true-false",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": false }
+            },
+            "value": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-multipleCollaborators-allowed-true-true",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": [
+                {
+                    "id": "usr_allowed",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "collaborator-multipleCollaborators-unknown-true-true",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "collaborator-multipleCollaborators-stored-true-true",
+            "schema": {
+                "fieldType": "multipleCollaborators",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": {
+                        "type": "multipleCollaborators",
+                        "options": {
+                            "choices": [
+                                {
+                                    "id": "usr_allowed",
+                                    "email": "synthetic@example.test",
+                                    "name": "Allowed"
+                                }
+                            ]
+                        }
+                    }
+                },
+                "miniExtConfig": { "readOnly": true }
+            },
+            "value": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "stored": [
+                {
+                    "id": "usr_legacy",
+                    "email": "synthetic@example.test",
+                    "name": "Synthetic"
+                }
+            ],
+            "hidden": true,
+            "invalid": false
+        }
+    ],
+    "structure": [
+        {
+            "name": "leading-and-sections",
+            "fields": [
+                {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "fld_0",
+                        "name": "Field 0",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "fld_1",
+                        "name": "Field 1",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": " First " }
+                },
+                {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "fld_2",
+                        "name": "Field 2",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "enableSectionHeader": false,
+                        "headerSectionTitle": "Retained"
+                    }
+                },
+                {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "fld_3",
+                        "name": "Field 3",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "Last" }
+                }
+            ],
+            "groups": [
+                { "fieldId": "fld_0" },
+                { "title": " First ", "fieldIds": ["fld_1", "fld_2"] },
+                { "title": "Last", "fieldIds": ["fld_3"] }
+            ]
+        },
+        {
+            "name": "blank-title",
+            "fields": [
+                {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "fld_0",
+                        "name": "Field 0",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": " " }
+                }
+            ],
+            "groups": [{ "fieldId": "fld_0" }]
+        },
+        {
+            "name": "legacy-header",
+            "fields": [
+                {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "fld_0",
+                        "name": "Field 0",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "Legacy" }
+                }
+            ],
+            "groups": [{ "title": "Legacy", "fieldIds": ["fld_0"] }]
+        },
+        { "name": "empty", "fields": [], "groups": [] }
+    ],
+    "navigation": [
+        {
+            "pages": [
+                { "isHidden": false },
+                { "isHidden": true },
+                { "isHidden": false }
+            ],
+            "index": 1,
+            "normalized": 0,
+            "next": 2,
+            "back": 0
+        },
+        {
+            "pages": [{ "isHidden": true }, { "isHidden": true }],
+            "index": 1,
+            "normalized": 0,
+            "next": null,
+            "back": null
+        }
+    ]
+}

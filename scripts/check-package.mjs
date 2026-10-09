@@ -13,6 +13,10 @@ import {
     rendererTypedConsumer,
     rendererReactTypedConsumer,
 } from './renderer-consumer-checks.mjs';
+import {
+    checkFormPageConsumer,
+    formPageTypedConsumer,
+} from './form-page-consumer-checks.mjs';
 import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
@@ -758,6 +762,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             join(temporaryDirectory, rendererFilename),
             rendererTypedConsumer
         );
+        const pageFilename = `form-pages-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, pageFilename),
+            formPageTypedConsumer
+        );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
             '--noEmit',
@@ -773,6 +782,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             filename,
             rendererFilename,
             linkedRecordsFilename,
+            pageFilename,
             ...formulasGuideSources,
         ]);
     }
@@ -1008,6 +1018,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 ),
         });
         if (example === 'browser') {
+            assert.equal(
+                await checkFormPageConsumer({
+                    consumerDirectory: temporaryDirectory,
+                }),
+                340
+            );
             assert.equal(
                 await checkFormDispositionConsumer({
                     consumerDirectory: temporaryDirectory,

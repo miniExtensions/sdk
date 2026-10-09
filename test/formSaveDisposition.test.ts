@@ -106,6 +106,108 @@ it('withdrawal after hook proves no dispatch, preserves native draft and permits
     assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
     f.controller.destroy();
 });
+for (const observation of ['getScope', 'getSession'] as const) {
+    it(`post-lifecycle ${observation} native mutation refuses captured Save and permits a new explicit Save`, async () => {
+        const f = fixture();
+        let armed = false;
+        let changed = false;
+        const mutate = () => {
+            if (armed && !changed) {
+                changed = true;
+                assert.equal(
+                    controller.write('fld_title', 'Observed native edit'),
+                    true
+                );
+            }
+        };
+        const getSession = f.client.getSession;
+        if (observation === 'getSession')
+            f.client.getSession = () => {
+                mutate();
+                return getSession();
+            };
+        const controller = createFormController({
+            ...f.options,
+            getScope: () => {
+                if (observation === 'getScope') mutate();
+                return { ownerId: 'A', revision: 0 };
+            },
+        });
+        const transportedTitles: unknown[] = [];
+        const save = f.client.forms.save;
+        f.client.forms.save = (input, options) => {
+            transportedTitles.push(input.formRecord.data.fld_title);
+            return save(input, options);
+        };
+        await assert.rejects(
+            controller.save({
+                lifecycle: f.lifecycle(() => {
+                    armed = true;
+                }),
+            })
+        );
+        assert.equal(changed, true);
+        assert.equal(f.calls, 0);
+        assert.deepEqual(transportedTitles, []);
+        assert.deepEqual(f.dispositions, ['not-dispatched']);
+        assert.equal(f.attempt!.outcome, 'not-dispatched');
+        assert.equal(f.attempt!.flight, false);
+        assert.equal(f.journal.blocking(scope, null), undefined);
+        assert.equal(f.journal.unknown('A').length, 0);
+        assert.equal(
+            controller.getState().draft!.data.fld_title,
+            'Observed native edit'
+        );
+        assert.equal(controller.getState().status, 'ready');
+        const refused = f.attempt!;
+        await controller.save({ lifecycle: f.lifecycle() });
+        assert.equal(f.calls, 1);
+        assert.deepEqual(transportedTitles, ['Observed native edit']);
+        assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
+        assert.notEqual(f.attempt!.id, refused.id);
+        assert.equal(refused.outcome, 'not-dispatched');
+        controller.destroy();
+        f.controller.destroy();
+    });
+}
+it('post-lifecycle scope getter configuration mutation is checked by the supplied epoch fence before transport', async () => {
+    const f = fixture();
+    let armed = false;
+    let changed = false;
+    let configuration = 0;
+    const controller = createFormController({
+        ...f.options,
+        getScope: () => {
+            if (armed && !changed) {
+                changed = true;
+                configuration++;
+            }
+            return { ownerId: 'A', revision: 0 };
+        },
+    });
+    assert.equal(controller.write('fld_title', 'Retained native draft'), true);
+    const before = controller.getState().draft;
+    await assert.rejects(
+        controller.save({
+            isCurrent: () => configuration === 0,
+            lifecycle: f.lifecycle(() => {
+                armed = true;
+            }),
+        })
+    );
+    assert.equal(changed, true);
+    assert.equal(configuration, 1);
+    assert.equal(f.calls, 0);
+    assert.deepEqual(f.dispositions, ['not-dispatched']);
+    assert.equal(f.attempt!.outcome, 'not-dispatched');
+    assert.equal(f.attempt!.flight, false);
+    assert.equal(f.journal.blocking(scope, null), undefined);
+    assert.equal(f.journal.unknown('A').length, 0);
+    assert.deepEqual(controller.getState().draft, before);
+    assert.equal(controller.getState().status, 'ready');
+    controller.destroy();
+    f.controller.destroy();
+});
 it('hook reset preserves successor B and retires only the old no-dispatch operation', async () => {
     const f = fixture();
     const b = loadedForm();

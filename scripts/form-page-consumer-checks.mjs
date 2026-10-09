@@ -234,6 +234,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 loaded,
                 store,
                 getScope: () => scope,
+                canWriteField: (id) => seed?.canWriteField?.(id) ?? true,
                 saveOptions: {
                     captchaVal: null,
                     isComputeMode: seed?.isComputeMode ?? false,
@@ -975,6 +976,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     context: 'direct-url',
                 };
                 let attempt;
+                const dispositions = [];
                 const saving = f.pages.submit(f.pages.getSnapshot().revision, {
                     lifecycle: {
                         dispatch() {
@@ -986,7 +988,8 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                                         'validation-error'
                                     );
                                 },
-                                finish() {
+                                finish(disposition) {
+                                    dispositions.push(disposition);
                                     journal.finishFlight(attempt);
                                 },
                             };
@@ -1000,6 +1003,9 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     formValidationErrors: [],
                 });
                 await assert.rejects(saving);
+                assert.deepEqual(dispositions, ['dispatched']);
+                assert.equal(attempt.outcome, 'unknown');
+                assert.equal(attempt.flight, false);
                 assert.equal(f.calls.length, 1);
                 assert.equal(journal.blocking(scope, null) != null, true);
                 await assert.rejects(
@@ -1307,6 +1313,194 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     },
                 };
             };
+            for (const callback of [
+                'scope-native',
+                'session-native',
+                'scope-configuration',
+            ]) {
+                const f = fixture();
+                let armed = false;
+                let changed = false;
+                let checksAfterHook = 0;
+                let configurationEpoch = 0;
+                let controller;
+                const mutate = () => {
+                    if (!armed) return;
+                    checksAfterHook++;
+                    assert(
+                        checksAfterHook <= 20,
+                        'Reentrant controller ownership checks are bounded'
+                    );
+                    if (changed) return;
+                    changed = true;
+                    if (callback === 'scope-configuration')
+                        configurationEpoch++;
+                    else assert.equal(controller.write('a', ''), true);
+                };
+                const getSession = f.client.getSession.bind(f.client);
+                if (callback === 'session-native')
+                    f.client.getSession = () => {
+                        mutate();
+                        return getSession();
+                    };
+                controller = forms.createFormController({
+                    client: f.client,
+                    loaded: f.loaded,
+                    getScope() {
+                        if (callback !== 'session-native') mutate();
+                        return { ownerId: 'A', revision: 0 };
+                    },
+                    saveOptions: {
+                        captchaVal: null,
+                        isComputeMode: false,
+                        searchQuery: { kept: 'exact' },
+                        context: { type: 'direct-url' },
+                        conditionalLinkedRecordFieldIdsToFilteringValues: {},
+                    },
+                });
+                const counts = { dispatch: 0, accepted: 0, finish: [] };
+                try {
+                    await assert.rejects(
+                        controller.save({
+                            isCurrent: () => configurationEpoch === 0,
+                            lifecycle: {
+                                dispatch(input) {
+                                    counts.dispatch++;
+                                    assert.equal(input.formRecord.data.a, 'A');
+                                    armed = true;
+                                    return {
+                                        accepted() {
+                                            counts.accepted++;
+                                        },
+                                        finish(disposition) {
+                                            counts.finish.push(disposition);
+                                        },
+                                    };
+                                },
+                            },
+                        })
+                    );
+                    assert(
+                        changed,
+                        `${callback} changes captured input ownership after lifecycle`
+                    );
+                    assert(checksAfterHook > 0 && checksAfterHook <= 20);
+                    assert.equal(f.calls.length, 0);
+                    assert.deepEqual(counts, {
+                        dispatch: 1,
+                        accepted: 0,
+                        finish: ['not-dispatched'],
+                    });
+                    if (callback !== 'scope-configuration')
+                        assert.equal(controller.getState().draft.data.a, '');
+                    checks++;
+                } finally {
+                    controller.destroy();
+                }
+            }
+            // These checks execute against each installed ESM/CJS package above.
+            for (const reviewed of [false, true]) {
+                for (const mutation of ['native', 'configuration']) {
+                    let armed = false;
+                    let changed = false;
+                    let request;
+                    let f;
+                    const configure = (p) => {
+                        p.payload.fieldIdsToSchemas.a.miniExtConfig.required = true;
+                        return {
+                            canWriteField() {
+                                if (armed && !changed) {
+                                    changed = true;
+                                    if (mutation === 'native')
+                                        assert.equal(
+                                            f.fields.controller.write('a', ''),
+                                            true
+                                        );
+                                    else f.setConfig(1);
+                                }
+                                return true;
+                            },
+                        };
+                    };
+                    f = reviewed
+                        ? reviewFixture(async (r) => {
+                              request = r;
+                              assert.equal(r.draft.data.a, 'A');
+                              return { type: 'confirm', isCurrent: () => true };
+                          }, configure)
+                        : fixture(configure);
+                    finalPage(f);
+                    const journal = new forms.RecoveryJournal();
+                    const scope = {
+                        owner: 'A',
+                        parentFieldId: null,
+                        tableId: null,
+                        childExtensionId: f.loaded.extensionId,
+                        context: 'direct-url',
+                    };
+                    const counts = { dispatch: 0, accepted: 0, finish: [] };
+                    let attempt;
+                    await assert.rejects(
+                        f.pages.submit(f.pages.getSnapshot().revision, {
+                            lifecycle: {
+                                dispatch(input) {
+                                    counts.dispatch++;
+                                    assert.equal(input.formRecord.data.a, 'A');
+                                    attempt = journal.begin(
+                                        scope,
+                                        null,
+                                        'save',
+                                        1
+                                    );
+                                    armed = true;
+                                    return {
+                                        accepted() {
+                                            counts.accepted++;
+                                        },
+                                        finish(disposition) {
+                                            counts.finish.push(disposition);
+                                            if (
+                                                disposition === 'not-dispatched'
+                                            )
+                                                assert.equal(
+                                                    journal.notDispatched(
+                                                        attempt
+                                                    ),
+                                                    true
+                                                );
+                                            else journal.finishFlight(attempt);
+                                        },
+                                    };
+                                },
+                            },
+                        })
+                    );
+                    assert(
+                        changed,
+                        'First post-lifecycle field ownership check mutates once'
+                    );
+                    assert.equal(Boolean(request), reviewed);
+                    assert.equal(
+                        f.calls.length,
+                        0,
+                        `${mutation} known before transport never dispatches`
+                    );
+                    assert.deepEqual(counts, {
+                        dispatch: 1,
+                        accepted: 0,
+                        finish: ['not-dispatched'],
+                    });
+                    assert.equal(attempt.outcome, 'not-dispatched');
+                    assert.equal(attempt.flight, false);
+                    assert.equal(journal.blocking(scope, null), undefined);
+                    if (mutation === 'native')
+                        assert.equal(
+                            f.fields.controller.getState().draft.data.a,
+                            ''
+                        );
+                    checks++;
+                }
+            }
             {
                 let reviews = 0;
                 const f = reviewFixture(async () => {

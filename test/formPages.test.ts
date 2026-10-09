@@ -361,6 +361,123 @@ describe('page composition authority regressions', () => {
         assert.equal(f.pages.getSnapshot().status, 'retired');
     });
 
+    for (const review of [false, true]) {
+        for (const change of [
+            'native-draft',
+            'configuration',
+            'transport-failure',
+        ] as const) {
+            it(`${review ? 'confirmed Review' : 'final Save'} classifies ${change} at the binding snapshot dispatch boundary`, async () => {
+                const f = fixture((loaded) => {
+                    loaded.payload.publicFields.state.promptUserBeforeSubmission =
+                        review;
+                });
+                f.pages.dispose();
+                f.fields.destroy();
+                let armed = false;
+                let observed = false;
+                let configuration = 0;
+                const fields = createFormFieldBindings({
+                    client: f.client,
+                    loaded: f.loaded,
+                    saveOptions: formSaveOptions(),
+                    getScope: () => ({ ownerId: 'A', revision: 0 }),
+                    canWriteField: () => {
+                        if (armed && !observed) {
+                            observed = true;
+                            if (change === 'native-draft')
+                                assert.equal(
+                                    fields.controller.write('a', ''),
+                                    true
+                                );
+                            else if (change === 'configuration')
+                                configuration++;
+                        }
+                        return true;
+                    },
+                });
+                const pages = createFormPageOwner({
+                    fields,
+                    isCurrent: () => true,
+                    configurationRevision: () => configuration,
+                    review: review
+                        ? async () => ({
+                              type: 'confirm',
+                              isCurrent: () => true,
+                          })
+                        : undefined,
+                });
+                while (pages.getSnapshot().canNext)
+                    assert.equal(
+                        pages.next(pages.getSnapshot().revision).accepted,
+                        true
+                    );
+                const journal = new RecoveryJournal();
+                const scope = {
+                    owner: 'A',
+                    parentFieldId: null,
+                    tableId: null,
+                    childExtensionId: 'form',
+                    context: 'modal' as const,
+                };
+                let attempt: ReturnType<typeof journal.begin> | undefined;
+                let accepted = 0;
+                const dispositions: string[] = [];
+                if (change === 'transport-failure')
+                    f.client.forms.save = async (input) => {
+                        f.calls.push(input);
+                        throw Error('Unknown server outcome');
+                    };
+                await assert.rejects(
+                    pages.submit(pages.getSnapshot().revision, {
+                        lifecycle: {
+                            dispatch() {
+                                attempt = journal.begin(scope, null, 'save', 1);
+                                armed = true;
+                                return {
+                                    accepted() {
+                                        accepted++;
+                                    },
+                                    finish(disposition) {
+                                        dispositions.push(disposition);
+                                        if (disposition === 'not-dispatched')
+                                            journal.notDispatched(attempt!);
+                                        else journal.finishFlight(attempt!);
+                                    },
+                                };
+                            },
+                        },
+                    })
+                );
+                assert.equal(observed, true);
+                assert.ok(attempt);
+                assert.equal(accepted, 0);
+                assert.equal(attempt.flight, false);
+                if (change === 'transport-failure') {
+                    assert.equal(f.calls.length, 1);
+                    assert.equal(f.calls[0]!.formRecord.data.a, 'A');
+                    assert.deepEqual(dispositions, ['dispatched']);
+                    assert.equal(attempt.outcome, 'unknown');
+                    assert.equal(journal.blocking(scope, null), attempt);
+                    assert.equal(journal.unknown('A').length, 1);
+                } else {
+                    assert.equal(f.calls.length, 0);
+                    assert.deepEqual(dispositions, ['not-dispatched']);
+                    assert.equal(attempt.outcome, 'not-dispatched');
+                    assert.equal(journal.blocking(scope, null), undefined);
+                    assert.equal(journal.unknown('A').length, 0);
+                    if (change === 'native-draft')
+                        assert.equal(
+                            fields.controller.getState().draft!.data.a,
+                            ''
+                        );
+                }
+                pages.dispose();
+                fields.destroy();
+            });
+        }
+    }
+
     it('a dispatched unknown Save is never replayed by retained page Submit', async () => {
         const f = fixture();
         lastPage(f);

@@ -728,9 +728,10 @@ export function createFormFieldBindings(
                 );
             return controller.save({
                 ...supplied,
-                isCurrent: () =>
-                    (supplied?.isCurrent?.() ?? true) &&
-                    [...entries.values()].every((entry) => {
+                isCurrent: () => {
+                    if (!current() || !(supplied?.isCurrent?.() ?? true))
+                        return false;
+                    const valid = [...entries.values()].every((entry) => {
                         const state = entry.binding.getSnapshot();
                         return (
                             state.visibility.type !== 'visible' ||
@@ -738,7 +739,14 @@ export function createFormFieldBindings(
                             !entry.binding.date ||
                             entry.binding.date.getState().valid
                         );
-                    }),
+                    });
+                    // Field/scope callbacks can synchronously change the draft,
+                    // configuration or owner after the caller's first check.
+                    // No field callback may run after this final caller fence.
+                    return (
+                        valid && current() && (supplied?.isCurrent?.() ?? true)
+                    );
+                },
             });
         },
         setLinkedOptions: (id, supplied, append = false) => {

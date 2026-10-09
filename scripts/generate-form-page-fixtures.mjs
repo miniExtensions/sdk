@@ -10,6 +10,7 @@ import {
 import { resolve, join, relative, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { format, resolveConfig } from 'prettier';
 
@@ -17,6 +18,8 @@ const revision = '58f73d575ab10baa0a10693660d8002f204368e1';
 const tree = 'b39e58ead46a311c497def57474cf5ca720542ae';
 // Roles identify evidence without distributing private source locations.
 const expectedSources = {
+    'email-syntax':
+        'cefb9409ea8d98342d5fe46fa5bf26d26004fb1cf549435874d3c604870d2783',
     'ordinary-validation':
         '4cd7da6d3f7ccb44fe23f46ecf96ebeb8844bb9236c3a3cf33ab8e42113556d9',
     'value-emptiness':
@@ -86,6 +89,18 @@ try {
         requireEvidence(bytes.equals(pinned));
         locations[role] = absolute;
     }
+    const emailValidatorEntry = createRequire(
+        locations['email-syntax']
+    ).resolve('email-validator');
+    const emailValidatorPackage = JSON.parse(
+        readFileSync(join(dirname(emailValidatorEntry), 'package.json'), 'utf8')
+    );
+    const emailValidatorSha256 = hash(readFileSync(emailValidatorEntry));
+    requireEvidence(emailValidatorPackage.version === '2.0.4');
+    requireEvidence(
+        emailValidatorSha256 ===
+            '72a150940d35695c23e26e262e564dae9397ca9757e2ab57b1c784607d9838b1'
+    );
     directory = mkdtempSync(join(tmpdir(), 'sdk-page-oracle-'));
     const outfile = join(directory, 'oracle.cjs');
     const importFrom = (role) => JSON.stringify(locations[role]);
@@ -135,6 +150,10 @@ console.log(JSON.stringify({validation,structure,navigation}));`,
             generatorSha256: hash(readFileSync(fileURLToPath(import.meta.url))),
             casesSourceSha256: hash(readFileSync(casesPath)),
             sources: expectedSources,
+            emailValidator: {
+                version: emailValidatorPackage.version,
+                entrySha256: emailValidatorSha256,
+            },
             execution:
                 'pinned ordinary validation, section grouping and navigation; synthetic values only',
         },

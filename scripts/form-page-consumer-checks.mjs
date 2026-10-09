@@ -137,13 +137,15 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
         pathToFileURL(join(esm, 'runtime/index.js'))
     );
     let checks = 0;
+    const esmUi = await import(pathToFileURL(join(esm, 'ui/index.js')));
     const esmReact = await import(pathToFileURL(join(esm, 'react/index.js')));
-    for (const [forms, runtime, reactApi] of [
-        [esmForms, esmRuntime, esmReact],
+    for (const [forms, runtime, reactApi, ui] of [
+        [esmForms, esmRuntime, esmReact, esmUi],
         [
             require('@miniextensions/sdk/forms'),
             require('@miniextensions/sdk'),
             require('@miniextensions/sdk/react'),
+            require('@miniextensions/sdk/ui'),
         ],
     ]) {
         const make = (configure = () => {}) => {
@@ -1259,6 +1261,430 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
             {
                 const f = fixture();
                 await checkPageRendererRemount(f, reactApi, require);
+                checks++;
+            }
+            const checkEmailComposition = async (f) => {
+                const { Window } = createRequire(import.meta.url)('happy-dom');
+                const window = new Window();
+                const keys = [
+                    'window',
+                    'document',
+                    'navigator',
+                    'HTMLElement',
+                    'HTMLInputElement',
+                    'IS_REACT_ACT_ENVIRONMENT',
+                ];
+                const previous = keys.map((key) =>
+                    Object.getOwnPropertyDescriptor(globalThis, key)
+                );
+                keys.forEach((key) =>
+                    Object.defineProperty(globalThis, key, {
+                        configurable: true,
+                        writable: true,
+                        value:
+                            key === 'IS_REACT_ACT_ENVIRONMENT'
+                                ? true
+                                : window[key],
+                    })
+                );
+                const { createElement, act } = require('react');
+                const { createRoot } = require('react-dom/client');
+                const scope = ui.createFormRenderScope({
+                    fields: f.fields,
+                    pages: f.pages,
+                    isCurrent: () => true,
+                    configurationRevision: () => 0,
+                });
+                const host = window.document.createElement('div');
+                window.document.body.append(host);
+                const root = createRoot(host);
+                let last, capability;
+                try {
+                    await act(async () =>
+                        root.render(
+                            createElement(reactApi.AirtableForm, {
+                                scope,
+                                renderers: {
+                                    renderEmailField: (p) => {
+                                        capability = p.capability;
+                                        return createElement(
+                                            'output',
+                                            { id: 'email' },
+                                            p.value
+                                        );
+                                    },
+                                    renderSingleLineTextField: (p) =>
+                                        createElement('output', null, p.value),
+                                },
+                                children: (state) => {
+                                    last = state;
+                                    return createElement(
+                                        'section',
+                                        null,
+                                        ...state.fields.map((field) =>
+                                            createElement(
+                                                'div',
+                                                { key: field.fieldId },
+                                                field.node
+                                            )
+                                        ),
+                                        createElement(
+                                            'output',
+                                            { id: 'feedback' },
+                                            JSON.stringify(state.page.problems)
+                                        )
+                                    );
+                                },
+                            })
+                        )
+                    );
+                    const retainedNext = last.actions.next;
+                    await act(async () => {
+                        assert(
+                            capability.setValue('composition-invalid').accepted
+                        );
+                    });
+                    assert(
+                        host
+                            .querySelector('#feedback')
+                            .textContent.includes('invalid-email')
+                    );
+                    assert.equal(last.page.canNext, false);
+                    assert.equal(retainedNext().accepted, false);
+                    await act(async () => {
+                        assert(
+                            capability.setValue('Composition+tag@EXAMPLE.test')
+                                .accepted
+                        );
+                    });
+                    await act(async () => {
+                        assert(last.actions.next().accepted);
+                    });
+                    await act(async () => {
+                        assert(last.actions.next().accepted);
+                    });
+                    const retainedSubmit = last.actions.submit;
+                    await act(async () => {
+                        assert(
+                            f.fields
+                                .field('a')
+                                .setValue('composition-final-invalid').accepted
+                        );
+                    });
+                    await assert.rejects(retainedSubmit());
+                    await assert.rejects(last.actions.submit());
+                    assert.equal(f.calls.length, 0);
+                    await act(async () => {
+                        assert(
+                            f.fields
+                                .field('a')
+                                .setValue('Composition+tag@EXAMPLE.test')
+                                .accepted
+                        );
+                    });
+                    await act(async () => {
+                        await last.actions.submit();
+                    });
+                    assert.equal(f.calls.length, 1);
+                    assert.equal(
+                        f.calls[0].formRecord.data.a,
+                        'Composition+tag@EXAMPLE.test'
+                    );
+                } finally {
+                    await act(async () => root.unmount());
+                    scope.destroy();
+                    host.remove();
+                    await window.happyDOM.abort();
+                    keys.forEach((key, index) => {
+                        if (previous[index])
+                            Object.defineProperty(
+                                globalThis,
+                                key,
+                                previous[index]
+                            );
+                        else delete globalThis[key];
+                    });
+                }
+            };
+            // Exercise ordinary email rules through each installed ESM/CJS owner.
+            const emailFixture = (value = 'Initial@example.test', mini = {}) =>
+                fixture((p) => {
+                    const schema = p.payload.fieldIdsToSchemas.a;
+                    schema.fieldType = 'email';
+                    schema.airtableField.config = {
+                        type: 'email',
+                        options: null,
+                    };
+                    schema.miniExtConfig = mini;
+                    p.payload.formRecord.data.a = value;
+                });
+            const emailProblems = (f) =>
+                f.pages.getSnapshot().problems.filter((p) => p.fieldId === 'a');
+            const journalFor = (f) => {
+                const journal = new forms.RecoveryJournal();
+                const scope = {
+                    owner: 'A',
+                    parentFieldId: null,
+                    tableId: null,
+                    childExtensionId: f.loaded.extensionId,
+                    context: 'direct-url',
+                };
+                let attempts = 0;
+                return {
+                    journal,
+                    scope,
+                    get attempts() {
+                        return attempts;
+                    },
+                    lifecycle: {
+                        dispatch() {
+                            attempts++;
+                            const attempt = journal.begin(
+                                scope,
+                                null,
+                                'save',
+                                1
+                            );
+                            return {
+                                accepted() {
+                                    journal.accepted(
+                                        attempt,
+                                        'validation-error'
+                                    );
+                                },
+                                finish() {
+                                    journal.finishFlight(attempt);
+                                },
+                            };
+                        },
+                    },
+                };
+            };
+            {
+                const f = emailFixture();
+                const native = 'Case.Sensitive+tag@EXAMPLE.test';
+                assert(f.fields.field('a').setValue(native).accepted);
+                assert.deepEqual(emailProblems(f), []);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert.equal(
+                    f.calls.length,
+                    0,
+                    'Explicit Next never sends email'
+                );
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                const recovery = journalFor(f);
+                await f.pages.submit(f.pages.getSnapshot().revision, {
+                    lifecycle: recovery.lifecycle,
+                });
+                assert.equal(f.calls.length, 1);
+                assert.equal(recovery.attempts, 1);
+                assert.equal(
+                    recovery.journal.blocking(recovery.scope, null),
+                    undefined
+                );
+                assert.deepEqual(f.calls[0].formRecord, {
+                    type: 'create',
+                    data: {
+                        a: native,
+                        b: 'B',
+                        c: 'C',
+                        unrendered: { text: 'native' },
+                    },
+                });
+                assert.deepEqual(f.calls[0].formFieldIdsWithUnsavedChanges, [
+                    'unrendered',
+                    'a',
+                ]);
+                assert.deepEqual(f.calls[0].searchQuery, { kept: 'exact' });
+                checks++;
+            }
+            for (const required of [false, true]) {
+                for (const [value, code] of [
+                    [null, required ? 'required' : null],
+                    [undefined, required ? 'required' : null],
+                    ['', required ? 'required' : null],
+                    ['   ', required ? 'required' : 'invalid-email'],
+                    ['not-an-email', 'invalid-email'],
+                    [' user@example.test ', 'invalid-email'],
+                ]) {
+                    const f = emailFixture(value, { required });
+                    // Undefined is a canonical empty too; avoid the helper's default argument.
+                    if (value === undefined)
+                        f.fields.controller.write('a', undefined);
+                    assert.deepEqual(
+                        emailProblems(f),
+                        code ? [{ fieldId: 'a', code }] : []
+                    );
+                    if (code) {
+                        const recovery = journalFor(f);
+                        assert.equal(
+                            f.pages.next(f.pages.getSnapshot().revision)
+                                .accepted,
+                            false
+                        );
+                        await assert.rejects(
+                            f.pages.submit(f.pages.getSnapshot().revision, {
+                                lifecycle: recovery.lifecycle,
+                            })
+                        );
+                        assert.equal(f.calls.length, 0);
+                        assert.equal(recovery.attempts, 0);
+                        assert.equal(
+                            recovery.journal.blocking(recovery.scope, null),
+                            undefined
+                        );
+                    }
+                    checks++;
+                }
+            }
+            for (const readOnly of [false, true]) {
+                const f = fixture((p) => {
+                    const schema = p.payload.fieldIdsToSchemas.a;
+                    schema.fieldType = 'email';
+                    schema.airtableField.config = {
+                        type: 'email',
+                        options: null,
+                    };
+                    schema.miniExtConfig = {
+                        readOnly,
+                        required: true,
+                        conditionalFields: {
+                            logicalOperator: 'and',
+                            conditions: [
+                                {
+                                    id: 'hide-email',
+                                    type: 'singleCondition',
+                                    setting: {
+                                        type: 'is',
+                                        fieldType: 'singleLineText',
+                                        idOrName: { type: 'id', id: 'b' },
+                                        value: 'show',
+                                    },
+                                },
+                            ],
+                        },
+                    };
+                    p.payload.formRecord.data.a = 'hidden-invalid-email';
+                });
+                assert.equal(
+                    f.fields.field('a').getSnapshot().visibility.type,
+                    'hidden'
+                );
+                // Hiding skips this structural page, but final Submit still
+                // validates its native email under the rule-specific exemption.
+                while (f.pages.getSnapshot().canNext)
+                    assert(
+                        f.pages.next(f.pages.getSnapshot().revision).accepted
+                    );
+                assert.deepEqual(
+                    emailProblems(f),
+                    readOnly ? [] : [{ fieldId: 'a', code: 'invalid-email' }]
+                );
+                const recovery = journalFor(f);
+                if (readOnly) {
+                    await f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: recovery.lifecycle,
+                    });
+                    assert.equal(
+                        f.calls[0].formRecord.data.a,
+                        'hidden-invalid-email'
+                    );
+                } else {
+                    await assert.rejects(
+                        f.pages.submit(f.pages.getSnapshot().revision, {
+                            lifecycle: recovery.lifecycle,
+                        })
+                    );
+                    assert.equal(f.calls.length, 0);
+                    assert.equal(recovery.attempts, 0);
+                }
+                checks++;
+            }
+            {
+                const f = emailFixture({
+                    text: 'private-malformed-email-value',
+                });
+                assert.deepEqual(emailProblems(f), [
+                    { fieldId: 'a', code: 'invalid-input' },
+                ]);
+                assert.equal(
+                    JSON.stringify(f.pages.getSnapshot().problems).includes(
+                        'private-malformed'
+                    ),
+                    false
+                );
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision)
+                );
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                const f = emailFixture();
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                const oldRevision = f.pages.getSnapshot().revision;
+                let reentered = false;
+                f.pages.subscribe(() => {
+                    if (!reentered) {
+                        reentered = true;
+                        f.fields.controller.write(
+                            'a',
+                            'callback-invalid-email'
+                        );
+                    }
+                });
+                assert(
+                    f.fields.field('a').setValue('New@example.test').accepted
+                );
+                assert(reentered);
+                const recovery = journalFor(f);
+                await assert.rejects(
+                    f.pages.submit(oldRevision, {
+                        lifecycle: recovery.lifecycle,
+                    })
+                );
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: recovery.lifecycle,
+                    })
+                );
+                assert.deepEqual(emailProblems(f), [
+                    { fieldId: 'a', code: 'invalid-email' },
+                ]);
+                assert.equal(f.calls.length, 0);
+                assert.equal(recovery.attempts, 0);
+                checks++;
+            }
+            {
+                const f = emailFixture();
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                let armed = false,
+                    ownershipChecks = 0;
+                f.setPredicate(() => {
+                    if (armed && ++ownershipChecks === 2)
+                        f.fields.controller.write(
+                            'a',
+                            'ownership-invalid-email'
+                        );
+                    return true;
+                });
+                const revision = f.pages.getSnapshot().revision;
+                const recovery = journalFor(f);
+                armed = true;
+                await assert.rejects(
+                    f.pages.submit(revision, { lifecycle: recovery.lifecycle })
+                );
+                assert.deepEqual(emailProblems(f), [
+                    { fieldId: 'a', code: 'invalid-email' },
+                ]);
+                assert.equal(f.calls.length, 0);
+                assert.equal(recovery.attempts, 0);
+                checks++;
+            }
+            {
+                await checkEmailComposition(emailFixture());
                 checks++;
             }
             const oracle = JSON.parse(

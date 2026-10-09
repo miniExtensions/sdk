@@ -163,6 +163,59 @@ for (const hidden of [false, true])
             hidden
         );
     }
+// Executed against the pinned email branch; values are never normalized.
+const emailValues = [
+    ['simple', 'person@example.test'],
+    ['plus-tag', 'person+tag@example.test'],
+    ['punctuation', "a!#$%&'*+-/=?^_`{|}~b@example.test"],
+    ['unicode-local', 'é@example.test'],
+    ['unicode-domain', 'person@例え.test'],
+    ['punycode-domain', 'person@xn--r8jz45g.test'],
+    ['leading-space', ' person@example.test'],
+    ['trailing-space', 'person@example.test '],
+    ['embedded-space', 'per son@example.test'],
+    ['newline', 'person@example.test\n'],
+    ['missing-domain', 'person@'],
+    ['missing-local', '@example.test'],
+    ['double-at', 'person@@example.test'],
+    ['local-leading-dot', '.person@example.test'],
+    ['local-trailing-dot', 'person.@example.test'],
+    ['local-double-dot', 'per..son@example.test'],
+    ['domain-double-dot', 'person@example..test'],
+    ['domain-leading-hyphen', 'person@-example.test'],
+    ['quoted-local', '"person"@example.test'],
+    ['local-64', `${'a'.repeat(64)}@example.test`],
+    ['local-65', `${'a'.repeat(65)}@example.test`],
+    ['label-63', `person@${'a'.repeat(63)}.test`],
+    ['label-64', `person@${'a'.repeat(64)}.test`],
+    [
+        'total-254',
+        `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(61)}`,
+    ],
+    [
+        'total-255',
+        `${'a'.repeat(64)}@${'b'.repeat(63)}.${'c'.repeat(63)}.${'d'.repeat(62)}`,
+    ],
+];
+for (const [name, value] of emailValues)
+    add(`email-syntax-${name}`, 'email', value);
+for (const [name, value] of [
+    ['null', null],
+    ['empty', ''],
+    ['spaces', '  '],
+    ['tab', '\t'],
+])
+    for (const required of [false, true])
+        for (const hidden of [false, true])
+            for (const readOnly of [false, true])
+                add(
+                    `email-empty-${name}-${required}-${hidden}-${readOnly}`,
+                    'email',
+                    value,
+                    { required, readOnly },
+                    null,
+                    hidden
+                );
 const computedValues = [
     ['formula', 'Computed'],
     ['rollup', 1],

@@ -133,6 +133,17 @@ describe('canonical ordinary page validation', () => {
             hash('test/fixtures/formPageCases.mjs')
         );
     });
+    it('pins the executed email dependency version and source digest', () => {
+        assert.equal(oracle.provenance.emailValidator.version, '2.0.4');
+        assert.equal(
+            oracle.provenance.emailValidator.entrySha256,
+            '72a150940d35695c23e26e262e564dae9397ca9757e2ab57b1c784607d9838b1'
+        );
+        assert.equal(
+            oracle.provenance.sources['email-syntax'],
+            'cefb9409ea8d98342d5fe46fa5bf26d26004fb1cf549435874d3c604870d2783'
+        );
+    });
     it('partitions every pinned case explicitly into canonical comparison or conservative refusal', () => {
         const ids = [
             ...validationSupport.canonicalComparison,
@@ -143,8 +154,8 @@ describe('canonical ordinary page validation', () => {
             [...ids].sort(),
             oracle.validation.map((c: { name: string }) => c.name).sort()
         );
-        assert.equal(validationSupport.canonicalComparison.length, 118);
-        assert.equal(validationSupport.unsupportedValidation.length, 28);
+        assert.equal(validationSupport.canonicalComparison.length, 177);
+        assert.equal(validationSupport.unsupportedValidation.length, 26);
     });
     for (const c of oracle.validation)
         it(c.name, () => {
@@ -165,6 +176,146 @@ describe('canonical ordinary page validation', () => {
                 });
             else assert.equal(result !== null, c.invalid);
         });
+});
+describe('email page validation regressions', () => {
+    const emailFixture = (value: string, readOnly = false) =>
+        fixture((loaded) => {
+            loaded.payload.fieldIdsToSchemas.a = {
+                fieldType: 'email',
+                airtableField: {
+                    id: 'a',
+                    name: 'Email',
+                    description: null,
+                    isComputed: false,
+                    isPrimaryField: false,
+                    config: { type: 'email', options: null },
+                },
+                miniExtConfig: { required: true, readOnly },
+            };
+            loaded.payload.formRecord.data.a = value;
+        });
+    it('invalid native email blocks Next and publishes feedback without dispatch', () => {
+        const f = emailFixture('person@@example.test');
+        const snapshot = f.pages.getSnapshot();
+        assert.equal(snapshot.status, 'ready');
+        assert.equal(snapshot.canNext, false);
+        assert.deepEqual(snapshot.problems, [
+            { fieldId: 'a', code: 'invalid-email' },
+        ]);
+        assert.deepEqual(f.pages.next(snapshot.revision), {
+            accepted: false,
+            reason: 'validation',
+        });
+        assert.equal(
+            f.fields.field('a').getSnapshot().value,
+            'person@@example.test'
+        );
+        assert.equal(f.calls.length, 0);
+        assert(
+            f.fields.field('a').setValue('person+tag@example.test').accepted
+        );
+        assert.deepEqual(f.pages.getSnapshot().problems, []);
+        assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+    });
+    it('final Submit rejects an invalid earlier email before journal preparation and retains drafts', async () => {
+        const f = emailFixture('person@example.test');
+        lastPage(f);
+        assert(f.fields.field('a').setValue(' person@example.test').accepted);
+        const snapshot = f.pages.getSnapshot();
+        assert.equal(snapshot.canSubmit, false);
+        assert.deepEqual(snapshot.problems, [
+            { fieldId: 'a', code: 'invalid-email' },
+        ]);
+        const journal = new RecoveryJournal();
+        let preparations = 0;
+        await assert.rejects(
+            f.pages.submit(snapshot.revision, {
+                lifecycle: {
+                    dispatch() {
+                        preparations++;
+                        journal.prepare(
+                            {
+                                owner: 'A',
+                                parentFieldId: null,
+                                tableId: null,
+                                childExtensionId: 'form',
+                                context: 'modal',
+                            },
+                            null,
+                            1
+                        );
+                        return { accepted() {}, finish() {} };
+                    },
+                },
+            })
+        );
+        assert.equal(preparations, 0);
+        assert.deepEqual(journal.unknown('A'), []);
+        assert.equal(f.calls.length, 0);
+        assert.equal(
+            f.fields.field('a').getSnapshot().value,
+            ' person@example.test'
+        );
+        assert.deepEqual(f.fields.controller.getState().draft?.data.untouched, {
+            text: 'native',
+        });
+    });
+    it('hidden invalid email still blocks final Submit and keeps its native value', async () => {
+        const f = emailFixture('hidden invalid email');
+        f.pages.dispose();
+        f.fields.destroy();
+        f.loaded.payload.fieldIdsToSchemas.a!.miniExtConfig = {
+            required: true,
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'hide-email',
+                        type: 'singleCondition',
+                        setting: {
+                            type: 'is',
+                            fieldType: 'singleLineText',
+                            idOrName: { type: 'id', id: 'b' },
+                            value: 'never',
+                        },
+                    },
+                ],
+            },
+        } as never;
+        const fields = createFormFieldBindings({
+            client: f.client,
+            loaded: f.loaded,
+            saveOptions: formSaveOptions(),
+            getScope: () => ({ ownerId: 'A', revision: 0 }),
+        });
+        const pages = createFormPageOwner({
+            fields,
+            isCurrent: () => true,
+            configurationRevision: () => 0,
+        });
+        assert.equal(fields.field('a').getSnapshot().visibility.type, 'hidden');
+        while (pages.getSnapshot().canNext)
+            assert(pages.next(pages.getSnapshot().revision).accepted);
+        assert.equal(pages.getSnapshot().canSubmit, false);
+        assert.deepEqual(pages.getSnapshot().problems, [
+            { fieldId: 'a', code: 'invalid-email' },
+        ]);
+        await assert.rejects(pages.submit(pages.getSnapshot().revision));
+        assert.equal(
+            fields.field('a').getSnapshot().value,
+            'hidden invalid email'
+        );
+        assert.equal(f.calls.length, 0);
+        pages.dispose();
+        fields.destroy();
+    });
+    it('read-only invalid email navigates and preserves the original Save value', async () => {
+        const f = emailFixture('legacy invalid email', true);
+        lastPage(f);
+        await f.pages.submit(f.pages.getSnapshot().revision);
+        assert.equal(f.calls.length, 1);
+        assert.equal(f.calls[0]!.formRecord.data.a, 'legacy invalid email');
+    });
 });
 describe('page composition authority regressions', () => {
     it('unsupported editable validation blocks its current page rather than unrelated Next', () => {

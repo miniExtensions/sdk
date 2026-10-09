@@ -399,6 +399,9 @@ try {
             await page.goto(
                 `${origin}/starter/index.html?scenario=${scenario}`
             );
+            // Dynamic main-module evaluation installs the submit handler before
+            // setting idle. An enabled form alone is not application readiness.
+            await idle(page);
             await page
                 .getByRole('button', { name: 'Connect and load', exact: true })
                 .click();

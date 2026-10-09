@@ -1,6 +1,8 @@
 import type { FormFieldBindings, FormFieldSnapshot } from './bindings.js';
 import type { FormControllerSaveOptions } from './controller.js';
 import { validatePageField, type FormPageProblem } from './pageValidation.js';
+import { validatePageDateRange } from './pageDateRange.js';
+import { withFormSaveAdmission } from './saveAdmission.js';
 import { normalizeFormLeaseLoaded } from '../ui/formLease.js';
 export type FormPageDescriptor = {
     title: string | null;
@@ -91,6 +93,10 @@ export function createFormPageOwner(
         navigationRevision = 0;
     let validatedInputRevision: number | null = null;
     let validatedNavigationRevision: number | null = null;
+    let dateRangeFields: {
+        field: NonNullable<FormFieldSnapshot['field']>;
+        hidden: boolean;
+    }[] = [];
     let validationStable = true;
     let fingerprint = '';
     let backBlocked = false;
@@ -324,6 +330,18 @@ export function createFormPageOwner(
                 validationStable && !retired ? inputTicket : null;
             validatedNavigationRevision =
                 validationStable && !retired ? navigationTicket : null;
+            dateRangeFields = [...snapshots.values()].flatMap((snapshot) =>
+                snapshot.field &&
+                (snapshot.field.fieldType === 'date' ||
+                    snapshot.field.fieldType === 'dateTime')
+                    ? [
+                          {
+                              field: snapshot.field,
+                              hidden: snapshot.visibility.type === 'hidden',
+                          },
+                      ]
+                    : []
+            );
             const blocked = problems.some((p) =>
                 [
                     'unsupported-configuration',
@@ -449,6 +467,9 @@ export function createFormPageOwner(
     const notify = () => publish(true);
     const refusal = (expected: number, back = false): FormPageAction | null => {
         sync();
+        // A clock boundary may change feedback without a draft/model event.
+        // Publish that manual read before rejecting a retained render action.
+        publish(false);
         if (retired) return { accepted: false, reason: 'retired' };
         if (expected !== revision)
             return { accepted: false, reason: 'stale-revision' };
@@ -470,6 +491,7 @@ export function createFormPageOwner(
         // Field/owner reads may invoke callbacks too. Never authorize an action
         // against a revision older than the final synchronized validation.
         sync();
+        publish(false);
         if (retired) return { accepted: false, reason: 'retired' };
         if (expected !== revision)
             return { accepted: false, reason: 'stale-revision' };
@@ -562,36 +584,88 @@ export function createFormPageOwner(
             const pageIndex = active;
             const inputTicket = inputRevision;
             const navigationTicket = navigationRevision;
+            const rangeFields = dateRangeFields;
+            const owns = () =>
+                current() &&
+                active === pageIndex &&
+                inputRevision === inputTicket &&
+                navigationRevision === navigationTicket &&
+                fields.controller.getState().draftRevision === draftRevision;
+            const admission = () => {
+                if (!owns()) throw new FormPageError('stale-revision');
+                // Read after ownership callbacks; then evaluate the detached
+                // field policy without another application callback. This gate
+                // runs before the journal and again after all dispatch hooks.
+                const control = fields.controller.getState();
+                // Scope/session getters above may change external configuration.
+                // Observe it last, then inspect only captured state and local tickets.
+                // Once observed, a mismatch cannot revive this owner on restoration.
+                try {
+                    const epoch = options.configurationRevision();
+                    if (
+                        !Number.isSafeInteger(epoch) ||
+                        epoch < 0 ||
+                        epoch !== configuration
+                    )
+                        retired = true;
+                } catch {
+                    retired = true;
+                }
+                if (
+                    retired ||
+                    disposed ||
+                    active !== pageIndex ||
+                    inputRevision !== inputTicket ||
+                    navigationRevision !== navigationTicket ||
+                    validatedDraftRevision !== draftRevision ||
+                    control.draftRevision !== draftRevision ||
+                    control.epoch !== initial.epoch ||
+                    control.contextRevision !== initial.contextRevision ||
+                    JSON.stringify(control.ownerScope) !==
+                        JSON.stringify(initial.ownerScope)
+                )
+                    throw new FormPageError('stale-revision');
+                if (
+                    rangeFields.some(({ field, hidden }) =>
+                        validatePageDateRange(
+                            field,
+                            control.draft?.data[field.fieldId],
+                            loaded.payload.formRecord.data[field.fieldId],
+                            hidden
+                        )
+                    )
+                ) {
+                    sync();
+                    publish(false);
+                    throw new FormPageError('validation');
+                }
+            };
             return fields.save({
                 ...saveOptions,
-                lifecycle: {
-                    dispatch(input, draftRevision) {
-                        // Inspect the effective controller input, including inherited
-                        // binding options, before a journal attempt or transport exists.
-                        if (input.isComputeMode === true)
-                            throw new FormPageError('blocked');
-                        const operation = saveOptions?.lifecycle?.dispatch(
-                            input,
-                            draftRevision
-                        );
-                        return {
-                            accepted(result) {
-                                operation?.accepted(result);
-                            },
-                            finish(disposition) {
-                                operation?.finish(disposition);
-                            },
-                        };
+                lifecycle: withFormSaveAdmission(
+                    {
+                        dispatch(input, draftRevision) {
+                            // Inspect the effective controller input, including inherited
+                            // binding options, before a journal attempt or transport exists.
+                            if (input.isComputeMode === true)
+                                throw new FormPageError('blocked');
+                            const operation = saveOptions?.lifecycle?.dispatch(
+                                input,
+                                draftRevision
+                            );
+                            return {
+                                accepted(result) {
+                                    operation?.accepted(result);
+                                },
+                                finish(disposition) {
+                                    operation?.finish(disposition);
+                                },
+                            };
+                        },
                     },
-                },
+                    admission
+                ),
                 isCurrent: () => {
-                    const owns = () =>
-                        current() &&
-                        active === pageIndex &&
-                        inputRevision === inputTicket &&
-                        navigationRevision === navigationTicket &&
-                        fields.controller.getState().draftRevision ===
-                            draftRevision;
                     if (!owns()) return false;
                     const callerCurrent = saveOptions?.isCurrent?.() ?? true;
                     return callerCurrent && owns();

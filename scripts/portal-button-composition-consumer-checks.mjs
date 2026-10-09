@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
 export const portalButtonCompositionTypedConsumer = `
-import { createPortalRenderScope, createPortalCellRendererHost, type ButtonFieldRecovery, type PortalRenderScopeOptions, type PortalCellRendererHostOptions, type FieldRendererSlots } from '@miniextensions/sdk/ui';
+import { createPortalRenderScope, createPortalCellRendererHost, type ButtonFieldRecovery, type PortalRenderScopeOptions, type PortalCellRendererHostOptions, type FieldRendererSlots as PortalButtonFieldRendererSlots } from '@miniextensions/sdk/ui';
 export function typedPortalButtonRecovery(scope: PortalRenderScopeOptions, cell: PortalCellRendererHostOptions, recovery: ButtonFieldRecovery) {
     const composed = createPortalRenderScope({...scope, buttonRecovery: recovery});
     const host = createPortalCellRendererHost({...cell, buttonRecovery: recovery});
@@ -17,7 +17,7 @@ export function typedPortalButtonRecovery(scope: PortalRenderScopeOptions, cell:
     void [optionalScope, optionalCell];
     host.dispose(); composed.destroy();
 }
-export const typedPortalButtonSlots: FieldRendererSlots<string> = {renderButtonField(props) {
+export const typedPortalButtonSlots: PortalButtonFieldRendererSlots<string> = {renderButtonField(props) {
     if(props.capability.type === 'button') {
         const link = props.capability.button.prepareLink();
         void props.capability.button.triggerWebhook();

@@ -74,6 +74,7 @@ it('admits detached Form rich data only for linked fields and rejects malformed 
     };
     const props = createRendererProps(source);
     assert.ok(props && props.physicalKind === 'multipleRecordLinks');
+    assert.ok(props.linkedRecords?.source === 'form');
     assert.equal(props.linkedRecords?.readSelected, linkedRecords.readSelected);
     props.linkedRecords!.state.selectedRecords[0]!.fields.fld_title = 'Changed';
     assert.equal(

@@ -10,6 +10,94 @@ Install a built SDK TGZ before using these imports. See the
 [archive and source installation instructions](../README.md#install-and-run-the-browser-starter)
 and [Form helpers](forms.md). A source checkout must be built and packed first.
 
+## Custom Form, Grid and List startup
+
+Start here when building a custom interface instead of copying the browser
+starter. The existing owners retain behavior and native data; rendering scopes
+group their accepted fields and records. Your application supplies field markup,
+layout, styles and vendor widgets. React is optional; these composition shells
+do not supply a default Form or grid UI.
+
+```ts
+import { createFormFieldBindings } from '@miniextensions/sdk/forms';
+import { createPortalListOwner } from '@miniextensions/sdk/portals';
+import {
+    createFormRenderScope,
+    createPortalRenderScope,
+    FIELD_RENDERER_SLOTS,
+    type FieldRendererSlots,
+} from '@miniextensions/sdk/ui';
+import {
+    AirtableForm,
+    AirtableGrid,
+    AirtableList,
+} from '@miniextensions/sdk/react';
+```
+
+1. [Load and accept the current screen](auth.md#app-owned-load-and-revision)
+   before constructing field or Portal owners. Handle redirects and configured
+   password/login/verification first. Remembered-session restoration is explicit
+   opt-in; keep provisional login private while it settles, and keep its lease
+   outside renderer mounts. Storage/transport errors are not proof of logout.
+2. For an accepted Form, create [one `FormFieldBindings` owner](#create-an-owner-then-mount-renderers)
+   with the full native record, fresh Save options and current scope/configuration
+   guards. Create [one Form render scope](#form-composition-with-app-owned-layout).
+   Supply an existing page owner if you already have one; otherwise the scope
+   owns its single page owner. Do not create competing drafts or navigation.
+3. For an accepted Portal, create [one `PortalListOwner`](portals.md#subscribed-list-ownership-and-react-rendering),
+   then [one Portal render scope](#portal-composition-with-app-owned-layout).
+   It borrows that list owner and uses only accepted rows/detail projections.
+   Cells are read-only unless `resolveCell` supplies an existing eligible cell
+   binding. Child Form plans retain their own accepted parent/context; opening
+   a child does not reuse a different child's draft or query.
+4. Supply [`FieldRendererSlots<ReactNode>`](#typed-renderer-hosts-and-named-slots)
+   and a layout render prop to `AirtableForm`, `AirtableGrid` or `AirtableList`.
+   `FIELD_RENDERER_SLOTS` maps all 33 physical kinds to their named slots. Narrow
+   the returned capability before offering actions; a slot's existence does not
+   grant editing or establish feature parity. Native props are not already-safe
+   display text: honor hidden, masking and returned display policy. If you supply
+   a fallback, return null for hidden and retired hosts.
+5. Use actions from the rendered snapshot. Form Back/Next and final Submit retain
+   that page revision; Submit delegates to the existing full-native Save with
+   your lifecycle/recovery bridge. Portal Load/More and criteria/child actions
+   retain the accepted owner revision. Mounting performs no requests. Upload,
+   Add Choice and Button actions are explicit and use their existing recovery
+   resources. An uncertain mutation requires inspection/recovery, never automatic
+   retry. Labels, visible rows and formatted input are never Save data.
+6. Keep owners and scopes outside ordinary React mounts. Unmount only removes
+   subscriptions; it preserves partial input, native drafts, Files and uncertainty.
+   On visitor/session/token/client/parent or accepted configuration replacement,
+   retire the old scope and owners before publishing the successor. Advance the
+   observed revision even for A→B→A. Scope destruction releases its owned
+   presentation resources; it does not destroy borrowed field/list/cell owners.
+   [Explicit reload](#selects-linked-reads-and-reload) is separate from remounting
+   and never replays an uncertain Save.
+
+Use the existing field-specific instructions instead of duplicating policy:
+
+| Field behavior                                        | Existing authority and rendering path                                                                                                                                                                                                                                                                                                                  |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Text, checkbox, numbers, currency, percent and rating | [Bindings](#create-an-owner-then-mount-renderers) and [scalar input models](#checkbox-and-numeric-inputs); keep unfinished input separate from the last native value.                                                                                                                                                                                  |
+| Date/dateTime and duration                            | [Date models](#calendar-dates-and-explicit-offset-datetimes) and [five-format duration editing](#duration-clock-input); do not normalize native values through display text.                                                                                                                                                                           |
+| Choices                                               | [Select policy and explicit Add Choice](#selects-linked-reads-and-reload); IDs identify options, native choice names are saved, and ineligible selected values remain data.                                                                                                                                                                            |
+| Linked records                                        | [Form rich state and Portal pill labels](#rich-linked-record-presentation); explicit authorized reads only, exact native ID occurrences, generic unresolved presentation and field-specific metadata.                                                                                                                                                  |
+| Attachments                                           | [Existing values, admission and pending files](#existing-attachment-values), [attachment policy](forms.md#attachment-presentation-and-file-admission) and [React cancellation](#optional-react-components); Form hosts need `attachmentRecovery` for upload actions. Preserve complete native metadata and apply privacy before display.               |
+| Buttons                                               | [Configured Button actions](#configured-button-actions); Form hosts/scopes need `button` options. Supported typed Grid/List scope options currently omit `buttonRecovery`; use a standalone Portal detail host for these actions.                                                                                                                      |
+| Collaborators                                         | Use the correlated `renderSingleCollaboratorField`/`renderMultipleCollaboratorsField` slots and native objects. [Page validation](forms.md#bounded-multipage-ownership) uses exact loaded choice IDs plus original stored IDs, without account lookup. The app supplies the picker; Portal object cells require the configured child Form for editing. |
+
+Check compatibility before building the UI. The accepted page-owner composition
+refuses configured prepared Review, compute and automatic submission, as well as
+unsupported advanced validation and condition drivers. The separate
+[one-page starter Review recipe](ui.md#prepared-form-review-in-the-browser-starter)
+does not enable configured Review in `AirtableForm`. Follow the
+[page-owner limits](forms.md#bounded-multipage-ownership),
+[visibility rules](forms.md#one-page-conditional-field-visibility) and
+[Portal editor limits](portals.md#renderer-neutral-bounded-criteria-editors).
+Rich nested Portal linked detail still needs field-specific accepted metadata;
+pill-label support does not grant arbitrary raw-field access. Synthetic installed
+and browser checks do not establish live backend acceptance, persistence,
+cross-browser accessibility or downstream webhook delivery.
+
 ## Create an owner, then mount renderers
 
 Create the owner for an accepted `FormLoadedResult`, outside ordinary renderer

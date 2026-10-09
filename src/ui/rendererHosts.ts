@@ -308,12 +308,23 @@ function capability(
                 : binding.setValue(value);
         },
     };
-    if (scalar)
-        result.scalar = {
-            state: structuredClone(scalar.getState()),
-            setInput: (input) => editable() && scalar.setInput(input),
-            setChecked: (value) => editable() && scalar.setChecked(value),
+    if (scalar) {
+        const scalarState = scalar.getState();
+        const actions = {
+            setInput: (input: string) => editable() && scalar.setInput(input),
+            setChecked: (value: boolean) =>
+                editable() && scalar.setChecked(value),
         };
+        result.scalar =
+            scalarState.kind === 'duration' && scalar.setFocused
+                ? {
+                      ...actions,
+                      state: structuredClone(scalarState),
+                      setFocused: (value: boolean) =>
+                          editable() && scalar.setFocused!(value),
+                  }
+                : { ...actions, state: structuredClone(scalarState) };
+    }
     if (date)
         result.date = {
             state: structuredClone(date.getState()),

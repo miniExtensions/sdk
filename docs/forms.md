@@ -1391,7 +1391,14 @@ declare const fields: FormFieldBindings;
 declare const lifecycle: FormSaveLifecycle;
 declare const acceptedConfigurationRevision: number;
 declare function acceptedFormOwnerIsCurrent(): boolean;
-declare function renderPages(snapshot: FormPageSnapshot): void;
+declare function renderPages(
+    snapshot: FormPageSnapshot,
+    actions: {
+        next(): ReturnType<typeof pages.next>;
+        back(): ReturnType<typeof pages.back>;
+        submit(): ReturnType<typeof pages.submit>;
+    }
+): void;
 
 // fields is the current FormFieldBindings owner. Increment the configuration
 // revision for every accepted replacement, including changes later restored.
@@ -1400,14 +1407,19 @@ const pages = createFormPageOwner({
     isCurrent: () => acceptedFormOwnerIsCurrent(),
     configurationRevision: () => acceptedConfigurationRevision,
 });
-const unsubscribe = pages.subscribe((snapshot) => renderPages(snapshot));
-// Use the revision captured with each rendered action.
-const snapshot = pages.getSnapshot();
-pages.next(snapshot.revision);
-// At the final visible page, deliberate submit delegates to fields.save().
-// Supply the same uncertainty-journal lifecycle as an ordinary binding Save.
-const submit = () => pages.submit(pages.getSnapshot().revision, { lifecycle });
-// Wire submit to an explicit user action; do not invoke it on mount.
+// Each render captures its revision for every retained action callback.
+function renderPage(snapshot: FormPageSnapshot) {
+    const revision = snapshot.revision;
+    const next = () => pages.next(revision);
+    const back = () => pages.back(revision);
+    // At the final visible page, deliberate submit delegates to fields.save().
+    // Supply the same uncertainty-journal lifecycle as an ordinary binding Save.
+    const submit = () => pages.submit(revision, { lifecycle });
+    renderPages(snapshot, { next, back, submit });
+}
+const unsubscribe = pages.subscribe(renderPage);
+renderPage(pages.getSnapshot());
+// Wire these callbacks to explicit user actions; do not invoke them on mount.
 unsubscribe(); // ordinary unmount; retain pages/fields for remount
 ```
 

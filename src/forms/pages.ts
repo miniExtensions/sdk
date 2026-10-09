@@ -79,7 +79,10 @@ export function createFormPageOwner(
         revision = 0,
         active = 0,
         emitting = false,
-        syncing = false;
+        syncing = false,
+        notificationPending = false;
+    let validatedDraftRevision: number | null = null;
+    let validationStable = true;
     let fingerprint = '';
     let backBlocked = false;
     let state: FormPageSnapshot = {
@@ -93,7 +96,8 @@ export function createFormPageOwner(
         canSubmit: false,
         problems: [],
     };
-    const listeners = new Set<(s: FormPageSnapshot) => void>();
+    // Delivery is independent of reads: getSnapshot may synchronize first.
+    const listeners = new Map<(s: FormPageSnapshot) => void, number>();
     const stops: (() => void)[] = [];
     const current = () => {
         if (retired || disposed) return false;
@@ -121,14 +125,16 @@ export function createFormPageOwner(
         }
         return !retired && !disposed;
     };
-    const sync = () => {
+    const sync = (retry = true) => {
         if (syncing) return;
         syncing = true;
+        validatedDraftRevision = null;
+        let needsRetry = false;
         try {
             const problems: FormPageProblem[] = [];
             const snapshots = new Map<string, FormFieldSnapshot>();
-            const control = fields.controller.getState();
             const live = current();
+            const control = fields.controller.getState();
             const config = loaded.payload.publicFields.state;
             const validConfig =
                 config != null &&
@@ -159,13 +165,19 @@ export function createFormPageOwner(
             const seen = new Set<string>();
             for (const id of ids) {
                 if (typeof id !== 'string' || seen.has(id)) {
-                    problems.push({ fieldId: null, code: 'invalid-metadata' });
+                    problems.push({
+                        fieldId: null,
+                        code: 'invalid-metadata',
+                    });
                     continue;
                 }
                 seen.add(id);
                 const schema = loaded.payload.fieldIdsToSchemas[id];
                 if (!schema) {
-                    problems.push({ fieldId: id, code: 'invalid-metadata' });
+                    problems.push({
+                        fieldId: id,
+                        code: 'invalid-metadata',
+                    });
                     continue;
                 }
                 const mini: Record<string, unknown> =
@@ -178,7 +190,10 @@ export function createFormPageOwner(
                     (mini.headerSectionDescription != null &&
                         typeof mini.headerSectionDescription !== 'string')
                 )
-                    problems.push({ fieldId: id, code: 'invalid-metadata' });
+                    problems.push({
+                        fieldId: id,
+                        code: 'invalid-metadata',
+                    });
                 const title =
                     mini.enableSectionHeader !== false &&
                     typeof mini.headerSectionTitle === 'string' &&
@@ -247,7 +262,10 @@ export function createFormPageOwner(
             // native answer using each rule's own hidden/read-only exceptions.
             for (const [id, snapshot] of snapshots) {
                 if (!snapshot.field) {
-                    problems.push({ fieldId: id, code: 'invalid-metadata' });
+                    problems.push({
+                        fieldId: id,
+                        code: 'invalid-metadata',
+                    });
                     continue;
                 }
                 const issue = validatePageField(
@@ -268,6 +286,17 @@ export function createFormPageOwner(
                     problems.push({ fieldId: id, code: 'invalid-input' });
             }
             if (!current()) retired = true;
+            validationStable =
+                fields.controller.getState().draftRevision ===
+                control.draftRevision;
+            // Ownership callbacks can edit the draft. Retry once, then refuse
+            // actions if callbacks do not leave one stable validated revision.
+            if (!validationStable && !retired && retry) {
+                needsRetry = true;
+                return;
+            }
+            validatedDraftRevision =
+                validationStable && !retired ? control.draftRevision : null;
             const blocked = problems.some((p) =>
                 [
                     'unsupported-configuration',
@@ -284,6 +313,7 @@ export function createFormPageOwner(
                 ].includes(p.code)
             );
             const busy =
+                !validationStable ||
                 control.status === 'saving' ||
                 !control.canSave ||
                 [...snapshots.values()].some(
@@ -343,33 +373,51 @@ export function createFormPageOwner(
             state = { ...shape, revision };
         } finally {
             syncing = false;
+            if (needsRetry) sync(false);
+            // A read can reenter through ownership callbacks and queue a write.
+            // Deliver it even when no later external event follows that read.
+            if (notificationPending && !emitting) publish(false);
         }
     };
     const snapshot = () => {
         sync();
         return structuredClone(state);
     };
-    const notify = () => {
-        if (emitting) return;
-        const before = revision;
-        sync();
-        if (before === revision) return;
+    const publish = (synchronize: boolean) => {
+        notificationPending = true;
+        if (emitting || syncing) return;
         emitting = true;
         try {
-            for (const listener of [...listeners]) {
-                const ticket = revision;
-                try {
-                    listener(structuredClone(state));
-                } catch {
-                    /* Renderer errors do not change state. */
+            if (synchronize) sync();
+            while (
+                [...listeners.values()].some(
+                    (delivered) => delivered !== revision
+                )
+            ) {
+                for (const [listener, delivered] of listeners) {
+                    if (delivered === revision) continue;
+                    const ticket = revision;
+                    // Mark before invoking the renderer, which can reenter.
+                    listeners.set(listener, ticket);
+                    try {
+                        listener(structuredClone(state));
+                    } catch {
+                        /* Renderer errors do not change state. */
+                    }
+                    // An explicit read may already have synchronized a newer
+                    // revision. Deliver that result without validating it again.
+                    // Unstable validation refuses actions and gets no automatic
+                    // retry merely to publish its busy snapshot.
+                    if (revision === ticket && validationStable) sync();
+                    if (revision !== ticket) break;
                 }
-                sync();
-                if (revision !== ticket || retired) break;
             }
+            notificationPending = false;
         } finally {
             emitting = false;
         }
     };
+    const notify = () => publish(true);
     const refusal = (expected: number, back = false): FormPageAction | null => {
         sync();
         if (retired) return { accepted: false, reason: 'retired' };
@@ -379,7 +427,7 @@ export function createFormPageOwner(
             return { accepted: false, reason: 'no-page' };
         if (state.status === 'blocked' && (!back || backBlocked))
             return { accepted: false, reason: 'blocked' };
-        if (
+        const busy =
             !fields.controller.getState().canSave ||
             [...state.pages.flatMap((p) => p.fieldIds)].some((id) => {
                 const s = fields.field(id).getSnapshot();
@@ -389,8 +437,14 @@ export function createFormPageOwner(
                         !s.readOnly &&
                         !s.canEdit)
                 );
-            })
-        )
+            });
+        // Field/owner reads may invoke callbacks too. Never authorize an action
+        // against a revision older than the final synchronized validation.
+        sync();
+        if (retired) return { accepted: false, reason: 'retired' };
+        if (expected !== revision)
+            return { accepted: false, reason: 'stale-revision' };
+        if (busy || validatedDraftRevision === null)
             return { accepted: false, reason: 'busy' };
         return null;
     };
@@ -406,7 +460,7 @@ export function createFormPageOwner(
     return {
         getSnapshot: snapshot,
         subscribe(listener) {
-            listeners.add(listener);
+            listeners.set(listener, revision);
             return () => listeners.delete(listener);
         },
         back(expected) {
@@ -450,6 +504,11 @@ export function createFormPageOwner(
                     state.problems.length ? 'validation' : 'no-page'
                 );
             const draftRevision = fields.controller.getState().draftRevision;
+            if (
+                validatedDraftRevision === null ||
+                draftRevision !== validatedDraftRevision
+            )
+                throw new FormPageError('stale-revision');
             const pageIndex = active;
             return fields.save({
                 ...saveOptions,

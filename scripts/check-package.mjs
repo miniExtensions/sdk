@@ -1022,7 +1022,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 await checkFormPageConsumer({
                     consumerDirectory: temporaryDirectory,
                 }),
-                340
+                354
             );
             assert.equal(
                 await checkFormDispositionConsumer({

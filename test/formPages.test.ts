@@ -763,6 +763,239 @@ describe('multipage Form ownership', () => {
         });
         assert.equal(f.fields.field('b').getSnapshot().value, 'Reentered');
     });
+    it('all subscribers converge after a native edit during Next notification', () => {
+        const f = fixture();
+        const first: { revision: number; canNext: boolean }[] = [];
+        const second: { revision: number; canNext: boolean }[] = [];
+        let edited = false;
+        f.pages.subscribe((s) => {
+            first.push({ revision: s.revision, canNext: s.canNext });
+            if (s.activePageIndex === 1 && !edited) {
+                edited = true;
+                assert.equal(f.fields.field('b').setValue('').accepted, true);
+            }
+        });
+        f.pages.subscribe((s) => {
+            second.push({ revision: s.revision, canNext: s.canNext });
+        });
+        assert.deepEqual(f.pages.next(f.pages.getSnapshot().revision), {
+            accepted: false,
+            reason: 'stale-revision',
+        });
+        const current = f.pages.getSnapshot();
+        assert.equal(current.revision, 3);
+        assert.equal(current.canNext, false);
+        assert.deepEqual(first[0], { revision: 2, canNext: true });
+        assert.deepEqual(first.at(-1), { revision: 3, canNext: false });
+        assert.deepEqual(second.at(-1), { revision: 3, canNext: false });
+        assert.equal(f.fields.field('b').getSnapshot().value, '');
+        assert.equal(f.calls.length, 0);
+    });
+
+    it('an earlier field subscriber reading pages cannot consume the edit notification', () => {
+        const f = fixture();
+        f.pages.dispose();
+        let pages: ReturnType<typeof createFormPageOwner> | undefined;
+        const reads: number[] = [];
+        f.fields.field('a').subscribe(() => {
+            if (pages) reads.push(pages.getSnapshot().revision);
+        });
+        pages = createFormPageOwner({
+            fields: f.fields,
+            isCurrent: () => true,
+            configurationRevision: () => 0,
+        });
+        const delivered: number[] = [];
+        pages.subscribe((s) => delivered.push(s.revision));
+        const before = pages.getSnapshot().revision;
+        assert.equal(f.fields.field('a').setValue('').accepted, true);
+        const current = pages.getSnapshot();
+        assert.equal(current.revision, before + 1);
+        assert.equal(current.canNext, false);
+        assert.equal(reads.at(-1), current.revision);
+        assert.deepEqual(delivered, [current.revision]);
+        assert.equal(f.calls.length, 0);
+    });
+
+    it('a snapshot read publishes a native edit made by its ownership callback', () => {
+        const f = fixture();
+        f.pages.dispose();
+        let armed = false;
+        let edited = false;
+        const pages = createFormPageOwner({
+            fields: f.fields,
+            configurationRevision: () => 0,
+            isCurrent: () => {
+                if (armed && !edited) {
+                    edited = true;
+                    assert.equal(f.fields.controller.write('a', ''), true);
+                }
+                return true;
+            },
+        });
+        const delivered: number[] = [];
+        pages.subscribe((s) => delivered.push(s.revision));
+        const before = pages.getSnapshot().revision;
+        armed = true;
+        const current = pages.getSnapshot();
+        assert.equal(edited, true);
+        assert(current.revision > before);
+        assert.equal(current.canNext, false);
+        assert.equal(delivered.at(-1), current.revision);
+        assert.equal(f.fields.field('a').getSnapshot().value, '');
+        assert.equal(f.calls.length, 0);
+    });
+
+    for (const listenerCount of [0, 2]) {
+        it(`an ownership callback that always edits returns a bounded busy snapshot with ${listenerCount} subscribers`, () => {
+            const f = fixture();
+            f.pages.dispose();
+            let armed = false;
+            let checks = 0;
+            const pages = createFormPageOwner({
+                fields: f.fields,
+                configurationRevision: () => 0,
+                isCurrent: () => {
+                    if (armed) {
+                        checks++;
+                        assert.equal(
+                            f.fields.controller.write('a', `Edited ${checks}`),
+                            true
+                        );
+                    }
+                    return true;
+                },
+            });
+            const deliveries = Array.from(
+                { length: listenerCount },
+                () =>
+                    [] as {
+                        revision: number;
+                        canNext: boolean;
+                        canSubmit: boolean;
+                    }[]
+            );
+            for (const delivered of deliveries)
+                pages.subscribe((s) =>
+                    delivered.push({
+                        revision: s.revision,
+                        canNext: s.canNext,
+                        canSubmit: s.canSubmit,
+                    })
+                );
+            armed = true;
+            const current = pages.getSnapshot();
+            assert(checks > 0 && checks <= 4);
+            assert.equal(current.canNext, false);
+            assert.equal(current.canSubmit, false);
+            for (const delivered of deliveries)
+                assert.deepEqual(delivered.at(-1), {
+                    revision: current.revision,
+                    canNext: false,
+                    canSubmit: false,
+                });
+            assert.equal(
+                f.fields.field('a').getSnapshot().value,
+                `Edited ${checks}`
+            );
+            assert.equal(f.calls.length, 0);
+
+            // An explicit later read can validate once the callback stops editing.
+            armed = false;
+            const recovered = pages.getSnapshot();
+            assert.equal(recovered.canNext, true);
+            assert.equal(recovered.canSubmit, false);
+            assert(recovered.revision > current.revision);
+            assert.equal(f.calls.length, 0);
+        });
+    }
+
+    it('all subscribers converge when an unstable notification explicitly reads a recovered snapshot', () => {
+        const f = fixture();
+        f.pages.dispose();
+        let armed = false;
+        let checks = 0;
+        const pages = createFormPageOwner({
+            fields: f.fields,
+            configurationRevision: () => 0,
+            isCurrent: () => {
+                if (armed) {
+                    checks++;
+                    assert.equal(
+                        f.fields.controller.write('a', `Edited ${checks}`),
+                        true
+                    );
+                }
+                return true;
+            },
+        });
+        const first: { revision: number; canNext: boolean }[] = [];
+        const second: { revision: number; canNext: boolean }[] = [];
+        let recoveredRevision: number | undefined;
+        pages.subscribe((s) => {
+            first.push({ revision: s.revision, canNext: s.canNext });
+            if (armed) {
+                armed = false;
+                const recovered = pages.getSnapshot();
+                assert.equal(recovered.canNext, true);
+                recoveredRevision = recovered.revision;
+            }
+        });
+        pages.subscribe((s) => {
+            second.push({ revision: s.revision, canNext: s.canNext });
+        });
+        const before = pages.getSnapshot().revision;
+        armed = true;
+        const current = pages.getSnapshot();
+        assert(checks > 0 && checks <= 4);
+        assert.deepEqual(first[0], { revision: before + 1, canNext: false });
+        assert.equal(current.revision, recoveredRevision);
+        assert.equal(current.revision, before + 2);
+        assert.equal(current.canNext, true);
+        assert.equal(current.canSubmit, false);
+        assert.deepEqual(first.at(-1), {
+            revision: current.revision,
+            canNext: true,
+        });
+        assert.deepEqual(second.at(-1), {
+            revision: current.revision,
+            canNext: true,
+        });
+        assert.equal(f.calls.length, 0);
+    });
+
+    it('an owner callback edit during final sync ownership validation cannot save an invalid earlier page', async () => {
+        const f = fixture();
+        f.pages.dispose();
+        let armed = false;
+        let checks = 0;
+        let edited = false;
+        const pages = createFormPageOwner({
+            fields: f.fields,
+            configurationRevision: () => 0,
+            isCurrent: () => {
+                // The second ownership check follows validation of the captured draft.
+                if (armed && ++checks === 2) {
+                    edited = true;
+                    assert.equal(f.fields.controller.write('a', ''), true);
+                }
+                return true;
+            },
+        });
+        while (pages.getSnapshot().canNext)
+            assert.equal(
+                pages.next(pages.getSnapshot().revision).accepted,
+                true
+            );
+        const revision = pages.getSnapshot().revision;
+        assert.equal(pages.getSnapshot().canSubmit, true);
+        armed = true;
+        await assert.rejects(pages.submit(revision));
+        assert.equal(edited, true);
+        assert.equal(f.fields.field('a').getSnapshot().value, '');
+        assert.equal(pages.getSnapshot().canSubmit, false);
+        assert.equal(f.calls.length, 0);
+    });
     it('all-hidden pages expose no submit and retain every native value', () => {
         const f = fixture((p) => {
             for (const schema of Object.values(p.payload.fieldIdsToSchemas)) {

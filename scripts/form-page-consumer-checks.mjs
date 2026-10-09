@@ -230,6 +230,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     conditionalLinkedRecordFieldIdsToFilteringValues: {},
                 },
             });
+            seed?.beforePages?.(fields);
             const pages = forms.createFormPageOwner({
                 fields,
                 isCurrent: () => predicate(),
@@ -287,6 +288,326 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     'b',
                 ]);
                 assert.deepEqual(f.calls[0].searchQuery, { kept: 'exact' });
+                checks++;
+            }
+            {
+                const f = fixture();
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                const guide = readFileSync('docs/forms.md', 'utf8');
+                const code = guide.match(
+                    /function renderPage\(snapshot: FormPageSnapshot\) \{[\s\S]*?\n\}\nconst unsubscribe = pages.subscribe\(renderPage\);/
+                )?.[0];
+                assert(
+                    code,
+                    'Extract the shipped guide callback implementation'
+                );
+                let actions;
+                let attempts = 0;
+                const renderPage = new Function(
+                    'pages',
+                    'lifecycle',
+                    'renderPages',
+                    code.replace('snapshot: FormPageSnapshot', 'snapshot') +
+                        '\nreturn { renderPage, unsubscribe };'
+                )(
+                    f.pages,
+                    {
+                        dispatch() {
+                            attempts++;
+                            return { accepted() {}, finish() {} };
+                        },
+                    },
+                    (_snapshot, renderedActions) => {
+                        actions = renderedActions;
+                    }
+                );
+                renderPage.renderPage(f.pages.getSnapshot());
+                const retainedSubmit = actions.submit;
+                assert(
+                    f.fields.field('b').setValue('Native edit after render')
+                        .accepted
+                );
+                await assert.rejects(retainedSubmit(), {
+                    reason: 'stale-revision',
+                });
+                await assert.rejects(retainedSubmit(), {
+                    reason: 'stale-revision',
+                });
+                assert.equal(attempts, 0);
+                assert.equal(
+                    f.calls.length,
+                    0,
+                    'Retained guide Submit never saves or replays'
+                );
+                renderPage.unsubscribe();
+                checks++;
+            }
+            {
+                const f = fixture((p) => {
+                    p.payload.fieldIdsToSchemas.b.miniExtConfig.required = true;
+                });
+                const received = [[], []];
+                let edited = false;
+                f.pages.subscribe((snapshot) => {
+                    received[0].push(snapshot);
+                    if (snapshot.activePageIndex === 1 && !edited) {
+                        edited = true;
+                        assert(f.fields.field('b').setValue('').accepted);
+                    }
+                });
+                f.pages.subscribe((snapshot) => received[1].push(snapshot));
+                assert.deepEqual(f.pages.next(f.pages.getSnapshot().revision), {
+                    accepted: false,
+                    reason: 'stale-revision',
+                });
+                const newest = f.pages.getSnapshot();
+                for (const snapshots of received) {
+                    assert(snapshots.length > 0);
+                    assert.deepEqual(snapshots.at(-1), newest);
+                }
+                assert.equal(received[0][0].canNext, true);
+                assert.equal(newest.canNext, false);
+                assert.equal(f.fields.field('b').getSnapshot().value, '');
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                const f = fixture((p) => {
+                    p.payload.fieldIdsToSchemas.a.miniExtConfig.required = true;
+                });
+                let armed = false;
+                let edited = false;
+                f.setPredicate(() => {
+                    if (armed && !edited) {
+                        edited = true;
+                        assert.equal(f.fields.controller.write('a', ''), true);
+                    }
+                    return true;
+                });
+                const received = [[], []];
+                f.pages.subscribe((snapshot) => received[0].push(snapshot));
+                f.pages.subscribe((snapshot) => received[1].push(snapshot));
+                const before = f.pages.getSnapshot();
+                assert.equal(before.canNext, true);
+                armed = true;
+                const newest = f.pages.getSnapshot();
+                assert(
+                    edited,
+                    'Snapshot ownership read edits the native draft once'
+                );
+                assert(newest.revision > before.revision);
+                assert.equal(newest.canNext, false);
+                for (const snapshots of received) {
+                    assert(
+                        snapshots.length > 0,
+                        'Reentrant native edit during a snapshot read notifies every page listener'
+                    );
+                    assert.deepEqual(snapshots.at(-1), newest);
+                }
+                assert.deepEqual(f.pages.getSnapshot(), newest);
+                assert.equal(f.fields.field('a').getSnapshot().value, '');
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                for (const subscriberCount of [0, 2]) {
+                    const f = fixture();
+                    let armed = false;
+                    let ownershipChecks = 0;
+                    f.setPredicate(() => {
+                        if (armed) {
+                            ownershipChecks++;
+                            assert(
+                                ownershipChecks <= 20,
+                                'Continuously editing ownership predicate must not spin'
+                            );
+                            assert.equal(
+                                f.fields.controller.write(
+                                    'a',
+                                    `Owner edit ${ownershipChecks}`
+                                ),
+                                true
+                            );
+                        }
+                        return true;
+                    });
+                    const received = Array.from(
+                        { length: subscriberCount },
+                        () => []
+                    );
+                    received.forEach((snapshots) =>
+                        f.pages.subscribe((snapshot) =>
+                            snapshots.push(snapshot)
+                        )
+                    );
+                    assert.equal(f.pages.getSnapshot().canNext, true);
+                    armed = true;
+                    const unstable = f.pages.getSnapshot();
+                    assert(ownershipChecks > 0);
+                    assert(
+                        ownershipChecks <= 4,
+                        'Snapshot read bounds ownership revalidation'
+                    );
+                    assert.equal(unstable.canNext, false);
+                    assert.equal(unstable.canSubmit, false);
+                    for (const snapshots of received) {
+                        assert(snapshots.length > 0);
+                        assert.deepEqual(snapshots.at(-1), unstable);
+                    }
+                    assert.equal(f.calls.length, 0);
+                    const checksAfterRead = ownershipChecks;
+                    await Promise.resolve();
+                    assert.equal(
+                        ownershipChecks,
+                        checksAfterRead,
+                        'Unstable snapshot never schedules an automatic retry'
+                    );
+                    armed = false;
+                    const recovered = f.pages.getSnapshot();
+                    assert.equal(recovered.canNext, true);
+                    assert(recovered.revision > unstable.revision);
+                    assert(
+                        f.fields
+                            .field('a')
+                            .setValue('Ordinary edit after recovery').accepted
+                    );
+                    assert.equal(f.pages.getSnapshot().canNext, true);
+                    assert.equal(
+                        f.fields.field('a').getSnapshot().value,
+                        'Ordinary edit after recovery'
+                    );
+                    assert.equal(f.calls.length, 0);
+                }
+                checks++;
+            }
+            {
+                const f = fixture();
+                let armed = false;
+                let ownershipChecks = 0;
+                f.setPredicate(() => {
+                    if (armed) {
+                        ownershipChecks++;
+                        assert(ownershipChecks <= 20);
+                        assert.equal(
+                            f.fields.controller.write(
+                                'a',
+                                `Recovery edit ${ownershipChecks}`
+                            ),
+                            true
+                        );
+                    }
+                    return true;
+                });
+                const received = [[], []];
+                let recovered;
+                f.pages.subscribe((snapshot) => {
+                    received[0].push(snapshot);
+                    if (armed && !snapshot.canNext) {
+                        armed = false;
+                        recovered = f.pages.getSnapshot();
+                    }
+                });
+                f.pages.subscribe((snapshot) => received[1].push(snapshot));
+                assert.equal(f.pages.getSnapshot().canNext, true);
+                armed = true;
+                const returned = f.pages.getSnapshot();
+                assert(
+                    recovered,
+                    'First listener explicitly reads a recovered snapshot'
+                );
+                assert(ownershipChecks > 0 && ownershipChecks <= 4);
+                assert.equal(received[0][0].canNext, false);
+                assert.equal(recovered.canNext, true);
+                assert(recovered.revision > received[0][0].revision);
+                assert.deepEqual(returned, recovered);
+                for (const snapshots of received) {
+                    assert(snapshots.length > 0);
+                    assert.deepEqual(
+                        snapshots.at(-1),
+                        recovered,
+                        'Every listener converges after recovery inside the first listener'
+                    );
+                }
+                assert.deepEqual(f.pages.getSnapshot(), recovered);
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                let pages;
+                let stop;
+                const f = fixture(() => ({
+                    beforePages(fields) {
+                        stop = fields
+                            .field('b')
+                            .subscribe(() => pages?.getSnapshot());
+                    },
+                }));
+                pages = f.pages;
+                const received = [];
+                pages.subscribe((snapshot) => received.push(snapshot));
+                const before = pages.getSnapshot().revision;
+                assert(
+                    f.fields.field('b').setValue('Read before notification')
+                        .accepted
+                );
+                assert(
+                    received.length > 0,
+                    'Earlier field subscriber reads do not consume page notifications'
+                );
+                assert.deepEqual(received.at(-1), pages.getSnapshot());
+                assert(received.at(-1).revision > before);
+                assert.equal(f.calls.length, 0);
+                stop();
+                checks++;
+            }
+            {
+                const f = fixture((p) => {
+                    p.payload.fieldIdsToSchemas.a.miniExtConfig.required = true;
+                });
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                let armed = false;
+                let ownershipChecks = 0;
+                let edited = false;
+                let attempts = 0;
+                f.setPredicate(() => {
+                    // The second ownership check follows validation of the captured draft.
+                    if (armed && ++ownershipChecks === 2) {
+                        edited = true;
+                        assert.equal(f.fields.controller.write('a', ''), true);
+                    }
+                    return true;
+                });
+                const revision = f.pages.getSnapshot().revision;
+                assert.equal(f.pages.getSnapshot().canSubmit, true);
+                armed = true;
+                await assert.rejects(
+                    f.pages.submit(revision, {
+                        lifecycle: {
+                            dispatch() {
+                                attempts++;
+                                return { accepted() {}, finish() {} };
+                            },
+                        },
+                    })
+                );
+                assert(
+                    edited,
+                    'Required answer changes during final page ownership check'
+                );
+                assert.equal(f.fields.field('a').getSnapshot().value, '');
+                assert.equal(f.pages.getSnapshot().canSubmit, false);
+                assert.equal(attempts, 0);
+                assert.equal(f.calls.length, 0);
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision)
+                );
+                assert.equal(
+                    f.calls.length,
+                    0,
+                    'Failed validation never replays Save'
+                );
                 checks++;
             }
             {

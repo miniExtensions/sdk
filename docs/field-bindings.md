@@ -767,18 +767,21 @@ export function CustomForm({
                         </ul>
                     )}
                     <button
+                        type="button"
                         disabled={!state.page.canBack}
                         onClick={() => state.actions.back()}
                     >
                         Back
                     </button>
                     <button
+                        type="button"
                         disabled={!state.page.canNext}
                         onClick={() => state.actions.next()}
                     >
                         Next
                     </button>
                     <button
+                        type="button"
                         disabled={!state.page.canSubmit}
                         onClick={() => {
                             void state.actions.submit().catch(() => {

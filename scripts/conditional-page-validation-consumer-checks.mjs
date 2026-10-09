@@ -525,22 +525,35 @@ export async function checkConditionalPageValidationConsumer({
                     });
                     root = createRoot(host);
                     try {
+                        let nativeSubmits = 0;
                         const recipeTree = () =>
                             h(
                                 StrictMode,
                                 null,
-                                h(CustomForm, {
-                                    scope: recipeScope,
-                                    formatPageProblem: ({ fieldId, code }) =>
-                                        fieldId === 'target' &&
-                                        code === 'conditional-validation'
-                                            ? 'Answer: Check this answer before continuing.'
-                                            : 'Check this Form before continuing.',
-                                    renderers: {
-                                        renderSingleLineTextField: (p) =>
-                                            h('output', null, p.value),
+                                h(
+                                    'form',
+                                    {
+                                        onSubmit: (event) => {
+                                            event.preventDefault();
+                                            nativeSubmits++;
+                                        },
                                     },
-                                })
+                                    h(CustomForm, {
+                                        scope: recipeScope,
+                                        formatPageProblem: ({
+                                            fieldId,
+                                            code,
+                                        }) =>
+                                            fieldId === 'target' &&
+                                            code === 'conditional-validation'
+                                                ? 'Answer: Check this answer before continuing.'
+                                                : 'Check this Form before continuing.',
+                                        renderers: {
+                                            renderSingleLineTextField: (p) =>
+                                                h('output', null, p.value),
+                                        },
+                                    })
+                                )
                             );
                         await act(async () => root.render(recipeTree()));
                         mounted = true;
@@ -575,6 +588,7 @@ export async function checkConditionalPageValidationConsumer({
                         assert.equal(recipeFixture.calls.length, 0);
                         assert.equal(recipeFixture.fetchAttempts, 0);
                         assert.equal(recipeJournal.attempts, 0);
+                        assert.equal(nativeSubmits, 0);
                         await act(async () => {
                             assert(
                                 recipeFixture.fields.controller.write(
@@ -586,6 +600,36 @@ export async function checkConditionalPageValidationConsumer({
                         assert.equal(feedback(), null);
                         assert.equal(button('Next').disabled, false);
                         await act(async () => button('Next').click());
+                        assert.equal(
+                            recipeFixture.pages.getSnapshot().activePageIndex,
+                            1
+                        );
+                        assert.equal(
+                            nativeSubmits,
+                            0,
+                            'Next must not submit the enclosing Form'
+                        );
+                        for (const name of ['Back', 'Next', 'Submit'])
+                            assert.equal(button(name).type, 'button');
+                        assert.equal(button('Back').disabled, false);
+                        await act(async () => button('Back').click());
+                        assert.equal(
+                            recipeFixture.pages.getSnapshot().activePageIndex,
+                            0
+                        );
+                        assert.equal(
+                            nativeSubmits,
+                            0,
+                            'Back must not submit the enclosing Form'
+                        );
+                        assert.equal(recipeFixture.calls.length, 0);
+                        assert.equal(recipeJournal.attempts, 0);
+                        await act(async () => button('Next').click());
+                        assert.equal(
+                            recipeFixture.pages.getSnapshot().activePageIndex,
+                            1
+                        );
+                        assert.equal(nativeSubmits, 0);
                         assert.equal(button('Submit').disabled, false);
                         await act(async () => {
                             assert(
@@ -633,6 +677,11 @@ export async function checkConditionalPageValidationConsumer({
                         await act(async () => button('Submit').click());
                         assert.equal(recipeFixture.calls.length, 1);
                         assert.equal(recipeJournal.attempts, 1);
+                        assert.equal(
+                            nativeSubmits,
+                            0,
+                            'Explicit SDK Submit must not submit the enclosing Form'
+                        );
                         assert.deepEqual(recipeFixture.calls[0], {
                             captchaVal: null,
                             isComputeMode: false,

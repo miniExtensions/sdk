@@ -10,6 +10,7 @@ import {
 import { checkLinkedRendererConsumer } from './linked-renderer-consumer-checks.mjs';
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
+import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
@@ -1038,6 +1039,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         26
+    );
+    const conditionalValidationChecks =
+        await checkConditionalPageValidationConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(conditionalValidationChecks, 126);
+    console.log(
+        `Installed configured conditional validation: ${conditionalValidationChecks} ESM/CJS, canonical and shipped React recipe checkpoints passed; synthetic dispatch only.`
     );
     assert.equal(
         await checkPortalCompositionConsumer({

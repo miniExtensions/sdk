@@ -1480,11 +1480,36 @@ Computed fields and canonical pass-through types such as rich text and buttons
 do not add ordinary frontend validation. Existing visibility refusals still apply;
 lookup presentation requires an explicit `hideFieldIfEmpty: false`. Other
 unimplemented validation types remain explicit refusals.
-Effective advanced conditional validation and `requireOpenLinkedRecords` without
-review tracking remain blocked when their page is relevant. Unsupported field rules
-on a future page do not block Next on an earlier page; reaching that page exposes
-the refusal. Final submission checks rules across all pages, including answers
-changed after leaving an earlier page. Existing blocked visibility results remain
+Configured `fieldValidationConditionalFields` now supports the existing strict
+direct-scalar condition subset through the same predicate evaluator used for
+field visibility. Ordinary errors retain priority. Advanced validation applies
+only to a visible writable, noncomputed target; hiding, read-only configuration
+and canonical computed physical kinds skip that extra rule without waiving any
+independent ordinary checks. Predicates read the complete native draft, including
+hidden and unrendered drivers, never the filtered presentation record. This does
+not broaden visibility, choice availability, edit-empty hiding or condition-driver
+support.
+
+A supported false predicate produces the generic `conditional-validation`
+problem, without copying a raw value, formula or configured message into feedback.
+The exact empty `customErrorMessageForFieldValidation: ''` suppresses that problem
+after successful evaluation, matching the frontend's truthy-message reporting;
+it never suppresses a malformed or unsupported rule. Null, omitted and nonempty
+messages still use the generic code, so an app may supply its own text.
+Missing/contradictory schema, ambiguous ID/name aliases, invalid native driver
+values, evaluator errors and unsupported predicates yield `unsupported-validation`.
+Select, linked, lookup, computed and date dependencies remain outside this slice,
+including select predicates optimized to a constant formula. No linked reads or
+metadata recovery are performed.
+
+Unsupported conditional rules and `requireOpenLinkedRecords` without review
+tracking remain blocked when their page is relevant. Rules on a future page do
+not block Next on an earlier page; reaching that page exposes their feedback or
+refusal. Final submission checks all pages again, including earlier answers and
+cross-field dependencies changed after navigation. Pass each rendered revision
+to Next or Submit; a retained callback cannot approve newer answers. Existing
+native/input/navigation/configuration/owner tickets, pending-file gates and
+uncertainty remain authoritative. Existing blocked visibility results remain
 blocked. There is no approximation of backend uniqueness, authentication or
 permission validation.
 

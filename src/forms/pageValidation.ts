@@ -1,8 +1,9 @@
-import type { AirtableValue } from '../runtime/types.js';
+import type { AirtableValue, RuntimeFieldSchema } from '../runtime/types.js';
 import type { LoadedFormFieldDescriptor } from './helpers.js';
 import { getSelectFieldPolicy } from '../ui/selectPolicy.js';
 import emailValidator from 'email-validator';
 import { checkIfPageUrlIsValid } from './pageUrlValidation.js';
+import { evaluateFormFieldVisibility } from './visibility.js';
 
 export type FormPageProblem = {
     fieldId: string | null;
@@ -16,6 +17,7 @@ export type FormPageProblem = {
         | 'invalid-input'
         | 'invalid-email'
         | 'invalid-url'
+        | 'conditional-validation'
         | 'unsupported-validation'
         | 'invalid-metadata'
         | 'blocked-visibility'
@@ -88,7 +90,7 @@ export const pageValueEmpty = (type: string, value: unknown): boolean => {
     return false;
 };
 /** Bounded canonical ordinary frontend rules. No network or backend validation. */
-export const validatePageField = (
+const validateOrdinaryPageField = (
     field: LoadedFormFieldDescriptor,
     value: AirtableValue | undefined,
     stored: AirtableValue | undefined,
@@ -124,17 +126,6 @@ export const validatePageField = (
             (typeof config[key] !== 'number' || !Number.isFinite(config[key]))
         )
             return problem('invalid-metadata');
-    if (
-        !hidden &&
-        !field.readOnly &&
-        config.fieldValidationConditionalFields != null &&
-        (!object(config.fieldValidationConditionalFields) ||
-            !Array.isArray(
-                config.fieldValidationConditionalFields.conditions
-            ) ||
-            config.fieldValidationConditionalFields.conditions.length > 0)
-    )
-        return problem('unsupported-validation');
     if (
         config.required === true &&
         !hidden &&
@@ -267,4 +258,114 @@ export const validatePageField = (
             return problem('linked-maximum');
     }
     return null;
+};
+
+// Canonical runtime enablement excludes these physical kinds even when a
+// returned optional isComputed flag is absent. This is not write authority.
+const computedTargets = new Set([
+    'formula',
+    'rollup',
+    'count',
+    'multipleLookupValues',
+    'autoNumber',
+    'createdTime',
+    'lastModifiedTime',
+    'createdBy',
+    'lastModifiedBy',
+    'button',
+    'externalSyncSource',
+    'aiText',
+]);
+
+type ConditionalPageContext = {
+    data: Readonly<Record<string, AirtableValue>>;
+    fieldIdsToSchemas: Readonly<Record<string, RuntimeFieldSchema | undefined>>;
+};
+
+/** Ordinary feedback precedes configured validation, as in the frontend. */
+export const validatePageField = (
+    field: LoadedFormFieldDescriptor,
+    value: AirtableValue | undefined,
+    stored: AirtableValue | undefined,
+    hidden: boolean,
+    context?: ConditionalPageContext
+): FormPageProblem | null => {
+    const ordinaryProblem = validateOrdinaryPageField(
+        field,
+        value,
+        stored,
+        hidden
+    );
+    if (ordinaryProblem) return ordinaryProblem;
+    const config = field.schema.miniExtConfig;
+    if (
+        hidden ||
+        field.readOnly ||
+        field.isComputed ||
+        computedTargets.has(field.schema.airtableField.config.type) ||
+        config == null ||
+        !('fieldValidationConditionalFields' in config) ||
+        config.fieldValidationConditionalFields == null
+    )
+        return null;
+    const definition = config.fieldValidationConditionalFields;
+    // Empty definitions have no active advanced validation, including legacy
+    // definitions whose otherwise unused group setting is malformed.
+    if (
+        object(definition) &&
+        Array.isArray(definition.conditions) &&
+        definition.conditions.length === 0
+    )
+        return null;
+    const refused: FormPageProblem = {
+        fieldId: field.fieldId,
+        code: 'unsupported-validation',
+    };
+    if (!context) return refused;
+    try {
+        const schemas = Object.entries(context.fieldIdsToSchemas);
+        const ids = new Set<string>();
+        for (const [id, schema] of schemas) {
+            const physical = schema?.airtableField;
+            if (
+                !schema ||
+                !physical ||
+                physical.id !== id ||
+                typeof physical.name !== 'string' ||
+                (physical.isComputed !== undefined &&
+                    typeof physical.isComputed !== 'boolean') ||
+                schema.fieldType !== physical.config.type ||
+                ids.has(physical.id)
+            )
+                return refused;
+            ids.add(physical.id);
+        }
+        // Reuse the scalar predicate evaluator without borrowing field hiding,
+        // sections, filtered records or any replacement Save data.
+        const result = evaluateFormFieldVisibility({
+            field: {
+                ...field.schema,
+                miniExtConfig: { conditionalFields: definition },
+            },
+            airtableFields: schemas.map(([, schema]) => schema!.airtableField),
+            data: context.data,
+            formRecordType: 'create',
+            evaluationMode: 'runtime',
+            invalidConditionMode: 'strict',
+        });
+        if (
+            result.type === 'blocked' ||
+            result.diagnostics.some((d) => d.code === 'missing-field')
+        )
+            return refused;
+        const message = config.customErrorMessageForFieldValidation;
+        if (message != null && typeof message !== 'string') return refused;
+        // Canonical evaluation happens before the outer caller's truthy-message
+        // check. An exact empty custom message suppresses only a valid failure.
+        return result.type === 'hidden' && message !== ''
+            ? { fieldId: field.fieldId, code: 'conditional-validation' }
+            : null;
+    } catch {
+        return refused;
+    }
 };

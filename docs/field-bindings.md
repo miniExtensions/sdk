@@ -87,7 +87,7 @@ Use the existing field-specific instructions instead of duplicating policy:
 
 Check compatibility before building the UI. The accepted page-owner composition
 refuses configured prepared Review, compute and automatic submission, as well as
-unsupported advanced validation and condition drivers. The separate
+unsupported conditional-validation dependencies and condition drivers. The separate
 [one-page starter Review recipe](ui.md#prepared-form-review-in-the-browser-starter)
 does not enable configured Review in `AirtableForm`. Follow the
 [page-owner limits](forms.md#bounded-multipage-ownership),
@@ -731,6 +731,7 @@ and styling:
 ```tsx
 import type { ReactNode } from 'react';
 import { AirtableForm } from '@miniextensions/sdk/react';
+import type { FormPageProblem } from '@miniextensions/sdk/forms';
 import type {
     FieldRendererSlots,
     FormRenderScope,
@@ -739,9 +740,11 @@ import type {
 export function CustomForm({
     scope,
     renderers,
+    formatPageProblem,
 }: {
     scope: FormRenderScope;
     renderers: FieldRendererSlots<ReactNode>;
+    formatPageProblem: (problem: FormPageProblem) => string;
 }) {
     return (
         <AirtableForm scope={scope} renderers={renderers}>
@@ -751,19 +754,34 @@ export function CustomForm({
                         <div key={fieldId}>{node}</div>
                     ))}
                     {state.errorMessage && <p>{state.errorMessage}</p>}
+                    {state.page.problems.length > 0 && (
+                        <ul aria-live="polite">
+                            {state.page.problems.map((problem, index) => (
+                                <li
+                                    key={`${problem.fieldId}:${problem.code}:${index}`}
+                                    data-field-id={problem.fieldId ?? undefined}
+                                >
+                                    {formatPageProblem(problem)}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                     <button
+                        type="button"
                         disabled={!state.page.canBack}
                         onClick={() => state.actions.back()}
                     >
                         Back
                     </button>
                     <button
+                        type="button"
                         disabled={!state.page.canNext}
                         onClick={() => state.actions.next()}
                     >
                         Next
                     </button>
                     <button
+                        type="button"
                         disabled={!state.page.canSubmit}
                         onClick={() => {
                             void state.actions.submit().catch(() => {
@@ -779,6 +797,15 @@ export function CustomForm({
     );
 }
 ```
+
+Page problems can block Next or Submit without a controller `errorMessage`.
+Supply `formatPageProblem` from your app's localization, using the problem code
+and target field ID to associate generic feedback with an answer. For example,
+a `conditional-validation` problem can say “Check this answer before continuing.”
+Use only authorized presentation labels if adding a field title; never echo a
+configured validation message, condition, hidden driver or native answer. Problems
+with a null field ID belong to the Form as a whole. Feedback updates from the same
+owner snapshot and clears when the problem is resolved.
 
 There is no default Form markup or styling. Mounting, rendering and subscribing
 perform no reads, Save, upload, Add Choice or Button requests. Partial text,

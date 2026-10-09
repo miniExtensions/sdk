@@ -13,6 +13,10 @@ import type { SelectionState } from './types.js';
 import type { FormAttachmentSnapshot } from '../forms/attachmentController.js';
 import type { FormSelectChoiceSnapshot } from '../forms/selectChoiceController.js';
 import type { ButtonFieldRenderProps } from './buttonModel.js';
+import type {
+    FormLinkedRecordsFacet,
+    FormLinkedRecordsSnapshot,
+} from '../forms/linkedRecords.js';
 
 export type FieldKind = RuntimeFieldSchema['fieldType'];
 export type FieldSchema<K extends FieldKind> = Extract<
@@ -158,6 +162,12 @@ export type FieldPresentation =
           type: 'computed-result';
           config: RuntimeFieldSchema['airtableField']['config'] | null;
       };
+/** Borrowed Form presentation; the discriminator leaves other contexts explicit. */
+export type LinkedRecordsRendererProps = {
+    source: 'form';
+    state: FormLinkedRecordsSnapshot;
+    readSelected: FormLinkedRecordsFacet['readSelected'];
+};
 export type FieldRendererProps<K extends FieldKind> = {
     physicalKind: K;
     presentation: FieldPresentation;
@@ -174,7 +184,9 @@ export type FieldRendererProps<K extends FieldKind> = {
     validation: readonly FormValidationMessage[];
     error: string | null;
     capability: FieldRendererCapability<K>;
-};
+} & (K extends 'multipleRecordLinks'
+    ? { linkedRecords?: LinkedRecordsRendererProps }
+    : { linkedRecords?: never });
 export type FieldRendererPropsUnion = {
     [K in FieldKind]: FieldRendererProps<K>;
 }[FieldKind];
@@ -254,12 +266,14 @@ export type RendererPropsInput = Omit<
     | 'writeConfig'
     | 'value'
     | 'capability'
+    | 'linkedRecords'
 > & {
     physicalKind: string;
     field: unknown;
     displayConfig: unknown;
     writeConfig?: unknown;
     value: unknown;
+    linkedRecords?: LinkedRecordsRendererProps;
     capability:
         | { type: 'readonly' }
         | {
@@ -580,6 +594,17 @@ export function createRendererProps(
     if (input.capability.type === 'editable' && (computed || kind === 'button'))
         return null;
     if (input.capability.type === 'button' && kind !== 'button') return null;
+    if (
+        input.linkedRecords !== undefined &&
+        (!object(input.linkedRecords) ||
+            kind !== 'multipleRecordLinks' ||
+            input.context !== 'form' ||
+            input.linkedRecords.source !== 'form' ||
+            typeof input.linkedRecords.readSelected !== 'function' ||
+            !object(input.linkedRecords.state) ||
+            !json(input.linkedRecords.state))
+    )
+        return null;
     if (input.capability.type === 'editable') {
         const cap = input.capability;
         if (
@@ -608,7 +633,7 @@ export function createRendererProps(
             return null;
     }
     try {
-        const { capability, ...data } = input;
+        const { capability, linkedRecords, ...data } = input;
         const config = input.field.config;
         const resultKind =
             kind === 'formula' ||
@@ -626,6 +651,15 @@ export function createRendererProps(
             : { type: 'physical', config };
         return {
             ...structuredClone({ ...data, computed, presentation }),
+            ...(linkedRecords
+                ? {
+                      linkedRecords: {
+                          source: linkedRecords.source,
+                          state: structuredClone(linkedRecords.state),
+                          readSelected: linkedRecords.readSelected,
+                      },
+                  }
+                : {}),
             capability,
         } as FieldRendererPropsUnion;
     } catch {

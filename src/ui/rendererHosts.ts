@@ -2,6 +2,7 @@ import {
     normalizeFormLeaseLoaded,
     normalizeFormLeaseField,
 } from './formLease.js';
+import { createFormLinkedRendererBridge } from './formLinkedRenderer.js';
 import type {
     FormFieldBindings,
     FormFieldBinding,
@@ -172,7 +173,7 @@ function host(
     options: LeaseOptions,
     authority: () => unknown | null,
     read: (current: () => boolean) => FieldRendererHostSnapshot,
-    subscribe: (listener: () => void) => (() => void)[],
+    subscribe: (listener: () => void, current: () => boolean) => (() => void)[],
     disposeOwned: () => void = () => {}
 ): FieldRendererHost {
     let disposed = false,
@@ -227,7 +228,7 @@ function host(
     };
     let stops: (() => void)[];
     try {
-        stops = subscribe(emit);
+        stops = subscribe(emit, current);
     } catch (error) {
         disposeOwned();
         throw error;
@@ -461,6 +462,10 @@ export function createFormFieldRendererHost(
     };
     let attachment: FormAttachmentController | undefined,
         button: ButtonFieldModel | undefined;
+    const linked =
+        binding.getSnapshot().field?.fieldType === 'multipleRecordLinks'
+            ? createFormLinkedRendererBridge(options.fields, options.fieldId)
+            : undefined;
     if (
         binding.getSnapshot().field?.fieldType === 'multipleAttachments' &&
         options.attachmentRecovery
@@ -481,11 +486,34 @@ export function createFormFieldRendererHost(
         options,
         authority,
         (current) =>
-            bindingSnapshot(binding, 'form', current, attachment, button),
-        (listener) =>
+            bindingSnapshot(
+                binding,
+                'form',
+                current,
+                attachment,
+                button,
+                linked
+                    ? (input) => ({
+                          ...input,
+                          linkedRecords: linked.getProps(),
+                      })
+                    : undefined
+            ),
+        (listener, current) =>
             subscribeTo(listener, [
-                (notify) => binding.subscribe(notify),
-                (notify) => options.fields.controller.subscribe(notify),
+                ...(linked
+                    ? [
+                          (notify: () => void) =>
+                              linked.subscribe(notify, current),
+                      ]
+                    : []),
+                ...[binding, options.fields.controller].map(
+                    (source) => (notify: () => void) =>
+                        source.subscribe(() => {
+                            linked?.refresh();
+                            notify();
+                        })
+                ),
                 ...(attachment
                     ? [(notify: () => void) => attachment.subscribe(notify)]
                     : []),
@@ -493,7 +521,10 @@ export function createFormFieldRendererHost(
                     ? [(notify: () => void) => button.subscribe(notify)]
                     : []),
             ]),
-        () => button?.dispose()
+        () => {
+            linked?.dispose();
+            button?.dispose();
+        }
     );
 }
 function portalContext(

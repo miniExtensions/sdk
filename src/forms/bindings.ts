@@ -767,8 +767,11 @@ export function createFormFieldBindings(
                 if (!owns()) return;
                 model.setOptions(next);
             } finally {
-                if (replacingLinkedOptions.get(id) === ticket)
+                if (replacingLinkedOptions.get(id) === ticket) {
                     replacingLinkedOptions.delete(id);
+                    if (linkedOptionRevisions.get(id) === ticket && current())
+                        refresh();
+                }
             }
         },
         setLinkedLoader: (id, loader) => {
@@ -833,8 +836,11 @@ export function createFormFieldBindings(
                     },
                 });
             } finally {
-                if (replacingLinkedOptions.get(id) === ticket)
+                if (replacingLinkedOptions.get(id) === ticket) {
                     replacingLinkedOptions.delete(id);
+                    if (linkedOptionRevisions.get(id) === ticket && current())
+                        refresh();
+                }
             }
         },
         reload: async (request) => {

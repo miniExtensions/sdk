@@ -2,6 +2,7 @@ import {
     checkLinkedRecordsConsumer,
     linkedRecordsTypedConsumer,
 } from './linked-records-consumer-checks.mjs';
+import { checkLinkedRendererConsumer } from './linked-renderer-consumer-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
@@ -991,6 +992,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(rendererProof.checks, 15);
     console.log(
         `Installed renderer hosts: all 33 slots and ${rendererProof.checks} owner/remount groups passed; synthetic transport only.`
+    );
+    const linkedRendererProof = await checkLinkedRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(linkedRendererProof.checks, 16);
+    console.log(
+        `Installed Form linked renderer bridge: ${linkedRendererProof.checks} ESM/CJS and shipped React recipe groups passed; synthetic transport only.`
     );
     assert.equal(
         await checkFormCompositionConsumer({

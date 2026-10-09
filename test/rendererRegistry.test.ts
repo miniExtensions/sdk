@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import type { UploadFileResult } from '../src/runtime/types.js';
+import type { LinkedRecordsRendererProps } from '../src/ui/rendererRegistry.js';
 import {
     createRendererProps,
     dispatchField,
@@ -29,6 +30,74 @@ const input = (): RendererPropsInput => ({
     validation: [],
     error: null,
     capability: { type: 'readonly' },
+});
+it('admits detached Form rich data only for linked fields and rejects malformed sources', () => {
+    const linkedRecords: LinkedRecordsRendererProps = {
+        source: 'form',
+        state: {
+            phase: 'idle',
+            pending: false,
+            error: null,
+            linkedTableId: 'tbl_linked',
+            selectedRecords: [{ id: 'rec_one', fields: { fld_title: 'Name' } }],
+            unresolvedSelectedIds: [],
+            candidateRecords: [],
+            table: null,
+            detailFields: null,
+            detailProjection: 'missing',
+            selectedPolicy: {
+                supported: true,
+                reasons: [],
+                state: 'not-configured',
+                diagnostics: [],
+            },
+        },
+        readSelected: async () => true,
+    };
+    const source: RendererPropsInput = {
+        ...input(),
+        physicalKind: 'multipleRecordLinks',
+        value: ['rec_one'],
+        field: {
+            ...(input().field as object),
+            config: {
+                type: 'multipleRecordLinks',
+                options: {
+                    linkedTableId: 'tbl_linked',
+                    inverseLinkFieldId: 'fld_inverse',
+                    isReversed: false,
+                    prefersSingleRecordLink: false,
+                },
+            },
+        },
+        linkedRecords,
+    };
+    const props = createRendererProps(source);
+    assert.ok(props && props.physicalKind === 'multipleRecordLinks');
+    assert.equal(props.linkedRecords?.readSelected, linkedRecords.readSelected);
+    props.linkedRecords!.state.selectedRecords[0]!.fields.fld_title = 'Changed';
+    assert.equal(
+        linkedRecords.state.selectedRecords[0]!.fields.fld_title,
+        'Name'
+    );
+    assert.equal(createRendererProps({ ...input(), linkedRecords }), null);
+    assert.equal(
+        createRendererProps({ ...source, context: 'portal-cell' }),
+        null
+    );
+    for (const malformed of [
+        null,
+        [],
+        'form',
+        { ...linkedRecords, source: 'accepted-detail' },
+    ])
+        assert.equal(
+            createRendererProps({
+                ...source,
+                linkedRecords: malformed as never,
+            }),
+            null
+        );
 });
 it('dispatches all 33 physical slots with explicit fallback', () => {
     assert.equal(Object.keys(FIELD_RENDERER_SLOTS).length, 33);

@@ -33,7 +33,7 @@ const numericTypes = new Set<string>([
 ]);
 function unavailable(): never {
     throw new Error(
-        'Review is unavailable for this configuration. This starter supports one-page manual Forms with direct text, numeric, checkbox, barcode, date, dateTime, select and conservatively presented linked and attachment answers.'
+        'Review is unavailable for this configuration. This recipe supports manual Forms with direct text, numeric, checkbox, barcode, date, dateTime, select and conservatively presented linked and attachment answers.'
     );
 }
 
@@ -173,7 +173,8 @@ export const prepareFormReviewRows = (
     const configuration = settings(page.payload.publicFields);
     if (
         (configuration.multiPageFormMode != null &&
-            configuration.multiPageFormMode !== 'one-page') ||
+            configuration.multiPageFormMode !== 'one-page' &&
+            configuration.multiPageFormMode !== 'multi-page') ||
         configuration.enableFormComputeMode === true ||
         configuration.autoSubmitAfterPrefill === true ||
         page.payload.fieldIdsInForm.some(

@@ -540,7 +540,7 @@ export async function checkFormReviewRecipe({
     }
     checks++;
     for (const unsupported of [
-        'multi-page',
+        'invalid-mode',
         'compute',
         'automatic',
         'computed',
@@ -548,8 +548,9 @@ export async function checkFormReviewRecipe({
     ]) {
         const variant = structuredClone(page);
         const data = structuredClone(native);
-        if (unsupported === 'multi-page')
-            variant.payload.publicFields.state.multiPageFormMode = 'multi-page';
+        if (unsupported === 'invalid-mode')
+            variant.payload.publicFields.state.multiPageFormMode =
+                'invalid-mode';
         else if (unsupported === 'compute')
             variant.payload.publicFields.state.enableFormComputeMode = true;
         else if (unsupported === 'automatic')

@@ -99,6 +99,8 @@ export type FormFieldBindingsOptions = FormControllerOptions & {
 export type FormFieldBindings = {
     controller: FormController;
     getLoaded(): FormLoadedResult;
+    /** Existing owner-held queues only; never constructs an attachment controller. */
+    hasPendingFiles(): boolean;
     attachment(
         fieldId: string,
         recovery: AttachmentRecovery,
@@ -540,7 +542,12 @@ export function createFormFieldBindings(
     };
     const unsubscribe = controller.subscribe(() => refresh());
     refresh();
+    const hasPendingFiles = () =>
+        [...attachments.values()].some(
+            (model) => model.getSnapshot().files.length > 0
+        );
     const owner: FormFieldBindings = {
+        hasPendingFiles,
         controller,
         getLoaded: () => {
             if (!current()) throw new Error('This Form owner is retired.');
@@ -700,9 +707,7 @@ export function createFormFieldBindings(
         save: (supplied) => {
             if (
                 pendingRead !== null ||
-                [...attachments.values()].some(
-                    (model) => model.getSnapshot().files.length > 0
-                ) ||
+                hasPendingFiles() ||
                 !(options.canWrite?.() ?? true) ||
                 attachmentBlocked() ||
                 choiceBlocked() ||

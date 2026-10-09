@@ -5,10 +5,22 @@ import { pathToFileURL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 export const formPageTypedConsumer = `
-import { createFormPageOwner, FormPageError, type FormFieldBindings, type FormPageOwner, type FormPageSnapshot, type FormPageAction, type FormSaveLifecycle } from '@miniextensions/sdk/forms';
+import { createFormPageOwner, FormPageError, type FormFieldBindings, type FormPageOwner, type FormPageSnapshot, type FormPageAction, type FormSaveLifecycle, type FormPageReviewRequest, type FormPageReviewDecision } from '@miniextensions/sdk/forms';
 declare const fields: FormFieldBindings;
 declare const lifecycle: FormSaveLifecycle;
 const owner: FormPageOwner = createFormPageOwner({fields, isCurrent: () => true, configurationRevision: () => 0});
+const reviewOwner = createFormPageOwner({fields, isCurrent: () => true, configurationRevision: () => 0,
+    review: async (request: FormPageReviewRequest): Promise<FormPageReviewDecision> => {
+        const signal: AbortSignal = request.signal;
+        const current: boolean = request.isCurrent();
+        const revision: number = request.revision;
+        void [signal, current, revision, request.loaded, request.draft.data, request.draft.dirtyFieldIds];
+        return {type: 'confirm', isCurrent: () => true};
+    }});
+const pendingFiles: boolean = fields.hasPendingFiles();
+const reviewing: boolean = reviewOwner.getSnapshot().reviewing;
+const canReview: boolean = reviewOwner.getSnapshot().canReview;
+const cancelled: FormPageError = new FormPageError('review-cancelled');
 const state: FormPageSnapshot = owner.getSnapshot();
 const action: FormPageAction = owner.next(state.revision);
 const save: ReturnType<FormFieldBindings['save']> = owner.submit(state.revision, {lifecycle});
@@ -19,7 +31,7 @@ owner.back('stale');
 createFormPageOwner({fields, isCurrent: () => true});
 // @ts-expect-error page navigation is not a native record writer
 owner.setValue({a:'replacement'});
-void [action, save, stop, FormPageError];
+void [action, save, stop, FormPageError, reviewing, canReview, cancelled, pendingFiles];
 `;
 /** Actual stock/custom React consumers share the retained owner across page mounts. */
 async function checkPageRendererRemount(f, reactApi, consumer) {
@@ -235,6 +247,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 fields,
                 isCurrent: () => predicate(),
                 configurationRevision: () => config,
+                review: seed?.review,
             });
             return {
                 loaded,
@@ -1259,6 +1272,561 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
             {
                 const f = fixture();
                 await checkPageRendererRemount(f, reactApi, require);
+                checks++;
+            }
+            // Configured Review remains an explicit opt-in around the native Save.
+            const reviewFixture = (review, configure = () => {}) =>
+                fixture((p) => {
+                    p.payload.publicFields.state.promptUserBeforeSubmission = true;
+                    const seed = configure(p);
+                    return { ...seed, review };
+                });
+            const finalPage = (f) => {
+                while (f.pages.getSnapshot().canNext)
+                    assert(
+                        f.pages.next(f.pages.getSnapshot().revision).accepted
+                    );
+                assert.equal(f.pages.getSnapshot().activePageIndex, 2);
+            };
+            const trackedLifecycle = () => {
+                const counts = { dispatch: 0, accepted: 0, finish: 0 };
+                return {
+                    counts,
+                    lifecycle: {
+                        dispatch() {
+                            counts.dispatch++;
+                            return {
+                                accepted() {
+                                    counts.accepted++;
+                                },
+                                finish() {
+                                    counts.finish++;
+                                },
+                            };
+                        },
+                    },
+                };
+            };
+            {
+                let reviews = 0;
+                const f = reviewFixture(async () => {
+                    reviews++;
+                    return { type: 'edit' };
+                });
+                assert.equal(f.pages.getSnapshot().status, 'ready');
+                finalPage(f);
+                const snapshot = f.pages.getSnapshot();
+                assert.equal(snapshot.canReview, true);
+                const tracked = trackedLifecycle();
+                await assert.rejects(
+                    f.pages.submit(snapshot.revision, {
+                        lifecycle: tracked.lifecycle,
+                    }),
+                    { reason: 'review-cancelled' }
+                );
+                assert.equal(reviews, 1);
+                assert.equal(f.pages.getSnapshot().reviewing, false);
+                assert.equal(f.pages.getSnapshot().canReview, true);
+                assert.equal(tracked.counts.dispatch, 0);
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                let request;
+                const f = reviewFixture(async (r) => {
+                    request = r;
+                    r.loaded.payload.formRecord.data.a =
+                        'Detached loaded mutation';
+                    r.loaded.payload.fieldIdsToSchemas.a.airtableField.name =
+                        'Detached name';
+                    r.draft.data.b = 'Detached draft mutation';
+                    r.draft.dirtyFieldIds.push('detached');
+                    return { type: 'confirm', isCurrent: () => true };
+                });
+                assert(f.fields.field('b').setValue('Native changed').accepted);
+                finalPage(f);
+                const snapshot = f.pages.getSnapshot();
+                const native = structuredClone(
+                    f.fields.controller.getState().draft.data
+                );
+                const dirty = [
+                    ...f.fields.controller.getState().draft.dirtyFieldIds,
+                ];
+                const tracked = trackedLifecycle();
+                await f.pages.submit(snapshot.revision, {
+                    lifecycle: tracked.lifecycle,
+                });
+                assert.equal(request.revision, snapshot.revision);
+                assert.equal(request.signal instanceof AbortSignal, true);
+                assert.equal(f.calls.length, 1);
+                assert.deepEqual(f.calls[0].formRecord.data, native);
+                assert.deepEqual(
+                    f.calls[0].formFieldIdsWithUnsavedChanges,
+                    dirty
+                );
+                assert.equal(f.loaded.payload.formRecord.data.a, 'A');
+                assert.equal(
+                    f.loaded.payload.fieldIdsToSchemas.a.airtableField.name,
+                    'a'
+                );
+                assert.equal(tracked.counts.dispatch, 1);
+                assert.equal(tracked.counts.finish, 1);
+                checks++;
+            }
+            for (const decision of ['edit', 'confirm']) {
+                let reviews = 0;
+                const f = reviewFixture(
+                    async () => {
+                        reviews++;
+                        return decision === 'edit'
+                            ? { type: 'edit' }
+                            : { type: 'confirm', isCurrent: () => true };
+                    },
+                    (p) => {
+                        p.payload.fieldIdsToSchemas.a.miniExtConfig.required = true;
+                    }
+                );
+                finalPage(f);
+                assert(f.fields.field('a').setValue('').accepted);
+                assert.equal(f.pages.getSnapshot().canSubmit, false);
+                assert.equal(f.pages.getSnapshot().canReview, true);
+                const tracked = trackedLifecycle();
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: tracked.lifecycle,
+                    }),
+                    {
+                        reason:
+                            decision === 'edit'
+                                ? 'review-cancelled'
+                                : 'validation',
+                    }
+                );
+                assert.equal(
+                    reviews,
+                    1,
+                    'Required errors remain readable in Review'
+                );
+                assert.equal(tracked.counts.dispatch, 0);
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            for (const kind of ['number', 'date']) {
+                let reviews = 0;
+                const f = reviewFixture(
+                    async () => {
+                        reviews++;
+                        return { type: 'confirm', isCurrent: () => true };
+                    },
+                    (p) => {
+                        const schema = p.payload.fieldIdsToSchemas.a;
+                        schema.fieldType = kind;
+                        schema.airtableField.config =
+                            kind === 'number'
+                                ? { type: 'number', options: { precision: 0 } }
+                                : {
+                                      type: 'date',
+                                      options: {
+                                          dateFormat: {
+                                              name: 'iso',
+                                              format: 'YYYY-MM-DD',
+                                          },
+                                      },
+                                  };
+                        p.payload.formRecord.data.a =
+                            kind === 'number' ? 1 : '2024-01-01';
+                    }
+                );
+                finalPage(f);
+                const binding = f.fields.field('a');
+                assert.equal(
+                    (kind === 'number'
+                        ? binding.scalar
+                        : binding.date
+                    ).setInput(kind === 'number' ? '-' : '2024-02-30'),
+                    false
+                );
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision)
+                );
+                assert.equal(
+                    reviews,
+                    0,
+                    'Unfinished raw input cannot open prepared Review'
+                );
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            for (const cancel of ['edit', 'escape', 'abort']) {
+                let release;
+                let request;
+                const f = reviewFixture((r) => {
+                    request = r;
+                    return new Promise((resolve) => {
+                        release = resolve;
+                    });
+                });
+                finalPage(f);
+                const tracked = trackedLifecycle();
+                const controller = new AbortController();
+                const flight = f.pages.submit(f.pages.getSnapshot().revision, {
+                    lifecycle: tracked.lifecycle,
+                    signal: controller.signal,
+                });
+                await Promise.resolve(); // The adapter opens in its queued microtask.
+                assert(request);
+                assert.equal(f.pages.getSnapshot().reviewing, true);
+                assert.equal(f.pages.getSnapshot().canBack, false);
+                assert.equal(f.pages.getSnapshot().canNext, false);
+                assert.equal(
+                    f.pages.back(f.pages.getSnapshot().revision).accepted,
+                    false
+                );
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision)
+                );
+                assert.equal(tracked.counts.dispatch, 0);
+                assert.equal(f.calls.length, 0);
+                if (cancel === 'abort') controller.abort();
+                else release({ type: 'edit' }); // Escape adapters also resolve Edit.
+                await assert.rejects(flight, { reason: 'review-cancelled' });
+                if (cancel === 'abort') {
+                    assert.equal(request.signal.aborted, true);
+                    release({ type: 'confirm', isCurrent: () => true });
+                    await Promise.resolve();
+                }
+                assert.equal(f.pages.getSnapshot().reviewing, false);
+                assert.equal(tracked.counts.dispatch, 0);
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            for (const transition of [
+                'native',
+                'raw',
+                'configuration',
+                'owner',
+                'presentation',
+            ]) {
+                let release;
+                let request;
+                let presentationRevision = 0;
+                const capturedPresentationRevision = presentationRevision;
+                const f = reviewFixture(
+                    (r) => {
+                        request = r;
+                        return new Promise((resolve) => {
+                            release = resolve;
+                        });
+                    },
+                    (p) => {
+                        if (transition === 'raw') {
+                            p.payload.fieldIdsToSchemas.a.fieldType = 'number';
+                            p.payload.fieldIdsToSchemas.a.airtableField.config =
+                                { type: 'number', options: { precision: 0 } };
+                            p.payload.formRecord.data.a = 1;
+                        }
+                    }
+                );
+                finalPage(f);
+                const native = structuredClone(
+                    f.fields.controller.getState().draft.data
+                );
+                const tracked = trackedLifecycle();
+                const flight = f.pages.submit(f.pages.getSnapshot().revision, {
+                    lifecycle: tracked.lifecycle,
+                });
+                await Promise.resolve(); // Mutate only after Review captures its request.
+                assert(request);
+                if (transition === 'native') {
+                    assert(
+                        f.fields.field('a').setValue('ABA changed').accepted
+                    );
+                    assert(f.fields.field('a').setValue(native.a).accepted);
+                } else if (transition === 'raw') {
+                    assert.equal(
+                        f.fields.field('a').scalar.setInput('-'),
+                        false
+                    );
+                    f.fields.field('a').scalar.setInput('1');
+                } else if (transition === 'configuration') {
+                    f.setConfig(1);
+                    f.pages.getSnapshot();
+                    f.setConfig(0);
+                } else if (transition === 'owner') {
+                    f.setScope({ ownerId: 'B', revision: 1 });
+                    f.pages.getSnapshot();
+                    f.setScope({ ownerId: 'A', revision: 2 });
+                } else {
+                    // A→B→A presentation retains a monotonic adapter epoch.
+                    presentationRevision++;
+                    presentationRevision++;
+                }
+                if (transition !== 'presentation')
+                    assert.equal(request.isCurrent(), false);
+                release({
+                    type: 'confirm',
+                    isCurrent: () =>
+                        presentationRevision === capturedPresentationRevision,
+                });
+                await assert.rejects(flight);
+                assert.equal(tracked.counts.dispatch, 0);
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                let guardCalls = 0;
+                const f = reviewFixture(async () => ({
+                    type: 'confirm',
+                    isCurrent: () => {
+                        guardCalls++;
+                        assert(guardCalls <= 8, 'Decision guard is bounded');
+                        assert(
+                            f.fields
+                                .field('a')
+                                .setValue(`Reentrant guard ${guardCalls}`)
+                                .accepted
+                        );
+                        return true;
+                    },
+                }));
+                finalPage(f);
+                const tracked = trackedLifecycle();
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: tracked.lifecycle,
+                    })
+                );
+                assert(guardCalls > 0 && guardCalls <= 4);
+                assert.equal(tracked.counts.dispatch, 0);
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                let release;
+                let request;
+                const f = reviewFixture((r) => {
+                    request = r;
+                    return new Promise((resolve) => {
+                        release = resolve;
+                    });
+                });
+                finalPage(f);
+                const flight = f.pages.submit(f.pages.getSnapshot().revision);
+                await Promise.resolve(); // Dispose an opened Review, preserving its late completion.
+                assert(request);
+                f.pages.dispose();
+                const successor = forms.createFormPageOwner({
+                    fields: f.fields,
+                    isCurrent: () => true,
+                    configurationRevision: () => 0,
+                    review: async () => ({ type: 'edit' }),
+                });
+                const stop = successor.subscribe(() => {});
+                assert(
+                    f.fields.field('a').setValue('Successor answer').accepted
+                );
+                const expected = successor.getSnapshot();
+                release({ type: 'confirm', isCurrent: () => true });
+                await assert.rejects(flight);
+                assert.equal(request.signal.aborted, true);
+                assert.deepEqual(successor.getSnapshot(), expected);
+                assert.equal(
+                    f.fields.field('a').getSnapshot().value,
+                    'Successor answer'
+                );
+                assert.equal(f.calls.length, 0);
+                stop();
+                successor.dispose();
+                checks++;
+            }
+            for (const queuedWhen of ['before-review', 'during-review']) {
+                let reviews = 0;
+                let request;
+                let release;
+                const f = reviewFixture(
+                    (r) => {
+                        reviews++;
+                        request = r;
+                        return new Promise((resolve) => {
+                            release = resolve;
+                        });
+                    },
+                    (p) => {
+                        p.payload.fieldIdsToSchemas.b.fieldType =
+                            'multipleAttachments';
+                        p.payload.fieldIdsToSchemas.b.airtableField.config = {
+                            type: 'multipleAttachments',
+                            options: {},
+                        };
+                        p.payload.formRecord.data.b = [];
+                    }
+                );
+                let uploads = 0;
+                f.client.attachments.uploadFile = async () => {
+                    uploads++;
+                    throw new Error('Queued file test must never upload');
+                };
+                const journal = new forms.RecoveryJournal();
+                const scope = {
+                    owner: 'A',
+                    parentFieldId: null,
+                    tableId: null,
+                    childExtensionId: f.loaded.extensionId,
+                    context: 'direct-url',
+                };
+                const attachment = f.fields.attachment('b', {
+                    journal,
+                    scope,
+                    loadVersion: 1,
+                });
+                finalPage(f);
+                const native = structuredClone(
+                    f.fields.controller.getState().draft.data
+                );
+                const draftRevision =
+                    f.fields.controller.getState().draftRevision;
+                const tracked = trackedLifecycle();
+                let flight;
+                if (queuedWhen === 'during-review') {
+                    flight = f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: tracked.lifecycle,
+                    });
+                    await Promise.resolve(); // Queue files after the held adapter has opened.
+                    assert(request);
+                    assert.equal(reviews, 1);
+                    assert.equal(f.pages.getSnapshot().reviewing, true);
+                }
+                assert.equal(
+                    attachment.select([
+                        new File(['queued'], 'queued.txt', {
+                            type: 'text/plain',
+                        }),
+                    ]),
+                    true
+                );
+                assert.equal(f.fields.hasPendingFiles(), true);
+                assert.equal(f.pages.getSnapshot().canReview, false);
+                assert.equal(journal.blocking(scope, null), undefined);
+                if (queuedWhen === 'before-review') {
+                    await assert.rejects(
+                        f.pages.submit(f.pages.getSnapshot().revision, {
+                            lifecycle: tracked.lifecycle,
+                        })
+                    );
+                    assert.equal(reviews, 0);
+                } else {
+                    assert.equal(
+                        request.isCurrent(),
+                        false,
+                        'Queued files invalidate held prepared Review'
+                    );
+                    release({ type: 'confirm', isCurrent: () => true });
+                    await assert.rejects(flight);
+                }
+                assert.equal(tracked.counts.dispatch, 0);
+                assert.equal(f.calls.length, 0);
+                assert.equal(uploads, 0);
+                assert.deepEqual(
+                    f.fields.controller.getState().draft.data,
+                    native
+                );
+                assert.equal(
+                    f.fields.controller.getState().draftRevision,
+                    draftRevision
+                );
+                attachment.clear();
+                assert.equal(f.fields.hasPendingFiles(), false);
+                assert.equal(f.pages.getSnapshot().reviewing, false);
+                assert.equal(f.pages.getSnapshot().canReview, true);
+                assert.equal(journal.blocking(scope, null), undefined);
+                assert.equal(f.calls.length, 0);
+                assert.equal(uploads, 0);
+                checks++;
+            }
+            {
+                let reviews = 0;
+                const f = reviewFixture(async () => {
+                    reviews++;
+                    return { type: 'confirm', isCurrent: () => true };
+                });
+                finalPage(f);
+                const tracked = trackedLifecycle();
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: tracked.lifecycle,
+                        isCurrent: () => false,
+                    })
+                );
+                assert.equal(
+                    reviews,
+                    0,
+                    'False caller lease refuses before opening Review'
+                );
+                assert.equal(tracked.counts.dispatch, 0);
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                for (const mutation of ['native', 'raw']) {
+                    let reviews = 0;
+                    let edited = false;
+                    let callerChecks = 0;
+                    const f = reviewFixture(
+                        async () => {
+                            reviews++;
+                            return { type: 'confirm', isCurrent: () => true };
+                        },
+                        (p) => {
+                            p.payload.fieldIdsToSchemas.a.fieldType = 'number';
+                            p.payload.fieldIdsToSchemas.a.airtableField.config =
+                                {
+                                    type: 'number',
+                                    options: { precision: 0 },
+                                };
+                            p.payload.formRecord.data.a = 1;
+                        }
+                    );
+                    finalPage(f);
+                    const tracked = trackedLifecycle();
+                    await assert.rejects(
+                        f.pages.submit(f.pages.getSnapshot().revision, {
+                            lifecycle: tracked.lifecycle,
+                            isCurrent() {
+                                callerChecks++;
+                                assert(
+                                    callerChecks <= 8,
+                                    'Caller lease revalidation is bounded'
+                                );
+                                if (!edited) {
+                                    edited = true;
+                                    if (mutation === 'native')
+                                        assert(
+                                            f.fields.field('a').setValue(2)
+                                                .accepted
+                                        );
+                                    else
+                                        assert.equal(
+                                            f.fields
+                                                .field('a')
+                                                .scalar.setInput('-'),
+                                            false
+                                        );
+                                }
+                                return true;
+                            },
+                        })
+                    );
+                    assert(edited);
+                    assert(callerChecks > 0 && callerChecks <= 4);
+                    assert.equal(
+                        reviews,
+                        0,
+                        'Reentrant caller edit refuses before opening Review'
+                    );
+                    assert.equal(tracked.counts.dispatch, 0);
+                    assert.equal(f.calls.length, 0);
+                    assert.equal(f.pages.getSnapshot().reviewing, false);
+                }
                 checks++;
             }
             const oracle = JSON.parse(

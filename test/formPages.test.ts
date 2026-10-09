@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { File } from 'node:buffer';
 import { describe, it } from 'node:test';
-import { createFormPageOwner, FormPageError } from '../src/forms/pages.js';
+import {
+    createFormPageOwner,
+    FormPageError,
+    type FormPageOwnerOptions,
+} from '../src/forms/pages.js';
 import { validatePageField } from '../src/forms/pageValidation.js';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
 import { describeLoadedFormFields } from '../src/forms/helpers.js';
@@ -826,7 +831,7 @@ describe('multipage Form ownership', () => {
         });
         assert.equal(f.calls.length, 0);
     });
-    it('rejects configured prepared Review without bypassing it', async () => {
+    it('rejects configured prepared Review without an adapter', async () => {
         const f = fixture();
         f.pages.dispose();
         f.loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
@@ -1352,5 +1357,683 @@ describe('multipage Form ownership', () => {
             } as never;
         });
         assert.equal(readonly.pages.getSnapshot().status, 'ready');
+    });
+});
+
+type ReviewAdapter = NonNullable<FormPageOwnerOptions['review']>;
+type ReviewDecision = Awaited<ReturnType<ReviewAdapter>>;
+const reviewFixture = (
+    review: ReviewAdapter,
+    configure: (loaded: FormLoadedResult) => void = () => {}
+) => {
+    const f = fixture((loaded) => {
+        loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
+        configure(loaded);
+    });
+    f.pages.dispose();
+    let current = true;
+    let configuration = 0;
+    const pages = createFormPageOwner({
+        fields: f.fields,
+        review,
+        isCurrent: () => current,
+        configurationRevision: () => configuration,
+    });
+    return {
+        ...f,
+        pages,
+        retire: () => {
+            current = false;
+        },
+        configureRevision: (value: number) => {
+            configuration = value;
+        },
+    };
+};
+const reviewLastPage = (f: ReturnType<typeof reviewFixture>) => {
+    while (f.pages.getSnapshot().canNext)
+        assert.equal(
+            f.pages.next(f.pages.getSnapshot().revision).accepted,
+            true
+        );
+    assert.equal(f.pages.getSnapshot().activePageIndex, 2);
+    assert.equal(f.pages.getSnapshot().canReview, true);
+};
+describe('configured multipage Review authority', () => {
+    it('Edit receives detached complete answers and performs no lifecycle or Save', async () => {
+        let captured!: Parameters<ReviewAdapter>[0];
+        const f = reviewFixture(async (request) => {
+            captured = request;
+            assert.equal(request.isCurrent(), true);
+            request.draft.data.a = 'Presentation-only mutation';
+            request.loaded.payload.formRecord.data.b =
+                'Detached loaded mutation';
+            return { type: 'edit' };
+        });
+        reviewLastPage(f);
+        let lifecycle = 0;
+        await assert.rejects(
+            f.pages.submit(f.pages.getSnapshot().revision, {
+                lifecycle: {
+                    dispatch() {
+                        lifecycle++;
+                        return { accepted() {}, finish() {} };
+                    },
+                },
+            }),
+            (error: unknown) =>
+                error instanceof FormPageError &&
+                error.reason === 'review-cancelled'
+        );
+        assert.deepEqual(captured.draft.data.untouched, { text: 'native' });
+        assert.equal(f.fields.field('a').getSnapshot().value, 'A');
+        assert.equal(f.loaded.payload.formRecord.data.b, 'B');
+        assert.equal(f.pages.getSnapshot().activePageIndex, 2);
+        assert.equal(f.pages.getSnapshot().reviewing, false);
+        assert.equal(f.pages.getSnapshot().canReview, true);
+        assert.equal(lifecycle, 0);
+        assert.equal(f.calls.length, 0);
+    });
+
+    it('one current Confirm preserves the native envelope and delegates once', async () => {
+        let reviews = 0;
+        const f = reviewFixture(async () => {
+            reviews++;
+            return { type: 'confirm', isCurrent: () => true };
+        });
+        reviewLastPage(f);
+        let lifecycle = 0;
+        await f.pages.submit(f.pages.getSnapshot().revision, {
+            lifecycle: {
+                dispatch() {
+                    lifecycle++;
+                    return { accepted() {}, finish() {} };
+                },
+            },
+        });
+        assert.equal(reviews, 1);
+        assert.equal(lifecycle, 1);
+        assert.equal(f.calls.length, 1);
+        assert.deepEqual(f.calls[0]!.formRecord.data, {
+            a: 'A',
+            b: 'B',
+            c: 'C',
+            untouched: { text: 'native' },
+        });
+        assert(
+            f.calls[0]!.formFieldIdsWithUnsavedChanges.includes('untouched')
+        );
+    });
+
+    for (const invalidField of ['a', 'c']) {
+        it(`ordinary required error on ${invalidField} allows Review but Confirm validates all pages before dispatch`, async () => {
+            let reviews = 0;
+            const f = reviewFixture(async () => {
+                reviews++;
+                return { type: 'confirm', isCurrent: () => true };
+            });
+            reviewLastPage(f);
+            assert.equal(
+                f.fields.field(invalidField).setValue('').accepted,
+                true
+            );
+            assert.equal(f.pages.getSnapshot().canReview, true);
+            let lifecycle = 0;
+            await assert.rejects(
+                f.pages.submit(f.pages.getSnapshot().revision, {
+                    lifecycle: {
+                        dispatch() {
+                            lifecycle++;
+                            return { accepted() {}, finish() {} };
+                        },
+                    },
+                })
+            );
+            assert.equal(reviews, 1);
+            assert.equal(lifecycle, 0);
+            assert.equal(f.calls.length, 0);
+            assert.equal(f.pages.getSnapshot().activePageIndex, 2);
+            assert.equal(f.fields.field(invalidField).getSnapshot().value, '');
+        });
+    }
+
+    it('a character limit allows Review but prevents Confirm transport', async () => {
+        let reviews = 0;
+        const f = reviewFixture(
+            async () => {
+                reviews++;
+                return { type: 'confirm', isCurrent: () => true };
+            },
+            (loaded) => {
+                loaded.payload.fieldIdsToSchemas.a!.miniExtConfig = {
+                    required: true,
+                    characterLimit: 1,
+                };
+            }
+        );
+        reviewLastPage(f);
+        assert.equal(f.fields.field('a').setValue('Too long').accepted, true);
+        assert.equal(f.pages.getSnapshot().canReview, true);
+        await assert.rejects(f.pages.submit(f.pages.getSnapshot().revision));
+        assert.equal(reviews, 1);
+        assert.equal(f.calls.length, 0);
+    });
+
+    it('a caller abort ends held Review without waiting for the adapter decision', async () => {
+        const held = deferred<ReviewDecision>();
+        let request!: Parameters<ReviewAdapter>[0];
+        const f = reviewFixture((value) => {
+            request = value;
+            return held.promise;
+        });
+        reviewLastPage(f);
+        const abort = new AbortController();
+        const saving = f.pages.submit(f.pages.getSnapshot().revision, {
+            signal: abort.signal,
+        });
+        await Promise.resolve();
+        abort.abort();
+        await assert.rejects(
+            saving,
+            (error: unknown) =>
+                error instanceof FormPageError &&
+                error.reason === 'review-cancelled'
+        );
+        assert.equal(request.signal.aborted, true);
+        assert.equal(f.pages.getSnapshot().reviewing, false);
+        assert.equal(f.calls.length, 0);
+        held.resolve({ type: 'confirm', isCurrent: () => true });
+    });
+
+    it('held Review is single flight and refuses Next, Back and another Submit', async () => {
+        const held = deferred<ReviewDecision>();
+        let reviews = 0;
+        const f = reviewFixture(() => {
+            reviews++;
+            return held.promise;
+        });
+        reviewLastPage(f);
+        const saving = f.pages.submit(f.pages.getSnapshot().revision);
+        await Promise.resolve();
+        const during = f.pages.getSnapshot();
+        assert.equal(during.reviewing, true);
+        assert.equal(during.canReview, false);
+        assert.equal(during.canNext, false);
+        assert.equal(during.canBack, false);
+        assert.equal(during.canSubmit, false);
+        assert.equal(f.pages.next(during.revision).accepted, false);
+        assert.equal(f.pages.back(during.revision).accepted, false);
+        await assert.rejects(f.pages.submit(during.revision));
+        assert.equal(reviews, 1);
+        assert.equal(f.calls.length, 0);
+        held.resolve({ type: 'edit' });
+        await assert.rejects(saving);
+        assert.equal(f.pages.getSnapshot().reviewing, false);
+    });
+
+    for (const replacement of [
+        'draft-ABA',
+        'configuration',
+        'owner',
+    ] as const) {
+        it(`held Confirm is invalidated by ${replacement}`, async () => {
+            const held = deferred<ReviewDecision>();
+            let request!: Parameters<ReviewAdapter>[0];
+            const f = reviewFixture((value) => {
+                request = value;
+                return held.promise;
+            });
+            reviewLastPage(f);
+            const saving = f.pages.submit(f.pages.getSnapshot().revision);
+            await Promise.resolve();
+            if (replacement === 'draft-ABA') {
+                assert.equal(f.fields.controller.write('a', 'Changed'), true);
+                assert.equal(f.fields.controller.write('a', 'A'), true);
+            } else if (replacement === 'configuration') f.configureRevision(1);
+            else f.retire();
+            assert.equal(request.isCurrent(), false);
+            held.resolve({ type: 'confirm', isCurrent: () => true });
+            await assert.rejects(saving);
+            assert.equal(f.calls.length, 0);
+        });
+    }
+
+    it('a reentrant confirmation presentation predicate cannot save a newer draft', async () => {
+        let changed = false;
+        const f = reviewFixture(async () => ({
+            type: 'confirm',
+            isCurrent: () => {
+                if (!changed) {
+                    changed = true;
+                    assert.equal(f.fields.controller.write('a', ''), true);
+                }
+                return true;
+            },
+        }));
+        reviewLastPage(f);
+        let lifecycle = 0;
+        await assert.rejects(
+            f.pages.submit(f.pages.getSnapshot().revision, {
+                lifecycle: {
+                    dispatch() {
+                        lifecycle++;
+                        return { accepted() {}, finish() {} };
+                    },
+                },
+            })
+        );
+        assert.equal(changed, true);
+        assert.equal(f.fields.field('a').getSnapshot().value, '');
+        assert.equal(lifecycle, 0);
+        assert.equal(f.calls.length, 0);
+    });
+
+    for (const stage of ['before-review', 'held-review'] as const) {
+        it(`invalid raw input ${stage} blocks Confirm without changing native data`, async () => {
+            const held = deferred<ReviewDecision>();
+            let reviews = 0;
+            const f = reviewFixture(
+                () => {
+                    reviews++;
+                    return held.promise;
+                },
+                (loaded) => {
+                    const schema = loaded.payload.fieldIdsToSchemas.a!;
+                    schema.fieldType = 'number';
+                    schema.airtableField.config = {
+                        type: 'number',
+                        options: { precision: 0 },
+                    };
+                    loaded.payload.formRecord.data.a = 1;
+                }
+            );
+            reviewLastPage(f);
+            const revision = f.pages.getSnapshot().revision;
+            let saving: ReturnType<typeof f.pages.submit>;
+            if (stage === 'held-review') {
+                saving = f.pages.submit(revision);
+                await Promise.resolve();
+            }
+            assert.equal(f.fields.field('a').scalar!.setInput('-'), false);
+            assert.equal(f.fields.controller.getState().draftRevision, 0);
+            if (stage === 'before-review') {
+                assert.equal(f.pages.getSnapshot().canReview, false);
+                saving = f.pages.submit(f.pages.getSnapshot().revision);
+            } else held.resolve({ type: 'confirm', isCurrent: () => true });
+            await assert.rejects(saving!);
+            assert.equal(reviews, stage === 'before-review' ? 0 : 1);
+            assert.equal(f.fields.field('a').getSnapshot().value, 1);
+            assert.equal(f.calls.length, 0);
+        });
+    }
+
+    for (const stage of ['before-review', 'held-review'] as const) {
+        it(`a queued attachment ${stage} refuses Review transport and clearing restores admission`, async () => {
+            const held = deferred<ReviewDecision>();
+            let reviews = 0;
+            const f = reviewFixture(
+                () => {
+                    reviews++;
+                    return stage === 'held-review' && reviews === 1
+                        ? held.promise
+                        : Promise.resolve({ type: 'edit' });
+                },
+                (loaded) => {
+                    const attachment = structuredClone(
+                        loadedForm().payload.fieldIdsToSchemas.fld_files!
+                    );
+                    attachment.airtableField.id = 'b';
+                    attachment.airtableField.name = 'b';
+                    attachment.miniExtConfig = { headerSectionTitle: 'Second' };
+                    loaded.payload.fieldIdsToSchemas.b = attachment;
+                    loaded.payload.formRecord.data.b = [];
+                }
+            );
+            const journal = new RecoveryJournal();
+            const scope = {
+                owner: 'A',
+                parentFieldId: null,
+                tableId: null,
+                childExtensionId: 'form',
+                context: 'modal' as const,
+            };
+            let journalAttempts = 0;
+            const begin = journal.begin.bind(journal);
+            journal.begin = (...args: Parameters<typeof journal.begin>) => {
+                journalAttempts++;
+                return begin(...args);
+            };
+            const attachment = f.fields.attachment('b', {
+                journal,
+                scope,
+                loadVersion: 1,
+            });
+            let uploads = 0;
+            f.client.attachments.uploadFile = async () => {
+                uploads++;
+                throw Error('Queued selection must not upload implicitly');
+            };
+            reviewLastPage(f);
+            let saving: ReturnType<typeof f.pages.submit> | undefined;
+            const lifecycle = {
+                dispatch() {
+                    journal.begin(scope, null, 'save', 1);
+                    return { accepted() {}, finish() {} };
+                },
+            };
+            if (stage === 'held-review') {
+                saving = f.pages.submit(f.pages.getSnapshot().revision, {
+                    lifecycle,
+                });
+                await Promise.resolve();
+            }
+            const selected = new File(['queued'], 'queued.txt', {
+                type: 'text/plain',
+            }) as unknown as globalThis.File;
+            assert.equal(attachment.select([selected]), true);
+            assert.equal(f.fields.hasPendingFiles(), true);
+            assert.equal(f.fields.controller.getState().draftRevision, 0);
+            assert.equal(f.pages.getSnapshot().canReview, false);
+            if (stage === 'held-review') {
+                held.resolve({ type: 'confirm', isCurrent: () => true });
+                await assert.rejects(saving!);
+            } else {
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle,
+                    })
+                );
+                assert.equal(reviews, 0);
+            }
+            assert.equal(journalAttempts, 0);
+            assert.equal(journal.unknown('A').length, 0);
+            assert.equal(uploads, 0);
+            assert.equal(f.calls.length, 0);
+            assert.deepEqual(f.fields.field('b').getSnapshot().value, []);
+
+            attachment.clear();
+            assert.equal(f.fields.hasPendingFiles(), false);
+            assert.equal(f.pages.getSnapshot().canReview, true);
+            await assert.rejects(
+                f.pages.submit(f.pages.getSnapshot().revision, { lifecycle }),
+                (error: unknown) =>
+                    error instanceof FormPageError &&
+                    error.reason === 'review-cancelled'
+            );
+            assert.equal(reviews, stage === 'held-review' ? 2 : 1);
+            assert.equal(journalAttempts, 0);
+            assert.equal(uploads, 0);
+            assert.equal(f.calls.length, 0);
+        });
+    }
+
+    it('pending reload blocks Review without invoking the adapter', async () => {
+        let reviews = 0;
+        const f = reviewFixture(async () => {
+            reviews++;
+            return { type: 'edit' };
+        });
+        reviewLastPage(f);
+        const held = deferred<FormLoadedResult>();
+        const loading = f.fields.reload({
+            dirty: 'keep',
+            read: () => held.promise,
+        });
+        assert.equal(f.pages.getSnapshot().canReview, false);
+        await assert.rejects(f.pages.submit(f.pages.getSnapshot().revision));
+        assert.equal(reviews, 0);
+        assert.equal(f.calls.length, 0);
+        held.resolve(structuredClone(f.loaded));
+        await loading;
+    });
+
+    for (const mode of [
+        'compute',
+        'automatic',
+        'unsupported-validation',
+    ] as const) {
+        it(`${mode} is not admitted by supplying a Review adapter`, async () => {
+            let reviews = 0;
+            const f = reviewFixture(
+                async () => {
+                    reviews++;
+                    return { type: 'edit' };
+                },
+                (loaded) => {
+                    if (mode === 'compute')
+                        loaded.payload.publicFields.state.enableFormComputeMode = true;
+                    else if (mode === 'automatic')
+                        loaded.payload.publicFields.state.autoSubmitAfterPrefill = true;
+                    else
+                        loaded.payload.fieldIdsToSchemas.a!.miniExtConfig = {
+                            required: true,
+                            requireOpenLinkedRecords: true,
+                        } as never;
+                }
+            );
+            const snapshot = f.pages.getSnapshot();
+            assert.equal(snapshot.canReview, false);
+            assert.equal(f.pages.next(snapshot.revision).accepted, false);
+            await assert.rejects(
+                f.pages.submit(f.pages.getSnapshot().revision)
+            );
+            assert.equal(reviews, 0);
+            assert.equal(f.calls.length, 0);
+        });
+    }
+
+    it('a continuously mutating confirmation predicate refuses in bounded work', async () => {
+        let checks = 0;
+        let sentinelReached = false;
+        const f = reviewFixture(async () => ({
+            type: 'confirm',
+            isCurrent: () => {
+                checks++;
+                if (checks > 12) {
+                    sentinelReached = true;
+                    throw Error('Unbounded Review ownership predicate');
+                }
+                assert.equal(
+                    f.fields.controller.write('a', `Changed ${checks}`),
+                    true
+                );
+                return true;
+            },
+        }));
+        reviewLastPage(f);
+        await assert.rejects(f.pages.submit(f.pages.getSnapshot().revision));
+        assert.equal(sentinelReached, false);
+        assert(checks > 0 && checks <= 4);
+        assert.equal(f.calls.length, 0);
+        assert.equal(f.pages.getSnapshot().reviewing, false);
+    });
+
+    it('an unknown confirmed Save cannot reopen Review or replay transport', async () => {
+        let reviews = 0;
+        const f = reviewFixture(async () => {
+            reviews++;
+            return { type: 'confirm', isCurrent: () => true };
+        });
+        reviewLastPage(f);
+        const held = deferred<ReturnType<typeof invalidForm>>();
+        const dispatched = deferred<void>();
+        f.client.forms.save = (input) => {
+            f.calls.push(input);
+            dispatched.resolve();
+            return held.promise;
+        };
+        const saving = f.pages.submit(f.pages.getSnapshot().revision);
+        const rejected = assert.rejects(saving);
+        await dispatched.promise;
+        f.fields.controller.cancel();
+        held.reject(Error('Unknown confirmed Save outcome'));
+        await rejected;
+        assert.equal(f.pages.getSnapshot().canReview, false);
+        await assert.rejects(f.pages.submit(f.pages.getSnapshot().revision));
+        assert.equal(reviews, 1);
+        assert.equal(f.calls.length, 1);
+    });
+
+    it('adapter failure restores only the current review gate without lifecycle work', async () => {
+        const f = reviewFixture(async () => {
+            throw Error('Synthetic dialog failed');
+        });
+        reviewLastPage(f);
+        let lifecycle = 0;
+        await assert.rejects(
+            f.pages.submit(f.pages.getSnapshot().revision, {
+                lifecycle: {
+                    dispatch() {
+                        lifecycle++;
+                        return { accepted() {}, finish() {} };
+                    },
+                },
+            })
+        );
+        assert.equal(f.pages.getSnapshot().reviewing, false);
+        assert.equal(f.pages.getSnapshot().canReview, true);
+        assert.equal(lifecycle, 0);
+        assert.equal(f.calls.length, 0);
+    });
+
+    for (const change of ['raw-input', 'configuration', 'owner'] as const) {
+        it(`a reentrant presentation check changing ${change} cannot dispatch Confirm`, async () => {
+            let changed = false;
+            const f = reviewFixture(
+                async () => ({
+                    type: 'confirm',
+                    isCurrent: () => {
+                        if (!changed) {
+                            changed = true;
+                            if (change === 'raw-input')
+                                assert.equal(
+                                    f.fields.field('a').scalar!.setInput('-'),
+                                    false
+                                );
+                            else if (change === 'configuration')
+                                f.configureRevision(1);
+                            else f.retire();
+                        }
+                        return true;
+                    },
+                }),
+                (loaded) => {
+                    const schema = loaded.payload.fieldIdsToSchemas.a!;
+                    schema.fieldType = 'number';
+                    schema.airtableField.config = {
+                        type: 'number',
+                        options: { precision: 0 },
+                    };
+                    loaded.payload.formRecord.data.a = 1;
+                }
+            );
+            reviewLastPage(f);
+            let lifecycle = 0;
+            await assert.rejects(
+                f.pages.submit(f.pages.getSnapshot().revision, {
+                    lifecycle: {
+                        dispatch() {
+                            lifecycle++;
+                            return { accepted() {}, finish() {} };
+                        },
+                    },
+                })
+            );
+            assert.equal(changed, true);
+            assert.equal(f.fields.controller.getState().draftRevision, 0);
+            assert.equal(f.fields.field('a').getSnapshot().value, 1);
+            assert.equal(lifecycle, 0);
+            assert.equal(f.calls.length, 0);
+        });
+    }
+
+    for (const fence of ['not-current', 'raw-input-change'] as const) {
+        it(`a caller Save fence ${fence} refuses before opening Review`, async () => {
+            let reviews = 0;
+            const f = reviewFixture(
+                async () => {
+                    reviews++;
+                    return { type: 'confirm', isCurrent: () => true };
+                },
+                (loaded) => {
+                    const schema = loaded.payload.fieldIdsToSchemas.a!;
+                    schema.fieldType = 'number';
+                    schema.airtableField.config = {
+                        type: 'number',
+                        options: { precision: 0 },
+                    };
+                    loaded.payload.formRecord.data.a = 1;
+                }
+            );
+            reviewLastPage(f);
+            let checks = 0;
+            let lifecycle = 0;
+            await assert.rejects(
+                f.pages.submit(f.pages.getSnapshot().revision, {
+                    isCurrent: () => {
+                        checks++;
+                        if (fence === 'not-current') return false;
+                        if (checks === 1)
+                            assert.equal(
+                                f.fields.field('a').scalar!.setInput('-'),
+                                false
+                            );
+                        return true;
+                    },
+                    lifecycle: {
+                        dispatch() {
+                            lifecycle++;
+                            return { accepted() {}, finish() {} };
+                        },
+                    },
+                })
+            );
+            assert(checks > 0 && checks <= 4);
+            assert.equal(reviews, 0);
+            assert.equal(lifecycle, 0);
+            assert.equal(f.calls.length, 0);
+            assert.equal(f.fields.field('a').getSnapshot().value, 1);
+            assert.equal(f.fields.controller.getState().draftRevision, 0);
+            assert.equal(f.pages.getSnapshot().reviewing, false);
+        });
+    }
+
+    it('a stale presentation decision never dispatches', async () => {
+        const f = reviewFixture(async () => ({
+            type: 'confirm',
+            isCurrent: () => false,
+        }));
+        reviewLastPage(f);
+        await assert.rejects(f.pages.submit(f.pages.getSnapshot().revision));
+        assert.equal(f.calls.length, 0);
+    });
+
+    it('disposal aborts held Review and its cleanup cannot change a successor owner', async () => {
+        const held = deferred<ReviewDecision>();
+        let request!: Parameters<ReviewAdapter>[0];
+        const f = reviewFixture((value) => {
+            request = value;
+            return held.promise;
+        });
+        reviewLastPage(f);
+        const saving = f.pages.submit(f.pages.getSnapshot().revision);
+        await Promise.resolve();
+        f.pages.dispose();
+        assert.equal(request.signal.aborted, true);
+        const successor = createFormPageOwner({
+            fields: f.fields,
+            review: async () => ({ type: 'edit' }),
+            isCurrent: () => true,
+            configurationRevision: () => 0,
+        });
+        const before = successor.getSnapshot();
+        held.resolve({ type: 'confirm', isCurrent: () => true });
+        await assert.rejects(saving);
+        assert.deepEqual(successor.getSnapshot(), before);
+        assert.equal(
+            f.fields.field('a').setValue('Successor edit').accepted,
+            true
+        );
+        assert.equal(f.calls.length, 0);
     });
 });

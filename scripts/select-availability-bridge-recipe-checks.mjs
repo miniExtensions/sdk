@@ -15,6 +15,9 @@ export async function checkSelectAvailabilityBridgeRecipe({
     consumerDirectory,
     happyDomModulePath,
 }) {
+    const messagePortsBefore = process
+        .getActiveResourcesInfo()
+        .filter((resource) => resource === 'MessagePort').length;
     const consumer = realpathSync(consumerDirectory);
     const require = createRequire(join(consumer, 'package.json'));
     const installed = realpathSync(
@@ -51,7 +54,10 @@ export async function checkSelectAvailabilityBridgeRecipe({
             loader: 'tsx',
         },
         bundle: true,
-        platform: 'browser',
+        // The DOM recipe runs in Node's installed React test consumer. Keep its
+        // peers external so act uses Node scheduling rather than browser ports.
+        platform: 'node',
+        external: ['react', 'react-dom', '@miniextensions/sdk/react'],
         format: 'esm',
         outfile,
         logLevel: 'silent',
@@ -354,5 +360,12 @@ export async function checkSelectAvailabilityBridgeRecipe({
             if (descriptor) Object.defineProperty(globalThis, key, descriptor);
             else delete globalThis[key];
         }
+        assert.equal(
+            process
+                .getActiveResourcesInfo()
+                .filter((resource) => resource === 'MessagePort').length,
+            messagePortsBefore,
+            'The installed React recipe must release its Node test resources'
+        );
     }
 }

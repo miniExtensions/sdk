@@ -922,8 +922,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         selectedPolicyProof.fixtureCases * 2 +
             selectedPolicyProof.lifecycleGroups
     );
+    assert.equal(selectedPolicyProof.aliasChecks, 14);
     console.log(
-        `Installed selected-record policy: ${selectedPolicyProof.checks} ESM/CJS fixture and lifecycle groups passed; synthetic transport only.`
+        `Installed selected-record policy: ${selectedPolicyProof.checks} ESM/CJS fixture and lifecycle groups plus ${selectedPolicyProof.aliasChecks} dependency-alias checks passed; synthetic transport only.`
     );
     const rendererProof = await checkRendererConsumer({
         consumerDirectory: temporaryDirectory,

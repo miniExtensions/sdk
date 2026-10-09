@@ -164,6 +164,91 @@ it('missing record keys are canonical empty only when returned field metadata ex
     assert.deepEqual(result.records, []);
 });
 
+it('dependency name aliases cannot replace or disagree with ID-keyed selected values', () => {
+    const metadata = { ...field('value'), name: 'Label' };
+    const values: AirtableRecord['fields'][] = [
+        { value: 'excluded', Label: 'keep' },
+        { Label: 'keep' },
+        { value: 'keep', Label: 'keep' },
+        { value: null, Label: null },
+    ];
+    for (const fields of values) {
+        for (const config of [
+            {
+                filterLinkedRecordsConditionFields: condition(
+                    'singleLineText',
+                    'contains',
+                    'keep'
+                ),
+            },
+            { sortFields: [sort()] },
+        ]) {
+            const records = [{ id: 'selected', fields }];
+            const before = structuredClone({ records, config });
+            const result = project(config, records, [metadata]);
+            assert.deepEqual(result.policy, {
+                supported: false,
+                reasons: [
+                    'sortFields' in config
+                        ? 'selected-sort'
+                        : 'selected-condition',
+                ],
+                state: 'unsupported',
+                diagnostics: [{ code: 'invalid-value', fieldId: 'value' }],
+            });
+            assert.deepEqual(result.records, []);
+            assert.deepEqual({ records, config }, before);
+        }
+    }
+});
+
+it('ID-only dependencies preserve empty values and ignore unrelated names', () => {
+    const metadata = { ...field('value'), name: 'Label' };
+    const records: AirtableRecord[] = [
+        { id: 'excluded', fields: { value: 'excluded', Other: 'keep' } },
+        { id: 'included', fields: { value: 'keep' } },
+        { id: 'missing', fields: {} },
+        { id: 'null', fields: { value: null } },
+    ];
+    const result = project(
+        {
+            filterLinkedRecordsConditionFields: condition(
+                'singleLineText',
+                'contains',
+                'keep'
+            ),
+        },
+        records,
+        [metadata]
+    );
+    assert.equal(result.policy.state, 'applied');
+    assert.deepEqual(
+        result.records.map((record) => record.id),
+        ['included']
+    );
+    const empty = project(
+        {
+            filterLinkedRecordsConditionFields: condition(
+                'singleLineText',
+                'isEmpty',
+                null
+            ),
+        },
+        records,
+        [metadata]
+    );
+    assert.deepEqual(
+        empty.records.map((record) => record.id),
+        ['missing', 'null']
+    );
+    assert.equal(
+        project({ filterLinkedRecordsConditionFields: condition() }, [
+            row('same-id-name', 'keep'),
+        ]).policy.state,
+        'applied'
+    );
+});
+
 it('unsupported selected conditions and sort structures fail closed', () => {
     for (const config of [
         {

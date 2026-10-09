@@ -97,6 +97,7 @@ export async function checkSelectedRecordPolicyConsumer({ consumerDirectory }) {
         ])
     );
     let checks = 0;
+    let aliasChecks = 0;
     for (const api of [esm, cjs]) {
         for (const test of canonical.cases) {
             const { input, expected } = test;
@@ -189,6 +190,163 @@ export async function checkSelectedRecordPolicyConsumer({ consumerDirectory }) {
                     `${test.name}: full save unchanged`
                 );
                 checks++;
+            } finally {
+                owner.destroy();
+            }
+        }
+        // Dependency-name aliases must fail closed even when they agree with
+        // the ID value; unrelated names do not affect an ID-only condition.
+        const aliasCases = [
+            {
+                name: 'conflicting own alias',
+                values: { fld_name: 'excluded', Label: 'keep' },
+                unsupported: true,
+            },
+            {
+                name: 'name-only own alias',
+                values: { Label: 'keep' },
+                unsupported: true,
+            },
+            {
+                name: 'matching own alias',
+                values: { fld_name: 'keep', Label: 'keep' },
+                unsupported: true,
+            },
+            {
+                name: 'ID-only value',
+                values: { fld_name: 'keep' },
+                selected: true,
+            },
+            {
+                name: 'unrelated alias',
+                values: { fld_name: 'keep', Other: 'excluded' },
+                selected: true,
+            },
+            { name: 'missing ID without alias', values: {}, selected: false },
+            {
+                name: 'name equals ID',
+                values: { fld_name: 'keep' },
+                fieldName: 'fld_name',
+                selected: true,
+            },
+        ];
+        for (const test of aliasCases) {
+            const input = {
+                fields: [
+                    {
+                        id: 'fld_name',
+                        name: test.fieldName ?? 'Label',
+                        description: null,
+                        isComputed: false,
+                        isPrimaryField: true,
+                        config: { type: 'singleLineText', options: null },
+                    },
+                    {
+                        id: 'fld_unrelated',
+                        name: 'Other',
+                        description: null,
+                        isComputed: false,
+                        isPrimaryField: false,
+                        config: { type: 'singleLineText', options: null },
+                    },
+                ],
+                records: [
+                    { id: 'rec_second', fields: structuredClone(test.values) },
+                    { id: 'rec_first', fields: { fld_name: 'keep' } },
+                ],
+                recordIds: ['rec_second', 'rec_first', 'rec_second'],
+                config: {
+                    filterLinkedRecordsConditionFields: {
+                        logicalOperator: 'and',
+                        conditions: [
+                            {
+                                id: 'alias_condition',
+                                type: 'singleCondition',
+                                setting: {
+                                    type: 'contains',
+                                    fieldType: 'singleLineText',
+                                    idOrName: { type: 'id', id: 'fld_name' },
+                                    value: 'keep',
+                                },
+                            },
+                        ],
+                    },
+                },
+            };
+            const loaded = loadedForm(input);
+            const owner = api.forms.createFormFieldBindings({
+                loaded,
+                client: {
+                    getSession: () => ({ visitor: 'policy-alias' }),
+                    linkedRecords: {
+                        loadSelectedRecords: async () => ({
+                            tbl_children: table(input),
+                        }),
+                    },
+                },
+                getScope: () => ({ ownerId: 'policy-alias', revision: 0 }),
+                isCurrent: () => true,
+                configurationRevision: () => 0,
+                saveOptions,
+            });
+            try {
+                const originalDraft = structuredClone(
+                    owner.controller.getState().draft
+                );
+                const originalSave = api.forms.createFormSaveInput({
+                    loaded,
+                    draft: originalDraft,
+                    options: saveOptions,
+                });
+                const facet = owner.linkedRecords('fld_parent');
+                assert.equal(await facet.readSelected(), true, test.name);
+                const snapshot = facet.getSnapshot();
+                assert.equal(
+                    snapshot.selectedPolicy.state,
+                    test.unsupported ? 'unsupported' : 'applied',
+                    test.name
+                );
+                assert.equal(
+                    snapshot.selectedPolicy.supported,
+                    !test.unsupported,
+                    test.name
+                );
+                assert.deepEqual(
+                    snapshot.selectedPolicy.diagnostics,
+                    test.unsupported
+                        ? [{ code: 'invalid-value', fieldId: 'fld_name' }]
+                        : [],
+                    test.name
+                );
+                assert.deepEqual(
+                    ids(snapshot),
+                    test.unsupported
+                        ? []
+                        : test.selected
+                          ? input.recordIds
+                          : ['rec_first'],
+                    test.name
+                );
+                assert.deepEqual(
+                    owner.field('fld_parent').getSnapshot().value,
+                    input.recordIds,
+                    `${test.name}: native order and duplicates`
+                );
+                assert.deepEqual(
+                    owner.controller.getState().draft,
+                    originalDraft,
+                    `${test.name}: full draft unchanged`
+                );
+                assert.deepEqual(
+                    api.forms.createFormSaveInput({
+                        loaded,
+                        draft: owner.controller.getState().draft,
+                        options: saveOptions,
+                    }),
+                    originalSave,
+                    `${test.name}: full save unchanged`
+                );
+                aliasChecks++;
             } finally {
                 owner.destroy();
             }
@@ -378,6 +536,7 @@ export async function checkSelectedRecordPolicyConsumer({ consumerDirectory }) {
     return {
         checks,
         fixtureCases: canonical.cases.length,
+        aliasChecks,
         lifecycleGroups: 12,
     };
 }

@@ -275,6 +275,14 @@ export function projectSelectedRecordsPolicy(input: {
         for (const record of input.records) {
             const values = new Map<string, Primitive>();
             for (const field of dependencies.values()) {
+                // The runner prefers own name keys, but accepted native values
+                // and sorting are ID-keyed. Match visibility's conservative
+                // refusal rather than evaluating an unchecked name alias.
+                if (
+                    field.name !== field.id &&
+                    Object.hasOwn(record.fields, field.name)
+                )
+                    return refuse('invalid-value', field.id);
                 const value = record.fields[field.id];
                 if (value != null) {
                     const type = field.config.type;

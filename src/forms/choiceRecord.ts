@@ -5,7 +5,7 @@ import type {
     RuntimeFieldSchema,
 } from '../runtime/types.js';
 import { getSelectFieldPolicy } from '../ui/selectPolicy.js';
-import { createScalarFormRecordProjection } from './projection.js';
+import { createFormConditionRecordProjection } from './projection.js';
 import { evaluateFormFieldVisibility } from './visibility.js';
 const settings = (value: Record<string, unknown>): Record<string, unknown> =>
     value.state != null &&
@@ -47,7 +47,7 @@ export function formChoiceConditionRecord(
             pageMode !== 'multi-page'
         )
             return null;
-        const projection = createScalarFormRecordProjection({
+        const projection = createFormConditionRecordProjection({
             fieldIds: page.payload.fieldIdsInForm,
             fieldIdsToSchemas: page.payload.fieldIdsToSchemas,
             airtableFields: schemas.map((schema) => schema.airtableField),

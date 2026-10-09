@@ -11,7 +11,7 @@ import {
     type CompileRuntimeConditionsInput,
 } from './conditions.js';
 import {
-    evaluateFormFieldVisibility,
+    evaluateFormFieldVisibilityWithPolicy,
     type FormFieldVisibility,
     type FormVisibilityDiagnostic,
 } from './visibility.js';
@@ -86,17 +86,27 @@ export function createScalarFormRecordProjection(
     return project(input, 'sections');
 }
 
+/** Internal Form consumer: shares ordered projection with the Form driver policy. */
+export function createFormConditionRecordProjection(
+    input: CreateScalarFormRecordProjectionInput
+): ScalarFormRecordProjection {
+    return project(input, 'sections', 'form');
+}
+
 function project(
     input: CreateFlatScalarFormRecordProjectionInput,
-    mode: 'flat'
+    mode: 'flat',
+    policy?: 'legacy-flat' | 'form'
 ): FlatScalarFormRecordProjection;
 function project(
     input: CreateScalarFormRecordProjectionInput,
-    mode: 'sections'
+    mode: 'sections',
+    policy?: 'legacy-flat' | 'form'
 ): ScalarFormRecordProjection;
 function project(
     input: CreateScalarFormRecordProjectionInput,
-    mode: 'flat' | 'sections'
+    mode: 'flat' | 'sections',
+    policy: 'legacy-flat' | 'form' = 'legacy-flat'
 ): FlatScalarFormRecordProjection | ScalarFormRecordProjection {
     const diagnostics: FormVisibilityDiagnostic[] = [];
     try {
@@ -263,14 +273,14 @@ function project(
                     section =
                         config.applyFieldConditionsToSection === true &&
                         config.conditionalFields != null
-                            ? predicate(field, input, diagnostics)
+                            ? predicate(field, input, diagnostics, policy)
                             : null;
                     if (section?.type === 'blocked')
                         return { ...section, diagnostics };
                 }
             }
             // Validate own predicates even beneath a hidden section.
-            const visibility = predicate(field, input, diagnostics);
+            const visibility = predicate(field, input, diagnostics, policy);
             if (visibility.type === 'blocked')
                 return { ...visibility, diagnostics };
             if (section?.type === 'hidden' || visibility.type === 'hidden')
@@ -297,7 +307,8 @@ function project(
 function predicate(
     field: RuntimeFieldSchema,
     input: CreateScalarFormRecordProjectionInput,
-    diagnostics: FormVisibilityDiagnostic[]
+    diagnostics: FormVisibilityDiagnostic[],
+    policy: 'legacy-flat' | 'form'
 ): FormFieldVisibility {
     const compiled = compileRuntimeConditions({
         conditions:
@@ -324,22 +335,25 @@ function predicate(
                 };
         }
     }
-    const visibility = evaluateFormFieldVisibility({
-        field: {
-            ...field,
-            miniExtConfig: {
-                ...field.miniExtConfig,
-                // Native empty hiding belongs to presentation, not
-                // canonical conditional-record pruning.
-                hideFieldIfEmpty: false,
+    const visibility = evaluateFormFieldVisibilityWithPolicy(
+        {
+            field: {
+                ...field,
+                miniExtConfig: {
+                    ...field.miniExtConfig,
+                    // Native empty hiding belongs to presentation, not
+                    // canonical conditional-record pruning.
+                    hideFieldIfEmpty: false,
+                },
             },
+            airtableFields: input.airtableFields,
+            data: input.data,
+            formRecordType: 'create',
+            evaluationMode: 'runtime',
+            invalidConditionMode: input.invalidConditionMode,
         },
-        airtableFields: input.airtableFields,
-        data: input.data,
-        formRecordType: 'create',
-        evaluationMode: 'runtime',
-        invalidConditionMode: input.invalidConditionMode,
-    });
+        policy
+    );
     diagnostics.push(...visibility.diagnostics);
     if (visibility.type === 'blocked') return { ...visibility, diagnostics };
     return visibility;

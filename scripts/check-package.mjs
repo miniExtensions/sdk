@@ -20,6 +20,8 @@ import {
     selectAvailabilityBridgeTypedConsumer,
 } from './select-availability-bridge-consumer-checks.mjs';
 import { checkSelectAvailabilityBridgeRecipe } from './select-availability-bridge-recipe-checks.mjs';
+import { checkSingleSelectFormDriverConsumer } from './single-select-form-driver-consumer-checks.mjs';
+import { checkSingleSelectFormDriverRecipe } from './single-select-form-driver-recipe-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
@@ -1083,6 +1085,20 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         });
     console.log(
         `Installed select-availability bridge: ${selectAvailabilityBridgeChecks} ESM/CJS groups and ${selectAvailabilityBridgeRecipeChecks} shipped React/custom-renderer groups passed; synthetic DOM/transport only.`
+    );
+    const singleSelectFormDriverChecks =
+        await checkSingleSelectFormDriverConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(singleSelectFormDriverChecks, 220);
+    const singleSelectFormDriverRecipeChecks = (
+        await checkSingleSelectFormDriverRecipe({
+            consumerDirectory: temporaryDirectory,
+        })
+    ).checks;
+    assert.equal(singleSelectFormDriverRecipeChecks, 26);
+    console.log(
+        `Installed single-select Form drivers: ${singleSelectFormDriverChecks} ESM/CJS groups and ${singleSelectFormDriverRecipeChecks} actual shipped AirtableForm recipe groups passed; synthetic DOM/transport only.`
     );
     assert.equal(
         await checkPortalCompositionConsumer({

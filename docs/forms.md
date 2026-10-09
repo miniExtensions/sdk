@@ -590,10 +590,13 @@ use the dedicated emptiness operators. Native multi-select serialization, escape
 and exact serialized length are preserved. Unsafe literal/regex round trips
 fail closed rather than approximating set membership or splitting commas.
 
-This compiler extension does not expand Form condition drivers, flat/section
-projection, conditional option availability or the shipped Portal editor.
-Those Form consumers inspect the original AST and keep their scalar boundary,
-including select predicates reduced to constant `FALSE()`. Richer saved Portal
+Form binding visibility and page advanced validation additionally admit the six
+single-select predicates above for exact-ID direct noncomputed drivers. They
+inspect the original AST and loaded metadata, even when compilation reduces a
+predicate to constant `FALSE()`. Public scalar flat/section projection helpers,
+prepared Review, select-driven conditional option availability and the shipped
+Portal editor retain their existing boundaries. Multi-select and richer Form
+drivers remain unsupported. Richer saved Portal
 criteria must remain intact until explicit replacement or accepted server
 cleanup; partial known-choice compilation is not permission to drop AST values.
 
@@ -717,13 +720,14 @@ empty hiding still blocks presentation and the starter Save gate.
 The existing `createFlatScalarFormRecordProjection` retains its types, blocked
 codes and behavior, including scanning schemas outside the supplied order and
 rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
-adapter and Form field bindings use `createScalarFormRecordProjection` for
-supported one-page and multipage scalar conditional choices. Inactive-page drivers remain in the
+adapter uses `createScalarFormRecordProjection` for supported scalar conditional
+choices. Form field bindings reuse the shared section engine internally with
+the bounded single-select Form driver policy. Inactive-page drivers remain in the
 evaluation record; conditionally hidden drivers are removed only from that
 detached projection. Eligibility changes never remove native selected values.
 One-page Review retains its separate page-mode and supported-driver checks.
 Review accepts scalar/select answers and conservative linked/attachment summaries;
-selects do not become supported condition drivers or edit-empty-hiding types.
+Review does not admit select condition drivers or select edit-empty-hiding types.
 The shipped Review recipe maps native names through complete select policy
 metadata, preserves selected-but-ineligible values and ordered duplicates,
 and adds an explicit unavailable marker to unknown names. Linked labels require previously accepted field-specific presentation; attachment
@@ -1377,6 +1381,153 @@ specific staging deployment, extension or backend compatibility.
 
 ## Bounded multipage ownership
 
+### Single-select Request type and Details
+
+Configure a direct, noncomputed `singleSelect` field `fld_request_type` named
+“Request type”, with native choices “Standard” and “Other” (choice ID
+`opt_other`). On the required text
+field `fld_details`, enable the “Details” section header and configure
+`conditionalFields` as an `and` group containing a `singleCondition` whose
+`setting` is `{ fieldType: 'singleSelect', type: 'is',
+idOrName: { type: 'id', id: 'fld_request_type' }, value: 'opt_other' }`.
+The condition operand is the canonical choice ID; the native answer is `'Other'`.
+The accepted Form configuration supplies this metadata; the component does not
+invent conditions or validate a second draft. In one-page mode “Other” reveals
+the required Details section. In `multi-page` mode it reveals a Details page;
+Next navigates there and deliberate Save checks every page.
+
+Pass the existing `createFormRenderScope({ fields, pages, isCurrent,
+configurationRevision, saveOptions })` result, created outside React mounts,
+to this copyable application UI. The supplied `pages` must own those same
+bindings. Supply the normal Save lifecycle in `saveOptions` when journaling.
+
+```tsx
+import type { ReactNode } from 'react';
+import { AirtableForm } from '@miniextensions/sdk/react';
+import type {
+    FieldRendererSlots,
+    FormRenderScope,
+} from '@miniextensions/sdk/ui';
+
+const requestRenderers: FieldRendererSlots<ReactNode> = {
+    renderSingleSelectField: (field) => {
+        const selection =
+            field.capability.type === 'editable'
+                ? field.capability.selection
+                : undefined;
+        return (
+            <label>
+                {field.title}
+                <select
+                    aria-label={field.title}
+                    value={field.value ?? ''}
+                    disabled={
+                        !selection ||
+                        selection.state.disabled ||
+                        selection.state.readOnly
+                    }
+                    onChange={(event) =>
+                        selection?.choose(
+                            event.currentTarget.value
+                                ? [event.currentTarget.value]
+                                : []
+                        )
+                    }
+                >
+                    <option value="">Choose a request type</option>
+                    {selection?.state.options.map((option) => (
+                        <option key={option.value} value={option.value}>
+                            {option.label}
+                        </option>
+                    ))}
+                </select>
+            </label>
+        );
+    },
+    renderSingleLineTextField: (field) => (
+        <section aria-label={field.title}>
+            <h2>{field.title}</h2>
+            <label>
+                {field.title}
+                <input
+                    aria-label={field.title}
+                    value={field.value ?? ''}
+                    disabled={field.capability.type !== 'editable'}
+                    onInput={(event) => {
+                        if (field.capability.type === 'editable')
+                            field.capability.setValue(
+                                event.currentTarget.value
+                            );
+                    }}
+                />
+            </label>
+        </section>
+    ),
+};
+
+export function SingleSelectRequestForm({ scope }: { scope: FormRenderScope }) {
+    return (
+        <AirtableForm scope={scope} renderers={requestRenderers}>
+            {(state) => (
+                <form
+                    onSubmit={(event) => {
+                        event.preventDefault();
+                        // This action retains the revision that produced this render.
+                        void state.actions.submit().catch(() => {
+                            /* App handles refusal. */
+                        });
+                    }}
+                >
+                    {state.fields.map(({ fieldId, node }) => (
+                        <div key={fieldId}>{node}</div>
+                    ))}
+                    <ul aria-live="polite">
+                        {state.page.problems.map((problem, index) => (
+                            <li key={index}>
+                                {problem.code === 'required'
+                                    ? 'Complete the required answer.'
+                                    : 'Check this answer before continuing.'}
+                            </li>
+                        ))}
+                    </ul>
+                    {state.errorMessage && (
+                        <p role="status">{state.errorMessage}</p>
+                    )}
+                    <button
+                        type="button"
+                        disabled={!state.page.canBack}
+                        onClick={() => state.actions.back()}
+                    >
+                        Back
+                    </button>
+                    <button
+                        type="button"
+                        disabled={!state.page.canNext}
+                        onClick={() => state.actions.next()}
+                    >
+                        Next
+                    </button>
+                    <button type="submit" disabled={!state.page.canSubmit}>
+                        Save
+                    </button>
+                </form>
+            )}
+        </AirtableForm>
+    );
+}
+```
+
+Choice writes use native names such as `'Other'`, never option IDs or labels
+recovered elsewhere. Hiding Details retains its native answer and dirty ID;
+hidden/unrendered answers remain in the complete Save envelope. Hidden and
+retired hosts produce no controls. Rendering and navigation perform no I/O;
+required feedback can refuse Submit before transport or journal creation.
+Keep ownership/configuration revisions monotonic, including A → B → A changes;
+retained rendered actions must not be reused after a newer revision.
+This slice supports only exact-ID direct noncomputed single-select drivers with
+`is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`, and `isNotEmpty`. It does not
+extend multi-select/richer drivers or select-driven conditional option predicates.
+
 `createFormPageOwner` owns local page navigation around an existing
 `createFormFieldBindings` owner. It reads the accepted load through
 `fields.getLoaded()`; do not supply another Form or create another draft store.
@@ -1514,8 +1665,9 @@ Computed fields and canonical pass-through types such as rich text and buttons
 do not add ordinary frontend validation. Existing visibility refusals still apply;
 lookup presentation requires an explicit `hideFieldIfEmpty: false`. Other
 unimplemented validation types remain explicit refusals.
-Configured `fieldValidationConditionalFields` now supports the existing strict
-direct-scalar condition subset through the same predicate evaluator used for
+Configured `fieldValidationConditionalFields` supports the existing strict
+direct-scalar condition subset and the six exact-ID direct noncomputed
+single-select driver predicates above through the same predicate evaluator used for
 field visibility. Ordinary errors retain priority. Advanced validation applies
 only to a visible writable, noncomputed target; hiding, read-only configuration
 and canonical computed physical kinds skip that extra rule without waiving any
@@ -1532,8 +1684,9 @@ it never suppresses a malformed or unsupported rule. Null, omitted and nonempty
 messages still use the generic code, so an app may supply its own text.
 Missing/contradictory schema, ambiguous ID/name aliases, invalid native driver
 values, evaluator errors and unsupported predicates yield `unsupported-validation`.
-Select, linked, lookup, computed and date dependencies remain outside this slice,
-including select predicates optimized to a constant formula. No linked reads or
+Multi-select, linked, lookup, computed and date dependencies remain outside this
+slice. Invalid or unsupported single-select drivers remain refused even when
+their predicates compile to a constant formula. No linked reads or
 metadata recovery are performed.
 
 Unsupported conditional rules and `requireOpenLinkedRecords` without review

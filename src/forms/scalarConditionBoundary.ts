@@ -32,3 +32,66 @@ export function hasSelectCondition(
     };
     return visit(definition);
 }
+
+/** Form-only select boundary; dependencies survive compiler constant folding. */
+export function inspectFormSelectConditions(
+    definition: unknown,
+    fields: readonly RuntimeAirtableField[]
+):
+    | { type: 'supported'; drivers: RuntimeAirtableField[] }
+    | { type: 'unsupported' } {
+    const drivers: RuntimeAirtableField[] = [];
+    const visited = new WeakSet<object>();
+    const object = (value: unknown): value is Record<string, unknown> =>
+        value != null && typeof value === 'object' && !Array.isArray(value);
+    const select = (type: unknown) =>
+        type === 'singleSelect' || type === 'multipleSelects';
+    const visit = (node: unknown): boolean => {
+        if (!object(node) || visited.has(node)) return true;
+        visited.add(node);
+        if (Array.isArray(node.conditions) && !node.conditions.every(visit))
+            return false;
+        const setting = node.setting;
+        if (!object(setting)) return true;
+        const ref = setting.idOrName;
+        const matches = object(ref)
+            ? fields.filter((field) =>
+                  ref.type === 'id'
+                      ? field.id === ref.id
+                      : ref.type === 'name' && field.name === ref.name
+              )
+            : [];
+        if (
+            !select(setting.fieldType) &&
+            !matches.some((field) => select(field.config.type))
+        )
+            return true;
+        const driver = matches[0];
+        if (
+            setting.fieldType !== 'singleSelect' ||
+            !object(ref) ||
+            ref.type !== 'id' ||
+            typeof ref.id !== 'string' ||
+            ref.id === '' ||
+            matches.length !== 1 ||
+            driver == null ||
+            typeof driver.name !== 'string' ||
+            driver.config.type !== 'singleSelect' ||
+            (driver.isComputed !== undefined && driver.isComputed !== false) ||
+            ![
+                'is',
+                'isNot',
+                'isAnyOf',
+                'isNoneOf',
+                'isEmpty',
+                'isNotEmpty',
+            ].includes(String(setting.type))
+        )
+            return false;
+        drivers.push(driver);
+        return true;
+    };
+    return visit(definition)
+        ? { type: 'supported', drivers }
+        : { type: 'unsupported' };
+}

@@ -7,7 +7,7 @@ import type {
 } from '../runtime/types.js';
 import type { FormValidationMessage } from '../forms/helpers.js';
 import type { FieldActionResult } from '../forms/bindings.js';
-import type { ScalarFieldState } from './scalarModels.js';
+import type { ScalarFieldState, DurationFieldState } from './scalarModels.js';
 import type { DateFieldState } from './dateModel.js';
 import type { SelectionState } from './types.js';
 import type { FormAttachmentSnapshot } from '../forms/attachmentController.js';
@@ -76,6 +76,13 @@ export type ScalarRendererActions = {
     state: ScalarFieldState;
     setInput(input: string): boolean;
     setChecked(checked: boolean): boolean;
+    /** Present only for the duration specialization. */
+    setFocused?(focused: boolean): boolean;
+};
+export type DurationRendererActions = ScalarRendererActions & {
+    state: DurationFieldState;
+    /** Presentation only; does not round or write native seconds. */
+    setFocused(focused: boolean): boolean;
 };
 export type DateRendererActions = {
     state: DateFieldState;
@@ -132,15 +139,16 @@ export type FieldRendererCapability<K extends FieldKind> =
             : {
                   type: 'editable';
                   setValue(value: FieldWriteValue<K>): FieldActionResult;
-              } & (K extends
-                  | 'number'
-                  | 'percent'
-                  | 'currency'
-                  | 'duration'
-                  | 'rating'
-                  | 'checkbox'
-                  ? { scalar?: ScalarRendererActions }
-                  : {}) &
+              } & (K extends 'duration'
+                  ? { scalar?: DurationRendererActions }
+                  : K extends
+                          | 'number'
+                          | 'percent'
+                          | 'currency'
+                          | 'rating'
+                          | 'checkbox'
+                    ? { scalar?: ScalarRendererActions }
+                    : {}) &
                   (K extends 'date' | 'dateTime'
                       ? { date?: DateRendererActions }
                       : {}) &
@@ -607,6 +615,14 @@ export function createRendererProps(
         return null;
     if (input.capability.type === 'editable') {
         const cap = input.capability;
+        if (
+            cap.scalar &&
+            (kind === 'duration'
+                ? cap.scalar.state.kind !== 'duration' ||
+                  typeof cap.scalar.setFocused !== 'function'
+                : cap.scalar.setFocused !== undefined)
+        )
+            return null;
         if (
             typeof cap.setValue !== 'function' ||
             (cap.scalar &&

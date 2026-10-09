@@ -34,6 +34,11 @@ import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
 import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
+import {
+    checkDurationBindingConsumer,
+    durationTypedConsumer,
+    durationReactTypedConsumer,
+} from './duration-binding-consumer-checks.mjs';
 import { checkReactBindingConsumer } from './react-binding-consumer-checks.mjs';
 import { checkFieldBindingRecipe } from './field-binding-recipe-checks.mjs';
 import { checkSelectConditions } from './select-condition-checks.mjs';
@@ -574,6 +579,7 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         consumer +
         rendererTypeConsumer +
         buttonTypedConsumer +
+        durationTypedConsumer +
         `
 import type { ListConditionalFilterPrimaryValuesInput, ConditionalFilterPrimaryValue, ConditionalFilterData, ListAddressPredictionsInput, AddressPrediction, GetFormattedAddressInput, TriggerConfiguredButtonWebhookInput, ConfiguredButtonWebhookSource, TriggerConfiguredButtonWebhookResult } from '@miniextensions/sdk';
 export async function checkAdditionalRuntimeTypes(client: MiniExtensionsClient, signal: AbortSignal) {
@@ -886,6 +892,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         rendererReactTypedConsumer
     );
     reactSources.push('renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'duration-react-consumer.tsx'),
+        durationReactTypedConsumer
+    );
+    reactSources.push('duration-react-consumer.tsx');
     writeFileSync(
         join(temporaryDirectory, 'form-composition-consumer.ts'),
         formCompositionTypedConsumer
@@ -1276,6 +1287,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             );
         }
         if (example === 'browser') {
+            await checkDurationBindingConsumer({
+                consumerDirectory: temporaryDirectory,
+                starterDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
             assert.equal(
                 await checkDateBindingConsumer({
                     consumerDirectory: temporaryDirectory,

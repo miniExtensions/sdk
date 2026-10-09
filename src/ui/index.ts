@@ -42,9 +42,13 @@ export {
 export {
     createNumberFieldModel,
     createCheckboxFieldModel,
+    createDurationFieldModel,
     type ScalarFieldModel,
     type ScalarFieldState,
     type ScalarFieldModelOptions,
+    type DurationFieldModel,
+    type DurationFieldModelOptions,
+    type DurationFieldState,
 } from './scalarModels.js';
 
 export {
@@ -80,6 +84,7 @@ export type {
     FieldRendererHost,
     FieldRendererHostSnapshot,
     ScalarRendererActions,
+    DurationRendererActions,
     DateRendererActions,
     SelectionRendererActions,
     AttachmentRendererActions,

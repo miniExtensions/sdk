@@ -1,0 +1,1944 @@
+{
+    "provenance": {
+        "revision": "58f73d575ab10baa0a10693660d8002f204368e1",
+        "tree": "b39e58ead46a311c497def57474cf5ca720542ae",
+        "sources": [
+            {
+                "path": "types/airtable/DurationField/helpers.ts",
+                "sha256": "a8208bcb379258404969dfa4a10d3b7e51b28a6cade9bebb09b068f846d6469a"
+            },
+            {
+                "path": "types/utils/assertUnreachable.ts",
+                "sha256": "4d028fb5576114f3840b4382de3d2a9062e95e6a9b9ffea4114401476f4d70c9"
+            }
+        ],
+        "generator": "scripts/generate-duration-fixtures.mjs",
+        "generatorSha256": "2c319fb366b7be27e58af546539ac9432c70f3327e3f16cf2d2ebb5886eaee46",
+        "dependencies": {
+            "moment": "2.31.0",
+            "moment-duration-format": "2.3.2"
+        },
+        "execution": "Unchanged pinned canonical duration helper bundled with esbuild; local pinned Moment dependencies; synthetic inputs only; no backend calls.",
+        "admission": "Explicit complete SDK editing partitions: empty clears; bare digits with optional minus and final 0..3 decimal digits; two components forbid decimals for h:mm and allow final decimals otherwise; three components allow final decimals for all formats. Partial, malformed and nonfinite inputs are refused without consulting canonical coercion as acceptance authority."
+    },
+    "inputCases": [
+        {
+            "id": "h:mm/admitted/clear",
+            "durationFormat": "h:mm",
+            "input": "",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": null,
+            "formattedInput": "",
+            "formattedNative": ""
+        },
+        {
+            "id": "h:mm/admitted/zero",
+            "durationFormat": "h:mm",
+            "input": "0",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 0,
+            "formattedInput": "0:00",
+            "formattedNative": "0:00"
+        },
+        {
+            "id": "h:mm/admitted/bare",
+            "durationFormat": "h:mm",
+            "input": "7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 420,
+            "formattedInput": "0:07",
+            "formattedNative": "0:07"
+        },
+        {
+            "id": "h:mm/admitted/negative-bare",
+            "durationFormat": "h:mm",
+            "input": "-7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -420,
+            "formattedInput": "-0:07",
+            "formattedNative": "-0:07"
+        },
+        {
+            "id": "h:mm/admitted/leading-zero",
+            "durationFormat": "h:mm",
+            "input": "0007",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 420,
+            "formattedInput": "0:07",
+            "formattedNative": "0:07"
+        },
+        {
+            "id": "h:mm/admitted/bare-terminal-dot",
+            "durationFormat": "h:mm",
+            "input": "7.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 420,
+            "formattedInput": "0:07",
+            "formattedNative": "0:07"
+        },
+        {
+            "id": "h:mm/admitted/bare-decimal",
+            "durationFormat": "h:mm",
+            "input": "212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 12735,
+            "formattedInput": "3:32",
+            "formattedNative": "3:32"
+        },
+        {
+            "id": "h:mm/admitted/negative-decimal",
+            "durationFormat": "h:mm",
+            "input": "-212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -12735,
+            "formattedInput": "-3:32",
+            "formattedNative": "-3:32"
+        },
+        {
+            "id": "h:mm/admitted/bare-milliseconds",
+            "durationFormat": "h:mm",
+            "input": "2.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 127.38000000000001,
+            "formattedInput": "0:02",
+            "formattedNative": "0:02"
+        },
+        {
+            "id": "h:mm/admitted/two-clock",
+            "durationFormat": "h:mm",
+            "input": "12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 45600,
+            "formattedInput": "12:40",
+            "formattedNative": "12:40"
+        },
+        {
+            "id": "h:mm/admitted/negative-two-clock",
+            "durationFormat": "h:mm",
+            "input": "-12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -45600,
+            "formattedInput": "-12:40",
+            "formattedNative": "-12:40"
+        },
+        {
+            "id": "h:mm/admitted/two-overflow",
+            "durationFormat": "h:mm",
+            "input": "25:72",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 94320,
+            "formattedInput": "26:12",
+            "formattedNative": "26:12"
+        },
+        {
+            "id": "h:mm/admitted/two-leading-zeros",
+            "durationFormat": "h:mm",
+            "input": "001:002",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3720,
+            "formattedInput": "1:02",
+            "formattedNative": "1:02"
+        },
+        {
+            "id": "h:mm/admitted/three-clock",
+            "durationFormat": "h:mm",
+            "input": "1:02:03",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02",
+            "formattedNative": "1:02"
+        },
+        {
+            "id": "h:mm/admitted/negative-three-clock",
+            "durationFormat": "h:mm",
+            "input": "-1:02:03.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -3723.123,
+            "formattedInput": "-1:02",
+            "formattedNative": "-1:02"
+        },
+        {
+            "id": "h:mm/admitted/three-terminal-dot",
+            "durationFormat": "h:mm",
+            "input": "1:02:03.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02",
+            "formattedNative": "1:02"
+        },
+        {
+            "id": "h:mm/admitted/three-leading-zeros",
+            "durationFormat": "h:mm",
+            "input": "001:002:003.004",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723.004,
+            "formattedInput": "1:02",
+            "formattedNative": "1:02"
+        },
+        {
+            "id": "h:mm/admitted/three-overflow",
+            "durationFormat": "h:mm",
+            "input": "25:72:75",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 94395,
+            "formattedInput": "26:13",
+            "formattedNative": "26:13"
+        },
+        {
+            "id": "h:mm/refused/two-decimal",
+            "durationFormat": "h:mm",
+            "input": "1:2.5",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/negative-two-decimal",
+            "durationFormat": "h:mm",
+            "input": "-1:2.125",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/two-terminal-dot",
+            "durationFormat": "h:mm",
+            "input": "1:2.",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/partial-sign",
+            "durationFormat": "h:mm",
+            "input": "-",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/partial-colon",
+            "durationFormat": "h:mm",
+            "input": ":",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/partial-two",
+            "durationFormat": "h:mm",
+            "input": "1:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/partial-three",
+            "durationFormat": "h:mm",
+            "input": "1:2:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/partial-dot",
+            "durationFormat": "h:mm",
+            "input": ".",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/partial-negative-dot",
+            "durationFormat": "h:mm",
+            "input": "-.",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/empty-component",
+            "durationFormat": "h:mm",
+            "input": "1::2",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/extra-component",
+            "durationFormat": "h:mm",
+            "input": "1:2:3:4",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm/refused/decimal-first-component",
+            "durationFormat": "h:mm",
+            "input": "1.2:3",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/decimal-middle-component",
+            "durationFormat": "h:mm",
+            "input": "1:2.3:4",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/plus",
+            "durationFormat": "h:mm",
+            "input": "+7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/exponent",
+            "durationFormat": "h:mm",
+            "input": "1e2",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/whitespace",
+            "durationFormat": "h:mm",
+            "input": " ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/leading-whitespace",
+            "durationFormat": "h:mm",
+            "input": " 7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/trailing-whitespace",
+            "durationFormat": "h:mm",
+            "input": "7 ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/letters",
+            "durationFormat": "h:mm",
+            "input": "abc",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/excess-bare-fraction",
+            "durationFormat": "h:mm",
+            "input": "1.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/excess-clock-fraction",
+            "durationFormat": "h:mm",
+            "input": "1:2:3.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm/refused/nonfinite-magnitude",
+            "durationFormat": "h:mm",
+            "input": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss/admitted/clear",
+            "durationFormat": "h:mm:ss",
+            "input": "",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": null,
+            "formattedInput": "",
+            "formattedNative": ""
+        },
+        {
+            "id": "h:mm:ss/admitted/zero",
+            "durationFormat": "h:mm:ss",
+            "input": "0",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 0,
+            "formattedInput": "0:00",
+            "formattedNative": "0:00"
+        },
+        {
+            "id": "h:mm:ss/admitted/bare",
+            "durationFormat": "h:mm:ss",
+            "input": "7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07",
+            "formattedNative": "0:07"
+        },
+        {
+            "id": "h:mm:ss/admitted/negative-bare",
+            "durationFormat": "h:mm:ss",
+            "input": "-7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -7,
+            "formattedInput": "-0:07",
+            "formattedNative": "-0:07"
+        },
+        {
+            "id": "h:mm:ss/admitted/leading-zero",
+            "durationFormat": "h:mm:ss",
+            "input": "0007",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07",
+            "formattedNative": "0:07"
+        },
+        {
+            "id": "h:mm:ss/admitted/bare-terminal-dot",
+            "durationFormat": "h:mm:ss",
+            "input": "7.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07",
+            "formattedNative": "0:07"
+        },
+        {
+            "id": "h:mm:ss/admitted/bare-decimal",
+            "durationFormat": "h:mm:ss",
+            "input": "212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 212.25,
+            "formattedInput": "3:32",
+            "formattedNative": "3:32"
+        },
+        {
+            "id": "h:mm:ss/admitted/negative-decimal",
+            "durationFormat": "h:mm:ss",
+            "input": "-212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -212.25,
+            "formattedInput": "-3:32",
+            "formattedNative": "-3:32"
+        },
+        {
+            "id": "h:mm:ss/admitted/bare-milliseconds",
+            "durationFormat": "h:mm:ss",
+            "input": "2.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 2.123,
+            "formattedInput": "0:02",
+            "formattedNative": "0:02"
+        },
+        {
+            "id": "h:mm:ss/admitted/two-clock",
+            "durationFormat": "h:mm:ss",
+            "input": "12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 760,
+            "formattedInput": "12:40:00",
+            "formattedNative": "12:40"
+        },
+        {
+            "id": "h:mm:ss/admitted/negative-two-clock",
+            "durationFormat": "h:mm:ss",
+            "input": "-12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -760,
+            "formattedInput": "-12:40:00",
+            "formattedNative": "-12:40"
+        },
+        {
+            "id": "h:mm:ss/admitted/two-overflow",
+            "durationFormat": "h:mm:ss",
+            "input": "25:72",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 1572,
+            "formattedInput": "26:12:00",
+            "formattedNative": "26:12"
+        },
+        {
+            "id": "h:mm:ss/admitted/two-leading-zeros",
+            "durationFormat": "h:mm:ss",
+            "input": "001:002",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62,
+            "formattedInput": "1:02:00",
+            "formattedNative": "1:02"
+        },
+        {
+            "id": "h:mm:ss/admitted/three-clock",
+            "durationFormat": "h:mm:ss",
+            "input": "1:02:03",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02:03",
+            "formattedNative": "1:02:03"
+        },
+        {
+            "id": "h:mm:ss/admitted/negative-three-clock",
+            "durationFormat": "h:mm:ss",
+            "input": "-1:02:03.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -3723.123,
+            "formattedInput": "-1:02:03",
+            "formattedNative": "-1:02:03"
+        },
+        {
+            "id": "h:mm:ss/admitted/three-terminal-dot",
+            "durationFormat": "h:mm:ss",
+            "input": "1:02:03.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02:03",
+            "formattedNative": "1:02:03"
+        },
+        {
+            "id": "h:mm:ss/admitted/three-leading-zeros",
+            "durationFormat": "h:mm:ss",
+            "input": "001:002:003.004",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723.004,
+            "formattedInput": "1:02:03",
+            "formattedNative": "1:02:03"
+        },
+        {
+            "id": "h:mm:ss/admitted/three-overflow",
+            "durationFormat": "h:mm:ss",
+            "input": "25:72:75",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 94395,
+            "formattedInput": "26:13:15",
+            "formattedNative": "26:13:15"
+        },
+        {
+            "id": "h:mm:ss/admitted/two-decimal",
+            "durationFormat": "h:mm:ss",
+            "input": "1:2.5",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62.5,
+            "formattedInput": "0:00",
+            "formattedNative": "1:03"
+        },
+        {
+            "id": "h:mm:ss/admitted/negative-two-decimal",
+            "durationFormat": "h:mm:ss",
+            "input": "-1:2.125",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -62.125,
+            "formattedInput": "0:00",
+            "formattedNative": "-1:02"
+        },
+        {
+            "id": "h:mm:ss/admitted/two-terminal-dot",
+            "durationFormat": "h:mm:ss",
+            "input": "1:2.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62,
+            "formattedInput": "0:00",
+            "formattedNative": "1:02"
+        },
+        {
+            "id": "h:mm:ss/refused/partial-sign",
+            "durationFormat": "h:mm:ss",
+            "input": "-",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss/refused/partial-colon",
+            "durationFormat": "h:mm:ss",
+            "input": ":",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss/refused/partial-two",
+            "durationFormat": "h:mm:ss",
+            "input": "1:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss/refused/partial-three",
+            "durationFormat": "h:mm:ss",
+            "input": "1:2:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss/refused/partial-dot",
+            "durationFormat": "h:mm:ss",
+            "input": ".",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/partial-negative-dot",
+            "durationFormat": "h:mm:ss",
+            "input": "-.",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/empty-component",
+            "durationFormat": "h:mm:ss",
+            "input": "1::2",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss/refused/extra-component",
+            "durationFormat": "h:mm:ss",
+            "input": "1:2:3:4",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss/refused/decimal-first-component",
+            "durationFormat": "h:mm:ss",
+            "input": "1.2:3",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/decimal-middle-component",
+            "durationFormat": "h:mm:ss",
+            "input": "1:2.3:4",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/plus",
+            "durationFormat": "h:mm:ss",
+            "input": "+7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/exponent",
+            "durationFormat": "h:mm:ss",
+            "input": "1e2",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/whitespace",
+            "durationFormat": "h:mm:ss",
+            "input": " ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/leading-whitespace",
+            "durationFormat": "h:mm:ss",
+            "input": " 7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/trailing-whitespace",
+            "durationFormat": "h:mm:ss",
+            "input": "7 ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/letters",
+            "durationFormat": "h:mm:ss",
+            "input": "abc",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/excess-bare-fraction",
+            "durationFormat": "h:mm:ss",
+            "input": "1.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/excess-clock-fraction",
+            "durationFormat": "h:mm:ss",
+            "input": "1:2:3.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss/refused/nonfinite-magnitude",
+            "durationFormat": "h:mm:ss",
+            "input": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.S/admitted/clear",
+            "durationFormat": "h:mm:ss.S",
+            "input": "",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": null,
+            "formattedInput": "",
+            "formattedNative": ""
+        },
+        {
+            "id": "h:mm:ss.S/admitted/zero",
+            "durationFormat": "h:mm:ss.S",
+            "input": "0",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 0,
+            "formattedInput": "0:00.0",
+            "formattedNative": "0:00.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/bare",
+            "durationFormat": "h:mm:ss.S",
+            "input": "7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.0",
+            "formattedNative": "0:07.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/negative-bare",
+            "durationFormat": "h:mm:ss.S",
+            "input": "-7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -7,
+            "formattedInput": "-0:07.0",
+            "formattedNative": "-0:07.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/leading-zero",
+            "durationFormat": "h:mm:ss.S",
+            "input": "0007",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.0",
+            "formattedNative": "0:07.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/bare-terminal-dot",
+            "durationFormat": "h:mm:ss.S",
+            "input": "7.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.0",
+            "formattedNative": "0:07.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/bare-decimal",
+            "durationFormat": "h:mm:ss.S",
+            "input": "212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 212.25,
+            "formattedInput": "3:32.3",
+            "formattedNative": "3:32.3"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/negative-decimal",
+            "durationFormat": "h:mm:ss.S",
+            "input": "-212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -212.25,
+            "formattedInput": "-3:32.3",
+            "formattedNative": "-3:32.3"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/bare-milliseconds",
+            "durationFormat": "h:mm:ss.S",
+            "input": "2.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 2.123,
+            "formattedInput": "0:02.1",
+            "formattedNative": "0:02.1"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/two-clock",
+            "durationFormat": "h:mm:ss.S",
+            "input": "12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 760,
+            "formattedInput": "12:40:00.0",
+            "formattedNative": "12:40.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/negative-two-clock",
+            "durationFormat": "h:mm:ss.S",
+            "input": "-12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -760,
+            "formattedInput": "-12:40:00.0",
+            "formattedNative": "-12:40.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/two-overflow",
+            "durationFormat": "h:mm:ss.S",
+            "input": "25:72",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 1572,
+            "formattedInput": "26:12:00.0",
+            "formattedNative": "26:12.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/two-leading-zeros",
+            "durationFormat": "h:mm:ss.S",
+            "input": "001:002",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62,
+            "formattedInput": "1:02:00.0",
+            "formattedNative": "1:02.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/three-clock",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:02:03",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02:03.0",
+            "formattedNative": "1:02:03.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/negative-three-clock",
+            "durationFormat": "h:mm:ss.S",
+            "input": "-1:02:03.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -3723.123,
+            "formattedInput": "-1:02:03.1",
+            "formattedNative": "-1:02:03.1"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/three-terminal-dot",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:02:03.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02:03.0",
+            "formattedNative": "1:02:03.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/three-leading-zeros",
+            "durationFormat": "h:mm:ss.S",
+            "input": "001:002:003.004",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723.004,
+            "formattedInput": "1:02:03.0",
+            "formattedNative": "1:02:03.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/three-overflow",
+            "durationFormat": "h:mm:ss.S",
+            "input": "25:72:75",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 94395,
+            "formattedInput": "26:13:15.0",
+            "formattedNative": "26:13:15.0"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/two-decimal",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:2.5",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62.5,
+            "formattedInput": "0:00.0",
+            "formattedNative": "1:02.5"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/negative-two-decimal",
+            "durationFormat": "h:mm:ss.S",
+            "input": "-1:2.125",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -62.125,
+            "formattedInput": "0:00.0",
+            "formattedNative": "-1:02.1"
+        },
+        {
+            "id": "h:mm:ss.S/admitted/two-terminal-dot",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:2.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62,
+            "formattedInput": "0:00.0",
+            "formattedNative": "1:02.0"
+        },
+        {
+            "id": "h:mm:ss.S/refused/partial-sign",
+            "durationFormat": "h:mm:ss.S",
+            "input": "-",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.S/refused/partial-colon",
+            "durationFormat": "h:mm:ss.S",
+            "input": ":",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.S/refused/partial-two",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.S/refused/partial-three",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:2:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.S/refused/partial-dot",
+            "durationFormat": "h:mm:ss.S",
+            "input": ".",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/partial-negative-dot",
+            "durationFormat": "h:mm:ss.S",
+            "input": "-.",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/empty-component",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1::2",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.S/refused/extra-component",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:2:3:4",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.S/refused/decimal-first-component",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1.2:3",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/decimal-middle-component",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:2.3:4",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/plus",
+            "durationFormat": "h:mm:ss.S",
+            "input": "+7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/exponent",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1e2",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/whitespace",
+            "durationFormat": "h:mm:ss.S",
+            "input": " ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/leading-whitespace",
+            "durationFormat": "h:mm:ss.S",
+            "input": " 7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/trailing-whitespace",
+            "durationFormat": "h:mm:ss.S",
+            "input": "7 ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/letters",
+            "durationFormat": "h:mm:ss.S",
+            "input": "abc",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/excess-bare-fraction",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/excess-clock-fraction",
+            "durationFormat": "h:mm:ss.S",
+            "input": "1:2:3.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.S/refused/nonfinite-magnitude",
+            "durationFormat": "h:mm:ss.S",
+            "input": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/clear",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": null,
+            "formattedInput": "",
+            "formattedNative": ""
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/zero",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "0",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 0,
+            "formattedInput": "0:00.00",
+            "formattedNative": "0:00.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/bare",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.00",
+            "formattedNative": "0:07.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/negative-bare",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "-7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -7,
+            "formattedInput": "-0:07.00",
+            "formattedNative": "-0:07.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/leading-zero",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "0007",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.00",
+            "formattedNative": "0:07.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/bare-terminal-dot",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "7.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.00",
+            "formattedNative": "0:07.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/bare-decimal",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 212.25,
+            "formattedInput": "3:32.25",
+            "formattedNative": "3:32.25"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/negative-decimal",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "-212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -212.25,
+            "formattedInput": "-3:32.25",
+            "formattedNative": "-3:32.25"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/bare-milliseconds",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "2.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 2.123,
+            "formattedInput": "0:02.12",
+            "formattedNative": "0:02.12"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/two-clock",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 760,
+            "formattedInput": "12:40:00.00",
+            "formattedNative": "12:40.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/negative-two-clock",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "-12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -760,
+            "formattedInput": "-12:40:00.00",
+            "formattedNative": "-12:40.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/two-overflow",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "25:72",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 1572,
+            "formattedInput": "26:12:00.00",
+            "formattedNative": "26:12.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/two-leading-zeros",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "001:002",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62,
+            "formattedInput": "1:02:00.00",
+            "formattedNative": "1:02.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/three-clock",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:02:03",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02:03.00",
+            "formattedNative": "1:02:03.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/negative-three-clock",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "-1:02:03.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -3723.123,
+            "formattedInput": "-1:02:03.12",
+            "formattedNative": "-1:02:03.12"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/three-terminal-dot",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:02:03.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02:03.00",
+            "formattedNative": "1:02:03.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/three-leading-zeros",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "001:002:003.004",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723.004,
+            "formattedInput": "1:02:03.00",
+            "formattedNative": "1:02:03.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/three-overflow",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "25:72:75",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 94395,
+            "formattedInput": "26:13:15.00",
+            "formattedNative": "26:13:15.00"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/two-decimal",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:2.5",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62.5,
+            "formattedInput": "0:00.00",
+            "formattedNative": "1:02.50"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/negative-two-decimal",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "-1:2.125",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -62.125,
+            "formattedInput": "0:00.00",
+            "formattedNative": "-1:02.13"
+        },
+        {
+            "id": "h:mm:ss.SS/admitted/two-terminal-dot",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:2.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62,
+            "formattedInput": "0:00.00",
+            "formattedNative": "1:02.00"
+        },
+        {
+            "id": "h:mm:ss.SS/refused/partial-sign",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "-",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SS/refused/partial-colon",
+            "durationFormat": "h:mm:ss.SS",
+            "input": ":",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SS/refused/partial-two",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SS/refused/partial-three",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:2:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SS/refused/partial-dot",
+            "durationFormat": "h:mm:ss.SS",
+            "input": ".",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/partial-negative-dot",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "-.",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/empty-component",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1::2",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SS/refused/extra-component",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:2:3:4",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SS/refused/decimal-first-component",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1.2:3",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/decimal-middle-component",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:2.3:4",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/plus",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "+7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/exponent",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1e2",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/whitespace",
+            "durationFormat": "h:mm:ss.SS",
+            "input": " ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/leading-whitespace",
+            "durationFormat": "h:mm:ss.SS",
+            "input": " 7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/trailing-whitespace",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "7 ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/letters",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "abc",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/excess-bare-fraction",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/excess-clock-fraction",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "1:2:3.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SS/refused/nonfinite-magnitude",
+            "durationFormat": "h:mm:ss.SS",
+            "input": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/clear",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": null,
+            "formattedInput": "",
+            "formattedNative": ""
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/zero",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "0",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 0,
+            "formattedInput": "0:00.000",
+            "formattedNative": "0:00.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/bare",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.000",
+            "formattedNative": "0:07.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/negative-bare",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "-7",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -7,
+            "formattedInput": "-0:07.000",
+            "formattedNative": "-0:07.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/leading-zero",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "0007",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.000",
+            "formattedNative": "0:07.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/bare-terminal-dot",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "7.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 7,
+            "formattedInput": "0:07.000",
+            "formattedNative": "0:07.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/bare-decimal",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 212.25,
+            "formattedInput": "3:32.250",
+            "formattedNative": "3:32.250"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/negative-decimal",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "-212.25",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -212.25,
+            "formattedInput": "-3:32.250",
+            "formattedNative": "-3:32.250"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/bare-milliseconds",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "2.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 2.123,
+            "formattedInput": "0:02.123",
+            "formattedNative": "0:02.123"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/two-clock",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 760,
+            "formattedInput": "12:40:00.000",
+            "formattedNative": "12:40.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/negative-two-clock",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "-12:40",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -760,
+            "formattedInput": "-12:40:00.000",
+            "formattedNative": "-12:40.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/two-overflow",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "25:72",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 1572,
+            "formattedInput": "26:12:00.000",
+            "formattedNative": "26:12.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/two-leading-zeros",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "001:002",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62,
+            "formattedInput": "1:02:00.000",
+            "formattedNative": "1:02.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/three-clock",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:02:03",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02:03.000",
+            "formattedNative": "1:02:03.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/negative-three-clock",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "-1:02:03.123",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -3723.123,
+            "formattedInput": "-1:02:03.123",
+            "formattedNative": "-1:02:03.123"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/three-terminal-dot",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:02:03.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723,
+            "formattedInput": "1:02:03.000",
+            "formattedNative": "1:02:03.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/three-leading-zeros",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "001:002:003.004",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 3723.004,
+            "formattedInput": "1:02:03.004",
+            "formattedNative": "1:02:03.004"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/three-overflow",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "25:72:75",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 94395,
+            "formattedInput": "26:13:15.000",
+            "formattedNative": "26:13:15.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/two-decimal",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:2.5",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62.5,
+            "formattedInput": "0:00.000",
+            "formattedNative": "1:02.500"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/negative-two-decimal",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "-1:2.125",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": -62.125,
+            "formattedInput": "0:00.000",
+            "formattedNative": "-1:02.125"
+        },
+        {
+            "id": "h:mm:ss.SSS/admitted/two-terminal-dot",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:2.",
+            "admission": "admitted",
+            "canonicalRawFilter": true,
+            "seconds": 62,
+            "formattedInput": "0:00.000",
+            "formattedNative": "1:02.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/partial-sign",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "-",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/partial-colon",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": ":",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/partial-two",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/partial-three",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:2:",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/partial-dot",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": ".",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/partial-negative-dot",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "-.",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/empty-component",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1::2",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/extra-component",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:2:3:4",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/decimal-first-component",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1.2:3",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/decimal-middle-component",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:2.3:4",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/plus",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "+7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/exponent",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1e2",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/whitespace",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": " ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/leading-whitespace",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": " 7",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/trailing-whitespace",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "7 ",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/letters",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "abc",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/excess-bare-fraction",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/excess-clock-fraction",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "1:2:3.1234",
+            "admission": "refused",
+            "canonicalRawFilter": false
+        },
+        {
+            "id": "h:mm:ss.SSS/refused/nonfinite-magnitude",
+            "durationFormat": "h:mm:ss.SSS",
+            "input": "9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999",
+            "admission": "refused",
+            "canonicalRawFilter": true
+        }
+    ],
+    "nativeCases": [
+        {
+            "id": "h:mm/native/7",
+            "durationFormat": "h:mm",
+            "secondsText": "7",
+            "formatted": "0:00"
+        },
+        {
+            "id": "h:mm/native/2.123456789",
+            "durationFormat": "h:mm",
+            "secondsText": "2.123456789",
+            "formatted": "0:00"
+        },
+        {
+            "id": "h:mm/native/-3680.4",
+            "durationFormat": "h:mm",
+            "secondsText": "-3680.4",
+            "formatted": "-1:01"
+        },
+        {
+            "id": "h:mm/native/-0.00001",
+            "durationFormat": "h:mm",
+            "secondsText": "-0.00001",
+            "formatted": "-0:00"
+        },
+        {
+            "id": "h:mm/native/-0",
+            "durationFormat": "h:mm",
+            "secondsText": "-0",
+            "formatted": "0:00"
+        },
+        {
+            "id": "h:mm/native/0",
+            "durationFormat": "h:mm",
+            "secondsText": "0",
+            "formatted": "0:00"
+        },
+        {
+            "id": "h:mm/native/10000000",
+            "durationFormat": "h:mm",
+            "secondsText": "10000000",
+            "formatted": "2777:47"
+        },
+        {
+            "id": "h:mm:ss/native/7",
+            "durationFormat": "h:mm:ss",
+            "secondsText": "7",
+            "formatted": "0:07"
+        },
+        {
+            "id": "h:mm:ss/native/2.123456789",
+            "durationFormat": "h:mm:ss",
+            "secondsText": "2.123456789",
+            "formatted": "0:02"
+        },
+        {
+            "id": "h:mm:ss/native/-3680.4",
+            "durationFormat": "h:mm:ss",
+            "secondsText": "-3680.4",
+            "formatted": "-1:01:20"
+        },
+        {
+            "id": "h:mm:ss/native/-0.00001",
+            "durationFormat": "h:mm:ss",
+            "secondsText": "-0.00001",
+            "formatted": "-0:00"
+        },
+        {
+            "id": "h:mm:ss/native/-0",
+            "durationFormat": "h:mm:ss",
+            "secondsText": "-0",
+            "formatted": "0:00"
+        },
+        {
+            "id": "h:mm:ss/native/0",
+            "durationFormat": "h:mm:ss",
+            "secondsText": "0",
+            "formatted": "0:00"
+        },
+        {
+            "id": "h:mm:ss/native/10000000",
+            "durationFormat": "h:mm:ss",
+            "secondsText": "10000000",
+            "formatted": "2777:46:40"
+        },
+        {
+            "id": "h:mm:ss.S/native/7",
+            "durationFormat": "h:mm:ss.S",
+            "secondsText": "7",
+            "formatted": "0:07.0"
+        },
+        {
+            "id": "h:mm:ss.S/native/2.123456789",
+            "durationFormat": "h:mm:ss.S",
+            "secondsText": "2.123456789",
+            "formatted": "0:02.1"
+        },
+        {
+            "id": "h:mm:ss.S/native/-3680.4",
+            "durationFormat": "h:mm:ss.S",
+            "secondsText": "-3680.4",
+            "formatted": "-1:01:20.4"
+        },
+        {
+            "id": "h:mm:ss.S/native/-0.00001",
+            "durationFormat": "h:mm:ss.S",
+            "secondsText": "-0.00001",
+            "formatted": "-0:00.0"
+        },
+        {
+            "id": "h:mm:ss.S/native/-0",
+            "durationFormat": "h:mm:ss.S",
+            "secondsText": "-0",
+            "formatted": "0:00.0"
+        },
+        {
+            "id": "h:mm:ss.S/native/0",
+            "durationFormat": "h:mm:ss.S",
+            "secondsText": "0",
+            "formatted": "0:00.0"
+        },
+        {
+            "id": "h:mm:ss.S/native/10000000",
+            "durationFormat": "h:mm:ss.S",
+            "secondsText": "10000000",
+            "formatted": "2777:46:40.0"
+        },
+        {
+            "id": "h:mm:ss.SS/native/7",
+            "durationFormat": "h:mm:ss.SS",
+            "secondsText": "7",
+            "formatted": "0:07.00"
+        },
+        {
+            "id": "h:mm:ss.SS/native/2.123456789",
+            "durationFormat": "h:mm:ss.SS",
+            "secondsText": "2.123456789",
+            "formatted": "0:02.12"
+        },
+        {
+            "id": "h:mm:ss.SS/native/-3680.4",
+            "durationFormat": "h:mm:ss.SS",
+            "secondsText": "-3680.4",
+            "formatted": "-1:01:20.40"
+        },
+        {
+            "id": "h:mm:ss.SS/native/-0.00001",
+            "durationFormat": "h:mm:ss.SS",
+            "secondsText": "-0.00001",
+            "formatted": "-0:00.00"
+        },
+        {
+            "id": "h:mm:ss.SS/native/-0",
+            "durationFormat": "h:mm:ss.SS",
+            "secondsText": "-0",
+            "formatted": "0:00.00"
+        },
+        {
+            "id": "h:mm:ss.SS/native/0",
+            "durationFormat": "h:mm:ss.SS",
+            "secondsText": "0",
+            "formatted": "0:00.00"
+        },
+        {
+            "id": "h:mm:ss.SS/native/10000000",
+            "durationFormat": "h:mm:ss.SS",
+            "secondsText": "10000000",
+            "formatted": "2777:46:40.00"
+        },
+        {
+            "id": "h:mm:ss.SSS/native/7",
+            "durationFormat": "h:mm:ss.SSS",
+            "secondsText": "7",
+            "formatted": "0:07.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/native/2.123456789",
+            "durationFormat": "h:mm:ss.SSS",
+            "secondsText": "2.123456789",
+            "formatted": "0:02.123"
+        },
+        {
+            "id": "h:mm:ss.SSS/native/-3680.4",
+            "durationFormat": "h:mm:ss.SSS",
+            "secondsText": "-3680.4",
+            "formatted": "-1:01:20.400"
+        },
+        {
+            "id": "h:mm:ss.SSS/native/-0.00001",
+            "durationFormat": "h:mm:ss.SSS",
+            "secondsText": "-0.00001",
+            "formatted": "-0:00.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/native/-0",
+            "durationFormat": "h:mm:ss.SSS",
+            "secondsText": "-0",
+            "formatted": "0:00.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/native/0",
+            "durationFormat": "h:mm:ss.SSS",
+            "secondsText": "0",
+            "formatted": "0:00.000"
+        },
+        {
+            "id": "h:mm:ss.SSS/native/10000000",
+            "durationFormat": "h:mm:ss.SSS",
+            "secondsText": "10000000",
+            "formatted": "2777:46:40.000"
+        }
+    ]
+}

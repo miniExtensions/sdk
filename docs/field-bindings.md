@@ -245,11 +245,90 @@ are lower-level primitives and do not inspect renderer input models.
 
 Percent values use native fractions: `0.25` means 25 percent. These controls do not
 convert display units or add range, precision, integer or rating-limit rules;
-canonical Save remains authoritative. A checkbox's initial native `null` is kept
+canonical Save remains authoritative. Duration clock input uses the specialization below.
+A checkbox's initial native `null` is kept
 until an explicit action writes `true` or `false`. Configured read-only, hidden,
 blocked and retired bindings reject writes. Accepted explicit reload replaces the
 models; old actions cannot edit the replacement. Ordinary remount does not reload
 or Save.
+
+## Duration clock input
+
+Duration uses the existing `binding.scalar` owner and native numeric seconds or
+`null`; there is no second draft or duration owner. `createDurationFieldModel`
+is also available from `/ui` for adapters. Its format comes from the accepted
+physical field's `options.durationFormat`: `h:mm`, `h:mm:ss`, `h:mm:ss.S`,
+`h:mm:ss.SS` or `h:mm:ss.SSS`. Missing or unsupported formats produce generic
+feedback rather than a guessed display.
+
+Use `/react` `DurationField`, the existing `renderDurationField` slot, or a custom
+renderer. Duration scalar actions include typed `setFocused(boolean)`; focusing
+preserves raw input, and blurring formats the committed native seconds without
+rounding or writing them. Owner lifetime stays outside mounts, so remounting keeps
+unfinished input. Existing `NumberField` also recognizes duration bindings.
+
+```tsx
+import { DurationField, type FieldProps } from '@miniextensions/sdk/react';
+
+export function DurationClock({ binding }: Pick<FieldProps, 'binding'>) {
+    return (
+        <DurationField
+            binding={binding}
+            render={({ snapshot, binding }) => {
+                const input = snapshot.scalar;
+                if (
+                    snapshot.retired ||
+                    snapshot.visibility.type !== 'visible' ||
+                    input?.kind !== 'duration'
+                )
+                    return null;
+                return (
+                    <label>
+                        {snapshot.field?.title}
+                        <input
+                            type="text"
+                            value={input.input}
+                            placeholder={input.durationFormat ?? undefined}
+                            disabled={!snapshot.canEdit}
+                            aria-invalid={!input.valid}
+                            onFocus={() => binding.scalar?.setFocused?.(true)}
+                            onBlur={() => binding.scalar?.setFocused?.(false)}
+                            onChange={(event) =>
+                                binding.scalar?.setInput(
+                                    event.currentTarget.value
+                                )
+                            }
+                        />
+                    </label>
+                );
+            }}
+        />
+    );
+}
+```
+
+An empty input explicitly clears to `null`; zero stays zero. A bare decimal uses
+minutes for `h:mm` and seconds for the other four formats. Two components mean
+hours/minutes for `h:mm`, minutes/seconds otherwise; three mean
+hours/minutes/seconds for every format. A leading minus applies to the complete
+duration. Overflow components are supported: `25:72` means 94,320 seconds for
+`h:mm` and 1,572 seconds otherwise.
+
+Complete input has one to three digit components. A decimal point with zero to
+three following digits is allowed on a bare value or the final seconds component;
+it is **not** allowed on the minutes component of a two-part `h:mm` clock.
+No plus sign, exponent, spaces or fractional earlier components are admitted.
+Partial or malformed text such as `-`, `1:`, `1::2` or a two-part `h:mm` value
+`1:2.5` stays visible with generic feedback, preserving the last native number.
+This is editor safety, not parity with canonical Moment's malformed-input-to-zero
+coercion. Accepted complete parsing and presentation use pinned canonical
+comparisons; displayed precision never rewrites native seconds.
+
+Invalid editable visible input blocks existing page navigation and Save before
+dispatch. Required, hidden, read-only, configuration and owner policy remain the
+existing binding/page rules. Focus and blur create no Save or journal attempt.
+Installed ESM/CJS, copied-starter and React proofs are synthetic; they do not
+establish native keyboard behavior or backend persistence.
 
 The stock numeric React/vanilla renderer uses a text input with decimal input mode
 to retain unfinished values rather than browser-sanitizing them to an empty value.

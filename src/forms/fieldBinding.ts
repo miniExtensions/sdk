@@ -3,6 +3,7 @@ import type { AirtableValue } from '../runtime/types.js';
 import {
     createNumberFieldModel,
     createCheckboxFieldModel,
+    createDurationFieldModel,
 } from '../ui/scalarModels.js';
 import type { SelectionModel } from '../ui/types.js';
 import type {
@@ -30,11 +31,22 @@ export const createFieldBinding = (options: {
     const scalar =
         options.fieldType === 'checkbox'
             ? createCheckboxFieldModel(scalarOptions)
-            : ['number', 'currency', 'percent', 'duration', 'rating'].includes(
-                    options.fieldType
-                )
-              ? createNumberFieldModel(scalarOptions)
-              : null;
+            : options.fieldType === 'duration'
+              ? createDurationFieldModel({
+                    ...scalarOptions,
+                    getDurationFormat() {
+                        const config =
+                            options.snapshot().field?.schema.airtableField
+                                .config;
+                        if (config?.type !== 'duration') throw Error('retired');
+                        return config.options.durationFormat;
+                    },
+                })
+              : ['number', 'currency', 'percent', 'rating'].includes(
+                      options.fieldType
+                  )
+                ? createNumberFieldModel(scalarOptions)
+                : null;
     const date =
         options.fieldType === 'date' || options.fieldType === 'dateTime'
             ? createDateFieldModel({

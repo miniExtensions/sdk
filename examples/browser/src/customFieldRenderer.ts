@@ -13,6 +13,26 @@ export function mountCustomField(
     node.append(title, body, status);
     const input = document.createElement('input');
     let retired = false;
+    let durationListeners = false;
+    const onFocus = () => {
+        if (!retired && body.contains(input))
+            binding.scalar?.setFocused?.(true);
+    };
+    const onBlur = () => {
+        if (!retired && body.contains(input))
+            binding.scalar?.setFocused?.(false);
+    };
+    const listenForDuration = (enabled: boolean) => {
+        if (durationListeners === enabled) return;
+        durationListeners = enabled;
+        if (enabled) {
+            input.addEventListener('focus', onFocus);
+            input.addEventListener('blur', onBlur);
+        } else {
+            input.removeEventListener('focus', onFocus);
+            input.removeEventListener('blur', onBlur);
+        }
+    };
     input.addEventListener('input', () => {
         if (retired || !binding.getSnapshot().canEdit) return;
         if (binding.date) binding.date.setInput(input.value);
@@ -23,6 +43,9 @@ export function mountCustomField(
         } else binding.setValue(input.value || null);
     });
     const stop = binding.subscribe((snapshot) => {
+        listenForDuration(
+            !snapshot.retired && snapshot.scalar?.kind === 'duration'
+        );
         node.hidden = snapshot.visibility.type !== 'visible';
         node.inert = snapshot.retired;
         title.textContent = snapshot.field?.title ?? '';
@@ -106,6 +129,7 @@ export function mountCustomField(
         destroy() {
             if (retired) return;
             retired = true;
+            listenForDuration(false);
             stop();
             node.remove();
         },

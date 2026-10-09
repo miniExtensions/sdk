@@ -280,7 +280,8 @@ export function NumberField({ binding, render }: FieldProps): ReactNode {
     if (
         snapshot.retired ||
         snapshot.visibility.type !== 'visible' ||
-        snapshot.scalar?.kind !== 'number'
+        !snapshot.scalar ||
+        snapshot.scalar.kind === 'checkbox'
     )
         return null;
     return createElement(
@@ -292,16 +293,34 @@ export function NumberField({ binding, render }: FieldProps): ReactNode {
             snapshot.field?.title,
             createElement('input', {
                 type: 'text',
-                inputMode: 'decimal',
+                inputMode:
+                    snapshot.scalar.kind === 'duration' ? 'text' : 'decimal',
+                placeholder:
+                    snapshot.scalar.kind === 'duration'
+                        ? ((snapshot.field?.schema.miniExtConfig &&
+                          'placeholderText' in
+                              snapshot.field.schema.miniExtConfig
+                              ? snapshot.field.schema.miniExtConfig
+                                    .placeholderText
+                              : undefined) ??
+                          snapshot.scalar.durationFormat ??
+                          undefined)
+                        : undefined,
                 value: snapshot.scalar.input,
                 disabled: !snapshot.canEdit,
                 'aria-invalid': !snapshot.scalar.valid,
+                onFocus: () => binding.scalar?.setFocused?.(true),
+                onBlur: () => binding.scalar?.setFocused?.(false),
                 onChange: (event: ChangeEvent<HTMLInputElement>) =>
                     binding.scalar?.setInput(event.currentTarget.value),
             })
         ),
         status(snapshot)
     );
+}
+/** Clock editing shares the existing scalar owner; render may replace all markup. */
+export function DurationField(props: FieldProps): ReactNode {
+    return createElement(NumberField, props);
 }
 export function CheckboxField({ binding, render }: FieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);

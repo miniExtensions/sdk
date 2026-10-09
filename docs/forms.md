@@ -1441,8 +1441,9 @@ fields. Select validity/count and linked maximum have neither exemption; linked
 minimum exempts hidden fields only. Initial loaded values are the detached
 persisted baseline for grandfathered select values; presentation is never data.
 
-This validator supports ordinary text, email/URL syntax, number/currency, select and
-linked limits plus required checks for the documented scalar/date/attachment types.
+This validator supports ordinary text, email/URL syntax, number/currency, select
+and collaborator selection validity, linked limits and required checks for the
+documented scalar/date/attachment types.
 Nonempty editable email answers use `email-validator` without trimming, case folding
 or native-value normalization. Invalid answers expose the field's generic
 `invalid-email` problem and block Next/final Submit before dispatch or journal creation.
@@ -1457,9 +1458,27 @@ validation only, with no network or DNS request. Conditional hiding does not
 waive URL syntax; read-only answers and exactly `allowInvalidUrls: true` are
 exempt. The native string is preserved byte for byte, including bare hosts;
 validation never replaces it with a normalized or prefixed href.
+Single and multiple collaborator answers are validated by exact string IDs from
+the loaded field's `config.options.choices` plus that same field's original stored
+selection. A stored collaborator can remain selected even if absent from current
+choices; an edited draft cannot create its own exemption. Names, email strings
+and other native object metadata are preserved and are not compared, normalized
+or checked for email syntax. There is no account lookup or local account
+authorization. Hidden and read-only fields skip required checks but still undergo
+nonempty selection validation. Native order and duplicate occurrences remain data.
+Null/missing and exactly empty strings, plus an explicit multiple `[]`, need no
+choice metadata after required validation. For nonempty values, missing or
+malformed choice-ID metadata gives `invalid-metadata`; an unknown ID or malformed
+selection gives `invalid-selection`. These problems block navigation and explicit
+submission before transport or journal creation. The SDK conservatively refuses
+single arrays, sparse or non-object array members and other invalid native shapes,
+including cases skipped by canonical loose empty-value comparison. The maintained
+fixture partition records those refusals separately from canonical comparisons.
+Renderer presentation still uses the full typed collaborator object, and Portal
+collaborator edits continue through the child Form rather than inline object writes.
 Computed fields and canonical pass-through types such as rich text and buttons
 do not add ordinary frontend validation. Existing visibility refusals still apply;
-lookup presentation requires an explicit `hideFieldIfEmpty: false`. Nonempty collaborator answers and other
+lookup presentation requires an explicit `hideFieldIfEmpty: false`. Other
 unimplemented validation types remain explicit refusals.
 Effective advanced conditional validation and `requireOpenLinkedRecords` without
 review tracking remain blocked when their page is relevant. Unsupported field rules

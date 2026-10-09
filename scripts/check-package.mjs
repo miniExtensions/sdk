@@ -4,6 +4,7 @@ import {
 } from './linked-records-consumer-checks.mjs';
 import { checkLinkedRendererConsumer } from './linked-renderer-consumer-checks.mjs';
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
+import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
@@ -1131,11 +1132,17 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 ),
         });
         if (example === 'browser') {
+            const collaboratorValidationProof =
+                await checkCollaboratorValidationConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    happyDomModulePath: require.resolve('happy-dom'),
+                });
+            assert.equal(collaboratorValidationProof.checks, 94);
             assert.equal(
                 await checkFormPageConsumer({
                     consumerDirectory: temporaryDirectory,
                 }),
-                806
+                1032
             );
             assert.equal(
                 await checkFormDispositionConsumer({

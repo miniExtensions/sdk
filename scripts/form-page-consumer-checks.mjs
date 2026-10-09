@@ -2053,7 +2053,14 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 classified.toSorted(),
                 oracle.validation.map((c) => c.name).toSorted()
             );
-            for (const c of oracle.validation) {
+            assert.deepEqual(
+                support.conservativeRefusal.toSorted(),
+                oracle.conservativeRefusal.map((c) => c.name).toSorted()
+            );
+            for (const c of [
+                ...oracle.validation,
+                ...oracle.conservativeRefusal,
+            ]) {
                 const f = fixture((p) => {
                     p.payload.fieldIdsInForm = ['fld_answer'];
                     p.payload.fieldIdsToSchemas = {
@@ -2101,7 +2108,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 const problems = f.pages
                     .getSnapshot()
                     .problems.filter((p) => p.fieldId === 'fld_answer');
-                if (support.unsupportedValidation.includes(c.name))
+                if (support.conservativeRefusal.includes(c.name))
+                    assert.deepEqual(problems, [
+                        { fieldId: 'fld_answer', code: c.expectedCode },
+                    ]);
+                else if (support.unsupportedValidation.includes(c.name))
                     assert.deepEqual(problems, [
                         {
                             fieldId: 'fld_answer',

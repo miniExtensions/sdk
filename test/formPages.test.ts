@@ -114,7 +114,11 @@ const lastPage = (f: ReturnType<typeof fixture>) => {
 };
 const validationSupport = JSON.parse(
     readFileSync('test/fixtures/formPageValidationSupport.json', 'utf8')
-) as { canonicalComparison: string[]; unsupportedValidation: string[] };
+) as {
+    canonicalComparison: string[];
+    unsupportedValidation: string[];
+    conservativeRefusal: string[];
+};
 describe('canonical ordinary page validation', () => {
     const oracle = JSON.parse(
         readFileSync('test/fixtures/formPages.json', 'utf8')
@@ -161,8 +165,15 @@ describe('canonical ordinary page validation', () => {
             [...ids].sort(),
             oracle.validation.map((c: { name: string }) => c.name).sort()
         );
-        assert.equal(validationSupport.canonicalComparison.length, 289);
-        assert.equal(validationSupport.unsupportedValidation.length, 24);
+        assert.equal(validationSupport.canonicalComparison.length, 413);
+        assert.equal(validationSupport.unsupportedValidation.length, 0);
+        assert.deepEqual(
+            [...validationSupport.conservativeRefusal].sort(),
+            oracle.conservativeRefusal
+                .map((c: { name: string }) => c.name)
+                .sort()
+        );
+        assert.equal(validationSupport.conservativeRefusal.length, 13);
     });
     for (const c of oracle.validation)
         it(c.name, () => {
@@ -182,6 +193,22 @@ describe('canonical ordinary page validation', () => {
                     code: 'unsupported-validation',
                 });
             else assert.equal(result !== null, c.invalid);
+        });
+    for (const c of oracle.conservativeRefusal)
+        it(c.name, () => {
+            const loaded = loadedForm();
+            loaded.payload.fieldIdsInForm = ['fld_answer'];
+            loaded.payload.fieldIdsToSchemas = { fld_answer: c.schema };
+            assert.deepEqual(
+                validatePageField(
+                    describeLoadedFormFields(loaded)[0]!,
+                    c.value,
+                    c.stored,
+                    c.hidden
+                ),
+                { fieldId: 'fld_answer', code: c.expectedCode }
+            );
+            assert(['result', 'throws'].includes(c.canonical.type));
         });
 });
 describe('email page validation regressions', () => {

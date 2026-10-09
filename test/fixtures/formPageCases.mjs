@@ -397,6 +397,206 @@ for (const type of ['singleCollaborator', 'multipleCollaborators'])
                     ],
                 };
             }
+// Collaborator page rules authorize native object IDs from loaded choices plus
+// immutable stored values. Display metadata is not selection authority.
+const allowedCollaborator = {
+    id: 'usr_allowed',
+    email: 'allowed@example.test',
+    name: 'Allowed',
+};
+const storedCollaborator = {
+    id: 'usr_legacy',
+    email: 'legacy@example.test',
+    name: 'Legacy',
+};
+const injectedCollaborator = {
+    id: 'usr_injected',
+    email: 'injected@example.test',
+    name: 'Injected',
+};
+const collaboratorValue = (type, person) =>
+    type === 'multipleCollaborators' ? [person] : person;
+const addCollaborator = (
+    name,
+    type,
+    value,
+    mini = {},
+    stored = null,
+    hidden = false,
+    choices = [allowedCollaborator]
+) => {
+    add(name, type, value, mini, stored, hidden);
+    formPageValidationCases.at(-1).schema.airtableField.config.options = {
+        choices: structuredClone(choices),
+    };
+};
+for (const type of ['singleCollaborator', 'multipleCollaborators']) {
+    for (const [emptyName, value] of [
+        ['null', null],
+        ['empty', ''],
+        ['spaces', '  '],
+        ['tab', '\t'],
+    ])
+        for (const required of [false, true])
+            for (const hidden of [false, true])
+                for (const readOnly of [false, true])
+                    addCollaborator(
+                        `collaborator-empty-${type}-${emptyName}-${required}-${hidden}-${readOnly}`,
+                        type,
+                        value,
+                        { required, readOnly },
+                        null,
+                        hidden
+                    );
+    const native = (person) => collaboratorValue(type, person);
+    for (const [shapeName, value, stored] of [
+        ['id-only', native({ id: 'usr_allowed' }), null],
+        [
+            'display-ignored',
+            native({
+                id: 'usr_allowed',
+                email: 'not-an-email',
+                name: 42,
+                profilePicUrl: false,
+            }),
+            null,
+        ],
+        ['id-number', native({ id: 7 }), null],
+        ['missing-id', native({ name: 'Allowed' }), null],
+        [
+            'wrong-container',
+            type === 'singleCollaborator'
+                ? [allowedCollaborator]
+                : allowedCollaborator,
+            null,
+        ],
+        ['bare-id', 'usr_allowed', null],
+        ['email-only', native({ email: 'allowed@example.test' }), null],
+        [
+            'duplicate-id',
+            type === 'multipleCollaborators'
+                ? [allowedCollaborator, allowedCollaborator]
+                : {
+                      ...allowedCollaborator,
+                      duplicateMetadata: ['usr_allowed', 'usr_allowed'],
+                  },
+            null,
+        ],
+        [
+            'mixed-unknown',
+            type === 'multipleCollaborators'
+                ? [allowedCollaborator, storedCollaborator]
+                : storedCollaborator,
+            null,
+        ],
+        [
+            'stored-wrong-shape',
+            native(storedCollaborator),
+            type === 'multipleCollaborators'
+                ? storedCollaborator
+                : [storedCollaborator],
+        ],
+        [
+            'stored-id-only',
+            native(storedCollaborator),
+            native({ id: 'usr_legacy' }),
+        ],
+        ['blank-id-unlisted', native({ id: '' }), null],
+    ])
+        addCollaborator(
+            `collaborator-shape-${type}-${shapeName}`,
+            type,
+            value,
+            {},
+            stored
+        );
+    addCollaborator(
+        `collaborator-shape-${type}-empty-id-allowed`,
+        type,
+        native({ id: '' }),
+        {},
+        null,
+        false,
+        [{ id: '' }]
+    );
+    for (const [choiceName, value, stored, choices] of [
+        ['empty-clear', null, null, []],
+        ['empty-known-refused', native(allowedCollaborator), null, []],
+        [
+            'empty-stored-retained',
+            native(storedCollaborator),
+            native(storedCollaborator),
+            [],
+        ],
+        [
+            'empty-stored-mixed-injected',
+            type === 'multipleCollaborators'
+                ? [storedCollaborator, injectedCollaborator]
+                : injectedCollaborator,
+            native(storedCollaborator),
+            [],
+        ],
+        [
+            'duplicates',
+            native(allowedCollaborator),
+            null,
+            [allowedCollaborator, allowedCollaborator],
+        ],
+    ])
+        addCollaborator(
+            `collaborator-choices-${type}-${choiceName}`,
+            type,
+            value,
+            {},
+            stored,
+            false,
+            choices
+        );
+}
+// Conservative SDK refusals are a distinct supported-boundary partition, not
+// canonical equality claims. Malformed/missing choices cannot supply selection
+// authority; malformed native values may be skipped by canonical's coercive
+// value != '' gate. Keep these out of executed canonical validation cases.
+export const formPageConservativeRefusalCases = [];
+for (const type of ['singleCollaborator', 'multipleCollaborators']) {
+    for (const [authorityName, options] of [
+        ['missing', {}],
+        ['null', { choices: null }],
+        ['nonarray', { choices: {} }],
+        ['malformed-id', { choices: [{ id: 7 }] }],
+    ]) {
+        const field = schema(type);
+        field.airtableField.config.options = options;
+        formPageConservativeRefusalCases.push({
+            name: `collaborator-refusal-${type}-choices-${authorityName}`,
+            schema: field,
+            value: collaboratorValue(type, allowedCollaborator),
+            stored: null,
+            hidden: false,
+            expectedCode: 'invalid-metadata',
+            reason: 'Loaded choices do not provide valid bounded selection authority.',
+        });
+    }
+}
+for (const [type, shapeName, value] of [
+    ['singleCollaborator', 'empty-array', []],
+    ['singleCollaborator', 'null-array', [null]],
+    ['multipleCollaborators', 'null-array', [null]],
+    ['multipleCollaborators', 'false', false],
+    ['multipleCollaborators', 'zero', 0],
+]) {
+    const field = schema(type);
+    field.airtableField.config.options = { choices: [allowedCollaborator] };
+    formPageConservativeRefusalCases.push({
+        name: `collaborator-refusal-${type}-coercive-${shapeName}`,
+        schema: field,
+        value,
+        stored: null,
+        hidden: false,
+        expectedCode: 'invalid-selection',
+        reason: 'Invalid native shape is conservatively refused where canonical loose empty comparison skips membership validation.',
+    });
+}
 export const formPageStructureCases = [
     {
         name: 'leading-and-sections',

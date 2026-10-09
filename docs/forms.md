@@ -1488,8 +1488,8 @@ that synchronously disposes the page owner cannot authorize a subsequent action.
 Unobserved in-place replacement is not detected. A stale
 callback never disposes shared or successor bindings.
 
-Pinned fixtures classify 177 ordinary-rule cases for exact canonical comparison
-and 26 cases as conservative unsupported-validation refusals. Executable installed
+Pinned fixtures compare supported ordinary rules with canonical frontend semantics
+and explicitly cover conservative unsupported-validation refusals. Executable installed
 ESM/CJS tests prove bounded local
 navigation and synthetic validation-response dispatch, not live persistence or
 complete hosted multipage parity. Live acceptance remains separately tracked.

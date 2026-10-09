@@ -17,6 +17,7 @@ import {
     createPortalDetailRendererHost,
 } from './rendererHosts.js';
 import type { FieldRendererHost } from './rendererRegistry.js';
+import type { ButtonFieldRecovery } from './buttonModel.js';
 
 export type PortalRenderScopeOptions = {
     /** Borrow the existing read owner; this scope never destroys it. */
@@ -24,6 +25,8 @@ export type PortalRenderScopeOptions = {
     client: MiniExtensionsClient;
     isCurrent(): boolean;
     configurationRevision(): string | number;
+    /** Borrow the existing mutation recovery resource; rendering never owns it. */
+    buttonRecovery?: ButtonFieldRecovery;
     /** Return an existing caller-owned cell only for this accepted detail. */
     resolveCell?(input: {
         recordId: string;
@@ -268,17 +271,21 @@ export function createPortalRenderScope(
                                         pending = true;
                                         break;
                                     }
-                                    const host: FieldRendererHost = cell
-                                        ? createPortalCellRendererHost({
-                                              ...options,
-                                              cell,
-                                              recordId: record.id,
-                                              fieldId: props.fieldId,
-                                          })
-                                        : projectDetailHost(
-                                              detailHost,
-                                              props.fieldId
-                                          );
+                                    // Button actions use returned detail policy, independently
+                                    // of inline-write configuration. Reuse this row's detail
+                                    // model instead of creating another owner for the action.
+                                    const host: FieldRendererHost =
+                                        cell && props.physicalKind !== 'button'
+                                            ? createPortalCellRendererHost({
+                                                  ...options,
+                                                  cell,
+                                                  recordId: record.id,
+                                                  fieldId: props.fieldId,
+                                              })
+                                            : projectDetailHost(
+                                                  detailHost,
+                                                  props.fieldId
+                                              );
                                     resources.push({ host, stop: () => {} });
                                     const snapshot = host.getSnapshot();
                                     if (

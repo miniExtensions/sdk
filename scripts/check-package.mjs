@@ -1,4 +1,9 @@
 import {
+    checkPortalButtonCompositionConsumer,
+    portalButtonCompositionTypedConsumer,
+    portalButtonCompositionReactTypedConsumer,
+} from './portal-button-composition-consumer-checks.mjs';
+import {
     checkLinkedRecordsConsumer,
     linkedRecordsTypedConsumer,
 } from './linked-records-consumer-checks.mjs';
@@ -581,6 +586,7 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         consumer +
         rendererTypeConsumer +
         buttonTypedConsumer +
+        portalButtonCompositionTypedConsumer +
         durationTypedConsumer +
         `
 import type { ListConditionalFilterPrimaryValuesInput, ConditionalFilterPrimaryValue, ConditionalFilterData, ListAddressPredictionsInput, AddressPrediction, GetFormattedAddressInput, TriggerConfiguredButtonWebhookInput, ConfiguredButtonWebhookSource, TriggerConfiguredButtonWebhookResult } from '@miniextensions/sdk';
@@ -909,6 +915,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         portalCompositionTypedConsumer
     );
     reactSources.push('portal-composition-consumer.ts');
+    writeFileSync(
+        join(temporaryDirectory, 'portal-button-composition-consumer.ts'),
+        portalButtonCompositionReactTypedConsumer
+    );
+    reactSources.push('portal-button-composition-consumer.ts');
     const compositionRecipes = [
         ...readFileSync(
             join(installedPackage, 'docs/field-bindings.md'),
@@ -1035,6 +1046,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         }),
         37
     );
+    const portalButtonCompositionProof =
+        await checkPortalButtonCompositionConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        });
+    assert.equal(portalButtonCompositionProof.checks, 66);
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),

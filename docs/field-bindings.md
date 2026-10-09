@@ -82,7 +82,7 @@ Use the existing field-specific instructions instead of duplicating policy:
 | Choices                                               | [Select policy and explicit Add Choice](#selects-linked-reads-and-reload); IDs identify options, native choice names are saved, and ineligible selected values remain data.                                                                                                                                                                            |
 | Linked records                                        | [Form rich state and Portal pill labels](#rich-linked-record-presentation); explicit authorized reads only, exact native ID occurrences, generic unresolved presentation and field-specific metadata.                                                                                                                                                  |
 | Attachments                                           | [Existing values, admission and pending files](#existing-attachment-values), [attachment policy](forms.md#attachment-presentation-and-file-admission) and [React cancellation](#optional-react-components); Form hosts need `attachmentRecovery` for upload actions. Preserve complete native metadata and apply privacy before display.               |
-| Buttons                                               | [Configured Button actions](#configured-button-actions); Form hosts/scopes need `button` options. Supported typed Grid/List scope options currently omit `buttonRecovery`; use a standalone Portal detail host for these actions.                                                                                                                      |
+| Buttons                                               | [Configured Button actions](#configured-button-actions); Form hosts/scopes need `button` options. Portal hosts and Grid/List scopes borrow `buttonRecovery` and use returned detail action policy.                                                                                                                                                     |
 | Collaborators                                         | Use the correlated `renderSingleCollaboratorField`/`renderMultipleCollaboratorsField` slots and native objects. [Page validation](forms.md#bounded-multipage-ownership) uses exact loaded choice IDs plus original stored IDs, without account lookup. The app supplies the picker; Portal object cells require the configured child Form for editing. |
 
 Check compatibility before building the UI. The accepted page-owner composition
@@ -821,6 +821,28 @@ export function createPortalPresentation(options: PortalRenderScopeOptions) {
 ```
 
 Supply `owner`, `client`, `isCurrent` and an observed `configurationRevision`.
+Optional `buttonRecovery` borrows the existing Button recovery resource for
+accepted row actions. Keep it outside renderer mounts, with the same accepted
+owner relationship and load version; neither the scope nor its hosts dispose
+the journal. Without it, Button slots retain read-only presentation. Supplying
+recovery does not grant action permission or bypass current membership, session,
+configuration or backend checks.
+
+```ts
+import {
+    createPortalRenderScope,
+    type PortalRenderScopeOptions,
+    type ButtonFieldRecovery,
+} from '@miniextensions/sdk/ui';
+
+export function createPortalButtonPresentation(
+    options: Omit<PortalRenderScopeOptions, 'buttonRecovery'>,
+    buttonRecovery: ButtonFieldRecovery
+) {
+    return createPortalRenderScope({ ...options, buttonRecovery });
+}
+```
+
 Snapshots contain `revision`, `retired`, the owner's state in `owner`, detached
 accepted `records`, ordered `rows` (`recordId`, then `cells` with `fieldId` and
 `host`) and captured `actions`. These actions delegate explicit Load, paging,
@@ -843,7 +865,13 @@ field, view, token, schema and write configuration before exposing capabilities.
 The scope does not fabricate editable bindings or widen the grid wire contract.
 The application owns these cell bindings and their uncertainty journal. Cache
 them at that ownership boundary, not in a renderer; explicitly retire them on
-real context replacement. No resolver means no inline mutation capability.
+real context replacement. No resolver means no inline value-write capability.
+Button actions always use returned detail policy, independently of child-first
+inline-write configuration. A scope reuses its row's detail Button host even
+when the resolver supplies a cell, avoiding a second action model for that row
+and field. Standalone `createPortalCellRendererHost` also accepts `buttonRecovery`
+and keeps its existing cell provenance checks; Button actions do not become
+inline cell writes.
 
 Optional React `AirtableGrid` and `AirtableList` use the same scope and all 33
 correlated `FieldRendererSlots<ReactNode>`. Both require a layout render prop.
@@ -911,6 +939,50 @@ subscribing and rendering perform no reads, saves, uploads or webhooks. Explicit
 criteria replacement retires old rows and paging; the next deliberate Load
 performs the read. Manual server cleanup remains a separate explicit action.
 Hidden and retired hosts never produce placeholder nodes.
+
+The same named slot works with either composition. It renders returned text
+and prepares a normal link without navigating or making a request. Webhooks
+remain explicit user actions, with the existing singleflight and uncertainty
+semantics described under [Configured Button actions](#configured-button-actions).
+
+```tsx
+import { createElement, type ReactNode } from 'react';
+import type {
+    FieldRendererProps,
+    FieldRendererSlots,
+} from '@miniextensions/sdk/ui';
+
+export function PortalButtonSlot(props: FieldRendererProps<'button'>) {
+    if (props.capability.type !== 'button') return null;
+    const action = props.capability.button;
+    const text = action.value?.label ?? props.title;
+    const link = action.canLink ? action.prepareLink() : null;
+    if (link) return createElement('a', { ...link }, text);
+    return createElement(
+        'button',
+        {
+            type: 'button',
+            disabled: !action.canTrigger,
+            'aria-busy': action.busy,
+            onClick: () => {
+                void action.triggerWebhook();
+            },
+        },
+        text
+    );
+}
+
+export const portalButtonSlots: FieldRendererSlots<ReactNode> = {
+    renderButtonField: PortalButtonSlot,
+};
+```
+
+All row hosts borrow the caller's journal. Pending or uncertain work blocks
+another action for the same recovery relationship and record; another row has
+its own record boundary. Host replacement preserves that journal outcome and
+never retries. Explicit acknowledgment is a new intent after inspection, not
+proof that the prior webhook failed. Retire old scope/hosts on real context
+replacement while retaining the journal at its original ownership boundary.
 
 React unmount and StrictMode cleanup only unsubscribe. Cell drafts, unfinished
 input, pending File identities and uncertainty remain with their original

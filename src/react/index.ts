@@ -10,6 +10,10 @@ import {
     type ChangeEvent,
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
+import type {
+    FormRenderScope,
+    FormRenderSnapshot,
+} from '../ui/formRenderScope.js';
 import type { FormFieldBinding, FormFieldSnapshot } from '../forms/bindings.js';
 import type {
     FormAttachmentController,
@@ -898,4 +902,66 @@ export function FieldRenderer({
             )
         )
     );
+}
+
+export type AirtableFormRenderState = Omit<FormRenderSnapshot, 'fields'> & {
+    fields: readonly { fieldId: string; node: ReactNode }[];
+};
+export type AirtableFormProps = {
+    scope: FormRenderScope;
+    renderers: import('../ui/rendererRegistry.js').FieldRendererSlots<ReactNode>;
+    fallback?(state: FieldRendererFallback): ReactNode;
+    /** Layout only; actions retain the revision that produced this render. */
+    children(state: AirtableFormRenderState): ReactNode;
+};
+
+/** A subscription shell: unmount never disposes the supplied rendering scope. */
+export function AirtableForm({
+    scope,
+    renderers,
+    fallback,
+    children,
+}: AirtableFormProps): ReactNode {
+    const store = useMemo(() => {
+        let value = scope.getSnapshot();
+        const read = () => {
+            const next = scope.getSnapshot();
+            if (next.revision !== value.revision) value = next;
+            return value;
+        };
+        return {
+            getSnapshot: read,
+            subscribe: (notify: () => void) => {
+                const refresh = () => {
+                    const before = value;
+                    read();
+                    if (value !== before) notify();
+                };
+                const stop = scope.subscribe(refresh);
+                refresh();
+                return stop;
+            },
+        };
+    }, [scope]);
+    const state = useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+    if (state.retired) return null;
+    return children({
+        ...state,
+        fields: state.fields.map(({ fieldId, host }) => ({
+            fieldId,
+            node: createElement(FieldRenderer, {
+                key: fieldId,
+                host,
+                renderers,
+                fallback: (failure) =>
+                    failure.status === 'hidden' || failure.status === 'retired'
+                        ? null
+                        : (fallback?.(failure) ?? null),
+            }),
+        })),
+    });
 }

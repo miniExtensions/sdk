@@ -90,6 +90,13 @@ export {
     createPortalCellRendererHost,
     createPortalDetailRendererHost,
 } from './rendererHosts.js';
+export { createFormRenderScope } from './formRenderScope.js';
+export type {
+    FormRenderScopeOptions,
+    FormRenderScope,
+    FormRenderSnapshot,
+    FormRenderField,
+} from './formRenderScope.js';
 export type {
     FormFieldRendererHostOptions,
     PortalCellRendererHostOptions,

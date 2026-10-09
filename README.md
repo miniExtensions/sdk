@@ -156,7 +156,8 @@ also includes optional DOM controls. The `/react` subpath provides `TextField`, 
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
 [field-binding usage guide](docs/field-bindings.md) and
-[typed renderer hosts, `FieldRenderer` and named slots](docs/field-bindings.md#typed-renderer-hosts-and-named-slots).
+[typed renderer hosts, `FieldRenderer` and named slots](docs/field-bindings.md#typed-renderer-hosts-and-named-slots), and
+[Form composition with `AirtableForm` and app-owned layout](docs/field-bindings.md#form-composition-with-app-owned-layout).
 Keep these owners outside renderer mounts; React is optional, and remounting a
 renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and

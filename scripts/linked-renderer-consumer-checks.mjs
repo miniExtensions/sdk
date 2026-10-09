@@ -632,7 +632,8 @@ export async function checkLinkedRendererConsumer({
                     host = f.host(),
                     held = fixtures.deferred();
                 f.setSelected(() => held.promise);
-                let received;
+                let received,
+                    submitCount = 0;
                 const renderers = {
                     renderMultipleRecordLinksField: (props) => {
                         received = props;
@@ -655,11 +656,20 @@ export async function checkLinkedRendererConsumer({
                     h(
                         StrictMode,
                         null,
-                        h(api.react.FieldRenderer, {
-                            host: receivingHost,
-                            renderers,
-                            fallback: () => h('span', null, 'fallback'),
-                        })
+                        h(
+                            'form',
+                            {
+                                onSubmit: (event) => {
+                                    event.preventDefault();
+                                    submitCount++;
+                                },
+                            },
+                            h(api.react.FieldRenderer, {
+                                host: receivingHost,
+                                renderers,
+                                fallback: () => h('span', null, 'fallback'),
+                            })
+                        )
                     );
                 await act(async () => root.render(tree(host)));
                 assert.equal(
@@ -684,6 +694,16 @@ export async function checkLinkedRendererConsumer({
                 );
                 await act(async () => readButton.click());
                 assert.equal(f.calls.selected.length, 1);
+                assert.equal(
+                    submitCount,
+                    0,
+                    'Load selected must not submit the enclosing native Form'
+                );
+                assert.equal(
+                    readButton.type,
+                    'button',
+                    'Installed recipe selected read is an explicit non-submit action'
+                );
                 const signal = f.calls.selected[0][1].signal;
                 await act(async () => root.unmount());
                 host.dispose();

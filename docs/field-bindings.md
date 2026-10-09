@@ -825,6 +825,7 @@ export function RichLinkedField(
         createElement(
             'button',
             {
+                type: 'button',
                 disabled: state.pending,
                 onClick: () => {
                     void linked.readSelected();

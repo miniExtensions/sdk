@@ -697,6 +697,117 @@ export async function checkDurationBindingConsumer({
             logLevel: 'silent',
         });
         const copied = await import(pathToFileURL(outfile));
+        // Drive the copied custom renderer itself, independently of the stock input.
+        let customScope = { ownerId: 'custom-A', revision: 0 };
+        const customOwner = forms.createFormFieldBindings({
+            ...options,
+            getScope: () => customScope,
+        });
+        const customBinding = customOwner.field('fld_duration');
+        let mountedCustom = copied.mountCustomField(
+            customBinding,
+            window.document
+        );
+        window.document.body.append(mountedCustom.node);
+        const nativeState = () => ({
+            value: customBinding.getSnapshot().value,
+            input: customBinding.scalar.getState().input,
+            focused: customBinding.scalar.getState().focused,
+            valid: customBinding.scalar.getState().valid,
+            scalarRevision: customBinding.scalar.getState().revision,
+            draftRevision: customOwner.controller.getState().draftRevision,
+            saves: saves.length,
+        });
+        const sendDetachedEvents = (input) => {
+            input.dispatchEvent(new window.Event('focus'));
+            input.value = '9:59.999';
+            input.dispatchEvent(new window.Event('input', { bubbles: true }));
+            input.dispatchEvent(new window.Event('blur'));
+        };
+        try {
+            let customInput = mountedCustom.node.querySelector('input');
+            const precisionBefore = nativeState();
+            const initialDirty = customBinding.getSnapshot().dirty;
+            assert.equal(initialDirty, false);
+            customInput.dispatchEvent(new window.Event('focus'));
+            assert.equal(customBinding.scalar.getState().focused, true);
+            customInput.dispatchEvent(new window.Event('blur'));
+            assert.equal(customBinding.scalar.getState().focused, false);
+            assert.equal(customBinding.getSnapshot().value, 3600.123456);
+            assert.equal(customBinding.getSnapshot().dirty, initialDirty);
+            assert.equal(
+                customOwner.controller.getState().draftRevision,
+                precisionBefore.draftRevision
+            );
+            assert.equal(saves.length, precisionBefore.saves);
+            checks++;
+            customInput.dispatchEvent(new window.Event('focus'));
+            assert.equal(customBinding.scalar.getState().focused, true);
+            customInput.value = '01:02.50';
+            customInput.dispatchEvent(
+                new window.Event('input', { bubbles: true })
+            );
+            assert.equal(customBinding.getSnapshot().value, 62.5);
+            assert.equal(customBinding.scalar.getState().input, '01:02.50');
+            const committedRevision =
+                customOwner.controller.getState().draftRevision;
+            customInput.dispatchEvent(new window.Event('blur'));
+            assert.equal(customBinding.scalar.getState().focused, false);
+            assert.equal(customBinding.scalar.getState().input, '1:02.500');
+            assert.equal(customInput.value, '1:02.500');
+            assert.equal(customBinding.getSnapshot().value, 62.5);
+            assert.equal(
+                customOwner.controller.getState().draftRevision,
+                committedRevision
+            );
+            assert.equal(saves.length, precisionBefore.saves);
+            checks++;
+            customInput.dispatchEvent(new window.Event('focus'));
+            customInput.value = '1:';
+            customInput.dispatchEvent(
+                new window.Event('input', { bubbles: true })
+            );
+            assert.equal(customBinding.scalar.getState().focused, true);
+            assert.equal(customBinding.scalar.getState().valid, false);
+            assert.equal(
+                customOwner.controller.write('fld_duration', 120.25),
+                true
+            );
+            assert.equal(customBinding.getSnapshot().value, 120.25);
+            assert.equal(customBinding.scalar.getState().input, '1:');
+            assert.equal(customBinding.scalar.getState().valid, false);
+            assert.equal(customInput.value, '1:');
+            assert.equal(saves.length, precisionBefore.saves);
+            checks++;
+            const beforeDestroyEvents = nativeState();
+            mountedCustom.destroy();
+            sendDetachedEvents(customInput);
+            assert.deepEqual(nativeState(), beforeDestroyEvents);
+            checks++;
+            mountedCustom = copied.mountCustomField(
+                customBinding,
+                window.document
+            );
+            window.document.body.append(mountedCustom.node);
+            customInput = mountedCustom.node.querySelector('input');
+            assert.equal(customInput.value, '1:');
+            assert.equal(customBinding.scalar.getState().valid, false);
+            assert.equal(customBinding.getSnapshot().value, 120.25);
+            assert.equal(customBinding.scalar.getState().focused, true);
+            assert.equal(saves.length, precisionBefore.saves);
+            checks++;
+            customScope = { ownerId: 'custom-B', revision: 1 };
+            customOwner.refresh();
+            assert.equal(customBinding.getSnapshot().retired, true);
+            assert.equal(mountedCustom.node.querySelector('input'), null);
+            const beforeRetiredEvents = nativeState();
+            sendDetachedEvents(customInput);
+            assert.deepEqual(nativeState(), beforeRetiredEvents);
+            checks++;
+        } finally {
+            mountedCustom.destroy();
+            customOwner.destroy();
+        }
         stock = copied.mountBoundFormField(
             binding,
             page.payload.fieldIdsToSchemas.fld_duration,

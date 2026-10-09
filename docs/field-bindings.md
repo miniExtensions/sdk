@@ -524,3 +524,44 @@ Installed proof covers all named-slot types, ESM/CommonJS dispatch, shared custo
 markup across Form, editable cell and read-only detail contexts, and synthetic
 StrictMode/remount and stale-action cases. It is not native-browser, live-backend,
 webhook-delivery or persistence acceptance.
+
+## Rich linked-record presentation
+
+Native linked-field values remain arrays of record IDs. Use the accepted owner’s rich-record facet to render other fields returned for each record; do not replace the native value with record objects.
+
+```ts
+import type { FormFieldBindings } from '@miniextensions/sdk/forms';
+
+export function inspectLinkedRecords(
+    fields: FormFieldBindings,
+    fieldId: string
+) {
+    const linked = fields.linkedRecords(fieldId);
+    const stop = linked.subscribe((state) => {
+        // Render selectedRecords and candidateRecords using returned physical metadata.
+        // unresolvedSelectedIds identifies native IDs without accepted record data.
+        console.log(
+            state.selectedRecords,
+            state.table,
+            state.unresolvedSelectedIds
+        );
+    });
+    // Explicit user Load/Retry action; subscribing does not dispatch this read.
+    const loadSelected = () => linked.readSelected();
+    return { loadSelected, stop };
+}
+```
+
+SDK Form and Portal linked-option loaders attach detached record data to `selection.getState().linkedRecords` only after the option page is accepted. Search replaces the candidate page; pagination appends accepted records. When retained pages supply conflicting physical metadata, their common table metadata is null; an empty page with no retained records does not override the metadata of a later nonempty page. Labels still use the primary field, and selection changes still write record IDs. A missing table is distinct from returned empty physical metadata.
+
+A Form facet accepts SDK rich pages only from the same client, token, field, and linked table. A custom option loader can still supply native choices, but replaying a page from another client or field does not provide rich-record presentation authority.
+
+The rich Form facet’s `phase`, `pending`, and `error` describe the shared selected-hydration read. For candidate Search and More, use the existing binding’s `selection.getState()` fields `loading`, `error`, `searchTerm`, and `offset`. The facet adds no second candidate read owner; native selection and draft writes remain owned by the existing binding.
+
+Selected candidate records remain owned by the Form facet across candidate searches and renderer unmounts, even without a subscriber or intervening snapshot read. Actual owner retirement clears that presentation. The facet’s `table` is common physical metadata from the sources of its returned selected and candidate records. Empty original hydration does not override candidate metadata. If participating sources conflict or lack metadata, `table` is null; render generic values rather than pairing a record with unrelated fields.
+
+Form `selectedRecords` follows native selection order, including duplicate IDs. Explicit `readSelected()` hydrates original selected IDs; newly selected candidates come from accepted option pages. `detailProjection` distinguishes an absent field key (`missing`), an explicit null projection (`null`), and a returned array, including an empty one (`present`). Selected-record conditions and sorting that the facet cannot evaluate are reported by `selectedPolicy`; they do not imply client-side filtered or sorted selected records.
+
+For an outer Portal list, call `owner.getRecords(owner.getSnapshot().revision)` after an accepted read. It returns detached records and physical table metadata for that field, or null while no accepted presentation exists or the revision/owner is stale. These snapshots grant no new write capability and trigger no reads. Retire the owner when its visitor, session, or configuration changes.
+
+The installed package checks use synthetic transports for these owner and race guarantees. They do not establish live backend filtering behavior or native browser presentation.

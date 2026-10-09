@@ -1,4 +1,8 @@
 import {
+    checkLinkedRecordsConsumer,
+    linkedRecordsTypedConsumer,
+} from './linked-records-consumer-checks.mjs';
+import {
     checkButtonConsumer,
     buttonTypedConsumer,
     buttonReactTypedConsumer,
@@ -744,6 +748,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         ['browser-consumer.ts', 'ESNext', 'Bundler'],
     ]) {
         writeFileSync(join(temporaryDirectory, filename), declarationConsumer);
+        const linkedRecordsFilename = `linked-records-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, linkedRecordsFilename),
+            linkedRecordsTypedConsumer
+        );
         const rendererFilename = `renderers-${filename}`;
         writeFileSync(
             join(temporaryDirectory, rendererFilename),
@@ -763,6 +772,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             moduleResolution,
             filename,
             rendererFilename,
+            linkedRecordsFilename,
             ...formulasGuideSources,
         ]);
     }
@@ -885,6 +895,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(buttonProof.checks, 67);
     console.log(
         `Installed Button model and custom React renderers: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
+    );
+    const linkedRecordsProof = await checkLinkedRecordsConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(linkedRecordsProof.checks, 12);
+    console.log(
+        `Installed rich linked records: ${linkedRecordsProof.checks} ESM/CJS groups passed; synthetic transport only.`
     );
     const rendererProof = await checkRendererConsumer({
         consumerDirectory: temporaryDirectory,

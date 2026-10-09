@@ -1,10 +1,18 @@
 import type {
+    AirtableRecord,
     ListPortalLinkedRecordsResult,
     MiniExtensionsClient,
     PortalLoadedResult,
+    RuntimeAirtableField,
+    RuntimeLinkedRecordDetailField,
 } from '../runtime/types.js';
 import { createPortalCollection, PortalCollectionError } from './collection.js';
-import { captureCriteria } from './helpers.js';
+import { AirtableFieldType } from '../formulas/types.js';
+import {
+    captureCriteria,
+    getPortalLinkedRecordFieldConfig,
+    isObject,
+} from './helpers.js';
 import type {
     PortalCollection,
     PortalCollectionOptions,
@@ -42,8 +50,18 @@ export type PortalListOwnerOptions = PortalCollectionOptions & {
     /** Advance on accepted configuration replacement, including observed A→B→A. */
     configurationRevision?(): string | number;
 };
+/** Detached presentation of one accepted outer Portal field; never a read owner. */
+export type PortalRecordPresentation = {
+    portalFieldId: string;
+    linkedTableId: string;
+    records: AirtableRecord[];
+    table: { airtableFields: RuntimeAirtableField[] };
+    detailFields: RuntimeLinkedRecordDetailField[];
+    detailProjection: 'missing' | 'null' | 'present';
+};
 export type PortalListOwner = {
     getSnapshot(): PortalListSnapshot;
+    getRecords(revision: number): PortalRecordPresentation | null;
     subscribe(listener: (snapshot: PortalListSnapshot) => void): () => void;
     isCurrent(revision: number): boolean;
     readFirst(revision: number, options: PortalReadOptions): Promise<boolean>;
@@ -330,6 +348,143 @@ export function createPortalListOwner(
         getSnapshot: () => {
             current();
             return snapshot();
+        },
+        getRecords(expected) {
+            if (
+                !owned(expected) ||
+                active !== null ||
+                !page ||
+                (phase !== 'ready' && phase !== 'empty')
+            )
+                return null;
+            try {
+                if (
+                    portal.payload.fieldIdsInPortal.filter(
+                        (id) => id === fieldId
+                    ).length !== 1
+                )
+                    return null;
+                const schema = portal.payload.fieldIdsToSchemas[fieldId];
+                if (
+                    !schema ||
+                    schema.airtableField.id !== fieldId ||
+                    schema.fieldType !== schema.airtableField.config.type
+                )
+                    return null;
+                const linked = getPortalLinkedRecordFieldConfig(
+                    schema.airtableField
+                );
+                if (!linked) return null;
+                const linkedTableId = linked.options.linkedTableId;
+                const table = page.tableIdsToLinkedTableStates[linkedTableId];
+                if (
+                    !table ||
+                    !Array.isArray(table.airtableFields) ||
+                    !isObject(table.recordIdsToAirtableRecords)
+                )
+                    return null;
+                const ids = new Set<string>();
+                for (const field of table.airtableFields) {
+                    if (
+                        !isObject(field) ||
+                        typeof field.id !== 'string' ||
+                        field.id.trim() === '' ||
+                        ids.has(field.id) ||
+                        typeof field.name !== 'string' ||
+                        (field.description !== null &&
+                            typeof field.description !== 'string') ||
+                        typeof field.isComputed !== 'boolean' ||
+                        typeof field.isPrimaryField !== 'boolean' ||
+                        !isObject(field.config) ||
+                        typeof field.config.type !== 'string' ||
+                        !Object.values(AirtableFieldType).includes(
+                            field.config.type as AirtableFieldType
+                        ) ||
+                        ([
+                            'singleLineText',
+                            'email',
+                            'url',
+                            'multilineText',
+                            'richText',
+                            'phoneNumber',
+                            'barcode',
+                            'button',
+                            'autoNumber',
+                        ].includes(field.config.type)
+                            ? field.config.options !== null
+                            : !isObject(field.config.options))
+                    )
+                        return null;
+                    ids.add(field.id);
+                }
+                const records: AirtableRecord[] = [];
+                const seen = new Set<string>();
+                for (const id of page.recordIds) {
+                    if (
+                        typeof id !== 'string' ||
+                        id.trim() === '' ||
+                        seen.has(id) ||
+                        !Object.hasOwn(table.recordIdsToAirtableRecords, id)
+                    )
+                        return null;
+                    seen.add(id);
+                    const record = table.recordIdsToAirtableRecords[id];
+                    if (
+                        !isObject(record) ||
+                        record.id !== id ||
+                        !isObject(record.fields)
+                    )
+                        return null;
+                    if (
+                        Object.values(page.tableIdsToLinkedTableStates).filter(
+                            (t) =>
+                                Object.hasOwn(t.recordIdsToAirtableRecords, id)
+                        ).length !== 1
+                    )
+                        return null;
+                    // Only physical fields returned for this table enter the facet.
+                    records.push({
+                        id,
+                        fields: Object.fromEntries(
+                            Object.entries(record.fields).filter(([key]) =>
+                                ids.has(key)
+                            )
+                        ),
+                    });
+                }
+                const detailIds = new Set<string>();
+                for (const detail of page.detailFields) {
+                    if (
+                        !isObject(detail) ||
+                        typeof detail.fieldId !== 'string' ||
+                        detail.fieldId.trim() === '' ||
+                        detailIds.has(detail.fieldId) ||
+                        typeof detail.isHidden !== 'boolean' ||
+                        !ids.has(detail.fieldId)
+                    )
+                        return null;
+                    detailIds.add(detail.fieldId);
+                }
+                const result: PortalRecordPresentation = structuredClone({
+                    portalFieldId: fieldId,
+                    linkedTableId,
+                    records,
+                    table: { airtableFields: table.airtableFields },
+                    detailFields: page.detailFields,
+                    detailProjection:
+                        page.customViewDetailFields === null
+                            ? 'null'
+                            : Object.hasOwn(
+                                    page.customViewDetailFields,
+                                    fieldId
+                                )
+                              ? 'present'
+                              : 'missing',
+                });
+                return owned(expected) && active === null ? result : null;
+            } catch {
+                return null;
+            }
         },
         subscribe(listener) {
             current();

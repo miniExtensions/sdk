@@ -34,6 +34,8 @@ export type SelectionState = {
     error: string | null;
     disabled: boolean;
     readOnly: boolean;
+    /** Present only after an SDK linked-record loader page is accepted. */
+    linkedRecords?: LinkedRecordSelectionPage;
 };
 
 export type SelectionModelOptions = {
@@ -74,4 +76,13 @@ export type SelectionModel = {
     reset(options: SelectionModelOptions): void;
     cancel(): void;
     destroy(): void;
+};
+import type { AirtableRecord, RuntimeAirtableField } from '../runtime/types.js';
+
+/** Detached data from an accepted SDK linked-option page, scoped to one field/table. */
+export type LinkedRecordSelectionPage = {
+    linkedTableId: string;
+    records: AirtableRecord[];
+    /** Physical metadata only; never a table-wide record cache. */
+    table: { airtableFields: RuntimeAirtableField[] } | null;
 };

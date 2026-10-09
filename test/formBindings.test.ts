@@ -62,6 +62,128 @@ const fixture = (
     };
 };
 
+const linkedFixture = () => {
+    const f = fixture();
+    const loaded = structuredClone(f.loaded);
+    loaded.payload.fieldIdsInForm.push('fld_parent');
+    loaded.payload.fieldIdsToSchemas.fld_parent = {
+        fieldType: 'multipleRecordLinks',
+        airtableField: {
+            id: 'fld_parent',
+            name: 'Parent',
+            description: null,
+            isComputed: false,
+            isPrimaryField: false,
+            config: {
+                type: 'multipleRecordLinks',
+                options: {
+                    linkedTableId: 'tbl_parent',
+                    isReversed: false,
+                    prefersSingleRecordLink: false,
+                },
+            },
+        },
+        miniExtConfig: {},
+    };
+    loaded.payload.formRecord.data.fld_parent = ['rec_original'];
+    f.owner.destroy();
+    return {
+        ...f,
+        loaded,
+        owner: createFormFieldBindings({ ...f.options, loaded }),
+    };
+};
+
+for (const kind of ['loader', 'options'] as const) {
+    it(`a newer ${kind} replacement wins reentrant rich-facet retirement`, async () => {
+        const f = linkedFixture();
+        const selection = f.owner.field('fld_parent').selection!;
+        const old = f.owner.linkedRecords('fld_parent');
+        let replaced = false,
+            olderReads = 0,
+            newerReads = 0;
+        let successor: ReturnType<typeof f.owner.linkedRecords> | undefined;
+        const stop = old.subscribe((state) => {
+            if (state.phase !== 'retired' || replaced) return;
+            replaced = true;
+            if (kind === 'loader')
+                f.owner.setLinkedLoader('fld_parent', async () => {
+                    newerReads++;
+                    return {
+                        options: [{ value: 'rec_newer', label: 'Newer' }],
+                        offset: null,
+                    };
+                });
+            else
+                f.owner.setLinkedOptions('fld_parent', [
+                    { value: 'rec_newer', label: 'Newer' },
+                ]);
+            successor = f.owner.linkedRecords('fld_parent');
+        });
+        if (kind === 'loader')
+            f.owner.setLinkedLoader('fld_parent', async () => {
+                olderReads++;
+                return {
+                    options: [{ value: 'rec_older', label: 'Older' }],
+                    offset: null,
+                };
+            });
+        else
+            f.owner.setLinkedOptions('fld_parent', [
+                { value: 'rec_older', label: 'Older' },
+            ]);
+        if (kind === 'loader') await selection.reload();
+        assert.equal(replaced, true);
+        assert.deepEqual(selection.getState().options, [
+            { value: 'rec_newer', label: 'Newer' },
+        ]);
+        assert.equal(olderReads, 0);
+        assert.equal(newerReads, kind === 'loader' ? 1 : 0);
+        assert.equal(f.owner.linkedRecords('fld_parent'), successor);
+        assert.equal(old.getSnapshot().phase, 'retired');
+        assert.equal(await old.readSelected(), false);
+        assert.deepEqual(f.owner.field('fld_parent').getSnapshot().value, [
+            'rec_original',
+        ]);
+        assert.equal(f.calls.length, 0);
+        stop();
+        f.owner.destroy();
+    });
+}
+
+it('static linked replacement retires a held older read without erasing native selection', async () => {
+    const f = linkedFixture();
+    const held = deferred<{
+        options: { value: string; label: string }[];
+        offset: null;
+    }>();
+    let signal: AbortSignal | undefined;
+    f.owner.setLinkedLoader('fld_parent', async (request) => {
+        signal = request.signal;
+        return held.promise;
+    });
+    const selection = f.owner.field('fld_parent').selection!;
+    const reading = selection.reload();
+    await Promise.resolve();
+    f.owner.setLinkedOptions('fld_parent', [
+        { value: 'rec_newer', label: 'Newer' },
+    ]);
+    assert.equal(signal!.aborted, true);
+    held.resolve({
+        options: [{ value: 'rec_older', label: 'Older' }],
+        offset: null,
+    });
+    await reading;
+    assert.deepEqual(selection.getState().options, [
+        { value: 'rec_newer', label: 'Newer' },
+    ]);
+    assert.deepEqual(f.owner.field('fld_parent').getSnapshot().value, [
+        'rec_original',
+    ]);
+    assert.equal(f.calls.length, 0);
+    f.owner.destroy();
+});
+
 describe('Form field binding ownership', () => {
     it('a held reload blocks shared writes and Save before journal dispatch', async () => {
         const f = fixture();

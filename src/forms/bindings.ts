@@ -16,6 +16,7 @@ import {
 } from './attachmentController.js';
 import type { AirtableValue, FormLoadedResult } from '../runtime/types.js';
 import { createSelectionModel } from '../ui/model.js';
+import { guardFormLinkedRecordPage } from '../ui/linkedRecordPages.js';
 import { createSelectFieldModel } from '../ui/selectModel.js';
 import { resolveSelectFieldAvailability } from '../ui/selectAvailability.js';
 import type {
@@ -42,6 +43,10 @@ import {
     type FormFieldVisibility,
 } from './visibility.js';
 import { formChoiceConditionRecord } from './choiceRecord.js';
+import {
+    createFormLinkedRecordsOwner,
+    type FormLinkedRecordsFacet,
+} from './linkedRecords.js';
 
 export type FieldActionResult =
     | { accepted: true }
@@ -82,6 +87,8 @@ export type FormFieldBinding = {
     readonly choiceCreation?: FormSelectChoiceController | null;
 };
 export type FormFieldBindingsOptions = FormControllerOptions & {
+    /** Advance for accepted linked-record configuration replacement, including observed ABA. */
+    configurationRevision?(): string | number;
     /** Explicit client zone for dateTime presentation; never a local-time parser. */
     getClientTimeZone?(): string;
     /** Additional explicit UI/recovery lease. It never clears native data. */
@@ -106,6 +113,8 @@ export type FormFieldBindings = {
         adapter?: SelectChoiceAdapter
     ): FormSelectChoiceController;
     field(fieldId: string): FormFieldBinding;
+    /** Read-only rich data; constructing/subscribing never dispatches a read. */
+    linkedRecords(fieldId: string): FormLinkedRecordsFacet;
     refresh(): void;
     setLinkedLoader(fieldId: string, loader: SelectionLoader): void;
     /** Accepted field-specific presentation only, not a table-wide cache. */
@@ -153,6 +162,10 @@ export function createFormFieldBindings(
     let options = initial;
     const store = initial.store ?? new FormDraftStore<AirtableValue>();
     let loaded = structuredClone(initial.loaded);
+    // Server-accepted selection IDs stay separate from dirty values kept across reload.
+    let originalLinkedRecordData = structuredClone(
+        initial.loaded.payload.formRecord.data
+    );
     const controller = createFormController({ ...initial, loaded, store });
     let epoch = controller.getState().epoch;
     let contextRevision = controller.getState().contextRevision;
@@ -169,6 +182,17 @@ export function createFormFieldBindings(
     let readGeneration = 0;
     let readError: string | null = null;
     let visibility: Record<string, FormFieldVisibility> = {};
+    let linkedRecordsOwner: ReturnType<
+        typeof createFormLinkedRecordsOwner
+    > | null = null;
+    const linkedOptionRevisions = new Map<string, number>();
+    const replacingLinkedOptions = new Map<string, number>();
+    const beginLinkedReplacement = (id: string) => {
+        const ticket = (linkedOptionRevisions.get(id) ?? 0) + 1;
+        linkedOptionRevisions.set(id, ticket);
+        replacingLinkedOptions.set(id, ticket);
+        return ticket;
+    };
     const entries = new Map<
         string,
         {
@@ -179,6 +203,9 @@ export function createFormFieldBindings(
         }
     >();
     const retireEntries = () => {
+        const oldLinkedRecords = linkedRecordsOwner;
+        linkedRecordsOwner = null;
+        oldLinkedRecords?.destroy();
         for (const entry of entries.values()) {
             entry.stop?.();
             entry.model?.destroy();
@@ -655,6 +682,20 @@ export function createFormFieldBindings(
             return model;
         },
         field,
+        linkedRecords: (id) => {
+            if (!current() || pendingRead || replacingLinkedOptions.has(id))
+                throw new Error('A current idle Form owner is required.');
+            linkedRecordsOwner ??= createFormLinkedRecordsOwner({
+                client: options.client,
+                loaded,
+                originalRecordData: originalLinkedRecordData,
+                field,
+                isCurrent: current,
+                configurationRevision: () =>
+                    options.configurationRevision?.() ?? 0,
+            });
+            return linkedRecordsOwner.field(id);
+        },
         refresh,
         save: (supplied) => {
             if (
@@ -696,48 +737,105 @@ export function createFormFieldBindings(
             });
         },
         setLinkedOptions: (id, supplied, append = false) => {
-            if (!current()) return;
-            const binding = field(id);
-            if (
-                binding.getSnapshot().field?.fieldType !== 'multipleRecordLinks'
-            )
-                throw new TypeError('A linked field is required.');
-            const existing = append
-                ? binding.selection!.getState().options
-                : [];
-            binding.selection!.setOptions([
-                ...existing,
-                ...structuredClone(supplied),
-            ]);
+            const ticket = beginLinkedReplacement(id);
+            try {
+                if (!current()) return;
+                const binding = field(id);
+                const model = binding.selection;
+                const fieldEpoch = epoch;
+                const owns = () =>
+                    linkedOptionRevisions.get(id) === ticket &&
+                    current() &&
+                    epoch === fieldEpoch &&
+                    entries.get(id)?.binding === binding &&
+                    linkedOptionRevisions.get(id) === ticket;
+                if (
+                    binding.getSnapshot().field?.fieldType !==
+                        'multipleRecordLinks' ||
+                    !model
+                )
+                    throw new TypeError('A linked field is required.');
+                if (!owns()) return;
+                linkedRecordsOwner?.clearOptions(id);
+                if (!owns()) return;
+                const existing = append ? model.getState().options : [];
+                const next = [...existing, ...structuredClone(supplied)];
+                if (!owns()) return;
+                // A static replacement must also retire any older option read.
+                // Cancellation retains native selection and invokes no request.
+                model.cancel();
+                if (!owns()) return;
+                model.setOptions(next);
+            } finally {
+                if (replacingLinkedOptions.get(id) === ticket)
+                    replacingLinkedOptions.delete(id);
+            }
         },
         setLinkedLoader: (id, loader) => {
-            if (!current()) return;
-            const binding = field(id);
-            if (
-                binding.getSnapshot().field?.fieldType !== 'multipleRecordLinks'
-            )
-                throw new TypeError('A linked field is required.');
-            const state = binding.selection!.getState();
-            const wrapped: SelectionLoader = Object.assign(
-                async (request: Parameters<SelectionLoader>[0]) => {
-                    if (!current())
-                        throw new Error('The linked field owner is retired.');
-                    const result = await loader(request);
-                    if (!current())
-                        throw new Error('The linked field owner is retired.');
-                    return result;
-                },
-                { isCurrent: () => current() && (loader.isCurrent?.() ?? true) }
-            );
-            binding.selection!.reset({
-                ...state,
-                selectedOptions: state.selectedOptions,
-                loadOptions: wrapped,
-                onChange: (values) => {
-                    const result = setValue(id, [...values]);
-                    if (!result.accepted) refresh();
-                },
-            });
+            const ticket = beginLinkedReplacement(id);
+            try {
+                if (!current()) return;
+                const binding = field(id);
+                const model = binding.selection;
+                const fieldEpoch = epoch;
+                const owns = () =>
+                    linkedOptionRevisions.get(id) === ticket &&
+                    current() &&
+                    epoch === fieldEpoch &&
+                    entries.get(id)?.binding === binding &&
+                    linkedOptionRevisions.get(id) === ticket;
+                const descriptor = binding.getSnapshot().field;
+                if (descriptor?.fieldType !== 'multipleRecordLinks' || !model)
+                    throw new TypeError('A linked field is required.');
+                const schema = descriptor.schema;
+                if (schema.airtableField.config.type !== 'multipleRecordLinks')
+                    throw new TypeError('A linked field is required.');
+                const linkedTableId =
+                    schema.airtableField.config.options.linkedTableId;
+                const token = loaded.payload.extensionAccessToken;
+                if (!owns()) return;
+                linkedRecordsOwner?.clearOptions(id);
+                if (!owns()) return;
+                const state = model.getState();
+                if (!owns()) return;
+                const wrapped: SelectionLoader = Object.assign(
+                    async (request: Parameters<SelectionLoader>[0]) => {
+                        if (!current())
+                            throw new Error(
+                                'The linked field owner is retired.'
+                            );
+                        const result = await loader(request);
+                        if (!current())
+                            throw new Error(
+                                'The linked field owner is retired.'
+                            );
+                        return guardFormLinkedRecordPage(
+                            result,
+                            options.client,
+                            token,
+                            id,
+                            linkedTableId
+                        );
+                    },
+                    {
+                        isCurrent: () =>
+                            current() && (loader.isCurrent?.() ?? true),
+                    }
+                );
+                if (!owns()) return;
+                model.reset({
+                    ...state,
+                    selectedOptions: state.selectedOptions,
+                    loadOptions: wrapped,
+                    onChange: (values) => {
+                        const result = setValue(id, [...values]);
+                        if (!result.accepted) refresh();
+                    },
+                });
+            } finally {
+                if (replacingLinkedOptions.get(id) === ticket)
+                    replacingLinkedOptions.delete(id);
+            }
         },
         reload: async (request) => {
             if (request.dirty !== 'keep' && request.dirty !== 'discard')
@@ -787,6 +885,9 @@ export function createFormFieldBindings(
             const previous = pendingRead;
             const abort = new AbortController();
             pendingRead = abort;
+            const previousLinkedRecords = linkedRecordsOwner;
+            linkedRecordsOwner = null;
+            previousLinkedRecords?.destroy();
             refresh();
             readError = null;
             notify();
@@ -813,6 +914,9 @@ export function createFormFieldBindings(
                 )
                     throw new Error('The reload does not match this Form.');
                 const snapshot = controller.getState().draft!;
+                const freshOriginalLinkedRecordData = structuredClone(
+                    fresh.payload.formRecord.data
+                );
                 if (request.dirty === 'keep') {
                     for (const id of snapshot.dirtyFieldIds)
                         if (Object.hasOwn(snapshot.data, id))
@@ -847,6 +951,7 @@ export function createFormFieldBindings(
                 });
                 store.discard(handle);
                 loaded = fresh;
+                originalLinkedRecordData = freshOriginalLinkedRecordData;
                 options = {
                     ...options,
                     loaded,

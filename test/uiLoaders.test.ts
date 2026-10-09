@@ -18,6 +18,7 @@ import {
     selectionOptionsFromRecords,
 } from '../src/ui/loaders.js';
 import type { SelectionRequest } from '../src/ui/types.js';
+import { createSelectionModel } from '../src/ui/model.js';
 
 const formInput: Omit<ListFormLinkedRecordOptionsInput, 'filter' | 'offset'> = {
     extensionAccessToken: 'access_example',
@@ -112,6 +113,299 @@ const deferred = () => {
 };
 
 describe('linked record UI loaders', () => {
+    it('keeps paged records and native choices while refusing conflicting common metadata', async () => {
+        const f = fixture(async ({ input }) => {
+            const page = result();
+            page.records = input.offset ? [records[1]] : [records[0]];
+            page.offset = input.offset ? null : 'next_page';
+            if (input.offset)
+                page.tableIdsToLinkedTableStates.table_projects.airtableFields[0].name =
+                    'Changed title';
+            return page;
+        });
+        const model = createSelectionModel({
+            multiple: true,
+            loadOptions: createFormLinkedRecordLoader({
+                client: f.client,
+                input: formInput,
+                linkedTableId: 'table_projects',
+            }),
+        });
+        await model.reload();
+        model.choose(['record_first']);
+        await model.loadMore();
+        assert.deepEqual(model.getState().linkedRecords!.records, records);
+        assert.equal(model.getState().linkedRecords!.table, null);
+        assert.equal(model.getState().offset, null);
+        assert.deepEqual(model.getState().value, ['record_first']);
+        assert.equal(model.canChoose(['record_first', 'record_second']), true);
+        model.choose(['record_first', 'record_second']);
+        assert.deepEqual(model.getState().value, [
+            'record_first',
+            'record_second',
+        ]);
+        model.destroy();
+    });
+
+    it('ignores metadata from pagination sources that contribute no retained records', async () => {
+        for (const mode of [
+            'empty-first',
+            'empty-next',
+            'all-replaced',
+        ] as const) {
+            const f = fixture(async ({ input }) => {
+                const page = result();
+                const next = input.offset !== null;
+                page.offset = next ? null : 'next_page';
+                page.records =
+                    (mode === 'empty-first' && !next) ||
+                    (mode === 'empty-next' && next)
+                        ? []
+                        : [records[0]];
+                if (next)
+                    page.tableIdsToLinkedTableStates.table_projects.airtableFields[0].name =
+                        'Latest title';
+                return page;
+            });
+            const model = createSelectionModel({
+                loadOptions: createFormLinkedRecordLoader({
+                    client: f.client,
+                    input: formInput,
+                    linkedTableId: 'table_projects',
+                }),
+            });
+            await model.reload();
+            await model.loadMore();
+            assert.deepEqual(model.getState().linkedRecords!.records, [
+                records[0],
+            ]);
+            assert.equal(
+                model.getState().linkedRecords!.table!.airtableFields[0].name,
+                mode === 'empty-next' ? 'Title' : 'Latest title'
+            );
+            model.destroy();
+        }
+    });
+
+    it('rejects a cached SDK page replayed through a custom loader after visitor replacement', async () => {
+        const f = fixture();
+        const loader = createFormLinkedRecordLoader({
+            client: f.client,
+            input: formInput,
+            linkedTableId: 'table_projects',
+        });
+        const page = await loader(request());
+        f.client.setSession({ visitor: 'visitor_B' });
+        assert.equal(loader.isCurrent!(), false);
+        const model = createSelectionModel({ loadOptions: async () => page });
+        await model.reload();
+        assert.match(model.getState().error!, /context changed/);
+        assert.deepEqual(model.getState().options, []);
+        assert.equal(model.getState().linkedRecords, undefined);
+        assert.equal(f.calls.length, 1);
+        model.destroy();
+        f.client.setSession({ visitor: 'visitor_A' });
+        const restored = createSelectionModel({
+            loadOptions: async () => page,
+        });
+        await restored.reload();
+        assert.equal(restored.getState().linkedRecords, undefined);
+        assert.match(restored.getState().error!, /context changed/);
+        restored.destroy();
+    });
+
+    it('clears rich data when its original SDK source retires even behind a custom loader', async () => {
+        const f = fixture();
+        const loader = createPortalLinkedRecordLoader({
+            client: f.client,
+            input: portalInput,
+            linkedTableId: 'table_projects',
+        });
+        const page = await loader(request());
+        const model = createSelectionModel({ loadOptions: async () => page });
+        await model.reload();
+        assert.equal(model.getState().linkedRecords!.records.length, 2);
+        f.client.setSession({ visitor: 'visitor_B' });
+        assert.equal(model.getState().linkedRecords, undefined);
+        assert.deepEqual(model.getState().options, []);
+        assert.match(model.getState().error!, /context changed/);
+        model.destroy();
+    });
+
+    it('publishes rich data atomically with accepted options and cursor, excluding table caches', async () => {
+        const response = result();
+        response.tableIdsToLinkedTableStates.table_projects.recordIdsToAirtableRecords.other_field_record =
+            {
+                id: 'other_field_record',
+                fields: { field_title: 'Other field' },
+            };
+        const f = fixture(async () => response);
+        const model = createSelectionModel({
+            multiple: true,
+            loadOptions: createFormLinkedRecordLoader({
+                client: f.client,
+                input: formInput,
+                linkedTableId: 'table_projects',
+            }),
+        });
+        let accepted = 0;
+        const stop = model.subscribe((state) => {
+            if (!state.linkedRecords) return;
+            accepted++;
+            assert.deepEqual(
+                state.linkedRecords.records.map((record) => record.id),
+                state.options.map((option) => option.value)
+            );
+            assert.equal(state.offset, 'next_page');
+            assert.deepEqual(Object.keys(state.linkedRecords.table!), [
+                'airtableFields',
+            ]);
+        });
+        assert.equal(f.calls.length, 0);
+        assert.equal(model.getState().linkedRecords, undefined);
+        await model.reload();
+        assert.equal(accepted, 1);
+        const snapshot = model.getState();
+        snapshot.linkedRecords!.records[0].fields.field_title = 'Changed';
+        snapshot.linkedRecords!.table!.airtableFields[0].name = 'Changed';
+        response.records[0].fields.field_title = 'Source changed';
+        assert.equal(
+            model.getState().linkedRecords!.records[0].fields.field_title,
+            'First project'
+        );
+        assert.equal(
+            model.getState().linkedRecords!.table!.airtableFields[0].name,
+            'Title'
+        );
+        stop();
+        model.destroy();
+    });
+
+    it('keeps accepted rich page one selectable after searched paging and clears candidates on search', async () => {
+        const f = fixture(async ({ input }) => ({
+            ...result(),
+            records: input.offset ? [records[1]] : [records[0]],
+            offset: input.offset ? null : 'next_page',
+        }));
+        const model = createSelectionModel({
+            multiple: true,
+            loadOptions: createFormLinkedRecordLoader({
+                client: f.client,
+                input: formInput,
+                linkedTableId: 'table_projects',
+            }),
+        });
+        model.setSearchInput('Acme');
+        assert.equal(f.calls.length, 0);
+        await model.reload();
+        await model.loadMore();
+        assert.deepEqual(
+            model.getState().linkedRecords!.records.map((record) => record.id),
+            records.map((record) => record.id)
+        );
+        assert.equal(model.canChoose(['record_first']), true);
+        model.choose(['record_first']);
+        model.setSearchInput('Next');
+        assert.deepEqual(model.getState().value, ['record_first']);
+        assert.equal(model.getState().linkedRecords, undefined);
+        assert.equal(f.calls.length, 2);
+        model.destroy();
+    });
+
+    it('does not publish stale same-search rich responses or their cursors', async () => {
+        const old = deferred(),
+            next = deferred();
+        const f = fixture(() =>
+            f.calls.length === 1 ? old.promise : next.promise
+        );
+        const model = createSelectionModel({
+            loadOptions: createFormLinkedRecordLoader({
+                client: f.client,
+                input: formInput,
+                linkedTableId: 'table_projects',
+            }),
+        });
+        model.setSearchInput('same');
+        const first = model.reload();
+        await Promise.resolve();
+        const second = model.reload();
+        await Promise.resolve();
+        next.resolve({
+            ...result(),
+            records: [records[1]],
+            offset: 'new_cursor',
+        });
+        await second;
+        old.resolve({
+            ...result(),
+            records: [records[0]],
+            offset: 'old_cursor',
+        });
+        await first;
+        assert.deepEqual(
+            model.getState().options.map((option) => option.value),
+            ['record_second']
+        );
+        assert.deepEqual(
+            model.getState().linkedRecords!.records.map((record) => record.id),
+            ['record_second']
+        );
+        assert.equal(model.getState().offset, 'new_cursor');
+        model.destroy();
+    });
+
+    it('rejects duplicate rich record or physical field identities atomically', async () => {
+        for (const kind of ['records', 'metadata']) {
+            const response = result();
+            if (kind === 'records')
+                response.records.push(structuredClone(response.records[0]));
+            else {
+                const duplicate = structuredClone(table.airtableFields[0]);
+                duplicate.isPrimaryField = false;
+                response.tableIdsToLinkedTableStates.table_projects.airtableFields.push(
+                    duplicate
+                );
+            }
+            const f = fixture(async () => response);
+            const model = createSelectionModel({
+                loadOptions: createFormLinkedRecordLoader({
+                    client: f.client,
+                    input: formInput,
+                    linkedTableId: 'table_projects',
+                }),
+            });
+            await model.reload();
+            assert.match(model.getState().error!, /duplicate/);
+            assert.equal(model.getState().linkedRecords, undefined);
+            assert.deepEqual(model.getState().options, []);
+            model.destroy();
+        }
+    });
+
+    it('retires rich results on session replacement and explicit cancellation without rewriting native membership', async () => {
+        const held = deferred();
+        const f = fixture(() => held.promise);
+        const model = createSelectionModel({
+            multiple: true,
+            value: ['record_unsaved'],
+            loadOptions: createFormLinkedRecordLoader({
+                client: f.client,
+                input: formInput,
+                linkedTableId: 'table_projects',
+            }),
+        });
+        const pending = model.reload();
+        await Promise.resolve();
+        model.cancel();
+        assert.deepEqual(model.getState().value, ['record_unsaved']);
+        held.resolve(result());
+        await pending;
+        assert.equal(model.getState().linkedRecords, undefined);
+        f.client.setSession({ visitor: 'visitor_B' });
+        assert.equal(model.getState().linkedRecords, undefined);
+        assert.match(model.getState().error!, /context changed/);
+        model.destroy();
+    });
     it('uses the existing Form operation with exact filter, paging, signal and captured session', async () => {
         const { client, calls } = fixture();
         const load = createFormLinkedRecordLoader({

@@ -84,6 +84,7 @@ export type {
     SelectionRendererActions,
     AttachmentRendererActions,
     ChoiceRendererActions,
+    LinkedRecordsRendererProps,
 } from './rendererRegistry.js';
 export {
     createFormFieldRendererHost,

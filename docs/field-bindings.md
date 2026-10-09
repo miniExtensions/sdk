@@ -786,6 +786,91 @@ export function inspectLinkedRecords(
 }
 ```
 
+### Form renderer bridge
+
+`FieldRendererProps<'multipleRecordLinks'>` optionally carries `linkedRecords`:
+`{ source: 'form', state: FormLinkedRecordsSnapshot, readSelected }`, exported as
+`LinkedRecordsRendererProps` from `@miniextensions/sdk/ui`. The bridge is available
+on a physical linked-record field with either read-only or editable capability;
+it grants no write capability. Other physical slots have no rich linked data.
+This bridge supports Form and accepted child Form hosts only. An outer Portal
+bridge and an `accepted-detail` source are outside this contract.
+
+The renderer below shows presentation status and a record count. Applications
+supply their own visual record renderer honoring the returned physical metadata,
+detail projection, hidden fields, masking and rich display settings. This bridge
+exposes existing authorized data; it does not redact that data.
+
+```tsx
+import { createElement } from 'react';
+import type { FieldRendererProps } from '@miniextensions/sdk/ui';
+
+export function RichLinkedField(
+    props: FieldRendererProps<'multipleRecordLinks'>
+) {
+    const linked = props.linkedRecords;
+    if (!linked) return createElement('p', null, 'Linked details unavailable');
+    const { state } = linked;
+    const policyUnavailable =
+        state.selectedPolicy.state === 'waiting-data' ||
+        state.selectedPolicy.state === 'unsupported';
+    const presentationAvailable =
+        !policyUnavailable &&
+        state.table !== null &&
+        state.detailProjection === 'present' &&
+        state.detailFields !== null;
+    return createElement(
+        'section',
+        null,
+        createElement(
+            'button',
+            {
+                disabled: state.pending,
+                onClick: () => {
+                    void linked.readSelected();
+                },
+            },
+            'Load selected'
+        ),
+        createElement(
+            'p',
+            { role: 'status' },
+            state.error
+                ? 'Selected details could not be loaded'
+                : state.pending
+                  ? 'Loading selected details'
+                  : state.phase === 'retired' ||
+                      state.phase === 'unavailable' ||
+                      !presentationAvailable
+                    ? 'Selected details unavailable'
+                    : state.detailFields!.length === 0
+                      ? 'No detail fields to display'
+                      : String(state.selectedRecords.length) +
+                        ' selected record presentations'
+        )
+    );
+}
+```
+
+Mounting and rendering perform zero I/O. Only clicking **Load selected** invokes
+`readSelected`; policy waiting/unsupported states show generic status. IDs are
+never substituted for labels. This small recipe does not establish complete rich
+UI or privacy presentation: the application still owns appropriate formatting
+and authorized display using the returned detail policy. Missing and null detail
+projections have no fallback; a present empty array renders no details. Never
+reconstruct a projection from cached fields or native IDs.
+
+The Form host borrows the existing owner's facet. Its captured action is fenced
+to that accepted owner, field and facet: replacing the facet, retiring the host,
+or replacing the owner/context (including A→B→A) makes old renderer callbacks
+inert. Keep the accepted Form owner alive at its actual session/configuration
+boundary, and replace the host/facet when that boundary changes. Stopping or
+unmounting renderers only releases presentation subscriptions; it does not cancel
+reads or dispose borrowed facets. Dispose the actual owner at its own lifetime
+boundary. Rich snapshots are detached presentation; native record IDs and full
+Save remain the existing binding/controller's authority. No engine, cache or
+implicit selected read is added.
+
 SDK Form and Portal linked-option loaders attach detached record data to `selection.getState().linkedRecords` only after the option page is accepted. Search replaces the candidate page; pagination appends accepted records. When retained pages supply conflicting physical metadata, their common table metadata is null; an empty page with no retained records does not override the metadata of a later nonempty page. Labels still use the primary field, and selection changes still write record IDs. A missing table is distinct from returned empty physical metadata.
 
 A Form facet accepts SDK rich pages only from the same client, token, field, and linked table. A custom option loader can still supply native choices, but replaying a page from another client or field does not provide rich-record presentation authority.

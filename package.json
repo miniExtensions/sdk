@@ -123,6 +123,7 @@
     "dependencies": {
         "@trpc/client": "11.0.0-rc.382",
         "@trpc/server": "11.0.0-rc.382",
+        "email-validator": "2.0.4",
         "moment": "2.31.0",
         "moment-duration-format": "2.3.2",
         "moment-timezone": "0.5.45"

@@ -1441,11 +1441,17 @@ fields. Select validity/count and linked maximum have neither exemption; linked
 minimum exempts hidden fields only. Initial loaded values are the detached
 persisted baseline for grandfathered select values; presentation is never data.
 
-This first validator supports ordinary text, number/currency, select and linked
-limits plus required checks for the documented scalar/date/attachment types.
-Writable nonempty email/URL validation is explicitly unsupported, except URL
-configuration that permits invalid URLs; readonly email/URL answers do not run
-those validators. Computed fields and canonical pass-through types such as rich text and buttons
+This validator supports ordinary text, email syntax, number/currency, select and
+linked limits plus required checks for the documented scalar/date/attachment types.
+Nonempty editable email answers use `email-validator` without trimming, case folding
+or native-value normalization. Invalid answers expose the field's generic
+`invalid-email` problem and block Next/final Submit before dispatch or journal creation.
+Conditional hiding does not waive email syntax; read-only fields are exempt.
+Null/missing and exactly empty strings skip syntax, while optional whitespace-only
+strings still fail syntax. This is a syntax check, not verification or deliverability.
+Writable nonempty URL validation remains unsupported, except configuration that
+permits invalid URLs; read-only URL answers do not run that validator.
+Computed fields and canonical pass-through types such as rich text and buttons
 do not add ordinary frontend validation. Existing visibility refusals still apply;
 lookup presentation requires an explicit `hideFieldIfEmpty: false`. Nonempty collaborator answers and other
 unimplemented validation types remain explicit refusals.
@@ -1476,8 +1482,8 @@ that synchronously disposes the page owner cannot authorize a subsequent action.
 Unobserved in-place replacement is not detected. A stale
 callback never disposes shared or successor bindings.
 
-Pinned fixtures classify 118 ordinary-rule cases for exact canonical comparison
-and 28 cases as conservative unsupported-validation refusals. Executable installed
+Pinned fixtures classify 177 ordinary-rule cases for exact canonical comparison
+and 26 cases as conservative unsupported-validation refusals. Executable installed
 ESM/CJS tests prove bounded local
 navigation and synthetic validation-response dispatch, not live persistence or
 complete hosted multipage parity. Live acceptance remains separately tracked.

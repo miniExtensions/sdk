@@ -39,12 +39,37 @@ const ordinary = new Set([
     'url',
     'singleSelect',
     'multipleSelects',
+    'singleCollaborator',
+    'multipleCollaborators',
     'multipleRecordLinks',
     'date',
     'dateTime',
     'multipleAttachments',
     'button',
 ]);
+const collaboratorIds = (
+    multiple: boolean,
+    value: unknown
+): string[] | null => {
+    if (value == null || value === '') return [];
+    const values = multiple
+        ? Array.isArray(value)
+            ? value
+            : null
+        : Array.isArray(value)
+          ? null
+          : [value];
+    if (values === null) return null;
+    const ids: string[] = [];
+    for (let index = 0; index < values.length; index++) {
+        const entry = values[index];
+        if (!Object.hasOwn(values, index) || !object(entry)) return null;
+        const id = entry.id;
+        if (typeof id !== 'string') return null;
+        ids.push(id);
+    }
+    return ids;
+};
 export const pageValueEmpty = (type: string, value: unknown): boolean => {
     if (value == null || (typeof value === 'string' && value.trim() === ''))
         return true;
@@ -133,6 +158,29 @@ export const validatePageField = (
     // Canonical ordinary rules use this exact non-null/nonempty gate, not required emptiness.
     if (value == null || value === '') return null;
     if (!ordinary.has(type)) return problem('unsupported-validation');
+    if (type === 'singleCollaborator' || type === 'multipleCollaborators') {
+        const multiple = type === 'multipleCollaborators';
+        // An explicit empty multiple selection needs no selectable-ID authority.
+        if (multiple && Array.isArray(value) && value.length === 0) return null;
+        const physical = field.schema.airtableField.config;
+        if (
+            (physical.type !== 'singleCollaborator' &&
+                physical.type !== 'multipleCollaborators') ||
+            physical.type !== type ||
+            !object(physical.options) ||
+            !Array.isArray(physical.options.choices)
+        )
+            return problem('invalid-metadata');
+        const choices = collaboratorIds(true, physical.options.choices);
+        if (choices === null) return problem('invalid-metadata');
+        const submitted = collaboratorIds(multiple, value);
+        const previous = collaboratorIds(multiple, stored) ?? [];
+        const allowed = new Set([...choices, ...previous]);
+        // Canonical selection validity uses IDs, not display metadata or email syntax.
+        if (submitted === null || submitted.some((id) => !allowed.has(id)))
+            return problem('invalid-selection');
+        return null;
+    }
     if (type === 'url' && !field.readOnly && config.allowInvalidUrls !== true) {
         if (typeof value !== 'string') return problem('invalid-input');
         if (!checkIfPageUrlIsValid(value)) return problem('invalid-url');

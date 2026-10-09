@@ -110,12 +110,21 @@ try {
 import {getErrorMessageForNonConditionalFields_frontend as validate} from ${importFrom('ordinary-validation')};
 import {groupFormFieldsBySections as group} from ${importFrom('section-grouping')};
 import {normalizeActivePageIndex as normalize, getNextVisiblePageIndex as next, getPreviousVisiblePageIndex as back} from ${importFrom('page-navigation')};
-import {formPageValidationCases as values, formPageStructureCases as structures} from ${JSON.stringify(casesPath)};
-const validation = values.map(c => ({...c, invalid: !!validate({
+import {formPageValidationCases as values, formPageConservativeRefusalCases as refusals, formPageStructureCases as structures} from ${JSON.stringify(casesPath)};
+const evaluate = c => !!validate({
     miniExtConfig:c.schema.miniExtConfig, airtableFieldConfig:c.schema.airtableField.config,
     value:c.value, storedValue:c.stored, isConditionallyHidden:c.hidden,
     language:'en', isComputeMode:false,
-})}));
+});
+const validation = values.map(c => ({...c, invalid: evaluate(c)}));
+// Refusals are deliberately separate from ordinary parity. Capture only the
+// canonical result/throw category, never exception text or private locations.
+const conservativeRefusal = refusals.map(c => {
+    let canonical;
+    try { canonical = {type:'result', invalid:evaluate(c)}; }
+    catch { canonical = {type:'throws'}; }
+    return {...c, canonical};
+});
 const structure = structures.map(c => ({...c, groups:group(c.fields).map(g =>
     'fieldsInSection' in g ? {title:g.title,fieldIds:g.fieldsInSection.map(f=>f.airtableField.id)} : {fieldId:g.airtableField.id}
 )}));
@@ -124,7 +133,7 @@ const navigation = [
     {pages:[{isHidden:true},{isHidden:true}],index:1},
 ].map(c => ({...c, normalized:normalize({pages:c.pages,activePageIndex:c.index}),
     next:next({pages:c.pages,activePageIndex:c.index}),back:back({pages:c.pages,activePageIndex:c.index})}));
-console.log(JSON.stringify({validation,structure,navigation}));`,
+console.log(JSON.stringify({validation,conservativeRefusal,structure,navigation}));`,
             resolveDir: checkout,
             loader: 'ts',
         },
@@ -160,7 +169,7 @@ console.log(JSON.stringify({validation,structure,navigation}));`,
                 entrySha256: emailValidatorSha256,
             },
             execution:
-                'pinned ordinary validation including URL/shared email syntax, section grouping and navigation; synthetic values only',
+                'pinned ordinary validation including collaborator ID membership, URL/shared email syntax, section grouping and navigation; separately classified conservative refusals; synthetic values only',
         },
         ...cases,
     };
@@ -172,7 +181,7 @@ console.log(JSON.stringify({validation,structure,navigation}));`,
         })
     );
     console.log(
-        `Canonical page fixtures: ${cases.validation.length} validation, ${cases.structure.length} structures, ${cases.navigation.length} navigation.`
+        `Canonical page fixtures: ${cases.validation.length} validation, ${cases.conservativeRefusal.length} separately classified conservative refusals, ${cases.structure.length} structures, ${cases.navigation.length} navigation.`
     );
 } catch {
     // Build and Git diagnostics can contain private locations; keep them private.

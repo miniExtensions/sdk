@@ -807,8 +807,9 @@ targets; the frontend compositor blocks active edit empty hiding in any
 section context, including a retained nonblank disabled section title.
 Lookup fields hide empty values by default in both modes and therefore block
 unless that flag is explicitly false. Conditional-only frontend sections
-retain the behavior described above. Multi-page navigation and richer native
-filtered-value adapters remain application-owned.
+retain the behavior described above. Multi-page layout remains application-owned;
+use [`createFormPageOwner`](#bounded-multipage-ownership) for bounded navigation.
+Richer native filtered-value adapters remain application-owned.
 
 The shipped browser starter applies these results to field presentation after
 accepted edits. It retains controls and native drafts, validates only visible

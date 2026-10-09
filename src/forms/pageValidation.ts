@@ -4,6 +4,7 @@ import { getSelectFieldPolicy } from '../ui/selectPolicy.js';
 import emailValidator from 'email-validator';
 import { checkIfPageUrlIsValid } from './pageUrlValidation.js';
 import { evaluateFormFieldVisibility } from './visibility.js';
+import { validatePageDateRange } from './pageDateRange.js';
 
 export type FormPageProblem = {
     fieldId: string | null;
@@ -149,6 +150,13 @@ const validateOrdinaryPageField = (
     // Canonical ordinary rules use this exact non-null/nonempty gate, not required emptiness.
     if (value == null || value === '') return null;
     if (!ordinary.has(type)) return problem('unsupported-validation');
+    const dateRangeProblem = validatePageDateRange(
+        field,
+        value,
+        stored,
+        hidden
+    );
+    if (dateRangeProblem) return problem(dateRangeProblem);
     if (type === 'singleCollaborator' || type === 'multipleCollaborators') {
         const multiple = type === 'multipleCollaborators';
         // An explicit empty multiple selection needs no selectable-ID authority.

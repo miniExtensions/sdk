@@ -41,6 +41,7 @@ import {
 } from './portal-composition-consumer-checks.mjs';
 import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
+import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
@@ -1171,6 +1172,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 ),
         });
         if (example === 'browser') {
+            await checkDateRangeConsumer({
+                consumerDirectory: temporaryDirectory,
+            });
             const collaboratorValidationProof =
                 await checkCollaboratorValidationConsumer({
                     consumerDirectory: temporaryDirectory,

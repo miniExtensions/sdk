@@ -1449,6 +1449,25 @@ persisted baseline for grandfathered select values; presentation is never data.
 This validator supports ordinary text, email/URL syntax, number/currency, select
 and collaborator selection validity, linked limits and required checks for the
 documented scalar/date/attachment types.
+
+Configured `dateRange` feedback is also checked by the page owner for date-only
+answers and dateTime answers with a valid fixed timezone. It uses all nine
+published range kinds and canonical calendar, ISO-week and day-boundary
+arithmetic. An out-of-range changed answer reports `invalid-input`; malformed
+active range or fixed-zone metadata reports `invalid-metadata`. Empty
+null/missing/`''` values, exact unchanged stored values, hidden fields and
+read-only fields keep their canonical exemptions. Required feedback still
+runs first. Validation never rewrites native date strings, dirty IDs or
+complete Save data.
+
+Client-zone ranges remain backend-validated. The accepted Form response does
+not expose the token-bound effective timezone from Load; a current browser or
+presentation timezone is not that provenance. Local feedback does not
+substitute one, deny client-zone Forms, or claim their range parity. Backend
+validation remains authoritative for every range. Range feedback uses the
+current clock on each validation, so a held navigation action can become
+stale when crossing a range boundary.
+
 Nonempty editable email answers use `email-validator` without trimming, case folding
 or native-value normalization. Invalid answers expose the field's generic
 `invalid-email` problem and block Next/final Submit before dispatch or journal creation.

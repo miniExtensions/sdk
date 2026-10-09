@@ -10,8 +10,10 @@ Your application renders the interface and owns its lifecycle. Optional Form,
 Portal, authentication and selection helpers, plus a local formula engine, are
 included.
 
-Start with the supplied browser application. Use the import and operation maps
-below when adapting it or asking an agent to build a different interface. A
+Start with the supplied browser application, or follow
+[custom Form, Grid and List startup](docs/field-bindings.md#custom-form-grid-and-list-startup)
+to build an app-supplied React interface. Use the import and operation maps
+below when adapting either path or asking an agent to build a different interface. A
 configuration property being typed does not mean the starter implements its UI.
 
 ## Install and run the browser starter
@@ -139,20 +141,20 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
-| Import                         | Included behavior                                                                                                                                                     | Guide                                    |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                       | [Runtime](docs/runtime.md)               |
-| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                                        | [Form helpers](docs/forms.md)            |
-| `@miniextensions/sdk/portals`  | `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests                  | [Portal helpers](docs/portals.md)        |
-| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                                      | [Authentication](docs/auth.md)           |
-| `@miniextensions/sdk/ui`       | Native selects, static policy and `resolveSelectFieldAvailability`, authorized linked-record loaders, headless selection model and `createAddressAutocompleteControl` | [Selection and address UI](docs/ui.md)   |
-| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                             | [Formulas](docs/formulas.md)             |
-| `@miniextensions/sdk/react`    | Optional React field, Portal list and criteria editor components using owner-held models and replaceable rendering                                                    | [Field bindings](docs/field-bindings.md) |
+| Import                         | Included behavior                                                                                                                                         | Guide                                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                           | [Runtime](docs/runtime.md)                                                   |
+| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                            | [Form helpers](docs/forms.md)                                                |
+| `@miniextensions/sdk/portals`  | `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests      | [Portal helpers](docs/portals.md)                                            |
+| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                          | [Authentication](docs/auth.md)                                               |
+| `@miniextensions/sdk/ui`       | Typed field hosts/slots, `createFormRenderScope`, `createPortalRenderScope`, selection/scalar/date models, authorized linked loaders and address controls | [Renderer startup](docs/field-bindings.md#custom-form-grid-and-list-startup) |
+| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                 | [Formulas](docs/formulas.md)                                                 |
+| `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
 also includes optional DOM controls. The `/react` subpath provides `TextField`, `NumberField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
-`DateTimeField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
+`DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
 [field-binding usage guide](docs/field-bindings.md) and

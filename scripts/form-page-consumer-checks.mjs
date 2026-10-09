@@ -533,6 +533,211 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 assert.equal(f.calls.length, 0);
                 checks++;
             }
+            for (const kind of ['number', 'date']) {
+                const nativeValue = kind === 'number' ? 1 : '2024-01-01';
+                const invalidInput = kind === 'number' ? '-' : '2024-02-30';
+                const f = fixture((p) => {
+                    const schema = p.payload.fieldIdsToSchemas.a;
+                    schema.fieldType = kind;
+                    schema.airtableField.config =
+                        kind === 'number'
+                            ? { type: 'number', options: { precision: 0 } }
+                            : {
+                                  type: 'date',
+                                  options: {
+                                      dateFormat: {
+                                          name: 'iso',
+                                          format: 'YYYY-MM-DD',
+                                      },
+                                  },
+                              };
+                    p.payload.formRecord.data.a = nativeValue;
+                });
+                let armed = false;
+                let ownershipChecks = 0;
+                let edited = false;
+                f.setPredicate(() => {
+                    if (armed && ++ownershipChecks === 2) {
+                        edited = true;
+                        const binding = f.fields.field('a');
+                        const input =
+                            kind === 'number' ? binding.scalar : binding.date;
+                        assert(input, `${kind} uses its installed input model`);
+                        assert.equal(input.setInput(invalidInput), false);
+                    }
+                    return true;
+                });
+                const received = [[], []];
+                f.pages.subscribe((snapshot) => received[0].push(snapshot));
+                f.pages.subscribe((snapshot) => received[1].push(snapshot));
+                const before = f.pages.getSnapshot();
+                const nativeBefore = structuredClone(
+                    f.fields.controller.getState().draft.data
+                );
+                const draftRevision =
+                    f.fields.controller.getState().draftRevision;
+                assert.equal(before.canNext, true);
+                armed = true;
+                const action = f.pages.next(before.revision);
+                assert(
+                    edited,
+                    `${kind} input changes after captured validation`
+                );
+                assert.equal(action.accepted, false);
+                const newest = f.pages.getSnapshot();
+                assert.equal(newest.activePageIndex, 0);
+                assert.equal(newest.canNext, false);
+                assert(newest.revision > before.revision);
+                assert(
+                    newest.problems.some(
+                        (problem) =>
+                            problem.fieldId === 'a' &&
+                            problem.code === 'invalid-input'
+                    )
+                );
+                for (const snapshots of received) {
+                    assert(snapshots.length > 0);
+                    assert.deepEqual(snapshots.at(-1), newest);
+                }
+                assert.equal(
+                    f.fields.field('a').getSnapshot().value,
+                    nativeValue
+                );
+                assert.deepEqual(
+                    f.fields.controller.getState().draft.data,
+                    nativeBefore
+                );
+                assert.equal(
+                    f.fields.controller.getState().draftRevision,
+                    draftRevision
+                );
+                assert.equal(f.calls.length, 0);
+                assert.deepEqual(f.pages.next(newest.revision), {
+                    accepted: false,
+                    reason: 'validation',
+                });
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            for (const kind of ['number', 'date']) {
+                const nativeValue = kind === 'number' ? 1 : '2024-01-01';
+                const f = fixture((p) => {
+                    const schema = p.payload.fieldIdsToSchemas.a;
+                    schema.fieldType = kind;
+                    schema.airtableField.config =
+                        kind === 'number'
+                            ? { type: 'number', options: { precision: 0 } }
+                            : {
+                                  type: 'date',
+                                  options: {
+                                      dateFormat: {
+                                          name: 'iso',
+                                          format: 'YYYY-MM-DD',
+                                      },
+                                  },
+                              };
+                    p.payload.formRecord.data.a = nativeValue;
+                });
+                let armed = false;
+                let ownershipChecks = 0;
+                let capReached = false;
+                f.setPredicate(() => {
+                    if (armed) {
+                        ownershipChecks++;
+                        if (ownershipChecks > 20) {
+                            capReached = true;
+                            throw new Error(
+                                'Raw input ownership revalidation sentinel'
+                            );
+                        }
+                        const binding = f.fields.field('a');
+                        const input =
+                            kind === 'number' ? binding.scalar : binding.date;
+                        const raw =
+                            kind === 'number'
+                                ? '-'.repeat(ownershipChecks)
+                                : `2024-13-${String(ownershipChecks).padStart(2, '0')}`;
+                        assert(input, `${kind} uses its installed input model`);
+                        assert.equal(input.setInput(raw), false);
+                    }
+                    return true;
+                });
+                const received = [[], []];
+                f.pages.subscribe((snapshot) => received[0].push(snapshot));
+                f.pages.subscribe((snapshot) => received[1].push(snapshot));
+                const before = f.pages.getSnapshot();
+                const nativeBefore = structuredClone(
+                    f.fields.controller.getState().draft.data
+                );
+                const draftRevision =
+                    f.fields.controller.getState().draftRevision;
+                assert.equal(before.canNext, true);
+                armed = true;
+                const unstable = f.pages.getSnapshot();
+                assert.equal(
+                    capReached,
+                    false,
+                    `${kind} snapshot returns before sentinel cap`
+                );
+                assert(ownershipChecks > 0 && ownershipChecks <= 4);
+                assert.equal(unstable.canNext, false);
+                assert.equal(unstable.canSubmit, false);
+                assert.equal(unstable.activePageIndex, 0);
+                for (const snapshots of received) {
+                    assert(snapshots.length > 0 && snapshots.length <= 4);
+                    assert.deepEqual(snapshots.at(-1), unstable);
+                }
+                assert.equal(
+                    f.fields.field('a').getSnapshot().value,
+                    nativeValue
+                );
+                assert.deepEqual(
+                    f.fields.controller.getState().draft.data,
+                    nativeBefore
+                );
+                assert.equal(
+                    f.fields.controller.getState().draftRevision,
+                    draftRevision
+                );
+                assert.equal(f.calls.length, 0);
+                const checksAfterRead = ownershipChecks;
+                await Promise.resolve();
+                assert.equal(
+                    ownershipChecks,
+                    checksAfterRead,
+                    'Raw input edits do not schedule retries'
+                );
+                ownershipChecks = 0;
+                capReached = false;
+                const action = f.pages.next(unstable.revision);
+                assert.equal(action.accepted, false);
+                assert.equal(
+                    capReached,
+                    false,
+                    `${kind} Next refuses before sentinel cap`
+                );
+                assert(ownershipChecks > 0 && ownershipChecks <= 4);
+                const latest = received[0].at(-1);
+                assert.equal(latest.activePageIndex, 0);
+                assert.equal(latest.canNext, false);
+                assert.equal(latest.canSubmit, false);
+                assert.deepEqual(received[1].at(-1), latest);
+                assert.equal(
+                    f.fields.field('a').getSnapshot().value,
+                    nativeValue
+                );
+                assert.deepEqual(
+                    f.fields.controller.getState().draft.data,
+                    nativeBefore
+                );
+                assert.equal(
+                    f.fields.controller.getState().draftRevision,
+                    draftRevision
+                );
+                assert.equal(f.calls.length, 0);
+                armed = false;
+                checks++;
+            }
             {
                 let pages;
                 let stop;

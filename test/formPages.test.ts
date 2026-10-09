@@ -582,6 +582,224 @@ describe('multipage Form ownership', () => {
             reason: 'validation',
         });
     });
+    for (const inputType of ['number', 'date'] as const) {
+        it(`a final ownership check changing raw ${inputType} input cannot advance Next`, () => {
+            const native = inputType === 'number' ? 1 : '2024-01-01';
+            const f = fixture((loaded) => {
+                const schema = loaded.payload.fieldIdsToSchemas.a!;
+                if (inputType === 'number') {
+                    schema.fieldType = 'number';
+                    schema.airtableField.config = {
+                        type: 'number',
+                        options: { precision: 0 },
+                    };
+                } else {
+                    loaded.payload.fieldIdsToSchemas.a = {
+                        fieldType: 'date',
+                        airtableField: {
+                            id: 'a',
+                            name: 'a',
+                            description: null,
+                            isComputed: false,
+                            isPrimaryField: false,
+                            config: {
+                                type: 'date',
+                                options: {
+                                    dateFormat: {
+                                        name: 'iso',
+                                        format: 'YYYY-MM-DD',
+                                    },
+                                },
+                            },
+                        },
+                        miniExtConfig: { required: true },
+                    };
+                }
+                loaded.payload.formRecord.data.a = native;
+            });
+            f.pages.dispose();
+            let armed = false;
+            let checks = 0;
+            let edited = false;
+            const pages = createFormPageOwner({
+                fields: f.fields,
+                configurationRevision: () => 0,
+                isCurrent: () => {
+                    if (armed && ++checks === 2) {
+                        edited = true;
+                        const field = f.fields.field('a');
+                        assert.equal(
+                            inputType === 'number'
+                                ? field.scalar!.setInput('-')
+                                : field.date!.setInput('2024-02-30'),
+                            false
+                        );
+                    }
+                    return true;
+                },
+            });
+            const deliveries = [[], []] as {
+                revision: number;
+                activePageIndex: number;
+                canNext: boolean;
+                invalidInput: boolean;
+            }[][];
+            for (const delivered of deliveries)
+                pages.subscribe((s) =>
+                    delivered.push({
+                        revision: s.revision,
+                        activePageIndex: s.activePageIndex,
+                        canNext: s.canNext,
+                        invalidInput: s.problems.some(
+                            (p) =>
+                                p.fieldId === 'a' && p.code === 'invalid-input'
+                        ),
+                    })
+                );
+            const revision = pages.getSnapshot().revision;
+            assert.equal(f.fields.controller.getState().draftRevision, 0);
+            armed = true;
+            assert.equal(pages.next(revision).accepted, false);
+            assert.equal(edited, true);
+            const current = pages.getSnapshot();
+            assert.equal(current.activePageIndex, 0);
+            assert.equal(current.canNext, false);
+            assert(current.revision > revision);
+            assert(
+                current.problems.some(
+                    (p) => p.fieldId === 'a' && p.code === 'invalid-input'
+                )
+            );
+            for (const delivered of deliveries)
+                assert.deepEqual(delivered.at(-1), {
+                    revision: current.revision,
+                    activePageIndex: 0,
+                    canNext: false,
+                    invalidInput: true,
+                });
+            assert.equal(f.fields.field('a').getSnapshot().value, native);
+            assert.equal(f.fields.controller.getState().draftRevision, 0);
+            assert.equal(f.calls.length, 0);
+        });
+    }
+    for (const inputType of ['number', 'date'] as const) {
+        for (const listenerCount of [0, 2]) {
+            it(`continuous raw ${inputType} edits return a bounded snapshot with ${listenerCount} subscribers`, () => {
+                const native = inputType === 'number' ? 1 : '2024-01-01';
+                const f = fixture((loaded) => {
+                    const schema = loaded.payload.fieldIdsToSchemas.a!;
+                    if (inputType === 'number') {
+                        schema.fieldType = 'number';
+                        schema.airtableField.config = {
+                            type: 'number',
+                            options: { precision: 0 },
+                        };
+                    } else {
+                        loaded.payload.fieldIdsToSchemas.a = {
+                            fieldType: 'date',
+                            airtableField: {
+                                id: 'a',
+                                name: 'a',
+                                description: null,
+                                isComputed: false,
+                                isPrimaryField: false,
+                                config: {
+                                    type: 'date',
+                                    options: {
+                                        dateFormat: {
+                                            name: 'iso',
+                                            format: 'YYYY-MM-DD',
+                                        },
+                                    },
+                                },
+                            },
+                            miniExtConfig: { required: true },
+                        };
+                    }
+                    loaded.payload.formRecord.data.a = native;
+                });
+                f.pages.dispose();
+                let armed = false;
+                let checks = 0;
+                let sentinelReached = false;
+                const pages = createFormPageOwner({
+                    fields: f.fields,
+                    configurationRevision: () => 0,
+                    isCurrent: () => {
+                        if (armed) {
+                            checks++;
+                            // Fail closed if a regression repeatedly drains notifications.
+                            // A thrown ownership callback terminates the old loop safely.
+                            if (checks > 12) {
+                                sentinelReached = true;
+                                throw Error(
+                                    'Unbounded raw-input ownership checks'
+                                );
+                            }
+                            const field = f.fields.field('a');
+                            assert.equal(
+                                inputType === 'number'
+                                    ? field.scalar!.setInput(
+                                          checks % 2 ? '-' : '+'
+                                      )
+                                    : field.date!.setInput(
+                                          checks % 2
+                                              ? '2024-02-30'
+                                              : '2024-02-31'
+                                      ),
+                                false
+                            );
+                        }
+                        return true;
+                    },
+                });
+                const deliveries = Array.from(
+                    { length: listenerCount },
+                    () =>
+                        [] as {
+                            revision: number;
+                            canNext: boolean;
+                            canSubmit: boolean;
+                        }[]
+                );
+                for (const delivered of deliveries)
+                    pages.subscribe((s) =>
+                        delivered.push({
+                            revision: s.revision,
+                            canNext: s.canNext,
+                            canSubmit: s.canSubmit,
+                        })
+                    );
+                armed = true;
+                const current = pages.getSnapshot();
+                assert.equal(sentinelReached, false);
+                assert(checks > 0 && checks <= 4);
+                assert.equal(current.canNext, false);
+                assert.equal(current.canSubmit, false);
+                for (const delivered of deliveries) {
+                    assert(delivered.length > 0 && delivered.length <= 2);
+                    assert.deepEqual(delivered.at(-1), {
+                        revision: current.revision,
+                        canNext: false,
+                        canSubmit: false,
+                    });
+                }
+                checks = 0;
+                sentinelReached = false;
+                assert.equal(pages.next(current.revision).accepted, false);
+                assert.equal(sentinelReached, false);
+                assert(checks > 0 && checks <= 4);
+                assert.equal(current.activePageIndex, 0);
+                for (const delivered of deliveries)
+                    assert.equal(delivered.at(-1)?.canNext, false);
+                armed = false;
+                assert.equal(pages.getSnapshot().activePageIndex, 0);
+                assert.equal(f.fields.field('a').getSnapshot().value, native);
+                assert.equal(f.fields.controller.getState().draftRevision, 0);
+                assert.equal(f.calls.length, 0);
+            });
+        }
+    }
     it('configuration ABA permanently retires; dispose never retires shared bindings', () => {
         const f = fixture();
         const old = f.pages.getSnapshot().revision;

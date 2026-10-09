@@ -82,6 +82,10 @@ export function createFormPageOwner(
         syncing = false,
         notificationPending = false;
     let validatedDraftRevision: number | null = null;
+    let inputRevision = 0,
+        navigationRevision = 0;
+    let validatedInputRevision: number | null = null;
+    let validatedNavigationRevision: number | null = null;
     let validationStable = true;
     let fingerprint = '';
     let backBlocked = false;
@@ -129,12 +133,15 @@ export function createFormPageOwner(
         if (syncing) return;
         syncing = true;
         validatedDraftRevision = null;
+        validatedInputRevision = null;
+        validatedNavigationRevision = null;
         let needsRetry = false;
         try {
             const problems: FormPageProblem[] = [];
             const snapshots = new Map<string, FormFieldSnapshot>();
             const live = current();
             const control = fields.controller.getState();
+            const inputTicket = inputRevision;
             const config = loaded.payload.publicFields.state;
             const validConfig =
                 config != null &&
@@ -254,8 +261,12 @@ export function createFormPageOwner(
                     code: 'unsupported-configuration',
                 });
             const first = pages.findIndex((p) => !p.hidden);
-            if (active >= pages.length || pages[active]?.hidden)
-                active = first < 0 ? 0 : first;
+            if (active >= pages.length || pages[active]?.hidden) {
+                const normalized = first < 0 ? 0 : first;
+                if (active !== normalized) navigationRevision++;
+                active = normalized;
+            }
+            const navigationTicket = navigationRevision;
             const currentIds = pages[active]?.fieldIds ?? [];
             const last = lastVisible(pages);
             // Next follows the current page. Final Submit rechecks the complete
@@ -288,15 +299,22 @@ export function createFormPageOwner(
             if (!current()) retired = true;
             validationStable =
                 fields.controller.getState().draftRevision ===
-                control.draftRevision;
-            // Ownership callbacks can edit the draft. Retry once, then refuse
-            // actions if callbacks do not leave one stable validated revision.
+                    control.draftRevision &&
+                inputRevision === inputTicket &&
+                navigationRevision === navigationTicket;
+            // Invalid raw input need not change the last valid native value.
+            // Retry once, then refuse if callbacks keep changing any validated
+            // draft, input or navigation revision.
             if (!validationStable && !retired && retry) {
                 needsRetry = true;
                 return;
             }
             validatedDraftRevision =
                 validationStable && !retired ? control.draftRevision : null;
+            validatedInputRevision =
+                validationStable && !retired ? inputTicket : null;
+            validatedNavigationRevision =
+                validationStable && !retired ? navigationTicket : null;
             const blocked = problems.some((p) =>
                 [
                     'unsupported-configuration',
@@ -357,6 +375,8 @@ export function createFormPageOwner(
             const key = JSON.stringify([
                 shape,
                 control.draftRevision,
+                inputTicket,
+                navigationTicket,
                 control.status,
                 [...snapshots].map(([id, s]) => [
                     id,
@@ -448,6 +468,23 @@ export function createFormPageOwner(
             return { accepted: false, reason: 'busy' };
         return null;
     };
+    // Observe model input changes before field render notifications. They
+    // include unfinished input and ABA edits with an unchanged native draft.
+    for (const id of loaded.payload.fieldIdsInForm) {
+        try {
+            const binding = fields.field(id);
+            const changed = () => {
+                inputRevision++;
+                notify();
+            };
+            const scalarStop = binding.scalar?.subscribe(changed);
+            const dateStop = binding.date?.subscribe(changed);
+            if (scalarStop) stops.push(scalarStop);
+            if (dateStop) stops.push(dateStop);
+        } catch {
+            /* Missing metadata is reported in the snapshot. */
+        }
+    }
     sync();
     stops.push(fields.controller.subscribe(notify));
     for (const id of loaded.payload.fieldIdsInForm) {
@@ -469,6 +506,7 @@ export function createFormPageOwner(
             const index = lastVisible(state.pages, active);
             if (index < 0) return { accepted: false, reason: 'no-page' };
             active = index;
+            navigationRevision++;
             const completionRevision = revision + 1;
             notify();
             if (revision !== completionRevision && current())
@@ -487,6 +525,7 @@ export function createFormPageOwner(
             );
             if (index < 0) return { accepted: false, reason: 'no-page' };
             active = index;
+            navigationRevision++;
             const completionRevision = revision + 1;
             notify();
             if (revision !== completionRevision && current())
@@ -506,10 +545,14 @@ export function createFormPageOwner(
             const draftRevision = fields.controller.getState().draftRevision;
             if (
                 validatedDraftRevision === null ||
-                draftRevision !== validatedDraftRevision
+                draftRevision !== validatedDraftRevision ||
+                validatedInputRevision !== inputRevision ||
+                validatedNavigationRevision !== navigationRevision
             )
                 throw new FormPageError('stale-revision');
             const pageIndex = active;
+            const inputTicket = inputRevision;
+            const navigationTicket = navigationRevision;
             return fields.save({
                 ...saveOptions,
                 lifecycle: {
@@ -536,6 +579,8 @@ export function createFormPageOwner(
                     const owns = () =>
                         current() &&
                         active === pageIndex &&
+                        inputRevision === inputTicket &&
+                        navigationRevision === navigationTicket &&
                         fields.controller.getState().draftRevision ===
                             draftRevision;
                     if (!owns()) return false;

@@ -560,7 +560,22 @@ The rich Form facet’s `phase`, `pending`, and `error` describe the shared sele
 
 Selected candidate records remain owned by the Form facet across candidate searches and renderer unmounts, even without a subscriber or intervening snapshot read. Actual owner retirement clears that presentation. The facet’s `table` is common physical metadata from the sources of its returned selected and candidate records. Empty original hydration does not override candidate metadata. If participating sources conflict or lack metadata, `table` is null; render generic values rather than pairing a record with unrelated fields.
 
-Form `selectedRecords` follows native selection order, including duplicate IDs. Explicit `readSelected()` hydrates original selected IDs; newly selected candidates come from accepted option pages. `detailProjection` distinguishes an absent field key (`missing`), an explicit null projection (`null`), and a returned array, including an empty one (`present`). Selected-record conditions and sorting that the facet cannot evaluate are reported by `selectedPolicy`; they do not imply client-side filtered or sorted selected records.
+Form `selectedRecords` is a detached presentation of accepted native selections. Without selected policy it follows native order, including duplicate IDs. Explicit `readSelected()` hydrates original selected IDs; newly selected candidates come from accepted option pages. `detailProjection` distinguishes an absent field key (`missing`), an explicit null projection (`null`), and a returned array, including an empty one (`present`). Policy evaluation never expands that display projection, reads records, changes native membership, or changes Save data.
+
+### Configured selected-record presentation
+
+The facet applies supported selected-record conditions before configured sorting. It reuses strict scalar/select condition compilation and direct scalar/select sort semantics: natural case-insensitive text order, numeric comparison, configured native select-name order and multiple sort keys. Equal keys preserve occurrence order; duplicates remain separate occurrences. An explicit `filterLinkedRecordsToggle: false` or `filterApplicationMode: 'record-finder-only'` disables selected filtering, independently of sorting. Omitted application mode applies a configured filter to selected records.
+
+Check `state.selectedPolicy` before rendering:
+
+- `not-configured`: no active selected filter or sort; ordinary resolved presentation.
+- `waiting-data`: a configured policy needs accepted metadata. Use the explicit Load/Retry action; rendering and subscribing never start a request. The facet's `phase`/`error` still describe hydration, so this state alone does not mean a request is running.
+- `applied`: supported conditions and sorting were evaluated on accepted field-specific data.
+- `unsupported`: configured policy cannot be evaluated safely. `supported` is false, `reasons` identifies selected condition/sort scope and generic `diagnostics` identifies missing dependencies, ambiguous metadata, unsupported policy or invalid values. `selectedRecords` is empty; this is not evidence of an empty native answer.
+
+A missing record remains in `unresolvedSelectedIds`; it is never fetched by arbitrary ID. A missing native property is canonical empty only when its dependency field is present in the accepted physical schema. Missing or conflicting schemas must not become empty values or borrow metadata from another field/table/visitor. Formula errors and malformed dependency values refuse the entire configured projection rather than partially applying a predicate.
+
+Calendar ordering, nested/computed/date conditions and sorts are outside this slice. Canonical child-success flows may exempt newly created records from selected filters. This facet has no accepted child-success exemption provenance, does not support flows needing that exemption, and accepts no caller-supplied bypass IDs. It does not claim full canonical selected-record parity. Native selections, dirty IDs and full Save values remain the existing binding/controller's authority even when presentation is filtered, sorted, unavailable or unresolved.
 
 For an outer Portal list, call `owner.getRecords(owner.getSnapshot().revision)` after an accepted read. It returns detached records and physical table metadata for that field, or null while no accepted presentation exists or the revision/owner is stale. These snapshots grant no new write capability and trigger no reads. Retire the owner when its visitor, session, or configuration changes.
 

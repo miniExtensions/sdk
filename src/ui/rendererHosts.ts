@@ -62,6 +62,8 @@ export type PortalCellRendererHostOptions = LeaseOptions & {
     client: MiniExtensionsClient;
     recordId: string;
     fieldId: string;
+    /** Borrow the same recovery resource used by accepted Portal detail actions. */
+    buttonRecovery?: ButtonFieldRecovery;
 };
 export type PortalDetailRendererHostOptions = LeaseOptions & {
     owner: PortalListOwner;
@@ -179,7 +181,14 @@ function host(
 ): FieldRendererHost {
     let disposed = false,
         retired = false;
-    const revision = options.configurationRevision();
+    let revision: string | number;
+    try {
+        revision = options.configurationRevision();
+    } catch (error) {
+        // Models may already own subscriptions when this application callback runs.
+        disposeOwned();
+        throw error;
+    }
     let accepted: unknown | null = null;
     let key = '';
     try {
@@ -822,6 +831,27 @@ export function createPortalCellRendererHost(
             )
         );
     };
+    // Button actions have returned-detail authority, not inline-write authority.
+    // Keep the cell's provenance checks before creating the existing action model.
+    let accepted: ReturnType<typeof authority> = null;
+    try {
+        accepted = authority();
+    } catch {
+        // Preserve unavailable presentation for malformed accepted cell metadata.
+    }
+    const button =
+        accepted?.data.field.config.type === 'button' && options.buttonRecovery
+            ? createPortalButtonFieldModel({
+                  owner: options.owner,
+                  client: options.client,
+                  portal: accepted.context.portal,
+                  recordId: options.recordId,
+                  fieldId: options.fieldId,
+                  recovery: options.buttonRecovery,
+                  isCurrent: options.isCurrent,
+                  configurationRevision: options.configurationRevision,
+              })
+            : undefined;
     return host(
         options,
         authority,
@@ -831,7 +861,7 @@ export function createPortalCellRendererHost(
                 'portal-cell',
                 current,
                 undefined,
-                undefined,
+                button,
                 (input) => {
                     const accepted = authority()!;
                     const data = accepted.data;
@@ -843,9 +873,14 @@ export function createPortalCellRendererHost(
                             data.detail.titleOverride ?? data.detail.fieldName,
                         displayConfig: display,
                         writeConfig: data.writeConfig,
-                        capability: blocked
-                            ? { type: 'readonly' }
-                            : input.capability,
+                        pending:
+                            input.capability.type === 'button'
+                                ? input.capability.button.busy
+                                : input.pending,
+                        capability:
+                            blocked && input.capability.type !== 'button'
+                                ? { type: 'readonly' }
+                                : input.capability,
                         ...(data.field.config.type === 'multipleRecordLinks'
                             ? {
                                   linkedRecords: portalLinkedPills({
@@ -868,6 +903,10 @@ export function createPortalCellRendererHost(
             subscribeTo(listener, [
                 (notify) => options.cell.binding.subscribe(notify),
                 (notify) => options.owner.subscribe(notify),
-            ])
+                ...(button
+                    ? [(notify: () => void) => button.subscribe(notify)]
+                    : []),
+            ]),
+        () => button?.dispose()
     );
 }

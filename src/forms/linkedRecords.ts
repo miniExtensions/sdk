@@ -8,6 +8,11 @@ import type {
 } from '../runtime/types.js';
 import type { FormFieldBinding } from './bindings.js';
 import { sameLinkedRecordTable } from '../ui/linkedRecordPages.js';
+import {
+    projectSelectedRecordsPolicy,
+    type FormSelectedRecordPolicy,
+} from './selectedRecordPolicy.js';
+export type { FormSelectedRecordPolicy } from './selectedRecordPolicy.js';
 
 export type FormLinkedRecordDetailFields =
     FormLoadedResult['payload']['linkedRecordFieldIdToDetailFields'][string];
@@ -23,10 +28,7 @@ export type FormLinkedRecordsSnapshot = {
     table: { airtableFields: readonly RuntimeAirtableField[] } | null;
     detailFields: FormLinkedRecordDetailFields | null;
     detailProjection: 'missing' | 'null' | 'present';
-    selectedPolicy: {
-        supported: boolean;
-        reasons: readonly ('selected-condition' | 'selected-sort')[];
-    };
+    selectedPolicy: FormSelectedRecordPolicy;
 };
 export type FormLinkedRecordsFacet = {
     getSnapshot(): FormLinkedRecordsSnapshot;
@@ -251,24 +253,6 @@ export function createFormLinkedRecordsOwner(options: {
         const detailFields =
             detailProjection === 'present' ? projection[fieldId] : null;
         const config = schema.miniExtConfig;
-        const reasons: ('selected-condition' | 'selected-sort')[] = [];
-        if (
-            config &&
-            'filterLinkedRecordsConditionFields' in config &&
-            config.filterLinkedRecordsConditionFields != null &&
-            config.filterLinkedRecordsConditionFields.conditions.length !== 0 &&
-            (!('filterLinkedRecordsToggle' in config) ||
-                config.filterLinkedRecordsToggle !== false) &&
-            (!('filterApplicationMode' in config) ||
-                config.filterApplicationMode !== 'record-finder-only')
-        )
-            reasons.push('selected-condition');
-        if (
-            config &&
-            'sortFields' in config &&
-            (config.sortFields?.length ?? 0) !== 0
-        )
-            reasons.push('selected-sort');
         let stopped = false;
         let stop = () => {};
         type Table = FormLinkedRecordsSnapshot['table'];
@@ -293,8 +277,10 @@ export function createFormLinkedRecordsOwner(options: {
             detailFields: null,
             detailProjection: 'missing',
             selectedPolicy: {
-                supported: reasons.length === 0,
-                reasons: [...reasons],
+                supported: false,
+                reasons: [],
+                state: 'unsupported',
+                diagnostics: [{ code: 'missing-dependency' }],
             },
         });
         const captureSelection = () => {
@@ -345,7 +331,7 @@ export function createFormLinkedRecordsOwner(options: {
                         ? hydrated?.recordIdsToAirtableRecords[id]
                         : undefined);
                 if (!record) unresolvedSelectedIds.push(id);
-                else if (reasons.length === 0) {
+                else {
                     selectedRecords.push(record);
                     contributingTables.push(
                         option
@@ -374,18 +360,25 @@ export function createFormLinkedRecordsOwner(options: {
                         )
                       ? contributingTables[0]
                       : null;
+            const projected = projectSelectedRecordsPolicy({
+                config,
+                records: selectedRecords,
+                airtableFields: commonTable?.airtableFields ?? null,
+                waitingData: !accepted && !rich && selectedOptions.size === 0,
+            });
+            if (!current() || stopped) return empty('retired');
             return structuredClone({
                 phase,
                 pending: phase === 'loading',
                 error,
                 linkedTableId,
-                selectedRecords,
+                selectedRecords: projected.records,
                 unresolvedSelectedIds,
                 candidateRecords: candidates,
                 table: commonTable,
                 detailFields,
                 detailProjection,
-                selectedPolicy: { supported: reasons.length === 0, reasons },
+                selectedPolicy: projected.policy,
             });
         };
         const notify = () => {

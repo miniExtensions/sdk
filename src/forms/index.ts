@@ -83,6 +83,7 @@ export type {
     FormLinkedRecordsFacet,
     FormLinkedRecordsSnapshot,
     FormLinkedRecordDetailFields,
+    FormSelectedRecordPolicy,
 } from './linkedRecords.js';
 
 export {

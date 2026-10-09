@@ -2,6 +2,7 @@ import {
     checkLinkedRecordsConsumer,
     linkedRecordsTypedConsumer,
 } from './linked-records-consumer-checks.mjs';
+import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
     buttonTypedConsumer,
@@ -912,6 +913,18 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(linkedRecordsProof.checks, 12);
     console.log(
         `Installed rich linked records: ${linkedRecordsProof.checks} ESM/CJS groups passed; synthetic transport only.`
+    );
+    const selectedPolicyProof = await checkSelectedRecordPolicyConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(
+        selectedPolicyProof.checks,
+        selectedPolicyProof.fixtureCases * 2 +
+            selectedPolicyProof.lifecycleGroups
+    );
+    assert.equal(selectedPolicyProof.aliasChecks, 14);
+    console.log(
+        `Installed selected-record policy: ${selectedPolicyProof.checks} ESM/CJS fixture and lifecycle groups plus ${selectedPolicyProof.aliasChecks} dependency-alias checks passed; synthetic transport only.`
     );
     const rendererProof = await checkRendererConsumer({
         consumerDirectory: temporaryDirectory,

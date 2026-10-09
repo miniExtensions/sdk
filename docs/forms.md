@@ -1441,7 +1441,7 @@ fields. Select validity/count and linked maximum have neither exemption; linked
 minimum exempts hidden fields only. Initial loaded values are the detached
 persisted baseline for grandfathered select values; presentation is never data.
 
-This validator supports ordinary text, email syntax, number/currency, select and
+This validator supports ordinary text, email/URL syntax, number/currency, select and
 linked limits plus required checks for the documented scalar/date/attachment types.
 Nonempty editable email answers use `email-validator` without trimming, case folding
 or native-value normalization. Invalid answers expose the field's generic
@@ -1449,8 +1449,14 @@ or native-value normalization. Invalid answers expose the field's generic
 Conditional hiding does not waive email syntax; read-only fields are exempt.
 Null/missing and exactly empty strings skip syntax, while optional whitespace-only
 strings still fail syntax. This is a syntax check, not verification or deliverability.
-Writable nonempty URL validation remains unsupported, except configuration that
-permits invalid URLs; read-only URL answers do not run that validator.
+Nonempty editable URL answers use the established local URL rule: supported
+HTTP/HTTPS or bare hosts, and `mailto:` with valid recipients. Whitespace,
+control characters, backslashes, unsafe schemes, credentials in a URL and
+unsupported host shapes produce a generic `invalid-url` problem. This is syntax
+validation only, with no network or DNS request. Conditional hiding does not
+waive URL syntax; read-only answers and exactly `allowInvalidUrls: true` are
+exempt. The native string is preserved byte for byte, including bare hosts;
+validation never replaces it with a normalized or prefixed href.
 Computed fields and canonical pass-through types such as rich text and buttons
 do not add ordinary frontend validation. Existing visibility refusals still apply;
 lookup presentation requires an explicit `hideFieldIfEmpty: false`. Nonempty collaborator answers and other

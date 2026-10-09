@@ -216,6 +216,105 @@ for (const [name, value] of [
                     null,
                     hidden
                 );
+// URL expectations execute the pinned ordinary URL branch and its shared helper.
+const urlValues = [
+    ['http', 'http://example.test'],
+    ['https', 'https://example.test/path'],
+    ['mixed-case', 'HTTPS://EXAMPLE.TEST'],
+    ['bare-host', 'example.test'],
+    ['bare-port', 'example.test:8080/path'],
+    ['http-port', 'https://example.test:443/path'],
+    ['invalid-port', 'example.test:65536'],
+    ['empty-port', 'https://example.test:'],
+    ['mailto', 'mailto:person@example.test'],
+    ['mailto-multiple', 'mailto:first@example.test,second@example.test'],
+    ['mailto-encoded', 'mailto:person%2Btag%40example.test'],
+    ['mailto-query', 'mailto:person@example.test?subject=Synthetic%20subject'],
+    ['mailto-empty', 'mailto:'],
+    ['mailto-empty-recipient', 'mailto:person@example.test,'],
+    ['mailto-invalid-recipient', 'mailto:person@example.test,invalid'],
+    ['mailto-authority', 'mailto://person@example.test'],
+    ['mailto-bad-escape', 'mailto:%ZZ@example.test'],
+    ['unicode-idn', 'https://例え.test/道'],
+    ['punycode-idn', 'xn--r8jz45g.test'],
+    [
+        'path-query-punctuation',
+        "https://example.test/a!$&'()*+,;=:@/?q=a%20b#fragment",
+    ],
+    ['encoded-slash', 'https://example.test/a%2Fb'],
+    ['trailing-dot', 'https://example.test.'],
+    ['leading-space', ' https://example.test'],
+    ['trailing-space', 'https://example.test '],
+    ['embedded-space', 'https://example.test/a b'],
+    ['newline', 'https://example.test\n'],
+    ['tab', 'https://example.test/\t'],
+    ['nul', 'https://example.test/\u0000'],
+    ['del', 'https://example.test/\u007f'],
+    ['encoded-nul', 'https://example.test/%00'],
+    ['encoded-newline', 'https://example.test/%0A'],
+    ['encoded-del', 'https://example.test/%7f'],
+    ['double-encoded-control', 'https://example.test/%250A'],
+    ['backslash', 'https://example.test\\path'],
+    ['javascript', 'javascript:alert(1)'],
+    ['data', 'data:text/plain,Synthetic'],
+    ['ftp', 'ftp://example.test'],
+    ['file', 'file:///synthetic'],
+    ['custom-scheme', 'synthetic:example.test'],
+    ['http-missing-slashes', 'http:example.test'],
+    ['protocol-relative', '//example.test'],
+    ['userinfo', 'https://person@example.test'],
+    ['password', 'https://person:secret@example.test'],
+    ['localhost', 'http://localhost'],
+    ['single-label', 'https://synthetic'],
+    ['ipv4', 'https://192.0.2.1'],
+    ['ipv4-short', 'https://127.1'],
+    ['ipv4-invalid', 'https://999.0.2.1'],
+    ['ipv6', 'https://[2001:db8::1]'],
+    ['ipv6-malformed', 'https://[2001:db8::1'],
+    ['empty-label', 'https://example..test'],
+    ['leading-hyphen', 'https://-example.test'],
+    ['underscore', 'https://some_host.test'],
+    ['label-63', `https://${'a'.repeat(63)}.test`],
+    ['label-64', `https://${'a'.repeat(64)}.test`],
+    ['missing-host', 'https://'],
+    ['path-only', '/synthetic/path'],
+    ['malformed-percent-http', 'https://example.test/%ZZ'],
+];
+for (const [name, value] of urlValues) add(`url-syntax-${name}`, 'url', value);
+for (const [name, value] of [
+    ['null', null],
+    ['empty', ''],
+    ['spaces', '  '],
+    ['tab', '\t'],
+])
+    for (const required of [false, true])
+        for (const hidden of [false, true])
+            for (const readOnly of [false, true])
+                add(
+                    `url-empty-${name}-${required}-${hidden}-${readOnly}`,
+                    'url',
+                    value,
+                    { required, readOnly },
+                    null,
+                    hidden
+                );
+for (const [name, allowInvalidUrls] of [
+    ['true', true],
+    ['false', false],
+    ['string', 'true'],
+    ['number', 1],
+    ['null', null],
+])
+    for (const hidden of [false, true])
+        for (const readOnly of [false, true])
+            add(
+                `url-config-${name}-${hidden}-${readOnly}`,
+                'url',
+                'javascript:alert(1)',
+                { allowInvalidUrls, readOnly },
+                null,
+                hidden
+            );
 const computedValues = [
     ['formula', 'Computed'],
     ['rollup', 1],

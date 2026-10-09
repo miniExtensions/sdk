@@ -717,8 +717,8 @@ empty hiding still blocks presentation and the starter Save gate.
 The existing `createFlatScalarFormRecordProjection` retains its types, blocked
 codes and behavior, including scanning schemas outside the supplied order and
 rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
-adapter and Form field bindings use this helper for supported one-page and
-multipage scalar conditional choices. Inactive-page drivers remain in the
+adapter and Form field bindings use `createScalarFormRecordProjection` for
+supported one-page and multipage scalar conditional choices. Inactive-page drivers remain in the
 evaluation record; conditionally hidden drivers are removed only from that
 detached projection. Eligibility changes never remove native selected values.
 One-page Review retains its separate page-mode and supported-driver checks.

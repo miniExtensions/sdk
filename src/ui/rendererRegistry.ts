@@ -9,6 +9,7 @@ import type { FormValidationMessage } from '../forms/helpers.js';
 import type { FieldActionResult } from '../forms/bindings.js';
 import type { ScalarFieldState, DurationFieldState } from './scalarModels.js';
 import type { DateFieldState } from './dateModel.js';
+import type { SelectAvailabilitySnapshot } from './selectAvailability.js';
 import type { SelectionState } from './types.js';
 import type { FormAttachmentSnapshot } from '../forms/attachmentController.js';
 import type { FormSelectChoiceSnapshot } from '../forms/selectChoiceController.js';
@@ -205,7 +206,10 @@ export type FieldRendererProps<K extends FieldKind> = {
     capability: FieldRendererCapability<K>;
 } & (K extends 'multipleRecordLinks'
     ? { linkedRecords?: LinkedRecordsRendererProps }
-    : { linkedRecords?: never });
+    : { linkedRecords?: never }) &
+    (K extends 'singleSelect' | 'multipleSelects'
+        ? { selectAvailability?: SelectAvailabilitySnapshot }
+        : { selectAvailability?: never });
 export type FieldRendererPropsUnion = {
     [K in FieldKind]: FieldRendererProps<K>;
 }[FieldKind];
@@ -286,6 +290,7 @@ export type RendererPropsInput = Omit<
     | 'value'
     | 'capability'
     | 'linkedRecords'
+    | 'selectAvailability'
 > & {
     physicalKind: string;
     field: unknown;
@@ -293,6 +298,7 @@ export type RendererPropsInput = Omit<
     writeConfig?: unknown;
     value: unknown;
     linkedRecords?: LinkedRecordsRendererProps;
+    selectAvailability?: SelectAvailabilitySnapshot;
     capability:
         | { type: 'readonly' }
         | {
@@ -613,6 +619,37 @@ export function createRendererProps(
     if (input.capability.type === 'editable' && (computed || kind === 'button'))
         return null;
     if (input.capability.type === 'button' && kind !== 'button') return null;
+    let selectAvailability: SelectAvailabilitySnapshot | undefined;
+    if (input.selectAvailability !== undefined) {
+        const availability = input.selectAvailability;
+        if (
+            input.context !== 'form' ||
+            (kind !== 'singleSelect' && kind !== 'multipleSelects') ||
+            !object(availability)
+        )
+            return null;
+        const keys = Object.keys(availability);
+        const status = availability.status;
+        if (status === 'ready') {
+            if (keys.length !== 1 || keys[0] !== 'status') return null;
+            selectAvailability = { status: 'ready' };
+        } else if (status === 'blocked') {
+            const code = availability.code;
+            if (
+                keys.length !== 2 ||
+                !keys.includes('status') ||
+                !keys.includes('code') ||
+                ![
+                    'unavailable-record',
+                    'unsupported-condition',
+                    'invalid-condition',
+                    'evaluation-error',
+                ].includes(code)
+            )
+                return null;
+            selectAvailability = { status: 'blocked', code };
+        } else return null;
+    }
     if (input.linkedRecords !== undefined) {
         const linked = input.linkedRecords;
         if (!object(linked) || kind !== 'multipleRecordLinks') return null;
@@ -684,7 +721,12 @@ export function createRendererProps(
             return null;
     }
     try {
-        const { capability, linkedRecords, ...data } = input;
+        const {
+            capability,
+            linkedRecords,
+            selectAvailability: _availability,
+            ...data
+        } = input;
         const config = input.field.config;
         const resultKind =
             kind === 'formula' ||
@@ -702,6 +744,7 @@ export function createRendererProps(
             : { type: 'physical', config };
         return {
             ...structuredClone({ ...data, computed, presentation }),
+            ...(selectAvailability ? { selectAvailability } : {}),
             ...(linkedRecords
                 ? {
                       linkedRecords:

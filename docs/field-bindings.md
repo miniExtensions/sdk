@@ -161,6 +161,20 @@ Unobserved in-place changes followed by restoration are not detected.
 
 ## Selects, linked reads and reload
 
+`FormFieldSnapshot.selectAvailability` is absent or `null` when unavailable for this
+host, or a readonly `SelectAvailabilitySnapshot`: `{ status: 'ready' }` or
+`{ status: 'blocked', code }`. Actual Form and child Form select hosts forward
+it as optional top-level `FieldRendererProps.selectAvailability`, including
+readonly fields. Hidden and retired hosts expose no field props. Portal and
+standalone hosts do not infer readiness. An absent bridge never means ready.
+The blocked code is finite and contains no condition IDs, driver values or raw
+errors; applications supply localized wording. Readiness is presentation only:
+keep using existing selection actions, retained native values and Save policy.
+
+The default headless React recipe below distinguishes blocked availability from
+a ready empty option set and a ready search with no matches. Search remains a
+presentation filter. Mounting and remounting perform no I/O.
+
 The shared select model applies configured labels, allowed choice IDs, retained
 ineligible values and selection limits. Stock and custom renderers share that
 policy. Disabled-option decoration is not whole-set validation: `canChoose`
@@ -602,7 +616,96 @@ The optional React dispatcher subscribes and invokes the matching named slot:
 
 ```tsx
 import { FieldRenderer } from '@miniextensions/sdk/react';
-import type { FieldRendererHost } from '@miniextensions/sdk/ui';
+import type {
+    FieldRendererHost,
+    FieldRendererProps,
+    SelectAvailabilitySnapshot,
+} from '@miniextensions/sdk/ui';
+
+// Replace these application-owned English strings with localized messages.
+export function selectAvailabilityMessage(
+    availability: SelectAvailabilitySnapshot | null | undefined,
+    query: string,
+    optionCount: number | undefined
+): string | null {
+    if (availability == null) return null;
+    if (availability.status === 'blocked') {
+        const messages: Record<
+            Extract<SelectAvailabilitySnapshot, { status: 'blocked' }>['code'],
+            string
+        > = {
+            'unavailable-record': 'Choices are temporarily unavailable.',
+            'unsupported-condition':
+                'Choices are unavailable for this configuration.',
+            'invalid-condition':
+                'Choices are unavailable for this configuration.',
+            'evaluation-error': 'Choices are temporarily unavailable.',
+        };
+        return messages[availability.code];
+    }
+    if (optionCount == null || optionCount > 0) return null;
+    return query.trim() ? 'No matching choices.' : 'No choices available.';
+}
+
+function renderSelect(
+    props:
+        | FieldRendererProps<'singleSelect'>
+        | FieldRendererProps<'multipleSelects'>
+) {
+    const selection =
+        props.capability.type === 'editable'
+            ? props.capability.selection
+            : undefined;
+    const message = selectAvailabilityMessage(
+        props.selectAvailability,
+        selection?.state.searchTerm ?? '',
+        selection?.state.options.length
+    );
+    const options = new Map(
+        [
+            ...(selection?.state.options ?? []),
+            ...(selection?.state.selectedOptions ?? []),
+        ].map((option) => [option.value, option])
+    );
+    return (
+        <div>
+            <span>
+                {typeof props.value === 'string'
+                    ? props.value
+                    : (props.value?.join(', ') ?? '')}
+            </span>
+            {selection && (
+                <input
+                    aria-label="Search choices"
+                    value={selection.state.searchTerm}
+                    onChange={(event) =>
+                        selection.setSearchInput(event.currentTarget.value)
+                    }
+                />
+            )}
+            {message && <p role="status">{message}</p>}
+            {selection &&
+                [...options.values()].map((option) => (
+                    <button
+                        key={option.value}
+                        type="button"
+                        aria-pressed={selection.state.value.includes(
+                            option.value
+                        )}
+                        disabled={
+                            selection.state.disabled ||
+                            selection.state.readOnly ||
+                            (!selection.state.value.includes(option.value) &&
+                                option.disabled === true)
+                        }
+                        onClick={() => selection.toggle(option.value)}
+                    >
+                        {option.label}
+                    </button>
+                ))}
+        </div>
+    );
+}
 
 export function CustomFields({ host }: { host: FieldRendererHost }) {
     return (
@@ -623,6 +726,8 @@ export function CustomFields({ host }: { host: FieldRendererHost }) {
                     ) : (
                         <span>{props.value ?? ''}</span>
                     ),
+                renderSingleSelectField: renderSelect,
+                renderMultipleSelectsField: renderSelect,
                 renderCheckboxField: (props) => (
                     <span>
                         {props.value === true ? 'Checked' : 'Unchecked'}

@@ -443,8 +443,8 @@ Record projection belongs to the caller. Supply the same accepted native
 record and metadata used by your presentation, including any required hidden
 field or linked-value projection. The helper neither reconstructs hidden
 fields nor hydrates linked records. The browser starter supplies
-`createScalarFormRecordProjection` for one-page rules with current noncomputed
-scalar dependencies and canonical ordered sections. It evaluates every field
+`createScalarFormRecordProjection` for supported one-page and multipage rules
+with current noncomputed scalar dependencies and canonical ordered sections. It evaluates every field
 predicate against the same complete accepted draft, then removes condition-hidden
 IDs only from a detached evaluation copy and recomputes after accepted edits.
 Configured choices use this projected record in a separate second phase; the

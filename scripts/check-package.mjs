@@ -15,6 +15,11 @@ import {
     checkCrossPageChoiceConsumer,
     crossPageChoiceTypedConsumer,
 } from './cross-page-choice-consumer-checks.mjs';
+import {
+    checkSelectAvailabilityBridgeConsumer,
+    selectAvailabilityBridgeTypedConsumer,
+} from './select-availability-bridge-consumer-checks.mjs';
+import { checkSelectAvailabilityBridgeRecipe } from './select-availability-bridge-recipe-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
@@ -922,6 +927,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('cross-page-choice-consumer.ts');
     writeFileSync(
+        join(temporaryDirectory, 'select-availability-bridge-consumer.ts'),
+        selectAvailabilityBridgeTypedConsumer
+    );
+    reactSources.push('select-availability-bridge-consumer.ts');
+    writeFileSync(
         join(temporaryDirectory, 'portal-composition-consumer.ts'),
         portalCompositionTypedConsumer
     );
@@ -1062,6 +1072,18 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
     });
     assert.equal(crossPageChoiceChecks, 76);
+    const selectAvailabilityBridgeChecks =
+        await checkSelectAvailabilityBridgeConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    const selectAvailabilityBridgeRecipeChecks =
+        await checkSelectAvailabilityBridgeRecipe({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        });
+    console.log(
+        `Installed select-availability bridge: ${selectAvailabilityBridgeChecks} ESM/CJS groups and ${selectAvailabilityBridgeRecipeChecks} shipped React/custom-renderer groups passed; synthetic DOM/transport only.`
+    );
     assert.equal(
         await checkPortalCompositionConsumer({
             consumerDirectory: temporaryDirectory,

@@ -18,7 +18,10 @@ import type { AirtableValue, FormLoadedResult } from '../runtime/types.js';
 import { createSelectionModel } from '../ui/model.js';
 import { guardFormLinkedRecordPage } from '../ui/linkedRecordPages.js';
 import { createSelectFieldModel } from '../ui/selectModel.js';
-import { resolveSelectFieldAvailability } from '../ui/selectAvailability.js';
+import {
+    resolveSelectFieldAvailability,
+    type SelectAvailabilitySnapshot,
+} from '../ui/selectAvailability.js';
 import type {
     SelectionLoader,
     SelectionModel,
@@ -71,6 +74,8 @@ export type FormFieldSnapshot = {
     error: string | null;
     validation: FormValidationMessage[];
     selection: SelectionState | null;
+    /** Eligible-new-choice presentation only; native values and Save stay authoritative. */
+    selectAvailability?: SelectAvailabilitySnapshot | null;
     scalar?: ScalarFieldState | null;
     date?: DateFieldState | null;
     retired: boolean;
@@ -199,6 +204,7 @@ export function createFormFieldBindings(
             binding: FormFieldBinding;
             listeners: Set<(state: FormFieldSnapshot) => void>;
             model: SelectionModel | null;
+            selectAvailability: SelectAvailabilitySnapshot | null;
             stop: (() => void) | null;
         }
     >();
@@ -344,8 +350,21 @@ export function createFormFieldBindings(
                             mode: 'runtime',
                             invalidConditionMode: 'compatibility',
                         });
+                        entry.selectAvailability =
+                            availability.status === 'ready'
+                                ? { status: 'ready' }
+                                : {
+                                      status: 'blocked',
+                                      code:
+                                          availability.diagnostics[0]?.code ??
+                                          'evaluation-error',
+                                  };
                         entry.model.setOptions(availability.options);
                     } catch {
+                        entry.selectAvailability = {
+                            status: 'blocked',
+                            code: 'evaluation-error',
+                        };
                         entry.model.setOptions([]);
                     }
                 }
@@ -510,6 +529,10 @@ export function createFormFieldBindings(
                           )
                         : [],
                     selection: live ? (model?.getState() ?? null) : null,
+                    selectAvailability:
+                        live && visibility[id]?.type === 'visible'
+                            ? (entries.get(id)?.selectAvailability ?? null)
+                            : null,
                     retired: !live,
                     choiceCreation: live
                         ? (choiceCreators.get(id)?.getSnapshot() ?? null)
@@ -530,6 +553,7 @@ export function createFormFieldBindings(
             binding,
             listeners,
             model,
+            selectAvailability: null,
             stop:
                 model?.subscribe(() => {
                     if (!syncing) notify();

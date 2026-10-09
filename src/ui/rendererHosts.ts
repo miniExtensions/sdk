@@ -438,6 +438,12 @@ function base(
         pending: state.pending,
         validation: structuredClone(state.validation),
         error: state.error,
+        ...(context === 'form' &&
+        (field.fieldType === 'singleSelect' ||
+            field.fieldType === 'multipleSelects') &&
+        state.selectAvailability != null
+            ? { selectAvailability: state.selectAvailability }
+            : {}),
         capability: { type: 'readonly' },
     };
 }

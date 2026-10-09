@@ -14,6 +14,10 @@ import type {
     FormRenderScope,
     FormRenderSnapshot,
 } from '../ui/formRenderScope.js';
+import type {
+    PortalRenderScope,
+    PortalRenderSnapshot,
+} from '../ui/portalRenderScope.js';
 import type { FormFieldBinding, FormFieldSnapshot } from '../forms/bindings.js';
 import type {
     FormAttachmentController,
@@ -964,4 +968,83 @@ export function AirtableForm({
             }),
         })),
     });
+}
+
+export type AirtablePortalRenderState = Omit<PortalRenderSnapshot, 'rows'> & {
+    rows: readonly {
+        recordId: string;
+        cells: readonly { fieldId: string; node: ReactNode }[];
+    }[];
+};
+export type AirtableGridProps = {
+    scope: PortalRenderScope;
+    renderers: import('../ui/rendererRegistry.js').FieldRendererSlots<ReactNode>;
+    fallback?(state: FieldRendererFallback): ReactNode;
+    /** App-owned layout; every action retains this accepted render's revision. */
+    children(state: AirtablePortalRenderState): ReactNode;
+};
+export type AirtableListProps = AirtableGridProps;
+
+function AirtablePortal({
+    scope,
+    renderers,
+    fallback,
+    children,
+}: AirtableGridProps): ReactNode {
+    const store = useMemo(() => {
+        let value = scope.getSnapshot();
+        const read = () => {
+            const next = scope.getSnapshot();
+            if (next.revision !== value.revision) value = next;
+            return value;
+        };
+        return {
+            getSnapshot: read,
+            subscribe: (notify: () => void) => {
+                const refresh = () => {
+                    const before = value;
+                    read();
+                    if (value !== before) notify();
+                };
+                const stop = scope.subscribe(refresh);
+                refresh();
+                return stop;
+            },
+        };
+    }, [scope]);
+    const state = useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+    if (state.retired) return null;
+    return children({
+        ...state,
+        rows: state.rows.map(({ recordId, cells }) => ({
+            recordId,
+            cells: cells.map(({ fieldId, host }) => ({
+                fieldId,
+                node: createElement(FieldRenderer, {
+                    key: fieldId,
+                    host,
+                    renderers,
+                    fallback: (failure) =>
+                        failure.status === 'hidden' ||
+                        failure.status === 'retired'
+                            ? null
+                            : (fallback?.(failure) ?? null),
+                }),
+            })),
+        })),
+    });
+}
+
+/** Grid layout shell only. Unmount never disposes the supplied scope or owner. */
+export function AirtableGrid(props: AirtableGridProps): ReactNode {
+    return createElement(AirtablePortal, props);
+}
+
+/** List layout shell over the same accepted records, hosts and action authority. */
+export function AirtableList(props: AirtableListProps): ReactNode {
+    return createElement(AirtablePortal, props);
 }

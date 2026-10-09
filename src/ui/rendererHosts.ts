@@ -151,6 +151,23 @@ const unavailable = (): FieldRendererHostSnapshot => ({
     status: 'unavailable',
     reason: 'Field presentation is unavailable.',
 });
+function subscribeTo(
+    listener: () => void,
+    sources: ((listener: () => void) => () => void)[]
+): (() => void)[] {
+    const stops: (() => void)[] = [];
+    try {
+        for (const source of sources) stops.push(source(listener));
+        return stops;
+    } catch (error) {
+        while (stops.length) {
+            try {
+                stops.pop()!();
+            } catch {}
+        }
+        throw error;
+    }
+}
 function host(
     options: LeaseOptions,
     authority: () => unknown | null,
@@ -208,7 +225,13 @@ function host(
                 } catch {}
             }
     };
-    const stops = subscribe(emit);
+    let stops: (() => void)[];
+    try {
+        stops = subscribe(emit);
+    } catch (error) {
+        disposeOwned();
+        throw error;
+    }
     return {
         getSnapshot: snapshot,
         subscribe(listener) {
@@ -459,12 +482,17 @@ export function createFormFieldRendererHost(
         authority,
         (current) =>
             bindingSnapshot(binding, 'form', current, attachment, button),
-        (listener) => [
-            binding.subscribe(listener),
-            options.fields.controller.subscribe(listener),
-            ...(attachment ? [attachment.subscribe(listener)] : []),
-            ...(button ? [button.subscribe(listener)] : []),
-        ],
+        (listener) =>
+            subscribeTo(listener, [
+                (notify) => binding.subscribe(notify),
+                (notify) => options.fields.controller.subscribe(notify),
+                ...(attachment
+                    ? [(notify: () => void) => attachment.subscribe(notify)]
+                    : []),
+                ...(button
+                    ? [(notify: () => void) => button.subscribe(notify)]
+                    : []),
+            ]),
         () => button?.dispose()
     );
 }
@@ -648,12 +676,13 @@ export function createPortalDetailRendererHost(
             }
             return { status: 'ready', fields };
         },
-        (listener) => [
-            options.owner.subscribe(listener),
-            ...[...buttons.values()].map((button) =>
-                button.subscribe(listener)
-            ),
-        ],
+        (listener) =>
+            subscribeTo(listener, [
+                (notify) => options.owner.subscribe(notify),
+                ...[...buttons.values()].map(
+                    (button) => (notify: () => void) => button.subscribe(notify)
+                ),
+            ]),
         () => buttons.forEach((button) => button.dispose())
     );
 }
@@ -753,9 +782,10 @@ export function createPortalCellRendererHost(
                 },
                 canEditDisplay
             ),
-        (listener) => [
-            options.cell.binding.subscribe(listener),
-            options.owner.subscribe(listener),
-        ]
+        (listener) =>
+            subscribeTo(listener, [
+                (notify) => options.cell.binding.subscribe(notify),
+                (notify) => options.owner.subscribe(notify),
+            ])
     );
 }

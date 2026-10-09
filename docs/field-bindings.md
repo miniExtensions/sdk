@@ -637,6 +637,128 @@ owner. Attachment and Button options likewise reuse their existing recovery and
 permission contracts. Full native Save data and backend validation remain
 owned by the existing bindings/controller.
 
+## Portal composition with app-owned layout
+
+`createPortalRenderScope` from `@miniextensions/sdk/ui` retains an existing
+`PortalListOwner`. It groups that owner's accepted record/detail projection and
+typed field hosts; it does not create a list, draft, session or mutation owner.
+Create it after accepting the Portal context, outside React renderer lifetime:
+
+```ts
+import { createPortalRenderScope } from '@miniextensions/sdk/ui';
+import type { PortalRenderScopeOptions } from '@miniextensions/sdk/ui';
+
+export function createPortalPresentation(options: PortalRenderScopeOptions) {
+    return createPortalRenderScope(options);
+}
+```
+
+Supply `owner`, `client`, `isCurrent` and an observed `configurationRevision`.
+Snapshots contain `revision`, `retired`, the owner's state in `owner`, detached
+accepted `records`, ordered `rows` (`recordId`, then `cells` with `fieldId` and
+`host`) and captured `actions`. These actions delegate explicit Load, paging,
+criteria/field replacement, manual cleanup acceptance/dismissal, child Form
+planning and cancellation to the same existing owner. They retain the revision
+that produced the render; old callbacks cannot use a newer accepted page or
+criteria snapshot. Child planning returns a plan and does not load a child.
+
+Rows use only the accepted field-scoped projection. Hidden details stay absent;
+an explicitly empty projection produces no cells. Missing projections are not
+reconstructed from a table cache. The owner's existing null-projection legacy
+fallback is preserved. Physical computed kind and display settings stay
+distinct. Returned display metadata remains presentation authority; existing
+child-first inline-write authorization is unchanged.
+
+By default cells are read-only. Optional `resolveCell({recordId, fieldId,
+ownerRevision})` may return an **existing** `PortalCellBinding` for an eligible
+accepted cell. The existing cell renderer host validates its record, outer
+field, view, token, schema and write configuration before exposing capabilities.
+The scope does not fabricate editable bindings or widen the grid wire contract.
+The application owns these cell bindings and their uncertainty journal. Cache
+them at that ownership boundary, not in a renderer; explicitly retire them on
+real context replacement. No resolver means no inline mutation capability.
+
+Optional React `AirtableGrid` and `AirtableList` use the same scope and all 33
+correlated `FieldRendererSlots<ReactNode>`. Both require a layout render prop.
+They supply ordered cell nodes and state/actions, without a grid, list markup,
+styles, virtualizer or automatic mode change:
+
+```tsx
+import type { ReactNode } from 'react';
+import { AirtableGrid } from '@miniextensions/sdk/react';
+import type {
+    FieldRendererSlots,
+    PortalRenderScope,
+} from '@miniextensions/sdk/ui';
+
+export function CustomPortal({
+    scope,
+    renderers,
+}: {
+    scope: PortalRenderScope;
+    renderers: FieldRendererSlots<ReactNode>;
+}) {
+    return (
+        <AirtableGrid scope={scope} renderers={renderers}>
+            {(state) => (
+                <section>
+                    {state.rows.map(({ recordId, cells }) => (
+                        <article key={recordId}>
+                            {cells.map(({ fieldId, node }) => (
+                                <div key={fieldId}>{node}</div>
+                            ))}
+                        </article>
+                    ))}
+                    {state.owner.error && <p>{state.owner.error}</p>}
+                    <button
+                        disabled={state.owner.pending}
+                        onClick={() => {
+                            void state.actions.load({
+                                pagesToFetch: 1,
+                                refreshLoggedInPortalRecord: false,
+                            });
+                        }}
+                    >
+                        Load
+                    </button>
+                    <button
+                        disabled={!state.owner.hasNext}
+                        onClick={() => {
+                            void state.actions.more({
+                                pagesToFetch: 1,
+                                refreshLoggedInPortalRecord: false,
+                            });
+                        }}
+                    >
+                        More
+                    </button>
+                </section>
+            )}
+        </AirtableGrid>
+    );
+}
+```
+
+Use `AirtableList` with your own card/list layout in the same way. Mounting,
+subscribing and rendering perform no reads, saves, uploads or webhooks. Explicit
+criteria replacement retires old rows and paging; the next deliberate Load
+performs the read. Manual server cleanup remains a separate explicit action.
+Hidden and retired hosts never produce placeholder nodes.
+
+React unmount and StrictMode cleanup only unsubscribe. Cell drafts, unfinished
+input, pending File identities and uncertainty remain with their original
+owners. `scope.destroy()` releases only its presentation hosts/subscriptions;
+the caller's list owner and resolved cell bindings survive. Retire the old
+scope before accepting a successor owner/context or observed configuration,
+including A→B→A. Create a fresh scope for the successor, and dispose actual
+list/cell owners at their own lifecycle boundary. No storage or mutation retry
+is introduced.
+
+Packed composition checks execute actual installed ESM/CJS React shells with
+synthetic transport. This is distinct from native-browser, live-backend or
+persistence acceptance; application rendering still owns visual and privacy
+presentation of the typed props.
+
 ## Rich linked-record presentation
 
 Native linked-field values remain arrays of record IDs. Use the accepted owner’s rich-record facet to render other fields returned for each record; do not replace the native value with record objects.

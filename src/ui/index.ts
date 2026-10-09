@@ -102,3 +102,11 @@ export type {
     PortalCellRendererHostOptions,
     PortalDetailRendererHostOptions,
 } from './rendererHosts.js';
+export { createPortalRenderScope } from './portalRenderScope.js';
+export type {
+    PortalRenderScopeOptions,
+    PortalRenderScope,
+    PortalRenderSnapshot,
+    PortalRenderRow,
+    PortalRenderCell,
+} from './portalRenderScope.js';

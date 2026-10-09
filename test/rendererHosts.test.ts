@@ -258,6 +258,45 @@ it('actual Portal cells use accepted detail display and private matching provena
     f.cell.destroy();
     f.owner.destroy();
 });
+it('a cell host constructor releases earlier subscriptions if owner subscription fails', async () => {
+    const f = await portal();
+    const subscribe = f.cell.binding.subscribe.bind(f.cell.binding);
+    const ownerSubscribe = f.owner.subscribe;
+    let live = 0;
+    f.cell.binding.subscribe = (listener) => {
+        const stop = subscribe(listener);
+        live++;
+        let active = true;
+        return () => {
+            if (!active) return;
+            active = false;
+            live--;
+            stop();
+        };
+    };
+    f.owner.subscribe = () => {
+        throw new Error('Synthetic subscription failure');
+    };
+    try {
+        assert.throws(
+            () =>
+                createPortalCellRendererHost({
+                    ...f.options,
+                    cell: f.cell,
+                    fieldId: 'fld_title',
+                }),
+            /Synthetic subscription failure/
+        );
+        assert.equal(live, 0);
+        assert.equal(f.cell.binding.getSnapshot().value, 'Initial');
+        assert.equal(f.owner.getSnapshot().phase, 'ready');
+    } finally {
+        f.owner.subscribe = ownerSubscribe;
+        f.cell.binding.subscribe = subscribe;
+        f.cell.destroy();
+        f.owner.destroy();
+    }
+});
 it('Portal detail projects only returned ordered fields and empty remains empty', async () => {
     const f = await portal();
     const host = createPortalDetailRendererHost(f.options),

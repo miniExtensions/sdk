@@ -22,6 +22,10 @@ import {
     checkFormCompositionConsumer,
     formCompositionTypedConsumer,
 } from './form-composition-consumer-checks.mjs';
+import {
+    checkPortalCompositionConsumer,
+    portalCompositionTypedConsumer,
+} from './portal-composition-consumer-checks.mjs';
 import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
@@ -886,6 +890,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         formCompositionTypedConsumer
     );
     reactSources.push('form-composition-consumer.ts');
+    writeFileSync(
+        join(temporaryDirectory, 'portal-composition-consumer.ts'),
+        portalCompositionTypedConsumer
+    );
+    reactSources.push('portal-composition-consumer.ts');
     const compositionRecipes = [
         ...readFileSync(
             join(installedPackage, 'docs/field-bindings.md'),
@@ -903,6 +912,26 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     for (const [, language, code] of compositionRecipes) {
         const path = `form-composition-guide-${reactSources.length}.${language}`;
+        writeFileSync(join(temporaryDirectory, path), code);
+        reactSources.push(path);
+    }
+    const portalCompositionRecipes = [
+        ...readFileSync(
+            join(installedPackage, 'docs/field-bindings.md'),
+            'utf8'
+        ).matchAll(/```(ts|tsx)\n([\s\S]*?)\n```/g),
+    ].filter(
+        ([, , code]) =>
+            code.includes('export function createPortalPresentation(') ||
+            code.includes('export function CustomPortal(')
+    );
+    assert.equal(
+        portalCompositionRecipes.length,
+        2,
+        'Missing shipped Portal composition recipes'
+    );
+    for (const [, language, code] of portalCompositionRecipes) {
+        const path = `portal-composition-guide-${reactSources.length}.${language}`;
         writeFileSync(join(temporaryDirectory, path), code);
         reactSources.push(path);
     }
@@ -968,6 +997,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         26
+    );
+    assert.equal(
+        await checkPortalCompositionConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        37
     );
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,

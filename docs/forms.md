@@ -1469,7 +1469,9 @@ current clock on each validation, so a held navigation action can become
 stale when crossing a range boundary.
 An explicit refused Next or Submit publishes the refreshed feedback without a
 polling timer. Submit rechecks the range after synchronous admission hooks,
-before journal creation and transport. If a hook changes validity after a
+before journal creation and transport. External configuration is observed again
+after ownership and controller getter callbacks; a changed configuration retires
+the old page owner. If a hook changes validity after a
 journal attempt was created, that attempt finishes as `not-dispatched`.
 After transport starts, a later clock boundary alone does not reject an
 otherwise accepted response; server validation remains authoritative.

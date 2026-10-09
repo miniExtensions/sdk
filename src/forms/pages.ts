@@ -597,6 +597,20 @@ export function createFormPageOwner(
                 // field policy without another application callback. This gate
                 // runs before the journal and again after all dispatch hooks.
                 const control = fields.controller.getState();
+                // Scope/session getters above may change external configuration.
+                // Observe it last, then inspect only captured state and local tickets.
+                // Once observed, a mismatch cannot revive this owner on restoration.
+                try {
+                    const epoch = options.configurationRevision();
+                    if (
+                        !Number.isSafeInteger(epoch) ||
+                        epoch < 0 ||
+                        epoch !== configuration
+                    )
+                        retired = true;
+                } catch {
+                    retired = true;
+                }
                 if (
                     retired ||
                     disposed ||

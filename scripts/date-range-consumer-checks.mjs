@@ -245,7 +245,8 @@ export async function checkDateRangeConsumer({
                 let transportResponse = null;
                 let configuration = 0,
                     ownerRevision = 0,
-                    predicate = () => true;
+                    predicate = () => true,
+                    scopeHook = () => {};
                 const fields = forms.createFormFieldBindings({
                     loaded,
                     client: {
@@ -263,10 +264,10 @@ export async function checkDateRangeConsumer({
                             },
                         },
                     },
-                    getScope: () => ({
-                        ownerId: 'range',
-                        revision: ownerRevision,
-                    }),
+                    getScope: () => {
+                        scopeHook();
+                        return { ownerId: 'range', revision: ownerRevision };
+                    },
                     getClientTimeZone: () => 'America/Los_Angeles',
                     saveOptions,
                     ...(owner === 'child'
@@ -338,6 +339,12 @@ export async function checkDateRangeConsumer({
                     },
                     setPredicate(fn) {
                         predicate = fn;
+                    },
+                    setScopeHook(fn) {
+                        scopeHook = fn;
+                    },
+                    setConfig(value) {
+                        configuration = value;
                     },
                     bumpConfig() {
                         configuration++;
@@ -965,6 +972,8 @@ async function checkClockRegressions({
         'lifecycle-clock',
         'after-journal-callback',
         'response-acceptance',
+        'final-owner-config',
+        'final-controller-config',
     ];
     assert(
         caseId === undefined || caseIds.includes(caseId),
@@ -1120,6 +1129,99 @@ async function checkClockRegressions({
             }
             assert(ownershipCallbacks > 0 && ownershipCallbacks < 20);
             assert.equal(f.journal.blocking(f.recoveryScope, null), undefined);
+            proofs++;
+        } finally {
+            dispose(f);
+        }
+    }
+    for (const phase of ['owner', 'controller']) {
+        const id = `final-${phase}-config`;
+        if (!selected(id)) continue;
+        clock(day.now);
+        const f = make(day, { onePage: true });
+        try {
+            assert(f.fields.field('answer').date.setInput(day.value));
+            const native = structuredClone(
+                f.fields.controller.getState().draft
+            );
+            const revision = f.pages.getSnapshot().revision;
+            const dispositions = [],
+                accepted = [];
+            let armed = false,
+                ownershipCallbacks = 0,
+                scopeReads = 0;
+            let changed = false;
+            f.setPredicate(() => {
+                if (armed) {
+                    ownershipCallbacks++;
+                    if (ownershipCallbacks === 2 && phase === 'owner') {
+                        changed = true;
+                        f.bumpConfig();
+                    }
+                }
+                return true;
+            });
+            f.setScopeHook(() => {
+                // After the second armed owner predicate, current() reads the
+                // controller, owns() reads it, then admission reads it last.
+                if (armed && ownershipCallbacks === 2 && !changed) {
+                    scopeReads++;
+                    if (scopeReads === 3 && phase === 'controller') {
+                        changed = true;
+                        f.bumpConfig();
+                    }
+                }
+            });
+            const lifecycle = {
+                dispatch(...args) {
+                    const operation = f.lifecycle.dispatch(...args);
+                    return {
+                        accepted(result) {
+                            accepted.push(result.type);
+                            operation.accepted(result);
+                        },
+                        finish(disposition) {
+                            dispositions.push(disposition);
+                            operation.finish(disposition);
+                        },
+                    };
+                },
+            };
+            const submission = f.pages.submit(revision, {
+                lifecycle,
+                isCurrent() {
+                    if (f.attempts === 1) armed = true;
+                    return true;
+                },
+            });
+            await assert.rejects(submission, undefined, id);
+            assert(
+                changed,
+                `${id}: targeted callback must change configuration`
+            );
+            assert(ownershipCallbacks >= 2 && ownershipCallbacks < 20, id);
+            if (phase === 'controller') assert.equal(scopeReads, 3, id);
+            armed = false;
+            assert.equal(f.calls.length, 0, id);
+            assert.equal(f.attempts, 1, id);
+            assert.deepEqual(accepted, [], id);
+            assert.deepEqual(dispositions, ['not-dispatched'], id);
+            assert.deepEqual(f.fields.controller.getState().draft, native, id);
+            assert.equal(
+                f.journal.blocking(f.recoveryScope, null),
+                undefined,
+                id
+            );
+            // Restoring the external value must never revive the retired owner.
+            f.setConfig(0);
+            const retired = f.pages.getSnapshot();
+            assert.equal(retired.canSubmit, false, id);
+            await assert.rejects(
+                f.pages.submit(retired.revision, { lifecycle })
+            );
+            assert.equal(f.calls.length, 0, id);
+            assert.equal(f.attempts, 1, id);
+            assert.deepEqual(f.fields.controller.getState().draft, native, id);
             proofs++;
         } finally {
             dispose(f);

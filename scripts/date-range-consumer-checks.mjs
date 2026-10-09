@@ -3,10 +3,16 @@ import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { transform } from 'esbuild';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 
 // Installed public APIs and actual React callers; transport responses are synthetic.
-export async function checkDateRangeConsumer({ consumerDirectory }) {
+export async function checkDateRangeConsumer({
+    consumerDirectory,
+    clockRegressionsOnly = false,
+    clockCaseId,
+    moduleFormat,
+}) {
     const require = createRequire(join(consumerDirectory, 'package.json'));
     const esm = join(
         consumerDirectory,
@@ -40,7 +46,7 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
         });
     assert.equal(cases.length + special.length, fixture.validation.length);
     assert.equal(new Set(cases.map((c) => c.dateRange)).size, 9);
-    const formats = [
+    const allFormats = [
         await Promise.all(
             ['forms', 'ui', 'react'].map(
                 (name) => import(pathToFileURL(join(esm, name, 'index.js')))
@@ -50,6 +56,10 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
             require(`@miniextensions/sdk/${name}`)
         ),
     ];
+    assert(moduleFormat === undefined || ['esm', 'cjs'].includes(moduleFormat));
+    const formats = moduleFormat
+        ? [allFormats[moduleFormat === 'esm' ? 0 : 1]]
+        : allFormats;
     const moment = require(
         require.resolve('moment-timezone', {
             paths: [require.resolve('@miniextensions/sdk/forms')],
@@ -57,7 +67,8 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
     );
     const realDateNow = Date.now,
         realMomentNow = moment.now;
-    let checks = 0;
+    let checks = 0,
+        clockChecks = 0;
     const clock = (now) => {
         Date.now = moment.now = () => new Date(now).getTime();
     };
@@ -76,6 +87,7 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
                     mini = {},
                     hidden = false,
                     owner = 'create',
+                    onePage = false,
                 } = {}
             ) => {
                 const loaded = portalRecipeFixtures.makeForm({
@@ -158,7 +170,9 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
                     publicFields: {
                         type: 'form',
                         state: {
-                            multiPageFormMode: 'multi-page',
+                            multiPageFormMode: onePage
+                                ? 'one-page'
+                                : 'multi-page',
                             promptUserBeforeSubmission: false,
                             enableFormComputeMode: false,
                             autoSubmitAfterPrefill: false,
@@ -228,6 +242,7 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
                     formFieldIdsWithUnsavedChanges: null,
                 };
                 const calls = [];
+                let transportResponse = null;
                 let configuration = 0,
                     ownerRevision = 0,
                     predicate = () => true;
@@ -238,6 +253,8 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
                         forms: {
                             save: async (input) => {
                                 calls.push(structuredClone(input));
+                                if (transportResponse)
+                                    return transportResponse(input);
                                 return {
                                     type: 'error',
                                     formValidationErrors: [],
@@ -287,11 +304,18 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
                             1
                         );
                         return {
-                            accepted() {
-                                journal.accepted(attempt, 'validation-error');
+                            accepted(result) {
+                                journal.accepted(
+                                    attempt,
+                                    result.type === 'saved'
+                                        ? 'saved'
+                                        : 'validation-error'
+                                );
                             },
-                            finish() {
-                                journal.finishFlight(attempt);
+                            finish(disposition) {
+                                if (disposition === 'not-dispatched')
+                                    journal.notDispatched(attempt);
+                                else journal.finishFlight(attempt);
                             },
                         };
                     },
@@ -299,6 +323,9 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
                 const f = {
                     loaded,
                     expectedEnvelope,
+                    setTransportResponse(fn) {
+                        transportResponse = fn;
+                    },
                     fields,
                     pages,
                     pageOptions,
@@ -371,6 +398,17 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
                 });
             };
             try {
+                clockChecks += await checkClockRegressions({
+                    make,
+                    dispose,
+                    clock,
+                    ui,
+                    api,
+                    require,
+                    consumerDirectory,
+                    caseId: clockRegressionsOnly ? clockCaseId : undefined,
+                });
+                if (clockRegressionsOnly) continue;
                 for (const sample of cases) {
                     clock(sample.now);
                     const f = make(sample);
@@ -716,6 +754,9 @@ export async function checkDateRangeConsumer({ consumerDirectory }) {
     console.log(
         `Installed date ranges: ${checks} checks; canonical fixtures, retained pages and actual React callers; synthetic saves only.`
     );
+    console.log(
+        `Installed date-range clock regressions: ${clockChecks} proofs${clockCaseId ? ` (${clockCaseId})` : ''}; ${moduleFormat?.toUpperCase() ?? 'ESM/CJS'}, synthetic saves only.`
+    );
     return checks;
 }
 
@@ -889,4 +930,336 @@ async function checkReactCaller(
             else delete globalThis[key];
         });
     }
+}
+
+// A bounded replay entrypoint lets the validation owner run the same proof against
+// an original installed candidate and an updated local pack without the oracle sweep.
+export async function checkDateRangeClockRegressions({
+    consumerDirectory,
+    caseId,
+    moduleFormat,
+}) {
+    return checkDateRangeConsumer({
+        consumerDirectory,
+        clockRegressionsOnly: true,
+        clockCaseId: caseId,
+        moduleFormat,
+    });
+}
+
+async function checkClockRegressions({
+    make,
+    dispose,
+    clock,
+    ui,
+    api,
+    require,
+    consumerDirectory,
+    caseId,
+}) {
+    const caseIds = [
+        'shippedNext',
+        'shippedSubmit',
+        'before-journal',
+        'before-journal-reentrant',
+        'lifecycle-clock',
+        'after-journal-callback',
+        'response-acceptance',
+    ];
+    assert(
+        caseId === undefined || caseIds.includes(caseId),
+        `Unknown clock regression: ${caseId}`
+    );
+    const selected = (id) => caseId === undefined || caseId === id;
+    let proofs = 0;
+    const day = {
+        kind: 'date',
+        timeZone: 'UTC',
+        dateRange: 'today or in the future',
+        value: '2026-10-09',
+        now: '2026-10-09T12:00:00Z',
+    };
+    const nextDay = '2026-10-10T12:00:00Z';
+    for (const repeat of [false, true]) {
+        if (!selected(repeat ? 'before-journal-reentrant' : 'before-journal'))
+            continue;
+        clock(day.now);
+        const f = make(day, { onePage: true });
+        try {
+            assert(f.fields.field('answer').date.setInput(day.value));
+            const native = structuredClone(
+                f.fields.controller.getState().draft
+            );
+            const revision = f.pages.getSnapshot().revision;
+            let callbacks = 0;
+            const isCurrent = () => {
+                callbacks++;
+                clock(
+                    repeat
+                        ? new Date(
+                              new Date(day.now).getTime() + callbacks * 86400000
+                          ).toISOString()
+                        : nextDay
+                );
+                if (repeat) f.pages.getSnapshot();
+                return true;
+            };
+            await assert.rejects(
+                f.pages.submit(revision, { lifecycle: f.lifecycle, isCurrent })
+            );
+            assert(
+                callbacks > 0 && callbacks < 20,
+                'Clock callback must remain bounded'
+            );
+            assert.deepEqual(f.pages.getSnapshot().problems, [
+                { fieldId: 'answer', code: 'invalid-input' },
+            ]);
+            assert.equal(f.calls.length, 0);
+            assert.equal(f.attempts, 0);
+            assert.deepEqual(f.fields.controller.getState().draft, native);
+            assert.equal(f.journal.blocking(f.recoveryScope, null), undefined);
+            proofs++;
+        } finally {
+            dispose(f);
+        }
+    }
+    const fixed = {
+        kind: 'dateTime',
+        timeZone: 'America/Los_Angeles',
+        dateRange: 'today or in the future',
+        value: '2026-10-09T19:00:00Z',
+        now: '2026-10-10T06:30:00Z',
+    };
+    const fixedNextDay = '2026-10-10T07:30:00Z';
+    for (const phase of ['dispatch', 'second-isCurrent', 'response']) {
+        const id = {
+            dispatch: 'lifecycle-clock',
+            'second-isCurrent': 'after-journal-callback',
+            response: 'response-acceptance',
+        }[phase];
+        if (!selected(id)) continue;
+        clock(fixed.now);
+        const f = make(fixed, { onePage: true });
+        try {
+            assert(f.fields.field('answer').date.setInput(fixed.value));
+            assert.deepEqual(f.pages.getSnapshot().problems, []);
+            const native = structuredClone(
+                f.fields.controller.getState().draft
+            );
+            const dispositions = [],
+                accepted = [];
+            let ownershipCallbacks = 0;
+            const lifecycle = {
+                dispatch(...args) {
+                    const operation = f.lifecycle.dispatch(...args);
+                    if (phase === 'dispatch') clock(fixedNextDay);
+                    return {
+                        accepted(result) {
+                            accepted.push(result.type);
+                            operation.accepted(result);
+                        },
+                        finish(disposition) {
+                            dispositions.push(disposition);
+                            operation.finish(disposition);
+                        },
+                    };
+                },
+            };
+            const isCurrent = () => {
+                ownershipCallbacks++;
+                if (phase === 'second-isCurrent' && f.attempts === 1)
+                    clock(fixedNextDay);
+                return true;
+            };
+            if (phase === 'response')
+                f.setTransportResponse((input) => {
+                    // Transport was invoked while locally valid; receiving the result
+                    // on a new calendar day must retain the accepted response.
+                    clock(fixedNextDay);
+                    return {
+                        type: 'saved',
+                        record: {
+                            id: 'rec_saved_range',
+                            fields: structuredClone(input.formRecord.data),
+                        },
+                        loggedInUserRecord: null,
+                        tableId: 'tbl_saved_range',
+                        context: { type: 'direct-url' },
+                    };
+                });
+            const submission = f.pages.submit(f.pages.getSnapshot().revision, {
+                lifecycle,
+                isCurrent,
+            });
+            if (phase === 'response') {
+                const result = await submission;
+                assert.equal(result.type, 'saved');
+                assert.deepEqual(accepted, ['saved']);
+                assert.deepEqual(dispositions, ['dispatched']);
+                assert.equal(f.calls.length, 1);
+                assert.equal(f.attempts, 1);
+                assert.equal(f.fields.controller.getState().status, 'saved');
+                assert.deepEqual(f.calls[0], {
+                    ...f.expectedEnvelope,
+                    formRecord: {
+                        ...f.expectedEnvelope.formRecord,
+                        data: native.data,
+                    },
+                    formFieldIdsWithUnsavedChanges: native.dirtyFieldIds,
+                });
+            } else {
+                await assert.rejects(submission);
+                assert.deepEqual(accepted, []);
+                assert.deepEqual(dispositions, ['not-dispatched']);
+                assert.equal(f.calls.length, 0);
+                assert.equal(f.attempts, 1);
+                assert.deepEqual(f.fields.controller.getState().draft, native);
+                assert.deepEqual(f.pages.getSnapshot().problems, [
+                    { fieldId: 'answer', code: 'invalid-input' },
+                ]);
+            }
+            assert(ownershipCallbacks > 0 && ownershipCallbacks < 20);
+            assert.equal(f.journal.blocking(f.recoveryScope, null), undefined);
+            proofs++;
+        } finally {
+            dispose(f);
+        }
+    }
+    if (!selected('shippedNext') && !selected('shippedSubmit')) return proofs;
+    const guide = readFileSync(
+        join(
+            consumerDirectory,
+            'node_modules/@miniextensions/sdk/docs/field-bindings.md'
+        ),
+        'utf8'
+    );
+    const recipes = [...guide.matchAll(/```tsx\n([\s\S]*?)\n```/g)].filter(
+        ([, code]) => code.includes('export function CustomForm(')
+    );
+    assert.equal(
+        recipes.length,
+        1,
+        'One actual shipped CustomForm recipe is required'
+    );
+    const compiled = await transform(recipes[0][1], {
+        loader: 'tsx',
+        format: 'cjs',
+        jsx: 'automatic',
+    });
+    const module = { exports: {} };
+    const recipeRequire = (name) =>
+        name === '@miniextensions/sdk/react' ? api : require(name);
+    new Function('require', 'module', 'exports', compiled.code)(
+        recipeRequire,
+        module,
+        module.exports
+    );
+    const { CustomForm } = module.exports;
+    const { Window } = createRequire(import.meta.url)('happy-dom');
+    const window = new Window();
+    const keys = [
+        'window',
+        'document',
+        'navigator',
+        'HTMLElement',
+        'HTMLInputElement',
+        'IS_REACT_ACT_ENVIRONMENT',
+    ];
+    const previous = keys.map((key) =>
+        Object.getOwnPropertyDescriptor(globalThis, key)
+    );
+    keys.forEach((key) =>
+        Object.defineProperty(globalThis, key, {
+            configurable: true,
+            writable: true,
+            value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
+        })
+    );
+    const { createElement: h, act } = require('react');
+    const { createRoot } = require('react-dom/client');
+    try {
+        for (const action of ['Next', 'Submit']) {
+            if (!selected(`shipped${action}`)) continue;
+            clock(day.now);
+            const f = make(day, { onePage: action === 'Submit' });
+            const scope = ui.createFormRenderScope({
+                ...f.pageOptions,
+                pages: f.pages,
+                saveOptions: { lifecycle: f.lifecycle },
+            });
+            const host = window.document.createElement('div');
+            window.document.body.append(host);
+            const root = createRoot(host);
+            try {
+                // A field write after accepted load must be validated even when its
+                // calendar value equals the day of mounting.
+                assert(f.fields.field('answer').date.setInput(day.value));
+                const native = structuredClone(
+                    f.fields.controller.getState().draft
+                );
+                await act(async () =>
+                    root.render(
+                        h(CustomForm, {
+                            scope,
+                            renderers: {
+                                renderDateField: (p) =>
+                                    h(
+                                        'output',
+                                        { id: 'native-date' },
+                                        p.capability.date.state.input
+                                    ),
+                            },
+                            formatPageProblem: (p) => `${p.fieldId}:${p.code}`,
+                        })
+                    )
+                );
+                const button = [...host.querySelectorAll('button')].find(
+                    (b) => b.textContent === action
+                );
+                assert(button);
+                assert.equal(button.disabled, false);
+                clock(nextDay);
+                await act(async () => {
+                    button.click();
+                    await Promise.resolve();
+                });
+                assert.equal(
+                    button.disabled,
+                    true,
+                    `${action}: manual refusal publishes disabled state`
+                );
+                assert(
+                    host
+                        .querySelector('ul[aria-live="polite"]')
+                        ?.textContent.includes('answer:invalid-input'),
+                    `${action}: manual refusal publishes problems`
+                );
+                await act(async () => {
+                    button.click();
+                    await Promise.resolve();
+                });
+                assert.equal(f.calls.length, 0);
+                assert.equal(f.attempts, 0);
+                assert.deepEqual(f.fields.controller.getState().draft, native);
+                assert.equal(
+                    host.querySelector('#native-date').textContent,
+                    day.value
+                );
+                proofs++;
+            } finally {
+                await act(async () => root.unmount());
+                scope.destroy();
+                host.remove();
+                dispose(f);
+            }
+        }
+    } finally {
+        await window.happyDOM.abort();
+        keys.forEach((key, i) => {
+            if (previous[i])
+                Object.defineProperty(globalThis, key, previous[i]);
+            else delete globalThis[key];
+        });
+    }
+    return proofs;
 }

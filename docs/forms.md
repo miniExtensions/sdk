@@ -1467,6 +1467,12 @@ substitute one, deny client-zone Forms, or claim their range parity. Backend
 validation remains authoritative for every range. Range feedback uses the
 current clock on each validation, so a held navigation action can become
 stale when crossing a range boundary.
+An explicit refused Next or Submit publishes the refreshed feedback without a
+polling timer. Submit rechecks the range after synchronous admission hooks,
+before journal creation and transport. If a hook changes validity after a
+journal attempt was created, that attempt finishes as `not-dispatched`.
+After transport starts, a later clock boundary alone does not reject an
+otherwise accepted response; server validation remains authoritative.
 
 Nonempty editable email answers use `email-validator` without trimming, case folding
 or native-value normalization. Invalid answers expose the field's generic

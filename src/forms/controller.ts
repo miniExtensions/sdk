@@ -22,6 +22,7 @@ import {
     type LoadedFormFieldDescriptor,
     type NormalizedFormSaveResult,
 } from './helpers.js';
+import { requireFormSaveAdmission } from './saveAdmission.js';
 
 /** Applications change revision for visitor, connection, token and context changes. */
 export type FormOwnerScope = { ownerId: string; revision: number };
@@ -501,11 +502,13 @@ export const createFormController = (
                 // A subscriber may have reset/cancelled during the loading emission.
                 controller.signal.throwIfAborted();
                 requireAttempt();
+                requireFormSaveAdmission(requestOptions.lifecycle);
                 operation = requestOptions.lifecycle?.dispatch(
                     structuredClone(input),
                     draftRevision
                 );
                 requireAttempt();
+                requireFormSaveAdmission(requestOptions.lifecycle);
                 transportInvoked = true;
                 const response = await owner.client.forms.save(input, {
                     signal: controller.signal,

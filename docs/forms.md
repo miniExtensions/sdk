@@ -1399,51 +1399,28 @@ Next navigates there and deliberate Save checks every page.
 Pass the existing `createFormRenderScope({ fields, pages, isCurrent,
 configurationRevision, saveOptions })` result, created outside React mounts,
 to this copyable application UI. The supplied `pages` must own those same
-bindings. Supply the normal Save lifecycle in `saveOptions` when journaling.
+bindings. Pass those same `fields` alongside `scope` below. Supply the normal
+Save lifecycle in `saveOptions` when journaling.
+The stock `SelectField` uses the same binding's retained selected options,
+including read-only answers and native names no longer in current choices.
+Displaying a retained answer does not make it eligible to add again or rewrite
+its native value to a renamed choice.
 
 ```tsx
 import type { ReactNode } from 'react';
-import { AirtableForm } from '@miniextensions/sdk/react';
+import { AirtableForm, SelectField } from '@miniextensions/sdk/react';
+import type { FormFieldBindings } from '@miniextensions/sdk/forms';
 import type {
     FieldRendererSlots,
     FormRenderScope,
 } from '@miniextensions/sdk/ui';
 
-const requestRenderers: FieldRendererSlots<ReactNode> = {
-    renderSingleSelectField: (field) => {
-        const selection =
-            field.capability.type === 'editable'
-                ? field.capability.selection
-                : undefined;
-        return (
-            <label>
-                {field.title}
-                <select
-                    aria-label={field.title}
-                    value={field.value ?? ''}
-                    disabled={
-                        !selection ||
-                        selection.state.disabled ||
-                        selection.state.readOnly
-                    }
-                    onChange={(event) =>
-                        selection?.choose(
-                            event.currentTarget.value
-                                ? [event.currentTarget.value]
-                                : []
-                        )
-                    }
-                >
-                    <option value="">Choose a request type</option>
-                    {selection?.state.options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                            {option.label}
-                        </option>
-                    ))}
-                </select>
-            </label>
-        );
-    },
+const requestRenderers = (
+    fields: FormFieldBindings
+): FieldRendererSlots<ReactNode> => ({
+    renderSingleSelectField: (field) => (
+        <SelectField binding={fields.field(field.fieldId)} />
+    ),
     renderSingleLineTextField: (field) => (
         <section aria-label={field.title}>
             <h2>{field.title}</h2>
@@ -1463,11 +1440,17 @@ const requestRenderers: FieldRendererSlots<ReactNode> = {
             </label>
         </section>
     ),
-};
+});
 
-export function SingleSelectRequestForm({ scope }: { scope: FormRenderScope }) {
+export function SingleSelectRequestForm({
+    scope,
+    fields,
+}: {
+    scope: FormRenderScope;
+    fields: FormFieldBindings;
+}) {
     return (
-        <AirtableForm scope={scope} renderers={requestRenderers}>
+        <AirtableForm scope={scope} renderers={requestRenderers(fields)}>
             {(state) => (
                 <form
                     onSubmit={(event) => {

@@ -1091,12 +1091,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         });
     assert.equal(singleSelectFormDriverChecks, 220);
-    const singleSelectFormDriverRecipeChecks = (
-        await checkSingleSelectFormDriverRecipe({
+    let singleSelectFormDriverRecipeChecks = 0;
+    for (const flavor of ['esm', 'cjs']) {
+        const result = await checkSingleSelectFormDriverRecipe({
             consumerDirectory: temporaryDirectory,
-        })
-    ).checks;
-    assert.equal(singleSelectFormDriverRecipeChecks, 26);
+            flavor,
+        });
+        assert.equal(result.checks, 41);
+        singleSelectFormDriverRecipeChecks += result.checks;
+    }
     console.log(
         `Installed single-select Form drivers: ${singleSelectFormDriverChecks} ESM/CJS groups and ${singleSelectFormDriverRecipeChecks} actual shipped AirtableForm recipe groups passed; synthetic DOM/transport only.`
     );

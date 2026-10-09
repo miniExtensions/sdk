@@ -8,7 +8,11 @@ import { build } from 'esbuild';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 
 /** Typecheck and execute the actual shipped TSX, using installed React peers. */
-export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
+export async function checkSingleSelectFormDriverRecipe({
+    consumerDirectory,
+    flavor = 'esm',
+}) {
+    assert(['esm', 'cjs'].includes(flavor));
     const directory = realpathSync(consumerDirectory);
     const consumer = createRequire(join(directory, 'package.json'));
     const installed = realpathSync(
@@ -56,12 +60,15 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
         ],
         { cwd: directory, stdio: 'pipe' }
     );
-    const outfile = join(generated, 'single-select-form-driver-recipe.mjs');
+    const outfile = join(
+        generated,
+        `single-select-form-driver-recipe.${flavor === 'esm' ? 'mjs' : 'cjs'}`
+    );
     await build({
         entryPoints: [source],
         bundle: true,
         platform: 'node',
-        format: 'esm',
+        format: flavor,
         jsx: 'automatic',
         external: [
             'react',
@@ -73,12 +80,18 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
         outfile,
         logLevel: 'silent',
     });
-    const forms = await import(
-        pathToFileURL(join(installed, 'dist/esm/forms/index.js'))
-    );
-    const ui = await import(
-        pathToFileURL(join(installed, 'dist/esm/ui/index.js'))
-    );
+    const forms =
+        flavor === 'cjs'
+            ? consumer('@miniextensions/sdk/forms')
+            : await import(
+                  pathToFileURL(join(installed, 'dist/esm/forms/index.js'))
+              );
+    const ui =
+        flavor === 'cjs'
+            ? consumer('@miniextensions/sdk/ui')
+            : await import(
+                  pathToFileURL(join(installed, 'dist/esm/ui/index.js'))
+              );
     const { Window } = createRequire(import.meta.url)('happy-dom');
     const window = new Window();
     const keys = [
@@ -102,9 +115,12 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
     );
     const { createElement, act } = consumer('react');
     const { createRoot } = consumer('react-dom/client');
-    const { SingleSelectRequestForm } = await import(pathToFileURL(outfile));
+    const { SingleSelectRequestForm } =
+        flavor === 'cjs'
+            ? consumer(outfile)
+            : await import(pathToFileURL(outfile));
     let checks = 0;
-    const fixture = (mode, allHidden = false) => {
+    const fixture = (mode, allHidden = false, configure = () => {}) => {
         const loaded = portalRecipeFixtures.makeForm({
             childExtensionInfo: { accessType: { type: 'create' } },
         });
@@ -181,6 +197,7 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
                 },
             },
         });
+        configure(loaded);
         let owner = { ownerId: 'A', revision: 0 },
             configuration = 0,
             attempts = 0;
@@ -265,6 +282,13 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
             },
         };
     };
+    const refreshSelectedOptions = (select) => {
+        // happy-dom caches selectedOptions after a value assignment. A DOM
+        // structural update refreshes it to the browser's live collection.
+        const temporary = window.document.createElement('option');
+        select.append(temporary);
+        temporary.remove();
+    };
     try {
         for (const mode of ['one-page', 'multi-page']) {
             const f = fixture(mode),
@@ -276,6 +300,7 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
                     root.render(
                         createElement(SingleSelectRequestForm, {
                             scope: f.scope,
+                            fields: f.fields,
                         })
                     )
                 );
@@ -283,6 +308,7 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
                 act(async () => {
                     const select = host.querySelector('select');
                     select.value = name;
+                    refreshSelectedOptions(select);
                     select.dispatchEvent(
                         new window.Event('change', { bubbles: true })
                     );
@@ -402,6 +428,144 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
                 host.remove();
             }
         }
+        // Execute the shipped renderer with retained native selections. Display
+        // must not depend on the option still being eligible for a new choice.
+        for (const kind of ['readonly', 'deleted', 'renamed']) {
+            const f = fixture('one-page', false, (loaded) => {
+                loaded.payload.formRecord.data.fld_request_type = 'Other';
+                loaded.payload.formRecord.data.fld_details = 'Retained details';
+                const schema =
+                    loaded.payload.fieldIdsToSchemas.fld_request_type;
+                if (kind === 'readonly') schema.miniExtConfig.readOnly = true;
+                if (kind === 'deleted')
+                    schema.airtableField.config.options.choices.pop();
+                if (kind === 'renamed')
+                    schema.airtableField.config.options.choices[1].name =
+                        'Renamed Other';
+            });
+            const nativeBefore = f.fields.controller.getState().draft;
+            const host = window.document.createElement('div');
+            window.document.body.append(host);
+            let root = createRoot(host);
+            const mount = () =>
+                act(async () =>
+                    root.render(
+                        createElement(SingleSelectRequestForm, {
+                            scope: f.scope,
+                            fields: f.fields,
+                        })
+                    )
+                );
+            const change = (value) =>
+                act(async () => {
+                    const select = host.querySelector('select');
+                    // A fabricated option tests the recipe handler/model guard,
+                    // not just browser refusal to select an absent option.
+                    if (![...select.options].some((o) => o.value === value)) {
+                        const option = window.document.createElement('option');
+                        option.value = value;
+                        option.textContent = value;
+                        select.append(option);
+                    }
+                    select.value = value;
+                    refreshSelectedOptions(select);
+                    select.dispatchEvent(
+                        new window.Event('change', { bubbles: true })
+                    );
+                });
+            try {
+                await mount();
+                const assertRetained = () => {
+                    const select = host.querySelector('select');
+                    assert.equal(select.value, 'Other', kind);
+                    assert.equal(select.selectedOptions.length, 1, kind);
+                    assert.equal(
+                        select.selectedOptions[0].textContent,
+                        'Other',
+                        kind
+                    );
+                    assert.equal(select.disabled, kind === 'readonly', kind);
+                    assert.equal(
+                        f.fields.field('fld_request_type').getSnapshot().value,
+                        'Other',
+                        kind
+                    );
+                };
+                assertRetained();
+                await act(async () => root.unmount());
+                root = createRoot(host);
+                await mount();
+                assertRetained();
+                if (kind === 'readonly') {
+                    await change('Standard');
+                    assert.equal(
+                        f.fields.field('fld_request_type').getSnapshot().value,
+                        'Other'
+                    );
+                    assert.equal(
+                        f.fields
+                            .field('fld_request_type')
+                            .selection.canChoose(['Standard']),
+                        false
+                    );
+                    // The forced event bypassed a disabled DOM control. A fresh
+                    // mount still displays the unchanged authoritative answer.
+                    await act(async () => root.unmount());
+                    root = createRoot(host);
+                    await mount();
+                    assertRetained();
+                }
+                await act(async () => {
+                    host.querySelector('form').dispatchEvent(
+                        new window.Event('submit', {
+                            bubbles: true,
+                            cancelable: true,
+                        })
+                    );
+                });
+                assert.equal(f.calls.length, 1, kind);
+                assert.equal(f.attempts, 1, kind);
+                assert.deepEqual(
+                    f.calls[0].formRecord,
+                    { type: 'create', data: nativeBefore.data },
+                    kind
+                );
+                assert.deepEqual(
+                    f.calls[0].formFieldIdsWithUnsavedChanges,
+                    nativeBefore.dirtyFieldIds,
+                    kind
+                );
+                if (kind !== 'readonly') {
+                    await change('Standard');
+                    assert.equal(
+                        f.fields.field('fld_request_type').getSnapshot().value,
+                        'Standard',
+                        kind
+                    );
+                    assert.equal(
+                        f.fields
+                            .field('fld_request_type')
+                            .selection.canChoose(['Other']),
+                        false,
+                        kind
+                    );
+                    await change('Other');
+                    assert.equal(
+                        f.fields.field('fld_request_type').getSnapshot().value,
+                        'Standard',
+                        kind
+                    );
+                    assert.equal(f.calls.length, 1, kind);
+                }
+                checks += 5;
+            } finally {
+                await act(async () => root.unmount());
+                f.scope.destroy();
+                f.pages.dispose();
+                f.fields.destroy();
+                host.remove();
+            }
+        }
         // Actual all-hidden rendering exposes no controls or admitted submission.
         const hidden = fixture('one-page', true);
         const host = window.document.createElement('div');
@@ -412,6 +576,7 @@ export async function checkSingleSelectFormDriverRecipe({ consumerDirectory }) {
                 root.render(
                     createElement(SingleSelectRequestForm, {
                         scope: hidden.scope,
+                        fields: hidden.fields,
                     })
                 )
             );

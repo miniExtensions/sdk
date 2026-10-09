@@ -11,6 +11,10 @@ import { checkLinkedRendererConsumer } from './linked-renderer-consumer-checks.m
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
+import {
+    checkCrossPageChoiceConsumer,
+    crossPageChoiceTypedConsumer,
+} from './cross-page-choice-consumer-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
@@ -912,6 +916,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('form-composition-consumer.ts');
     writeFileSync(
+        join(temporaryDirectory, 'cross-page-choice-consumer.ts'),
+        crossPageChoiceTypedConsumer
+    );
+    reactSources.push('cross-page-choice-consumer.ts');
+    writeFileSync(
         join(temporaryDirectory, 'portal-composition-consumer.ts'),
         portalCompositionTypedConsumer
     );
@@ -1048,6 +1057,10 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed configured conditional validation: ${conditionalValidationChecks} ESM/CJS, canonical and shipped React recipe checkpoints passed; synthetic dispatch only.`
     );
+    const crossPageChoiceChecks = await checkCrossPageChoiceConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(crossPageChoiceChecks, 76);
     assert.equal(
         await checkPortalCompositionConsumer({
             consumerDirectory: temporaryDirectory,

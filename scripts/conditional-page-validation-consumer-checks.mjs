@@ -26,6 +26,18 @@ export async function checkConditionalPageValidationConsumer({
     const oracle = JSON.parse(
         readFileSync('test/fixtures/conditionalPageValidation.json', 'utf8')
     );
+    // Retain the historical fixture bytes; these two valid null single-select
+    // drivers are now in the bounded Form subset. Malformed native objects and
+    // all multi-select/richer dependencies retain their original refusals.
+    const admittedSingleSelectCases = new Set([
+        'select-boundary-singleSelect-known-null',
+        'select-boundary-singleSelect-missing-null',
+    ]);
+    for (const name of admittedSingleSelectCases) {
+        const fixture = oracle.validation.find((c) => c.name === name);
+        assert(fixture, 'Missing pinned single-select boundary fixture');
+        assert.deepEqual(fixture.canonical, { type: 'result', invalid: true });
+    }
     const guideSource = [
         ...readFileSync(
             join(
@@ -221,14 +233,20 @@ export async function checkConditionalPageValidationConsumer({
             for (const c of oracle.validation) {
                 const f = make(c);
                 const actual = problems(f);
+                const expectedCode = admittedSingleSelectCases.has(c.name)
+                    ? 'conditional-validation'
+                    : c.expectedCode;
                 assert.deepEqual(
                     actual,
-                    c.expectedCode
-                        ? [{ fieldId: 'target', code: c.expectedCode }]
+                    expectedCode
+                        ? [{ fieldId: 'target', code: expectedCode }]
                         : [],
                     c.name
                 );
-                if (c.comparison === 'parity') {
+                if (
+                    c.comparison === 'parity' ||
+                    admittedSingleSelectCases.has(c.name)
+                ) {
                     assert.equal(c.canonical.type, 'result', c.name);
                     assert.equal(
                         actual.length > 0,

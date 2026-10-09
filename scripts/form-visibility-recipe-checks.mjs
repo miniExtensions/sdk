@@ -315,21 +315,21 @@ export async function checkBrowserVisibilityExample({
         assert.equal(shown('fld_title'), true);
         assert.equal(target.value, 'Accepted packed draft');
 
-        // This is a legitimate published single-select condition, outside the
-        // helper's direct scalar scope. It must block the actual Save sink.
+        // This is a legitimate published multi-select condition, outside the
+        // bounded Form driver scope. It must block the actual Save sink.
         loaded.payload.fieldIdsInForm = ['fld_title', 'fld_readonly'];
         loaded.payload.fieldIdsToSchemas.fld_title.miniExtConfig = {
             conditionalFields: {
                 logicalOperator: 'and',
                 conditions: [
                     {
-                        id: 'published_select_condition',
+                        id: 'published_multiselect_condition',
                         type: 'singleCondition',
                         setting: {
-                            type: 'is',
-                            fieldType: 'singleSelect',
+                            type: 'hasAnyOf',
+                            fieldType: 'multipleSelects',
                             idOrName: { type: 'id', id: 'fld_select' },
-                            value: 'sel_red',
+                            value: ['sel_red'],
                         },
                     },
                 ],
@@ -337,16 +337,16 @@ export async function checkBrowserVisibilityExample({
         };
         loaded.payload.fieldIdsToSchemas.fld_readonly.miniExtConfig = {};
         loaded.payload.fieldIdsToSchemas.fld_select = {
-            fieldType: 'singleSelect',
+            fieldType: 'multipleSelects',
             airtableField: {
                 ...text('fld_select').airtableField,
                 config: {
-                    type: 'singleSelect',
+                    type: 'multipleSelects',
                     options: { choices: [{ id: 'sel_red', name: 'Red' }] },
                 },
             },
         };
-        loaded.payload.formRecord.data.fld_select = 'Red';
+        loaded.payload.formRecord.data.fld_select = ['Red'];
         const blockedBaseline = structuredClone(loaded.payload.formRecord);
         window.document.getElementById('reload').click();
         await waitFor(

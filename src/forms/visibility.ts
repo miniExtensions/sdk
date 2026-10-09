@@ -1,4 +1,7 @@
-import { hasSelectCondition } from './scalarConditionBoundary.js';
+import {
+    hasSelectCondition,
+    inspectFormSelectConditions,
+} from './scalarConditionBoundary.js';
 import type {
     AirtableValue,
     RuntimeAirtableField,
@@ -133,6 +136,14 @@ const nativeValueProblem = (
 export function evaluateFormFieldVisibility(
     input: EvaluateFormFieldVisibilityInput
 ): FormFieldVisibility {
+    return evaluateFormFieldVisibilityWithPolicy(input, 'form');
+}
+
+/** Internal policy keeps the legacy flat projection boundary unchanged. */
+export function evaluateFormFieldVisibilityWithPolicy(
+    input: EvaluateFormFieldVisibilityInput,
+    policy: 'form' | 'legacy-flat'
+): FormFieldVisibility {
     const config = input.field.miniExtConfig;
     const hideEmpty =
         config != null && 'hideFieldIfEmpty' in config
@@ -213,17 +224,44 @@ export function evaluateFormFieldVisibility(
     if (compiled.type !== 'compiled')
         return { type: 'blocked', code: compiled.type, diagnostics };
 
+    const definition =
+        config != null && 'conditionalFields' in config
+            ? config.conditionalFields
+            : null;
+    const selects =
+        policy === 'form'
+            ? inspectFormSelectConditions(definition, input.airtableFields)
+            : { type: 'supported' as const, drivers: [] };
     if (
-        hasSelectCondition(
-            config != null && 'conditionalFields' in config
-                ? config.conditionalFields
-                : null,
-            input.airtableFields
-        )
+        (policy === 'legacy-flat' &&
+            hasSelectCondition(definition, input.airtableFields)) ||
+        selects.type === 'unsupported'
     )
         return { type: 'blocked', code: 'unsupported', diagnostics };
 
     try {
+        for (const driver of selects.drivers) {
+            const matches = input.airtableFields.filter(
+                (field) => field.id === driver.id || field.name === driver.id
+            );
+            if (
+                matches.length !== 1 ||
+                (driver.name !== driver.id &&
+                    Object.hasOwn(input.data, driver.name))
+            )
+                return {
+                    type: 'blocked',
+                    code: 'ambiguous-reference',
+                    diagnostics,
+                };
+            const value = input.data[driver.id];
+            if (value != null && typeof value !== 'string')
+                return {
+                    type: 'blocked',
+                    code: 'invalid-native-value',
+                    diagnostics,
+                };
+        }
         for (const reference of extractIdentifiersFromFormula(
             compiled.formula
         )) {

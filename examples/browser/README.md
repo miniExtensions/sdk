@@ -90,7 +90,7 @@ are displayed intact rather than converted to text for saving.
 Select controls use the published choice-ID allowlist and numeric maximum,
 retain existing unavailable choice names for removal, and keep custom labels
 separate from saved native names. A nonempty allowlist disables **Add a choice**
-even when a retained `allowAddingNewOptions` flag is true. In a supported one-page Form,
+even when a retained `allowAddingNewOptions` flag is true. In a supported one-page or multipage Form,
 configured choice conditions use the installed bounded scalar helper.
 Unsupported predicates show an unavailable status; the projection limits
 below apply.
@@ -276,7 +276,7 @@ Field visibility and configured choice availability both recompute after
 accepted edits while retaining the native draft. Their record contracts
 differ: field predicates use the complete unfiltered draft, while choice
 predicates need a separate conditional-record projection. The starter uses
-`createScalarFormRecordProjection` for absent or explicit `one-page` mode
+`createScalarFormRecordProjection` for absent, explicit `one-page` or `multi-page` mode
 with direct scalar dependencies: every field predicate reads the complete
 accepted draft, then condition-hidden IDs are removed only from an evaluation
 copy. Hiding or revealing a driver recomputes choice availability while all

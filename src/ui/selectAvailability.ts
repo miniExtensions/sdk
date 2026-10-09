@@ -29,6 +29,14 @@ export type SelectFieldAvailabilityDiagnostic = {
         | 'evaluation-error';
 };
 
+/** Detached presentation only; never field validation or Save authority. */
+export type SelectAvailabilitySnapshot =
+    | { readonly status: 'ready' }
+    | {
+          readonly status: 'blocked';
+          readonly code: SelectFieldAvailabilityDiagnostic['code'];
+      };
+
 export type SelectFieldAvailability = {
     /** Static policy retains limits, read-only and Add Choice semantics. */
     policy: SelectFieldPolicy;

@@ -59,6 +59,25 @@ export function mountCustomField(
             body.replaceChildren();
             return;
         }
+        if (
+            !status.textContent &&
+            snapshot.selectAvailability?.status === 'blocked'
+        ) {
+            // Application-owned localized wording; the SDK returns finite codes only.
+            const code = snapshot.selectAvailability.code;
+            status.textContent =
+                code === 'unsupported-condition' || code === 'invalid-condition'
+                    ? 'Choices are unavailable for this configuration.'
+                    : 'Choices are temporarily unavailable.';
+        } else if (
+            !status.textContent &&
+            snapshot.selectAvailability?.status === 'ready' &&
+            snapshot.selection?.options.length === 0
+        ) {
+            status.textContent = snapshot.selection.searchTerm.trim()
+                ? 'No matching choices.'
+                : 'No choices available.';
+        }
         if (snapshot.selection && binding.selection) {
             body.replaceChildren();
             const available = new Map(

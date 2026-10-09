@@ -17,6 +17,7 @@ export {
     type SelectFieldAvailability,
     type SelectFieldAvailabilityInput,
     type SelectFieldAvailabilityDiagnostic,
+    type SelectAvailabilitySnapshot,
 } from './selectAvailability.js';
 export type {
     SelectControlOptions,

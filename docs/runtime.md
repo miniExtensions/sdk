@@ -881,4 +881,4 @@ export type PortalDetailDisplayConfig =
     RuntimeLinkedRecordDetailField['miniExtConfig'];
 ```
 
-These payload types cover data, not a complete field-by-host renderer contract. Editable Form fields, Portal cells and linked-record hosts still need their respective SDK owners/capabilities; a native `readOnly` or computed flag alone does not authorize a Button action. Grid/List aggregates and per-kind host action props are separate work.
+These payload types cover native data. The [typed renderer hosts](field-bindings.md#typed-renderer-hosts-and-named-slots) combine them with correlated per-kind action props. [Form composition](field-bindings.md#form-composition-with-app-owned-layout) and [Portal Grid/List composition](field-bindings.md#portal-composition-with-app-owned-layout) reuse the existing SDK owners and capabilities; a native `readOnly` or computed flag alone does not authorize a Button action. Applications supply layout and visual field renderers.

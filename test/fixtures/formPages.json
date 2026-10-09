@@ -3,8 +3,8 @@
         "revision": "58f73d575ab10baa0a10693660d8002f204368e1",
         "tree": "b39e58ead46a311c497def57474cf5ca720542ae",
         "generator": "scripts/generate-form-page-fixtures.mjs",
-        "generatorSha256": "6c58af870202b9be397e9e95ea4f6e312bff7658d012530c9986054657995343",
-        "casesSourceSha256": "1e09719d6a8e2832667287f91baa0339ad190c4fdf52cabec5aa4d8b2f00d56e",
+        "generatorSha256": "b44032cf869191b4edd7e24e58dc843e4e16d398b4f702d5237b7966cdd4103e",
+        "casesSourceSha256": "0a4ba195a4c868d383b89ac16d77968566598b63d991d5760682379155c9c5dd",
         "sources": {
             "email-syntax": "cefb9409ea8d98342d5fe46fa5bf26d26004fb1cf549435874d3c604870d2783",
             "ordinary-validation": "4cd7da6d3f7ccb44fe23f46ecf96ebeb8844bb9236c3a3cf33ab8e42113556d9",
@@ -15,11 +15,16 @@
             "form-orchestration": "810b89b525ddfa05d520d2f7044f2304c320ff3b0884e810f408ba8ca06518b1",
             "navigation-dispatch": "83d76714a265ccef980773b9df031bcbc074b56a742a447de551d6f8f5ac8f56"
         },
+        "urlSyntax": {
+            "sourceRole": "email-syntax",
+            "export": "checkIfUrlIsValid",
+            "hrefExport": "getValidUrlHref"
+        },
         "emailValidator": {
             "version": "2.0.4",
             "entrySha256": "72a150940d35695c23e26e262e564dae9397ca9757e2ab57b1c784607d9838b1"
         },
-        "execution": "pinned ordinary validation, section grouping and navigation; synthetic values only"
+        "execution": "pinned ordinary validation including URL/shared email syntax, section grouping and navigation; synthetic values only"
     },
     "validation": [
         {
@@ -2654,6 +2659,2114 @@
                 "miniExtConfig": { "required": true, "readOnly": true }
             },
             "value": "\t",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-http",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "http://example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-https",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/path",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-mixed-case",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "HTTPS://EXAMPLE.TEST",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-bare-host",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-bare-port",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "example.test:8080/path",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-http-port",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test:443/path",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-invalid-port",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "example.test:65536",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-empty-port",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test:",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-mailto",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto:person@example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-mailto-multiple",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto:first@example.test,second@example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-mailto-encoded",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto:person%2Btag%40example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-mailto-query",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto:person@example.test?subject=Synthetic%20subject",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-mailto-empty",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto:",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-mailto-empty-recipient",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto:person@example.test,",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-mailto-invalid-recipient",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto:person@example.test,invalid",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-mailto-authority",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto://person@example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-mailto-bad-escape",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "mailto:%ZZ@example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-unicode-idn",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://例え.test/道",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-punycode-idn",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "xn--r8jz45g.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-path-query-punctuation",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/a!$&'()*+,;=:@/?q=a%20b#fragment",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-encoded-slash",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/a%2Fb",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-trailing-dot",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test.",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-leading-space",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": " https://example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-trailing-space",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test ",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-embedded-space",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/a b",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-newline",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test\n",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-tab",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/\t",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-nul",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/\u0000",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-del",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-encoded-nul",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/%00",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-encoded-newline",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/%0A",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-encoded-del",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/%7f",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-double-encoded-control",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/%250A",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-backslash",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test\\path",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-javascript",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-data",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "data:text/plain,Synthetic",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-ftp",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "ftp://example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-file",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "file:///synthetic",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-custom-scheme",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "synthetic:example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-http-missing-slashes",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "http:example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-protocol-relative",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "//example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-userinfo",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://person@example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-password",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://person:secret@example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-localhost",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "http://localhost",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-single-label",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://synthetic",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-ipv4",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://192.0.2.1",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-ipv4-short",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://127.1",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-ipv4-invalid",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://999.0.2.1",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-ipv6",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://[2001:db8::1]",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-ipv6-malformed",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://[2001:db8::1",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-empty-label",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example..test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-leading-hyphen",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://-example.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-underscore",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://some_host.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-label-63",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-syntax-label-64",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.test",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-missing-host",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-path-only",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "/synthetic/path",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-syntax-malformed-percent-http",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {}
+            },
+            "value": "https://example.test/%ZZ",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-null-false-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": false }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-null-false-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": true }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-null-false-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": false }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-null-false-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": true }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-null-true-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-null-true-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-null-true-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-null-true-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": null,
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-empty-false-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": false }
+            },
+            "value": "",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-empty-false-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": true }
+            },
+            "value": "",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-empty-false-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": false }
+            },
+            "value": "",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-empty-false-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": true }
+            },
+            "value": "",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-empty-true-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-empty-true-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-empty-true-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-empty-true-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-spaces-false-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": false }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-spaces-false-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": true }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-spaces-false-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": false }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-spaces-false-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": true }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-spaces-true-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-spaces-true-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-spaces-true-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-spaces-true-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "  ",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-tab-false-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": false }
+            },
+            "value": "\t",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-tab-false-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": true }
+            },
+            "value": "\t",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-tab-false-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": false }
+            },
+            "value": "\t",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-tab-false-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": false, "readOnly": true }
+            },
+            "value": "\t",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-tab-true-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "\t",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-tab-true-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "\t",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-empty-tab-true-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": false }
+            },
+            "value": "\t",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-empty-tab-true-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "required": true, "readOnly": true }
+            },
+            "value": "\t",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-config-true-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": true, "readOnly": false }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-config-true-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": true, "readOnly": true }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-config-true-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": true, "readOnly": false }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-config-true-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": true, "readOnly": true }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-config-false-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {
+                    "allowInvalidUrls": false,
+                    "readOnly": false
+                }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-config-false-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": false, "readOnly": true }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-config-false-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {
+                    "allowInvalidUrls": false,
+                    "readOnly": false
+                }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-config-false-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": false, "readOnly": true }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-config-string-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {
+                    "allowInvalidUrls": "true",
+                    "readOnly": false
+                }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-config-string-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {
+                    "allowInvalidUrls": "true",
+                    "readOnly": true
+                }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-config-string-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {
+                    "allowInvalidUrls": "true",
+                    "readOnly": false
+                }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-config-string-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": {
+                    "allowInvalidUrls": "true",
+                    "readOnly": true
+                }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-config-number-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": 1, "readOnly": false }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-config-number-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": 1, "readOnly": true }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-config-number-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": 1, "readOnly": false }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-config-number-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": 1, "readOnly": true }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": false
+        },
+        {
+            "name": "url-config-null-false-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": null, "readOnly": false }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": true
+        },
+        {
+            "name": "url-config-null-false-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": null, "readOnly": true }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": false,
+            "invalid": false
+        },
+        {
+            "name": "url-config-null-true-false",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": null, "readOnly": false }
+            },
+            "value": "javascript:alert(1)",
+            "stored": null,
+            "hidden": true,
+            "invalid": true
+        },
+        {
+            "name": "url-config-null-true-true",
+            "schema": {
+                "fieldType": "url",
+                "airtableField": {
+                    "id": "fld_answer",
+                    "name": "Synthetic answer",
+                    "description": null,
+                    "isComputed": false,
+                    "isPrimaryField": false,
+                    "config": { "type": "url", "options": null }
+                },
+                "miniExtConfig": { "allowInvalidUrls": null, "readOnly": true }
+            },
+            "value": "javascript:alert(1)",
             "stored": null,
             "hidden": true,
             "invalid": false

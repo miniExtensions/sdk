@@ -150,12 +150,17 @@ console.log(JSON.stringify({validation,structure,navigation}));`,
             generatorSha256: hash(readFileSync(fileURLToPath(import.meta.url))),
             casesSourceSha256: hash(readFileSync(casesPath)),
             sources: expectedSources,
+            urlSyntax: {
+                sourceRole: 'email-syntax',
+                export: 'checkIfUrlIsValid',
+                hrefExport: 'getValidUrlHref',
+            },
             emailValidator: {
                 version: emailValidatorPackage.version,
                 entrySha256: emailValidatorSha256,
             },
             execution:
-                'pinned ordinary validation, section grouping and navigation; synthetic values only',
+                'pinned ordinary validation including URL/shared email syntax, section grouping and navigation; synthetic values only',
         },
         ...cases,
     };

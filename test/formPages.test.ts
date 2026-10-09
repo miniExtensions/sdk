@@ -144,6 +144,13 @@ describe('canonical ordinary page validation', () => {
             'cefb9409ea8d98342d5fe46fa5bf26d26004fb1cf549435874d3c604870d2783'
         );
     });
+    it('binds URL syntax to the executed shared canonical helper', () => {
+        assert.deepEqual(oracle.provenance.urlSyntax, {
+            sourceRole: 'email-syntax',
+            export: 'checkIfUrlIsValid',
+            hrefExport: 'getValidUrlHref',
+        });
+    });
     it('partitions every pinned case explicitly into canonical comparison or conservative refusal', () => {
         const ids = [
             ...validationSupport.canonicalComparison,
@@ -154,8 +161,8 @@ describe('canonical ordinary page validation', () => {
             [...ids].sort(),
             oracle.validation.map((c: { name: string }) => c.name).sort()
         );
-        assert.equal(validationSupport.canonicalComparison.length, 177);
-        assert.equal(validationSupport.unsupportedValidation.length, 26);
+        assert.equal(validationSupport.canonicalComparison.length, 289);
+        assert.equal(validationSupport.unsupportedValidation.length, 24);
     });
     for (const c of oracle.validation)
         it(c.name, () => {
@@ -315,6 +322,220 @@ describe('email page validation regressions', () => {
         await f.pages.submit(f.pages.getSnapshot().revision);
         assert.equal(f.calls.length, 1);
         assert.equal(f.calls[0]!.formRecord.data.a, 'legacy invalid email');
+    });
+});
+describe('url page validation regressions', () => {
+    const urlFixture = (value: string, readOnly = false) =>
+        fixture((loaded) => {
+            loaded.payload.fieldIdsToSchemas.a = {
+                fieldType: 'url',
+                airtableField: {
+                    id: 'a',
+                    name: 'URL',
+                    description: null,
+                    isComputed: false,
+                    isPrimaryField: false,
+                    config: { type: 'url', options: null },
+                },
+                miniExtConfig: { required: true, readOnly },
+            };
+            loaded.payload.formRecord.data.a = value;
+        });
+    it('invalid native url blocks Next and publishes feedback without dispatch', () => {
+        const f = urlFixture('javascript:alert(1)');
+        const snapshot = f.pages.getSnapshot();
+        assert.equal(snapshot.status, 'ready');
+        assert.equal(snapshot.canNext, false);
+        assert.deepEqual(snapshot.problems, [
+            { fieldId: 'a', code: 'invalid-url' },
+        ]);
+        assert.deepEqual(f.pages.next(snapshot.revision), {
+            accepted: false,
+            reason: 'validation',
+        });
+        assert.equal(
+            f.fields.field('a').getSnapshot().value,
+            'javascript:alert(1)'
+        );
+        assert.equal(f.calls.length, 0);
+        assert(
+            f.fields.field('a').setValue('example.test/path?q=a%20b').accepted
+        );
+        assert.deepEqual(f.pages.getSnapshot().problems, []);
+        assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+    });
+    it('final Submit rejects an invalid earlier url before journal preparation and retains drafts', async () => {
+        const f = urlFixture('https://example.test');
+        lastPage(f);
+        assert(f.fields.field('a').setValue(' https://example.test').accepted);
+        const snapshot = f.pages.getSnapshot();
+        assert.equal(snapshot.canSubmit, false);
+        assert.deepEqual(snapshot.problems, [
+            { fieldId: 'a', code: 'invalid-url' },
+        ]);
+        const journal = new RecoveryJournal();
+        let preparations = 0;
+        await assert.rejects(
+            f.pages.submit(snapshot.revision, {
+                lifecycle: {
+                    dispatch() {
+                        preparations++;
+                        journal.prepare(
+                            {
+                                owner: 'A',
+                                parentFieldId: null,
+                                tableId: null,
+                                childExtensionId: 'form',
+                                context: 'modal',
+                            },
+                            null,
+                            1
+                        );
+                        return { accepted() {}, finish() {} };
+                    },
+                },
+            })
+        );
+        assert.equal(preparations, 0);
+        assert.deepEqual(journal.unknown('A'), []);
+        assert.equal(f.calls.length, 0);
+        assert.equal(
+            f.fields.field('a').getSnapshot().value,
+            ' https://example.test'
+        );
+        assert.deepEqual(f.fields.controller.getState().draft?.data.untouched, {
+            text: 'native',
+        });
+    });
+    it('hidden invalid url still blocks final Submit and keeps its native value', async () => {
+        const f = urlFixture('hidden invalid url');
+        f.pages.dispose();
+        f.fields.destroy();
+        f.loaded.payload.fieldIdsToSchemas.a!.miniExtConfig = {
+            required: true,
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'hide-url',
+                        type: 'singleCondition',
+                        setting: {
+                            type: 'is',
+                            fieldType: 'singleLineText',
+                            idOrName: { type: 'id', id: 'b' },
+                            value: 'never',
+                        },
+                    },
+                ],
+            },
+        } as never;
+        const fields = createFormFieldBindings({
+            client: f.client,
+            loaded: f.loaded,
+            saveOptions: formSaveOptions(),
+            getScope: () => ({ ownerId: 'A', revision: 0 }),
+        });
+        const pages = createFormPageOwner({
+            fields,
+            isCurrent: () => true,
+            configurationRevision: () => 0,
+        });
+        assert.equal(fields.field('a').getSnapshot().visibility.type, 'hidden');
+        while (pages.getSnapshot().canNext)
+            assert(pages.next(pages.getSnapshot().revision).accepted);
+        assert.equal(pages.getSnapshot().canSubmit, false);
+        assert.deepEqual(pages.getSnapshot().problems, [
+            { fieldId: 'a', code: 'invalid-url' },
+        ]);
+        await assert.rejects(pages.submit(pages.getSnapshot().revision));
+        assert.equal(
+            fields.field('a').getSnapshot().value,
+            'hidden invalid url'
+        );
+        assert.equal(f.calls.length, 0);
+        pages.dispose();
+        fields.destroy();
+    });
+    it('read-only invalid url navigates and preserves the original Save value', async () => {
+        const f = urlFixture('legacy invalid url', true);
+        lastPage(f);
+        await f.pages.submit(f.pages.getSnapshot().revision);
+        assert.equal(f.calls.length, 1);
+        assert.equal(f.calls[0]!.formRecord.data.a, 'legacy invalid url');
+    });
+});
+describe('URL native navigation and ownership regressions', () => {
+    const urlFixture = (value: string) =>
+        fixture((loaded) => {
+            loaded.payload.fieldIdsToSchemas.a = {
+                fieldType: 'url',
+                airtableField: {
+                    id: 'a',
+                    name: 'URL',
+                    description: null,
+                    isComputed: false,
+                    isPrimaryField: false,
+                    config: { type: 'url', options: null },
+                },
+                miniExtConfig: { required: true },
+            };
+            loaded.payload.formRecord.data.a = value;
+        });
+    it('valid bare URL navigates and saves the exact native value', async () => {
+        const value = 'example.test:8080/path?q=a%20b#fragment';
+        const f = urlFixture(value);
+        assert.equal(f.pages.getSnapshot().canNext, true);
+        lastPage(f);
+        await f.pages.submit(f.pages.getSnapshot().revision);
+        assert.equal(f.calls.length, 1);
+        assert.equal(f.calls[0]!.formRecord.data.a, value);
+        assert.deepEqual(f.calls[0]!.formRecord.data.untouched, {
+            text: 'native',
+        });
+    });
+    it('URL edits reject retained Next revisions and keep syntax feedback', () => {
+        const f = urlFixture('https://example.test');
+        const before = f.pages.getSnapshot().revision;
+        assert(
+            f.fields.field('a').setValue('https://example.test/%0A').accepted
+        );
+        assert.deepEqual(f.pages.next(before), {
+            accepted: false,
+            reason: 'stale-revision',
+        });
+        assert.deepEqual(f.pages.getSnapshot().problems, [
+            { fieldId: 'a', code: 'invalid-url' },
+        ]);
+        assert.equal(
+            f.fields.field('a').getSnapshot().value,
+            'https://example.test/%0A'
+        );
+        assert.equal(f.calls.length, 0);
+    });
+    it('reentrant URL edit during Next supersedes navigation and blocks final Save', async () => {
+        const f = urlFixture('https://example.test');
+        let edited = false;
+        f.pages.subscribe((snapshot) => {
+            if (snapshot.activePageIndex === 1 && !edited) {
+                edited = true;
+                assert(
+                    f.fields.field('a').setValue('javascript:alert(1)').accepted
+                );
+            }
+        });
+        assert.deepEqual(f.pages.next(f.pages.getSnapshot().revision), {
+            accepted: false,
+            reason: 'stale-revision',
+        });
+        while (f.pages.getSnapshot().canNext)
+            assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+        assert.equal(f.pages.getSnapshot().canSubmit, false);
+        await assert.rejects(f.pages.submit(f.pages.getSnapshot().revision));
+        assert.equal(
+            f.fields.field('a').getSnapshot().value,
+            'javascript:alert(1)'
+        );
+        assert.equal(f.calls.length, 0);
     });
 });
 describe('page composition authority regressions', () => {

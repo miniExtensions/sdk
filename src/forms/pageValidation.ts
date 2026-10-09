@@ -2,6 +2,7 @@ import type { AirtableValue } from '../runtime/types.js';
 import type { LoadedFormFieldDescriptor } from './helpers.js';
 import { getSelectFieldPolicy } from '../ui/selectPolicy.js';
 import emailValidator from 'email-validator';
+import { checkIfPageUrlIsValid } from './pageUrlValidation.js';
 
 export type FormPageProblem = {
     fieldId: string | null;
@@ -14,6 +15,7 @@ export type FormPageProblem = {
         | 'linked-maximum'
         | 'invalid-input'
         | 'invalid-email'
+        | 'invalid-url'
         | 'unsupported-validation'
         | 'invalid-metadata'
         | 'blocked-visibility'
@@ -131,8 +133,10 @@ export const validatePageField = (
     // Canonical ordinary rules use this exact non-null/nonempty gate, not required emptiness.
     if (value == null || value === '') return null;
     if (!ordinary.has(type)) return problem('unsupported-validation');
-    if (type === 'url' && !field.readOnly && config.allowInvalidUrls !== true)
-        return problem('unsupported-validation');
+    if (type === 'url' && !field.readOnly && config.allowInvalidUrls !== true) {
+        if (typeof value !== 'string') return problem('invalid-input');
+        if (!checkIfPageUrlIsValid(value)) return problem('invalid-url');
+    }
     // Email syntax, unlike required/character limits, is not waived by hiding.
     // Keep the original native string: the canonical validator does not trim it.
     if (type === 'email' && !field.readOnly) {

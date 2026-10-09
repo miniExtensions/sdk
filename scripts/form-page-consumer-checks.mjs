@@ -1263,7 +1263,12 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 await checkPageRendererRemount(f, reactApi, require);
                 checks++;
             }
-            const checkEmailComposition = async (f) => {
+            const checkEmailComposition = async (
+                f,
+                renderer = 'renderEmailField',
+                problem = 'invalid-email',
+                valid = 'Composition+tag@EXAMPLE.test'
+            ) => {
                 const { Window } = createRequire(import.meta.url)('happy-dom');
                 const window = new Window();
                 const keys = [
@@ -1305,7 +1310,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                             createElement(reactApi.AirtableForm, {
                                 scope,
                                 renderers: {
-                                    renderEmailField: (p) => {
+                                    [renderer]: (p) => {
                                         capability = p.capability;
                                         return createElement(
                                             'output',
@@ -1347,15 +1352,12 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     assert(
                         host
                             .querySelector('#feedback')
-                            .textContent.includes('invalid-email')
+                            .textContent.includes(problem)
                     );
                     assert.equal(last.page.canNext, false);
                     assert.equal(retainedNext().accepted, false);
                     await act(async () => {
-                        assert(
-                            capability.setValue('Composition+tag@EXAMPLE.test')
-                                .accepted
-                        );
+                        assert(capability.setValue(valid).accepted);
                     });
                     await act(async () => {
                         assert(last.actions.next().accepted);
@@ -1375,21 +1377,13 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     await assert.rejects(last.actions.submit());
                     assert.equal(f.calls.length, 0);
                     await act(async () => {
-                        assert(
-                            f.fields
-                                .field('a')
-                                .setValue('Composition+tag@EXAMPLE.test')
-                                .accepted
-                        );
+                        assert(f.fields.field('a').setValue(valid).accepted);
                     });
                     await act(async () => {
                         await last.actions.submit();
                     });
                     assert.equal(f.calls.length, 1);
-                    assert.equal(
-                        f.calls[0].formRecord.data.a,
-                        'Composition+tag@EXAMPLE.test'
-                    );
+                    assert.equal(f.calls[0].formRecord.data.a, valid);
                 } finally {
                     await act(async () => root.unmount());
                     scope.destroy();
@@ -1685,6 +1679,360 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
             }
             {
                 await checkEmailComposition(emailFixture());
+                checks++;
+            }
+            // Exercise ordinary url rules through each installed ESM/CJS owner.
+            const urlFixture = (value = 'initial.example.test', mini = {}) =>
+                fixture((p) => {
+                    const schema = p.payload.fieldIdsToSchemas.a;
+                    schema.fieldType = 'url';
+                    schema.airtableField.config = {
+                        type: 'url',
+                        options: null,
+                    };
+                    schema.miniExtConfig = mini;
+                    p.payload.formRecord.data.a = value;
+                });
+            const urlProblems = (f) =>
+                f.pages.getSnapshot().problems.filter((p) => p.fieldId === 'a');
+            {
+                const f = urlFixture();
+                const native = 'EXAMPLE.test/Case?kept=Exact';
+                assert(f.fields.field('a').setValue(native).accepted);
+                assert.deepEqual(urlProblems(f), []);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert.equal(
+                    f.calls.length,
+                    0,
+                    'Explicit Next never sends url'
+                );
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                const recovery = journalFor(f);
+                await f.pages.submit(f.pages.getSnapshot().revision, {
+                    lifecycle: recovery.lifecycle,
+                });
+                assert.equal(f.calls.length, 1);
+                assert.equal(recovery.attempts, 1);
+                assert.equal(
+                    recovery.journal.blocking(recovery.scope, null),
+                    undefined
+                );
+                assert.deepEqual(f.calls[0].formRecord, {
+                    type: 'create',
+                    data: {
+                        a: native,
+                        b: 'B',
+                        c: 'C',
+                        unrendered: { text: 'native' },
+                    },
+                });
+                assert.deepEqual(f.calls[0].formFieldIdsWithUnsavedChanges, [
+                    'unrendered',
+                    'a',
+                ]);
+                assert.deepEqual(f.calls[0].searchQuery, { kept: 'exact' });
+                checks++;
+            }
+            for (const required of [false, true]) {
+                for (const [value, code] of [
+                    [null, required ? 'required' : null],
+                    [undefined, required ? 'required' : null],
+                    ['', required ? 'required' : null],
+                    ['   ', required ? 'required' : 'invalid-url'],
+                    ['not-an-url', 'invalid-url'],
+                    [' https://example.test ', 'invalid-url'],
+                ]) {
+                    const f = urlFixture(value, { required });
+                    // Undefined is a canonical empty too; avoid the helper's default argument.
+                    if (value === undefined)
+                        f.fields.controller.write('a', undefined);
+                    assert.deepEqual(
+                        urlProblems(f),
+                        code ? [{ fieldId: 'a', code }] : []
+                    );
+                    if (code) {
+                        const recovery = journalFor(f);
+                        assert.equal(
+                            f.pages.next(f.pages.getSnapshot().revision)
+                                .accepted,
+                            false
+                        );
+                        await assert.rejects(
+                            f.pages.submit(f.pages.getSnapshot().revision, {
+                                lifecycle: recovery.lifecycle,
+                            })
+                        );
+                        assert.equal(f.calls.length, 0);
+                        assert.equal(recovery.attempts, 0);
+                        assert.equal(
+                            recovery.journal.blocking(recovery.scope, null),
+                            undefined
+                        );
+                    }
+                    checks++;
+                }
+            }
+            for (const readOnly of [false, true]) {
+                const f = fixture((p) => {
+                    const schema = p.payload.fieldIdsToSchemas.a;
+                    schema.fieldType = 'url';
+                    schema.airtableField.config = {
+                        type: 'url',
+                        options: null,
+                    };
+                    schema.miniExtConfig = {
+                        readOnly,
+                        required: true,
+                        conditionalFields: {
+                            logicalOperator: 'and',
+                            conditions: [
+                                {
+                                    id: 'hide-url',
+                                    type: 'singleCondition',
+                                    setting: {
+                                        type: 'is',
+                                        fieldType: 'singleLineText',
+                                        idOrName: { type: 'id', id: 'b' },
+                                        value: 'show',
+                                    },
+                                },
+                            ],
+                        },
+                    };
+                    p.payload.formRecord.data.a = 'hidden-invalid-url';
+                });
+                assert.equal(
+                    f.fields.field('a').getSnapshot().visibility.type,
+                    'hidden'
+                );
+                // Hiding skips this structural page, but final Submit still
+                // validates its native url under the rule-specific exemption.
+                while (f.pages.getSnapshot().canNext)
+                    assert(
+                        f.pages.next(f.pages.getSnapshot().revision).accepted
+                    );
+                assert.deepEqual(
+                    urlProblems(f),
+                    readOnly ? [] : [{ fieldId: 'a', code: 'invalid-url' }]
+                );
+                const recovery = journalFor(f);
+                if (readOnly) {
+                    await f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: recovery.lifecycle,
+                    });
+                    assert.equal(
+                        f.calls[0].formRecord.data.a,
+                        'hidden-invalid-url'
+                    );
+                } else {
+                    await assert.rejects(
+                        f.pages.submit(f.pages.getSnapshot().revision, {
+                            lifecycle: recovery.lifecycle,
+                        })
+                    );
+                    assert.equal(f.calls.length, 0);
+                    assert.equal(recovery.attempts, 0);
+                }
+                checks++;
+            }
+            {
+                const f = urlFixture({
+                    text: 'private-malformed-url-value',
+                });
+                assert.deepEqual(urlProblems(f), [
+                    { fieldId: 'a', code: 'invalid-input' },
+                ]);
+                assert.equal(
+                    JSON.stringify(f.pages.getSnapshot().problems).includes(
+                        'private-malformed'
+                    ),
+                    false
+                );
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision)
+                );
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
+            {
+                const f = urlFixture();
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                const oldRevision = f.pages.getSnapshot().revision;
+                let reentered = false;
+                f.pages.subscribe(() => {
+                    if (!reentered) {
+                        reentered = true;
+                        f.fields.controller.write('a', 'callback-invalid-url');
+                    }
+                });
+                assert(
+                    f.fields.field('a').setValue('new.example.test').accepted
+                );
+                assert(reentered);
+                const recovery = journalFor(f);
+                await assert.rejects(
+                    f.pages.submit(oldRevision, {
+                        lifecycle: recovery.lifecycle,
+                    })
+                );
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: recovery.lifecycle,
+                    })
+                );
+                assert.deepEqual(urlProblems(f), [
+                    { fieldId: 'a', code: 'invalid-url' },
+                ]);
+                assert.equal(f.calls.length, 0);
+                assert.equal(recovery.attempts, 0);
+                checks++;
+            }
+            {
+                const f = urlFixture();
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                let armed = false,
+                    ownershipChecks = 0;
+                f.setPredicate(() => {
+                    if (armed && ++ownershipChecks === 2)
+                        f.fields.controller.write('a', 'ownership-invalid-url');
+                    return true;
+                });
+                const revision = f.pages.getSnapshot().revision;
+                const recovery = journalFor(f);
+                armed = true;
+                await assert.rejects(
+                    f.pages.submit(revision, { lifecycle: recovery.lifecycle })
+                );
+                assert.deepEqual(urlProblems(f), [
+                    { fieldId: 'a', code: 'invalid-url' },
+                ]);
+                assert.equal(f.calls.length, 0);
+                assert.equal(recovery.attempts, 0);
+                checks++;
+            }
+            {
+                await checkEmailComposition(
+                    urlFixture(),
+                    'renderUrlField',
+                    'invalid-url',
+                    'EXAMPLE.test/Composition?kept=Exact'
+                );
+                checks++;
+            }
+            for (const native of [
+                'mailto:Case+tag@EXAMPLE.test',
+                'example.test:8443/Path',
+            ]) {
+                const f = urlFixture();
+                assert(f.fields.field('a').setValue(native).accepted);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert.equal(f.calls.length, 0);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                await f.pages.submit(f.pages.getSnapshot().revision);
+                assert.equal(f.calls.length, 1);
+                assert.equal(f.calls[0].formRecord.data.a, native);
+                checks++;
+            }
+            for (const value of [
+                'https://example.test/\npath',
+                'https://example.test/%0apath',
+                'https://example.test/%7Fpath',
+                'javascript:alert(1)',
+                'data:text/plain,unsafe',
+                'ftp://example.test',
+                'https://user:secret@example.test',
+                'mailto://person@example.test',
+            ]) {
+                const f = urlFixture();
+                assert(f.fields.field('a').setValue(value).accepted);
+                const native = structuredClone(f.fields.controller.getState());
+                assert.deepEqual(urlProblems(f), [
+                    { fieldId: 'a', code: 'invalid-url' },
+                ]);
+                assert.equal(
+                    f.pages.next(f.pages.getSnapshot().revision).accepted,
+                    false
+                );
+                const recovery = journalFor(f);
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: recovery.lifecycle,
+                    })
+                );
+                assert.equal(f.calls.length, 0);
+                assert.equal(recovery.attempts, 0);
+                assert.equal(
+                    recovery.journal.blocking(recovery.scope, null),
+                    undefined
+                );
+                assert.deepEqual(f.fields.controller.getState(), native);
+                checks++;
+            }
+            for (const allowInvalidUrls of [true, false, 'true', 1, {}, null]) {
+                const f = urlFixture('javascript:alert(1)', {
+                    allowInvalidUrls,
+                });
+                assert.deepEqual(
+                    urlProblems(f),
+                    allowInvalidUrls === true
+                        ? []
+                        : [{ fieldId: 'a', code: 'invalid-url' }]
+                );
+                const recovery = journalFor(f);
+                if (allowInvalidUrls === true) {
+                    assert(
+                        f.pages.next(f.pages.getSnapshot().revision).accepted
+                    );
+                    assert(
+                        f.pages.next(f.pages.getSnapshot().revision).accepted
+                    );
+                    await f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle: recovery.lifecycle,
+                    });
+                    assert.equal(f.calls.length, 1);
+                    assert.equal(
+                        f.calls[0].formRecord.data.a,
+                        'javascript:alert(1)'
+                    );
+                } else {
+                    assert.equal(
+                        f.pages.next(f.pages.getSnapshot().revision).accepted,
+                        false
+                    );
+                    await assert.rejects(
+                        f.pages.submit(f.pages.getSnapshot().revision, {
+                            lifecycle: recovery.lifecycle,
+                        })
+                    );
+                    assert.equal(f.calls.length, 0);
+                    assert.equal(recovery.attempts, 0);
+                }
+                checks++;
+            }
+            {
+                const f = urlFixture();
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                assert(f.pages.next(f.pages.getSnapshot().revision).accepted);
+                let armed = false,
+                    configurationChecks = 0;
+                f.setPredicate(() => {
+                    if (armed && ++configurationChecks === 2) f.setConfig(1);
+                    return true;
+                });
+                const revision = f.pages.getSnapshot().revision;
+                const recovery = journalFor(f);
+                armed = true;
+                await assert.rejects(
+                    f.pages.submit(revision, { lifecycle: recovery.lifecycle })
+                );
+                assert.equal(f.calls.length, 0);
+                assert.equal(recovery.attempts, 0);
+                assert.equal(
+                    recovery.journal.blocking(recovery.scope, null),
+                    undefined
+                );
                 checks++;
             }
             const oracle = JSON.parse(

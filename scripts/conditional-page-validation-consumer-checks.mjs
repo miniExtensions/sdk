@@ -506,12 +506,22 @@ export async function checkConditionalPageValidationConsumer({
                     checks++;
                     await act(async () => root.unmount());
                     mounted = false;
-                    const recipeFixture = make();
+                    const recipeCase = structuredClone(
+                        oracle.validation.find((c) => c.name === 'text-false')
+                    );
+                    recipeCase.data.driver = 'PRIVATE_HIDDEN_DRIVER_VALUE';
+                    recipeCase.schemas.driver.airtableField.name =
+                        'PRIVATE_HIDDEN_DRIVER_TITLE';
+                    recipeCase.schemas.target.miniExtConfig.customErrorMessageForFieldValidation =
+                        'PRIVATE_CONFIGURED_VALIDATION_MESSAGE';
+                    const recipeFixture = make(recipeCase);
+                    const recipeJournal = journal(recipeFixture);
                     const recipeScope = ui.createFormRenderScope({
                         fields: recipeFixture.fields,
                         pages: recipeFixture.pages,
                         isCurrent: () => true,
                         configurationRevision: () => 0,
+                        saveOptions: { lifecycle: recipeJournal.lifecycle },
                     });
                     root = createRoot(host);
                     try {
@@ -521,6 +531,11 @@ export async function checkConditionalPageValidationConsumer({
                                 null,
                                 h(CustomForm, {
                                     scope: recipeScope,
+                                    formatPageProblem: ({ fieldId, code }) =>
+                                        fieldId === 'target' &&
+                                        code === 'conditional-validation'
+                                            ? 'Answer: Check this answer before continuing.'
+                                            : 'Check this Form before continuing.',
                                     renderers: {
                                         renderSingleLineTextField: (p) =>
                                             h('output', null, p.value),
@@ -533,12 +548,33 @@ export async function checkConditionalPageValidationConsumer({
                             [...host.querySelectorAll('button')].find(
                                 (node) => node.textContent === text
                             );
+                        const feedback = () =>
+                            host.querySelector('li[data-field-id="target"]');
+                        const assertPrivate = () => {
+                            for (const text of [
+                                'PRIVATE_HIDDEN_DRIVER_VALUE',
+                                'PRIVATE_HIDDEN_DRIVER_TITLE',
+                                'PRIVATE_CONFIGURED_VALIDATION_MESSAGE',
+                            ])
+                                assert.equal(
+                                    host.outerHTML.includes(text),
+                                    false,
+                                    'Feedback must not reveal hidden data or configured messages'
+                                );
+                        };
+                        assert.equal(
+                            feedback()?.textContent,
+                            'Answer: Check this answer before continuing.',
+                            'The actual shipped recipe must explain its blocked actions'
+                        );
+                        assertPrivate();
                         assert.equal(button('Next').disabled, true);
                         assert.equal(button('Submit').disabled, true);
                         button('Next').click();
                         button('Submit').click();
                         assert.equal(recipeFixture.calls.length, 0);
                         assert.equal(recipeFixture.fetchAttempts, 0);
+                        assert.equal(recipeJournal.attempts, 0);
                         await act(async () => {
                             assert(
                                 recipeFixture.fields.controller.write(
@@ -547,6 +583,7 @@ export async function checkConditionalPageValidationConsumer({
                                 )
                             );
                         });
+                        assert.equal(feedback(), null);
                         assert.equal(button('Next').disabled, false);
                         await act(async () => button('Next').click());
                         assert.equal(button('Submit').disabled, false);
@@ -558,6 +595,11 @@ export async function checkConditionalPageValidationConsumer({
                                 )
                             );
                         });
+                        assert.equal(
+                            feedback()?.textContent,
+                            'Answer: Check this answer before continuing.'
+                        );
+                        assertPrivate();
                         assert.equal(button('Submit').disabled, true);
                         await act(async () => root.unmount());
                         mounted = false;
@@ -571,6 +613,50 @@ export async function checkConditionalPageValidationConsumer({
                         );
                         assert.equal(button('Submit').disabled, true);
                         assert.equal(recipeFixture.calls.length, 0);
+                        assert.equal(recipeFixture.fetchAttempts, 0);
+                        assert.equal(recipeJournal.attempts, 0);
+                        assert.equal(
+                            feedback()?.textContent,
+                            'Answer: Check this answer before continuing.'
+                        );
+                        assertPrivate();
+                        await act(async () => {
+                            assert(
+                                recipeFixture.fields.controller.write(
+                                    'driver',
+                                    'allow'
+                                )
+                            );
+                        });
+                        assert.equal(feedback(), null);
+                        assert.equal(button('Submit').disabled, false);
+                        await act(async () => button('Submit').click());
+                        assert.equal(recipeFixture.calls.length, 1);
+                        assert.equal(recipeJournal.attempts, 1);
+                        assert.deepEqual(recipeFixture.calls[0], {
+                            captchaVal: null,
+                            isComputeMode: false,
+                            searchQuery: { retained: 'exact' },
+                            context: { type: 'direct-url' },
+                            conditionalLinkedRecordFieldIdsToFilteringValues:
+                                {},
+                            extensionAccessToken:
+                                recipeFixture.loaded.payload
+                                    .extensionAccessToken,
+                            formRecord: {
+                                type: 'create',
+                                data: {
+                                    target: 'Answer',
+                                    driver: 'allow',
+                                    later: 'Later',
+                                    native: { text: 'retained' },
+                                },
+                            },
+                            formFieldIdsWithUnsavedChanges: [
+                                'native',
+                                'driver',
+                            ],
+                        });
                         assert.equal(recipeFixture.fetchAttempts, 0);
                         checks++;
                     } finally {

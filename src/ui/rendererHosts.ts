@@ -3,6 +3,7 @@ import {
     normalizeFormLeaseField,
 } from './formLease.js';
 import { createFormLinkedRendererBridge } from './formLinkedRenderer.js';
+import { portalLinkedPills } from './portalLinkedPills.js';
 import type {
     FormFieldBindings,
     FormFieldBinding,
@@ -190,14 +191,18 @@ function host(
     const current = () => {
         if (disposed || retired) return false;
         try {
-            const now = authority();
             if (
                 !options.isCurrent() ||
                 options.configurationRevision() !== revision ||
-                now === null ||
-                fingerprint(now) !== key
+                disposed ||
+                retired
             )
                 retired = true;
+            else {
+                // Ownership callbacks may synchronously replace the owner.
+                const now = authority();
+                if (now === null || fingerprint(now) !== key) retired = true;
+            }
         } catch {
             retired = true;
         }
@@ -210,11 +215,19 @@ function host(
                 status: 'retired',
                 reason: 'The accepted field context changed.',
             };
+        let result: FieldRendererHostSnapshot;
         try {
-            return read(current);
+            result = read(current);
         } catch {
-            return unavailable();
+            result = unavailable();
         }
+        // Reading presentation can invoke application ownership callbacks.
+        return current()
+            ? result
+            : {
+                  status: 'retired',
+                  reason: 'The accepted field context changed.',
+              };
     };
     const listeners = new Set<(s: FieldRendererHostSnapshot) => void>();
     const emit = () => {
@@ -712,6 +725,18 @@ export function createPortalDetailRendererHost(
                               },
                           }
                         : { type: 'readonly' },
+                    ...(data.field.config.type === 'multipleRecordLinks'
+                        ? {
+                              linkedRecords: portalLinkedPills({
+                                  field: data.field,
+                                  originalValue:
+                                      context.row.fields[detail.fieldId],
+                                  value: context.row.fields[detail.fieldId],
+                                  tables: context.state.page!
+                                      .tableIdsToLinkedTableStates,
+                              }),
+                          }
+                        : {}),
                 });
                 if (!props) return unavailable();
                 fields.push(props);
@@ -808,7 +833,8 @@ export function createPortalCellRendererHost(
                 undefined,
                 undefined,
                 (input) => {
-                    const data = authority()!.data;
+                    const accepted = authority()!;
+                    const data = accepted.data;
                     const display = data.detail.miniExtConfig;
                     const blocked = !canEditDisplay();
                     return {
@@ -820,6 +846,20 @@ export function createPortalCellRendererHost(
                         capability: blocked
                             ? { type: 'readonly' }
                             : input.capability,
+                        ...(data.field.config.type === 'multipleRecordLinks'
+                            ? {
+                                  linkedRecords: portalLinkedPills({
+                                      field: data.field,
+                                      originalValue:
+                                          accepted.context.row.fields[
+                                              options.fieldId
+                                          ],
+                                      value: input.value,
+                                      tables: accepted.context.state.page!
+                                          .tableIdsToLinkedTableStates,
+                                  }),
+                              }
+                            : {}),
                     };
                 },
                 canEditDisplay

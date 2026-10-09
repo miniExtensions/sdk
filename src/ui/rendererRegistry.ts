@@ -170,12 +170,23 @@ export type FieldPresentation =
           type: 'computed-result';
           config: RuntimeFieldSchema['airtableField']['config'] | null;
       };
-/** Borrowed Form presentation; the discriminator leaves other contexts explicit. */
-export type LinkedRecordsRendererProps = {
+/** Borrowed Form presentation and its existing explicit hydration action. */
+export type FormLinkedRecordsRendererProps = {
     source: 'form';
     state: FormLinkedRecordsSnapshot;
     readSelected: FormLinkedRecordsFacet['readSelected'];
 };
+export type PortalLinkedPillOccurrence =
+    | { nativeIndex: number; state: 'resolved'; label: string }
+    | { nativeIndex: number; state: 'blank' | 'unavailable'; label: null };
+/** Detached primary labels only; no records, nested fields or read actions. */
+export type PortalLinkedPillsRendererProps = {
+    source: 'portal-pills';
+    items: readonly PortalLinkedPillOccurrence[];
+};
+export type LinkedRecordsRendererProps =
+    | FormLinkedRecordsRendererProps
+    | PortalLinkedPillsRendererProps;
 export type FieldRendererProps<K extends FieldKind> = {
     physicalKind: K;
     presentation: FieldPresentation;
@@ -602,17 +613,41 @@ export function createRendererProps(
     if (input.capability.type === 'editable' && (computed || kind === 'button'))
         return null;
     if (input.capability.type === 'button' && kind !== 'button') return null;
-    if (
-        input.linkedRecords !== undefined &&
-        (!object(input.linkedRecords) ||
-            kind !== 'multipleRecordLinks' ||
-            input.context !== 'form' ||
-            input.linkedRecords.source !== 'form' ||
-            typeof input.linkedRecords.readSelected !== 'function' ||
-            !object(input.linkedRecords.state) ||
-            !json(input.linkedRecords.state))
-    )
-        return null;
+    if (input.linkedRecords !== undefined) {
+        const linked = input.linkedRecords;
+        if (!object(linked) || kind !== 'multipleRecordLinks') return null;
+        if (linked.source === 'form') {
+            if (
+                input.context !== 'form' ||
+                typeof linked.readSelected !== 'function' ||
+                !object(linked.state) ||
+                !json(linked.state)
+            )
+                return null;
+        } else if (linked.source === 'portal-pills') {
+            if (
+                !['portal-cell', 'portal-detail', 'linked-detail'].includes(
+                    input.context
+                ) ||
+                !dense(
+                    linked.items,
+                    (item) =>
+                        object(item) &&
+                        Number.isSafeInteger(item.nativeIndex) &&
+                        (item.state === 'resolved'
+                            ? typeof item.label === 'string' &&
+                              item.label.trim() !== ''
+                            : (item.state === 'blank' ||
+                                  item.state === 'unavailable') &&
+                              item.label === null)
+                ) ||
+                linked.items.length !==
+                    (Array.isArray(input.value) ? input.value.length : 0) ||
+                linked.items.some((item, index) => item.nativeIndex !== index)
+            )
+                return null;
+        } else return null;
+    }
     if (input.capability.type === 'editable') {
         const cap = input.capability;
         if (
@@ -669,11 +704,21 @@ export function createRendererProps(
             ...structuredClone({ ...data, computed, presentation }),
             ...(linkedRecords
                 ? {
-                      linkedRecords: {
-                          source: linkedRecords.source,
-                          state: structuredClone(linkedRecords.state),
-                          readSelected: linkedRecords.readSelected,
-                      },
+                      linkedRecords:
+                          linkedRecords.source === 'form'
+                              ? {
+                                    source: linkedRecords.source,
+                                    state: structuredClone(linkedRecords.state),
+                                    readSelected: linkedRecords.readSelected,
+                                }
+                              : {
+                                    source: linkedRecords.source,
+                                    items: linkedRecords.items.map((item) => ({
+                                        nativeIndex: item.nativeIndex,
+                                        state: item.state,
+                                        label: item.label,
+                                    })),
+                                },
                   }
                 : {}),
             capability,

@@ -3,6 +3,7 @@ import {
     linkedRecordsTypedConsumer,
 } from './linked-records-consumer-checks.mjs';
 import { checkLinkedRendererConsumer } from './linked-renderer-consumer-checks.mjs';
+import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
@@ -1009,6 +1010,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(linkedRendererProof.checks, 16);
+    const portalPillProof = await checkPortalLinkedPillConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(portalPillProof.checks, 53);
+    console.log(
+        `Installed Portal linked pills: ${portalPillProof.checks} ESM/CJS and shipped React recipe groups passed; synthetic DOM/transport only.`
+    );
     console.log(
         `Installed Form linked renderer bridge: ${linkedRendererProof.checks} ESM/CJS and shipped React recipe groups passed; synthetic transport only.`
     );

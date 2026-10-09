@@ -869,11 +869,13 @@ export function inspectLinkedRecords(
 
 `FieldRendererProps<'multipleRecordLinks'>` optionally carries `linkedRecords`:
 `{ source: 'form', state: FormLinkedRecordsSnapshot, readSelected }`, exported as
-`LinkedRecordsRendererProps` from `@miniextensions/sdk/ui`. The bridge is available
+`FormLinkedRecordsRendererProps` from `@miniextensions/sdk/ui`, one arm of
+`LinkedRecordsRendererProps`. The bridge is available
 on a physical linked-record field with either read-only or editable capability;
 it grants no write capability. Other physical slots have no rich linked data.
-This bridge supports Form and accepted child Form hosts only. An outer Portal
-bridge and an `accepted-detail` source are outside this contract.
+This arm supports Form and accepted child Form hosts only. Portal hosts provide
+the data-only pill arm described below; rich Portal detail projection and an
+`accepted-detail` source remain outside this contract.
 
 The renderer below shows presentation status and a record count. Applications
 supply their own visual record renderer honoring the returned physical metadata,
@@ -888,7 +890,8 @@ export function RichLinkedField(
     props: FieldRendererProps<'multipleRecordLinks'>
 ) {
     const linked = props.linkedRecords;
-    if (!linked) return createElement('p', null, 'Linked details unavailable');
+    if (!linked || linked.source !== 'form')
+        return createElement('p', null, 'Linked details unavailable');
     const { state } = linked;
     const policyUnavailable =
         state.selectedPolicy.state === 'waiting-data' ||
@@ -950,6 +953,74 @@ reads or dispose borrowed facets. Dispose the actual owner at its own lifetime
 boundary. Rich snapshots are detached presentation; native record IDs and full
 Save remain the existing binding/controller's authority. No engine, cache or
 implicit selected read is added.
+
+### Portal linked-pill labels
+
+Accepted Portal detail and eligible cell hosts add a second linked-only arm:
+`{ source: 'portal-pills', items: readonly PortalLinkedPillOccurrence[] }`.
+Each item has its `nativeIndex`, a `state` of `resolved`, `blank` or `unavailable`,
+and a `label`. Resolved labels are strings; the other states have a null label.
+The exported `PortalLinkedPillsRendererProps` contains no records, schemas,
+nested detail fields, candidates or read actions. Rendering performs zero I/O.
+
+Labels use the existing formatter and the exact target table's unique physical
+primary field. They resolve only IDs in the accepted original row and field.
+Current native order and duplicate occurrences are preserved. Added IDs remain
+unavailable even if that record exists elsewhere in the accepted page. Missing
+records, missing primary ID values, conflicting name aliases or ambiguous
+primary metadata also remain unavailable; record IDs never become labels.
+Blank primary formatting is explicit, and supported computed primary values use
+their existing readable formatting. The bridge does not guess a primary from
+the first returned field or use a Form custom-primary setting. Primary results
+that require linked resolution, attachment presentation or Button behavior stay
+generic rather than exposing IDs, rich metadata or actions.
+
+Missing, null and present-empty nested rich policies expose no raw fields.
+They do not remove the canonical primary-label presentation. Outer row detail
+configuration is not a nested rich projection, and this arm never expands one.
+Returned display policy and existing cell/child-Form write authority stay
+separate; this presentation grants no edit or child-open permission.
+
+Use plain text for labels, including HTML-looking text. This example provides a
+generic item for unavailable or blank occurrences; the application owns its
+visual layout and may instead omit blank pills.
+
+```tsx
+import { createElement } from 'react';
+import type { FieldRendererProps } from '@miniextensions/sdk/ui';
+
+export function PortalLinkedPills(
+    props: FieldRendererProps<'multipleRecordLinks'>
+) {
+    const linked = props.linkedRecords;
+    if (!linked || linked.source !== 'portal-pills')
+        return createElement('span', null, 'Linked record unavailable');
+    return createElement(
+        'ul',
+        null,
+        ...linked.items.map((item) =>
+            createElement(
+                'li',
+                { key: item.nativeIndex },
+                item.label ?? 'Linked record unavailable'
+            )
+        )
+    );
+}
+```
+
+Supply this function as `renderMultipleRecordLinksField` in the existing
+`FieldRendererSlots`. A Form renderer must narrow `source === 'form'` before
+using rich state or `readSelected`; those properties do not exist on the Portal
+arm. Both arms are detached presentation of the same existing native value.
+
+The host lease binds the accepted owner, view revision, row, displayed field,
+configuration and cell provenance. Paging, criteria or owner/session replacement
+retires old hosts and actions; construct a fresh host from the new accepted page.
+An ordinary React unmount only unsubscribes and preserves the existing cell
+draft. Detached copies do not become live authorities: consume a current host
+snapshot, and dispose presentation hosts at their owner/context boundary. Native
+arrays and complete Save values remain owned by the existing cell or child Form.
 
 SDK Form and Portal linked-option loaders attach detached record data to `selection.getState().linkedRecords` only after the option page is accepted. Search replaces the candidate page; pagination appends accepted records. When retained pages supply conflicting physical metadata, their common table metadata is null; an empty page with no retained records does not override the metadata of a later nonempty page. Labels still use the primary field, and selection changes still write record IDs. A missing table is distinct from returned empty physical metadata.
 

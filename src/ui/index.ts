@@ -90,6 +90,9 @@ export type {
     AttachmentRendererActions,
     ChoiceRendererActions,
     LinkedRecordsRendererProps,
+    FormLinkedRecordsRendererProps,
+    PortalLinkedPillsRendererProps,
+    PortalLinkedPillOccurrence,
 } from './rendererRegistry.js';
 export {
     createFormFieldRendererHost,

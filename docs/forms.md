@@ -1401,8 +1401,9 @@ configurationRevision, saveOptions })` result, created outside React mounts,
 to this copyable application UI. The supplied `pages` must own those same
 bindings. Pass those same `fields` alongside `scope` below. Supply the normal
 Save lifecycle in `saveOptions` when journaling.
-The stock `SelectField` uses the same binding's retained selected options,
-including read-only answers and native names no longer in current choices.
+The stock `SelectField` supplies subscribed presentation from the same binding,
+including retained read-only answers and native names no longer in current
+choices. Its render prop keeps changes on the typed host's guarded capability.
 Displaying a retained answer does not make it eligible to add again or rewrite
 its native value to a renamed choice.
 
@@ -1418,9 +1419,59 @@ import type {
 const requestRenderers = (
     fields: FormFieldBindings
 ): FieldRendererSlots<ReactNode> => ({
-    renderSingleSelectField: (field) => (
-        <SelectField binding={fields.field(field.fieldId)} />
-    ),
+    renderSingleSelectField: (field) => {
+        const selection =
+            field.capability.type === 'editable'
+                ? field.capability.selection
+                : undefined;
+        return (
+            <SelectField
+                binding={fields.field(field.fieldId)}
+                render={({ snapshot }) => {
+                    const state = snapshot.selection;
+                    if (
+                        snapshot.retired ||
+                        snapshot.visibility.type !== 'visible' ||
+                        !state
+                    )
+                        return null;
+                    const options = new Map(
+                        [...state.selectedOptions, ...state.options].map(
+                            (option) => [option.value, option]
+                        )
+                    );
+                    return (
+                        <label>
+                            {field.title}
+                            <select
+                                aria-label={field.title}
+                                value={state.value[0] ?? ''}
+                                disabled={!selection || !snapshot.canEdit}
+                                onChange={(event) =>
+                                    selection?.choose(
+                                        event.currentTarget.value
+                                            ? [event.currentTarget.value]
+                                            : []
+                                    )
+                                }
+                            >
+                                <option value="">Choose a request type</option>
+                                {[...options.values()].map((option) => (
+                                    <option
+                                        key={option.value}
+                                        value={option.value}
+                                        disabled={option.disabled}
+                                    >
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    );
+                }}
+            />
+        );
+    },
     renderSingleLineTextField: (field) => (
         <section aria-label={field.title}>
             <h2>{field.title}</h2>

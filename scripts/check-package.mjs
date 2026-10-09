@@ -1097,7 +1097,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
             flavor,
         });
-        assert.equal(result.checks, 41);
+        assert.equal(result.checks, 42);
         singleSelectFormDriverRecipeChecks += result.checks;
     }
     console.log(

@@ -276,6 +276,9 @@ export async function checkSingleSelectFormDriverRecipe({
                 owner = { ownerId: 'A', revision: 2 };
                 fields.refresh();
             },
+            replaceConfiguration() {
+                configuration++;
+            },
             retire() {
                 configuration += 2;
                 scope.getSnapshot();
@@ -558,6 +561,45 @@ export async function checkSingleSelectFormDriverRecipe({
                     assert.equal(f.calls.length, 1, kind);
                 }
                 checks += 5;
+            } finally {
+                await act(async () => root.unmount());
+                f.scope.destroy();
+                f.pages.dispose();
+                f.fields.destroy();
+                host.remove();
+            }
+        }
+        // A configuration change before a scope read/unmount must still retire
+        // the actual retained select handler before it can write native data.
+        {
+            const f = fixture('one-page');
+            const host = window.document.createElement('div');
+            window.document.body.append(host);
+            const root = createRoot(host);
+            try {
+                await act(async () =>
+                    root.render(
+                        createElement(SingleSelectRequestForm, {
+                            scope: f.scope,
+                            fields: f.fields,
+                        })
+                    )
+                );
+                const select = host.querySelector('select');
+                const before = f.fields.controller.getState().draft;
+                f.replaceConfiguration();
+                await act(async () => {
+                    select.value = 'Other';
+                    refreshSelectedOptions(select);
+                    select.dispatchEvent(
+                        new window.Event('change', { bubbles: true })
+                    );
+                });
+                assert.deepEqual(f.fields.controller.getState().draft, before);
+                assert.equal(f.scope.getSnapshot().retired, true);
+                assert.equal(f.calls.length, 0);
+                assert.equal(f.attempts, 0);
+                checks++;
             } finally {
                 await act(async () => root.unmount());
                 f.scope.destroy();

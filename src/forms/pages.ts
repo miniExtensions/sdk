@@ -617,6 +617,7 @@ export function createFormPageOwner(
                     active !== pageIndex ||
                     inputRevision !== inputTicket ||
                     navigationRevision !== navigationTicket ||
+                    validatedDraftRevision !== draftRevision ||
                     control.draftRevision !== draftRevision ||
                     control.epoch !== initial.epoch ||
                     control.contextRevision !== initial.contextRevision ||

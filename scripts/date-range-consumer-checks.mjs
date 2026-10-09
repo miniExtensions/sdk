@@ -246,7 +246,8 @@ export async function checkDateRangeConsumer({
                 let configuration = 0,
                     ownerRevision = 0,
                     predicate = () => true,
-                    scopeHook = () => {};
+                    scopeHook = () => {},
+                    configHook = () => {};
                 const fields = forms.createFormFieldBindings({
                     loaded,
                     client: {
@@ -283,7 +284,10 @@ export async function checkDateRangeConsumer({
                 const pageOptions = {
                     fields,
                     isCurrent: () => predicate(),
-                    configurationRevision: () => configuration,
+                    configurationRevision: () => {
+                        configHook();
+                        return configuration;
+                    },
                 };
                 const pages = forms.createFormPageOwner(pageOptions);
                 const journal = new forms.RecoveryJournal();
@@ -339,6 +343,9 @@ export async function checkDateRangeConsumer({
                     },
                     setPredicate(fn) {
                         predicate = fn;
+                    },
+                    setConfigHook(fn) {
+                        configHook = fn;
                     },
                     setScopeHook(fn) {
                         scopeHook = fn;
@@ -974,6 +981,9 @@ async function checkClockRegressions({
         'response-acceptance',
         'final-owner-config',
         'final-controller-config',
+        'final-getter-native',
+        'final-getter-native-aba',
+        'final-getter-other-field',
     ];
     assert(
         caseId === undefined || caseIds.includes(caseId),
@@ -1222,6 +1232,142 @@ async function checkClockRegressions({
             assert.equal(f.calls.length, 0, id);
             assert.equal(f.attempts, 1, id);
             assert.deepEqual(f.fields.controller.getState().draft, native, id);
+            proofs++;
+        } finally {
+            dispose(f);
+        }
+    }
+    for (const id of [
+        'final-getter-native',
+        'final-getter-native-aba',
+        'final-getter-other-field',
+    ]) {
+        if (!selected(id)) continue;
+        clock(day.now);
+        const f = make(day, { onePage: true });
+        try {
+            assert(f.fields.field('answer').date.setInput(day.value));
+            const revision = f.pages.getSnapshot().revision;
+            const draftRevision = f.fields.controller.getState().draftRevision;
+            const dispositions = [],
+                accepted = [];
+            let armed = false,
+                changed = false,
+                ownershipCallbacks = 0;
+            let configCallbacks = 0,
+                native;
+            const invalid = '2026-10-08';
+            f.setPredicate(() => {
+                if (armed) ownershipCallbacks++;
+                return true;
+            });
+            f.setConfigHook(() => {
+                if (!armed) return;
+                configCallbacks++;
+                // current() observes configuration before its owner predicate.
+                // With two armed predicates completed, this is admission's
+                // final getter, after it captured the native controller state.
+                if (ownershipCallbacks === 2 && !changed) {
+                    changed = true;
+                    // Disarm the targeted getter before synchronous write observers.
+                    // Those notifications must not schedule another mutation.
+                    armed = false;
+                    if (id === 'final-getter-other-field') {
+                        assert(
+                            f.fields.controller.write(
+                                'next',
+                                'getter changed next'
+                            ),
+                            id
+                        );
+                    } else {
+                        assert(
+                            f.fields.controller.write('answer', invalid),
+                            id
+                        );
+                        if (id === 'final-getter-native-aba')
+                            assert(
+                                f.fields.controller.write('answer', day.value),
+                                id
+                            );
+                    }
+                    native = structuredClone(
+                        f.fields.controller.getState().draft
+                    );
+                }
+            });
+            const lifecycle = {
+                dispatch(...args) {
+                    const operation = f.lifecycle.dispatch(...args);
+                    return {
+                        accepted(result) {
+                            accepted.push(result.type);
+                            operation.accepted(result);
+                        },
+                        finish(disposition) {
+                            dispositions.push(disposition);
+                            operation.finish(disposition);
+                        },
+                    };
+                },
+            };
+            const outcome = await f.pages
+                .submit(revision, {
+                    lifecycle,
+                    isCurrent() {
+                        if (f.attempts === 1) armed = true;
+                        return true;
+                    },
+                })
+                .then(
+                    (result) => ({ rejected: false, result }),
+                    (error) => ({ rejected: true, error })
+                );
+            assert.equal(
+                f.calls.length,
+                0,
+                `${id}: final getter must prevent transport`
+            );
+            assert.equal(
+                outcome.rejected,
+                true,
+                `${id}: submission must reject`
+            );
+            armed = false;
+            assert(changed, `${id}: final getter must write the native draft`);
+            assert(ownershipCallbacks >= 2 && ownershipCallbacks < 20, id);
+            assert(configCallbacks > 0 && configCallbacks < 20, id);
+            assert.equal(
+                native.data.answer,
+                id === 'final-getter-native' ? invalid : day.value,
+                id
+            );
+            assert(native.dirtyFieldIds.includes('answer'), id);
+            assert(
+                f.fields.controller.getState().draftRevision > draftRevision,
+                id
+            );
+            if (id === 'final-getter-other-field') {
+                assert.equal(native.data.next, 'getter changed next', id);
+                assert(native.dirtyFieldIds.includes('next'), id);
+            }
+            assert.deepEqual(f.fields.controller.getState().draft, native, id);
+            assert.deepEqual(
+                f.pages.getSnapshot().problems,
+                id === 'final-getter-native'
+                    ? [{ fieldId: 'answer', code: 'invalid-input' }]
+                    : [],
+                id
+            );
+            assert.equal(f.calls.length, 0, id);
+            assert.equal(f.attempts, 1, id);
+            assert.deepEqual(accepted, [], id);
+            assert.deepEqual(dispositions, ['not-dispatched'], id);
+            assert.equal(
+                f.journal.blocking(f.recoveryScope, null),
+                undefined,
+                id
+            );
             proofs++;
         } finally {
             dispose(f);

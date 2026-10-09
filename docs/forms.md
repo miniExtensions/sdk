@@ -1471,7 +1471,9 @@ An explicit refused Next or Submit publishes the refreshed feedback without a
 polling timer. Submit rechecks the range after synchronous admission hooks,
 before journal creation and transport. External configuration is observed again
 after ownership and controller getter callbacks; a changed configuration retires
-the old page owner. If a hook changes validity after a
+the old page owner. Local validation and input/navigation tickets are checked
+after that observation too, so a getter cannot admit a stale native snapshot.
+If a hook changes validity after a
 journal attempt was created, that attempt finishes as `not-dispatched`.
 After transport starts, a later clock boundary alone does not reject an
 otherwise accepted response; server validation remains authoritative.

@@ -279,13 +279,13 @@ describe('actual browser starter conditional visibility', () => {
             logicalOperator: 'and',
             conditions: [
                 {
-                    id: 'published_select_condition',
+                    id: 'published_multiselect_condition',
                     type: 'singleCondition',
                     setting: {
-                        type: 'is',
-                        fieldType: AirtableFieldType.SINGLE_SELECT,
+                        type: 'hasAnyOf',
+                        fieldType: AirtableFieldType.MULTIPLE_SELECTS,
                         idOrName: { type: 'id', id: 'fld_select' },
-                        value: 'sel_red',
+                        value: ['sel_red'],
                     },
                 },
             ],
@@ -293,7 +293,7 @@ describe('actual browser starter conditional visibility', () => {
         title.miniExtConfig = { conditionalFields: unsupported };
         adjacent.miniExtConfig = {};
         form.payload.fieldIdsToSchemas.fld_select = {
-            fieldType: AirtableFieldType.SINGLE_SELECT,
+            fieldType: AirtableFieldType.MULTIPLE_SELECTS,
             airtableField: {
                 id: 'fld_select',
                 name: 'Selection',
@@ -301,7 +301,7 @@ describe('actual browser starter conditional visibility', () => {
                 isComputed: false,
                 isPrimaryField: false,
                 config: {
-                    type: AirtableFieldType.SINGLE_SELECT,
+                    type: AirtableFieldType.MULTIPLE_SELECTS,
                     options: { choices: [{ id: 'sel_red', name: 'Red' }] },
                 },
             },
@@ -314,7 +314,7 @@ describe('actual browser starter conditional visibility', () => {
             data: {
                 fld_title: 'Kept target',
                 fld_readonly: 'Adjacent native',
-                fld_select: 'Red',
+                fld_select: ['Red'],
                 fld_number: 0,
                 fld_linked: ['record_parent'],
             },

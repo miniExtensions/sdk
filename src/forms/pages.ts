@@ -288,7 +288,11 @@ export function createFormPageOwner(
                     snapshot.field,
                     control.draft?.data[id],
                     loaded.payload.formRecord.data[id],
-                    snapshot.visibility.type === 'hidden'
+                    snapshot.visibility.type === 'hidden',
+                    {
+                        data: control.draft?.data ?? {},
+                        fieldIdsToSchemas: loaded.payload.fieldIdsToSchemas,
+                    }
                 );
                 if (issue && (active === last || currentIds.includes(id)))
                     problems.push(issue);

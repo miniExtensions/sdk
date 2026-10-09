@@ -119,6 +119,62 @@ const validationSupport = JSON.parse(
     unsupportedValidation: string[];
     conservativeRefusal: string[];
 };
+describe('configured conditional page fixture provenance', () => {
+    const oracle = JSON.parse(
+        readFileSync('test/fixtures/conditionalPageValidation.json', 'utf8')
+    );
+    it('pins the executed frontend sources, tree, generator and synthetic cases', () => {
+        assert.equal(
+            oracle.provenance.revision,
+            '58f73d575ab10baa0a10693660d8002f204368e1'
+        );
+        assert.equal(
+            oracle.provenance.tree,
+            'b39e58ead46a311c497def57474cf5ca720542ae'
+        );
+        assert.equal(
+            oracle.provenance.generatorSha256,
+            hash(oracle.provenance.generator)
+        );
+        assert.equal(
+            oracle.provenance.casesSourceSha256,
+            hash('test/fixtures/conditionalPageValidationCases.mjs')
+        );
+        assert.equal(
+            oracle.provenance.sources['frontend-validation'],
+            '768b7d657fd670c70918f540147fc6abbbd18513ba7605a0f4631999ad333810'
+        );
+        assert.equal(
+            oracle.provenance.sources['advanced-enabled'],
+            '94e1ab19162424a0898db09a79cbbcf103b98047c33751bb34b09685c0f617b0'
+        );
+    });
+    it('keeps executed comparisons separate from conservative refusal cases', () => {
+        const cases = oracle.validation as {
+            name: string;
+            comparison: 'parity' | 'refusal';
+            expectedCode: string | null;
+            canonical: { type: string; invalid?: boolean };
+        }[];
+        assert.equal(new Set(cases.map((c) => c.name)).size, cases.length);
+        assert.equal(cases.filter((c) => c.comparison === 'parity').length, 32);
+        assert.equal(
+            cases.filter((c) => c.comparison === 'refusal').length,
+            22
+        );
+        for (const c of cases) {
+            if (c.comparison === 'parity') {
+                assert.equal(c.canonical.type, 'result', c.name);
+                assert.equal(
+                    c.canonical.invalid,
+                    c.expectedCode !== null,
+                    c.name
+                );
+            } else
+                assert.equal(c.expectedCode, 'unsupported-validation', c.name);
+        }
+    });
+});
 describe('canonical ordinary page validation', () => {
     const oracle = JSON.parse(
         readFileSync('test/fixtures/formPages.json', 'utf8')
@@ -566,7 +622,7 @@ describe('URL native navigation and ownership regressions', () => {
     });
 });
 describe('page composition authority regressions', () => {
-    it('unsupported editable validation blocks its current page rather than unrelated Next', () => {
+    it('configured scalar validation blocks its current page rather than unrelated Next', () => {
         const f = fixture((loaded) => {
             loaded.payload.fieldIdsToSchemas.b!.miniExtConfig = {
                 headerSectionTitle: 'Second',
@@ -580,7 +636,7 @@ describe('page composition authority regressions', () => {
                                 type: 'is',
                                 fieldType: 'singleLineText',
                                 idOrName: { type: 'id', id: 'b' },
-                                value: 'B',
+                                value: 'Required configured value',
                             },
                         },
                     ],
@@ -592,13 +648,14 @@ describe('page composition authority regressions', () => {
             f.pages.next(f.pages.getSnapshot().revision).accepted,
             true
         );
-        assert.equal(f.pages.getSnapshot().status, 'blocked');
+        assert.equal(f.pages.getSnapshot().status, 'ready');
+        assert.equal(f.pages.getSnapshot().canNext, false);
         assert(
             f.pages
                 .getSnapshot()
                 .problems.some(
                     (p) =>
-                        p.fieldId === 'b' && p.code === 'unsupported-validation'
+                        p.fieldId === 'b' && p.code === 'conditional-validation'
                 )
         );
         assert.equal(f.calls.length, 0);
@@ -1704,7 +1761,7 @@ describe('multipage Form ownership', () => {
         );
         assert.equal(f.fields.controller.getState().draft?.data.a, 'Successor');
     });
-    it('effective advanced validation and linked review tracking block explicitly', () => {
+    it('unsupported configured predicates and linked review tracking block explicitly', () => {
         const f = fixture((p) => {
             p.payload.fieldIdsToSchemas.a!.miniExtConfig = {
                 fieldValidationConditionalFields: {
@@ -1714,7 +1771,7 @@ describe('multipage Form ownership', () => {
                             id: 'advanced',
                             type: 'singleCondition',
                             setting: {
-                                type: 'is',
+                                type: 'unsupported-operator',
                                 fieldType: 'singleLineText',
                                 idOrName: { type: 'id', id: 'a' },
                                 value: 'A',

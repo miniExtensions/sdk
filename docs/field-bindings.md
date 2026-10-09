@@ -87,7 +87,7 @@ Use the existing field-specific instructions instead of duplicating policy:
 
 Check compatibility before building the UI. The accepted page-owner composition
 refuses configured prepared Review, compute and automatic submission, as well as
-unsupported advanced validation and condition drivers. The separate
+unsupported conditional-validation dependencies and condition drivers. The separate
 [one-page starter Review recipe](ui.md#prepared-form-review-in-the-browser-starter)
 does not enable configured Review in `AirtableForm`. Follow the
 [page-owner limits](forms.md#bounded-multipage-ownership),

@@ -525,6 +525,118 @@ markup across Form, editable cell and read-only detail contexts, and synthetic
 StrictMode/remount and stale-action cases. It is not native-browser, live-backend,
 webhook-delivery or persistence acceptance.
 
+## Form composition with app-owned layout
+
+`createFormRenderScope` from `@miniextensions/sdk/ui` groups the existing page
+owner and typed field hosts for one accepted Form context. It accepts
+`FormPageOwnerOptions` (`fields`, `isCurrent`, `configurationRevision`) plus
+optional `pages`, `saveOptions`, `attachmentRecovery` and `button`. A supplied
+`pages` must be the exact SDK page owner for the same `fields`; `scope.pages`
+retains that object and `scope.ownsPages` is false. Otherwise the scope creates
+one page owner and `ownsPages` is true. It adds no draft, session or navigation
+owner beyond these existing resources.
+
+Create the scope outside renderer lifetime, after accepting the Form owner:
+
+```ts
+import { createFormRenderScope } from '@miniextensions/sdk/ui';
+import type { FormRenderScopeOptions } from '@miniextensions/sdk/ui';
+
+export function createFormPresentation(options: FormRenderScopeOptions) {
+    return createFormRenderScope(options);
+}
+```
+
+`scope.getSnapshot()` returns `revision`, `retired`, `page`, `fields` entries
+`{ fieldId, host }`, controller `status`, `canSave`, `errorMessage`,
+`validationErrors` and `actions` (`back`, `next`, `submit`). The field list follows
+the current page's order and omits hidden or retired hosts. `scope.subscribe`
+observes the same state and returns an unsubscribe function. Every snapshot's
+actions capture its page revision; retained callbacks cannot act against a later
+page revision or retired context.
+
+Optional React `AirtableForm` takes a scope, `FieldRendererSlots<ReactNode>`, an
+optional field `fallback` and a required `children(state)` layout render prop.
+Its state supplies `{ fieldId, node }` field entries, the same page/controller
+state and revision-bound actions. The application supplies all layout, markup
+and styling:
+
+```tsx
+import type { ReactNode } from 'react';
+import { AirtableForm } from '@miniextensions/sdk/react';
+import type {
+    FieldRendererSlots,
+    FormRenderScope,
+} from '@miniextensions/sdk/ui';
+
+export function CustomForm({
+    scope,
+    renderers,
+}: {
+    scope: FormRenderScope;
+    renderers: FieldRendererSlots<ReactNode>;
+}) {
+    return (
+        <AirtableForm scope={scope} renderers={renderers}>
+            {(state) => (
+                <section>
+                    {state.fields.map(({ fieldId, node }) => (
+                        <div key={fieldId}>{node}</div>
+                    ))}
+                    {state.errorMessage && <p>{state.errorMessage}</p>}
+                    <button
+                        disabled={!state.page.canBack}
+                        onClick={() => state.actions.back()}
+                    >
+                        Back
+                    </button>
+                    <button
+                        disabled={!state.page.canNext}
+                        onClick={() => state.actions.next()}
+                    >
+                        Next
+                    </button>
+                    <button
+                        disabled={!state.page.canSubmit}
+                        onClick={() => {
+                            void state.actions.submit().catch(() => {
+                                // Handle a refused/stale action in your app.
+                            });
+                        }}
+                    >
+                        Submit
+                    </button>
+                </section>
+            )}
+        </AirtableForm>
+    );
+}
+```
+
+There is no default Form markup or styling. Mounting, rendering and subscribing
+perform no reads, Save, upload, Add Choice or Button requests. Partial text,
+number and date input, selected/pending File identities and uncertainty stay
+with the original field owners across renderer remounts. React unmount and
+StrictMode cleanup only unsubscribe; they do not destroy the scope.
+
+On accepted owner/context or observed configuration replacement, retire the old
+scope and create a fresh one with current resources. Advance the monotonic
+configuration revision for observed replacements, including A→B→A; retired
+actions never revive. `scope.destroy()` disposes its owned field hosts and only
+an internally created page owner. It never destroys caller-owned `fields` or
+`pages`. Dispose those resources separately at their actual ownership boundary.
+
+Composition retains the [existing page owner's validation and configuration
+limits](forms.md#bounded-multipage-ownership): configured prepared Review, compute
+mode and automatic submission remain global refusals. It does not introduce a
+Review flow or relax effective compute Save restrictions. Explicit final submit
+delegates to the existing `fields.save` authority after page validation. Supply
+fresh `saveOptions` and the existing Save lifecycle/uncertainty journal; these
+options delegate to that authority and create no second journal or mutation
+owner. Attachment and Button options likewise reuse their existing recovery and
+permission contracts. Full native Save data and backend validation remain
+owned by the existing bindings/controller.
+
 ## Rich linked-record presentation
 
 Native linked-field values remain arrays of record IDs. Use the accepted owner’s rich-record facet to render other fields returned for each record; do not replace the native value with record objects.

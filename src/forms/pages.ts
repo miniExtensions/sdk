@@ -58,6 +58,11 @@ export class FormPageError extends Error {
         this.name = 'FormPageError';
     }
 }
+// Rendering adapters may retain a caller's SDK page owner, but never pair it
+// with another native draft. This identity is not a public /forms API.
+const pageFields = new WeakMap<FormPageOwner, FormFieldBindings>();
+export const readFormPageOwnerFields = (pages: FormPageOwner) =>
+    pageFields.get(pages) ?? null;
 const lastVisible = (
     pages: readonly FormPageDescriptor[],
     before = pages.length
@@ -494,7 +499,7 @@ export function createFormPageOwner(
             /* Missing metadata is reported in the snapshot. */
         }
     }
-    return {
+    const owner: FormPageOwner = {
         getSnapshot: snapshot,
         subscribe(listener) {
             listeners.set(listener, revision);
@@ -598,4 +603,6 @@ export function createFormPageOwner(
             listeners.clear();
         },
     };
+    pageFields.set(owner, fields);
+    return owner;
 }

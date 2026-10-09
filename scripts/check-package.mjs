@@ -18,6 +18,10 @@ import {
     checkFormPageConsumer,
     formPageTypedConsumer,
 } from './form-page-consumer-checks.mjs';
+import {
+    checkFormCompositionConsumer,
+    formCompositionTypedConsumer,
+} from './form-composition-consumer-checks.mjs';
 import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
@@ -877,6 +881,31 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         rendererReactTypedConsumer
     );
     reactSources.push('renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'form-composition-consumer.ts'),
+        formCompositionTypedConsumer
+    );
+    reactSources.push('form-composition-consumer.ts');
+    const compositionRecipes = [
+        ...readFileSync(
+            join(installedPackage, 'docs/field-bindings.md'),
+            'utf8'
+        ).matchAll(/```(ts|tsx)\n([\s\S]*?)\n```/g),
+    ].filter(
+        ([, , code]) =>
+            code.includes('export function createFormPresentation(') ||
+            code.includes('export function CustomForm(')
+    );
+    assert.equal(
+        compositionRecipes.length,
+        2,
+        'Missing shipped Form composition recipes'
+    );
+    for (const [, language, code] of compositionRecipes) {
+        const path = `form-composition-guide-${reactSources.length}.${language}`;
+        writeFileSync(join(temporaryDirectory, path), code);
+        reactSources.push(path);
+    }
     run(process.execPath, [
         require.resolve('typescript/bin/tsc'),
         '--noEmit',
@@ -933,6 +962,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(rendererProof.checks, 15);
     console.log(
         `Installed renderer hosts: all 33 slots and ${rendererProof.checks} owner/remount groups passed; synthetic transport only.`
+    );
+    assert.equal(
+        await checkFormCompositionConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        22
     );
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,

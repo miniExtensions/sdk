@@ -63,6 +63,22 @@ export type ComposeFormFieldVisibilityInput = FormVisibilityContext & {
 const isObject = (value: unknown): value is Record<string, unknown> =>
     value != null && typeof value === 'object' && !Array.isArray(value);
 
+const nativeStringArray = (value: unknown): value is string[] => {
+    // Native JSON arrays have only length and own data entries. Do not let
+    // overridden iteration/formatting methods change an admitted condition.
+    if (
+        !Array.isArray(value) ||
+        Object.getPrototypeOf(value) !== Array.prototype ||
+        Reflect.ownKeys(value).length !== value.length + 1
+    )
+        return false;
+    for (let index = 0; index < value.length; index++) {
+        const entry = Object.getOwnPropertyDescriptor(value, String(index));
+        if (entry == null || typeof entry.value !== 'string') return false;
+    }
+    return true;
+};
+
 const emptyHidingScalarTypes = new Set<string>([
     'singleLineText',
     'email',
@@ -120,6 +136,8 @@ const nativeValueProblem = (
                   : 'non-finite-result';
         case 'checkbox':
             return typeof value === 'boolean' ? null : 'invalid-native-value';
+        case 'multipleSelects':
+            return nativeStringArray(value) ? null : 'invalid-native-value';
         case 'barcode':
             return isObject(value) &&
                 'text' in value &&
@@ -255,7 +273,12 @@ export function evaluateFormFieldVisibilityWithPolicy(
                     diagnostics,
                 };
             const value = input.data[driver.id];
-            if (value != null && typeof value !== 'string')
+            if (
+                value != null &&
+                (driver.config.type === 'singleSelect'
+                    ? typeof value !== 'string'
+                    : !nativeStringArray(value))
+            )
                 return {
                     type: 'blocked',
                     code: 'invalid-native-value',

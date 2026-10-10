@@ -591,11 +591,11 @@ and exact serialized length are preserved. Unsafe literal/regex round trips
 fail closed rather than approximating set membership or splitting commas.
 
 Form binding visibility and page advanced validation additionally admit the six
-single-select predicates above for exact-ID direct noncomputed drivers. They
+single-select and six multi-select predicates above for exact-ID direct noncomputed drivers. They
 inspect the original AST and loaded metadata, even when compilation reduces a
 predicate to constant `FALSE()`. Public scalar flat/section projection helpers,
 prepared Review, select-driven conditional option availability and the shipped
-Portal editor retain their existing boundaries. Multi-select and richer Form
+Portal editor retain their existing boundaries. Linked, computed, lookup and date Form
 drivers remain unsupported. Richer saved Portal
 criteria must remain intact until explicit replacement or accepted server
 cleanup; partial known-choice compilation is not permission to drop AST values.
@@ -722,7 +722,7 @@ codes and behavior, including scanning schemas outside the supplied order and
 rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
 adapter uses `createScalarFormRecordProjection` for supported scalar conditional
 choices. Form field bindings reuse the shared section engine internally with
-the bounded single-select Form driver policy. Inactive-page drivers remain in the
+the bounded direct single-select/multi-select Form driver policy. Inactive-page drivers remain in the
 evaluation record; conditionally hidden drivers are removed only from that
 detached projection. Eligibility changes never remove native selected values.
 One-page Review retains its separate page-mode and supported-driver checks.
@@ -1558,9 +1558,102 @@ retired hosts produce no controls. Rendering and navigation perform no I/O;
 required feedback can refuse Submit before transport or journal creation.
 Keep ownership/configuration revisions monotonic, including A → B → A changes;
 retained rendered actions must not be reused after a newer revision.
-This slice supports only exact-ID direct noncomputed single-select drivers with
-`is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`, and `isNotEmpty`. It does not
-extend multi-select/richer drivers or select-driven conditional option predicates.
+This example uses exact-ID direct noncomputed single-select drivers with
+`is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`, and `isNotEmpty`. Direct
+multi-select drivers additionally support `hasAnyOf`, `hasAllOf`, `hasNoneOf`,
+`isExactly`, `isEmpty`, and `isNotEmpty`. Neither admits richer drivers or
+select-driven conditional option predicates.
+
+### Multiple-select conditional drivers
+
+A direct, noncomputed `multipleSelects` driver uses the same Form owner and
+page validator. Its condition operands are exact choice IDs; its native value
+is a dense array of exact choice names, or null/missing. An empty array is valid.
+Native order, duplicates, unknown retained names, case and whitespace are not
+normalized by condition evaluation. Untouched drafts retain these values;
+explicit stock selection edits deduplicate names. Malformed arrays are a conservative refusal, including when a
+removed choice makes the compiled predicate constant `FALSE()`.
+
+The six operators are `hasAnyOf`, `hasAllOf`, `hasNoneOf`, `isExactly`, `isEmpty`
+and `isNotEmpty`. Evaluation uses canonical serialized names and regex boundaries;
+`isExactly` retains the canonical serialized-length check, not set equality.
+Visibility and conditional validation read the complete native draft, including
+hidden and inactive-page drivers. Presentation never removes hidden native Save
+values. Public scalar projections, prepared Review with select drivers,
+select-driven option conditions and select edit-empty hiding remain unsupported.
+
+This optional plain native-select renderer uses the existing stock subscription
+and the typed host's guarded selection action. Register it as
+`renderMultipleSelectsField: field => <MultipleSelectRequestField field={field}
+fields={fields} />` in the existing `AirtableForm` slots. Keep `fields`, `pages`
+and `scope` outside renderer mounts; rendering performs no reads or writes.
+The app supplies all visual styling and page layout.
+
+```tsx
+import { SelectField } from '@miniextensions/sdk/react';
+import type { FormFieldBindings } from '@miniextensions/sdk/forms';
+import type { FieldRendererProps } from '@miniextensions/sdk/ui';
+
+export function MultipleSelectRequestField({
+    field,
+    fields,
+}: {
+    field: FieldRendererProps<'multipleSelects'>;
+    fields: FormFieldBindings;
+}) {
+    const selection =
+        field.capability.type === 'editable'
+            ? field.capability.selection
+            : undefined;
+    return (
+        <SelectField
+            binding={fields.field(field.fieldId)}
+            render={({ snapshot }) => {
+                const state = snapshot.selection;
+                if (
+                    snapshot.retired ||
+                    snapshot.visibility.type !== 'visible' ||
+                    !state
+                )
+                    return null;
+                const options = new Map(
+                    [...state.selectedOptions, ...state.options].map(
+                        (option) => [option.value, option]
+                    )
+                );
+                return (
+                    <label>
+                        {field.title}
+                        <select
+                            multiple
+                            aria-label={field.title}
+                            value={state.value}
+                            disabled={!selection || !snapshot.canEdit}
+                            onChange={(event) =>
+                                selection?.choose(
+                                    Array.from(
+                                        event.currentTarget.selectedOptions
+                                    ).map((option) => option.value)
+                                )
+                            }
+                        >
+                            {[...options.values()].map((option) => (
+                                <option
+                                    key={option.value}
+                                    value={option.value}
+                                    disabled={option.disabled}
+                                >
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                );
+            }}
+        />
+    );
+}
+```
 
 `createFormPageOwner` owns local page navigation around an existing
 `createFormFieldBindings` owner. It reads the accepted load through
@@ -1701,7 +1794,7 @@ lookup presentation requires an explicit `hideFieldIfEmpty: false`. Other
 unimplemented validation types remain explicit refusals.
 Configured `fieldValidationConditionalFields` supports the existing strict
 direct-scalar condition subset and the six exact-ID direct noncomputed
-single-select driver predicates above through the same predicate evaluator used for
+single-select/multi-select driver predicates above through the same predicate evaluator used for
 field visibility. Ordinary errors retain priority. Advanced validation applies
 only to a visible writable, noncomputed target; hiding, read-only configuration
 and canonical computed physical kinds skip that extra rule without waiving any
@@ -1718,8 +1811,8 @@ it never suppresses a malformed or unsupported rule. Null, omitted and nonempty
 messages still use the generic code, so an app may supply its own text.
 Missing/contradictory schema, ambiguous ID/name aliases, invalid native driver
 values, evaluator errors and unsupported predicates yield `unsupported-validation`.
-Multi-select, linked, lookup, computed and date dependencies remain outside this
-slice. Invalid or unsupported single-select drivers remain refused even when
+Linked, lookup, computed and date dependencies remain outside this
+slice. Invalid or unsupported select drivers remain refused even when
 their predicates compile to a constant formula. No linked reads or
 metadata recovery are performed.
 

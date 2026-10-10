@@ -272,6 +272,7 @@ export async function runSingleSelectFormDriverChecks(
     assert.equal(evaluate(named, 'Other').type, 'blocked');
     const multi = choice().airtableField;
     multi.config.type = 'multipleSelects';
+    multi.isComputed = true;
     const multiDefinition = condition('hasAnyOf', ['other']);
     multiDefinition.conditions[0].setting.fieldType = 'multipleSelects';
     assert.equal(evaluate(multiDefinition, ['Other'], [multi]).type, 'blocked');

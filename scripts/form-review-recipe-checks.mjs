@@ -367,6 +367,26 @@ export async function checkFormReviewRecipe({
         () => prepareFormReviewRows(driver, selectNative),
         /Review is unavailable/
     );
+    // Form driver admission does not widen the shipped prepared Review policy,
+    // including when a missing choice folds the predicate to constant FALSE().
+    for (const optionId of ['sel_first', 'sel_deleted']) {
+        const multiDriver = structuredClone(selectPage);
+        const setting =
+            multiDriver.payload.fieldIdsToSchemas.fld_review_conditional
+                .miniExtConfig.conditionalFields.conditions[0].setting;
+        Object.assign(setting, {
+            idOrName: { type: 'id', id: 'fld_review_multi' },
+            fieldType: 'multipleSelects',
+            type: 'hasAnyOf',
+            value: [optionId],
+        });
+        assert.throws(
+            () => prepareFormReviewRows(multiDriver, selectNative),
+            /Review is unavailable/
+        );
+        assert.deepEqual(selectNative, beforeSelect);
+        checks++;
+    }
     for (const [id, values] of [
         ['fld_review_single', [1, true, {}, [], ['First']]],
         [

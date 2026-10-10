@@ -22,6 +22,8 @@ import {
 import { checkSelectAvailabilityBridgeRecipe } from './select-availability-bridge-recipe-checks.mjs';
 import { checkSingleSelectFormDriverConsumer } from './single-select-form-driver-consumer-checks.mjs';
 import { checkSingleSelectFormDriverRecipe } from './single-select-form-driver-recipe-checks.mjs';
+import { checkMultipleSelectFormDriverConsumer } from './multi-select-form-driver-consumer-checks.mjs';
+import { checkMultipleSelectFormDriverRecipe } from './multi-select-form-driver-recipe-checks.mjs';
 import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
@@ -1104,6 +1106,23 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     }
     console.log(
         `Installed single-select Form drivers: ${singleSelectFormDriverChecks} ESM/CJS groups and ${singleSelectFormDriverRecipeChecks} actual shipped AirtableForm recipe groups passed; synthetic DOM/transport only.`
+    );
+    const multipleSelectFormDriverChecks =
+        await checkMultipleSelectFormDriverConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(multipleSelectFormDriverChecks, 332);
+    let multipleSelectFormDriverRecipeChecks = 0;
+    for (const flavor of ['esm', 'cjs']) {
+        const result = await checkMultipleSelectFormDriverRecipe({
+            consumerDirectory: temporaryDirectory,
+            flavor,
+        });
+        assert.equal(result.checks, 46);
+        multipleSelectFormDriverRecipeChecks += result.checks;
+    }
+    console.log(
+        `Installed multi-select Form drivers: ${multipleSelectFormDriverChecks} ESM/CJS groups and ${multipleSelectFormDriverRecipeChecks} actual shipped AirtableForm recipe groups passed; synthetic DOM/transport only.`
     );
     assert.equal(
         await checkPortalCompositionConsumer({

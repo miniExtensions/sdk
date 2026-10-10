@@ -298,7 +298,7 @@ describe('actual browser starter conditional visibility', () => {
                 id: 'fld_select',
                 name: 'Selection',
                 description: null,
-                isComputed: false,
+                isComputed: true,
                 isPrimaryField: false,
                 config: {
                     type: AirtableFieldType.MULTIPLE_SELECTS,

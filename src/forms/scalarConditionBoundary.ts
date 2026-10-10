@@ -68,7 +68,7 @@ export function inspectFormSelectConditions(
             return true;
         const driver = matches[0];
         if (
-            setting.fieldType !== 'singleSelect' ||
+            !select(setting.fieldType) ||
             !object(ref) ||
             ref.type !== 'id' ||
             typeof ref.id !== 'string' ||
@@ -76,16 +76,27 @@ export function inspectFormSelectConditions(
             matches.length !== 1 ||
             driver == null ||
             typeof driver.name !== 'string' ||
-            driver.config.type !== 'singleSelect' ||
+            driver.config.type !== setting.fieldType ||
             (driver.isComputed !== undefined && driver.isComputed !== false) ||
-            ![
-                'is',
-                'isNot',
-                'isAnyOf',
-                'isNoneOf',
-                'isEmpty',
-                'isNotEmpty',
-            ].includes(String(setting.type))
+            !(
+                setting.fieldType === 'singleSelect'
+                    ? [
+                          'is',
+                          'isNot',
+                          'isAnyOf',
+                          'isNoneOf',
+                          'isEmpty',
+                          'isNotEmpty',
+                      ]
+                    : [
+                          'hasAnyOf',
+                          'hasAllOf',
+                          'hasNoneOf',
+                          'isExactly',
+                          'isEmpty',
+                          'isNotEmpty',
+                      ]
+            ).includes(String(setting.type))
         )
             return false;
         drivers.push(driver);

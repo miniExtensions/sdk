@@ -131,7 +131,15 @@ export function createFormLinkedRecordsOwner(options: {
         null;
     const facets = new Map<
         string,
-        { facet: FormLinkedRecordsFacet; destroy(): void; emit(): void }
+        {
+            facet: FormLinkedRecordsFacet;
+            destroy(): void;
+            emit(): void;
+            prepareCreated(
+                record: AirtableRecord,
+                childTable: FormLinkedRecordsSnapshot['table']
+            ): (() => void) | null;
+        }
     >();
     const current = () => {
         if (retired) return false;
@@ -260,6 +268,10 @@ export function createFormLinkedRecordsOwner(options: {
             string,
             { record: AirtableRecord; table: Table }
         >();
+        const createdOptions = new Map<
+            string,
+            { record: AirtableRecord; table: Table }
+        >();
         const listeners = new Set<
             (snapshot: FormLinkedRecordsSnapshot) => void
         >();
@@ -294,6 +306,8 @@ export function createFormLinkedRecordsOwner(options: {
             const selected = new Set(nativeIds);
             for (const id of selectedOptions.keys())
                 if (!selected.has(id)) selectedOptions.delete(id);
+            for (const id of createdOptions.keys())
+                if (!selected.has(id)) createdOptions.delete(id);
             if (rich?.linkedTableId === linkedTableId)
                 for (const record of rich.records)
                     if (selected.has(record.id))
@@ -324,7 +338,8 @@ export function createFormLinkedRecordsOwner(options: {
             if (candidates.length !== 0)
                 contributingTables.push(rich?.table ?? null);
             for (const id of nativeIds) {
-                const option = selectedOptions.get(id);
+                const option =
+                    createdOptions.get(id) ?? selectedOptions.get(id);
                 const record =
                     option?.record ??
                     (originalIds.has(id)
@@ -365,6 +380,9 @@ export function createFormLinkedRecordsOwner(options: {
                 records: selectedRecords,
                 airtableFields: commonTable?.airtableFields ?? null,
                 waitingData: !accepted && !rich && selectedOptions.size === 0,
+                createdRecordIds: new Set(
+                    nativeIds.filter((id) => createdOptions.has(id))
+                ),
             });
             if (!current() || stopped) return empty('retired');
             return structuredClone({
@@ -411,10 +429,196 @@ export function createFormLinkedRecordsOwner(options: {
         const entry = {
             facet,
             emit: notify,
+            prepareCreated(
+                source: AirtableRecord,
+                childTable: Table
+            ): (() => void) | null {
+                if (stopped || !current()) return null;
+                try {
+                    if (
+                        !object(source) ||
+                        typeof source.id !== 'string' ||
+                        source.id.trim() === '' ||
+                        !object(source.fields)
+                    )
+                        return null;
+                    const record = structuredClone(source);
+                    const child = childTable && structuredClone(childTable);
+                    if (
+                        child &&
+                        !validate({
+                            [linkedTableId]: {
+                                airtableFields: [...child.airtableFields],
+                                recordIdsToAirtableRecords: {
+                                    [record.id]: record,
+                                },
+                            },
+                        })
+                    )
+                        return null;
+                    // Child public metadata is not a parent detail policy. Only
+                    // an already accepted parent table may supply that policy.
+                    const hydrated = accepted?.[linkedTableId];
+                    const tables: Table[] = hydrated
+                        ? [{ airtableFields: hydrated.airtableFields }]
+                        : [...selectedOptions.values()].map(
+                              (value) => value.table
+                          );
+                    const parent = tables[0];
+                    let prepared: {
+                        record: AirtableRecord;
+                        table: Table;
+                    } | null = null;
+                    if (
+                        child &&
+                        parent &&
+                        detailFields &&
+                        tables.every(
+                            (table) =>
+                                table && sameLinkedRecordTable(parent, table)
+                        )
+                    ) {
+                        const allowed = new Set<string>();
+                        const resolve = (reference: unknown): boolean => {
+                            if (!object(reference)) return false;
+                            const matches = parent.airtableFields.filter(
+                                (field) =>
+                                    reference.type === 'id'
+                                        ? field.id === reference.id
+                                        : reference.type === 'name' &&
+                                          field.name === reference.name
+                            );
+                            if (matches.length !== 1) return false;
+                            allowed.add(matches[0]!.id);
+                            return true;
+                        };
+                        let supported = detailFields.every(
+                            (detail) =>
+                                detail.isHidden === true ||
+                                resolve({ type: 'id', id: detail.fieldId })
+                        );
+                        const policy = config as
+                            | Record<string, unknown>
+                            | undefined;
+                        const conditions =
+                            policy?.filterLinkedRecordsToggle === false ||
+                            policy?.filterApplicationMode ===
+                                'record-finder-only'
+                                ? null
+                                : policy?.filterLinkedRecordsConditionFields;
+                        const active = new Set<object>();
+                        const dependencies = (group: unknown): boolean => {
+                            if (group == null) return true;
+                            if (
+                                !object(group) ||
+                                !Array.isArray(group.conditions) ||
+                                active.has(group)
+                            )
+                                return false;
+                            active.add(group);
+                            const valid = group.conditions.every(
+                                (condition: unknown) =>
+                                    object(condition) &&
+                                    (condition.type === 'groupCondition'
+                                        ? dependencies(condition)
+                                        : condition.type ===
+                                              'singleCondition' &&
+                                          object(condition.setting) &&
+                                          resolve(condition.setting.idOrName))
+                            );
+                            active.delete(group);
+                            return valid;
+                        };
+                        supported &&= dependencies(conditions);
+                        if (policy?.sortFields != null) {
+                            supported &&=
+                                Array.isArray(policy.sortFields) &&
+                                policy.sortFields.every(
+                                    (sort: unknown) =>
+                                        object(sort) && resolve(sort.idOrName)
+                                );
+                        }
+                        supported &&= [...allowed].every((id) => {
+                            const parentField = parent.airtableFields.filter(
+                                (field) => field.id === id
+                            );
+                            const childField = child.airtableFields.filter(
+                                (field) => field.id === id
+                            );
+                            return (
+                                parentField.length === 1 &&
+                                childField.length === 1 &&
+                                sameLinkedRecordTable(
+                                    { airtableFields: parentField },
+                                    { airtableFields: childField }
+                                )
+                            );
+                        });
+                        const projected = {
+                            id: record.id,
+                            fields: Object.fromEntries(
+                                Object.entries(record.fields).filter(([id]) =>
+                                    allowed.has(id)
+                                )
+                            ),
+                        };
+                        if (
+                            supported &&
+                            projectSelectedRecordsPolicy({
+                                config,
+                                records: [projected],
+                                airtableFields: parent.airtableFields,
+                                waitingData: false,
+                                createdRecordIds: new Set([record.id]),
+                            }).policy.supported
+                        )
+                            prepared = structuredClone({
+                                record: projected,
+                                table: parent,
+                            });
+                    }
+                    let used = false;
+                    return () => {
+                        if (used) return;
+                        used = true;
+                        // afterCommit must not re-enter application callbacks.
+                        // Native membership is checked by every snapshot and
+                        // pruned by the accepted binding publication below.
+                        if (stopped || retired || !prepared) return;
+                        const latestHydrated = accepted?.[linkedTableId];
+                        const latestTables: Table[] = latestHydrated
+                            ? [
+                                  {
+                                      airtableFields:
+                                          latestHydrated.airtableFields,
+                                  },
+                              ]
+                            : [...selectedOptions.values()].map(
+                                  (value) => value.table
+                              );
+                        if (
+                            !latestTables.length ||
+                            latestTables.some(
+                                (table) =>
+                                    !table ||
+                                    !sameLinkedRecordTable(
+                                        prepared.table,
+                                        table
+                                    )
+                            )
+                        )
+                            return;
+                        createdOptions.set(record.id, prepared);
+                    };
+                } catch {
+                    return null;
+                }
+            },
             destroy() {
                 if (stopped) return;
                 stopped = true;
                 selectedOptions.clear();
+                createdOptions.clear();
                 stop();
                 notify();
                 listeners.clear();
@@ -426,6 +630,18 @@ export function createFormLinkedRecordsOwner(options: {
     };
     return {
         field,
+        /** Private trusted coordinator channel; never exposed on a field facet. */
+        prepareCreated(
+            fieldId: string,
+            record: AirtableRecord,
+            childTable: FormLinkedRecordsSnapshot['table']
+        ): (() => void) | null {
+            if (!current()) return null;
+            field(fieldId);
+            return (
+                facets.get(fieldId)?.prepareCreated(record, childTable) ?? null
+            );
+        },
         clearOptions(fieldId: string) {
             const entry = facets.get(fieldId);
             facets.delete(fieldId);

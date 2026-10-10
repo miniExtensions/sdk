@@ -8,6 +8,10 @@ import {
     linkedRecordsTypedConsumer,
 } from './linked-records-consumer-checks.mjs';
 import { checkLinkedRendererConsumer } from './linked-renderer-consumer-checks.mjs';
+import {
+    checkLinkedChildConsumer,
+    linkedChildTypedConsumer,
+} from './linked-child-consumer-checks.mjs';
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
@@ -799,6 +803,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             join(temporaryDirectory, linkedRecordsFilename),
             linkedRecordsTypedConsumer
         );
+        const linkedChildFilename = `linked-child-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, linkedChildFilename),
+            linkedChildTypedConsumer
+        );
         const rendererFilename = `renderers-${filename}`;
         writeFileSync(
             join(temporaryDirectory, rendererFilename),
@@ -824,6 +833,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             filename,
             rendererFilename,
             linkedRecordsFilename,
+            linkedChildFilename,
             pageFilename,
             ...formulasGuideSources,
         ]);
@@ -948,6 +958,21 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         portalButtonCompositionReactTypedConsumer
     );
     reactSources.push('portal-button-composition-consumer.ts');
+    const linkedChildRecipes = [
+        ...formsGuide.matchAll(/```tsx\n([\s\S]*?)\n```/g),
+    ].filter(([, code]) =>
+        code.includes('export function createLinkedChildPanel(')
+    );
+    assert.equal(
+        linkedChildRecipes.length,
+        1,
+        'Missing shipped linked-child panel'
+    );
+    writeFileSync(
+        join(temporaryDirectory, 'linked-child-guide.tsx'),
+        linkedChildRecipes[0][1]
+    );
+    reactSources.push('linked-child-guide.tsx');
     const compositionRecipes = [
         ...readFileSync(
             join(installedPackage, 'docs/field-bindings.md'),
@@ -1024,6 +1049,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(linkedRecordsProof.checks, 12);
     console.log(
         `Installed rich linked records: ${linkedRecordsProof.checks} ESM/CJS groups passed; synthetic transport only.`
+    );
+    const linkedChildProof = await checkLinkedChildConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(linkedChildProof, 64);
+    console.log(
+        `Installed configured linked-child create: ${linkedChildProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
     );
     const selectedPolicyProof = await checkSelectedRecordPolicyConsumer({
         consumerDirectory: temporaryDirectory,

@@ -1,0 +1,273 @@
+{
+    "revision": "4bf957c4830e6863972e45e52f2c371dc8ea9c77",
+    "sourceHashes": {
+        "utils/linked-records-field-config-helpers.ts": "8b7658c63a3b991b410d820e53e1bc965c4e88580f4ee40f65887ba0a3e65ea5",
+        "components/Fields/FieldRenderer/LinkedRecordsField/LinkedRecordsField.tsx": "8475998be1e17529802eafe60442b5c986aa1559c10fc55f7f0dceec71ae01d3",
+        "components/PublicExtension/redux/publicExtensionReducer.ts": "83d76714a265ccef980773b9df031bcbc074b56a742a447de551d6f8f5ac8f56",
+        "components/Fields/FieldRenderer/LinkedRecordsField/getPrefillQueryForChildExtension.ts": "cf49df4430ddf7df157d8f445601ff43fd92206f4d18adc8d8f75d0e43287f51",
+        "types/airtable/getReadableStringFromAirtableValue.ts": "ef3513f1c8a1b773436a1f23600b48e2665f3ed4bf3a3d11e6aeff656991d426",
+        "types/extensions/miniExt-field-configs/writeTypeForField-helpers.ts": "0706072d80bdefbbda17b931e6371c909617ed06dde944d1debcc72db3bd14aa",
+        "types/airtable/types.ts": "6426f0039a1dd4876c8dda07fd93e919c763b1418e3b2c4c75e1628c8d0726a4",
+        "types/helpers/isValueEmptyForField.ts": "0d4c94bfeeb88d2d180957861d8e1d34f40eeee64d921ba26b9aa5cf16a2785d"
+    },
+    "generator": "scripts/generate-linked-child-fixture.mjs",
+    "generatorSha256": "d3f51d99683e2cba344a4233e60af85443a7eba7483780ebaceded5f350a35ad",
+    "proof": "Pinned canonical helper and expression execution; synthetic pure policy only. Reconciliation executes the canonical inverse predicate and append/remove expressions; no-op exemption refusal is the conservative SDK policy, not full canonical reducer provenance. No full reducer, browser or persistence evidence.",
+    "createCases": [
+        {
+            "name": "shared-default",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create"
+            },
+            "expected": "form_shared"
+        },
+        {
+            "name": "shared-explicit",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create"
+            },
+            "expected": "form_shared"
+        },
+        {
+            "name": "separate",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "different-forms",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create"
+            },
+            "expected": "form_create"
+        },
+        {
+            "name": "create-only",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": false,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create"
+            },
+            "expected": "form_create"
+        },
+        {
+            "name": "disabled",
+            "config": {
+                "allowCreatingRecords": false,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create"
+            },
+            "expected": null
+        }
+    ],
+    "capacityCases": [
+        {
+            "name": "physical-single-empty",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create"
+            },
+            "physicalSingle": true,
+            "selectedCount": 0,
+            "expected": {
+                "prefersSingleRecordLink": true,
+                "canAddMoreRecordsToCell": true
+            }
+        },
+        {
+            "name": "physical-single-full",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create"
+            },
+            "physicalSingle": true,
+            "selectedCount": 1,
+            "expected": {
+                "prefersSingleRecordLink": true,
+                "canAddMoreRecordsToCell": false
+            }
+        },
+        {
+            "name": "unlimited-overrides-physical",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create",
+                "maxRecordsToSelectOrCreate": "unlimited"
+            },
+            "physicalSingle": true,
+            "selectedCount": 2,
+            "expected": {
+                "prefersSingleRecordLink": false,
+                "canAddMoreRecordsToCell": true
+            }
+        },
+        {
+            "name": "configured-one",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create",
+                "maxRecordsToSelectOrCreate": "1"
+            },
+            "physicalSingle": false,
+            "selectedCount": 1,
+            "expected": {
+                "prefersSingleRecordLink": true,
+                "canAddMoreRecordsToCell": false
+            }
+        },
+        {
+            "name": "custom-below",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create",
+                "customMaxRecordsToSelect": 3
+            },
+            "physicalSingle": false,
+            "selectedCount": 2,
+            "expected": {
+                "prefersSingleRecordLink": false,
+                "canAddMoreRecordsToCell": true
+            }
+        },
+        {
+            "name": "custom-at",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create",
+                "customMaxRecordsToSelect": 3
+            },
+            "physicalSingle": false,
+            "selectedCount": 3,
+            "expected": {
+                "prefersSingleRecordLink": false,
+                "canAddMoreRecordsToCell": false
+            }
+        },
+        {
+            "name": "custom-zero",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "formsForEditingAndCreating": "same-form",
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForCreating": "form_create",
+                "customMaxRecordsToSelect": 0
+            },
+            "physicalSingle": false,
+            "selectedCount": 0,
+            "expected": {
+                "prefersSingleRecordLink": false,
+                "canAddMoreRecordsToCell": false
+            }
+        }
+    ],
+    "reconciliationCases": [
+        {
+            "name": "create-append",
+            "parentMode": "create",
+            "nativeIds": ["rec_other"],
+            "savedId": "rec_new",
+            "inverseIds": [],
+            "expected": {
+                "nativeIds": ["rec_other", "rec_new"],
+                "changed": true,
+                "exemptCreatedRecord": true
+            }
+        },
+        {
+            "name": "create-noop-duplicates",
+            "parentMode": "create",
+            "nativeIds": ["rec_new", "rec_new"],
+            "savedId": "rec_new",
+            "inverseIds": [],
+            "expected": {
+                "nativeIds": ["rec_new", "rec_new"],
+                "changed": false,
+                "exemptCreatedRecord": false
+            }
+        },
+        {
+            "name": "edit-linked-append",
+            "parentMode": "edit",
+            "nativeIds": ["rec_other"],
+            "savedId": "rec_new",
+            "inverseIds": ["rec_parent"],
+            "expected": {
+                "nativeIds": ["rec_other", "rec_new"],
+                "changed": true,
+                "exemptCreatedRecord": true
+            }
+        },
+        {
+            "name": "edit-unlinked-removes-all",
+            "parentMode": "edit",
+            "nativeIds": ["rec_new", "rec_other", "rec_new"],
+            "savedId": "rec_new",
+            "inverseIds": [],
+            "expected": {
+                "nativeIds": ["rec_other"],
+                "changed": true,
+                "exemptCreatedRecord": false
+            }
+        },
+        {
+            "name": "edit-unlinked-noop",
+            "parentMode": "edit",
+            "nativeIds": ["rec_other"],
+            "savedId": "rec_new",
+            "inverseIds": [],
+            "expected": {
+                "nativeIds": ["rec_other"],
+                "changed": false,
+                "exemptCreatedRecord": false
+            }
+        }
+    ],
+    "prefillCases": [
+        { "name": "text-0", "value": null, "expected": null },
+        { "name": "text-1", "value": "", "expected": null },
+        { "name": "text-2", "value": "  ", "expected": null },
+        {
+            "name": "text-3",
+            "value": "prefill_Title=one",
+            "expected": "prefill_Title=one"
+        },
+        {
+            "name": "text-4",
+            "value": "  prefill_Title=two  ",
+            "expected": "  prefill_Title=two  "
+        }
+    ],
+    "emptyCases": [
+        { "name": "empty-0", "value": null, "expected": true },
+        { "name": "empty-1", "value": "", "expected": true },
+        { "name": "empty-2", "value": "  ", "expected": true }
+    ]
+}

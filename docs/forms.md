@@ -1861,3 +1861,176 @@ and explicitly cover conservative unsupported-validation refusals. Executable in
 ESM/CJS tests prove bounded local
 navigation and synthetic validation-response dispatch, not live persistence or
 complete hosted multipage parity. Live acceptance remains separately tracked.
+
+## Configured linked child CREATE
+
+A top-level Form binding can coordinate an explicitly configured linked child
+CREATE in an ordinary modal. Acquire the owner outside the mounted UI and keep
+it with the parent binding:
+
+```ts
+import {
+    RecoveryJournal,
+    type FormFieldBindings,
+} from '@miniextensions/sdk/forms';
+declare const parent: FormFieldBindings;
+declare const fieldId: string;
+declare const acceptedLoadVersion: number;
+const childOwner = parent.linkedChild(fieldId, {
+    journal: new RecoveryJournal(),
+    loadVersion: acceptedLoadVersion,
+});
+```
+
+The following presentation factory captures the borrowed owner before mounting.
+For a real input, replace the example title button with your input renderer.
+
+```tsx
+import { createElement as h, useEffect, useState } from 'react';
+import { AirtableForm } from '@miniextensions/sdk/react';
+import {
+    createFormRenderScope,
+    type FormRenderScope,
+} from '@miniextensions/sdk/ui';
+import type {
+    FormLinkedChildOwner,
+    FormFieldBinding,
+} from '@miniextensions/sdk/forms';
+
+export function createLinkedChildPanel(
+    owner: FormLinkedChildOwner,
+    parentField: FormFieldBinding
+) {
+    return function LinkedChild() {
+        const [visible, setVisible] = useState(
+            () => parentField.getSnapshot().visibility.type === 'visible'
+        );
+        useEffect(
+            () =>
+                parentField.subscribe((s) =>
+                    setVisible(s.visibility.type === 'visible')
+                ),
+            []
+        );
+        const [snapshot, setSnapshot] = useState(() => owner.getSnapshot());
+        useEffect(() => owner.subscribe(setSnapshot), []);
+        const { child, pages, revision, phase } = snapshot;
+        const [scope, setScope] = useState<FormRenderScope | null>(null);
+        useEffect(() => {
+            if (!child || !pages) {
+                setScope(null);
+                return;
+            }
+            const presentation = createFormRenderScope({
+                fields: child,
+                pages,
+                isCurrent: () => owner.getSnapshot().child === child,
+                configurationRevision: () => 0,
+            });
+            setScope(presentation);
+            return () => presentation.destroy();
+        }, [child, pages]);
+        if (!visible || phase === 'retired' || phase === 'unavailable')
+            return null;
+        return h(
+            'section',
+            null,
+            h(
+                'button',
+                {
+                    type: 'button',
+                    id: 'create',
+                    disabled: !snapshot.canCreate,
+                    onClick: () => owner.openCreate(),
+                },
+                'Create'
+            ),
+            scope &&
+                h(AirtableForm, {
+                    scope,
+                    renderers: {
+                        renderSingleLineTextField: (p) =>
+                            p.capability.type === 'editable'
+                                ? h(
+                                      'button',
+                                      {
+                                          type: 'button',
+                                          id: 'edit',
+                                          onClick: () =>
+                                              p.capability.type ===
+                                                  'editable' &&
+                                              p.capability.setValue(
+                                                  'Edited child'
+                                              ),
+                                      },
+                                      p.value
+                                  )
+                                : h('span', null, p.value),
+                    },
+                    children: (s) =>
+                        h(
+                            'div',
+                            null,
+                            ...s.fields.map((f) =>
+                                h('div', { key: f.fieldId }, f.node)
+                            )
+                        ),
+                }),
+            child &&
+                h(
+                    'button',
+                    {
+                        type: 'button',
+                        id: 'save',
+                        onClick: () => owner.save(revision),
+                    },
+                    'Save'
+                ),
+            h(
+                'button',
+                { type: 'button', id: 'close', onClick: () => owner.close() },
+                'Close'
+            ),
+            h('output', { id: 'completion' }, snapshot.completion)
+        );
+    };
+}
+```
+
+The owner resolves the configured child extension, freezes its parent prefill,
+and owns the child binding and page owner. Applications do not supply a child
+record ID, Save receipt, or validation exemption. Construction, subscription,
+and rendering perform no load or Save. Create invokes `openCreate()`; Save
+invokes `save(snapshot.revision)` using the revision captured by the rendered
+button; Close invokes `close()`. Give every button an explicit `type="button"`.
+
+A React presentation borrows this owner. Subscribe in an effect and return only
+the unsubscribe function. Render `snapshot.child` using `AirtableForm` with a
+`createFormRenderScope` that borrows `snapshot.pages`; create and destroy that
+presentation scope in an effect. Do not destroy the parent binding, child
+binding, or page owner during UI unmount. StrictMode effect cleanup and a later
+remount preserve the child draft. Guard retired or unavailable snapshots with
+`return null`, and use the parent field's visibility to suppress a hidden field's
+presentation. The installed-package checks execute this recipe against installed
+ESM and CJS entrypoints and actual React.
+
+This slice supports final one-page Save for an ordinary child CREATE. Prepared
+Review, compute, captcha, automatic submission, nested child creation, child
+EDIT, and multipage child flows are outside its supported scope. Existing child
+validation and backend validation remain authoritative. Successful reconciliation
+updates the shared parent's native linked IDs, rich presentation and dirty state;
+other parent values remain in the shared draft.
+
+Child linked fields with enabled dynamic filtering or nonempty conditional-filter
+descriptors are refused before exposing child controls, including hidden or
+read-only fields. This coordinator does not derive child cascade values; absent,
+null or empty descriptor lists do not introduce that dependency.
+
+Inspect `snapshot.completion`: `reconciled` means the known saved child was linked
+into the current parent draft. A capacity or parent-state race can produce
+`saved-not-reconciled`; the child has already saved, so do not submit it again.
+A true child-session retirement or interrupted dispatched Save can leave an
+unknown outcome. Keep the recovery journal, inspect the outcome, and explicitly
+reload or resolve it before proceeding. There is no automatic mutation retry.
+The installed checks use synthetic load, validation and known-saved responses;
+they demonstrate the recipe and native reconciliation, not live persistence.

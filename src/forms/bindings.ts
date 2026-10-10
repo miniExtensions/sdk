@@ -50,6 +50,12 @@ import {
     createFormLinkedRecordsOwner,
     type FormLinkedRecordsFacet,
 } from './linkedRecords.js';
+import {
+    createFormLinkedChildOwner,
+    type FormLinkedChildOwner,
+    type FormLinkedChildRecovery,
+} from './linkedChild.js';
+import { withFormWriteAdmission } from './writeAdmission.js';
 
 export type FieldActionResult =
     | { accepted: true }
@@ -120,6 +126,11 @@ export type FormFieldBindings = {
     field(fieldId: string): FormFieldBinding;
     /** Read-only rich data; constructing/subscribing never dispatches a read. */
     linkedRecords(fieldId: string): FormLinkedRecordsFacet;
+    /** Explicit configured modal CREATE; does not accept record IDs or completion receipts. */
+    linkedChild(
+        fieldId: string,
+        recovery: FormLinkedChildRecovery
+    ): FormLinkedChildOwner;
     refresh(): void;
     setLinkedLoader(fieldId: string, loader: SelectionLoader): void;
     /** Accepted field-specific presentation only, not a table-wide cache. */
@@ -178,6 +189,20 @@ export function createFormFieldBindings(
     const choiceBlocked = () =>
         [...choiceCreators.values()].some((model) => model.blocksForm());
     const attachments = new Map<string, FormAttachmentController>();
+    const linkedChildren = new Map<
+        string,
+        {
+            model: ReturnType<typeof createFormLinkedChildOwner>;
+            journal: FormLinkedChildRecovery['journal'];
+            loadVersion: number;
+        }
+    >();
+    const retainedChildren = new Set<
+        ReturnType<typeof createFormLinkedChildOwner>
+    >();
+    const constructingLinkedChildren = new Set<string>();
+    const childBlocked = () =>
+        [...retainedChildren].some((model) => model.blocksForm());
     const attachmentBlocked = () =>
         [...attachments.values()].some((model) => model.blocksForm());
     let retired = false;
@@ -570,6 +595,149 @@ export function createFormFieldBindings(
             if (!current()) throw new Error('This Form owner is retired.');
             return structuredClone(loaded);
         },
+        linkedChild: (id, recovery) => {
+            if (constructingLinkedChildren.has(id))
+                throw new Error(
+                    'This linked child owner is being initialized.'
+                );
+            constructingLinkedChildren.add(id);
+            try {
+                if (!current()) throw new Error('This Form owner is retired.');
+                const previous = linkedChildren.get(id);
+                if (
+                    previous?.journal === recovery.journal &&
+                    previous.loadVersion === recovery.loadVersion
+                )
+                    return previous.model;
+                if (previous) {
+                    previous.model.dispose();
+                    linkedChildren.delete(id);
+                    if (!previous.model.blocksForm())
+                        retainedChildren.delete(previous.model);
+                }
+                const handle = openLoadedFormDraft({
+                    store,
+                    loaded,
+                    parent: options.parent,
+                });
+                const fieldLease = () => {
+                    const snapshot = field(id).getSnapshot();
+                    return (
+                        current() &&
+                        pendingRead === null &&
+                        !snapshot.retired &&
+                        !snapshot.readOnly &&
+                        snapshot.visibility.type === 'visible' &&
+                        !attachmentBlocked() &&
+                        !choiceBlocked() &&
+                        (options.canWriteField?.(id) ?? true) &&
+                        (options.canWrite?.() ?? true) &&
+                        ['ready', 'saved', 'validation-error'].includes(
+                            controller.getState().status
+                        )
+                    );
+                };
+                let model: ReturnType<
+                    typeof createFormLinkedChildOwner
+                > | null = null;
+                model = createFormLinkedChildOwner({
+                    ...recovery,
+                    form: owner,
+                    fieldId: id,
+                    parentHandle: handle,
+                    client: options.client,
+                    getClient: () => options.client,
+                    getScope: () => options.getScope(),
+                    configurationRevision: () =>
+                        options.configurationRevision?.() ?? 0,
+                    parentCurrent: () => current(),
+                    canAccept: () =>
+                        fieldLease() &&
+                        [...retainedChildren].every(
+                            (other) => other === model || !other.blocksForm()
+                        ),
+                    createChild: (child) =>
+                        createFormFieldBindings({
+                            ...child,
+                            client: options.client,
+                            getScope: () => options.getScope(),
+                            // One independent native store per genuine create intent.
+                            // No synthetic Portal parent scope and no saved-create reuse.
+                            store: new FormDraftStore<AirtableValue>(),
+                        }),
+                    commit: (
+                        value,
+                        expectedDraftRevision,
+                        afterCommit,
+                        ownsIntent,
+                        unchanged = false
+                    ) => {
+                        const admission = () => {
+                            if (!fieldLease()) return false;
+                            // Observe the parent lease after permission callbacks;
+                            // its own callbacks may also change the native draft.
+                            return (
+                                current() &&
+                                ownsIntent() &&
+                                store.revision(handle) ===
+                                    expectedDraftRevision &&
+                                linkedValues(value) !== null
+                            );
+                        };
+                        if (unchanged) {
+                            if (!admission()) return false;
+                            const actual = linkedValues(store.read(handle, id));
+                            const expected = linkedValues(value);
+                            if (
+                                !actual ||
+                                !expected ||
+                                actual.length !== expected.length ||
+                                actual.some(
+                                    (entry, index) => entry !== expected[index]
+                                )
+                            )
+                                return false;
+                            afterCommit();
+                            return true;
+                        }
+                        return controller.write(
+                            id,
+                            value,
+                            withFormWriteAdmission(afterCommit, admission)
+                        );
+                    },
+                    prepareCreated: (result) => {
+                        owner.linkedRecords(id);
+                        const table =
+                            result.raw.context.type !== 'direct-url'
+                                ? result.raw.context
+                                      .newTableIdsToLinkedTableStates[
+                                      result.raw.tableId
+                                  ]
+                                : null;
+                        return (
+                            linkedRecordsOwner?.prepareCreated(
+                                id,
+                                result.raw.record,
+                                table
+                                    ? { airtableFields: table.airtableFields }
+                                    : null
+                            ) ?? null
+                        );
+                    },
+                    changed: refresh,
+                });
+                linkedChildren.set(id, {
+                    model,
+                    journal: recovery.journal,
+                    loadVersion: recovery.loadVersion,
+                });
+                retainedChildren.add(model);
+                return model;
+            } finally {
+                constructingLinkedChildren.delete(id);
+            }
+        },
         attachment: (id, recovery, adapter) => {
             if (!current()) throw new Error('This Form owner is retired.');
             let model = attachments.get(id);
@@ -730,6 +898,7 @@ export function createFormFieldBindings(
                 !(options.canWrite?.() ?? true) ||
                 attachmentBlocked() ||
                 choiceBlocked() ||
+                childBlocked() ||
                 !current() ||
                 [...entries.values()].some((entry) => {
                     const state = entry.binding.getSnapshot();
@@ -973,6 +1142,10 @@ export function createFormFieldBindings(
                 attachments.clear();
                 for (const model of choiceCreators.values()) model.dispose();
                 choiceCreators.clear();
+                for (const child of retainedChildren) child.dispose();
+                linkedChildren.clear();
+                for (const child of retainedChildren)
+                    if (!child.blocksForm()) retainedChildren.delete(child);
                 if (!ownsReplacement()) return false;
                 const handle = openLoadedFormDraft({
                     store,
@@ -1027,6 +1200,8 @@ export function createFormFieldBindings(
             if (disposed) return;
             disposed = true;
             retired = true;
+            for (const child of retainedChildren) child.dispose();
+            linkedChildren.clear();
             readGeneration++;
             const previous = pendingRead;
             pendingRead = null;

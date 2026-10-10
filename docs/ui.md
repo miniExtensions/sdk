@@ -425,11 +425,20 @@ Readonly or computed schema policy preserves all current choices for display,
 including those outside a static allowlist. Configuration-preview mode on an
 otherwise editable schema retains that schema's static limits.
 
-The supported operators, physical field types and nested AND/OR groups are
-those of the scalar compiler. Both modes block unsupported conditions; strict
+Supported option rules include the scalar compiler's operators and nested AND/OR
+groups, plus exact-ID direct noncomputed single-select and multi-select predicates.
+Single-select supports `is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`, `isNotEmpty`;
+multi-select supports `hasAnyOf`, `hasAllOf`, `hasNoneOf`, `isExactly`, `isEmpty`,
+`isNotEmpty`. Operands are exact choice IDs; native values remain names. Deleted
+operand IDs retain the compiler's unknown/partial-known-choice semantics.
+Select dependencies are checked on the original AST and native record, including
+rules compiled to `FALSE()`. Name references, computed select drivers, physical
+type drift and malformed native select values refuse conservatively. Both modes
+block unsupported conditions; strict
 mode rejects incomplete rules, while compatibility mode can omit incomplete
-rules when a complete sibling survives. A missing metadata driver follows the
-compiler's `FALSE()` leaf semantics, so an OR sibling can still match. The
+rules when a complete sibling survives. A missing scalar metadata driver follows
+the compiler's `FALSE()` leaf semantics, so an OR sibling can still match. Missing
+select metadata blocks through original-AST inspection. The
 availability helper does not promote compiler warnings to failures. A failed
 compile or evaluation blocks the whole field with no eligible options.
 Emitted field references with ambiguous current ID/name metadata, including a
@@ -442,19 +451,20 @@ record values or condition IDs.
 Record projection belongs to the caller. Supply the same accepted native
 record and metadata used by your presentation, including any required hidden
 field or linked-value projection. The helper neither reconstructs hidden
-fields nor hydrates linked records. The browser starter supplies
-`createScalarFormRecordProjection` for supported one-page and multipage rules
-with current noncomputed scalar dependencies and canonical ordered sections. It evaluates every field
+fields nor hydrates linked records. The Form owner and browser starter use the
+internal Form projection for supported one-page and multipage rules
+with current noncomputed scalar/select dependencies and canonical ordered sections. It evaluates every field
 predicate against the same complete accepted draft, then removes condition-hidden
 IDs only from a detached evaluation copy and recomputes after accepted edits.
 Configured choices use this projected record in a separate second phase; the
-adapter retains its configured, noncomputed scalar-driver guards. Hidden values
+adapter retains its configured, noncomputed driver guards. Hidden values
 remain in the complete native Save record. Active linked filtering and referenced
 linked/lookup/computed drivers remain unavailable; native empty hiding and
 readonly display do not independently prune the conditional copy. Section plus
 active edit empty hiding remains blocked. The older
 `createFlatScalarFormRecordProjection` export retains its flat contract and
-section refusals; the starter opts into the section-capable helper. See the
+section refusals; the public scalar projection exports also retain their select
+driver refusal. See the
 [projection rules](forms.md#one-page-conditional-field-visibility); broader
 projection and presentation workflows remain application-owned.
 

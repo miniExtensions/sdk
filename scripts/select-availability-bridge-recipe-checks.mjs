@@ -348,8 +348,275 @@ export async function checkSelectAvailabilityBridgeRecipe({
             await act(async () => root.unmount());
             root = undefined;
         }
+        // Run the same shipped renderers with bounded select drivers. Native
+        // selected names remain removable even when absent from NEW options.
+        for (const driverMultiple of [false, true]) {
+            const driverType = driverMultiple
+                ? 'multipleSelects'
+                : 'singleSelect';
+            const loaded = portalRecipeFixtures.makeForm({
+                childExtensionInfo: { accessType: { type: 'create' } },
+            });
+            const driverRule = conditionalRule(
+                driverMultiple ? 'hasAnyOf' : 'is',
+                driverMultiple ? ['allow'] : 'allow',
+                driverType
+            );
+            Object.assign(loaded.payload, {
+                hasParentExtension: false,
+                fieldIdsInForm: ['gate', 'driver', 'single'],
+                fieldIdsToSchemas: {
+                    gate: conditionalField('gate'),
+                    driver: conditionalField(
+                        'driver',
+                        driverType,
+                        {
+                            conditionalFields: conditionalRule(
+                                'is',
+                                'show',
+                                'singleLineText',
+                                { type: 'id', id: 'gate' }
+                            ),
+                        },
+                        {
+                            config: {
+                                type: driverType,
+                                options: {
+                                    choices: [
+                                        { id: 'allow', name: 'Allow' },
+                                        { id: 'deny', name: 'Deny' },
+                                    ],
+                                },
+                            },
+                        }
+                    ),
+                    single: conditionalField(
+                        'single',
+                        driverType,
+                        {
+                            headerSectionTitle: 'Choices on another page',
+                            enableConditionalOptions: true,
+                            conditionsForOptions: [
+                                {
+                                    id: 'select-driver-rule',
+                                    config: {
+                                        optionForConditions: 'alpha',
+                                        conditionsForOption: driverRule,
+                                    },
+                                },
+                            ],
+                        },
+                        {
+                            config: {
+                                type: driverType,
+                                options: {
+                                    choices: [{ id: 'alpha', name: 'Alpha' }],
+                                },
+                            },
+                        }
+                    ),
+                },
+                formRecord: {
+                    type: 'create',
+                    data: {
+                        gate: 'show',
+                        driver: driverMultiple ? ['Deny', 'Deny'] : 'Deny',
+                        single: driverMultiple ? ['Alpha', 'Alpha'] : 'Alpha',
+                        native: { exact: ['untouched', 'untouched'] },
+                    },
+                },
+                formFieldIdsWithUnsavedChanges: ['native'],
+                urlPrefilledFieldIds: [],
+                publicFields: {
+                    type: 'form',
+                    state: { multiPageFormMode: 'multi-page' },
+                },
+            });
+            const saves = [];
+            const forbidden = () => {
+                io++;
+                throw Error('Unexpected renderer I/O');
+            };
+            const saveOptions = {
+                captchaVal: null,
+                isComputeMode: false,
+                searchQuery: { exact: 'retained' },
+                context: { type: 'direct-url' },
+                conditionalLinkedRecordFieldIdsToFilteringValues: {},
+            };
+            const fields = forms.createFormFieldBindings({
+                loaded,
+                client: {
+                    getSession: () => ({}),
+                    request: forbidden,
+                    forms: {
+                        save: async (input) => {
+                            saves.push(structuredClone(input));
+                            return {
+                                type: 'error',
+                                formValidationErrors: [],
+                                formErrors: {},
+                            };
+                        },
+                        addSelectOption: forbidden,
+                    },
+                },
+                getScope: () => ({
+                    ownerId: `select-recipe-${driverType}`,
+                    revision: 0,
+                }),
+                saveOptions,
+            });
+            const host = ui.createFormFieldRendererHost({
+                fields,
+                fieldId: 'single',
+                isCurrent: () => true,
+                configurationRevision: () => 0,
+            });
+            let custom = mountCustomField(
+                fields.field('single'),
+                window.document
+            );
+            window.document.body.append(custom.node);
+            const before = structuredClone(
+                fields.controller.getState().draft.data
+            );
+            const options = () =>
+                fields
+                    .field('single')
+                    .selection.getState()
+                    .options.map((option) => option.value);
+            const assertRetained = () => {
+                assert.deepEqual(
+                    fields.field('single').getSnapshot().value,
+                    before.single
+                );
+                assert.match(container.textContent, /Alpha/);
+                assert.match(custom.node.textContent, /Alpha/);
+            };
+            try {
+                root = createRoot(container);
+                await act(async () =>
+                    root.render(createElement(CustomFields, { host }))
+                );
+                assert.deepEqual(options(), []);
+                assertRetained();
+                assert.match(container.textContent, /No choices available/);
+                assert.match(custom.node.textContent, /No choices available/);
+                assert.equal(io, 0);
+                await fields.save();
+                assert.deepEqual(saves[0], {
+                    ...saveOptions,
+                    extensionAccessToken: loaded.payload.extensionAccessToken,
+                    formRecord: { type: 'create', data: before },
+                    formFieldIdsWithUnsavedChanges: ['native'],
+                });
+                await act(async () => root.unmount());
+                custom.destroy();
+                custom = mountCustomField(
+                    fields.field('single'),
+                    window.document
+                );
+                window.document.body.append(custom.node);
+                root = createRoot(container);
+                await act(async () =>
+                    root.render(createElement(CustomFields, { host }))
+                );
+                assert.deepEqual(options(), []);
+                assertRetained();
+                await act(async () =>
+                    fields
+                        .field('driver')
+                        .setValue(driverMultiple ? ['Allow'] : 'Allow')
+                );
+                assert.deepEqual(options(), ['Alpha']);
+                assertRetained();
+                assert.equal(
+                    container.textContent.includes('No choices available'),
+                    false
+                );
+                assert.equal(
+                    custom.node.textContent.includes('No choices available'),
+                    false
+                );
+                await fields.save();
+                assert.deepEqual(saves[1], {
+                    ...saveOptions,
+                    extensionAccessToken: loaded.payload.extensionAccessToken,
+                    formRecord: {
+                        type: 'create',
+                        data: {
+                            ...before,
+                            driver: driverMultiple ? ['Allow'] : 'Allow',
+                        },
+                    },
+                    formFieldIdsWithUnsavedChanges: ['native', 'driver'],
+                });
+                // Hide the driver using an accepted native gate edit. The
+                // target is on a later page; projection drops the driver only
+                // from conditions and leaves its native draft intact.
+                await act(async () => fields.field('gate').setValue('hide'));
+                assert.equal(
+                    fields.field('driver').getSnapshot().visibility.type,
+                    'hidden'
+                );
+                assert.deepEqual(options(), []);
+                assertRetained();
+                assert.deepEqual(
+                    fields.field('driver').getSnapshot().value,
+                    driverMultiple ? ['Allow'] : 'Allow'
+                );
+                const retainedButton = [
+                    ...container.querySelectorAll('button'),
+                ].find(
+                    (button) => button.getAttribute('aria-pressed') === 'true'
+                );
+                assert.ok(retainedButton);
+                assert.equal(retainedButton.disabled, false);
+                await act(async () => retainedButton.click());
+                assert.deepEqual(
+                    fields.field('single').getSnapshot().value,
+                    driverMultiple ? [] : null
+                );
+                // Ineligible Alpha cannot be admitted again by either model.
+                await act(async () =>
+                    fields.field('single').selection.choose(['Alpha'])
+                );
+                assert.deepEqual(
+                    fields.field('single').getSnapshot().value,
+                    driverMultiple ? [] : null
+                );
+                await fields.save();
+                assert.deepEqual(saves[2], {
+                    ...saveOptions,
+                    extensionAccessToken: loaded.payload.extensionAccessToken,
+                    formRecord: {
+                        type: 'create',
+                        data: {
+                            ...before,
+                            gate: 'hide',
+                            driver: driverMultiple ? ['Allow'] : 'Allow',
+                            single: driverMultiple ? [] : null,
+                        },
+                    },
+                    formFieldIdsWithUnsavedChanges: [
+                        'native',
+                        'driver',
+                        'gate',
+                        'single',
+                    ],
+                });
+                assert.equal(io, 0);
+            } finally {
+                custom.destroy();
+                await act(async () => root.unmount());
+                root = undefined;
+                host.dispose();
+                fields.destroy();
+            }
+        }
         assert.equal(io, 0);
-        return 8;
+        return 10;
     } finally {
         if (root)
             await (

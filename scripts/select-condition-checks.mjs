@@ -61,7 +61,12 @@ for (const type of ['singleSelect','multipleSelects']) {
   for(const project of [createFlatScalarFormRecordProjection,createScalarFormRecordProjection]) assert.equal(project({fieldIds:['target'],fieldIdsToSchemas:{target},airtableFields:input.airtableFields,data,recordId:'rec',invalidConditionMode:'strict'}).type,'blocked');
   const optionField={fieldType:'singleSelect',airtableField:{...base,id:'option',name:'Option'},miniExtConfig:{enableConditionalOptions:true,conditionsForOptions:[{config:{optionForConditions:'sel_a',conditionsForOption:conditions}}]}};
   const availability=resolveSelectFieldAvailability({field:optionField,airtableFields:input.airtableFields,recordForConditionEvaluation:{id:'rec',fields:data},mode:'runtime',invalidConditionMode:'strict'});
-  assert.equal(availability.status,'blocked'); assert.equal(availability.diagnostics[0].code,'unsupported-condition');checks++;
+  if(type==='singleSelect' && Array.isArray(value)) {
+   assert.equal(availability.status,'blocked'); assert.equal(availability.diagnostics[0].code,'invalid-condition');
+  } else {
+   assert.equal(availability.status,'ready'); assert(!availability.options.some(option=>option.id==='sel_a'));
+  }
+  checks++;
  }
 }
 for(const logicalOperator of ['and','or']) for(const mode of ['strict','compatibility']) for(const op of ['is','isNot']) {

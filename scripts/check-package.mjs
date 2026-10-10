@@ -16,6 +16,10 @@ import {
     checkLinkedChildEditConsumer,
     linkedChildEditTypedConsumer,
 } from './linked-child-edit-consumer-checks.mjs';
+import {
+    checkLinkedChildEditFreshnessConsumer,
+    linkedChildEditFreshnessConsumerCheckCount,
+} from './linked-child-edit-freshness-consumer-checks.mjs';
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
@@ -1073,6 +1077,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(linkedChildEditProof, 34);
     console.log(
         `Installed configured linked-child edit: ${linkedChildEditProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
+    );
+    const editFreshnessProof = await checkLinkedChildEditFreshnessConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(
+        editFreshnessProof,
+        linkedChildEditFreshnessConsumerCheckCount
+    );
+    console.log(
+        `Installed linked-child Edit freshness: ${editFreshnessProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
     );
     const selectedPolicyProof = await checkSelectedRecordPolicyConsumer({
         consumerDirectory: temporaryDirectory,

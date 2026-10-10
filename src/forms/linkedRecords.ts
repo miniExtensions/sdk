@@ -9,6 +9,8 @@ import type {
 import type { FormFieldBinding } from './bindings.js';
 import {
     acceptedLinkedRecordPageTicket,
+    acceptedLinkedRecordReadStamp,
+    nextLinkedRecordReadStamp,
     sameLinkedRecordTable,
 } from '../ui/linkedRecordPages.js';
 import {
@@ -128,6 +130,15 @@ export function createFormLinkedRecordsOwner(options: {
     let retired = false;
     let generation = 0;
     let accepted: LoadSelectedRecordsResult | null = null;
+    type Table = FormLinkedRecordsSnapshot['table'];
+    type EditedPresentation = {
+        value: { record: AirtableRecord; table: Table } | null;
+        readStamp: number;
+    };
+    // A facade or option-loader replacement does not replace this Form owner.
+    // Keep edited data/tombstones here until retirement or a newer trusted read
+    // actually returns that target. Omitted targets cannot erase provenance.
+    const editedFields = new Map<string, Map<string, EditedPresentation>>();
     let phase: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
     let error: string | null = null;
     let active: { abort: AbortController; promise: Promise<boolean> } | null =
@@ -177,6 +188,8 @@ export function createFormLinkedRecordsOwner(options: {
         retired = true;
         generation++;
         accepted = null;
+        for (const edited of editedFields.values()) edited.clear();
+        editedFields.clear();
         const previous = active;
         active = null;
         for (const entry of [...facets.values()]) entry.destroy();
@@ -203,6 +216,7 @@ export function createFormLinkedRecordsOwner(options: {
             let installed = false;
             try {
                 if (!owns()) return false;
+                const readStamp = nextLinkedRecordReadStamp();
                 const result =
                     await options.client.linkedRecords.loadSelectedRecords(
                         {
@@ -216,6 +230,37 @@ export function createFormLinkedRecordsOwner(options: {
                     throw new Error('Malformed linked records.');
                 const detached = structuredClone(result);
                 if (!owns()) return false;
+                for (const [fieldId, editedOptions] of editedFields) {
+                    const schema = loaded.payload.fieldIdsToSchemas[fieldId];
+                    if (
+                        schema?.airtableField.config.type !==
+                        'multipleRecordLinks'
+                    )
+                        continue;
+                    const table =
+                        detached[
+                            schema.airtableField.config.options.linkedTableId
+                        ];
+                    if (!table) continue;
+                    const originalIds = new Set(
+                        ids(originalRecordData[fieldId]) ?? []
+                    );
+                    for (const [id, edited] of editedOptions) {
+                        if (
+                            !originalIds.has(id) ||
+                            readStamp <= edited.readStamp ||
+                            !Object.hasOwn(table.recordIdsToAirtableRecords, id)
+                        )
+                            continue;
+                        editedOptions.set(id, {
+                            value: structuredClone({
+                                record: table.recordIdsToAirtableRecords[id]!,
+                                table: { airtableFields: table.airtableFields },
+                            }),
+                            readStamp,
+                        });
+                    }
+                }
                 accepted = detached;
                 phase = 'ready';
                 installed = true;
@@ -270,7 +315,6 @@ export function createFormLinkedRecordsOwner(options: {
         const config = schema.miniExtConfig;
         let stopped = false;
         let stop = () => {};
-        type Table = FormLinkedRecordsSnapshot['table'];
         const selectedOptions = new Map<
             string,
             { record: AirtableRecord; table: Table }
@@ -280,14 +324,12 @@ export function createFormLinkedRecordsOwner(options: {
             { record: AirtableRecord; table: Table }
         >();
         const createdRecordIds = new Set<string>();
-        // An edited record or tombstone outranks pre-Save accepted data.
-        const editedOptions = new Map<
-            string,
-            {
-                value: { record: AirtableRecord; table: Table } | null;
-                ticket: number;
-            }
-        >();
+        let editedOptions = editedFields.get(fieldId);
+        if (!editedOptions) {
+            editedOptions = new Map();
+            editedFields.set(fieldId, editedOptions);
+        }
+        const fieldEdits = editedOptions;
         const createdPresentationTickets = new Map<string, number>();
         const listeners = new Set<
             (snapshot: FormLinkedRecordsSnapshot) => void
@@ -332,15 +374,19 @@ export function createFormLinkedRecordsOwner(options: {
                 if (!selected.has(id)) createdRecordIds.delete(id);
             if (rich?.linkedTableId === linkedTableId) {
                 for (const record of rich.records) {
-                    const edited = editedOptions.get(record.id);
-                    if (
-                        edited &&
-                        acceptedLinkedRecordPageTicket(
-                            binding.selection,
-                            record.id
-                        ) > edited.ticket
-                    )
-                        editedOptions.delete(record.id);
+                    const edited = fieldEdits.get(record.id);
+                    const readStamp = acceptedLinkedRecordReadStamp(
+                        binding.selection,
+                        record.id
+                    );
+                    if (edited && readStamp > edited.readStamp)
+                        fieldEdits.set(record.id, {
+                            value: structuredClone({
+                                record,
+                                table: rich.table,
+                            }),
+                            readStamp,
+                        });
                     const createdTicket = createdPresentationTickets.get(
                         record.id
                     );
@@ -377,7 +423,7 @@ export function createFormLinkedRecordsOwner(options: {
             const candidates =
                 rich?.linkedTableId === linkedTableId
                     ? rich.records.flatMap((record) => {
-                          const edited = editedOptions.get(record.id);
+                          const edited = fieldEdits.get(record.id);
                           return edited
                               ? edited.value
                                   ? [edited.value.record]
@@ -393,7 +439,7 @@ export function createFormLinkedRecordsOwner(options: {
             if (candidates.length !== 0)
                 contributingTables.push(rich?.table ?? null);
             for (const id of nativeIds) {
-                const edited = editedOptions.get(id);
+                const edited = fieldEdits.get(id);
                 const option = edited
                     ? edited.value
                     : (createdOptions.get(id) ?? selectedOptions.get(id));
@@ -651,13 +697,13 @@ export function createFormLinkedRecordsOwner(options: {
                         // afterCommit must not re-enter application callbacks.
                         // Native membership is checked by every snapshot and
                         // pruned by the accepted binding publication below.
-                        if (stopped || retired) return;
+                        if (retired || (stopped && !edited)) return;
                         const pageTicket =
                             acceptedLinkedRecordPageTicket(selectionOwner);
                         if (edited) {
-                            editedOptions.set(record.id, {
+                            fieldEdits.set(record.id, {
                                 value: null,
-                                ticket: pageTicket,
+                                readStamp: nextLinkedRecordReadStamp(),
                             });
                         }
                         if (!prepared) return;
@@ -685,9 +731,9 @@ export function createFormLinkedRecordsOwner(options: {
                         )
                             return;
                         if (edited)
-                            editedOptions.set(record.id, {
+                            fieldEdits.set(record.id, {
                                 value: prepared,
-                                ticket: pageTicket,
+                                readStamp: fieldEdits.get(record.id)!.readStamp,
                             });
                         else {
                             createdOptions.set(record.id, prepared);
@@ -715,7 +761,6 @@ export function createFormLinkedRecordsOwner(options: {
                 createdOptions.clear();
                 createdPresentationTickets.clear();
                 createdRecordIds.clear();
-                editedOptions.clear();
                 stop();
                 notify();
                 listeners.clear();

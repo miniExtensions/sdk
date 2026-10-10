@@ -2072,6 +2072,12 @@ projection. Unsupported refresh invalidates stale target presentation to a
 generic unresolved result. Token-only `readSelected()` covers original loaded
 membership and cannot recover a newly selected existing candidate whose data
 was retired; an eligible explicit option read or accepted reload is required.
+Edited presentation and unresolved markers remain with the accepted Form owner
+when an option loader or rich facet is replaced. A cached hydration result or a
+read dispatched before the accepted Edit cannot restore older target data.
+Only a trusted read dispatched afterward that returns that exact target may
+replace its presentation; pages omitting the target leave it intact. Native
+membership, order and duplicate occurrences remain independent of this refresh.
 
 Inspect `snapshot.completion`: `reconciled` means the known saved child's inverse
 relationship was reconciled into the current parent draft. A capacity or parent-state race can produce

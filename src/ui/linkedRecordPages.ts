@@ -77,13 +77,24 @@ export type LinkedRecordPageOrigin = {
 };
 const payloads = new WeakMap<
     SelectionPage,
-    { data: LinkedRecordSelectionPage; origin: LinkedRecordPageOrigin }
+    {
+        data: LinkedRecordSelectionPage;
+        origin: LinkedRecordPageOrigin;
+        readStamp: number;
+    }
 >();
 const origins = new WeakMap<
     LinkedRecordSelectionPage,
     LinkedRecordPageOrigin
 >();
 const retiredOrigins = new WeakSet<LinkedRecordPageOrigin>();
+
+// Private dispatch order shared by trusted option reads, token hydration and
+// accepted Edit barriers. Arrival order does not establish post-mutation data.
+let readSequence = 0;
+export function nextLinkedRecordReadStamp(): number {
+    return ++readSequence;
+}
 
 function observeCurrent(origin: LinkedRecordPageOrigin): boolean {
     if (retiredOrigins.has(origin)) return false;
@@ -135,7 +146,8 @@ export function linkedRecordPageIsCurrent(
 export function attachLinkedRecordPage(
     page: SelectionPage,
     payload: LinkedRecordSelectionPage,
-    origin: LinkedRecordPageOrigin
+    origin: LinkedRecordPageOrigin,
+    readStamp: number
 ): void {
     const fields = new Set<string>();
     for (const field of payload.table?.airtableFields ?? []) {
@@ -153,7 +165,7 @@ export function attachLinkedRecordPage(
             );
         ids.add(record.id);
     }
-    payloads.set(page, { data: structuredClone(payload), origin });
+    payloads.set(page, { data: structuredClone(payload), origin, readStamp });
 }
 
 export function acceptedLinkedRecordPage(
@@ -196,7 +208,11 @@ export function acceptedLinkedRecordPage(
 // Private acceptance identity; detached snapshots cannot supply provenance.
 const acceptedPageTickets = new WeakMap<
     object,
-    { ticket: number; records: Map<string, number> }
+    {
+        ticket: number;
+        records: Map<string, number>;
+        readStamps: Map<string, number>;
+    }
 >();
 let acceptedPageSequence = 0;
 export function markAcceptedLinkedRecordPage(
@@ -207,8 +223,20 @@ export function markAcceptedLinkedRecordPage(
     if (!payload) return;
     const ticket = ++acceptedPageSequence;
     const records = new Map(acceptedPageTickets.get(model)?.records);
-    for (const record of payload.data.records) records.set(record.id, ticket);
-    acceptedPageTickets.set(model, { ticket, records });
+    const readStamps = new Map(acceptedPageTickets.get(model)?.readStamps);
+    for (const record of payload.data.records) {
+        records.set(record.id, ticket);
+        readStamps.set(record.id, payload.readStamp);
+    }
+    acceptedPageTickets.set(model, { ticket, records, readStamps });
+}
+export function acceptedLinkedRecordReadStamp(
+    model: object | null | undefined,
+    recordId: string
+): number {
+    return (
+        (model && acceptedPageTickets.get(model)?.readStamps.get(recordId)) || 0
+    );
 }
 export function acceptedLinkedRecordPageTicket(
     model: object | null | undefined,

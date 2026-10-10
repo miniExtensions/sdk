@@ -7,7 +7,10 @@ import type {
     RuntimeSession,
 } from '../runtime/types.js';
 import type { SelectionLoader, SelectionOption } from './types.js';
-import { attachLinkedRecordPage } from './linkedRecordPages.js';
+import {
+    attachLinkedRecordPage,
+    nextLinkedRecordReadStamp,
+} from './linkedRecordPages.js';
 
 /** Dispose/reset the control and create a loader for the new visitor context. */
 export class SelectionScopeChangedError extends Error {
@@ -236,6 +239,7 @@ const createLoader = <
                 'The linked record selection request is malformed.'
             );
         }
+        const readStamp = nextLinkedRecordReadStamp();
         const result = await list(
             structuredClone(input),
             request.searchTerm,
@@ -276,7 +280,8 @@ const createLoader = <
                 records: result.records,
                 table: table ? { airtableFields: table.airtableFields } : null,
             },
-            origin
+            origin,
+            readStamp
         );
         // A custom formatter can synchronously change the client's session.
         requireScope();

@@ -2021,6 +2021,11 @@ validation and backend validation remain authoritative. Successful reconciliatio
 updates the shared parent's native linked IDs, rich presentation and dirty state;
 other parent values remain in the shared draft.
 
+Child linked fields with enabled dynamic filtering or nonempty conditional-filter
+descriptors are refused before exposing child controls, including hidden or
+read-only fields. This coordinator does not derive child cascade values; absent,
+null or empty descriptor lists do not introduce that dependency.
+
 Inspect `snapshot.completion`: `reconciled` means the known saved child was linked
 into the current parent draft. A capacity or parent-state race can produce
 `saved-not-reconciled`; the child has already saved, so do not submit it again.

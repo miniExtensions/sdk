@@ -85,7 +85,8 @@ type InternalOptions = FormLinkedChildRecovery & {
         value: AirtableValue,
         expectedDraftRevision: number,
         afterCommit: () => void,
-        isCurrent: () => boolean
+        isCurrent: () => boolean,
+        unchanged?: boolean
     ): boolean;
     prepareCreated(
         result: Extract<NormalizedFormSaveResult, { type: 'saved' }>
@@ -105,6 +106,30 @@ const sameSession = (
 ) =>
     Object.keys(a).length === Object.keys(b).length &&
     Object.keys(a).every((key) => Object.hasOwn(b, key) && a[key] === b[key]);
+
+// This coordinator has no child cascade owner. Never submit an invented empty
+// filtering map for configured child dependencies, including hidden/read-only fields.
+const hasUnsupportedChildLinkedFilters = (loaded: FormLoadedResult) =>
+    Object.values(loaded.payload.fieldIdsToSchemas).some((schema) => {
+        if (schema.fieldType !== 'multipleRecordLinks') return false;
+        const config = schema.miniExtConfig;
+        if (config == null) return false;
+        if (typeof config !== 'object' || Array.isArray(config)) return true;
+        const toggle =
+            'dynamicFilteringToggle' in config
+                ? config.dynamicFilteringToggle
+                : undefined;
+        const filters =
+            'conditionalLinkedRecordFilterFields' in config
+                ? config.conditionalLinkedRecordFilterFields
+                : undefined;
+        return (
+            toggle === true ||
+            (toggle != null && typeof toggle !== 'boolean') ||
+            (filters != null &&
+                (!Array.isArray(filters) || filters.length !== 0))
+        );
+    });
 
 /** Internal configured-create coordinator. There is no caller receipt or exemption channel. */
 export function createFormLinkedChildOwner(
@@ -427,7 +452,9 @@ export function createFormLinkedChildOwner(
                             .multiPageFormMode !== 'one-page') ||
                     response.payload.publicFields.state
                         .promptUserBeforeSubmission === true ||
-                    response.payload.publicFields.state.enableCaptcha === true
+                    response.payload.publicFields.state.enableCaptcha ===
+                        true ||
+                    hasUnsupportedChildLinkedFilters(response)
                 )
                     throw Error(
                         'The configured child Form is unavailable in this flow.'
@@ -670,8 +697,24 @@ export function createFormLinkedChildOwner(
                                         parentCurrent() &&
                                         options.canAccept() &&
                                         ownsIntent(candidate)
-                                    )
-                                        afterCommit();
+                                    ) {
+                                        // No-op reconciliation still requires the final
+                                        // native lease: callbacks may have edited it.
+                                        try {
+                                            options.commit(
+                                                reconciliation.nativeIds,
+                                                state.draftRevision!,
+                                                afterCommit,
+                                                () =>
+                                                    ownsIntent(candidate) &&
+                                                    !disposed &&
+                                                    !parentRetired,
+                                                true
+                                            );
+                                        } catch {
+                                            /* The accepted receipt stays known when admission fails. */
+                                        }
+                                    }
                                 } else if (
                                     parentCurrent() &&
                                     options.canAccept()

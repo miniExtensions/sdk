@@ -14,6 +14,7 @@ import type {
     SaveFormInput,
     SaveFormResult,
     LoadExtensionInput,
+    RuntimeFieldSchema,
 } from '../src/runtime/types.js';
 import { formSaveOptions } from './formsFixtures.js';
 import {
@@ -216,16 +217,24 @@ describe('owner-held Form linked-child creation', () => {
                     : ['rec_new_sibling', 'rec_existing', 'rec_existing'];
                 assert(f.fields.controller.write('fld_children_a', latest));
                 const revision = f.fields.controller.getState().draftRevision;
+                const dirtyFieldIds = [
+                    ...f.fields.controller.getState().draft!.dirtyFieldIds,
+                ];
                 await save(f);
                 assert.deepEqual(
                     native(f),
                     alreadyPresent ? latest : [...latest, 'rec_created']
                 );
-                if (alreadyPresent)
+                if (alreadyPresent) {
+                    assert.deepEqual(
+                        f.fields.controller.getState().draft!.dirtyFieldIds,
+                        dirtyFieldIds
+                    );
                     assert.equal(
                         f.fields.controller.getState().draftRevision,
                         revision
                     );
+                }
                 assert.equal(
                     f.coordinator.getSnapshot().completion,
                     'reconciled'
@@ -620,6 +629,208 @@ describe('owner-held Form linked-child creation', () => {
             }
         }
     });
+
+    type ChildLinkConfig = Extract<
+        NonNullable<
+            Extract<
+                RuntimeFieldSchema,
+                { fieldType: 'multipleRecordLinks' }
+            >['miniExtConfig']
+        >,
+        { dynamicFilteringToggle?: boolean }
+    >;
+    const conditionalFilters: NonNullable<
+        ChildLinkConfig['conditionalLinkedRecordFilterFields']
+    > = [
+        {
+            idOrName: { type: 'id', id: 'fld_filter_synthetic' },
+            config: { type: 'multipleRecordLinks', config: {} },
+        },
+    ];
+    for (const [label, config] of [
+        ['toggle', { dynamicFilteringToggle: true }],
+        [
+            'descriptors',
+            { conditionalLinkedRecordFilterFields: conditionalFilters },
+        ],
+        [
+            'disabled toggle with descriptors',
+            {
+                dynamicFilteringToggle: false,
+                conditionalLinkedRecordFilterFields: conditionalFilters,
+            },
+        ],
+        [
+            'read-only descriptors',
+            {
+                readOnly: true,
+                conditionalLinkedRecordFilterFields: conditionalFilters,
+            },
+        ],
+        [
+            'hidden descriptors',
+            {
+                conditionalLinkedRecordFilteringFieldsType: 'hide',
+                conditionalLinkedRecordFilterFields: conditionalFilters,
+            },
+        ],
+    ] satisfies Array<[string, ChildLinkConfig]>)
+        it(`unsupported child dynamic filtering ${label} refuses before child ownership`, async () => {
+            const loaded = childForm();
+            loaded.payload.fieldIdsToSchemas.fld_parent_b!.miniExtConfig =
+                config;
+            const f = fixture({ child: loaded });
+            const reports: Array<{
+                phase: string;
+                child: unknown;
+                pages: unknown;
+            }> = [];
+            const stop = f.coordinator.subscribe((snapshot) =>
+                reports.push({
+                    phase: snapshot.phase,
+                    child: snapshot.child,
+                    pages: snapshot.pages,
+                })
+            );
+            try {
+                const before = structuredClone(native(f));
+                assert.equal(await f.coordinator.openCreate(), false);
+                assert.equal(f.loads.length, 1);
+                assert.equal(f.coordinator.getSnapshot().child, null);
+                assert.equal(f.coordinator.getSnapshot().pages, null);
+                assert.equal(
+                    reports.some(
+                        (report) =>
+                            report.phase === 'ready' ||
+                            report.child !== null ||
+                            report.pages !== null
+                    ),
+                    false
+                );
+                await assert.rejects(save(f));
+                assert.equal(f.saves.length, 0);
+                assert.equal(f.journal.observed.length, 0);
+                assert.deepEqual(native(f), before);
+                assert.deepEqual(f.parentWrites, []);
+            } finally {
+                stop();
+                f.close();
+            }
+        });
+
+    for (const [label, config] of [
+        ['absent', {}],
+        ['null descriptors', null],
+        ['empty descriptors', { conditionalLinkedRecordFilterFields: [] }],
+        ['disabled toggle', { dynamicFilteringToggle: false }],
+    ] satisfies Array<[string, ChildLinkConfig | null]>)
+        it(`ordinary child filtering ${label} retains genuine Save authority`, async () => {
+            const loaded = childForm();
+            Object.defineProperty(
+                loaded.payload.fieldIdsToSchemas.fld_parent_b!,
+                'miniExtConfig',
+                {
+                    value:
+                        config === null
+                            ? { conditionalLinkedRecordFilterFields: null }
+                            : config,
+                    enumerable: true,
+                    writable: true,
+                    configurable: true,
+                }
+            );
+            const f = fixture({ child: loaded });
+            try {
+                assert.equal(await f.coordinator.openCreate(), true);
+                assert.equal((await save(f)).type, 'saved');
+                assert.equal(
+                    f.coordinator.getSnapshot().completion,
+                    'reconciled'
+                );
+                assert.equal(f.loads.length, 1);
+                assert.equal(f.saves.length, 1);
+                assert.equal(f.journal.observed.at(-1)?.outcome, 'saved');
+            } finally {
+                f.close();
+            }
+        });
+
+    for (const position of ['policy', 'final canAccept'] as const)
+        it(`no-op reconciliation preserves a reentrant native edit during ${position}`, async () => {
+            const parent = parentForm();
+            parent.payload.formRecord.data.fld_children_a = [
+                'rec_created',
+                'rec_sibling',
+            ];
+            let afterReceipt = false;
+            let inPolicy = false;
+            let policyRead = false;
+            let edited = false;
+            let edit: (() => void) | null = null;
+            const f = fixture({
+                parent,
+                canWriteField: (id) => {
+                    if (
+                        afterReceipt &&
+                        id === 'fld_children_a' &&
+                        !edited &&
+                        (position === 'policy'
+                            ? inPolicy
+                            : policyRead && !inPolicy)
+                    ) {
+                        edited = true;
+                        edit!();
+                    }
+                    return true;
+                },
+            });
+            const facet = f.fields.linkedRecords('fld_children_a');
+            const getSnapshot = facet.getSnapshot;
+            facet.getSnapshot = () => {
+                inPolicy = true;
+                try {
+                    return getSnapshot();
+                } finally {
+                    inPolicy = false;
+                    if (afterReceipt) policyRead = true;
+                }
+            };
+            edit = () =>
+                assert(
+                    f.fields.controller.write('fld_children_a', [
+                        'rec_reentrant',
+                    ])
+                );
+            f.journal.afterAccepted = () => {
+                afterReceipt = true;
+            };
+            const completions: string[] = [];
+            const stop = f.coordinator.subscribe((snapshot) =>
+                completions.push(snapshot.completion)
+            );
+            try {
+                assert(await f.coordinator.openCreate());
+                assert.equal((await save(f)).type, 'saved');
+                assert.equal(edited, true);
+                assert.equal(
+                    f.coordinator.getSnapshot().completion,
+                    'saved-not-reconciled'
+                );
+                assert.equal(completions.includes('reconciled'), false);
+                assert.deepEqual(native(f), ['rec_reentrant']);
+                assert.deepEqual(f.parentWrites, ['fld_children_a']);
+                assert.deepEqual(facet.getSnapshot().selectedRecords, []);
+                assert.deepEqual(facet.getSnapshot().unresolvedSelectedIds, [
+                    'rec_reentrant',
+                ]);
+                assert.equal(f.journal.observed.length, 1);
+                assert.equal(f.journal.observed[0]!.outcome, 'saved');
+                assert.equal(f.saves.length, 1);
+            } finally {
+                stop();
+                f.close();
+            }
+        });
 
     it('configured Review and compute child forms never become Save authority', async () => {
         for (const key of [

@@ -669,23 +669,41 @@ export function createFormFieldBindings(
                         value,
                         expectedDraftRevision,
                         afterCommit,
-                        ownsIntent
-                    ) =>
-                        controller.write(
+                        ownsIntent,
+                        unchanged = false
+                    ) => {
+                        const admission = () => {
+                            if (!fieldLease()) return false;
+                            return (
+                                current() &&
+                                store.revision(handle) ===
+                                    expectedDraftRevision &&
+                                linkedValues(value) !== null &&
+                                ownsIntent()
+                            );
+                        };
+                        if (unchanged) {
+                            if (!admission()) return false;
+                            const actual = linkedValues(store.read(handle, id));
+                            const expected = linkedValues(value);
+                            if (
+                                !actual ||
+                                !expected ||
+                                actual.length !== expected.length ||
+                                actual.some(
+                                    (entry, index) => entry !== expected[index]
+                                )
+                            )
+                                return false;
+                            afterCommit();
+                            return true;
+                        }
+                        return controller.write(
                             id,
                             value,
-                            withFormWriteAdmission(afterCommit, () => {
-                                if (!fieldLease()) return false;
-                                const state = controller.getState();
-                                return (
-                                    current() &&
-                                    state.draftRevision ===
-                                        expectedDraftRevision &&
-                                    linkedValues(value) !== null &&
-                                    ownsIntent()
-                                );
-                            })
-                        ),
+                            withFormWriteAdmission(afterCommit, admission)
+                        );
+                    },
                     prepareCreated: (result) => {
                         owner.linkedRecords(id);
                         const table =

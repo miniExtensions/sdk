@@ -1053,7 +1053,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     const linkedChildProof = await checkLinkedChildConsumer({
         consumerDirectory: temporaryDirectory,
     });
-    assert.equal(linkedChildProof, 28);
+    assert.equal(linkedChildProof, 48);
     console.log(
         `Installed configured linked-child create: ${linkedChildProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
     );

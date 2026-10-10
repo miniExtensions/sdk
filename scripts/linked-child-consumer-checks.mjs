@@ -56,7 +56,19 @@ async function checkCoordinator(forms, fixtures) {
                 },
             },
         };
-        const journal = new forms.RecoveryJournal();
+        class ObservedJournal extends forms.RecoveryJournal {
+            observed = [];
+            prepare(...args) {
+                const attempt = super.prepare(...args);
+                this.observed.push(attempt);
+                return attempt;
+            }
+            accepted(...args) {
+                super.accepted(...args);
+                options.afterAccepted?.();
+            }
+        }
+        const journal = new ObservedJournal();
         let fields;
         fields = forms.createFormFieldBindings({
             loaded,
@@ -150,6 +162,9 @@ async function checkCoordinator(forms, fixtures) {
                 : ['rec_new_sibling', 'rec_existing', 'rec_existing'];
             assert(f.fields.controller.write('fld_children_a', latest));
             const draftRevision = f.fields.controller.getState().draftRevision;
+            const dirtyFieldIds = structuredClone(
+                f.fields.controller.getState().draft.dirtyFieldIds
+            );
             assert.equal(
                 (await f.owner.save(f.owner.getSnapshot().revision)).type,
                 'saved'
@@ -162,6 +177,11 @@ async function checkCoordinator(forms, fixtures) {
                 assert.equal(
                     f.fields.controller.getState().draftRevision,
                     draftRevision
+                );
+            if (present)
+                assert.deepEqual(
+                    f.fields.controller.getState().draft.dirtyFieldIds,
+                    dirtyFieldIds
                 );
             assert.equal(f.owner.getSnapshot().completion, 'reconciled');
             checks++;
@@ -210,6 +230,147 @@ async function checkCoordinator(forms, fixtures) {
                 );
             assert.equal(await f.owner.openCreate(), false);
             assert.equal(f.calls.loads.length, 1);
+            assert.equal(f.calls.saves.length, 1);
+            checks++;
+        } finally {
+            f.fields.destroy();
+        }
+    }
+    // Descriptor shape matches the generated runtime contract and typed fixture.
+    const filterDescriptor = {
+        idOrName: { type: 'id', id: 'fld_parent_a' },
+        config: { type: 'multipleRecordLinks', config: { title: 'Parent' } },
+    };
+    for (const configuration of [
+        { dynamicFilteringToggle: true },
+        { conditionalLinkedRecordFilterFields: [filterDescriptor] },
+        {
+            dynamicFilteringToggle: false,
+            conditionalLinkedRecordFilterFields: [filterDescriptor],
+        },
+    ]) {
+        const child = fixtures.childForm();
+        Object.assign(
+            child.payload.fieldIdsToSchemas.fld_parent_a.miniExtConfig,
+            configuration
+        );
+        const f = setup({ load: () => child });
+        try {
+            const before = structuredClone(f.fields.controller.getState());
+            const snapshots = [];
+            const unsubscribe = f.owner.subscribe((snapshot) =>
+                snapshots.push(snapshot)
+            );
+            try {
+                assert.equal(await f.owner.openCreate(), false);
+            } finally {
+                unsubscribe();
+            }
+            assert.equal(f.owner.getSnapshot().child, null);
+            assert.equal(f.owner.getSnapshot().pages, null);
+            assert(
+                snapshots.every(
+                    (snapshot) =>
+                        snapshot.child === null &&
+                        snapshot.pages === null &&
+                        snapshot.phase !== 'ready'
+                )
+            );
+            assert.equal(f.calls.loads.length, 1);
+            assert.equal(f.calls.saves.length, 0);
+            assert.equal(f.journal.observed.length, 0);
+            assert.deepEqual(f.fields.controller.getState(), before);
+            checks++;
+        } finally {
+            f.fields.destroy();
+        }
+    }
+    for (const configuration of [
+        {},
+        { conditionalLinkedRecordFilterFields: null },
+        { conditionalLinkedRecordFilterFields: [] },
+        { dynamicFilteringToggle: false },
+        {
+            dynamicFilteringToggle: false,
+            conditionalLinkedRecordFilterFields: [],
+        },
+    ]) {
+        const child = fixtures.childForm();
+        Object.assign(
+            child.payload.fieldIdsToSchemas.fld_parent_a.miniExtConfig,
+            configuration
+        );
+        const f = setup({ load: () => child });
+        try {
+            assert(await f.owner.openCreate());
+            assert.equal(f.owner.getSnapshot().phase, 'ready');
+            assert(f.owner.getSnapshot().child);
+            assert(f.owner.getSnapshot().pages);
+            assert.equal(
+                (await f.owner.save(f.owner.getSnapshot().revision)).type,
+                'saved'
+            );
+            assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+            assert.equal(f.journal.observed.at(-1)?.outcome, 'saved');
+            assert.equal(f.calls.saves.length, 1);
+            checks++;
+        } finally {
+            f.fields.destroy();
+        }
+    }
+    for (const stage of ['policy', 'final-canAccept']) {
+        let armed = false,
+            admissionCalls = 0,
+            reentries = 0;
+        const f = setup({
+            afterAccepted() {
+                armed = true;
+            },
+            canWriteField(fieldId, fields) {
+                if (
+                    armed &&
+                    fieldId === 'fld_children_a' &&
+                    ++admissionCalls === (stage === 'policy' ? 2 : 3)
+                ) {
+                    armed = false;
+                    reentries++;
+                    assert(fields.controller.write(fieldId, ['rec_reentrant']));
+                }
+                return true;
+            },
+        });
+        try {
+            assert(await f.owner.openCreate());
+            assert(
+                f.fields.controller.write('fld_children_a', [
+                    'rec_created',
+                    'rec_sibling',
+                ])
+            );
+            const receipt = await f.owner.save(f.owner.getSnapshot().revision);
+            assert.equal(receipt.type, 'saved');
+            assert.equal(receipt.raw.record.id, 'rec_created');
+            assert.equal(reentries, 1, stage);
+            assert.equal(
+                f.owner.getSnapshot().completion,
+                'saved-not-reconciled',
+                stage
+            );
+            assert.deepEqual(f.native(), ['rec_reentrant']);
+            assert.equal(f.journal.observed.at(-1)?.outcome, 'saved');
+            const linked = f.fields
+                .linkedRecords('fld_children_a')
+                .getSnapshot();
+            assert(
+                !linked.selectedRecords.some(
+                    (record) => record.id === 'rec_created'
+                )
+            );
+            assert(
+                !linked.candidateRecords.some(
+                    (record) => record.id === 'rec_created'
+                )
+            );
             assert.equal(f.calls.saves.length, 1);
             checks++;
         } finally {

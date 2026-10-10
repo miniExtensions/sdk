@@ -594,6 +594,7 @@ export async function checkSelectAvailabilityBridgeRecipe({
                         type: 'create',
                         data: {
                             ...before,
+                            gate: 'hide',
                             driver: driverMultiple ? ['Allow'] : 'Allow',
                             single: driverMultiple ? [] : null,
                         },
@@ -601,6 +602,7 @@ export async function checkSelectAvailabilityBridgeRecipe({
                     formFieldIdsWithUnsavedChanges: [
                         'native',
                         'driver',
+                        'gate',
                         'single',
                     ],
                 });

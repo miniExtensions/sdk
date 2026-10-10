@@ -200,6 +200,7 @@ export function createFormFieldBindings(
     const retainedChildren = new Set<
         ReturnType<typeof createFormLinkedChildOwner>
     >();
+    const constructingLinkedChildren = new Set<string>();
     const childBlocked = () =>
         [...retainedChildren].some((model) => model.blocksForm());
     const attachmentBlocked = () =>
@@ -595,115 +596,127 @@ export function createFormFieldBindings(
             return structuredClone(loaded);
         },
         linkedChild: (id, recovery) => {
-            if (!current()) throw new Error('This Form owner is retired.');
-            const previous = linkedChildren.get(id);
-            if (
-                previous?.journal === recovery.journal &&
-                previous.loadVersion === recovery.loadVersion
-            )
-                return previous.model;
-            if (previous) {
-                previous.model.dispose();
-                linkedChildren.delete(id);
-                if (!previous.model.blocksForm())
-                    retainedChildren.delete(previous.model);
-            }
-            const handle = openLoadedFormDraft({
-                store,
-                loaded,
-                parent: options.parent,
-            });
-            const fieldLease = () => {
-                const snapshot = field(id).getSnapshot();
-                return (
-                    current() &&
-                    pendingRead === null &&
-                    !snapshot.retired &&
-                    !snapshot.readOnly &&
-                    snapshot.visibility.type === 'visible' &&
-                    !attachmentBlocked() &&
-                    !choiceBlocked() &&
-                    (options.canWriteField?.(id) ?? true) &&
-                    (options.canWrite?.() ?? true) &&
-                    ['ready', 'saved', 'validation-error'].includes(
-                        controller.getState().status
-                    )
+            if (constructingLinkedChildren.has(id))
+                throw new Error(
+                    'This linked child owner is being initialized.'
                 );
-            };
-            let model: ReturnType<typeof createFormLinkedChildOwner> | null =
-                null;
-            model = createFormLinkedChildOwner({
-                ...recovery,
-                form: owner,
-                fieldId: id,
-                parentHandle: handle,
-                client: options.client,
-                getClient: () => options.client,
-                getScope: () => options.getScope(),
-                configurationRevision: () =>
-                    options.configurationRevision?.() ?? 0,
-                parentCurrent: () => current(),
-                canAccept: () =>
-                    fieldLease() &&
-                    [...retainedChildren].every(
-                        (other) => other === model || !other.blocksForm()
-                    ),
-                createChild: (child) =>
-                    createFormFieldBindings({
-                        ...child,
-                        client: options.client,
-                        getScope: () => options.getScope(),
-                        // One independent native store per genuine create intent.
-                        // No synthetic Portal parent scope and no saved-create reuse.
-                        store: new FormDraftStore<AirtableValue>(),
-                    }),
-                commit: (
-                    value,
-                    expectedDraftRevision,
-                    afterCommit,
-                    ownsIntent
-                ) =>
-                    controller.write(
-                        id,
-                        value,
-                        withFormWriteAdmission(afterCommit, () => {
-                            if (!fieldLease()) return false;
-                            const state = controller.getState();
-                            return (
-                                current() &&
-                                state.draftRevision === expectedDraftRevision &&
-                                linkedValues(value) !== null &&
-                                ownsIntent()
-                            );
-                        })
-                    ),
-                prepareCreated: (result) => {
-                    owner.linkedRecords(id);
-                    const table =
-                        result.raw.context.type !== 'direct-url'
-                            ? result.raw.context.newTableIdsToLinkedTableStates[
-                                  result.raw.tableId
-                              ]
-                            : null;
+            constructingLinkedChildren.add(id);
+            try {
+                if (!current()) throw new Error('This Form owner is retired.');
+                const previous = linkedChildren.get(id);
+                if (
+                    previous?.journal === recovery.journal &&
+                    previous.loadVersion === recovery.loadVersion
+                )
+                    return previous.model;
+                if (previous) {
+                    previous.model.dispose();
+                    linkedChildren.delete(id);
+                    if (!previous.model.blocksForm())
+                        retainedChildren.delete(previous.model);
+                }
+                const handle = openLoadedFormDraft({
+                    store,
+                    loaded,
+                    parent: options.parent,
+                });
+                const fieldLease = () => {
+                    const snapshot = field(id).getSnapshot();
                     return (
-                        linkedRecordsOwner?.prepareCreated(
-                            id,
-                            result.raw.record,
-                            table
-                                ? { airtableFields: table.airtableFields }
-                                : null
-                        ) ?? null
+                        current() &&
+                        pendingRead === null &&
+                        !snapshot.retired &&
+                        !snapshot.readOnly &&
+                        snapshot.visibility.type === 'visible' &&
+                        !attachmentBlocked() &&
+                        !choiceBlocked() &&
+                        (options.canWriteField?.(id) ?? true) &&
+                        (options.canWrite?.() ?? true) &&
+                        ['ready', 'saved', 'validation-error'].includes(
+                            controller.getState().status
+                        )
                     );
-                },
-                changed: refresh,
-            });
-            linkedChildren.set(id, {
-                model,
-                journal: recovery.journal,
-                loadVersion: recovery.loadVersion,
-            });
-            retainedChildren.add(model);
-            return model;
+                };
+                let model: ReturnType<
+                    typeof createFormLinkedChildOwner
+                > | null = null;
+                model = createFormLinkedChildOwner({
+                    ...recovery,
+                    form: owner,
+                    fieldId: id,
+                    parentHandle: handle,
+                    client: options.client,
+                    getClient: () => options.client,
+                    getScope: () => options.getScope(),
+                    configurationRevision: () =>
+                        options.configurationRevision?.() ?? 0,
+                    parentCurrent: () => current(),
+                    canAccept: () =>
+                        fieldLease() &&
+                        [...retainedChildren].every(
+                            (other) => other === model || !other.blocksForm()
+                        ),
+                    createChild: (child) =>
+                        createFormFieldBindings({
+                            ...child,
+                            client: options.client,
+                            getScope: () => options.getScope(),
+                            // One independent native store per genuine create intent.
+                            // No synthetic Portal parent scope and no saved-create reuse.
+                            store: new FormDraftStore<AirtableValue>(),
+                        }),
+                    commit: (
+                        value,
+                        expectedDraftRevision,
+                        afterCommit,
+                        ownsIntent
+                    ) =>
+                        controller.write(
+                            id,
+                            value,
+                            withFormWriteAdmission(afterCommit, () => {
+                                if (!fieldLease()) return false;
+                                const state = controller.getState();
+                                return (
+                                    current() &&
+                                    state.draftRevision ===
+                                        expectedDraftRevision &&
+                                    linkedValues(value) !== null &&
+                                    ownsIntent()
+                                );
+                            })
+                        ),
+                    prepareCreated: (result) => {
+                        owner.linkedRecords(id);
+                        const table =
+                            result.raw.context.type !== 'direct-url'
+                                ? result.raw.context
+                                      .newTableIdsToLinkedTableStates[
+                                      result.raw.tableId
+                                  ]
+                                : null;
+                        return (
+                            linkedRecordsOwner?.prepareCreated(
+                                id,
+                                result.raw.record,
+                                table
+                                    ? { airtableFields: table.airtableFields }
+                                    : null
+                            ) ?? null
+                        );
+                    },
+                    changed: refresh,
+                });
+                linkedChildren.set(id, {
+                    model,
+                    journal: recovery.journal,
+                    loadVersion: recovery.loadVersion,
+                });
+                retainedChildren.add(model);
+                return model;
+            } finally {
+                constructingLinkedChildren.delete(id);
+            }
         },
         attachment: (id, recovery, adapter) => {
             if (!current()) throw new Error('This Form owner is retired.');

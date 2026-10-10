@@ -56,11 +56,17 @@ async function checkCoordinator(forms, fixtures) {
                 },
             },
         };
-        const fields = forms.createFormFieldBindings({
+        const journal = new forms.RecoveryJournal();
+        let fields;
+        fields = forms.createFormFieldBindings({
             loaded,
             client,
             getScope: () => ({ ownerId: 'synthetic', revision: 0 }),
             configurationRevision: () => configuration,
+            canWriteField: (fieldId) =>
+                fields && options.canWriteField
+                    ? options.canWriteField(fieldId, fields, journal)
+                    : true,
             saveOptions: {
                 captchaVal: null,
                 isComputeMode: false,
@@ -70,12 +76,13 @@ async function checkCoordinator(forms, fixtures) {
             },
         });
         const owner = fields.linkedChild('fld_children_a', {
-            journal: new forms.RecoveryJournal(),
+            journal,
             loadVersion: 1,
         });
         return {
             fields,
             owner,
+            journal,
             calls,
             native: () =>
                 fields.controller.getState().draft?.data.fld_children_a,
@@ -87,6 +94,53 @@ async function checkCoordinator(forms, fixtures) {
             },
         };
     };
+    {
+        let armed = true,
+            reentries = 0,
+            hiddenOwner,
+            reentryError;
+        const f = setup({
+            canWriteField(fieldId, fields, journal) {
+                if (armed && fieldId === 'fld_children_a') {
+                    armed = false;
+                    reentries++;
+                    try {
+                        hiddenOwner = fields.linkedChild(fieldId, {
+                            journal,
+                            loadVersion: 1,
+                        });
+                    } catch (error) {
+                        reentryError = error;
+                    }
+                }
+                return true;
+            },
+        });
+        try {
+            assert.equal(reentries, 1);
+            assert.equal(hiddenOwner, undefined);
+            assert.match(reentryError?.message ?? '', /being initialized/);
+            assert.equal(
+                f.fields.linkedChild('fld_children_a', {
+                    journal: f.journal,
+                    loadVersion: 1,
+                }),
+                f.owner
+            );
+            assert.deepEqual(f.calls, { loads: [], saves: [] });
+            assert(await f.owner.openCreate());
+            assert.equal(
+                (await f.owner.save(f.owner.getSnapshot().revision)).type,
+                'saved'
+            );
+            assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+            assert.equal(f.calls.loads.length, 1);
+            assert.equal(f.calls.saves.length, 1);
+            checks++;
+        } finally {
+            f.fields.destroy();
+        }
+    }
     for (const present of [false, true]) {
         const f = setup();
         try {

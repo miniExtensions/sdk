@@ -61,6 +61,10 @@ const fixture = (
         save?: () => Promise<SaveFormResult>;
         load?: () => Promise<FormLoadedResult>;
         canWriteField?: (fieldId: string) => boolean;
+        beforeCoordinator?: (
+            fields: ReturnType<typeof createFormFieldBindings>,
+            journal: ObservedJournal
+        ) => void;
     } = {}
 ) => {
     const mode = options.mode ?? 'create';
@@ -97,6 +101,7 @@ const fixture = (
         configurationRevision: () => configuration,
         canWriteField: options.canWriteField,
     });
+    options.beforeCoordinator?.(fields, journal);
     const parentWrites: string[] = [];
     const write = store.write.bind(store);
     store.write = (handle, id, value) => {
@@ -1064,6 +1069,61 @@ describe('owner-held Form linked-child creation', () => {
             assert.equal(f.journal.observed.length, 0);
         } finally {
             stop();
+            f.close();
+        }
+    });
+
+    it('same-field acquisition during initialization is refused without creating a hidden owner', async () => {
+        let acquireDuringInitialization: (() => void) | null = null;
+        let attempted = false;
+        let initializationError: unknown;
+        const f = fixture({
+            beforeCoordinator: (fields, journal) => {
+                acquireDuringInitialization = () => {
+                    fields.linkedChild('fld_children_a', {
+                        journal,
+                        loadVersion: 1,
+                    });
+                };
+            },
+            canWriteField: (id) => {
+                if (
+                    id === 'fld_children_a' &&
+                    acquireDuringInitialization &&
+                    !attempted
+                ) {
+                    attempted = true;
+                    try {
+                        acquireDuringInitialization();
+                    } catch (failure) {
+                        initializationError = failure;
+                    }
+                }
+                return true;
+            },
+        });
+        try {
+            assert.equal(attempted, true);
+            assert.ok(initializationError instanceof Error);
+            assert.match(initializationError.message, /initializ/i);
+            assert.equal(
+                f.coordinator,
+                f.fields.linkedChild('fld_children_a', {
+                    journal: f.journal,
+                    loadVersion: 1,
+                })
+            );
+            assert.equal(f.coordinator.getSnapshot().canCreate, true);
+            assert.equal(f.loads.length, 0);
+            assert.equal(await f.coordinator.openCreate(), true);
+            assert.equal(await f.coordinator.openCreate(), false);
+            assert.equal(f.loads.length, 1);
+            assert.equal((await save(f)).type, 'saved');
+            assert.equal(f.coordinator.getSnapshot().completion, 'reconciled');
+            f.coordinator.close();
+            assert.equal(f.coordinator.getSnapshot().canCreate, true);
+            assert.equal(f.journal.observed.length, 1);
+        } finally {
             f.close();
         }
     });

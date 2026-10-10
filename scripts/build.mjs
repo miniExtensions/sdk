@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { compilerMetadata, fingerprint } from './build-metadata.mjs';
+import { withCommonJsSource } from './commonjs-source.mjs';
 import {
     assertModuleFormats,
     moduleFormatReceiptPath,
@@ -17,17 +18,32 @@ for (const directory of ['dist/esm', 'dist/cjs']) {
 }
 
 for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
-    console.error(
-        '[sdk-build-compiler]',
-        JSON.stringify(compilerMetadata(compiler, project))
-    );
-    const result = spawnSync(
-        process.execPath,
-        [compiler, '--project', project],
-        {
-            stdio: 'inherit',
-        }
-    );
+    const compile = (actualProject) => {
+        console.error(
+            '[sdk-build-compiler]',
+            JSON.stringify(
+                compilerMetadata(
+                    compiler,
+                    project,
+                    spawnSync,
+                    process.env.NODE_OPTIONS ?? '',
+                    actualProject
+                )
+            )
+        );
+        return spawnSync(
+            process.execPath,
+            [compiler, '--project', actualProject],
+            {
+                stdio: 'inherit',
+            }
+        );
+    };
+    const result =
+        project === 'tsconfig.cjs.json'
+            ? withCommonJsSource(process.cwd(), compile)
+            : compile(project);
+    // A failed CJS compiler must return through stage cleanup before exiting.
     if (result.error) throw result.error;
     if (result.status !== 0) process.exit(result.status ?? 1);
     const format = project === 'tsconfig.json' ? 'esm' : 'cjs';

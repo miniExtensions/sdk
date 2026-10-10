@@ -7,7 +7,12 @@ import type {
     RuntimeAirtableField,
 } from '../runtime/types.js';
 import type { FormFieldBinding } from './bindings.js';
-import { sameLinkedRecordTable } from '../ui/linkedRecordPages.js';
+import {
+    acceptedLinkedRecordPageTicket,
+    acceptedLinkedRecordReadStamp,
+    nextLinkedRecordReadStamp,
+    sameLinkedRecordTable,
+} from '../ui/linkedRecordPages.js';
 import {
     projectSelectedRecordsPolicy,
     type FormSelectedRecordPolicy,
@@ -125,6 +130,15 @@ export function createFormLinkedRecordsOwner(options: {
     let retired = false;
     let generation = 0;
     let accepted: LoadSelectedRecordsResult | null = null;
+    type Table = FormLinkedRecordsSnapshot['table'];
+    type EditedPresentation = {
+        value: { record: AirtableRecord; table: Table } | null;
+        readStamp: number;
+    };
+    // A facade or option-loader replacement does not replace this Form owner.
+    // Keep edited data/tombstones here until retirement or a newer trusted read
+    // actually returns that target. Omitted targets cannot erase provenance.
+    const editedFields = new Map<string, Map<string, EditedPresentation>>();
     let phase: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
     let error: string | null = null;
     let active: { abort: AbortController; promise: Promise<boolean> } | null =
@@ -135,6 +149,10 @@ export function createFormLinkedRecordsOwner(options: {
             facet: FormLinkedRecordsFacet;
             destroy(): void;
             emit(): void;
+            prepareEdited(
+                record: AirtableRecord,
+                childTable: FormLinkedRecordsSnapshot['table']
+            ): (() => void) | null;
             prepareCreated(
                 record: AirtableRecord,
                 childTable: FormLinkedRecordsSnapshot['table']
@@ -170,6 +188,8 @@ export function createFormLinkedRecordsOwner(options: {
         retired = true;
         generation++;
         accepted = null;
+        for (const edited of editedFields.values()) edited.clear();
+        editedFields.clear();
         const previous = active;
         active = null;
         for (const entry of [...facets.values()]) entry.destroy();
@@ -196,6 +216,7 @@ export function createFormLinkedRecordsOwner(options: {
             let installed = false;
             try {
                 if (!owns()) return false;
+                const readStamp = nextLinkedRecordReadStamp();
                 const result =
                     await options.client.linkedRecords.loadSelectedRecords(
                         {
@@ -209,6 +230,37 @@ export function createFormLinkedRecordsOwner(options: {
                     throw new Error('Malformed linked records.');
                 const detached = structuredClone(result);
                 if (!owns()) return false;
+                for (const [fieldId, editedOptions] of editedFields) {
+                    const schema = loaded.payload.fieldIdsToSchemas[fieldId];
+                    if (
+                        schema?.airtableField.config.type !==
+                        'multipleRecordLinks'
+                    )
+                        continue;
+                    const table =
+                        detached[
+                            schema.airtableField.config.options.linkedTableId
+                        ];
+                    if (!table) continue;
+                    const originalIds = new Set(
+                        ids(originalRecordData[fieldId]) ?? []
+                    );
+                    for (const [id, edited] of editedOptions) {
+                        if (
+                            !originalIds.has(id) ||
+                            readStamp <= edited.readStamp ||
+                            !Object.hasOwn(table.recordIdsToAirtableRecords, id)
+                        )
+                            continue;
+                        editedOptions.set(id, {
+                            value: structuredClone({
+                                record: table.recordIdsToAirtableRecords[id]!,
+                                table: { airtableFields: table.airtableFields },
+                            }),
+                            readStamp,
+                        });
+                    }
+                }
                 accepted = detached;
                 phase = 'ready';
                 installed = true;
@@ -263,7 +315,6 @@ export function createFormLinkedRecordsOwner(options: {
         const config = schema.miniExtConfig;
         let stopped = false;
         let stop = () => {};
-        type Table = FormLinkedRecordsSnapshot['table'];
         const selectedOptions = new Map<
             string,
             { record: AirtableRecord; table: Table }
@@ -272,6 +323,14 @@ export function createFormLinkedRecordsOwner(options: {
             string,
             { record: AirtableRecord; table: Table }
         >();
+        const createdRecordIds = new Set<string>();
+        let editedOptions = editedFields.get(fieldId);
+        if (!editedOptions) {
+            editedOptions = new Map();
+            editedFields.set(fieldId, editedOptions);
+        }
+        const fieldEdits = editedOptions;
+        const createdPresentationTickets = new Map<string, number>();
         const listeners = new Set<
             (snapshot: FormLinkedRecordsSnapshot) => void
         >();
@@ -307,14 +366,47 @@ export function createFormLinkedRecordsOwner(options: {
             for (const id of selectedOptions.keys())
                 if (!selected.has(id)) selectedOptions.delete(id);
             for (const id of createdOptions.keys())
-                if (!selected.has(id)) createdOptions.delete(id);
-            if (rich?.linkedTableId === linkedTableId)
-                for (const record of rich.records)
+                if (!selected.has(id)) {
+                    createdOptions.delete(id);
+                    createdPresentationTickets.delete(id);
+                }
+            for (const id of createdRecordIds)
+                if (!selected.has(id)) createdRecordIds.delete(id);
+            if (rich?.linkedTableId === linkedTableId) {
+                for (const record of rich.records) {
+                    const edited = fieldEdits.get(record.id);
+                    const readStamp = acceptedLinkedRecordReadStamp(
+                        binding.selection,
+                        record.id
+                    );
+                    if (edited && readStamp > edited.readStamp)
+                        fieldEdits.set(record.id, {
+                            value: structuredClone({
+                                record,
+                                table: rich.table,
+                            }),
+                            readStamp,
+                        });
+                    const createdTicket = createdPresentationTickets.get(
+                        record.id
+                    );
+                    if (
+                        createdTicket !== undefined &&
+                        acceptedLinkedRecordPageTicket(
+                            binding.selection,
+                            record.id
+                        ) > createdTicket
+                    ) {
+                        createdOptions.delete(record.id);
+                        createdPresentationTickets.delete(record.id);
+                    }
                     if (selected.has(record.id))
                         selectedOptions.set(
                             record.id,
                             structuredClone({ record, table: rich.table })
                         );
+                }
+            }
         };
         const snapshot = (): FormLinkedRecordsSnapshot => {
             if (stopped || !current()) return empty('retired');
@@ -329,7 +421,16 @@ export function createFormLinkedRecordsOwner(options: {
                 return empty('unavailable');
             const rich = binding.selection?.getState().linkedRecords;
             const candidates =
-                rich?.linkedTableId === linkedTableId ? rich.records : [];
+                rich?.linkedTableId === linkedTableId
+                    ? rich.records.flatMap((record) => {
+                          const edited = fieldEdits.get(record.id);
+                          return edited
+                              ? edited.value
+                                  ? [edited.value.record]
+                                  : []
+                              : [record];
+                      })
+                    : [];
             if (!current() || stopped) return empty('retired');
             const hydrated = accepted?.[linkedTableId];
             const selectedRecords: AirtableRecord[] = [];
@@ -338,11 +439,13 @@ export function createFormLinkedRecordsOwner(options: {
             if (candidates.length !== 0)
                 contributingTables.push(rich?.table ?? null);
             for (const id of nativeIds) {
-                const option =
-                    createdOptions.get(id) ?? selectedOptions.get(id);
+                const edited = fieldEdits.get(id);
+                const option = edited
+                    ? edited.value
+                    : (createdOptions.get(id) ?? selectedOptions.get(id));
                 const record =
                     option?.record ??
-                    (originalIds.has(id)
+                    (!edited && originalIds.has(id)
                         ? hydrated?.recordIdsToAirtableRecords[id]
                         : undefined);
                 if (!record) unresolvedSelectedIds.push(id);
@@ -381,7 +484,7 @@ export function createFormLinkedRecordsOwner(options: {
                 airtableFields: commonTable?.airtableFields ?? null,
                 waitingData: !accepted && !rich && selectedOptions.size === 0,
                 createdRecordIds: new Set(
-                    nativeIds.filter((id) => createdOptions.has(id))
+                    nativeIds.filter((id) => createdRecordIds.has(id))
                 ),
             });
             if (!current() || stopped) return empty('retired');
@@ -431,7 +534,8 @@ export function createFormLinkedRecordsOwner(options: {
             emit: notify,
             prepareCreated(
                 source: AirtableRecord,
-                childTable: Table
+                childTable: Table,
+                edited = false
             ): (() => void) | null {
                 if (stopped || !current()) return null;
                 try {
@@ -443,7 +547,7 @@ export function createFormLinkedRecordsOwner(options: {
                     )
                         return null;
                     const record = structuredClone(source);
-                    const child = childTable && structuredClone(childTable);
+                    let child = childTable && structuredClone(childTable);
                     if (
                         child &&
                         !validate({
@@ -454,8 +558,10 @@ export function createFormLinkedRecordsOwner(options: {
                                 },
                             },
                         })
-                    )
-                        return null;
+                    ) {
+                        if (!edited) return null;
+                        child = null;
+                    }
                     // Child public metadata is not a parent detail policy. Only
                     // an already accepted parent table may supply that policy.
                     const hydrated = accepted?.[linkedTableId];
@@ -569,7 +675,13 @@ export function createFormLinkedRecordsOwner(options: {
                                 records: [projected],
                                 airtableFields: parent.airtableFields,
                                 waitingData: false,
-                                createdRecordIds: new Set([record.id]),
+                                createdRecordIds: new Set(
+                                    edited
+                                        ? createdRecordIds.has(record.id)
+                                            ? [record.id]
+                                            : []
+                                        : [record.id]
+                                ),
                             }).policy.supported
                         )
                             prepared = structuredClone({
@@ -577,6 +689,7 @@ export function createFormLinkedRecordsOwner(options: {
                                 table: parent,
                             });
                     }
+                    const selectionOwner = binding.selection;
                     let used = false;
                     return () => {
                         if (used) return;
@@ -584,7 +697,16 @@ export function createFormLinkedRecordsOwner(options: {
                         // afterCommit must not re-enter application callbacks.
                         // Native membership is checked by every snapshot and
                         // pruned by the accepted binding publication below.
-                        if (stopped || retired || !prepared) return;
+                        if (retired || (stopped && !edited)) return;
+                        const pageTicket =
+                            acceptedLinkedRecordPageTicket(selectionOwner);
+                        if (edited) {
+                            fieldEdits.set(record.id, {
+                                value: null,
+                                readStamp: nextLinkedRecordReadStamp(),
+                            });
+                        }
+                        if (!prepared) return;
                         const latestHydrated = accepted?.[linkedTableId];
                         const latestTables: Table[] = latestHydrated
                             ? [
@@ -608,17 +730,37 @@ export function createFormLinkedRecordsOwner(options: {
                             )
                         )
                             return;
-                        createdOptions.set(record.id, prepared);
+                        if (edited)
+                            fieldEdits.set(record.id, {
+                                value: prepared,
+                                readStamp: fieldEdits.get(record.id)!.readStamp,
+                            });
+                        else {
+                            createdOptions.set(record.id, prepared);
+                            createdPresentationTickets.set(
+                                record.id,
+                                pageTicket
+                            );
+                            createdRecordIds.add(record.id);
+                        }
                     };
                 } catch {
                     return null;
                 }
+            },
+            prepareEdited(
+                source: AirtableRecord,
+                childTable: Table
+            ): (() => void) | null {
+                return entry.prepareCreated(source, childTable, true);
             },
             destroy() {
                 if (stopped) return;
                 stopped = true;
                 selectedOptions.clear();
                 createdOptions.clear();
+                createdPresentationTickets.clear();
+                createdRecordIds.clear();
                 stop();
                 notify();
                 listeners.clear();
@@ -640,6 +782,17 @@ export function createFormLinkedRecordsOwner(options: {
             field(fieldId);
             return (
                 facets.get(fieldId)?.prepareCreated(record, childTable) ?? null
+            );
+        },
+        prepareEdited(
+            fieldId: string,
+            record: AirtableRecord,
+            childTable: FormLinkedRecordsSnapshot['table']
+        ): (() => void) | null {
+            if (!current()) return null;
+            field(fieldId);
+            return (
+                facets.get(fieldId)?.prepareEdited(record, childTable) ?? null
             );
         },
         clearOptions(fieldId: string) {

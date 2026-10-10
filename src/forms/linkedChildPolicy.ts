@@ -16,6 +16,8 @@ export type LinkedChildPolicyUnavailableReason =
     | 'invalid-metadata'
     | 'unsupported-configuration'
     | 'create-disabled'
+    | 'edit-disabled'
+    | 'unavailable-edit-record'
     | 'invalid-native-value'
     | 'unavailable-selected-policy'
     | 'capacity-reached'
@@ -367,6 +369,249 @@ export function reconcileLinkedChildCreate(input: {
             nativeIds: next,
             changed,
             exemptCreatedRecord: add && changed,
+        };
+    } catch {
+        return unavailable('invalid-metadata');
+    }
+}
+
+export type LinkedChildEditPolicy = Omit<LinkedChildCreatePolicy, 'prefill'> & {
+    recordId: string;
+    displayedRecordIds: string[];
+    prefill: LinkedRecordPrefill;
+};
+
+/** Displayed native Form rows only; finder candidates are outside this SDK subset. */
+export function resolveLinkedChildEditPolicy(input: {
+    loaded: FormLoadedResult;
+    fieldId: string;
+    recordId: string;
+    data: Readonly<Record<string, AirtableValue>>;
+    linkedRecords?: FormLinkedRecordsSnapshot;
+}): LinkedChildEditPolicy | Unavailable {
+    try {
+        const { loaded, fieldId, data } = input;
+        const schema = physicalLink(loaded, fieldId);
+        if (!schema || !loaded.payload.fieldIdsInForm.includes(fieldId))
+            return unavailable('invalid-metadata');
+        if (schema.miniExtConfig != null && !object(schema.miniExtConfig))
+            return unavailable('invalid-metadata');
+        const config: Record<string, unknown> = schema.miniExtConfig ?? {};
+        for (const key of [
+            'allowCreatingRecords',
+            'allowEditingRecords',
+            'readOnly',
+            'dynamicFilteringToggle',
+        ]) {
+            if (config[key] != null && typeof config[key] !== 'boolean')
+                return unavailable('invalid-metadata');
+        }
+        if (config.allowEditingRecords !== true)
+            return unavailable('edit-disabled');
+        if (
+            !optionalEnum(config.layout, ['list', 'grid', 'gallery']) ||
+            (Object.hasOwn(config, 'openRecordsAs') &&
+                config.openRecordsAs !== 'modal') ||
+            config.dynamicFilteringToggle === true ||
+            !optionalEnum(config.formsForEditingAndCreating, [
+                'same-form',
+                'different-forms',
+            ]) ||
+            !optionalEnum(config.loggedInUserRecordsViewMode, [
+                'only-record-linked-to-user',
+                'all-records',
+            ])
+        )
+            return unavailable('unsupported-configuration');
+        const shared =
+            config.allowCreatingRecords === true &&
+            (config.formsForEditingAndCreating == null ||
+                config.formsForEditingAndCreating === 'same-form');
+        const childExtensionId = shared
+            ? config.extensionIdForCreatingAndEditing
+            : config.extensionIdForEditing;
+        if (!nonempty(childExtensionId)) return unavailable('invalid-metadata');
+        if (!object(data)) return unavailable('invalid-native-value');
+        const nativeIds = recordIds(data[fieldId]);
+        if (!nativeIds) return unavailable('invalid-native-value');
+        const snapshot = input.linkedRecords;
+        if (
+            !snapshot ||
+            !['idle', 'ready'].includes(snapshot.phase) ||
+            snapshot.pending ||
+            snapshot.linkedTableId !==
+                schema.airtableField.config.options.linkedTableId ||
+            !snapshot.selectedPolicy.supported ||
+            !['applied', 'not-configured'].includes(
+                snapshot.selectedPolicy.state
+            ) ||
+            snapshot.unresolvedSelectedIds.includes(input.recordId) ||
+            !snapshot.table
+        )
+            return unavailable('unavailable-selected-policy');
+        const remaining = new Map<string, number>();
+        for (const id of nativeIds)
+            remaining.set(id, (remaining.get(id) ?? 0) + 1);
+        for (const record of snapshot.selectedRecords) {
+            const count = remaining.get(record.id) ?? 0;
+            if (!nonempty(record.id) || count === 0 || !object(record.fields))
+                return unavailable('unavailable-selected-policy');
+            remaining.set(record.id, count - 1);
+        }
+        const displayedRecordIds = [
+            ...new Set(snapshot.selectedRecords.map((record) => record.id)),
+        ];
+        if (
+            !nonempty(input.recordId) ||
+            !nativeIds.includes(input.recordId) ||
+            !displayedRecordIds.includes(input.recordId)
+        )
+            return unavailable('unavailable-edit-record');
+        const physical = schema.airtableField.config;
+        const inverse = physical.options.inverseLinkFieldId;
+        if (inverse != null && !nonempty(inverse))
+            return unavailable('invalid-metadata');
+        if (
+            !optionalEnum(config.maxRecordsToSelectOrCreate, ['1', 'unlimited'])
+        )
+            return unavailable('invalid-metadata');
+        const single = Object.hasOwn(config, 'maxRecordsToSelectOrCreate')
+            ? config.maxRecordsToSelectOrCreate === '1'
+            : physical.options.prefersSingleRecordLink;
+        const custom = config.customMaxRecordsToSelect;
+        if (
+            custom != null &&
+            (typeof custom !== 'number' ||
+                !Number.isFinite(custom) ||
+                custom < 0)
+        )
+            return unavailable('invalid-metadata');
+        const parent = loaded.payload.formRecord;
+        return {
+            type: 'available',
+            childExtensionId,
+            parentFieldId: fieldId,
+            linkedTableId: physical.options.linkedTableId,
+            parentInverseFieldId: inverse ?? null,
+            maximum: single ? 1 : typeof custom === 'number' ? custom : null,
+            selectedCount: snapshot.selectedRecords.length,
+            nativeIds,
+            recordId: input.recordId,
+            displayedRecordIds,
+            prefill: {
+                prefillQueryForChildExtension: null,
+                toLinkToParent:
+                    parent.type === 'edit' &&
+                    inverse != null &&
+                    config.loggedInUserRecordsViewMode ===
+                        'only-record-linked-to-user'
+                        ? {
+                              reversedFieldIdToPrefill: inverse,
+                              parentFormRecordId: parent.recordId,
+                          }
+                        : null,
+            },
+        };
+    } catch {
+        return unavailable('invalid-metadata');
+    }
+}
+
+/** Exact EDIT receipt only. Explicit inverse arrays are a conservative SDK subset;
+ * canonical reconciliation also accepts missing inverse metadata. */
+export function reconcileLinkedChildEdit(input: {
+    parent: FormLoadedResult;
+    fieldId: string;
+    data: Readonly<Record<string, AirtableValue>>;
+    child: FormLoadedResult;
+    savedRecord: AirtableRecord;
+    recordId: string;
+    maximum: number | null;
+    selectedCount: number;
+}):
+    | {
+          type: 'available';
+          nativeIds: string[];
+          changed: boolean;
+          exemptCreatedRecord: boolean;
+      }
+    | Unavailable {
+    try {
+        const field = physicalLink(input.parent, input.fieldId);
+        const nativeIds = recordIds(input.data[input.fieldId]);
+        if (
+            !field ||
+            !nativeIds ||
+            !nonempty(input.savedRecord.id) ||
+            !object(input.savedRecord.fields) ||
+            input.child.payload.formRecord.type !== 'edit' ||
+            input.child.payload.formRecord.recordId !== input.recordId ||
+            input.savedRecord.id !== input.recordId
+        )
+            return unavailable('invalid-metadata');
+        let add = true;
+        const parent = input.parent.payload.formRecord;
+        if (parent.type === 'edit') {
+            const inverseId =
+                field.airtableField.config.options.inverseLinkFieldId;
+            const matches = Object.values(
+                input.child.payload.fieldIdsToSchemas
+            ).filter(
+                (schema) =>
+                    schema.airtableField.config.type ===
+                        'multipleRecordLinks' &&
+                    schema.airtableField.config.options.inverseLinkFieldId ===
+                        input.fieldId
+            );
+            const inverse = matches[0];
+            if (
+                !nonempty(inverseId) ||
+                matches.length !== 1 ||
+                !inverse ||
+                inverse.airtableField.id !== inverseId ||
+                !Object.hasOwn(
+                    input.child.payload.fieldIdsToSchemas,
+                    inverseId
+                ) ||
+                input.child.payload.fieldIdsToSchemas[inverseId] !== inverse ||
+                Object.values(input.child.payload.fieldIdsToSchemas).filter(
+                    (schema) => schema.airtableField.id === inverseId
+                ).length !== 1 ||
+                inverse.fieldType !== 'multipleRecordLinks' ||
+                inverse.airtableField.isComputed !== false ||
+                inverse.airtableField.config.type !== 'multipleRecordLinks' ||
+                inverse.airtableField.config.options.linkedTableId !==
+                    parent.tableId ||
+                !Object.hasOwn(input.savedRecord.fields, inverseId)
+            )
+                return unavailable('unavailable-inverse');
+            const linked = recordIds(input.savedRecord.fields[inverseId]);
+            // A returned explicit array is required; null/missing is not unlink evidence.
+            if (!Array.isArray(input.savedRecord.fields[inverseId]) || !linked)
+                return unavailable('unavailable-inverse');
+            add = linked.includes(parent.recordId);
+        }
+        const alreadyPresent = nativeIds.includes(input.savedRecord.id);
+        // Capacity limits only an append; retain, remove and no-op stay admissible.
+        if (
+            add &&
+            !alreadyPresent &&
+            input.maximum !== null &&
+            (!Number.isFinite(input.selectedCount) ||
+                input.selectedCount >= input.maximum)
+        )
+            return unavailable('capacity-reached');
+        const next = add
+            ? alreadyPresent
+                ? nativeIds
+                : [...nativeIds, input.savedRecord.id]
+            : nativeIds.filter((id) => id !== input.savedRecord.id);
+        const changed = next.length !== nativeIds.length;
+        return {
+            type: 'available',
+            nativeIds: next,
+            changed,
+            exemptCreatedRecord: false,
         };
     } catch {
         return unavailable('invalid-metadata');

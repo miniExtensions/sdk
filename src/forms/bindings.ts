@@ -126,7 +126,7 @@ export type FormFieldBindings = {
     field(fieldId: string): FormFieldBinding;
     /** Read-only rich data; constructing/subscribing never dispatches a read. */
     linkedRecords(fieldId: string): FormLinkedRecordsFacet;
-    /** Explicit configured modal CREATE; does not accept record IDs or completion receipts. */
+    /** Explicit configured modal child owner; IDs must come from its accepted displayed native subset. */
     linkedChild(
         fieldId: string,
         recovery: FormLinkedChildRecovery
@@ -620,18 +620,19 @@ export function createFormFieldBindings(
                     loaded,
                     parent: options.parent,
                 });
-                const fieldLease = () => {
+                const fieldLease = (write = true) => {
                     const snapshot = field(id).getSnapshot();
                     return (
                         current() &&
                         pendingRead === null &&
                         !snapshot.retired &&
-                        !snapshot.readOnly &&
+                        (!write || !snapshot.readOnly) &&
                         snapshot.visibility.type === 'visible' &&
                         !attachmentBlocked() &&
                         !choiceBlocked() &&
-                        (options.canWriteField?.(id) ?? true) &&
-                        (options.canWrite?.() ?? true) &&
+                        (!write ||
+                            ((options.canWriteField?.(id) ?? true) &&
+                                (options.canWrite?.() ?? true))) &&
                         ['ready', 'saved', 'validation-error'].includes(
                             controller.getState().status
                         )
@@ -656,12 +657,17 @@ export function createFormFieldBindings(
                         [...retainedChildren].every(
                             (other) => other === model || !other.blocksForm()
                         ),
+                    canObserve: () =>
+                        fieldLease(false) &&
+                        [...retainedChildren].every(
+                            (other) => other === model || !other.blocksForm()
+                        ),
                     createChild: (child) =>
                         createFormFieldBindings({
                             ...child,
                             client: options.client,
                             getScope: () => options.getScope(),
-                            // One independent native store per genuine create intent.
+                            // One native store per genuine accepted child intent.
                             // No synthetic Portal parent scope and no saved-create reuse.
                             store: new FormDraftStore<AirtableValue>(),
                         }),
@@ -670,10 +676,12 @@ export function createFormFieldBindings(
                         expectedDraftRevision,
                         afterCommit,
                         ownsIntent,
-                        unchanged = false
+                        unchanged = false,
+                        readonlyNoop = false
                     ) => {
                         const admission = () => {
-                            if (!fieldLease()) return false;
+                            if (!fieldLease(!(unchanged && readonlyNoop)))
+                                return false;
                             // Observe the parent lease after permission callbacks;
                             // its own callbacks may also change the native draft.
                             return (
@@ -717,6 +725,25 @@ export function createFormFieldBindings(
                                 : null;
                         return (
                             linkedRecordsOwner?.prepareCreated(
+                                id,
+                                result.raw.record,
+                                table
+                                    ? { airtableFields: table.airtableFields }
+                                    : null
+                            ) ?? null
+                        );
+                    },
+                    prepareEdited: (result) => {
+                        owner.linkedRecords(id);
+                        const table =
+                            result.raw.context.type !== 'direct-url'
+                                ? result.raw.context
+                                      .newTableIdsToLinkedTableStates[
+                                      result.raw.tableId
+                                  ]
+                                : null;
+                        return (
+                            linkedRecordsOwner?.prepareEdited(
                                 id,
                                 result.raw.record,
                                 table

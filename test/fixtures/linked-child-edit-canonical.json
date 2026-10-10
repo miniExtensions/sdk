@@ -1,0 +1,651 @@
+{
+    "revision": "4bf957c4830e6863972e45e52f2c371dc8ea9c77",
+    "tree": "1e731268b05adb72791e448320e464d5b338dcff",
+    "sourceHashes": {
+        "utils/linked-records-field-config-helpers.ts": "8b7658c63a3b991b410d820e53e1bc965c4e88580f4ee40f65887ba0a3e65ea5",
+        "components/Fields/FieldRenderer/LinkedRecordsField/LinkedRecordsField.tsx": "8475998be1e17529802eafe60442b5c986aa1559c10fc55f7f0dceec71ae01d3",
+        "components/Fields/FieldRenderer/LinkedRecordsField/LineItemModalTrigger.tsx": "c4448ba83759376e83713cdb7662c9a5265b96f7e87bdb962eda6a4f20eb94b5",
+        "components/PublicExtension/redux/publicExtensionReducer.ts": "83d76714a265ccef980773b9df031bcbc074b56a742a447de551d6f8f5ac8f56",
+        "components/PublicExtension/redux/saveOrComputeForm.ts": "15a555cfe1f810b710c55b7d4a360b406dedd5404e61f79cebfd4c9771484eaf",
+        "types/helpers/mergeLinkedTableState.ts": "72b07a4ed8ff497fea1c7d232729aa67bdb81bc9fb1e4fd059e4e2951b5261ad",
+        "types/airtable/helpers.ts": "38618da47dd77618ec0af1a1cc4d196bb89a9ceaa56adb79985398bfceebf73d",
+        "backend-src/v1/handlers/fetchExtensionForEndUser/index.ts": "a477d57d9300a1bd82568832410eb26f6f66a5b7831637c213fd57298fa9391a",
+        "backend-src/utils/reconcileAllowedRecordIdsForChildExtension.ts": "adc0084164e4f42e6dfdca22ae75bb5ac6c8c16dd66b87b990d6827902307ba8",
+        "backend-src/public-extensions/prefillState.ts": "e60272968da7f7fd4437f7f3ebaa21da33f098a4b1880fe0dcc8396f7dfdc364",
+        "types/utils/type-guards/index.ts": "c0712f54a6dbaa8a46110fb65ea55e870ca92ef21a12753d6389fd56ba6313fd",
+        "utils/skipLoginRecordId.ts": "835e4e9ce0aa52078e23720d1cecf6ea8af29aa7052916f7b446ef64f44a1519"
+    },
+    "generator": "scripts/generate-linked-child-edit-fixture.mjs",
+    "generatorSha256": "8a0d577d7d8fc1f61a5ad3818ab27606197d8647fa3c19a0721fb26b7e3d1357",
+    "proof": "Finite source-executed EDIT helper/expression and pure cache-merge oracles with synthetic external schema input. Proposed displayed-native-row eligibility is explicitly a conservative contract, not an implemented SDK EDIT owner. No full reducer, backend authorization, browser or persistence proof.",
+    "editExtensionCases": [
+        {
+            "name": "shared-default",
+            "config": {
+                "allowEditingRecords": true,
+                "allowCreatingRecords": true,
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForEditing": "form_edit"
+            },
+            "expected": "form_shared"
+        },
+        {
+            "name": "shared-explicit",
+            "config": {
+                "allowEditingRecords": true,
+                "allowCreatingRecords": true,
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForEditing": "form_edit",
+                "formsForEditingAndCreating": "same-form"
+            },
+            "expected": "form_shared"
+        },
+        {
+            "name": "shared-null",
+            "config": {
+                "allowEditingRecords": true,
+                "allowCreatingRecords": true,
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForEditing": "form_edit",
+                "formsForEditingAndCreating": null
+            },
+            "expected": "form_shared"
+        },
+        {
+            "name": "separate",
+            "config": {
+                "allowEditingRecords": true,
+                "allowCreatingRecords": true,
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForEditing": "form_edit",
+                "formsForEditingAndCreating": "different-forms"
+            },
+            "expected": "form_edit"
+        },
+        {
+            "name": "edit-only-false",
+            "config": {
+                "allowEditingRecords": true,
+                "allowCreatingRecords": false,
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForEditing": "form_edit"
+            },
+            "expected": "form_edit"
+        },
+        {
+            "name": "edit-only-omitted",
+            "config": {
+                "allowEditingRecords": true,
+                "extensionIdForEditing": "form_edit"
+            },
+            "expected": "form_edit"
+        },
+        {
+            "name": "edit-disabled",
+            "config": {
+                "allowEditingRecords": false,
+                "allowCreatingRecords": true,
+                "extensionIdForCreatingAndEditing": "form_shared",
+                "extensionIdForEditing": "form_edit"
+            },
+            "expected": null
+        },
+        {
+            "name": "edit-toggle-omitted",
+            "config": { "extensionIdForEditing": "form_edit" },
+            "expected": null
+        },
+        {
+            "name": "shared-id-missing",
+            "config": {
+                "allowCreatingRecords": true,
+                "allowEditingRecords": true,
+                "extensionIdForEditing": "form_edit"
+            },
+            "expected": null
+        },
+        {
+            "name": "separate-id-missing",
+            "config": {
+                "allowCreatingRecords": false,
+                "allowEditingRecords": true,
+                "extensionIdForCreatingAndEditing": "form_shared"
+            },
+            "expected": null
+        }
+    ],
+    "openCases": [
+        {
+            "name": "readonly-full-capacity",
+            "parentReadOnly": true,
+            "capacityFull": true,
+            "targetInNative": true,
+            "targetDisplayed": true,
+            "expected": {
+                "canonicalWrapperAllows": true,
+                "canonicalCanAdd": false,
+                "proposedScopeEligible": true,
+                "displayedRecordIds": ["rec_child"]
+            }
+        },
+        {
+            "name": "editable-full-capacity",
+            "parentReadOnly": false,
+            "capacityFull": true,
+            "targetInNative": true,
+            "targetDisplayed": true,
+            "expected": {
+                "canonicalWrapperAllows": true,
+                "canonicalCanAdd": false,
+                "proposedScopeEligible": true,
+                "displayedRecordIds": ["rec_child"]
+            }
+        },
+        {
+            "name": "displayed-selected",
+            "parentReadOnly": false,
+            "capacityFull": false,
+            "targetInNative": true,
+            "targetDisplayed": true,
+            "expected": {
+                "canonicalWrapperAllows": true,
+                "canonicalCanAdd": true,
+                "proposedScopeEligible": true,
+                "displayedRecordIds": ["rec_child"]
+            }
+        },
+        {
+            "name": "filtered-out-selected",
+            "parentReadOnly": false,
+            "capacityFull": false,
+            "targetInNative": true,
+            "targetDisplayed": false,
+            "expected": {
+                "canonicalWrapperAllows": true,
+                "canonicalCanAdd": true,
+                "proposedScopeEligible": false,
+                "displayedRecordIds": []
+            }
+        },
+        {
+            "name": "finder-only",
+            "parentReadOnly": false,
+            "capacityFull": false,
+            "targetInNative": false,
+            "targetDisplayed": false,
+            "expected": {
+                "canonicalWrapperAllows": true,
+                "canonicalCanAdd": true,
+                "proposedScopeEligible": false,
+                "displayedRecordIds": []
+            }
+        },
+        {
+            "name": "config-preview",
+            "parentReadOnly": false,
+            "capacityFull": false,
+            "targetInNative": true,
+            "targetDisplayed": true,
+            "expected": {
+                "canonicalWrapperAllows": false,
+                "canonicalCanAdd": true,
+                "proposedScopeEligible": false,
+                "displayedRecordIds": ["rec_child"]
+            }
+        },
+        {
+            "name": "no-edit-form",
+            "parentReadOnly": false,
+            "capacityFull": false,
+            "targetInNative": true,
+            "targetDisplayed": true,
+            "expected": {
+                "canonicalWrapperAllows": false,
+                "canonicalCanAdd": true,
+                "proposedScopeEligible": false,
+                "displayedRecordIds": ["rec_child"]
+            }
+        }
+    ],
+    "reconciliationCases": [
+        {
+            "name": "retain-duplicates",
+            "parentMode": "edit",
+            "nativeIds": ["rec_child", "rec_other", "rec_child"],
+            "savedId": "rec_child",
+            "inversePresent": true,
+            "inverseIds": ["rec_parent"],
+            "expected": {
+                "nativeIds": ["rec_child", "rec_other", "rec_child"],
+                "changed": false,
+                "createdExemption": false
+            }
+        },
+        {
+            "name": "readd-after-local-removal",
+            "parentMode": "edit",
+            "nativeIds": ["rec_other", "rec_other"],
+            "savedId": "rec_child",
+            "inversePresent": true,
+            "inverseIds": ["rec_parent"],
+            "expected": {
+                "nativeIds": ["rec_other", "rec_other", "rec_child"],
+                "changed": true,
+                "createdExemption": false
+            }
+        },
+        {
+            "name": "unlink-all-duplicates",
+            "parentMode": "edit",
+            "nativeIds": ["rec_child", "rec_other", "rec_child", "rec_last"],
+            "savedId": "rec_child",
+            "inversePresent": true,
+            "inverseIds": [],
+            "expected": {
+                "nativeIds": ["rec_other", "rec_last"],
+                "changed": true,
+                "createdExemption": false
+            }
+        },
+        {
+            "name": "unlink-absent-noop",
+            "parentMode": "edit",
+            "nativeIds": ["rec_other", "rec_other"],
+            "savedId": "rec_child",
+            "inversePresent": true,
+            "inverseIds": [],
+            "expected": {
+                "nativeIds": ["rec_other", "rec_other"],
+                "changed": false,
+                "createdExemption": false
+            }
+        },
+        {
+            "name": "parent-create-keeps-selection",
+            "parentMode": "create",
+            "nativeIds": ["rec_child", "rec_child"],
+            "savedId": "rec_child",
+            "inversePresent": true,
+            "inverseIds": [],
+            "expected": {
+                "nativeIds": ["rec_child", "rec_child"],
+                "changed": false,
+                "createdExemption": false
+            }
+        },
+        {
+            "name": "missing-inverse-canonical-add",
+            "parentMode": "edit",
+            "nativeIds": ["rec_other"],
+            "savedId": "rec_child",
+            "inversePresent": false,
+            "inverseIds": null,
+            "expected": {
+                "nativeIds": ["rec_other", "rec_child"],
+                "changed": true,
+                "createdExemption": false
+            }
+        },
+        {
+            "name": "null-inverse-canonical-remove",
+            "parentMode": "edit",
+            "nativeIds": ["rec_child", "rec_other", "rec_child"],
+            "savedId": "rec_child",
+            "inversePresent": true,
+            "inverseIds": null,
+            "expected": {
+                "nativeIds": ["rec_other"],
+                "changed": true,
+                "createdExemption": false
+            }
+        }
+    ],
+    "membershipCases": [
+        {
+            "name": "cached-edit-local-removal",
+            "cachedAllowed": true,
+            "parentContext": "edit",
+            "fallbackAllowed": false,
+            "expected": {
+                "fallbackRequired": false,
+                "fallbackPermitted": false,
+                "passedRecordAllowlistGate": true
+            }
+        },
+        {
+            "name": "cached-create-local-removal",
+            "cachedAllowed": true,
+            "parentContext": "create",
+            "fallbackAllowed": false,
+            "expected": {
+                "fallbackRequired": false,
+                "fallbackPermitted": false,
+                "passedRecordAllowlistGate": true
+            }
+        },
+        {
+            "name": "cached-remote-unlink",
+            "cachedAllowed": true,
+            "parentContext": "edit",
+            "fallbackAllowed": false,
+            "expected": {
+                "fallbackRequired": false,
+                "fallbackPermitted": false,
+                "passedRecordAllowlistGate": true
+            }
+        },
+        {
+            "name": "miss-edit-live-linked",
+            "cachedAllowed": false,
+            "parentContext": "edit",
+            "fallbackAllowed": true,
+            "expected": {
+                "fallbackRequired": true,
+                "fallbackPermitted": true,
+                "passedRecordAllowlistGate": true
+            }
+        },
+        {
+            "name": "miss-edit-live-unlinked",
+            "cachedAllowed": false,
+            "parentContext": "edit",
+            "fallbackAllowed": false,
+            "expected": {
+                "fallbackRequired": true,
+                "fallbackPermitted": true,
+                "passedRecordAllowlistGate": false
+            }
+        },
+        {
+            "name": "miss-create-local-selected",
+            "cachedAllowed": false,
+            "parentContext": "create",
+            "fallbackAllowed": true,
+            "expected": {
+                "fallbackRequired": true,
+                "fallbackPermitted": false,
+                "passedRecordAllowlistGate": false
+            }
+        }
+    ],
+    "relationshipCases": [
+        {
+            "name": "new-selection-keeps-parent-context",
+            "value": [],
+            "publicField": true,
+            "parentLink": true,
+            "sdkQuery": {},
+            "prefillQueryForChildExtension": null,
+            "toLinkToParent": {
+                "reversedFieldIdToPrefill": "fld_parent",
+                "parentFormRecordId": "rec_parent"
+            },
+            "expected": { "fieldName": "Parent", "fieldValue": ["rec_parent"] },
+            "expectedNative": ["rec_child"]
+        },
+        {
+            "name": "existing-inverse-canonical-dedup",
+            "value": ["rec_other", "rec_other"],
+            "publicField": true,
+            "parentLink": true,
+            "sdkQuery": {},
+            "prefillQueryForChildExtension": null,
+            "toLinkToParent": {
+                "reversedFieldIdToPrefill": "fld_parent",
+                "parentFormRecordId": "rec_parent"
+            },
+            "expected": {
+                "fieldName": "Parent",
+                "fieldValue": ["rec_other", "rec_parent"]
+            },
+            "expectedNative": ["rec_child"]
+        },
+        {
+            "name": "already-linked-no-prefill",
+            "value": ["rec_parent", "rec_parent"],
+            "publicField": true,
+            "parentLink": true,
+            "sdkQuery": {},
+            "prefillQueryForChildExtension": null,
+            "toLinkToParent": {
+                "reversedFieldIdToPrefill": "fld_parent",
+                "parentFormRecordId": "rec_parent"
+            },
+            "expected": null,
+            "expectedNative": ["rec_child"]
+        },
+        {
+            "name": "nonpublic-inverse-no-prefill",
+            "value": [],
+            "publicField": false,
+            "parentLink": true,
+            "sdkQuery": {},
+            "prefillQueryForChildExtension": null,
+            "toLinkToParent": {
+                "reversedFieldIdToPrefill": "fld_parent",
+                "parentFormRecordId": "rec_parent"
+            },
+            "expected": null,
+            "expectedNative": []
+        },
+        {
+            "name": "dropped-context-demonstrates-unlink",
+            "value": [],
+            "publicField": true,
+            "parentLink": false,
+            "sdkQuery": {},
+            "prefillQueryForChildExtension": null,
+            "toLinkToParent": null,
+            "expected": null,
+            "expectedNative": []
+        }
+    ],
+    "contextCases": [
+        {
+            "name": "configured-parent-edit",
+            "inverseId": "fld_parent",
+            "parentId": "rec_parent",
+            "config": {
+                "loggedInUserRecordsViewMode": "only-record-linked-to-user"
+            },
+            "selectedCustomView": null,
+            "expected": {
+                "reversedFieldIdToPrefill": "fld_parent",
+                "parentFormRecordId": "rec_parent"
+            }
+        },
+        {
+            "name": "custom-view-parent-edit",
+            "inverseId": "fld_parent",
+            "parentId": "rec_parent",
+            "config": {},
+            "selectedCustomView": { "showRecordsNotLinkedToUser": false },
+            "expected": {
+                "reversedFieldIdToPrefill": "fld_parent",
+                "parentFormRecordId": "rec_parent"
+            }
+        },
+        {
+            "name": "unrestricted-view",
+            "inverseId": "fld_parent",
+            "parentId": "rec_parent",
+            "config": {},
+            "selectedCustomView": null,
+            "expected": null
+        },
+        {
+            "name": "missing-inverse",
+            "inverseId": null,
+            "parentId": "rec_parent",
+            "config": {
+                "loggedInUserRecordsViewMode": "only-record-linked-to-user"
+            },
+            "selectedCustomView": null,
+            "expected": null
+        },
+        {
+            "name": "parent-create-no-id",
+            "inverseId": "fld_parent",
+            "parentId": null,
+            "config": {
+                "loggedInUserRecordsViewMode": "only-record-linked-to-user"
+            },
+            "selectedCustomView": null,
+            "expected": null
+        }
+    ],
+    "cacheCases": [
+        {
+            "name": "cache-edit-overlay",
+            "a": {
+                "airtableFields": [
+                    {
+                        "id": "fld_title",
+                        "name": "Title",
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "fld_enabled",
+                        "name": "Enabled",
+                        "config": { "type": "checkbox", "options": {} }
+                    }
+                ],
+                "recordIdsToAirtableRecords": {
+                    "rec_child": {
+                        "id": "rec_child",
+                        "fields": {
+                            "fld_title": "Old label",
+                            "fld_enabled": true,
+                            "fld_unfetched": "Retained dependency"
+                        }
+                    },
+                    "rec_sibling": {
+                        "id": "rec_sibling",
+                        "fields": { "fld_title": "Sibling" }
+                    }
+                }
+            },
+            "b": {
+                "airtableFields": [
+                    {
+                        "id": "fld_title",
+                        "name": "Title",
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "fld_enabled",
+                        "name": "Enabled",
+                        "config": { "type": "checkbox", "options": {} }
+                    }
+                ],
+                "recordIdsToAirtableRecords": {
+                    "rec_child": {
+                        "id": "rec_child",
+                        "fields": { "fld_title": "Edited label" }
+                    }
+                }
+            },
+            "expected": {
+                "airtableFields": [
+                    {
+                        "id": "fld_title",
+                        "name": "Title",
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "fld_enabled",
+                        "name": "Enabled",
+                        "config": { "type": "checkbox", "options": {} }
+                    }
+                ],
+                "recordIdsToAirtableRecords": {
+                    "rec_child": {
+                        "id": "rec_child",
+                        "fields": {
+                            "fld_title": "Edited label",
+                            "fld_unfetched": "Retained dependency"
+                        }
+                    },
+                    "rec_sibling": {
+                        "id": "rec_sibling",
+                        "fields": { "fld_title": "Sibling" }
+                    }
+                }
+            }
+        },
+        {
+            "name": "cache-unfetched-boolean-retained",
+            "a": {
+                "airtableFields": [
+                    {
+                        "id": "fld_title",
+                        "name": "Title",
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "fld_enabled",
+                        "name": "Enabled",
+                        "config": { "type": "checkbox", "options": {} }
+                    }
+                ],
+                "recordIdsToAirtableRecords": {
+                    "rec_child": {
+                        "id": "rec_child",
+                        "fields": {
+                            "fld_title": "Old label",
+                            "fld_enabled": true,
+                            "fld_unfetched": "Retained dependency"
+                        }
+                    },
+                    "rec_sibling": {
+                        "id": "rec_sibling",
+                        "fields": { "fld_title": "Sibling" }
+                    }
+                }
+            },
+            "b": {
+                "airtableFields": [
+                    {
+                        "id": "fld_title",
+                        "name": "Title",
+                        "config": { "type": "singleLineText", "options": null }
+                    }
+                ],
+                "recordIdsToAirtableRecords": {
+                    "rec_child": {
+                        "id": "rec_child",
+                        "fields": { "fld_title": "Edited label" }
+                    }
+                }
+            },
+            "expected": {
+                "airtableFields": [
+                    {
+                        "id": "fld_title",
+                        "name": "Title",
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    {
+                        "id": "fld_enabled",
+                        "name": "Enabled",
+                        "config": { "type": "checkbox", "options": {} }
+                    }
+                ],
+                "recordIdsToAirtableRecords": {
+                    "rec_child": {
+                        "id": "rec_child",
+                        "fields": {
+                            "fld_title": "Edited label",
+                            "fld_enabled": true,
+                            "fld_unfetched": "Retained dependency"
+                        }
+                    },
+                    "rec_sibling": {
+                        "id": "rec_sibling",
+                        "fields": { "fld_title": "Sibling" }
+                    }
+                }
+            }
+        }
+    ]
+}

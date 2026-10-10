@@ -1862,10 +1862,10 @@ ESM/CJS tests prove bounded local
 navigation and synthetic validation-response dispatch, not live persistence or
 complete hosted multipage parity. Live acceptance remains separately tracked.
 
-## Configured linked child CREATE
+## Configured linked child Create and Edit
 
 A top-level Form binding can coordinate an explicitly configured linked child
-CREATE in an ordinary modal. Acquire the owner outside the mounted UI and keep
+Create or Edit in an ordinary modal. Acquire the owner outside the mounted UI and keep
 it with the parent binding:
 
 ```ts
@@ -1945,6 +1945,18 @@ export function createLinkedChildPanel(
                 },
                 'Create'
             ),
+            ...snapshot.editableRecordIds.map((recordId) =>
+                h(
+                    'button',
+                    {
+                        key: recordId,
+                        type: 'button',
+                        id: `edit-child-${recordId}`,
+                        onClick: () => owner.openEdit(recordId, revision),
+                    },
+                    'Edit linked record'
+                )
+            ),
             scope &&
                 h(AirtableForm, {
                     scope,
@@ -1997,12 +2009,24 @@ export function createLinkedChildPanel(
 }
 ```
 
-The owner resolves the configured child extension, freezes its parent prefill,
-and owns the child binding and page owner. Applications do not supply a child
-record ID, Save receipt, or validation exemption. Construction, subscription,
-and rendering perform no load or Save. Create invokes `openCreate()`; Save
-invokes `save(snapshot.revision)` using the revision captured by the rendered
-button; Close invokes `close()`. Give every button an explicit `type="button"`.
+The owner resolves the configured child extension and owns the child binding
+and page owner. Construction, subscription and rendering perform no load or
+Save. Create invokes `openCreate()`. Edit invokes
+`openEdit(recordId, snapshot.revision)` with an ID from the captured
+`editableRecordIds`: ordered unique native selections that have an accepted,
+currently displayed field-specific record. Finder-only, filtered-out or
+unresolved records cannot open Edit directly. An explicit accepted option read
+may supply a newly selected existing record; Review or mounting never performs
+that read. A read-only or full-capacity parent may still expose Edit.
+
+`snapshot.intent` distinguishes Create from the captured exact Edit record.
+Create freezes its configured prefill. Edit uses an empty query and no dynamic
+or static Create query, while retaining applicable token-bound parent
+relationship context. The server remains authoritative for child access; this
+local displayed-row subset is not a server allowlist. Applications cannot
+supply a Save receipt or validation exemption. Save invokes
+`save(snapshot.revision)` using the rendered revision; Close invokes `close()`.
+Give every button an explicit `type="button"`.
 
 A React presentation borrows this owner. Subscribe in an effect and return only
 the unsubscribe function. Render `snapshot.child` using `AirtableForm` with a
@@ -2014,9 +2038,9 @@ remount preserve the child draft. Guard retired or unavailable snapshots with
 presentation. The installed-package checks execute this recipe against installed
 ESM and CJS entrypoints and actual React.
 
-This slice supports final one-page Save for an ordinary child CREATE. Prepared
-Review, compute, captcha, automatic submission, nested child creation, child
-EDIT, and multipage child flows are outside its supported scope. Existing child
+This slice supports final one-page Save for ordinary child Create and Edit.
+Prepared Review, compute, captcha, automatic submission, nested child flows
+and multipage child flows remain unsupported. Existing child
 validation and backend validation remain authoritative. Successful reconciliation
 updates the shared parent's native linked IDs, rich presentation and dirty state;
 other parent values remain in the shared draft.
@@ -2026,8 +2050,37 @@ descriptors are refused before exposing child controls, including hidden or
 read-only fields. This coordinator does not derive child cascade values; absent,
 null or empty descriptor lists do not introduce that dependency.
 
-Inspect `snapshot.completion`: `reconciled` means the known saved child was linked
-into the current parent draft. A capacity or parent-state race can produce
+Child Edit Save retains the captured child token and exact record authority,
+with live owner, session and configuration fences. It does not require the
+record to remain locally selected or spare Create capacity. Native relationship
+reconciliation is separate: it uses the saved inverse relationship and the
+latest parent draft, preserves duplicate occurrences, and never grants a new
+Create exemption. A prior proven Create exemption remains separate from edited
+presentation data. Explicit inverse arrays are required for edit-parent
+reconciliation; missing/null inverse evidence remains unsupported. This is a
+conservative subset of canonical reconciliation.
+
+An unchanged native array may reconcile on a read-only field without writing.
+Changed membership keeps writable-field admission; re-adding a removed record
+also observes current capacity. A denied write or over-capacity append yields
+`saved-not-reconciled` and preserves newer parent siblings. This capacity check
+is an SDK safety boundary, not a claim of canonical reconciliation parity.
+
+Edited rich data is restricted to the originating field's already accepted
+parent detail projection and dependencies. Child-only fields never expand that
+projection. Unsupported refresh invalidates stale target presentation to a
+generic unresolved result. Token-only `readSelected()` covers original loaded
+membership and cannot recover a newly selected existing candidate whose data
+was retired; an eligible explicit option read or accepted reload is required.
+Edited presentation and unresolved markers remain with the accepted Form owner
+when an option loader or rich facet is replaced. A cached hydration result or a
+read dispatched before the accepted Edit cannot restore older target data.
+Only a trusted read dispatched afterward that returns that exact target may
+replace its presentation; pages omitting the target leave it intact. Native
+membership, order and duplicate occurrences remain independent of this refresh.
+
+Inspect `snapshot.completion`: `reconciled` means the known saved child's inverse
+relationship was reconciled into the current parent draft. A capacity or parent-state race can produce
 `saved-not-reconciled`; the child has already saved, so do not submit it again.
 A true child-session retirement or interrupted dispatched Save can leave an
 unknown outcome. Keep the recovery journal, inspect the outcome, and explicitly

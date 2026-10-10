@@ -19,6 +19,9 @@ import { normalizeFormLeaseLoaded } from '../ui/formLease.js';
 import {
     resolveLinkedChildCreatePolicy,
     reconcileLinkedChildCreate,
+    resolveLinkedChildEditPolicy,
+    reconcileLinkedChildEdit,
+    type LinkedChildEditPolicy,
     type LinkedChildCreatePolicy,
 } from './linkedChildPolicy.js';
 
@@ -40,6 +43,9 @@ export type FormLinkedChildSnapshot = {
         | 'retired'
         | 'unavailable';
     canCreate: boolean;
+    /** Ordered unique displayed native IDs; this is UI eligibility, not server authorization. */
+    editableRecordIds: readonly string[];
+    intent: { type: 'create' } | { type: 'edit'; recordId: string } | null;
     /** Borrowed by rendering; unmount must not destroy these owned resources. */
     child: FormFieldBindings | null;
     pages: FormPageOwner | null;
@@ -56,6 +62,11 @@ export type FormLinkedChildOwner = {
         signal?: AbortSignal;
         clientTimeZone?: string;
     }): Promise<boolean>;
+    openEdit(
+        recordId: string,
+        renderedRevision: number,
+        options?: { signal?: AbortSignal; clientTimeZone?: string }
+    ): Promise<boolean>;
     /** Captured rendered revision; existing page validation and Form Save remain authoritative. */
     save(
         renderedRevision: number,
@@ -75,6 +86,8 @@ type InternalOptions = FormLinkedChildRecovery & {
     configurationRevision(): string | number;
     parentCurrent(): boolean;
     canAccept(): boolean;
+    /** Observation lease permits readonly child Edit; native writes keep their own admission. */
+    canObserve(): boolean;
     createChild(options: {
         loaded: FormLoadedResult;
         saveOptions: FormSaveOptions;
@@ -86,9 +99,13 @@ type InternalOptions = FormLinkedChildRecovery & {
         expectedDraftRevision: number,
         afterCommit: () => void,
         isCurrent: () => boolean,
-        unchanged?: boolean
+        unchanged?: boolean,
+        readonlyNoop?: boolean
     ): boolean;
     prepareCreated(
+        result: Extract<NormalizedFormSaveResult, { type: 'saved' }>
+    ): (() => void) | null;
+    prepareEdited(
         result: Extract<NormalizedFormSaveResult, { type: 'saved' }>
     ): (() => void) | null;
     changed(): void;
@@ -131,7 +148,7 @@ const hasUnsupportedChildLinkedFilters = (loaded: FormLoadedResult) =>
         );
     });
 
-/** Internal configured-create coordinator. There is no caller receipt or exemption channel. */
+/** Internal configured child coordinator. There is no caller receipt or exemption channel. */
 export function createFormLinkedChildOwner(
     options: InternalOptions
 ): FormLinkedChildOwner & {
@@ -173,7 +190,8 @@ export function createFormLinkedChildOwner(
     const ownedAttempts = new Set<RecoveryAttempt>();
     type Intent = {
         generation: number;
-        plan: LinkedChildCreatePolicy;
+        plan: LinkedChildCreatePolicy | LinkedChildEditPolicy;
+        recordId: string | null;
         loaded: FormLoadedResult;
         fields: FormFieldBindings;
         pages: FormPageOwner | null;
@@ -186,6 +204,7 @@ export function createFormLinkedChildOwner(
         released: boolean;
     };
     let intent: Intent | null = null;
+    let lastRecordId: string | null = null;
     const listeners = new Set<(snapshot: FormLinkedChildSnapshot) => void>();
     let notifying = false,
         notifyPending = false;
@@ -246,7 +265,9 @@ export function createFormLinkedChildOwner(
             return null;
         }
     };
-    const blocking = () => options.journal.blocking(scope, null) !== undefined;
+    const blocking = (
+        recordId: string | null = intent?.recordId ?? lastRecordId
+    ) => options.journal.blocking(scope, recordId) !== undefined;
     const canCreate = () => {
         try {
             const admissionGeneration = generation;
@@ -255,7 +276,7 @@ export function createFormLinkedChildOwner(
                 !parentCurrent() ||
                 activeLoad ||
                 saving ||
-                blocking() ||
+                blocking(null) ||
                 (intent && !['saved', 'closed', 'error'].includes(phase)) ||
                 completion === 'saved-not-reconciled' ||
                 !options.canAccept()
@@ -278,6 +299,53 @@ export function createFormLinkedChildOwner(
             return false;
         }
     };
+    const editPolicy = (recordId: string) => {
+        const data = options.form.controller.getState().draft?.data;
+        if (!data) return null;
+        return resolveLinkedChildEditPolicy({
+            loaded: parent,
+            fieldId: options.fieldId,
+            recordId,
+            data,
+            linkedRecords: options.form
+                .linkedRecords(options.fieldId)
+                .getSnapshot(),
+        });
+    };
+    const editableIds = (): string[] => {
+        try {
+            const ticket = generation;
+            if (
+                parent.payload.hasParentExtension ||
+                !parentCurrent() ||
+                activeLoad ||
+                saving ||
+                (intent && !['saved', 'closed', 'error'].includes(phase)) ||
+                completion === 'saved-not-reconciled' ||
+                !options.canObserve()
+            )
+                return [];
+            const state = options.form
+                .linkedRecords(options.fieldId)
+                .getSnapshot();
+            const ids = [
+                ...new Set(state.selectedRecords.map((record) => record.id)),
+            ];
+            const allowed = ids.filter(
+                (id) => editPolicy(id)?.type === 'available' && !blocking(id)
+            );
+            return parentCurrent() &&
+                ticket === generation &&
+                !activeLoad &&
+                !saving &&
+                !disposed &&
+                !parentRetired
+                ? allowed
+                : [];
+        } catch {
+            return [];
+        }
+    };
     const snapshot = (): FormLinkedChildSnapshot => {
         const live = parentCurrent();
         const p = live ? policy() : null;
@@ -288,16 +356,24 @@ export function createFormLinkedChildOwner(
             !saving &&
             (parent.payload.hasParentExtension ||
                 p?.type === 'unavailable' ||
-                !p);
+                !p) &&
+            editableIds().length === 0;
         return {
             revision,
             phase: !live ? 'retired' : unavailable ? 'unavailable' : phase,
             canCreate: canCreate(),
+            editableRecordIds: editableIds(),
+            intent:
+                live && intent?.current
+                    ? intent.recordId === null
+                        ? { type: 'create' }
+                        : { type: 'edit', recordId: intent.recordId }
+                    : null,
             child: live && intent?.current ? intent.fields : null,
             pages: live && intent?.current ? intent.pages : null,
             completion,
             error: unavailable
-                ? 'This configured child creation is unsupported or unavailable.'
+                ? 'This configured child flow is unsupported or unavailable.'
                 : error,
         };
     };
@@ -338,22 +414,229 @@ export function createFormLinkedChildOwner(
             }
         }
     };
-    const requireParent = (plan: LinkedChildCreatePolicy) => {
-        if (!parentCurrent() || !options.canAccept())
-            throw Error('This parent Form is no longer available.');
-        const fresh = policy();
+    const requireParent = (candidate: Intent) => {
+        const edit = candidate.recordId !== null;
         if (
-            !fresh ||
-            fresh.type !== 'available' ||
-            fresh.childExtensionId !== plan.childExtensionId ||
-            fresh.linkedTableId !== plan.linkedTableId ||
-            !parentCurrent()
+            !parentCurrent() ||
+            !(edit ? options.canObserve() : options.canAccept())
         )
-            throw Error(
-                'This configured child creation is no longer available.'
-            );
+            throw Error('This parent Form is no longer available.');
+        // Accepted edit authority binds the child token/record. Current selection
+        // and CREATE capacity are not Save authority; reconciliation is separate.
+        if (!edit) {
+            const fresh = policy();
+            if (
+                !fresh ||
+                fresh.type !== 'available' ||
+                fresh.childExtensionId !== candidate.plan.childExtensionId ||
+                fresh.linkedTableId !== candidate.plan.linkedTableId
+            )
+                throw Error(
+                    'This configured child creation is no longer available.'
+                );
+        }
+        if (!parentCurrent() || !ownsIntent(candidate))
+            throw Error('This child intent is stale.');
     };
     let stopParent = () => {};
+    let stopField = () => {};
+    let stopRich = () => {};
+    let observedFacet: ReturnType<FormFieldBindings['linkedRecords']> | null =
+        null;
+    const open = async (
+        plan: LinkedChildCreatePolicy | LinkedChildEditPolicy,
+        recordId: string | null,
+        request: { signal?: AbortSignal; clientTimeZone?: string }
+    ): Promise<boolean> => {
+        const ticket = ++generation;
+        lastRecordId = recordId;
+        const abort = new AbortController();
+        const forward = () => abort.abort(request.signal?.reason);
+        request.signal?.addEventListener('abort', forward, { once: true });
+        if (request.signal?.aborted) forward();
+        const old = intent;
+        intent = null;
+        activeLoad = abort;
+        if (old) release(old);
+        if (activeLoad !== abort || generation !== ticket) return false;
+        phase = 'loading';
+        completion = 'none';
+        error = null;
+        scope.tableId = plan.linkedTableId;
+        scope.childExtensionId = plan.childExtensionId;
+        emit();
+        const ownsLoad = () =>
+            activeLoad === abort &&
+            generation === ticket &&
+            !abort.signal.aborted &&
+            parentCurrent();
+        try {
+            if (!ownsLoad()) return false;
+            const input: LoadExtensionInput = {
+                childExtensionAccessData: {
+                    parentExtensionAccessToken:
+                        parent.payload.extensionAccessToken,
+                    fieldIdUsedToAccessExtension: options.fieldId,
+                },
+                childExtensionInfo: {
+                    childExtensionId: plan.childExtensionId,
+                    accessType:
+                        recordId === null
+                            ? { type: 'create' }
+                            : {
+                                  type: 'edit',
+                                  childExtensionRecordId: recordId,
+                                  childExtensionFieldId: null,
+                              },
+                },
+                context: {
+                    type: 'modal',
+                    linkedTableIdOfLinkedRecordField: plan.linkedTableId,
+                    prefillDataForLinkedRecordsForm: structuredClone(
+                        plan.prefill
+                    ),
+                },
+                query:
+                    recordId !== null
+                        ? {}
+                        : Object.fromEntries(
+                              new URLSearchParams(
+                                  plan.prefill.prefillQueryForChildExtension ??
+                                      ''
+                              )
+                          ),
+                ...(request.clientTimeZone !== undefined
+                    ? { clientTimeZone: request.clientTimeZone }
+                    : {}),
+            };
+            const response = await options.client.loadExtension(input, {
+                signal: abort.signal,
+                session: { ...session },
+            });
+            if (!ownsLoad()) return false;
+            if (
+                response.extensionScreen !== 'form_loaded' ||
+                response.extensionId !== plan.childExtensionId ||
+                response.workspaceId !== parent.workspaceId ||
+                response.payload.baseId !== parent.payload.baseId ||
+                response.payload.hasParentExtension !== true ||
+                (recordId === null
+                    ? response.payload.formRecord.type !== 'create'
+                    : response.payload.formRecord.type !== 'edit' ||
+                      response.payload.formRecord.recordId !== recordId ||
+                      response.payload.formRecord.tableId !==
+                          plan.linkedTableId) ||
+                response.payload.publicFields.state.tableId !==
+                    plan.linkedTableId ||
+                response.payload.publicFields.state.enableFormComputeMode ===
+                    true ||
+                (response.payload.publicFields.state.multiPageFormMode !=
+                    null &&
+                    response.payload.publicFields.state.multiPageFormMode !==
+                        'one-page') ||
+                response.payload.publicFields.state
+                    .promptUserBeforeSubmission === true ||
+                response.payload.publicFields.state.enableCaptcha === true ||
+                hasUnsupportedChildLinkedFilters(response)
+            )
+                throw Error(
+                    'The configured child Form is unavailable in this flow.'
+                );
+            const loaded = structuredClone(response);
+            const saveOptions: FormSaveOptions = {
+                captchaVal: null,
+                isComputeMode: false,
+                searchQuery: structuredClone(input.query ?? {}),
+                context: {
+                    type: 'modal',
+                    prefillData: structuredClone(plan.prefill),
+                },
+                conditionalLinkedRecordFieldIdsToFilteringValues: {},
+            };
+            let candidate: Intent | null = null;
+            let initializing = true;
+            const fields = options.createChild({
+                loaded,
+                saveOptions,
+                isCurrent: () =>
+                    initializing
+                        ? ownsLoad()
+                        : candidate !== null && childCurrent(candidate),
+            });
+            if (!ownsLoad()) {
+                initializing = false;
+                fields.destroy();
+                return false;
+            }
+            let pages: FormPageOwner | null = null;
+            try {
+                candidate = {
+                    generation: ticket,
+                    plan,
+                    recordId,
+                    loaded,
+                    fields,
+                    pages: null,
+                    current: true,
+                    attempt: null,
+                    receipt: null,
+                    reconciled: false,
+                    saveOptions,
+                    stops: [],
+                    released: false,
+                };
+                intent = candidate;
+                initializing = false;
+                pages = createFormPageOwner({
+                    fields,
+                    isCurrent: () => childCurrent(candidate!),
+                    configurationRevision: () => 0,
+                });
+                candidate.pages = pages;
+                if (pages.getSnapshot().status === 'blocked' || !ownsLoad())
+                    throw Error(
+                        'This child Form configuration is unsupported.'
+                    );
+                activeLoad = null;
+                const stop = fields.controller.subscribe(() => {
+                    if (intent === candidate && !saving) emit();
+                });
+                if (!ownsIntent(candidate) || !parentCurrent()) {
+                    stop();
+                    release(candidate);
+                    return false;
+                }
+                candidate.stops.push(stop);
+                phase = 'ready';
+                emit();
+                return (
+                    intent === candidate && candidate.current && parentCurrent()
+                );
+            } catch (failure) {
+                if (candidate) {
+                    candidate.current = false;
+                    for (const stop of candidate.stops) stop();
+                }
+                pages?.dispose();
+                fields.destroy();
+                if (intent === candidate) intent = null;
+                throw failure;
+            }
+        } catch {
+            if (activeLoad === abort && generation === ticket) {
+                phase = 'error';
+                error =
+                    'Child Form could not be loaded. Retry its explicit Create or Edit action.';
+            }
+            return false;
+        } finally {
+            request.signal?.removeEventListener('abort', forward);
+            if (activeLoad === abort) {
+                activeLoad = null;
+                emit();
+            }
+        }
+    };
     const owner: ReturnType<typeof createFormLinkedChildOwner> = {
         getSnapshot: snapshot,
         subscribe(listener) {
@@ -367,193 +650,39 @@ export function createFormLinkedChildOwner(
             return () => listeners.delete(listener);
         },
         async openCreate(request = {}) {
-            const admissionGeneration = generation;
+            const ticket = generation;
             if (!canCreate()) return false;
             const plan = policy();
             if (
                 !plan ||
                 plan.type !== 'available' ||
                 !parentCurrent() ||
-                admissionGeneration !== generation ||
+                ticket !== generation ||
                 activeLoad ||
-                saving ||
-                disposed ||
-                parentRetired
+                saving
             )
                 return false;
-            const ticket = ++generation;
-            const abort = new AbortController();
-            const forward = () => abort.abort(request.signal?.reason);
-            request.signal?.addEventListener('abort', forward, { once: true });
-            if (request.signal?.aborted) forward();
-            const old = intent;
-            intent = null;
-            activeLoad = abort;
-            if (old) release(old);
-            if (activeLoad !== abort || generation !== ticket) return false;
-            phase = 'loading';
-            completion = 'none';
-            error = null;
-            scope.tableId = plan.linkedTableId;
-            scope.childExtensionId = plan.childExtensionId;
-            emit();
-            const ownsLoad = () =>
-                activeLoad === abort &&
-                generation === ticket &&
-                !abort.signal.aborted &&
-                parentCurrent();
-            try {
-                if (!ownsLoad()) return false;
-                const input: LoadExtensionInput = {
-                    childExtensionAccessData: {
-                        parentExtensionAccessToken:
-                            parent.payload.extensionAccessToken,
-                        fieldIdUsedToAccessExtension: options.fieldId,
-                    },
-                    childExtensionInfo: {
-                        childExtensionId: plan.childExtensionId,
-                        accessType: { type: 'create' },
-                    },
-                    context: {
-                        type: 'modal',
-                        linkedTableIdOfLinkedRecordField: plan.linkedTableId,
-                        prefillDataForLinkedRecordsForm: structuredClone(
-                            plan.prefill
-                        ),
-                    },
-                    query: Object.fromEntries(
-                        new URLSearchParams(
-                            plan.prefill.prefillQueryForChildExtension ?? ''
-                        )
-                    ),
-                    ...(request.clientTimeZone !== undefined
-                        ? { clientTimeZone: request.clientTimeZone }
-                        : {}),
-                };
-                const response = await options.client.loadExtension(input, {
-                    signal: abort.signal,
-                    session: { ...session },
-                });
-                if (!ownsLoad()) return false;
-                if (
-                    response.extensionScreen !== 'form_loaded' ||
-                    response.extensionId !== plan.childExtensionId ||
-                    response.workspaceId !== parent.workspaceId ||
-                    response.payload.baseId !== parent.payload.baseId ||
-                    response.payload.hasParentExtension !== true ||
-                    response.payload.formRecord.type !== 'create' ||
-                    response.payload.publicFields.state.tableId !==
-                        plan.linkedTableId ||
-                    response.payload.publicFields.state
-                        .enableFormComputeMode === true ||
-                    (response.payload.publicFields.state.multiPageFormMode !=
-                        null &&
-                        response.payload.publicFields.state
-                            .multiPageFormMode !== 'one-page') ||
-                    response.payload.publicFields.state
-                        .promptUserBeforeSubmission === true ||
-                    response.payload.publicFields.state.enableCaptcha ===
-                        true ||
-                    hasUnsupportedChildLinkedFilters(response)
-                )
-                    throw Error(
-                        'The configured child Form is unavailable in this flow.'
-                    );
-                const loaded = structuredClone(response);
-                const saveOptions: FormSaveOptions = {
-                    captchaVal: null,
-                    isComputeMode: false,
-                    searchQuery: structuredClone(input.query ?? {}),
-                    context: {
-                        type: 'modal',
-                        prefillData: structuredClone(plan.prefill),
-                    },
-                    conditionalLinkedRecordFieldIdsToFilteringValues: {},
-                };
-                let candidate: Intent | null = null;
-                let initializing = true;
-                const fields = options.createChild({
-                    loaded,
-                    saveOptions,
-                    isCurrent: () =>
-                        initializing
-                            ? ownsLoad()
-                            : candidate !== null && childCurrent(candidate),
-                });
-                if (!ownsLoad()) {
-                    initializing = false;
-                    fields.destroy();
-                    return false;
-                }
-                let pages: FormPageOwner | null = null;
-                try {
-                    candidate = {
-                        generation: ticket,
-                        plan,
-                        loaded,
-                        fields,
-                        pages: null,
-                        current: true,
-                        attempt: null,
-                        receipt: null,
-                        reconciled: false,
-                        saveOptions,
-                        stops: [],
-                        released: false,
-                    };
-                    intent = candidate;
-                    initializing = false;
-                    pages = createFormPageOwner({
-                        fields,
-                        isCurrent: () => childCurrent(candidate!),
-                        configurationRevision: () => 0,
-                    });
-                    candidate.pages = pages;
-                    if (pages.getSnapshot().status === 'blocked' || !ownsLoad())
-                        throw Error(
-                            'This child Form configuration is unsupported.'
-                        );
-                    activeLoad = null;
-                    const stop = fields.controller.subscribe(() => {
-                        if (intent === candidate && !saving) emit();
-                    });
-                    if (!ownsIntent(candidate) || !parentCurrent()) {
-                        stop();
-                        release(candidate);
-                        return false;
-                    }
-                    candidate.stops.push(stop);
-                    phase = 'ready';
-                    emit();
-                    return (
-                        intent === candidate &&
-                        candidate.current &&
-                        parentCurrent()
-                    );
-                } catch (failure) {
-                    if (candidate) {
-                        candidate.current = false;
-                        for (const stop of candidate.stops) stop();
-                    }
-                    pages?.dispose();
-                    fields.destroy();
-                    if (intent === candidate) intent = null;
-                    throw failure;
-                }
-            } catch {
-                if (activeLoad === abort && generation === ticket) {
-                    phase = 'error';
-                    error =
-                        'Child Form could not be loaded. Choose Create to retry explicitly.';
-                }
+            return open(plan, null, request);
+        },
+        async openEdit(recordId, renderedRevision, request = {}) {
+            const ticket = generation;
+            if (
+                renderedRevision !== revision ||
+                !editableIds().includes(recordId)
+            )
                 return false;
-            } finally {
-                request.signal?.removeEventListener('abort', forward);
-                if (activeLoad === abort) {
-                    activeLoad = null;
-                    emit();
-                }
-            }
+            const plan = editPolicy(recordId);
+            if (
+                !plan ||
+                plan.type !== 'available' ||
+                renderedRevision !== revision ||
+                !parentCurrent() ||
+                ticket !== generation ||
+                activeLoad ||
+                saving
+            )
+                return false;
+            return open(plan, recordId, request);
         },
         async save(renderedRevision, request = {}) {
             const candidate = intent;
@@ -567,7 +696,7 @@ export function createFormLinkedChildOwner(
                 blocking()
             )
                 throw Error('This child submission is unavailable.');
-            requireParent(candidate.plan);
+            requireParent(candidate);
             const page = candidate.pages.getSnapshot();
             if (!page.canSubmit)
                 throw Error('Complete the child Form before submitting.');
@@ -581,14 +710,20 @@ export function createFormLinkedChildOwner(
                             !childCurrent(candidate) ||
                             input.extensionAccessToken !==
                                 candidate.loaded.payload.extensionAccessToken ||
-                            input.formRecord.type !== 'create' ||
+                            (candidate.recordId === null
+                                ? input.formRecord.type !== 'create'
+                                : input.formRecord.type !== 'edit' ||
+                                  input.formRecord.recordId !==
+                                      candidate.recordId ||
+                                  input.formRecord.tableId !==
+                                      candidate.plan.linkedTableId) ||
                             input.context.type !== 'modal' ||
                             input.isComputeMode
                         )
-                            throw Error('The child creation intent is stale.');
+                            throw Error('The child intent is stale.');
                         const attempt = options.journal.begin(
                             attemptScope,
-                            null,
+                            candidate.recordId,
                             'save',
                             options.loadVersion,
                             options.fieldId
@@ -601,10 +736,13 @@ export function createFormLinkedChildOwner(
                                     if (
                                         result.raw.tableId !==
                                             candidate.plan.linkedTableId ||
-                                        result.raw.context.type !== 'modal'
+                                        result.raw.context.type !== 'modal' ||
+                                        (candidate.recordId !== null &&
+                                            result.raw.record.id !==
+                                                candidate.recordId)
                                     )
                                         throw Error(
-                                            'The child creation response does not match its intent.'
+                                            'The child response does not match its intent.'
                                         );
                                     candidate.receipt = structuredClone(result);
                                 }
@@ -624,7 +762,7 @@ export function createFormLinkedChildOwner(
                     },
                 },
                 () => {
-                    requireParent(candidate.plan);
+                    requireParent(candidate);
                 }
             );
             saving = true;
@@ -656,17 +794,34 @@ export function createFormLinkedChildOwner(
                         candidate.generation === generation &&
                         !candidate.reconciled &&
                         parentCurrent() &&
-                        options.canAccept()
+                        (candidate.recordId === null
+                            ? options.canAccept()
+                            : options.canObserve())
                     ) {
                         const state = options.form.controller.getState();
                         const reconciliation =
                             state.draft &&
-                            reconcileLinkedChildCreate({
+                            (candidate.recordId === null
+                                ? reconcileLinkedChildCreate
+                                : reconcileLinkedChildEdit)({
                                 parent,
                                 fieldId: options.fieldId,
                                 data: state.draft.data,
                                 child: candidate.loaded,
                                 savedRecord: accepted.raw.record,
+                                recordId:
+                                    candidate.recordId ??
+                                    accepted.raw.record.id,
+                                maximum: candidate.plan.maximum,
+                                selectedCount:
+                                    state.draft.data[options.fieldId] instanceof
+                                    Array
+                                        ? (
+                                              state.draft.data[
+                                                  options.fieldId
+                                              ] as unknown[]
+                                          ).length
+                                        : 0,
                             });
                         if (
                             reconciliation &&
@@ -674,8 +829,19 @@ export function createFormLinkedChildOwner(
                         ) {
                             const fresh = policy();
                             // Capacity changes cannot overwrite newer parent edits. A no-op/remove needs no spare slot.
-                            const adding = reconciliation.exemptCreatedRecord;
+                            const adding =
+                                reconciliation.nativeIds.length >
+                                (Array.isArray(
+                                    state.draft!.data[options.fieldId]
+                                )
+                                    ? (
+                                          state.draft!.data[
+                                              options.fieldId
+                                          ] as unknown[]
+                                      ).length
+                                    : 0);
                             if (
+                                candidate.recordId !== null ||
                                 !adding ||
                                 (fresh?.type === 'available' &&
                                     fresh.childExtensionId ===
@@ -683,9 +849,12 @@ export function createFormLinkedChildOwner(
                                     fresh.linkedTableId ===
                                         candidate.plan.linkedTableId)
                             ) {
-                                const install = adding
-                                    ? options.prepareCreated(accepted)
-                                    : () => {};
+                                const install =
+                                    candidate.recordId !== null
+                                        ? options.prepareEdited(accepted)
+                                        : adding
+                                          ? options.prepareCreated(accepted)
+                                          : () => {};
                                 const afterCommit = () => {
                                     install?.();
                                     candidate.reconciled = true;
@@ -695,7 +864,9 @@ export function createFormLinkedChildOwner(
                                     if (
                                         ownsIntent(candidate) &&
                                         parentCurrent() &&
-                                        options.canAccept() &&
+                                        (candidate.recordId === null
+                                            ? options.canAccept()
+                                            : options.canObserve()) &&
                                         ownsIntent(candidate)
                                     ) {
                                         // No-op reconciliation still requires the final
@@ -709,7 +880,8 @@ export function createFormLinkedChildOwner(
                                                     ownsIntent(candidate) &&
                                                     parentCurrent() &&
                                                     ownsIntent(candidate),
-                                                true
+                                                true,
+                                                candidate.recordId !== null
                                             );
                                         } catch {
                                             /* The accepted receipt stays known when admission fails. */
@@ -808,6 +980,8 @@ export function createFormLinkedChildOwner(
             disposed = true;
             parentRetired = true;
             stopParent();
+            stopField();
+            stopRich();
             const load = activeLoad;
             activeLoad = null;
             load?.abort();
@@ -817,14 +991,30 @@ export function createFormLinkedChildOwner(
             listeners.clear();
         },
     };
+    const reconnectRich = () => {
+        if (disposed || parentRetired) return;
+        const next = options.form.linkedRecords(options.fieldId);
+        if (next === observedFacet) return;
+        const old = stopRich;
+        observedFacet = next;
+        stopRich = () => {};
+        old();
+        if (disposed || parentRetired || observedFacet !== next) return;
+        const stop = next.subscribe(() => emit());
+        if (disposed || parentRetired || observedFacet !== next) stop();
+        else stopRich = stop;
+    };
     try {
-        stopParent = options.form.controller.subscribe(() => {
-            // Native edits can change capacity and conditional visibility without
-            // replacing the Form owner. Publish their new action revision too.
+        stopParent = options.form.controller.subscribe(() => emit());
+        stopField = options.form.field(options.fieldId).subscribe(() => {
+            reconnectRich();
             emit();
         });
+        reconnectRich();
     } catch (failure) {
         stopParent();
+        stopField();
+        stopRich();
         throw failure;
     }
     return owner;

@@ -12,6 +12,14 @@ import {
     checkLinkedChildConsumer,
     linkedChildTypedConsumer,
 } from './linked-child-consumer-checks.mjs';
+import {
+    checkLinkedChildEditConsumer,
+    linkedChildEditTypedConsumer,
+} from './linked-child-edit-consumer-checks.mjs';
+import {
+    checkLinkedChildEditFreshnessConsumer,
+    linkedChildEditFreshnessConsumerCheckCount,
+} from './linked-child-edit-freshness-consumer-checks.mjs';
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
@@ -808,6 +816,11 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             join(temporaryDirectory, linkedChildFilename),
             linkedChildTypedConsumer
         );
+        const linkedChildEditFilename = `linked-child-edit-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, linkedChildEditFilename),
+            linkedChildEditTypedConsumer
+        );
         const rendererFilename = `renderers-${filename}`;
         writeFileSync(
             join(temporaryDirectory, rendererFilename),
@@ -834,6 +847,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             rendererFilename,
             linkedRecordsFilename,
             linkedChildFilename,
+            linkedChildEditFilename,
             pageFilename,
             ...formulasGuideSources,
         ]);
@@ -1056,6 +1070,23 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(linkedChildProof, 64);
     console.log(
         `Installed configured linked-child create: ${linkedChildProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
+    );
+    const linkedChildEditProof = await checkLinkedChildEditConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(linkedChildEditProof, 34);
+    console.log(
+        `Installed configured linked-child edit: ${linkedChildEditProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
+    );
+    const editFreshnessProof = await checkLinkedChildEditFreshnessConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(
+        editFreshnessProof,
+        linkedChildEditFreshnessConsumerCheckCount
+    );
+    console.log(
+        `Installed linked-child Edit freshness: ${editFreshnessProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
     );
     const selectedPolicyProof = await checkSelectedRecordPolicyConsumer({
         consumerDirectory: temporaryDirectory,

@@ -114,7 +114,7 @@
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
         "test": "tsc --project tsconfig.test.json && node --test --test-concurrency=1 dist/test/test/*.test.js",
         "check:browser": "node scripts/check-native-browser.mjs",
-        "check:package": "node --test scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs && node scripts/check-package.mjs",
+        "check:package": "node --test scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "check": "pnpm format:check && pnpm typecheck && pnpm test && pnpm check:package",

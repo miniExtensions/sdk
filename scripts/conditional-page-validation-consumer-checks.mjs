@@ -26,16 +26,18 @@ export async function checkConditionalPageValidationConsumer({
     const oracle = JSON.parse(
         readFileSync('test/fixtures/conditionalPageValidation.json', 'utf8')
     );
-    // Retain the historical fixture bytes; these two valid null single-select
-    // drivers are now in the bounded Form subset. Malformed native objects and
-    // all multi-select/richer dependencies retain their original refusals.
-    const admittedSingleSelectCases = new Set([
+    // Retain historical fixture bytes; valid null direct select drivers now
+    // belong to the bounded Form subset. Malformed object selections and
+    // richer dependencies retain their original refusals.
+    const admittedSelectCases = new Set([
         'select-boundary-singleSelect-known-null',
         'select-boundary-singleSelect-missing-null',
+        'select-boundary-multipleSelects-known-null',
+        'select-boundary-multipleSelects-missing-null',
     ]);
-    for (const name of admittedSingleSelectCases) {
+    for (const name of admittedSelectCases) {
         const fixture = oracle.validation.find((c) => c.name === name);
-        assert(fixture, 'Missing pinned single-select boundary fixture');
+        assert(fixture, 'Missing pinned select boundary fixture');
         assert.deepEqual(fixture.canonical, { type: 'result', invalid: true });
     }
     const guideSource = [
@@ -233,7 +235,7 @@ export async function checkConditionalPageValidationConsumer({
             for (const c of oracle.validation) {
                 const f = make(c);
                 const actual = problems(f);
-                const expectedCode = admittedSingleSelectCases.has(c.name)
+                const expectedCode = admittedSelectCases.has(c.name)
                     ? 'conditional-validation'
                     : c.expectedCode;
                 assert.deepEqual(
@@ -245,7 +247,7 @@ export async function checkConditionalPageValidationConsumer({
                 );
                 if (
                     c.comparison === 'parity' ||
-                    admittedSingleSelectCases.has(c.name)
+                    admittedSelectCases.has(c.name)
                 ) {
                     assert.equal(c.canonical.type, 'result', c.name);
                     assert.equal(

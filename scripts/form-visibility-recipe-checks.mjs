@@ -315,8 +315,8 @@ export async function checkBrowserVisibilityExample({
         assert.equal(shown('fld_title'), true);
         assert.equal(target.value, 'Accepted packed draft');
 
-        // This is a legitimate published multi-select condition, outside the
-        // bounded Form driver scope. It must block the actual Save sink.
+        // Computed multi-select dependencies remain outside the bounded
+        // direct Form driver scope and must block the actual Save sink.
         loaded.payload.fieldIdsInForm = ['fld_title', 'fld_readonly'];
         loaded.payload.fieldIdsToSchemas.fld_title.miniExtConfig = {
             conditionalFields: {
@@ -340,6 +340,7 @@ export async function checkBrowserVisibilityExample({
             fieldType: 'multipleSelects',
             airtableField: {
                 ...text('fld_select').airtableField,
+                isComputed: true,
                 config: {
                     type: 'multipleSelects',
                     options: { choices: [{ id: 'sel_red', name: 'Red' }] },

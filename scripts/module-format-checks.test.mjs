@@ -11,7 +11,6 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import ts from 'typescript';
 import {
     assertModuleFormats,
     assertModuleFormatReceipt,
@@ -66,17 +65,18 @@ test('valid CJS is parsed without execution and produces a deterministic relativ
 
 test('the exact 787-byte ESM-plus-use-strict entry is refused as CommonJS', (t) => {
     const { root } = fixture(t);
-    const source = readFileSync(
-        new URL('../src/formulas/index.ts', import.meta.url),
-        'utf8'
-    );
-    const esm = ts.transpileModule(source, {
-        compilerOptions: {
-            target: ts.ScriptTarget.ES2022,
-            module: ts.ModuleKind.ESNext,
-        },
-    }).outputText;
-    const malformed = '"use strict";\n' + esm;
+    // Frozen historical bytes; future formula exports must not change this case.
+    const malformed = `"use strict";
+export { default, default as FormulaRunner } from './runner.js';
+export { default as Interpreter, FormulaFunctions, } from './interpreter/interpreter.js';
+export { default as Lexer } from './lexer/lexer.js';
+export { default as TokenTypes } from './lexer/tokenTypes.js';
+export { default as Parser } from './parser/parser.js';
+export { Binary, Literal, Unary, FunctionCall, Grouping, Identifier, } from './parser/ast.js';
+export { extractIdentifiersFromExpr, extractIdentifiersFromFormula, } from './helpers/extractIdentifiersFromExpr.js';
+export { AIRTABLE_FORMULA_ERROR_VALUE, AirtableFieldType, } from './types.js';
+export { getReadableStringFromAirtableValue, convertAirtableValueToPrimitive, formatAirtablePrimitive, arrayJoinSeparator, } from './valueConversion.js';
+`;
     assert.equal(Buffer.byteLength(malformed), 787);
     assert.equal(
         createHash('sha256').update(malformed).digest('hex'),

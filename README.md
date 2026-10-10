@@ -110,6 +110,12 @@ package name as the delivery route: the source checkout does not contain built
 module output, and the package is not on npm. Building/packing locally does not
 publish the package or change repository visibility.
 
+The build parses every CommonJS JavaScript file without executing it and checks
+the package scopes and import/require entry targets before packing. The small
+`dist/cjs/module-format-receipt.json` records only relative entry paths, sizes
+and SHA256 hashes. Installed package checks compare those bytes with the receipt;
+it is a packaging diagnostic, not proof of an earlier installation failure's cause.
+
 ## Obtain the actual runtime configuration
 
 - Publish the Form or Portal through the existing miniExtensions workspace,

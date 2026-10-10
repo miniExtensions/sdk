@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import {
+    assertModuleFormats,
+    moduleFormatReceiptPath,
+} from './module-format-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
@@ -90,3 +94,9 @@ for (const format of ['esm', 'cjs']) {
         JSON.stringify(publicProvenance, null, 4) + '\n'
     );
 }
+
+// Prepack inherits this boundary: malformed output must never become a TGZ.
+writeFileSync(
+    moduleFormatReceiptPath,
+    JSON.stringify(assertModuleFormats(process.cwd()), null, 4) + '\n'
+);

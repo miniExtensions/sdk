@@ -6,12 +6,14 @@ import {
     mkdtempSync,
     mkdirSync,
     readFileSync,
+    readdirSync,
     rmSync,
     symlinkSync,
     writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import {
     assertModuleFormats,
@@ -19,6 +21,7 @@ import {
     moduleFormatReceiptPath,
 } from './module-format-checks.mjs';
 import { compilerMetadata } from './build-metadata.mjs';
+import { withCommonJsSource } from './commonjs-source.mjs';
 
 const write = (root, path, value) => {
     mkdirSync(join(root, path, '..'), { recursive: true });
@@ -367,4 +370,264 @@ test('actual resolved compiler reports inherited effective ESM and explicit CJS 
         assert.equal(metadata.module, module);
         assert.equal(metadata.moduleResolution, resolution);
     }
+});
+
+function compilerFixture(root) {
+    json(root, 'package.json', {
+        name: '@miniextensions/sdk',
+        type: 'module',
+        exports: {
+            './formulas': {
+                import: { default: './dist/esm/formulas/index.js' },
+                require: { default: './dist/cjs/formulas/index.js' },
+            },
+        },
+    });
+    json(root, 'tsconfig.json', {
+        compilerOptions: {
+            target: 'ES2022',
+            module: 'NodeNext',
+            moduleResolution: 'NodeNext',
+            strict: true,
+            declaration: true,
+            rootDir: 'src',
+            outDir: 'dist/esm',
+            types: [],
+        },
+        include: ['src/**/*.ts'],
+    });
+    json(root, 'tsconfig.cjs.json', {
+        extends: './tsconfig.json',
+        compilerOptions: {
+            module: 'CommonJS',
+            moduleResolution: 'Node',
+            outDir: 'dist/cjs',
+        },
+    });
+    write(root, 'src/formulas/value.ts', 'export const value = 7;\n');
+    write(
+        root,
+        'src/formulas/index.ts',
+        "export { value } from './value.js';\n"
+    );
+    write(
+        root,
+        'src/auth/flow.ts',
+        "import { value } from '../formulas/value.js';\nexport const read = () => value;\n"
+    );
+    json(root, 'dist/cjs/package.json', { type: 'commonjs' });
+}
+
+function fileBytes(root) {
+    const entries = readdirSync(root, { recursive: true, withFileTypes: true });
+    return Object.fromEntries(
+        entries
+            .filter((entry) => entry.isFile())
+            .map((entry) => {
+                const path = join(entry.parentPath, entry.name);
+                return [
+                    relative(root, path),
+                    readFileSync(path).toString('hex'),
+                ];
+            })
+            .sort(([left], [right]) => left.localeCompare(right))
+    );
+}
+
+const stages = (root) =>
+    readdirSync(join(root, 'dist')).filter((name) =>
+        name.startsWith('.cjs-source-')
+    );
+
+test('real TypeScript under node_modules: old output is refused; detached source scope matches plain CJS and declarations', (t) => {
+    const root = mkdtempSync(join(tmpdir(), 'sdk-source-scope-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    const plain = join(root, 'plain');
+    const nested = join(root, 'node_modules', 'sdk');
+    const compiler = createRequire(import.meta.url).resolve(
+        'typescript/bin/tsc'
+    );
+    const compile = (project, cwd) => {
+        const result = spawnSync(process.execPath, [compiler, '-p', project], {
+            cwd,
+            encoding: 'utf8',
+            timeout: 30000,
+        });
+        assert.ifError(result.error);
+        assert.equal(result.status, 0, result.stdout + result.stderr);
+    };
+    for (const location of [plain, nested]) {
+        compilerFixture(location);
+        compile('tsconfig.json', location);
+        compile('tsconfig.cjs.json', location);
+    }
+    assertModuleFormats(plain);
+    assert.throws(() => assertModuleFormats(nested), /Invalid CommonJS output/);
+    assert.deepEqual(
+        fileBytes(join(nested, 'dist/esm')),
+        fileBytes(join(plain, 'dist/esm'))
+    );
+    assert.equal(
+        readFileSync(join(nested, 'dist/cjs/formulas/index.js'), 'utf8'),
+        '"use strict";\n' +
+            readFileSync(join(nested, 'dist/esm/formulas/index.js'), 'utf8')
+    );
+    const originals = {
+        source: fileBytes(join(nested, 'src')),
+        manifest: readFileSync(join(nested, 'package.json')),
+        config: readFileSync(join(nested, 'tsconfig.cjs.json')),
+    };
+    withCommonJsSource(nested, (project) => {
+        assert.equal(
+            JSON.parse(
+                readFileSync(join(project, '..', 'package.json'), 'utf8')
+            ).type,
+            'commonjs'
+        );
+        assert.deepEqual(
+            Object.fromEntries(
+                Object.entries(fileBytes(join(project, '..'))).filter(
+                    ([path]) => path.endsWith('.ts')
+                )
+            ),
+            originals.source
+        );
+        const configs = [join(nested, 'tsconfig.cjs.json'), project].map(
+            (path) => {
+                const result = spawnSync(
+                    process.execPath,
+                    [compiler, '-p', path, '--showConfig'],
+                    { encoding: 'utf8', timeout: 30000 }
+                );
+                assert.ifError(result.error);
+                assert.equal(result.status, 0);
+                const config = JSON.parse(result.stdout);
+                delete config.compilerOptions.rootDir;
+                delete config.compilerOptions.outDir;
+                return config.compilerOptions;
+            }
+        );
+        assert.deepEqual(configs[0], configs[1]);
+        const calls = [];
+        const metadata = compilerMetadata(
+            compiler,
+            'tsconfig.cjs.json',
+            (binary, args, options) => {
+                calls.push(args);
+                return spawnSync(binary, args, options);
+            },
+            '',
+            project
+        );
+        assert.equal(metadata.module, 'commonjs');
+        assert.equal(metadata.moduleResolution, 'node10');
+        assert.equal(metadata.project, 'tsconfig.cjs.json');
+        assert.equal(calls[1][2], project);
+        assert.equal(JSON.stringify(metadata).includes(root), false);
+        compile(project, nested);
+    });
+    assert.deepEqual(stages(nested), []);
+    assertModuleFormats(nested);
+    assert.deepEqual(
+        fileBytes(join(nested, 'dist/cjs')),
+        fileBytes(join(plain, 'dist/cjs'))
+    );
+    assert.deepEqual(fileBytes(join(nested, 'src')), originals.source);
+    assert.deepEqual(
+        readFileSync(join(nested, 'package.json')),
+        originals.manifest
+    );
+    assert.deepEqual(
+        readFileSync(join(nested, 'tsconfig.cjs.json')),
+        originals.config
+    );
+});
+
+test('owned source staging is removed on compiler nonzero, thrown spawn/probe failure and source copy failure', (t) => {
+    const root = mkdtempSync(join(tmpdir(), 'sdk-source-cleanup-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    compilerFixture(root);
+    assert.deepEqual(
+        withCommonJsSource(root, () => ({ status: 2 })),
+        { status: 2 }
+    );
+    assert.deepEqual(stages(root), []);
+    const error = new Error('controlled compiler failure');
+    assert.throws(
+        () =>
+            withCommonJsSource(root, () => {
+                throw error;
+            }),
+        (caught) => caught === error
+    );
+    assert.deepEqual(stages(root), []);
+    const source = fileBytes(join(root, 'src'));
+    assert.throws(() =>
+        withCommonJsSource(join(root, 'missing-source'), () =>
+            assert.fail('no compile after failed copy')
+        )
+    );
+    assert.deepEqual(stages(join(root, 'missing-source')), []);
+    assert.deepEqual(fileBytes(join(root, 'src')), source);
+});
+
+test('real compiler rejection cleans staging and preserves the original invalid source', (t) => {
+    const root = mkdtempSync(join(tmpdir(), 'sdk-source-invalid-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    compilerFixture(root);
+    const invalid = 'export const value: string = 7;\n';
+    write(root, 'src/formulas/value.ts', invalid);
+    const compiler = createRequire(import.meta.url).resolve(
+        'typescript/bin/tsc'
+    );
+    const result = withCommonJsSource(root, (project) =>
+        spawnSync(process.execPath, [compiler, '-p', project], {
+            encoding: 'utf8',
+            timeout: 30000,
+        })
+    );
+    assert.ifError(result.error);
+    assert.notEqual(result.status, 0);
+    assert.deepEqual(stages(root), []);
+    assert.equal(
+        readFileSync(join(root, 'src/formulas/value.ts'), 'utf8'),
+        invalid
+    );
+});
+
+for (const name of ['package.json', 'tsconfig.json']) {
+    test(`failed staged ${name} write cleans only the owned copy`, (t) => {
+        const root = mkdtempSync(join(tmpdir(), 'sdk-source-write-failure-'));
+        t.after(() => rmSync(root, { recursive: true, force: true }));
+        compilerFixture(root);
+        mkdirSync(join(root, 'src', name));
+        assert.throws(() =>
+            withCommonJsSource(root, () =>
+                assert.fail('no compiler after failed setup')
+            )
+        );
+        assert.deepEqual(stages(root), []);
+        assert.equal(fs.statSync(join(root, 'src', name)).isDirectory(), true);
+    });
+}
+
+test('exclusive staging preserves preexisting matching directories and symlinks', (t) => {
+    const root = mkdtempSync(join(tmpdir(), 'sdk-source-existing-'));
+    t.after(() => rmSync(root, { recursive: true, force: true }));
+    compilerFixture(root);
+    write(root, 'dist/.cjs-source-existing/sentinel', 'preserve');
+    symlinkSync('.cjs-source-existing', join(root, 'dist/.cjs-source-linked'));
+    const expected = ['.cjs-source-existing', '.cjs-source-linked'];
+    withCommonJsSource(root, () => {});
+    assert.deepEqual(stages(root).sort(), expected);
+    assert.throws(() =>
+        withCommonJsSource(root, () => {
+            throw new Error('failure');
+        })
+    );
+    assert.deepEqual(stages(root).sort(), expected);
+    assert.equal(
+        readFileSync(join(root, 'dist/.cjs-source-linked/sentinel'), 'utf8'),
+        'preserve'
+    );
 });

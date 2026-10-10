@@ -48,7 +48,8 @@ export function compilerMetadata(
     compiler,
     project,
     execute = spawnSync,
-    nodeOptions = process.env.NODE_OPTIONS ?? ''
+    nodeOptions = process.env.NODE_OPTIONS ?? '',
+    probeProject = project
 ) {
     assert(
         project === 'tsconfig.json' || project === 'tsconfig.cjs.json',
@@ -67,7 +68,7 @@ export function compilerMetadata(
         }
     };
     const version = run(['--version']);
-    const config = run(['--project', project, '--showConfig']);
+    const config = run(['--project', probeProject, '--showConfig']);
     let options = null;
     if (!config.error && config.status === 0) {
         try {

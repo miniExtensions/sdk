@@ -123,6 +123,12 @@ exception messages, source text, environment values and private paths are omitte
 These diagnostics do not replace native parsing or explain historical failures
 whose bytes were not retained.
 
+The CommonJS compiler uses a temporary detached source copy with an explicit
+CommonJS package scope. This keeps native TypeScript emission consistent when a
+Git dependency is prepared beneath `node_modules`. The ESM compiler uses the
+original sources; the temporary copy is removed after compilation, including
+compiler failure, and is not shipped. No source package settings are rewritten.
+
 ## Obtain the actual runtime configuration
 
 - Publish the Form or Portal through the existing miniExtensions workspace,

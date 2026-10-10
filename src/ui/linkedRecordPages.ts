@@ -192,3 +192,32 @@ export function acceptedLinkedRecordPage(
     origins.set(next, payload.origin);
     return next;
 }
+
+// Private acceptance identity; detached snapshots cannot supply provenance.
+const acceptedPageTickets = new WeakMap<
+    object,
+    { ticket: number; records: Map<string, number> }
+>();
+let acceptedPageSequence = 0;
+export function markAcceptedLinkedRecordPage(
+    model: object,
+    page: SelectionPage
+): void {
+    const payload = payloads.get(page);
+    if (!payload) return;
+    const ticket = ++acceptedPageSequence;
+    const records = new Map(acceptedPageTickets.get(model)?.records);
+    for (const record of payload.data.records) records.set(record.id, ticket);
+    acceptedPageTickets.set(model, { ticket, records });
+}
+export function acceptedLinkedRecordPageTicket(
+    model: object | null | undefined,
+    recordId?: string
+): number {
+    const accepted = model && acceptedPageTickets.get(model);
+    return accepted
+        ? recordId === undefined
+            ? accepted.ticket
+            : (accepted.records.get(recordId) ?? 0)
+        : 0;
+}

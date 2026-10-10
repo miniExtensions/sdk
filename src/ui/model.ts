@@ -7,6 +7,7 @@ import type {
 } from './types.js';
 import {
     acceptedLinkedRecordPage,
+    markAcceptedLinkedRecordPage,
     linkedRecordPageIsCurrent,
 } from './linkedRecordPages.js';
 
@@ -205,6 +206,7 @@ export function createSelectionModel(
                 if (!active() || !current() || !active()) return;
                 options = nextOptions;
                 linkedRecords = nextRecords;
+                if (nextRecords) markAcceptedLinkedRecordPage(model, page);
                 cache(options);
                 offset = page.offset;
             } catch (cause) {
@@ -258,7 +260,7 @@ export function createSelectionModel(
     }
 
     replace(initial);
-    return {
+    const model: SelectionModel = {
         getState,
         canChoose(next) {
             if (!current() || disabled || readOnly || !Array.isArray(next))
@@ -389,4 +391,5 @@ export function createSelectionModel(
             listeners.clear();
         },
     };
+    return model;
 }

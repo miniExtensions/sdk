@@ -364,12 +364,20 @@ export async function checkSelectAvailabilityBridgeRecipe({
             );
             Object.assign(loaded.payload, {
                 hasParentExtension: false,
-                fieldIdsInForm: ['driver', 'single'],
+                fieldIdsInForm: ['gate', 'driver', 'single'],
                 fieldIdsToSchemas: {
+                    gate: conditionalField('gate'),
                     driver: conditionalField(
                         'driver',
                         driverType,
-                        {},
+                        {
+                            conditionalFields: conditionalRule(
+                                'is',
+                                'show',
+                                'singleLineText',
+                                { type: 'id', id: 'gate' }
+                            ),
+                        },
                         {
                             config: {
                                 type: driverType,
@@ -411,6 +419,7 @@ export async function checkSelectAvailabilityBridgeRecipe({
                 formRecord: {
                     type: 'create',
                     data: {
+                        gate: 'show',
                         driver: driverMultiple ? ['Deny', 'Deny'] : 'Deny',
                         single: driverMultiple ? ['Alpha', 'Alpha'] : 'Alpha',
                         native: { exact: ['untouched', 'untouched'] },
@@ -543,16 +552,10 @@ export async function checkSelectAvailabilityBridgeRecipe({
                     },
                     formFieldIdsWithUnsavedChanges: ['native', 'driver'],
                 });
-                // Hide the driver using its own accepted native value. The
+                // Hide the driver using an accepted native gate edit. The
                 // target is on a later page; projection drops the driver only
                 // from conditions and leaves its native draft intact.
-                loaded.payload.fieldIdsToSchemas.driver.miniExtConfig.conditionalFields =
-                    conditionalRule(
-                        driverMultiple ? 'hasAnyOf' : 'is',
-                        driverMultiple ? ['deny'] : 'deny',
-                        driverType
-                    );
-                await act(async () => fields.refresh());
+                await act(async () => fields.field('gate').setValue('hide'));
                 assert.equal(
                     fields.field('driver').getSnapshot().visibility.type,
                     'hidden'

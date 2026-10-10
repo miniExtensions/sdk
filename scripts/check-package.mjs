@@ -1086,6 +1086,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     const selectOptionDriverChecks = await checkSelectOptionDriverConsumer({
         consumerDirectory: temporaryDirectory,
     });
+    assert.equal(selectOptionDriverChecks, 384);
     console.log(
         `Installed select-driven option eligibility: ${selectOptionDriverChecks} ESM/CJS canonical and Form-owner checkpoints passed; synthetic transport only.`
     );

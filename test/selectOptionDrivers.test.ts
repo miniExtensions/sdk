@@ -13,8 +13,8 @@ it('admits bounded native select option drivers through the actual Form owner', 
             resolve('scripts/select-option-driver-consumer-checks.mjs')
         ).href
     );
-    assert(
-        (await checkSelectOptionDriverModules(forms, runtime, ui, loadedForm)) >
-            150
+    assert.equal(
+        await checkSelectOptionDriverModules(forms, runtime, ui, loadedForm),
+        192
     );
 });

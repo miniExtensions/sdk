@@ -232,7 +232,7 @@ describe('cross-page scalar conditional choices', () => {
         assert.equal(get(), null);
     });
 
-    it('does not admit a select condition driver after select compilation support', () => {
+    it('admits a direct select driver with deleted operands without pruning native values', () => {
         const loaded = make(true);
         const choice = loaded.payload.fieldIdsToSchemas.choice!;
         const config = choice.miniExtConfig;
@@ -257,7 +257,10 @@ describe('cross-page scalar conditional choices', () => {
             choice,
             loaded.payload.formRecord.data
         );
-        assert.equal(record, null);
+        assert.deepEqual(record, {
+            id: '',
+            fields: loaded.payload.formRecord.data,
+        });
         assert.equal(
             resolveSelectFieldAvailability({
                 field: choice,
@@ -268,7 +271,7 @@ describe('cross-page scalar conditional choices', () => {
                 mode: 'runtime',
                 invalidConditionMode: 'compatibility',
             }).status,
-            'blocked'
+            'ready'
         );
         assert.deepEqual(loaded.payload.formRecord.data.choice, ['Allowed']);
     });

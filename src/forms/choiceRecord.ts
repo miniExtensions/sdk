@@ -6,6 +6,7 @@ import type {
 } from '../runtime/types.js';
 import { getSelectFieldPolicy } from '../ui/selectPolicy.js';
 import { createFormConditionRecordProjection } from './projection.js';
+import { inspectFormSelectConditions } from './scalarConditionBoundary.js';
 import { evaluateFormFieldVisibility } from './visibility.js';
 const settings = (value: Record<string, unknown>): Record<string, unknown> =>
     value.state != null &&
@@ -31,7 +32,7 @@ const scalarTypes = new Set([
 const object = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 
-/** Scalar choice recipe; linked/lookup projection stays unavailable. */
+/** Direct scalar/select choice projection; linked/lookup drivers stay unavailable. */
 export function formChoiceConditionRecord(
     page: FormLoadedResult,
     field: RuntimeFieldSchema,
@@ -100,7 +101,13 @@ export function formChoiceConditionRecord(
                         driver == null ||
                         !configured.has(driver.airtableField.id) ||
                         driver.airtableField.isComputed ||
-                        !scalarTypes.has(driver.airtableField.config.type)
+                        !(
+                            scalarTypes.has(driver.airtableField.config.type) ||
+                            driver.airtableField.config.type ===
+                                'singleSelect' ||
+                            driver.airtableField.config.type ===
+                                'multipleSelects'
+                        )
                     )
                         return false;
                     return true;
@@ -120,6 +127,13 @@ export function formChoiceConditionRecord(
                     candidate.config?.optionForConditions === option.id
             );
             if (!inspect(rule?.config?.conditionsForOption ?? null))
+                return null;
+            if (
+                inspectFormSelectConditions(
+                    rule?.config?.conditionsForOption ?? null,
+                    schemas.map((schema) => schema.airtableField)
+                ).type === 'unsupported'
+            )
                 return null;
             // Reuse native/error/reference guards before the existing select
             // resolver evaluates its current projected record. A hidden

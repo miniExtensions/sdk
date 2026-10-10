@@ -20,6 +20,7 @@ import {
     selectAvailabilityBridgeTypedConsumer,
 } from './select-availability-bridge-consumer-checks.mjs';
 import { checkSelectAvailabilityBridgeRecipe } from './select-availability-bridge-recipe-checks.mjs';
+import { checkSelectOptionDriverConsumer } from './select-option-driver-consumer-checks.mjs';
 import { checkSingleSelectFormDriverConsumer } from './single-select-form-driver-consumer-checks.mjs';
 import { checkSingleSelectFormDriverRecipe } from './single-select-form-driver-recipe-checks.mjs';
 import { checkMultipleSelectFormDriverConsumer } from './multi-select-form-driver-consumer-checks.mjs';
@@ -1082,6 +1083,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         await checkSelectAvailabilityBridgeConsumer({
             consumerDirectory: temporaryDirectory,
         });
+    const selectOptionDriverChecks = await checkSelectOptionDriverConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    console.log(
+        `Installed select-driven option eligibility: ${selectOptionDriverChecks} ESM/CJS canonical and Form-owner checkpoints passed; synthetic transport only.`
+    );
     const selectAvailabilityBridgeRecipeChecks =
         await checkSelectAvailabilityBridgeRecipe({
             consumerDirectory: temporaryDirectory,

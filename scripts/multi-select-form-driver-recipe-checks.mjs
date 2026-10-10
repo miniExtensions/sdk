@@ -310,7 +310,7 @@ export function MultipleSelectRequestForm({ scope, fields }: { scope: FormRender
     };
     let checks = 0;
     try {
-        // Admitting Form drivers does not admit select-driven option filtering.
+        // Bounded direct native select predicates also admit option eligibility.
         for (const type of ['multipleSelects', 'singleSelect']) {
             const f = fixture('one-page');
             try {
@@ -372,8 +372,13 @@ export function MultipleSelectRequestForm({ scope, fields }: { scope: FormRender
                     mode: 'runtime',
                     invalidConditionMode: 'strict',
                 });
-                assert.equal(result.status, 'blocked');
-                assert.deepEqual(result.options, []);
+                assert.equal(result.status, 'ready');
+                assert.deepEqual(
+                    result.options.map((option) => option.value),
+                    target.airtableField.config.options.choices.map(
+                        (choice) => choice.name
+                    )
+                );
                 assert.equal(f.calls.length, 0);
                 checks++;
             } finally {

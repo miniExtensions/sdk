@@ -593,9 +593,10 @@ fail closed rather than approximating set membership or splitting commas.
 Form binding visibility and page advanced validation additionally admit the six
 single-select and six multi-select predicates above for exact-ID direct noncomputed drivers. They
 inspect the original AST and loaded metadata, even when compilation reduces a
-predicate to constant `FALSE()`. Public scalar flat/section projection helpers,
-prepared Review, select-driven conditional option availability and the shipped
-Portal editor retain their existing boundaries. Linked, computed, lookup and date Form
+predicate to constant `FALSE()`. Configured option eligibility also supports these
+direct select predicates through the existing Form owner. Public scalar flat/section
+projection helpers and prepared Review retain their existing boundaries. Linked,
+computed, lookup and date Form
 drivers remain unsupported. Richer saved Portal
 criteria must remain intact until explicit replacement or accepted server
 cleanup; partial known-choice compilation is not permission to drop AST values.
@@ -1561,8 +1562,7 @@ retained rendered actions must not be reused after a newer revision.
 This example uses exact-ID direct noncomputed single-select drivers with
 `is`, `isNot`, `isAnyOf`, `isNoneOf`, `isEmpty`, and `isNotEmpty`. Direct
 multi-select drivers additionally support `hasAnyOf`, `hasAllOf`, `hasNoneOf`,
-`isExactly`, `isEmpty`, and `isNotEmpty`. Neither admits richer drivers or
-select-driven conditional option predicates.
+`isExactly`, `isEmpty`, and `isNotEmpty`. Neither admits richer drivers.
 
 ### Multiple-select conditional drivers
 
@@ -1579,8 +1579,18 @@ and `isNotEmpty`. Evaluation uses canonical serialized names and regex boundarie
 `isExactly` retains the canonical serialized-length check, not set equality.
 Visibility and conditional validation read the complete native draft, including
 hidden and inactive-page drivers. Presentation never removes hidden native Save
-values. Public scalar projections, prepared Review with select drivers,
-select-driven option conditions and select edit-empty hiding remain unsupported.
+values. Public scalar projections, prepared Review with select drivers and select
+edit-empty hiding remain unsupported.
+
+Configured option conditions use these same direct select predicates in a second
+phase. The Form owner first removes condition-hidden fields from a detached
+evaluation record, including drivers on inactive pages, then evaluates each
+choice's first matching rule. Hidden native values remain in Save. A selected
+choice that becomes ineligible remains selected; eligibility controls only new
+admission. Read-only presentation, static limits and configured labels retain their
+existing policy. Malformed native values and unsupported dependencies block new
+choices with generic diagnostics, even when a deleted operand compiles to
+`FALSE()`. See [configured choice availability](ui.md#configured-scalar-choice-availability).
 
 This optional plain native-select renderer uses the existing stock subscription
 and the typed host's guarded selection action. Register it as

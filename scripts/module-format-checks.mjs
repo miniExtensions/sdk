@@ -1,15 +1,94 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, readdirSync, existsSync } from 'node:fs';
+import fs, { lstatSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import Module, { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { Script } from 'node:vm';
+import ts from 'typescript';
 
 export const moduleFormatReceiptPath = 'dist/cjs/module-format-receipt.json';
 
 const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
 const record = (value) =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
+
+function exceptionClass(error) {
+    try {
+        for (const [constructor, name] of [
+            [SyntaxError, 'SyntaxError'],
+            [TypeError, 'TypeError'],
+            [RangeError, 'RangeError'],
+            [ReferenceError, 'ReferenceError'],
+            [Error, 'Error'],
+        ]) {
+            if (error instanceof constructor) return name;
+        }
+    } catch {
+        // Even a hostile exception object must not replace the guard failure.
+    }
+    return 'unknown';
+}
+
+function esmSyntax(source) {
+    const tree = ts.createSourceFile(
+        'output.js',
+        source,
+        ts.ScriptTarget.Latest,
+        false,
+        ts.ScriptKind.JS
+    );
+    let found = false;
+    const visit = (node) => {
+        if (
+            ts.isImportDeclaration(node) ||
+            ts.isExportDeclaration(node) ||
+            (ts.isExportAssignment(node) && !node.isExportEquals) ||
+            node.modifiers?.some(
+                (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword
+            ) ||
+            (ts.isMetaProperty(node) &&
+                node.keywordToken === ts.SyntaxKind.ImportKeyword)
+        )
+            found = true;
+        if (!found) ts.forEachChild(node, visit);
+    };
+    visit(tree);
+    return found;
+}
+
+function refuseCommonJs(root, path, stage, error, bytes = null) {
+    const file = relative(root, path).split('\\').join('/');
+    assert(
+        /^dist\/cjs\/[A-Za-z0-9_./-]+\.js$/.test(file) &&
+            !file.split('/').includes('..'),
+        'Invalid built JavaScript path'
+    );
+    let syntax = null;
+    if (bytes !== null) {
+        try {
+            syntax = esmSyntax(bytes.toString('utf8'));
+        } catch {
+            /* Informational only. */
+        }
+    }
+    const diagnostic = {
+        stage,
+        path: file,
+        exceptionClass: exceptionClass(error),
+        size: bytes?.length ?? null,
+        sha256:
+            bytes === null
+                ? null
+                : createHash('sha256').update(bytes).digest('hex'),
+        esmSyntax: syntax,
+    };
+    const refusal = new Error(
+        `Invalid CommonJS output: ${file}; ${JSON.stringify(diagnostic)}`
+    );
+    // No underlying message, cause or private build path in uncaught output.
+    refusal.stack = `Error: ${refusal.message}`;
+    throw refusal;
+}
 const packagePath = (root, path) => {
     assert(
         typeof path === 'string' &&
@@ -47,18 +126,23 @@ function commonJsFiles(root, directory) {
         else if (name.endsWith('.js')) {
             assert(stat.isFile(), 'Built JavaScript must be a regular file');
             assert.equal(packageType(root, path), 'commonjs');
+            let bytes;
+            try {
+                bytes = fs.readFileSync(path);
+            } catch (error) {
+                refuseCommonJs(root, path, 'read', error);
+            }
             try {
                 // Parse without executing package code or loading optional peers.
-                const source = readFileSync(path, 'utf8')
+                const source = bytes
+                    .toString('utf8')
                     .replace(/^\uFEFF/, '')
                     .replace(/^#![^\n]*(?:\n|$)/, '');
                 new Script(Module.wrap(source), {
                     filename: relative(root, path),
                 });
-            } catch {
-                throw new Error(
-                    `Invalid CommonJS output: ${relative(root, path)}`
-                );
+            } catch (error) {
+                refuseCommonJs(root, path, 'parse', error, bytes);
             }
             files.push(path);
         }

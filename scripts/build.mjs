@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import { compilerMetadata, fingerprint } from './build-metadata.mjs';
 import {
     assertModuleFormats,
     moduleFormatReceiptPath,
@@ -16,6 +17,10 @@ for (const directory of ['dist/esm', 'dist/cjs']) {
 }
 
 for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
+    console.error(
+        '[sdk-build-compiler]',
+        JSON.stringify(compilerMetadata(compiler, project))
+    );
     const result = spawnSync(
         process.execPath,
         [compiler, '--project', project],
@@ -25,6 +30,17 @@ for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
     );
     if (result.error) throw result.error;
     if (result.status !== 0) process.exit(result.status ?? 1);
+    const format = project === 'tsconfig.json' ? 'esm' : 'cjs';
+    for (const name of ['auth/flow', 'formulas/index']) {
+        console.error(
+            '[sdk-build-output]',
+            JSON.stringify({
+                path: `dist/${format}/${name}.js`,
+                source: fingerprint(`src/${name}.ts`),
+                output: fingerprint(`dist/${format}/${name}.js`),
+            })
+        );
+    }
 }
 
 mkdirSync('dist/cjs', { recursive: true });

@@ -115,6 +115,13 @@ the package scopes and import/require entry targets before packing. The small
 `dist/cjs/module-format-receipt.json` records only relative entry paths, sizes
 and SHA256 hashes. Installed package checks compare those bytes with the receipt;
 it is a packaging diagnostic, not proof of an earlier installation failure's cause.
+Build logs identify the resolved compiler version and effective module options,
+and fingerprint two source/output pairs. A CommonJS refusal reports only its
+relative file, read/parse stage, finite exception class, byte size/hash and
+informational static-ESM detection. Read failures have no byte fingerprint;
+exception messages, source text, environment values and private paths are omitted.
+These diagnostics do not replace native parsing or explain historical failures
+whose bytes were not retained.
 
 ## Obtain the actual runtime configuration
 

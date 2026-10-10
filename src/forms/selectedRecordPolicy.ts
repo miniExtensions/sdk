@@ -77,12 +77,14 @@ function compare(a: Primitive, b: Primitive, field: RuntimeAirtableField) {
     );
 }
 
-/** Internal detached presentation only; no draft writes, reads or bypass IDs. */
+/** Internal detached presentation only; no draft writes or reads. */
 export function projectSelectedRecordsPolicy(input: {
     config: unknown;
     records: readonly AirtableRecord[];
     airtableFields: readonly RuntimeAirtableField[] | null;
     waitingData: boolean;
+    /** Private owner receipt: only native-selected, accepted created records. */
+    createdRecordIds?: ReadonlySet<string>;
 }): { records: AirtableRecord[]; policy: FormSelectedRecordPolicy } {
     const reasons: ('selected-condition' | 'selected-sort')[] = [];
     const diagnostics: FormSelectedRecordPolicy['diagnostics'][number][] = [];
@@ -325,6 +327,7 @@ export function projectSelectedRecordsPolicy(input: {
         }
         const selected = input.records.filter((record) => {
             if (!runner) return true;
+            if (input.createdRecordIds?.has(record.id)) return true;
             runner.context = {
                 record,
                 airtableFields: [...dependencies.values()],

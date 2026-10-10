@@ -2,7 +2,10 @@ import type { FormFieldBindings, FormFieldSnapshot } from './bindings.js';
 import type { FormControllerSaveOptions } from './controller.js';
 import { validatePageField, type FormPageProblem } from './pageValidation.js';
 import { validatePageDateRange } from './pageDateRange.js';
-import { withFormSaveAdmission } from './saveAdmission.js';
+import {
+    withFormSaveAdmission,
+    requireFormSaveAdmission,
+} from './saveAdmission.js';
 import { normalizeFormLeaseLoaded } from '../ui/formLease.js';
 export type FormPageDescriptor = {
     title: string | null;
@@ -663,7 +666,10 @@ export function createFormPageOwner(
                             };
                         },
                     },
-                    admission
+                    () => {
+                        requireFormSaveAdmission(saveOptions?.lifecycle);
+                        admission();
+                    }
                 ),
                 isCurrent: () => {
                     if (!owns()) return false;

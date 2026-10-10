@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
+import { createFormLinkedRecordsOwner } from '../src/forms/linkedRecords.js';
 import { createFormLinkedRecordLoader } from '../src/ui/loaders.js';
 import type {
     AirtableRecord,
@@ -779,6 +780,107 @@ const selectedCondition = (value: unknown) => ({
 const selectedSort = (id = 'fld_name', type = 'asc') => ({
     idOrName: { type: 'id', id },
     type,
+});
+
+it('private created receipts project parent fields, exempt only native selected occurrences and retire on removal', async () => {
+    const loaded = richForm();
+    loaded.payload.linkedRecordFieldIdToDetailFields.fld_a = [
+        {
+            fieldId: metadata.id,
+            fieldName: metadata.name,
+            titleOverride: null,
+            miniExtConfig: {},
+            isHidden: false,
+            fieldIsInEditingChildForm: false,
+            childFormField: null,
+        },
+    ];
+    loaded.payload.fieldIdsToSchemas.fld_a.miniExtConfig = {
+        filterLinkedRecordsConditionFields: selectedCondition('rec_a'),
+        sortFields: [selectedSort()],
+    } as never;
+    const f = fixture(loaded);
+    let current = true;
+    const owner = createFormLinkedRecordsOwner({
+        client: f.client,
+        loaded,
+        originalRecordData: loaded.payload.formRecord.data,
+        field: f.fields.field,
+        isCurrent: () => current,
+    });
+    const facet = owner.field('fld_a');
+    await facet.readSelected();
+    const child = {
+        id: 'rec_created',
+        fields: { fld_name: 'Denied', fld_secret: 'Child-only' },
+    };
+    const childTable = {
+        airtableFields: [
+            metadata,
+            { ...metadata, id: 'fld_secret', name: 'Secret' },
+        ],
+    };
+    const install = owner.prepareCreated('fld_a', child, childTable);
+    assert.equal(typeof install, 'function');
+    child.fields.fld_name = 'Later caller mutation';
+    assert.equal(
+        f.fields.controller.write(
+            'fld_a',
+            ['rec_a', 'rec_created', 'rec_created'],
+            install!
+        ),
+        true
+    );
+    assert.deepEqual(facet.getSnapshot().selectedRecords, [
+        { id: 'rec_created', fields: { fld_name: 'Denied' } },
+        { id: 'rec_created', fields: { fld_name: 'Denied' } },
+        record('rec_a'),
+    ]);
+    assert.deepEqual(facet.getSnapshot().candidateRecords, []);
+    f.fields.controller.write('fld_b', ['rec_created']);
+    assert.deepEqual(owner.field('fld_b').getSnapshot().unresolvedSelectedIds, [
+        'rec_created',
+    ]);
+    f.fields.controller.write('fld_a', ['rec_a']);
+    f.fields.controller.write('fld_a', ['rec_created']);
+    assert.deepEqual(facet.getSnapshot().unresolvedSelectedIds, [
+        'rec_created',
+    ]);
+    assert.deepEqual(facet.getSnapshot().selectedRecords, []);
+    current = false;
+    assert.equal(
+        owner.prepareCreated('fld_a', record('rec_late'), {
+            airtableFields: [metadata],
+        }),
+        null
+    );
+    assert.equal(facet.getSnapshot().phase, 'retired');
+    f.fields.destroy();
+});
+
+it('private created receipt without admitted parent detail/table policy keeps the new native ID unresolved', () => {
+    const loaded = richForm();
+    const f = fixture(loaded);
+    const owner = createFormLinkedRecordsOwner({
+        client: f.client,
+        loaded,
+        originalRecordData: loaded.payload.formRecord.data,
+        field: f.fields.field,
+        isCurrent: () => true,
+    });
+    const facet = owner.field('fld_a');
+    const install = owner.prepareCreated('fld_a', record('rec_created'), {
+        airtableFields: [metadata],
+    });
+    assert.equal(typeof install, 'function');
+    f.fields.controller.write('fld_a', ['rec_created'], install!);
+    assert.deepEqual(facet.getSnapshot().unresolvedSelectedIds, [
+        'rec_created',
+    ]);
+    assert.deepEqual(facet.getSnapshot().selectedRecords, []);
+    assert.equal('prepareCreated' in facet, false);
+    owner.destroy();
+    f.fields.destroy();
 });
 
 it('selected filtering and sorting alter detached presentation while native duplicates and Save remain exact', async () => {

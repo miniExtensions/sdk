@@ -319,34 +319,50 @@ async function checkCoordinator(forms, fixtures) {
         }
     }
     for (const stage of ['policy', 'final-canAccept']) {
-        let armed = false,
-            admissionCalls = 0,
+        const parent = fixtures.parentForm();
+        parent.payload.formRecord.data.fld_children_a = [
+            'rec_created',
+            'rec_sibling',
+        ];
+        let afterReceipt = false,
+            inPolicy = false,
+            policyRead = false,
             reentries = 0;
         const f = setup({
+            parent,
             afterAccepted() {
-                armed = true;
+                afterReceipt = true;
             },
             canWriteField(fieldId, fields) {
                 if (
-                    armed &&
+                    afterReceipt &&
                     fieldId === 'fld_children_a' &&
-                    ++admissionCalls === (stage === 'policy' ? 2 : 3)
+                    reentries === 0 &&
+                    (stage === 'policy' ? inPolicy : policyRead && !inPolicy)
                 ) {
-                    armed = false;
                     reentries++;
                     assert(fields.controller.write(fieldId, ['rec_reentrant']));
                 }
                 return true;
             },
         });
+        const facet = f.fields.linkedRecords('fld_children_a');
+        const getSnapshot = facet.getSnapshot;
+        facet.getSnapshot = () => {
+            inPolicy = true;
+            try {
+                return getSnapshot();
+            } finally {
+                inPolicy = false;
+                if (afterReceipt) policyRead = true;
+            }
+        };
+        const completions = [];
+        const stop = f.owner.subscribe((snapshot) =>
+            completions.push(snapshot.completion)
+        );
         try {
             assert(await f.owner.openCreate());
-            assert(
-                f.fields.controller.write('fld_children_a', [
-                    'rec_created',
-                    'rec_sibling',
-                ])
-            );
             const receipt = await f.owner.save(f.owner.getSnapshot().revision);
             assert.equal(receipt.type, 'saved');
             assert.equal(receipt.raw.record.id, 'rec_created');
@@ -356,16 +372,13 @@ async function checkCoordinator(forms, fixtures) {
                 'saved-not-reconciled',
                 stage
             );
+            assert(!completions.includes('reconciled'));
             assert.deepEqual(f.native(), ['rec_reentrant']);
-            assert.equal(f.journal.observed.at(-1)?.outcome, 'saved');
-            const linked = f.fields
-                .linkedRecords('fld_children_a')
-                .getSnapshot();
-            assert(
-                !linked.selectedRecords.some(
-                    (record) => record.id === 'rec_created'
-                )
-            );
+            assert.equal(f.journal.observed.length, 1);
+            assert.equal(f.journal.observed[0].outcome, 'saved');
+            const linked = facet.getSnapshot();
+            assert.deepEqual(linked.selectedRecords, []);
+            assert.deepEqual(linked.unresolvedSelectedIds, ['rec_reentrant']);
             assert(
                 !linked.candidateRecords.some(
                     (record) => record.id === 'rec_created'
@@ -374,6 +387,7 @@ async function checkCoordinator(forms, fixtures) {
             assert.equal(f.calls.saves.length, 1);
             checks++;
         } finally {
+            stop();
             f.fields.destroy();
         }
     }

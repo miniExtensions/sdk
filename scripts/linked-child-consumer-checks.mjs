@@ -34,7 +34,8 @@ async function checkCoordinator(forms, fixtures) {
         const mode = options.mode ?? 'create';
         const loaded = options.parent ?? fixtures.parentForm(mode);
         let configuration = 0,
-            session = { visitor: 'synthetic-A' };
+            session = { visitor: 'synthetic-A' },
+            scope = { ownerId: 'synthetic', revision: 0 };
         const calls = { loads: [], saves: [] };
         const client = {
             getSession: () => session,
@@ -73,8 +74,11 @@ async function checkCoordinator(forms, fixtures) {
         fields = forms.createFormFieldBindings({
             loaded,
             client,
-            getScope: () => ({ ownerId: 'synthetic', revision: 0 }),
-            configurationRevision: () => configuration,
+            getScope: () => scope,
+            configurationRevision: () =>
+                options.configurationRevision
+                    ? options.configurationRevision(fields, configuration)
+                    : configuration,
             canWriteField: (fieldId) =>
                 fields && options.canWriteField
                     ? options.canWriteField(fieldId, fields, journal)
@@ -100,6 +104,9 @@ async function checkCoordinator(forms, fixtures) {
                 fields.controller.getState().draft?.data.fld_children_a,
             retireParent: () => {
                 configuration++;
+            },
+            retireScope: () => {
+                scope = { ownerId: 'synthetic-replacement', revision: 1 };
             },
             retireSession: () => {
                 session = { visitor: 'synthetic-B' };
@@ -384,6 +391,223 @@ async function checkCoordinator(forms, fixtures) {
                     (record) => record.id === 'rec_created'
                 )
             );
+            assert.equal(f.calls.saves.length, 1);
+            checks++;
+        } finally {
+            stop();
+            f.fields.destroy();
+        }
+    }
+    for (const reconciliation of ['append', 'no-op']) {
+        for (const loss of ['configuration', 'owner', 'session']) {
+            const parent = fixtures.parentForm();
+            const native =
+                reconciliation === 'no-op'
+                    ? ['rec_created', 'rec_sibling']
+                    : ['rec_existing', 'rec_sibling'];
+            parent.payload.formRecord.data.fld_children_a = native;
+            let afterReceipt = false,
+                inCommit = false,
+                inPolicy = false,
+                policyRead = false,
+                reentries = 0,
+                changeLease;
+            const f = setup({
+                parent,
+                afterAccepted() {
+                    afterReceipt = true;
+                },
+                canWriteField(fieldId) {
+                    if (
+                        afterReceipt &&
+                        fieldId === 'fld_children_a' &&
+                        reentries === 0 &&
+                        (reconciliation === 'append'
+                            ? inCommit
+                            : policyRead && !inPolicy)
+                    ) {
+                        reentries++;
+                        changeLease();
+                    }
+                    return true;
+                },
+            });
+            changeLease =
+                loss === 'configuration'
+                    ? f.retireParent
+                    : loss === 'owner'
+                      ? f.retireScope
+                      : f.retireSession;
+            const write = f.fields.controller.write;
+            f.fields.controller.write = (...args) => {
+                inCommit = true;
+                try {
+                    return write(...args);
+                } finally {
+                    inCommit = false;
+                }
+            };
+            const facet = f.fields.linkedRecords('fld_children_a');
+            const getSnapshot = facet.getSnapshot;
+            facet.getSnapshot = () => {
+                inPolicy = true;
+                try {
+                    return getSnapshot();
+                } finally {
+                    inPolicy = false;
+                    if (afterReceipt) policyRead = true;
+                }
+            };
+            const publishedNative = [];
+            const stopParent = f.fields.controller.subscribe((state) => {
+                if (state.draft)
+                    publishedNative.push(
+                        structuredClone(state.draft.data.fld_children_a)
+                    );
+            });
+            const completions = [];
+            const stop = f.owner.subscribe((snapshot) =>
+                completions.push(snapshot.completion)
+            );
+            try {
+                assert(await f.owner.openCreate());
+                const receipt = await f.owner.save(
+                    f.owner.getSnapshot().revision
+                );
+                assert.equal(receipt.type, 'saved');
+                assert.equal(receipt.raw.record.id, 'rec_created');
+                assert.equal(reentries, 1, `${reconciliation}/${loss}`);
+                assert(
+                    !completions.includes('reconciled'),
+                    `${reconciliation}/${loss}`
+                );
+                assert.equal(
+                    f.owner.getSnapshot().completion,
+                    'saved-not-reconciled',
+                    `${reconciliation}/${loss}`
+                );
+                if (loss === 'configuration')
+                    assert.deepEqual(f.native(), native);
+                else assert.equal(f.native(), undefined);
+                assert(
+                    publishedNative.every(
+                        (ids) => JSON.stringify(ids) === JSON.stringify(native)
+                    ),
+                    `${reconciliation}/${loss}: no native write was published`
+                );
+                assert.equal(f.journal.observed.length, 1);
+                assert.equal(f.journal.observed[0].outcome, 'saved');
+                assert.equal(f.calls.saves.length, 1);
+                checks++;
+            } finally {
+                stop();
+                stopParent();
+                f.fields.destroy();
+            }
+        }
+    }
+    for (const reconciliation of ['append', 'no-op']) {
+        const parent = fixtures.parentForm();
+        parent.payload.formRecord.data.fld_children_a =
+            reconciliation === 'no-op'
+                ? ['rec_created', 'rec_sibling']
+                : ['rec_existing', 'rec_sibling'];
+        let afterReceipt = false,
+            inCommit = false,
+            inPolicy = false,
+            policyRead = false,
+            finalPermission = false,
+            reentries = 0;
+        const f = setup({
+            parent,
+            afterAccepted() {
+                afterReceipt = true;
+            },
+            canWriteField(fieldId) {
+                if (
+                    afterReceipt &&
+                    fieldId === 'fld_children_a' &&
+                    (reconciliation === 'append'
+                        ? inCommit
+                        : policyRead && !inPolicy)
+                )
+                    finalPermission = true;
+                return true;
+            },
+            configurationRevision(fields, configuration) {
+                if (afterReceipt && finalPermission && reentries === 0) {
+                    reentries++;
+                    assert(
+                        reconciliation === 'no-op'
+                            ? fields.controller.write(
+                                  'fld_title',
+                                  'Getter native title'
+                              )
+                            : fields.controller.write('fld_children_a', [
+                                  'rec_getter_edit',
+                              ])
+                    );
+                }
+                return configuration;
+            },
+        });
+        const write = f.fields.controller.write;
+        f.fields.controller.write = (...args) => {
+            inCommit = true;
+            try {
+                return write(...args);
+            } finally {
+                inCommit = false;
+            }
+        };
+        const facet = f.fields.linkedRecords('fld_children_a');
+        const getSnapshot = facet.getSnapshot;
+        facet.getSnapshot = () => {
+            inPolicy = true;
+            try {
+                return getSnapshot();
+            } finally {
+                inPolicy = false;
+                if (afterReceipt) policyRead = true;
+            }
+        };
+        const completions = [];
+        const stop = f.owner.subscribe((snapshot) =>
+            completions.push(snapshot.completion)
+        );
+        try {
+            assert(await f.owner.openCreate());
+            const receipt = await f.owner.save(f.owner.getSnapshot().revision);
+            assert.equal(receipt.type, 'saved');
+            assert.equal(receipt.raw.record.id, 'rec_created');
+            assert.equal(reentries, 1, reconciliation);
+            assert.equal(
+                f.owner.getSnapshot().completion,
+                'saved-not-reconciled',
+                reconciliation
+            );
+            assert(!completions.includes('reconciled'));
+            const latestIds =
+                reconciliation === 'no-op'
+                    ? ['rec_created', 'rec_sibling']
+                    : ['rec_getter_edit'];
+            assert.deepEqual(f.native(), latestIds);
+            assert.equal(
+                f.fields.controller.getState().draft.data.fld_title,
+                reconciliation === 'no-op'
+                    ? 'Getter native title'
+                    : 'Parent native title'
+            );
+            const linked = facet.getSnapshot();
+            assert.deepEqual(linked.selectedRecords, []);
+            assert.deepEqual(linked.unresolvedSelectedIds, latestIds);
+            assert(
+                !linked.candidateRecords.some(
+                    (record) => record.id === 'rec_created'
+                )
+            );
+            assert.equal(f.journal.observed.length, 1);
+            assert.equal(f.journal.observed[0].outcome, 'saved');
             assert.equal(f.calls.saves.length, 1);
             checks++;
         } finally {

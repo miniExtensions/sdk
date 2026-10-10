@@ -707,8 +707,8 @@ export function createFormLinkedChildOwner(
                                                 afterCommit,
                                                 () =>
                                                     ownsIntent(candidate) &&
-                                                    !disposed &&
-                                                    !parentRetired,
+                                                    parentCurrent() &&
+                                                    ownsIntent(candidate),
                                                 true
                                             );
                                         } catch {
@@ -726,8 +726,8 @@ export function createFormLinkedChildOwner(
                                             afterCommit,
                                             () =>
                                                 ownsIntent(candidate) &&
-                                                !disposed &&
-                                                !parentRetired
+                                                parentCurrent() &&
+                                                ownsIntent(candidate)
                                         );
                                     } catch {
                                         /* A committed native write must never be replayed after observer failure. */

@@ -674,12 +674,14 @@ export function createFormFieldBindings(
                     ) => {
                         const admission = () => {
                             if (!fieldLease()) return false;
+                            // Observe the parent lease after permission callbacks;
+                            // its own callbacks may also change the native draft.
                             return (
                                 current() &&
+                                ownsIntent() &&
                                 store.revision(handle) ===
                                     expectedDraftRevision &&
-                                linkedValues(value) !== null &&
-                                ownsIntent()
+                                linkedValues(value) !== null
                             );
                         };
                         if (unchanged) {

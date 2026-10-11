@@ -170,6 +170,94 @@ for (const observation of ['getScope', 'getSession'] as const) {
         f.controller.destroy();
     });
 }
+for (const change of ['session', 'scope'] as const) {
+    it(`post-lifecycle caller freshness callback cannot dispatch after changing ${change}`, async () => {
+        const f = fixture();
+        f.client.setSession({ visitor: 'A' });
+        let ownerScope = { ownerId: 'A', revision: 0 };
+        let armed = false;
+        let changed = false;
+        const controller = createFormController({
+            ...f.options,
+            getScope: () => ownerScope,
+        });
+        controller.write('fld_title', 'Old owner draft');
+        await assert.rejects(
+            controller.save({
+                isCurrent: () => {
+                    if (armed && !changed) {
+                        changed = true;
+                        if (change === 'session')
+                            f.client.setSession({ visitor: 'B' });
+                        else ownerScope = { ownerId: 'B', revision: 1 };
+                    }
+                    return true;
+                },
+                lifecycle: f.lifecycle(() => {
+                    armed = true;
+                }),
+            }),
+            { code: 'scope-changed' }
+        );
+        assert.equal(changed, true);
+        assert.equal(f.calls, 0);
+        assert.deepEqual(f.dispositions, ['not-dispatched']);
+        assert.equal(f.attempt!.outcome, 'not-dispatched');
+        assert.equal(f.attempt!.flight, false);
+        assert.deepEqual(f.attempt!.retainedInput, []);
+        assert.equal(f.journal.blocking(scope, null), undefined);
+        assert.equal(f.journal.unknown('A').length, 0);
+        assert.equal(controller.getState().status, 'stale');
+        assert.equal(controller.getState().draft, null);
+        controller.destroy();
+        f.controller.destroy();
+    });
+}
+
+it('the final native draft fence follows the post-callback ownership observation', async () => {
+    const f = fixture();
+    let armed = false;
+    let checkedInput = false;
+    let changed = false;
+    const controller = createFormController({
+        ...f.options,
+        getScope: () => {
+            if (armed && checkedInput && !changed) {
+                changed = true;
+                controller.write('fld_title', 'Edit during ownership check');
+            }
+            return { ownerId: 'A', revision: 0 };
+        },
+    });
+    controller.write('fld_title', 'Captured draft');
+    await assert.rejects(
+        controller.save({
+            isCurrent: () => {
+                if (armed) checkedInput = true;
+                return true;
+            },
+            lifecycle: f.lifecycle(() => {
+                armed = true;
+            }),
+        }),
+        { code: 'scope-changed' }
+    );
+    assert.equal(changed, true);
+    assert.equal(f.calls, 0);
+    assert.deepEqual(f.dispositions, ['not-dispatched']);
+    assert.equal(f.journal.blocking(scope, null), undefined);
+    assert.equal(controller.getState().status, 'ready');
+    assert.equal(
+        controller.getState().draft!.data.fld_title,
+        'Edit during ownership check'
+    );
+    await controller.save({ lifecycle: f.lifecycle() });
+    assert.equal(f.calls, 1);
+    assert.deepEqual(f.dispositions, ['not-dispatched', 'dispatched']);
+    controller.destroy();
+    f.controller.destroy();
+});
+
 it('post-lifecycle scope getter configuration mutation is checked by the supplied epoch fence before transport', async () => {
     const f = fixture();
     let armed = false;

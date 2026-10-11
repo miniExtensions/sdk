@@ -506,6 +506,9 @@ export const createFormController = (
                 requireScope();
                 if (!ownsAttempt() || !(requestOptions.isCurrent?.() ?? true))
                     throw scopeError();
+                // The caller's freshness callback can itself replace the
+                // external scope/session while reporting current input.
+                requireScope();
                 controller.signal.throwIfAborted();
                 // This last check invokes no application callbacks. A captured
                 // input may never dispatch after a synchronous native edit.

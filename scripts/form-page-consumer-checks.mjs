@@ -207,7 +207,8 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
             const seed = configure(loaded);
             let scope = { ownerId: 'A', revision: 0 },
                 config = 0,
-                predicate = () => true;
+                predicate = () => true,
+                scopeRead = () => {};
             const calls = [];
             const client = runtime.createMiniExtensionsClient({
                 apiOrigin: 'https://sdk.example.test',
@@ -238,7 +239,10 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 client,
                 loaded,
                 store,
-                getScope: () => scope,
+                getScope: () => {
+                    scopeRead();
+                    return scope;
+                },
                 canWriteField: (id) => seed?.canWriteField?.(id) ?? true,
                 saveOptions: {
                     captchaVal: null,
@@ -264,6 +268,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 setPredicate: (fn) => (predicate = fn),
                 setConfig: (v) => (config = v),
                 setScope: (v) => (scope = v),
+                onScopeRead: (fn) => (scopeRead = fn),
             };
         };
         const fixtures = [];
@@ -1318,6 +1323,158 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     },
                 };
             };
+            // Locate the final post-journal scope callback with a stable control,
+            // then invalidate the approved presentation at that exact boundary.
+            // Both installed module formats must refuse even an ABA label change,
+            // release recovery state, and allow a fresh explicit Review/Save.
+            const presentationBoundary = async (
+                invalidateAt,
+                restore = false
+            ) => {
+                let label = 'Reviewed linked label';
+                let armed = false;
+                let observations = 0;
+                let reviews = 0;
+                let invalidation;
+                const f = reviewFixture(async () => {
+                    reviews++;
+                    const captured = label;
+                    invalidation = new AbortController();
+                    return {
+                        type: 'confirm',
+                        signal: invalidation.signal,
+                        isCurrent: () => label === captured,
+                    };
+                });
+                f.onScopeRead(() => {
+                    if (armed && ++observations === invalidateAt) {
+                        label = 'Changed linked label';
+                        invalidation.abort();
+                        if (restore) label = 'Reviewed linked label';
+                    }
+                });
+                finalPage(f);
+                const nativeDraft = structuredClone(
+                    f.fields.controller.getState().draft.data
+                );
+                const transport = f.client.forms.save;
+                f.client.forms.save = (...args) => {
+                    armed = false;
+                    return transport(...args);
+                };
+                const journal = new forms.RecoveryJournal();
+                const scope = {
+                    owner: 'A',
+                    parentFieldId: null,
+                    tableId: null,
+                    childExtensionId: f.loaded.extensionId,
+                    context: 'direct-url',
+                };
+                const attempts = [];
+                const dispositions = [];
+                let accepted = 0;
+                const lifecycle = {
+                    dispatch() {
+                        const attempt = journal.begin(
+                            scope,
+                            null,
+                            'save',
+                            attempts.length + 1
+                        );
+                        attempts.push(attempt);
+                        attempt.retainedInput = [
+                            { title: 'Reviewed label', value: label },
+                        ];
+                        armed = true;
+                        return {
+                            accepted() {
+                                accepted++;
+                                journal.accepted(attempt, 'validation-error');
+                            },
+                            finish(disposition) {
+                                dispositions.push(disposition);
+                                if (disposition === 'not-dispatched')
+                                    assert.equal(
+                                        journal.notDispatched(attempt),
+                                        true
+                                    );
+                                else journal.finishFlight(attempt);
+                            },
+                        };
+                    },
+                };
+                const saving = f.pages.submit(f.pages.getSnapshot().revision, {
+                    lifecycle,
+                });
+                if (invalidateAt === 0) {
+                    await saving;
+                    assert.equal(f.calls.length, 1);
+                    assert.equal(reviews, 1);
+                    assert.equal(accepted, 1);
+                    assert.equal(attempts.length, 1);
+                } else {
+                    await assert.rejects(saving);
+                    armed = false;
+                    assert(
+                        observations >= invalidateAt,
+                        'Final scope callback actually invalidated Review'
+                    );
+                    assert.equal(invalidation.signal.aborted, true);
+                    assert.equal(
+                        label,
+                        restore
+                            ? 'Reviewed linked label'
+                            : 'Changed linked label'
+                    );
+                    assert.equal(f.calls.length, 0);
+                    assert.equal(accepted, 0);
+                    assert.equal(attempts.length, 1);
+                    assert.deepEqual(dispositions, ['not-dispatched']);
+                    const refused = attempts[0];
+                    assert.equal(refused.outcome, 'not-dispatched');
+                    assert.equal(refused.flight, false);
+                    assert.deepEqual(refused.retainedInput, []);
+                    assert.equal(journal.blocking(scope, null), undefined);
+                    assert.equal(journal.unknown('A').length, 0);
+                    assert.deepEqual(
+                        f.fields.controller.getState().draft.data,
+                        nativeDraft
+                    );
+                    const oldSignal = invalidation.signal;
+                    f.onScopeRead(() => {});
+                    finalPage(f);
+                    await f.pages.submit(f.pages.getSnapshot().revision, {
+                        lifecycle,
+                    });
+                    assert.equal(reviews, 2);
+                    assert.notEqual(invalidation.signal, oldSignal);
+                    assert.equal(invalidation.signal.aborted, false);
+                    assert.equal(f.calls.length, 1);
+                    assert.deepEqual(f.calls[0].formRecord.data, nativeDraft);
+                    assert.equal(accepted, 1);
+                    assert.equal(attempts.length, 2);
+                    assert.notEqual(attempts[1], refused);
+                    assert.equal(refused.outcome, 'not-dispatched');
+                    assert.equal(refused.flight, false);
+                    assert.deepEqual(refused.retainedInput, []);
+                }
+                assert.deepEqual(
+                    dispositions,
+                    invalidateAt === 0
+                        ? ['dispatched']
+                        : ['not-dispatched', 'dispatched']
+                );
+                assert.equal(attempts.at(-1).outcome, 'validation-error');
+                assert.equal(attempts.at(-1).flight, false);
+                assert.equal(journal.blocking(scope, null), undefined);
+                assert.equal(journal.unknown('A').length, 0);
+                checks++;
+                return observations;
+            };
+            const finalScopeObservation = await presentationBoundary(0);
+            assert(finalScopeObservation > 0);
+            await presentationBoundary(finalScopeObservation);
+            await presentationBoundary(finalScopeObservation, true);
             for (const callback of [
                 'scope-native',
                 'session-native',

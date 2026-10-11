@@ -726,7 +726,8 @@ choices. Form field bindings reuse the shared section engine internally with
 the bounded direct single-select/multi-select Form driver policy. Inactive-page drivers remain in the
 evaluation record; conditionally hidden drivers are removed only from that
 detached projection. Eligibility changes never remove native selected values.
-One-page Review retains its separate page-mode and supported-driver checks.
+Manual Review also supports bounded multipage presentation while retaining its
+separate supported-driver checks.
 Review accepts scalar/select answers and conservative linked/attachment summaries;
 Review does not admit select condition drivers or select edit-empty-hiding types.
 The shipped Review recipe maps native names through complete select policy
@@ -1837,9 +1838,105 @@ uncertainty remain authoritative. Existing blocked visibility results remain
 blocked. There is no approximation of backend uniqueness, authentication or
 permission validation.
 
-Configured prepared Review, compute and automatic submission remain unsupported
-by this owner and block navigation globally. It never bypasses them. After full
-page validation, final submission delegates to the existing `fields.save`,
+Compute and automatic submission remain unsupported and block navigation globally.
+Configured Review also blocks navigation unless an explicit `review` adapter is
+supplied. The adapter uses the existing native draft and opens only on deliberate
+final Submit. `canReview` means presentation may open at the final visible page:
+ordinary required/limit errors may still be present. `canSubmit` means the supported
+all-page validation currently passes. With configured Review, use `canReview` for
+the final action and `reviewing` for its pending presentation state. Neither flag
+is permission to dispatch a request. Next and Back remain unavailable while the
+adapter or Save is pending.
+
+A confirmed decision must retain a fresh presentation guard. After Confirm the
+owner rechecks stable native draft, unfinished input, navigation, configuration
+and owner tickets, including mutations from application callbacks, then runs
+all-page validation. This local validation is stricter than canonical frontend
+Review, which opens before final backend validation. Invalid ordinary answers
+can be inspected but cannot reach Save. Unfinished raw input, unsupported policy,
+pending files/reads and uncertain operations block opening Review. Edit, Escape
+and abort create no journal attempt. There is no automatic retry.
+
+The adapter receives detached `loaded` and `draft` copies for presentation; never
+write display labels back into values or submit those copies. Reuse the shipped
+`prepareFormReviewRows` and `requestConfirmation` recipes, which now accept manual
+one-page and multipage Forms within their existing supported answer and privacy
+boundaries. The page owner itself does not format answers or initiate reads.
+
+```ts
+import type {
+    FormPageReviewRequest,
+    FormPageReviewDecision,
+} from '@miniextensions/sdk/forms';
+import {
+    prepareFormReviewRows,
+    captureReviewDateContext,
+} from './src/review.js';
+import { requestConfirmation } from './src/confirmation.js';
+import type { LinkedReviewSnapshot } from './src/linkedReview.js';
+
+// App-owned render presentation: no reads here. Capture the accepted linked
+// presentation revision, pending-file generation, parent/context and observed
+// configuration/baseline epochs. The adapter separately checks client zone only
+// for displayed original-client dateTime rows, as in the starter Review handler.
+declare function captureReviewPresentation(): {
+    linked: LinkedReviewSnapshot;
+    isCurrent(fieldIds: readonly string[]): boolean;
+};
+async function reviewPage(
+    request: FormPageReviewRequest
+): Promise<FormPageReviewDecision> {
+    const presentation = captureReviewPresentation();
+    const dateContext = captureReviewDateContext();
+    const rows = prepareFormReviewRows(
+        request.loaded,
+        request.draft.data,
+        presentation.linked,
+        dateContext
+    );
+    const clientDateZoneRequired = rows.some(({ fieldId }) => {
+        const config =
+            request.loaded.payload.fieldIdsToSchemas[fieldId]?.airtableField
+                .config;
+        return (
+            config?.type === 'dateTime' && config.options.timeZone === 'client'
+        );
+    });
+    const preparedCurrent = () =>
+        request.isCurrent() &&
+        (!clientDateZoneRequired ||
+            captureReviewDateContext().clientTimeZone ===
+                dateContext.clientTimeZone) &&
+        presentation.isCurrent(rows.map((row) => row.fieldId)) &&
+        request.isCurrent();
+    if (!preparedCurrent())
+        throw new Error('Review is unavailable for the current presentation.');
+    const accepted = await requestConfirmation({
+        title: 'Review answers',
+        message: 'Confirm these answers before submitting.',
+        confirmLabel: 'Confirm',
+        cancelLabel: 'Edit',
+        rows,
+        signal: request.signal,
+    });
+    return accepted
+        ? { type: 'confirm', isCurrent: preparedCurrent }
+        : { type: 'edit' };
+}
+// Pass review: reviewPage when constructing createFormPageOwner.
+```
+
+The adapter must honor its signal to close only its captured dialog. The owner
+settles an aborted adapter even if application code ignores the signal; a late
+result cannot authorize Save or clear a successor. Failed presentation remains
+an explicit error, not permission. Keep owner lifetime outside renderer mounts.
+Return `edit` for cancellation; a fresh explicit action is needed to reopen.
+The confirmed `isCurrent` callback is application code and may be invoked more
+than once. Keep it side-effect-free; observed reentrant edits refuse the action
+without an unbounded retry loop. The unchanged `submit(revision, options)`
+returns `FormPageError('review-cancelled')` for Edit/abort.
+
+After full page validation, final submission delegates to the existing `fields.save`,
 refusing an effective compute Save input before journal creation or transport,
 and retaining the complete native envelope, dirty-ID union, pending-file and
 uncertainty gates; backend validation remains authoritative. A cancelled/unknown

@@ -493,15 +493,29 @@ export const createFormController = (
                 }
             };
             const attemptSequence = ++saveSequence;
-            const requireAttempt = () => {
-                if (
-                    saveGeneration !== generation ||
-                    owner !== context ||
-                    !(requestOptions.isCurrent?.() ?? true)
-                )
+            const ownsAttempt = () =>
+                saveGeneration === generation &&
+                owner === context &&
+                attemptSequence === saveSequence &&
+                active === controller;
+            const requireAttempt = (beforeDispatch = false) => {
+                if (!ownsAttempt()) throw scopeError();
+                controller.signal.throwIfAborted();
+                // Scope/session getters are application code. Run them before
+                // the caller's final draft/input/configuration freshness check.
+                requireScope();
+                if (!ownsAttempt() || !(requestOptions.isCurrent?.() ?? true))
                     throw scopeError();
                 controller.signal.throwIfAborted();
-                requireScope();
+                // This last check invokes no application callbacks. A captured
+                // input may never dispatch after a synchronous native edit.
+                // In-flight edits remain valid and are handled as newer edits.
+                if (
+                    !ownsAttempt() ||
+                    (beforeDispatch &&
+                        owner.store.revision(owner.handle) !== draftRevision)
+                )
+                    throw scopeError();
             };
             active = controller;
             status = 'saving';
@@ -510,13 +524,13 @@ export const createFormController = (
             try {
                 // A subscriber may have reset/cancelled during the loading emission.
                 controller.signal.throwIfAborted();
-                requireAttempt();
+                requireAttempt(true);
                 requireFormSaveAdmission(requestOptions.lifecycle);
                 operation = requestOptions.lifecycle?.dispatch(
                     structuredClone(input),
                     draftRevision
                 );
-                requireAttempt();
+                requireAttempt(true);
                 requireFormSaveAdmission(requestOptions.lifecycle);
                 transportInvoked = true;
                 const response = await owner.client.forms.save(input, {

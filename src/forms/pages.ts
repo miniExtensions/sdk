@@ -1,5 +1,7 @@
 import type { FormFieldBindings, FormFieldSnapshot } from './bindings.js';
 import type { FormControllerSaveOptions } from './controller.js';
+import type { FormDraftSnapshot } from './drafts.js';
+import type { AirtableValue, FormLoadedResult } from '../runtime/index.js';
 import { validatePageField, type FormPageProblem } from './pageValidation.js';
 import { validatePageDateRange } from './pageDateRange.js';
 import {
@@ -22,6 +24,9 @@ export type FormPageSnapshot = {
     canBack: boolean;
     canNext: boolean;
     canSubmit: boolean;
+    /** Final Review may open with ordinary validation errors. */
+    canReview: boolean;
+    reviewing: boolean;
     problems: FormPageProblem[];
 };
 export type FormPageAction =
@@ -36,12 +41,28 @@ export type FormPageAction =
               | 'no-page'
               | 'busy';
       };
+export type FormPageReviewRequest = {
+    revision: number;
+    /** Detached presentation copies; the existing native draft remains Save authority. */
+    loaded: FormLoadedResult;
+    draft: Readonly<FormDraftSnapshot<AirtableValue>>;
+    signal: AbortSignal;
+    isCurrent(): boolean;
+};
+export type FormPageReviewDecision =
+    | { type: 'edit' }
+    | { type: 'confirm'; isCurrent(): boolean };
+export type FormPageErrorReason =
+    | Exclude<FormPageAction, { accepted: true }>['reason']
+    | 'review-cancelled';
 export type FormPageOwnerOptions = {
     fields: FormFieldBindings;
     /** Exact accepted owner/session/token/parent lease. Observed failure retires permanently. */
     isCurrent(): boolean;
     /** Monotonic accepted configuration epoch; do not use a reversible value hash. */
     configurationRevision(): number;
+    /** Explicit final Review only. No adapter preserves configured-Review refusal. */
+    review?(request: FormPageReviewRequest): Promise<FormPageReviewDecision>;
 };
 export type FormPageOwner = {
     getSnapshot(): FormPageSnapshot;
@@ -56,9 +77,7 @@ export type FormPageOwner = {
     dispose(): void;
 };
 export class FormPageError extends Error {
-    constructor(
-        readonly reason: Exclude<FormPageAction, { accepted: true }>['reason']
-    ) {
+    constructor(readonly reason: FormPageErrorReason) {
         super(`Form page action refused: ${reason}.`);
         this.name = 'FormPageError';
     }
@@ -103,6 +122,14 @@ export function createFormPageOwner(
     let validationStable = true;
     let fingerprint = '';
     let backBlocked = false;
+    let intent: {
+        abort: AbortController;
+        reviewing: boolean;
+        draftRevision: number;
+        inputRevision: number;
+        navigationRevision: number;
+        pageIndex: number;
+    } | null = null;
     let state: FormPageSnapshot = {
         revision,
         status: 'blocked',
@@ -112,6 +139,8 @@ export function createFormPageOwner(
         canBack: false,
         canNext: false,
         canSubmit: false,
+        canReview: false,
+        reviewing: false,
         problems: [],
     };
     // Delivery is independent of reads: getSnapshot may synchronize first.
@@ -129,6 +158,7 @@ export function createFormPageOwner(
                 !Number.isSafeInteger(epoch) ||
                 epoch < 0 ||
                 epoch !== configuration ||
+                options.configurationRevision() !== configuration ||
                 before.epoch !== initial.epoch ||
                 after.epoch !== initial.epoch ||
                 after.contextRevision !== initial.contextRevision ||
@@ -141,6 +171,7 @@ export function createFormPageOwner(
         } catch {
             retired = true;
         }
+        if (retired || disposed) intent?.abort.abort();
         return !retired && !disposed;
     };
     const sync = (retry = true) => {
@@ -168,7 +199,8 @@ export function createFormPageOwner(
             if (
                 cfg.enableFormComputeMode === true ||
                 cfg.autoSubmitAfterPrefill === true ||
-                cfg.promptUserBeforeSubmission === true
+                (cfg.promptUserBeforeSubmission === true &&
+                    typeof options.review !== 'function')
             )
                 problems.push({
                     fieldId: null,
@@ -360,7 +392,10 @@ export function createFormPageOwner(
                     'blocked-visibility',
                 ].includes(p.code)
             );
+            const queuedFiles = fields.hasPendingFiles();
             const busy =
+                intent !== null ||
+                queuedFiles ||
                 !validationStable ||
                 control.status === 'saving' ||
                 !control.canSave ||
@@ -400,6 +435,15 @@ export function createFormPageOwner(
                     problems.length === 0 &&
                     active === last &&
                     [...snapshots.values()].some((s) => !s.readOnly),
+                canReview:
+                    cfg.promptUserBeforeSubmission === true &&
+                    typeof options.review === 'function' &&
+                    status === 'ready' &&
+                    !busy &&
+                    !problems.some((p) => p.code === 'invalid-input') &&
+                    active === last &&
+                    [...snapshots.values()].some((s) => !s.readOnly),
+                reviewing: intent?.reviewing ?? false,
                 problems,
             };
             const key = JSON.stringify([
@@ -421,6 +465,25 @@ export function createFormPageOwner(
                 revision++;
             }
             state = { ...shape, revision };
+            const held = intent;
+            if (
+                held?.reviewing &&
+                (held.draftRevision !==
+                    fields.controller.getState().draftRevision ||
+                    held.inputRevision !== inputRevision ||
+                    held.navigationRevision !== navigationRevision ||
+                    held.pageIndex !== active ||
+                    queuedFiles ||
+                    !control.canSave ||
+                    [...snapshots.values()].some(
+                        (s) =>
+                            s.pending ||
+                            (s.visibility.type === 'visible' &&
+                                !s.readOnly &&
+                                !s.canEdit)
+                    ))
+            )
+                held.abort.abort();
         } finally {
             syncing = false;
             if (needsRetry) sync(false);
@@ -470,9 +533,9 @@ export function createFormPageOwner(
     const notify = () => publish(true);
     const refusal = (expected: number, back = false): FormPageAction | null => {
         sync();
-        // A clock boundary may change feedback without a draft/model event.
-        // Publish that manual read before rejecting a retained render action.
+        // Publish clock-boundary feedback before rejecting a retained action.
         publish(false);
+        if (intent !== null) return { accepted: false, reason: 'busy' };
         if (retired) return { accepted: false, reason: 'retired' };
         if (expected !== revision)
             return { accepted: false, reason: 'stale-revision' };
@@ -482,6 +545,7 @@ export function createFormPageOwner(
             return { accepted: false, reason: 'blocked' };
         const busy =
             !fields.controller.getState().canSave ||
+            fields.hasPendingFiles() ||
             [...state.pages.flatMap((p) => p.fieldIds)].some((id) => {
                 const s = fields.field(id).getSnapshot();
                 return (
@@ -572,28 +636,55 @@ export function createFormPageOwner(
             const denied = refusal(expected);
             if (denied && !denied.accepted)
                 throw new FormPageError(denied.reason);
-            if (!state.canSubmit)
+            const reviewRequired =
+                loaded.payload.publicFields.state.promptUserBeforeSubmission ===
+                true;
+            if (!(reviewRequired ? state.canReview : state.canSubmit))
                 throw new FormPageError(
                     state.problems.length ? 'validation' : 'no-page'
                 );
-            const draftRevision = fields.controller.getState().draftRevision;
+            const control = fields.controller.getState();
+            const draftRevision = control.draftRevision;
             if (
                 validatedDraftRevision === null ||
                 draftRevision !== validatedDraftRevision ||
                 validatedInputRevision !== inputRevision ||
-                validatedNavigationRevision !== navigationRevision
+                validatedNavigationRevision !== navigationRevision ||
+                control.draft === null
             )
                 throw new FormPageError('stale-revision');
             const pageIndex = active;
             const inputTicket = inputRevision;
             const navigationTicket = navigationRevision;
+            const operation = {
+                abort: new AbortController(),
+                reviewing: reviewRequired,
+                draftRevision: draftRevision!,
+                inputRevision: inputTicket,
+                navigationRevision: navigationTicket,
+                pageIndex,
+            };
+            const externalSignal = saveOptions?.signal;
+            const abort = () => operation.abort.abort();
+            externalSignal?.addEventListener('abort', abort, { once: true });
+            if (externalSignal?.aborted) abort();
+            intent = operation;
+            const owns = () => {
+                if (intent !== operation || operation.abort.signal.aborted)
+                    return false;
+                const live = current();
+                return (
+                    live &&
+                    intent === operation &&
+                    !operation.abort.signal.aborted &&
+                    !fields.hasPendingFiles() &&
+                    active === pageIndex &&
+                    inputRevision === inputTicket &&
+                    navigationRevision === navigationTicket &&
+                    fields.controller.getState().draftRevision === draftRevision
+                );
+            };
             const rangeFields = dateRangeFields;
-            const owns = () =>
-                current() &&
-                active === pageIndex &&
-                inputRevision === inputTicket &&
-                navigationRevision === navigationTicket &&
-                fields.controller.getState().draftRevision === draftRevision;
             const admission = () => {
                 if (!owns()) throw new FormPageError('stale-revision');
                 // Read after ownership callbacks; then evaluate the detached
@@ -643,45 +734,125 @@ export function createFormPageOwner(
                     throw new FormPageError('validation');
                 }
             };
-            return fields.save({
-                ...saveOptions,
-                lifecycle: withFormSaveAdmission(
-                    {
-                        dispatch(input, draftRevision) {
-                            // Inspect the effective controller input, including inherited
-                            // binding options, before a journal attempt or transport exists.
-                            if (input.isComputeMode === true)
-                                throw new FormPageError('blocked');
-                            const operation = saveOptions?.lifecycle?.dispatch(
-                                input,
-                                draftRevision
+            let presentationCurrent: (() => boolean) | undefined;
+            const callerOwns = () => {
+                if (!owns()) return false;
+                const caller = saveOptions?.isCurrent?.() ?? true;
+                return caller && owns();
+            };
+            const fresh = () => {
+                if (!callerOwns()) return false;
+                // Every application callback may synchronously mutate or dispose.
+                return (
+                    !presentationCurrent ||
+                    (presentationCurrent() && callerOwns())
+                );
+            };
+            try {
+                notify();
+                if (!fresh()) throw new FormPageError('stale-revision');
+                if (reviewRequired) {
+                    const cancelled = new Promise<never>((_, reject) => {
+                        const fail = () =>
+                            reject(new FormPageError('review-cancelled'));
+                        if (operation.abort.signal.aborted) fail();
+                        else
+                            operation.abort.signal.addEventListener(
+                                'abort',
+                                fail,
+                                { once: true }
                             );
-                            return {
-                                accepted(result) {
-                                    operation?.accepted(result);
-                                },
-                                finish(disposition) {
-                                    operation?.finish(disposition);
-                                },
-                            };
+                    });
+                    const decision = await Promise.race([
+                        cancelled,
+                        Promise.resolve().then(() => {
+                            if (!fresh())
+                                throw new FormPageError('stale-revision');
+                            return options.review!({
+                                revision: expected,
+                                loaded: structuredClone(fields.getLoaded()),
+                                draft: structuredClone(control.draft!),
+                                signal: operation.abort.signal,
+                                isCurrent: callerOwns,
+                            });
+                        }),
+                    ]);
+                    if (!owns()) throw new FormPageError('stale-revision');
+                    if (decision?.type === 'edit')
+                        throw new FormPageError('review-cancelled');
+                    if (
+                        decision?.type !== 'confirm' ||
+                        typeof decision.isCurrent !== 'function'
+                    )
+                        throw new FormPageError('blocked');
+                    presentationCurrent = () => decision.isCurrent();
+                    if (!fresh()) throw new FormPageError('stale-revision');
+                    sync();
+                    if (
+                        !fresh() ||
+                        validatedDraftRevision !== draftRevision ||
+                        validatedInputRevision !== inputTicket ||
+                        validatedNavigationRevision !== navigationTicket
+                    )
+                        throw new FormPageError('stale-revision');
+                    if (state.status !== 'ready' || state.problems.length > 0)
+                        throw new FormPageError(
+                            state.status === 'blocked'
+                                ? 'blocked'
+                                : 'validation'
+                        );
+                }
+                if (!fresh()) throw new FormPageError('stale-revision');
+                operation.reviewing = false;
+                notify();
+                if (!fresh()) throw new FormPageError('stale-revision');
+                return await fields.save({
+                    ...saveOptions,
+                    signal: operation.abort.signal,
+                    lifecycle: withFormSaveAdmission(
+                        {
+                            dispatch(input, revision) {
+                                if (input.isComputeMode === true)
+                                    throw new FormPageError('blocked');
+                                if (!fresh())
+                                    throw new FormPageError('stale-revision');
+                                const journal =
+                                    saveOptions?.lifecycle?.dispatch(
+                                        input,
+                                        revision
+                                    );
+                                return {
+                                    accepted(result) {
+                                        journal?.accepted(result);
+                                    },
+                                    finish(disposition) {
+                                        journal?.finish(disposition);
+                                    },
+                                };
+                            },
                         },
-                    },
-                    () => {
-                        requireFormSaveAdmission(saveOptions?.lifecycle);
-                        admission();
-                    }
-                ),
-                isCurrent: () => {
-                    if (!owns()) return false;
-                    const callerCurrent = saveOptions?.isCurrent?.() ?? true;
-                    return callerCurrent && owns();
-                },
-            });
+                        () => {
+                            requireFormSaveAdmission(saveOptions?.lifecycle);
+                            admission();
+                        }
+                    ),
+                    isCurrent: fresh,
+                });
+            } finally {
+                externalSignal?.removeEventListener('abort', abort);
+                // An old completion owns only its own intent and abort signal.
+                if (intent === operation) {
+                    intent = null;
+                    operation.abort.abort();
+                    notify();
+                }
+            }
         },
         dispose() {
             if (disposed) return;
             disposed = true;
             retired = true;
+            intent?.abort.abort();
             for (const stop of stops) stop();
             notify();
             listeners.clear();

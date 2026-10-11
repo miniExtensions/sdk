@@ -4,6 +4,8 @@
         "rootDir": ".",
         "outDir": "dist/test",
         "declaration": false,
+        "sourceMap": true,
+        "inlineSources": true,
         "types": ["node", "moment-duration-format"]
     },
     "include": ["src/**/*.ts", "test/**/*.ts"]

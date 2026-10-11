@@ -29,6 +29,19 @@ jobs:
             - name: Verify runner-provided Chrome
               if: matrix.node == 24
               run: google-chrome --version
+            - name: Retain unit, component, and combined source coverage
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: sdk-source-coverage-node-${{ matrix.node }}-attempt-${{ github.run_attempt }}
+                  path: |
+                      coverage/source-metrics.json
+                      coverage/*/coverage-summary.json
+                      coverage/*/coverage-final.json
+                      coverage/*/lcov.info
+                      coverage/*/lcov-report/
+                  if-no-files-found: error
+                  retention-days: 7
             - name: Execute packed native Chromium proof
               if: matrix.node == 24
               timeout-minutes: 10

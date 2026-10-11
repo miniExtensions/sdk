@@ -1,0 +1,79 @@
+{
+    "combined": {
+        "all": {
+            "lines": 97,
+            "branches": 89,
+            "functions": 95,
+            "statements": 97
+        },
+        "auth": {
+            "lines": 95,
+            "branches": 85,
+            "functions": 92
+        },
+        "forms": {
+            "lines": 97,
+            "branches": 89,
+            "functions": 96
+        },
+        "formulas": {
+            "lines": 97,
+            "branches": 89,
+            "functions": 99
+        },
+        "portals": {
+            "lines": 96,
+            "branches": 85,
+            "functions": 97
+        },
+        "runtime": {
+            "lines": 99,
+            "branches": 95,
+            "functions": 100
+        },
+        "ui": {
+            "lines": 95,
+            "branches": 89,
+            "functions": 94
+        },
+        "react": {
+            "lines": 97,
+            "branches": 85,
+            "functions": 90
+        }
+    },
+    "unit": {
+        "auth": {
+            "lines": 95,
+            "branches": 85,
+            "functions": 92
+        },
+        "runtime": {
+            "lines": 99,
+            "branches": 95,
+            "functions": 100
+        },
+        "forms": {
+            "lines": 97,
+            "branches": 89,
+            "functions": 96
+        },
+        "formulas": {
+            "lines": 97,
+            "branches": 89,
+            "functions": 99
+        },
+        "portals": {
+            "lines": 96,
+            "branches": 85,
+            "functions": 97
+        }
+    },
+    "component": {
+        "react": {
+            "lines": 97,
+            "branches": 85,
+            "functions": 90
+        }
+    }
+}

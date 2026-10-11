@@ -243,13 +243,18 @@ try {
                 path === 'docs/portals.md' ||
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
+                path === 'docs/testing.md' ||
                 browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/'),
             `Unexpected packed file: ${path}`
         );
     }
-    for (const path of ['docs/browser-lifecycle.md', ...browserStarterFiles]) {
+    for (const path of [
+        'docs/browser-lifecycle.md',
+        'docs/testing.md',
+        ...browserStarterFiles,
+    ]) {
         assert(
             packed.files.some((file) => file.path === path),
             `Missing shipped browser starter file: ${path}`

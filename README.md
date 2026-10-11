@@ -493,6 +493,11 @@ packed-consumer checks. These checks make no live miniExtensions API calls;
 they do not certify deployment CORS, provider compatibility, production
 durability or every hosted workflow. See [verification limits](docs/browser-lifecycle.md#verification-limits).
 
+Source tests report unit and component coverage separately and enforce combined
+and per-area thresholds on both standard GitHub-hosted Node 22/24 jobs. See
+[the coverage policy](docs/testing.md) for the measured baseline, executable
+source denominator, focused commands, and retained reports.
+
 For an agent integrating a customer application: install the actual supplied
 archive, start with the [field bindings](docs/field-bindings.md),
 [Portal owners/editors](docs/portals.md) and [authentication](docs/auth.md) guides

@@ -51,7 +51,12 @@ export type FormPageReviewRequest = {
 };
 export type FormPageReviewDecision =
     | { type: 'edit' }
-    | { type: 'confirm'; isCurrent(): boolean };
+    | {
+          type: 'confirm';
+          /** Abort synchronously whenever the approved presentation changes. */
+          signal: AbortSignal;
+          isCurrent(): boolean;
+      };
 export type FormPageErrorReason =
     | Exclude<FormPageAction, { accepted: true }>['reason']
     | 'review-cancelled';
@@ -735,6 +740,7 @@ export function createFormPageOwner(
                 }
             };
             let presentationCurrent: (() => boolean) | undefined;
+            let releasePresentation = () => {};
             const callerOwns = () => {
                 if (!owns()) return false;
                 const caller = saveOptions?.isCurrent?.() ?? true;
@@ -785,6 +791,25 @@ export function createFormPageOwner(
                         typeof decision.isCurrent !== 'function'
                     )
                         throw new FormPageError('blocked');
+                    const presentationSignal = decision.signal;
+                    if (
+                        !presentationSignal ||
+                        typeof presentationSignal.addEventListener !==
+                            'function' ||
+                        typeof presentationSignal.removeEventListener !==
+                            'function'
+                    )
+                        throw new FormPageError('blocked');
+                    const invalidate = () => operation.abort.abort();
+                    presentationSignal.addEventListener('abort', invalidate, {
+                        once: true,
+                    });
+                    releasePresentation = () =>
+                        presentationSignal.removeEventListener(
+                            'abort',
+                            invalidate
+                        );
+                    if (presentationSignal.aborted) invalidate();
                     presentationCurrent = () => decision.isCurrent();
                     if (!fresh()) throw new FormPageError('stale-revision');
                     sync();
@@ -839,6 +864,7 @@ export function createFormPageOwner(
                     isCurrent: fresh,
                 });
             } finally {
+                releasePresentation();
                 externalSignal?.removeEventListener('abort', abort);
                 // An old completion owns only its own intent and abort signal.
                 if (intent === operation) {

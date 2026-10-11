@@ -70,11 +70,15 @@ const fixture = (configure: (loaded: FormLoadedResult) => void = () => {}) => {
         calls.push(input);
         return invalidForm();
     };
+    let observeScope = () => {};
     const fields = createFormFieldBindings({
         client,
         loaded,
         saveOptions: formSaveOptions(),
-        getScope: () => scope,
+        getScope: () => {
+            observeScope();
+            return scope;
+        },
     });
     const pages = createFormPageOwner({
         fields,
@@ -87,6 +91,9 @@ const fixture = (configure: (loaded: FormLoadedResult) => void = () => {}) => {
         fields,
         pages,
         calls,
+        onScopeRead: (observe: () => void) => {
+            observeScope = observe;
+        },
         setScope: (v: typeof scope) => {
             scope = v;
         },
@@ -860,6 +867,7 @@ describe('page composition authority regressions', () => {
                     review: review
                         ? async () => ({
                               type: 'confirm',
+                              signal: new AbortController().signal,
                               isCurrent: () => true,
                           })
                         : undefined,
@@ -2035,7 +2043,11 @@ describe('configured multipage Review authority', () => {
                 assert.equal(f.pages.getSnapshot().reviewing, true);
                 if (boundary === 'held-review')
                     now = Date.parse('2026-10-12T12:00:00Z');
-                held.resolve({ type: 'confirm', isCurrent: () => true });
+                held.resolve({
+                    type: 'confirm',
+                    signal: new AbortController().signal,
+                    isCurrent: () => true,
+                });
                 await assert.rejects(saving, { reason: 'validation' });
                 assert.equal(f.calls.length, 0);
                 assert.equal(dispatches, boundary === 'held-review' ? 0 : 1);
@@ -2102,7 +2114,11 @@ describe('configured multipage Review authority', () => {
         let reviews = 0;
         const f = reviewFixture(async () => {
             reviews++;
-            return { type: 'confirm', isCurrent: () => true };
+            return {
+                type: 'confirm',
+                signal: new AbortController().signal,
+                isCurrent: () => true,
+            };
         });
         reviewLastPage(f);
         let lifecycle = 0;
@@ -2133,7 +2149,11 @@ describe('configured multipage Review authority', () => {
             let reviews = 0;
             const f = reviewFixture(async () => {
                 reviews++;
-                return { type: 'confirm', isCurrent: () => true };
+                return {
+                    type: 'confirm',
+                    signal: new AbortController().signal,
+                    isCurrent: () => true,
+                };
             });
             reviewLastPage(f);
             assert.equal(
@@ -2165,7 +2185,11 @@ describe('configured multipage Review authority', () => {
         const f = reviewFixture(
             async () => {
                 reviews++;
-                return { type: 'confirm', isCurrent: () => true };
+                return {
+                    type: 'confirm',
+                    signal: new AbortController().signal,
+                    isCurrent: () => true,
+                };
             },
             (loaded) => {
                 loaded.payload.fieldIdsToSchemas.a!.miniExtConfig = {
@@ -2205,7 +2229,11 @@ describe('configured multipage Review authority', () => {
         assert.equal(request.signal.aborted, true);
         assert.equal(f.pages.getSnapshot().reviewing, false);
         assert.equal(f.calls.length, 0);
-        held.resolve({ type: 'confirm', isCurrent: () => true });
+        held.resolve({
+            type: 'confirm',
+            signal: new AbortController().signal,
+            isCurrent: () => true,
+        });
     });
 
     it('held Review is single flight and refuses Next, Back and another Submit', async () => {
@@ -2255,7 +2283,11 @@ describe('configured multipage Review authority', () => {
             } else if (replacement === 'configuration') f.configureRevision(1);
             else f.retire();
             assert.equal(request.isCurrent(), false);
-            held.resolve({ type: 'confirm', isCurrent: () => true });
+            held.resolve({
+                type: 'confirm',
+                signal: new AbortController().signal,
+                isCurrent: () => true,
+            });
             await assert.rejects(saving);
             assert.equal(f.calls.length, 0);
         });
@@ -2265,6 +2297,7 @@ describe('configured multipage Review authority', () => {
         let changed = false;
         const f = reviewFixture(async () => ({
             type: 'confirm',
+            signal: new AbortController().signal,
             isCurrent: () => {
                 if (!changed) {
                     changed = true;
@@ -2322,7 +2355,12 @@ describe('configured multipage Review authority', () => {
             if (stage === 'before-review') {
                 assert.equal(f.pages.getSnapshot().canReview, false);
                 saving = f.pages.submit(f.pages.getSnapshot().revision);
-            } else held.resolve({ type: 'confirm', isCurrent: () => true });
+            } else
+                held.resolve({
+                    type: 'confirm',
+                    signal: new AbortController().signal,
+                    isCurrent: () => true,
+                });
             await assert.rejects(saving!);
             assert.equal(reviews, stage === 'before-review' ? 0 : 1);
             assert.equal(f.fields.field('a').getSnapshot().value, 1);
@@ -2398,7 +2436,11 @@ describe('configured multipage Review authority', () => {
             assert.equal(f.fields.controller.getState().draftRevision, 0);
             assert.equal(f.pages.getSnapshot().canReview, false);
             if (stage === 'held-review') {
-                held.resolve({ type: 'confirm', isCurrent: () => true });
+                held.resolve({
+                    type: 'confirm',
+                    signal: new AbortController().signal,
+                    isCurrent: () => true,
+                });
                 await assert.rejects(saving!);
             } else {
                 await assert.rejects(
@@ -2490,6 +2532,7 @@ describe('configured multipage Review authority', () => {
         let sentinelReached = false;
         const f = reviewFixture(async () => ({
             type: 'confirm',
+            signal: new AbortController().signal,
             isCurrent: () => {
                 checks++;
                 if (checks > 12) {
@@ -2515,7 +2558,11 @@ describe('configured multipage Review authority', () => {
         let reviews = 0;
         const f = reviewFixture(async () => {
             reviews++;
-            return { type: 'confirm', isCurrent: () => true };
+            return {
+                type: 'confirm',
+                signal: new AbortController().signal,
+                isCurrent: () => true,
+            };
         });
         reviewLastPage(f);
         const held = deferred<ReturnType<typeof invalidForm>>();
@@ -2565,6 +2612,7 @@ describe('configured multipage Review authority', () => {
             const f = reviewFixture(
                 async () => ({
                     type: 'confirm',
+                    signal: new AbortController().signal,
                     isCurrent: () => {
                         if (!changed) {
                             changed = true;
@@ -2616,7 +2664,11 @@ describe('configured multipage Review authority', () => {
             const f = reviewFixture(
                 async () => {
                     reviews++;
-                    return { type: 'confirm', isCurrent: () => true };
+                    return {
+                        type: 'confirm',
+                        signal: new AbortController().signal,
+                        isCurrent: () => true,
+                    };
                 },
                 (loaded) => {
                     const schema = loaded.payload.fieldIdsToSchemas.a!;
@@ -2664,6 +2716,7 @@ describe('configured multipage Review authority', () => {
     it('a stale presentation decision never dispatches', async () => {
         const f = reviewFixture(async () => ({
             type: 'confirm',
+            signal: new AbortController().signal,
             isCurrent: () => false,
         }));
         reviewLastPage(f);
@@ -2690,7 +2743,11 @@ describe('configured multipage Review authority', () => {
             configurationRevision: () => 0,
         });
         const before = successor.getSnapshot();
-        held.resolve({ type: 'confirm', isCurrent: () => true });
+        held.resolve({
+            type: 'confirm',
+            signal: new AbortController().signal,
+            isCurrent: () => true,
+        });
         await assert.rejects(saving);
         assert.deepEqual(successor.getSnapshot(), before);
         assert.equal(
@@ -2699,4 +2756,151 @@ describe('configured multipage Review authority', () => {
         );
         assert.equal(f.calls.length, 0);
     });
+});
+
+it('Review presentation invalidation at every post-journal scope observation refuses transport', async () => {
+    const run = async (invalidateAt: number, restore = false) => {
+        let label = 'Reviewed linked label';
+        let armed = false;
+        let observations = 0;
+        const invalidation = new AbortController();
+        const f = reviewFixture(async () => {
+            const captured = label;
+            return {
+                type: 'confirm',
+                signal: invalidation.signal,
+                isCurrent: () => label === captured,
+            };
+        });
+        f.onScopeRead(() => {
+            if (armed && ++observations === invalidateAt) {
+                label = 'Changed linked label';
+                invalidation.abort();
+                if (restore) label = 'Reviewed linked label';
+            }
+        });
+        reviewLastPage(f);
+        const transport = f.client.forms.save;
+        f.client.forms.save = (...args) => {
+            armed = false;
+            return transport(...args);
+        };
+        const journal = new RecoveryJournal();
+        const scope = {
+            owner: 'A',
+            parentFieldId: null,
+            tableId: null,
+            childExtensionId: 'form',
+            context: 'modal' as const,
+        };
+        let attempt: ReturnType<typeof journal.begin> | undefined;
+        const dispositions: string[] = [];
+        const saving = f.pages.submit(f.pages.getSnapshot().revision, {
+            lifecycle: {
+                dispatch() {
+                    attempt = journal.begin(scope, null, 'save', 1);
+                    armed = true;
+                    return {
+                        accepted() {
+                            journal.accepted(attempt!, 'validation-error');
+                        },
+                        finish(disposition) {
+                            dispositions.push(disposition);
+                            if (disposition === 'not-dispatched')
+                                journal.notDispatched(attempt!);
+                            else journal.finishFlight(attempt!);
+                        },
+                    };
+                },
+            },
+        });
+        if (invalidateAt === 0) await saving;
+        else {
+            await assert.rejects(saving);
+            assert.equal(invalidation.signal.aborted, true);
+            assert(observations >= invalidateAt);
+            assert.equal(
+                f.calls.length,
+                0,
+                `Scope observation ${invalidateAt} must refuse stale Review`
+            );
+            assert.deepEqual(dispositions, ['not-dispatched']);
+            assert.equal(attempt!.flight, false);
+            assert.equal(journal.blocking(scope, null), undefined);
+            assert.equal(journal.unknown('A').length, 0);
+        }
+        const count = observations;
+        if (invalidateAt === 0) assert.equal(f.calls.length, 1);
+        f.pages.dispose();
+        f.fields.controller.destroy();
+        return count;
+    };
+    const observations = await run(0);
+    assert(observations > 0);
+    for (let index = 1; index <= observations; index++) {
+        await run(index);
+        await run(index, true);
+    }
+});
+
+for (const missing of [false, true]) {
+    it(`a ${missing ? 'missing' : 'pre-aborted'} presentation signal refuses before journal dispatch`, async () => {
+        const invalidation = new AbortController();
+        invalidation.abort();
+        const f = reviewFixture(async () => ({
+            type: 'confirm',
+            signal: missing
+                ? (undefined as unknown as AbortSignal)
+                : invalidation.signal,
+            isCurrent: () => true,
+        }));
+        reviewLastPage(f);
+        let dispatches = 0;
+        await assert.rejects(
+            f.pages.submit(f.pages.getSnapshot().revision, {
+                lifecycle: {
+                    dispatch() {
+                        dispatches++;
+                        return { accepted() {}, finish() {} };
+                    },
+                },
+            })
+        );
+        assert.equal(dispatches, 0);
+        assert.equal(f.calls.length, 0);
+        f.pages.dispose();
+        f.fields.controller.destroy();
+    });
+}
+it('a settled Review signal cannot abort a fresh explicit Review', async () => {
+    const previous = new AbortController();
+    const successor = new AbortController();
+    let reviews = 0;
+    const f = reviewFixture(async () => ({
+        type: 'confirm',
+        signal: ++reviews === 1 ? previous.signal : successor.signal,
+        isCurrent: () => true,
+    }));
+    reviewLastPage(f);
+    await f.pages.submit(f.pages.getSnapshot().revision);
+    const dispositions: string[] = [];
+    await f.pages.submit(f.pages.getSnapshot().revision, {
+        lifecycle: {
+            dispatch() {
+                previous.abort();
+                return {
+                    accepted() {},
+                    finish(value) {
+                        dispositions.push(value);
+                    },
+                };
+            },
+        },
+    });
+    assert.equal(reviews, 2);
+    assert.equal(f.calls.length, 2);
+    assert.deepEqual(dispositions, ['dispatched']);
+    assert.equal(successor.signal.aborted, false);
+    f.pages.dispose();
+    f.fields.controller.destroy();
 });

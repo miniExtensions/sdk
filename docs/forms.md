@@ -1881,12 +1881,18 @@ import type { LinkedReviewSnapshot } from './src/linkedReview.js';
 // for displayed original-client dateTime rows, as in the starter Review handler.
 declare function captureReviewPresentation(): {
     linked: LinkedReviewSnapshot;
+    // Abort synchronously on any approved presentation/configuration change.
+    signal: AbortSignal;
     isCurrent(fieldIds: readonly string[]): boolean;
 };
 async function reviewPage(
     request: FormPageReviewRequest
 ): Promise<FormPageReviewDecision> {
     const presentation = captureReviewPresentation();
+    const presentationSignal = AbortSignal.any([
+        presentation.signal,
+        presentation.linked.signal,
+    ]);
     const dateContext = captureReviewDateContext();
     const rows = prepareFormReviewRows(
         request.loaded,
@@ -1903,6 +1909,7 @@ async function reviewPage(
         );
     });
     const preparedCurrent = () =>
+        !presentationSignal.aborted &&
         request.isCurrent() &&
         (!clientDateZoneRequired ||
             captureReviewDateContext().clientTimeZone ===
@@ -1920,7 +1927,11 @@ async function reviewPage(
         signal: request.signal,
     });
     return accepted
-        ? { type: 'confirm', isCurrent: preparedCurrent }
+        ? {
+              type: 'confirm',
+              signal: presentationSignal,
+              isCurrent: preparedCurrent,
+          }
         : { type: 'edit' };
 }
 // Pass review: reviewPage when constructing createFormPageOwner.
@@ -1931,8 +1942,15 @@ settles an aborted adapter even if application code ignores the signal; a late
 result cannot authorize Save or clear a successor. Failed presentation remains
 an explicit error, not permission. Keep owner lifetime outside renderer mounts.
 Return `edit` for cancellation; a fresh explicit action is needed to reopen.
-The confirmed `isCurrent` callback is application code and may be invoked more
-than once. Keep it side-effect-free; observed reentrant edits refuse the action
+A confirmed decision must include a presentation invalidation `signal`. Abort it
+synchronously on every approved presentation change, including linked labels,
+configuration, pending files, or a relevant date-zone change; restoration does
+not revive the old signal. The linked presentation snapshot supplies its own
+signal for label replacement and retirement; the adapter above combines it with
+the other presentation invalidations. Missing or already-aborted signals cannot authorize Save.
+The controller checks the captured abort state after all admission and ownership
+callbacks, immediately before transport. The confirmed `isCurrent` callback is
+application code and may be invoked more than once. Keep it side-effect-free; observed reentrant edits refuse the action
 without an unbounded retry loop. The unchanged `submit(revision, options)`
 returns `FormPageError('review-cancelled')` for Edit/abort.
 

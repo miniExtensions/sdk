@@ -15,7 +15,7 @@ const reviewOwner = createFormPageOwner({fields, isCurrent: () => true, configur
         const current: boolean = request.isCurrent();
         const revision: number = request.revision;
         void [signal, current, revision, request.loaded, request.draft.data, request.draft.dirtyFieldIds];
-        return {type: 'confirm', isCurrent: () => true};
+        return {type: 'confirm', signal: new AbortController().signal, isCurrent: () => true};
     }});
 const pendingFiles: boolean = fields.hasPendingFiles();
 const reviewing: boolean = reviewOwner.getSnapshot().reviewing;
@@ -25,6 +25,9 @@ const state: FormPageSnapshot = owner.getSnapshot();
 const action: FormPageAction = owner.next(state.revision);
 const save: ReturnType<FormFieldBindings['save']> = owner.submit(state.revision, {lifecycle});
 const stop: () => void = owner.subscribe(snapshot => { const ids: string[] = snapshot.currentFieldIds; void ids; });
+// @ts-expect-error confirmed Review requires synchronous presentation invalidation
+const missingInvalidation: FormPageReviewDecision = {type: 'confirm', isCurrent: () => true};
+void missingInvalidation;
 // @ts-expect-error revision must be numeric
 owner.back('stale');
 // @ts-expect-error an observed configuration revision is required
@@ -1428,7 +1431,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                         ? reviewFixture(async (r) => {
                               request = r;
                               assert.equal(r.draft.data.a, 'A');
-                              return { type: 'confirm', isCurrent: () => true };
+                              return {
+                                  type: 'confirm',
+                                  signal: new AbortController().signal,
+                                  isCurrent: () => true,
+                              };
                           }, configure)
                         : fixture(configure);
                     finalPage(f);
@@ -1537,7 +1544,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                         'Detached name';
                     r.draft.data.b = 'Detached draft mutation';
                     r.draft.dirtyFieldIds.push('detached');
-                    return { type: 'confirm', isCurrent: () => true };
+                    return {
+                        type: 'confirm',
+                        signal: new AbortController().signal,
+                        isCurrent: () => true,
+                    };
                 });
                 assert(f.fields.field('b').setValue('Native changed').accepted);
                 finalPage(f);
@@ -1576,7 +1587,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                         reviews++;
                         return decision === 'edit'
                             ? { type: 'edit' }
-                            : { type: 'confirm', isCurrent: () => true };
+                            : {
+                                  type: 'confirm',
+                                  signal: new AbortController().signal,
+                                  isCurrent: () => true,
+                              };
                     },
                     (p) => {
                         p.payload.fieldIdsToSchemas.a.miniExtConfig.required = true;
@@ -1612,7 +1627,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 const f = reviewFixture(
                     async () => {
                         reviews++;
-                        return { type: 'confirm', isCurrent: () => true };
+                        return {
+                            type: 'confirm',
+                            signal: new AbortController().signal,
+                            isCurrent: () => true,
+                        };
                     },
                     (p) => {
                         const schema = p.payload.fieldIdsToSchemas.a;
@@ -1688,7 +1707,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 await assert.rejects(flight, { reason: 'review-cancelled' });
                 if (cancel === 'abort') {
                     assert.equal(request.signal.aborted, true);
-                    release({ type: 'confirm', isCurrent: () => true });
+                    release({
+                        type: 'confirm',
+                        signal: new AbortController().signal,
+                        isCurrent: () => true,
+                    });
                     await Promise.resolve();
                 }
                 assert.equal(f.pages.getSnapshot().reviewing, false);
@@ -1761,6 +1784,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     assert.equal(request.isCurrent(), false);
                 release({
                     type: 'confirm',
+                    signal: new AbortController().signal,
                     isCurrent: () =>
                         presentationRevision === capturedPresentationRevision,
                 });
@@ -1773,6 +1797,7 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 let guardCalls = 0;
                 const f = reviewFixture(async () => ({
                     type: 'confirm',
+                    signal: new AbortController().signal,
                     isCurrent: () => {
                         guardCalls++;
                         assert(guardCalls <= 8, 'Decision guard is bounded');
@@ -1822,7 +1847,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     f.fields.field('a').setValue('Successor answer').accepted
                 );
                 const expected = successor.getSnapshot();
-                release({ type: 'confirm', isCurrent: () => true });
+                release({
+                    type: 'confirm',
+                    signal: new AbortController().signal,
+                    isCurrent: () => true,
+                });
                 await assert.rejects(flight);
                 assert.equal(request.signal.aborted, true);
                 assert.deepEqual(successor.getSnapshot(), expected);
@@ -1916,7 +1945,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                         false,
                         'Queued files invalidate held prepared Review'
                     );
-                    release({ type: 'confirm', isCurrent: () => true });
+                    release({
+                        type: 'confirm',
+                        signal: new AbortController().signal,
+                        isCurrent: () => true,
+                    });
                     await assert.rejects(flight);
                 }
                 assert.equal(tracked.counts.dispatch, 0);
@@ -1943,7 +1976,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                 let reviews = 0;
                 const f = reviewFixture(async () => {
                     reviews++;
-                    return { type: 'confirm', isCurrent: () => true };
+                    return {
+                        type: 'confirm',
+                        signal: new AbortController().signal,
+                        isCurrent: () => true,
+                    };
                 });
                 finalPage(f);
                 const tracked = trackedLifecycle();
@@ -1970,7 +2007,11 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
                     const f = reviewFixture(
                         async () => {
                             reviews++;
-                            return { type: 'confirm', isCurrent: () => true };
+                            return {
+                                type: 'confirm',
+                                signal: new AbortController().signal,
+                                isCurrent: () => true,
+                            };
                         },
                         (p) => {
                             p.payload.fieldIdsToSchemas.a.fieldType = 'number';

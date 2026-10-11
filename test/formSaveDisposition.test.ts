@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
+import { withFormSaveAdmission } from '../src/forms/saveAdmission.js';
 import {
     createFormController,
     RecoveryJournal,
@@ -782,3 +783,33 @@ it('captured old scope result cannot retire a replacement owner or clear its nat
     controller.destroy();
     f.controller.destroy();
 });
+
+for (const change of ['session', 'native-draft'] as const) {
+    it(`post-journal admission ${change} changes refuse transport after the last caller fence`, async () => {
+        const f = fixture();
+        let armed = false;
+        const lifecycle = withFormSaveAdmission(
+            f.lifecycle(() => {
+                armed = true;
+            }),
+            () => {
+                if (!armed) return;
+                armed = false;
+                if (change === 'session') f.client.setSession({ visitor: 'B' });
+                else f.controller.write('fld_title', 'Late admission edit');
+            }
+        );
+        await assert.rejects(f.controller.save({ lifecycle }));
+        assert.equal(f.calls, 0);
+        assert.deepEqual(f.dispositions, ['not-dispatched']);
+        assert.equal(f.attempt!.flight, false);
+        assert.equal(f.journal.blocking(scope, null), undefined);
+        assert.equal(f.journal.unknown('A').length, 0);
+        if (change === 'native-draft')
+            assert.equal(
+                f.controller.getState().draft!.data.fld_title,
+                'Late admission edit'
+            );
+        f.controller.destroy();
+    });
+}

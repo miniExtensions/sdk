@@ -259,16 +259,25 @@ export async function checkFormPageReviewRecipe({
         let ownerCurrent = true;
         let presentationCurrent = true;
         let observedIds;
-        setReviewPresentation({
-            linked: {
-                forPage: () => true,
-                label: () => 'Selected record — details unavailable',
-            },
-            isCurrent: (ids) => {
-                observedIds = [...ids];
-                return presentationCurrent;
-            },
-        });
+        let presentationInvalidation;
+        let linkedInvalidation;
+        const installPresentation = () => {
+            presentationInvalidation = new AbortController();
+            linkedInvalidation = new AbortController();
+            setReviewPresentation({
+                signal: presentationInvalidation.signal,
+                linked: {
+                    signal: linkedInvalidation.signal,
+                    forPage: () => true,
+                    label: () => 'Selected record — details unavailable',
+                },
+                isCurrent: (ids) => {
+                    observedIds = [...ids];
+                    return presentationCurrent;
+                },
+            });
+        };
+        installPresentation();
         const request = {
             loaded: structuredClone(page),
             draft: { data: structuredClone(native) },
@@ -291,6 +300,7 @@ export async function checkFormPageReviewRecipe({
         adapterDialog.querySelectorAll('button')[1].click();
         const confirmed = await adapterDecision;
         assert.equal(confirmed.type, 'confirm');
+        assert.equal(confirmed.signal.aborted, false);
         assert.equal(confirmed.isCurrent(), true);
         assert.deepEqual(
             observedIds,
@@ -299,12 +309,29 @@ export async function checkFormPageReviewRecipe({
         // Pending-file/presentation invalidation and owner retirement each
         // independently refuse the same confirmed decision.
         presentationCurrent = false;
+        presentationInvalidation.abort();
+        assert.equal(confirmed.signal.aborted, true);
         assert.equal(confirmed.isCurrent(), false);
         presentationCurrent = true;
         ownerCurrent = false;
         assert.equal(confirmed.isCurrent(), false);
         assert.equal(writes, 1);
         checks++;
+
+        ownerCurrent = true;
+        presentationCurrent = true;
+        installPresentation();
+        const linkedDecision = reviewPage(request);
+        window.document
+            .querySelector('dialog[open]')
+            .querySelectorAll('button')[1]
+            .click();
+        const linkedConfirmed = await linkedDecision;
+        assert.equal(linkedConfirmed.signal.aborted, false);
+        linkedInvalidation.abort();
+        assert.equal(linkedConfirmed.signal.aborted, true);
+        assert.equal(linkedConfirmed.isCurrent(), false);
+        installPresentation();
 
         for (const stale of ['presentation', 'owner']) {
             ownerCurrent = stale !== 'owner';

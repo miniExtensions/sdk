@@ -498,6 +498,17 @@ export const createFormController = (
                 owner === context &&
                 attemptSequence === saveSequence &&
                 active === controller;
+            // This fence must follow every application callback, including
+            // page admission and ownership observations.
+            const requireCapturedAttempt = (beforeDispatch = false) => {
+                controller.signal.throwIfAborted();
+                if (
+                    !ownsAttempt() ||
+                    (beforeDispatch &&
+                        owner.store.revision(owner.handle) !== draftRevision)
+                )
+                    throw scopeError();
+            };
             const requireAttempt = (beforeDispatch = false) => {
                 if (!ownsAttempt()) throw scopeError();
                 controller.signal.throwIfAborted();
@@ -509,16 +520,7 @@ export const createFormController = (
                 // The caller's freshness callback can itself replace the
                 // external scope/session while reporting current input.
                 requireScope();
-                controller.signal.throwIfAborted();
-                // This last check invokes no application callbacks. A captured
-                // input may never dispatch after a synchronous native edit.
-                // In-flight edits remain valid and are handled as newer edits.
-                if (
-                    !ownsAttempt() ||
-                    (beforeDispatch &&
-                        owner.store.revision(owner.handle) !== draftRevision)
-                )
-                    throw scopeError();
+                requireCapturedAttempt(beforeDispatch);
             };
             active = controller;
             status = 'saving';
@@ -535,6 +537,10 @@ export const createFormController = (
                 );
                 requireAttempt(true);
                 requireFormSaveAdmission(requestOptions.lifecycle);
+                // Admission can replace the session; observing it can invalidate
+                // the Review signal or native draft. Finish with local state only.
+                requireScope();
+                requireCapturedAttempt(true);
                 transportInvoked = true;
                 const response = await owner.client.forms.save(input, {
                     signal: controller.signal,

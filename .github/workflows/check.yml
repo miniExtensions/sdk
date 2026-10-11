@@ -10,16 +10,13 @@ permissions:
 
 jobs:
     check:
+        name: check (24)
         runs-on: ubuntu-latest
-        strategy:
-            fail-fast: false
-            matrix:
-                node: [22, 24]
         steps:
             - uses: actions/checkout@v4
             - uses: actions/setup-node@v4
               with:
-                  node-version: ${{ matrix.node }}
+                  node-version: 24
             - run: npm install --global pnpm@10.28.2
             - run: pnpm install --frozen-lockfile
             - run: pnpm check
@@ -28,13 +25,12 @@ jobs:
                   SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
             - name: Verify runner-provided Chrome
-              if: matrix.node == 24
               run: google-chrome --version
             - name: Retain unit, component, and combined source coverage
               if: always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
-                  name: sdk-source-coverage-node-${{ matrix.node }}-attempt-${{ github.run_attempt }}
+                  name: sdk-source-coverage-node-24-attempt-${{ github.run_attempt }}
                   path: |
                       coverage/source-metrics.json
                       coverage/*/coverage-summary.json
@@ -44,7 +40,6 @@ jobs:
                   if-no-files-found: error
                   retention-days: 7
             - name: Execute packed native Chromium proof
-              if: matrix.node == 24
               timeout-minutes: 10
               run: pnpm check:browser
               env:
@@ -52,7 +47,7 @@ jobs:
                   SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
             - name: Retain native Chromium receipt and failure evidence
-              if: always() && matrix.node == 24 && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+              if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
                   name: sdk-native-browser-results-attempt-${{ github.run_attempt }}
@@ -67,7 +62,7 @@ jobs:
               if: success() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
-                  name: sdk-tested-customer-kit-node-${{ matrix.node }}-attempt-${{ github.run_attempt }}
+                  name: sdk-tested-customer-kit-node-24-attempt-${{ github.run_attempt }}
                   path: |
                       ${{ runner.temp }}/sdk-tested-customer-kit/*.tgz
                       ${{ runner.temp }}/sdk-tested-customer-kit/SHA256SUMS
@@ -83,7 +78,7 @@ jobs:
               if: success() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
-                  name: sdk-synthetic-browser-proof-node-${{ matrix.node }}-attempt-${{ github.run_attempt }}
+                  name: sdk-synthetic-browser-proof-node-24-attempt-${{ github.run_attempt }}
                   path: ${{ runner.temp }}/sdk-synthetic-browser-proof/
                   if-no-files-found: error
                   retention-days: 7

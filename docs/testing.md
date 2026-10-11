@@ -76,10 +76,15 @@ React tests fail.
 
 ## CI and reproducibility
 
-The existing workflow matrix stays on standard GitHub-hosted `ubuntu-latest`
-with Node 22 and 24 and frozen pnpm installation. Both jobs run the same
-coverage gate and retain reports for seven days, including on failure.
+CI runs one Node 24 job named `check (24)` on standard GitHub-hosted
+`ubuntu-latest` with frozen pnpm installation. Pull requests run one workflow;
+push runs are limited to `main`. The job enforces the coverage gate and retains
+reports for seven days, including on failure. Node 22 is not a CI target.
 Existing installed CommonJS/ESM consumers, package-format/receipt guards,
 recipes and the Node 24 native Chromium proof remain unchanged. No larger or
 self-hosted runner, live-backend smoke, package publication or deployment is
 introduced.
+
+The Node 24 check name is unchanged. If repository protection still requires
+`check (22)`, a repository administrator must remove that retired requirement;
+the workflow does not change repository protection settings.

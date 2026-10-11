@@ -494,7 +494,7 @@ they do not certify deployment CORS, provider compatibility, production
 durability or every hosted workflow. See [verification limits](docs/browser-lifecycle.md#verification-limits).
 
 Source tests report unit and component coverage separately and enforce combined
-and per-area thresholds on both standard GitHub-hosted Node 22/24 jobs. See
+and per-area thresholds in one standard GitHub-hosted Node 24 job. See
 [the coverage policy](docs/testing.md) for the measured baseline, executable
 source denominator, focused commands, and retained reports.
 

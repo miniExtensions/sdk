@@ -340,10 +340,11 @@ it('AttachmentField accepts chooser changes and clearing pending files leaves na
         const file = new f.window.File(['test'], 'local.txt', {
             type: 'text/plain',
         });
-        Object.defineProperty(f.input(), 'files', {
-            configurable: true,
-            value: [file],
-        });
+        const selection = new f.window.FileList();
+        selection.push(file);
+        f.input().files = selection;
+        assert.notEqual(f.input().value, '');
+        assert.equal(f.input().files.length, 1);
         await act(async () => {
             f.input().dispatchEvent(
                 new f.window.Event('change', { bubbles: true })
@@ -351,6 +352,7 @@ it('AttachmentField accepts chooser changes and clearing pending files leaves na
         });
         assert.equal(controller.getSnapshot().files[0], file);
         assert.equal(f.input().value, '');
+        assert.equal(f.input().files.length, 0);
         assert.equal(button('Upload').disabled, false);
         assert.match(f.text()!, /Files selected/);
         assert.deepEqual(binding.getSnapshot().value, original);

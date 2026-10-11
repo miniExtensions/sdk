@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
+import { createFormLinkedRecordsOwner } from '../src/forms/linkedRecords.js';
 import { createFormLinkedRecordLoader } from '../src/ui/loaders.js';
 import type {
     AirtableRecord,
@@ -10,7 +11,7 @@ import type {
     RuntimeAirtableField,
     RuntimeSession,
 } from '../src/runtime/types.js';
-import { loadedForm, formSaveOptions } from './formsFixtures.js';
+import { loadedForm, formSaveOptions, invalidForm } from './formsFixtures.js';
 
 const metadata: RuntimeAirtableField = {
     id: 'fld_name',
@@ -221,6 +222,8 @@ it('unsupported selected sort suppresses records without changing native values'
     assert.deepEqual(facet.getSnapshot().selectedPolicy, {
         supported: false,
         reasons: ['selected-sort'],
+        state: 'unsupported',
+        diagnostics: [{ code: 'unsupported-sort' }],
     });
     assert.deepEqual(facet.getSnapshot().selectedRecords, []);
     assert.deepEqual(f.fields.field('fld_a').getSnapshot().value, [
@@ -333,7 +336,7 @@ it('session replacement retires rich records and aborts pending hydration', asyn
     f.fields.destroy();
 });
 
-it('canonical selected-condition defaults are unsupported unless disabled or finder-only', async () => {
+it('malformed selected conditions refuse by default unless disabled or finder-only', async () => {
     for (const mode of ['default', 'selected', 'disabled', 'finder'] as const) {
         const loaded = richForm();
         loaded.payload.fieldIdsToSchemas.fld_a.miniExtConfig = {
@@ -360,6 +363,8 @@ it('canonical selected-condition defaults are unsupported unless disabled or fin
         assert.deepEqual(facet.getSnapshot().selectedPolicy, {
             supported: !blocked,
             reasons: blocked ? ['selected-condition'] : [],
+            state: blocked ? 'unsupported' : 'not-configured',
+            diagnostics: blocked ? [{ code: 'unsupported-condition' }] : [],
         });
         assert.equal(
             facet.getSnapshot().selectedRecords.length,
@@ -754,5 +759,288 @@ it('missing metadata from a contributing candidate source stays unavailable', as
         ['rec_candidate']
     );
     assert.equal(facet.getSnapshot().table, null);
+    f.fields.destroy();
+});
+
+const selectedCondition = (value: unknown) => ({
+    logicalOperator: 'and',
+    conditions: [
+        {
+            id: 'selected-name',
+            type: 'singleCondition',
+            setting: {
+                fieldType: 'singleLineText',
+                type: 'is',
+                value,
+                idOrName: { type: 'id', id: 'fld_name' },
+            },
+        },
+    ],
+});
+const selectedSort = (id = 'fld_name', type = 'asc') => ({
+    idOrName: { type: 'id', id },
+    type,
+});
+
+it('private created receipts project parent fields, exempt only native selected occurrences and retire on removal', async () => {
+    const loaded = richForm();
+    loaded.payload.linkedRecordFieldIdToDetailFields.fld_a = [
+        {
+            fieldId: metadata.id,
+            fieldName: metadata.name,
+            titleOverride: null,
+            miniExtConfig: {},
+            isHidden: false,
+            fieldIsInEditingChildForm: false,
+            childFormField: null,
+        },
+    ];
+    loaded.payload.fieldIdsToSchemas.fld_a.miniExtConfig = {
+        filterLinkedRecordsConditionFields: selectedCondition('rec_a'),
+        sortFields: [selectedSort()],
+    } as never;
+    const f = fixture(loaded);
+    let current = true;
+    const owner = createFormLinkedRecordsOwner({
+        client: f.client,
+        loaded,
+        originalRecordData: loaded.payload.formRecord.data,
+        field: f.fields.field,
+        isCurrent: () => current,
+    });
+    const facet = owner.field('fld_a');
+    await facet.readSelected();
+    const child = {
+        id: 'rec_created',
+        fields: { fld_name: 'Denied', fld_secret: 'Child-only' },
+    };
+    const childTable = {
+        airtableFields: [
+            metadata,
+            { ...metadata, id: 'fld_secret', name: 'Secret' },
+        ],
+    };
+    const install = owner.prepareCreated('fld_a', child, childTable);
+    assert.equal(typeof install, 'function');
+    child.fields.fld_name = 'Later caller mutation';
+    assert.equal(
+        f.fields.controller.write(
+            'fld_a',
+            ['rec_a', 'rec_created', 'rec_created'],
+            install!
+        ),
+        true
+    );
+    assert.deepEqual(facet.getSnapshot().selectedRecords, [
+        { id: 'rec_created', fields: { fld_name: 'Denied' } },
+        { id: 'rec_created', fields: { fld_name: 'Denied' } },
+        record('rec_a'),
+    ]);
+    assert.deepEqual(facet.getSnapshot().candidateRecords, []);
+    f.fields.controller.write('fld_b', ['rec_created']);
+    assert.deepEqual(owner.field('fld_b').getSnapshot().unresolvedSelectedIds, [
+        'rec_created',
+    ]);
+    f.fields.controller.write('fld_a', ['rec_a']);
+    f.fields.controller.write('fld_a', ['rec_created']);
+    assert.deepEqual(facet.getSnapshot().unresolvedSelectedIds, [
+        'rec_created',
+    ]);
+    assert.deepEqual(facet.getSnapshot().selectedRecords, []);
+    current = false;
+    assert.equal(
+        owner.prepareCreated('fld_a', record('rec_late'), {
+            airtableFields: [metadata],
+        }),
+        null
+    );
+    assert.equal(facet.getSnapshot().phase, 'retired');
+    f.fields.destroy();
+});
+
+it('private created receipt without admitted parent detail/table policy keeps the new native ID unresolved', () => {
+    const loaded = richForm();
+    const f = fixture(loaded);
+    const owner = createFormLinkedRecordsOwner({
+        client: f.client,
+        loaded,
+        originalRecordData: loaded.payload.formRecord.data,
+        field: f.fields.field,
+        isCurrent: () => true,
+    });
+    const facet = owner.field('fld_a');
+    const install = owner.prepareCreated('fld_a', record('rec_created'), {
+        airtableFields: [metadata],
+    });
+    assert.equal(typeof install, 'function');
+    f.fields.controller.write('fld_a', ['rec_created'], install!);
+    assert.deepEqual(facet.getSnapshot().unresolvedSelectedIds, [
+        'rec_created',
+    ]);
+    assert.deepEqual(facet.getSnapshot().selectedRecords, []);
+    assert.equal('prepareCreated' in facet, false);
+    owner.destroy();
+    f.fields.destroy();
+});
+
+it('selected filtering and sorting alter detached presentation while native duplicates and Save remain exact', async () => {
+    const loaded = richForm();
+    loaded.payload.formRecord.data.fld_a = [
+        'rec_b',
+        'rec_a',
+        'rec_b',
+        'rec_missing',
+    ];
+    loaded.payload.fieldIdsToSchemas.fld_a.miniExtConfig = {
+        filterLinkedRecordsConditionFields: selectedCondition('rec_b'),
+        sortFields: [selectedSort()],
+    } as never;
+    const f = fixture(loaded),
+        facet = f.fields.linkedRecords('fld_a');
+    assert.equal(facet.getSnapshot().selectedPolicy.state, 'waiting-data');
+    assert.equal(f.calls.length, 0);
+    assert.equal(await facet.readSelected(), true);
+    assert.deepEqual(facet.getSnapshot().selectedPolicy, {
+        supported: true,
+        reasons: [],
+        state: 'applied',
+        diagnostics: [],
+    });
+    assert.deepEqual(
+        facet.getSnapshot().selectedRecords.map((r) => r.id),
+        ['rec_b', 'rec_b']
+    );
+    assert.deepEqual(facet.getSnapshot().unresolvedSelectedIds, [
+        'rec_missing',
+    ]);
+    assert.deepEqual(
+        f.fields
+            .linkedRecords('fld_b')
+            .getSnapshot()
+            .selectedRecords.map((r) => r.id),
+        ['rec_b']
+    );
+    assert.equal(
+        f.fields.controller.getState().draft?.dirtyFieldIds.includes('fld_a'),
+        false
+    );
+    const native = ['rec_a', 'rec_b', 'rec_b', 'rec_missing'];
+    f.fields.controller.write('fld_a', native);
+    let saved: unknown;
+    f.client.forms = {
+        save: async (input) => {
+            saved = input.formRecord.data.fld_a;
+            return invalidForm();
+        },
+    } as MiniExtensionsClient['forms'];
+    await f.fields.save();
+    assert.deepEqual(saved, native);
+    assert.deepEqual(f.fields.field('fld_a').getSnapshot().value, native);
+    assert.equal(f.calls.length, 1);
+    f.fields.destroy();
+});
+
+it('disabled and finder-only filters keep independent selected sorting', async () => {
+    for (const mode of ['disabled', 'finder'] as const) {
+        const loaded = richForm();
+        loaded.payload.formRecord.data.fld_a = ['rec_b', 'rec_a', 'rec_b'];
+        loaded.payload.fieldIdsToSchemas.fld_a.miniExtConfig = {
+            filterLinkedRecordsConditionFields: {
+                logicalOperator: 'xor',
+                conditions: [null],
+            },
+            ...(mode === 'disabled'
+                ? { filterLinkedRecordsToggle: false }
+                : { filterApplicationMode: 'record-finder-only' }),
+            sortFields: [selectedSort()],
+        } as never;
+        const f = fixture(loaded),
+            facet = f.fields.linkedRecords('fld_a');
+        await facet.readSelected();
+        assert.equal(facet.getSnapshot().selectedPolicy.state, 'applied');
+        assert.deepEqual(
+            facet.getSnapshot().selectedRecords.map((r) => r.id),
+            ['rec_a', 'rec_b', 'rec_b']
+        );
+        assert.deepEqual(f.fields.field('fld_a').getSnapshot().value, [
+            'rec_b',
+            'rec_a',
+            'rec_b',
+        ]);
+        f.fields.destroy();
+    }
+});
+
+it('selected policy requires returned dependency metadata and never implicitly retries', async () => {
+    const loaded = richForm();
+    loaded.payload.fieldIdsToSchemas.fld_a.miniExtConfig = {
+        sortFields: [selectedSort('fld_absent')],
+    } as never;
+    const f = fixture(loaded),
+        facet = f.fields.linkedRecords('fld_a');
+    await facet.readSelected();
+    const snapshot = facet.getSnapshot();
+    assert.equal(snapshot.selectedPolicy.state, 'unsupported');
+    assert.deepEqual(snapshot.selectedPolicy.diagnostics, [
+        { code: 'missing-dependency', fieldId: 'fld_absent' },
+    ]);
+    assert.deepEqual(snapshot.selectedRecords, []);
+    assert.deepEqual(snapshot.unresolvedSelectedIds, []);
+    facet.getSnapshot();
+    facet.subscribe(() => {})();
+    assert.equal(f.calls.length, 1);
+    assert.deepEqual(f.fields.field('fld_a').getSnapshot().value, [
+        'rec_a',
+        'rec_a',
+    ]);
+    f.fields.destroy();
+});
+
+it('configured selected policy survives option paging without listeners and suppresses incoherent metadata', async () => {
+    const loaded = richForm();
+    loaded.payload.formRecord.data.fld_a = [];
+    loaded.payload.fieldIdsToSchemas.fld_a.miniExtConfig = {
+        sortFields: [selectedSort()],
+    } as never;
+    const f = fixture(loaded);
+    let pages = 0;
+    f.client.linkedRecords.listFormOptions = async () => {
+        const first = ++pages === 1;
+        const candidate = record(first ? 'rec_old' : 'rec_new');
+        const candidateTable = table([candidate]);
+        if (!first)
+            candidateTable.airtableFields = [
+                { ...metadata, name: 'Changed name' },
+            ];
+        return {
+            records: [candidate],
+            offset: first ? 'next-page' : null,
+            tableIdsToLinkedTableStates: { tbl_linked: candidateTable },
+            linkedRecordFieldIdToDetailFields: null,
+        };
+    };
+    installCandidateLoader(f);
+    const facet = f.fields.linkedRecords('fld_a'),
+        binding = f.fields.field('fld_a');
+    await binding.selection!.reload();
+    binding.selection!.choose(['rec_old']);
+    binding.selection!.setSearchInput('later');
+    assert.deepEqual(
+        facet.getSnapshot().selectedRecords.map((r) => r.id),
+        ['rec_old']
+    );
+    await binding.selection!.reload();
+    const conflict = facet.getSnapshot();
+    assert.equal(conflict.table, null);
+    assert.equal(conflict.selectedPolicy.state, 'unsupported');
+    assert.deepEqual(conflict.selectedRecords, []);
+    assert.deepEqual(binding.getSnapshot().value, ['rec_old']);
+    binding.selection!.setSearchInput('clear candidates');
+    assert.equal(facet.getSnapshot().selectedPolicy.state, 'applied');
+    assert.deepEqual(
+        facet.getSnapshot().selectedRecords.map((r) => r.id),
+        ['rec_old']
+    );
+    assert.equal(f.calls.length, 0);
     f.fields.destroy();
 });

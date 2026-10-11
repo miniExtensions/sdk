@@ -22,6 +22,8 @@ import {
     type LoadedFormFieldDescriptor,
     type NormalizedFormSaveResult,
 } from './helpers.js';
+import { requireFormSaveAdmission } from './saveAdmission.js';
+import { admitsFormWrite } from './writeAdmission.js';
 
 /** Applications change revision for visitor, connection, token and context changes. */
 export type FormOwnerScope = { ownerId: string; revision: number };
@@ -413,6 +415,14 @@ export const createFormController = (
             if (field === undefined || field.readOnly) return false;
             const owner = context;
             const writeGeneration = generation;
+            if (
+                !admitsFormWrite(afterCommit) ||
+                context !== owner ||
+                generation !== writeGeneration ||
+                status === 'stale' ||
+                status === 'disposed'
+            )
+                return false;
             if (!context.store.write(context.handle, fieldId, value))
                 return false;
             if (status === 'saved') hasNewerEdits = true;
@@ -515,11 +525,13 @@ export const createFormController = (
                 // A subscriber may have reset/cancelled during the loading emission.
                 controller.signal.throwIfAborted();
                 requireAttempt(true);
+                requireFormSaveAdmission(requestOptions.lifecycle);
                 operation = requestOptions.lifecycle?.dispatch(
                     structuredClone(input),
                     draftRevision
                 );
                 requireAttempt(true);
+                requireFormSaveAdmission(requestOptions.lifecycle);
                 transportInvoked = true;
                 const response = await owner.client.forms.save(input, {
                     signal: controller.signal,

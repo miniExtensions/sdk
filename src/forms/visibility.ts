@@ -1,4 +1,7 @@
-import { hasSelectCondition } from './scalarConditionBoundary.js';
+import {
+    hasSelectCondition,
+    inspectFormSelectConditions,
+} from './scalarConditionBoundary.js';
 import type {
     AirtableValue,
     RuntimeAirtableField,
@@ -60,6 +63,22 @@ export type ComposeFormFieldVisibilityInput = FormVisibilityContext & {
 const isObject = (value: unknown): value is Record<string, unknown> =>
     value != null && typeof value === 'object' && !Array.isArray(value);
 
+const nativeStringArray = (value: unknown): value is string[] => {
+    // Native JSON arrays have only length and own data entries. Do not let
+    // overridden iteration/formatting methods change an admitted condition.
+    if (
+        !Array.isArray(value) ||
+        Object.getPrototypeOf(value) !== Array.prototype ||
+        Reflect.ownKeys(value).length !== value.length + 1
+    )
+        return false;
+    for (let index = 0; index < value.length; index++) {
+        const entry = Object.getOwnPropertyDescriptor(value, String(index));
+        if (entry == null || typeof entry.value !== 'string') return false;
+    }
+    return true;
+};
+
 const emptyHidingScalarTypes = new Set<string>([
     'singleLineText',
     'email',
@@ -117,6 +136,8 @@ const nativeValueProblem = (
                   : 'non-finite-result';
         case 'checkbox':
             return typeof value === 'boolean' ? null : 'invalid-native-value';
+        case 'multipleSelects':
+            return nativeStringArray(value) ? null : 'invalid-native-value';
         case 'barcode':
             return isObject(value) &&
                 'text' in value &&
@@ -132,6 +153,14 @@ const nativeValueProblem = (
 /** Field presentation only; this helper never changes drafts or authority. */
 export function evaluateFormFieldVisibility(
     input: EvaluateFormFieldVisibilityInput
+): FormFieldVisibility {
+    return evaluateFormFieldVisibilityWithPolicy(input, 'form');
+}
+
+/** Internal policy keeps the legacy flat projection boundary unchanged. */
+export function evaluateFormFieldVisibilityWithPolicy(
+    input: EvaluateFormFieldVisibilityInput,
+    policy: 'form' | 'legacy-flat'
 ): FormFieldVisibility {
     const config = input.field.miniExtConfig;
     const hideEmpty =
@@ -213,17 +242,49 @@ export function evaluateFormFieldVisibility(
     if (compiled.type !== 'compiled')
         return { type: 'blocked', code: compiled.type, diagnostics };
 
+    const definition =
+        config != null && 'conditionalFields' in config
+            ? config.conditionalFields
+            : null;
+    const selects =
+        policy === 'form'
+            ? inspectFormSelectConditions(definition, input.airtableFields)
+            : { type: 'supported' as const, drivers: [] };
     if (
-        hasSelectCondition(
-            config != null && 'conditionalFields' in config
-                ? config.conditionalFields
-                : null,
-            input.airtableFields
-        )
+        (policy === 'legacy-flat' &&
+            hasSelectCondition(definition, input.airtableFields)) ||
+        selects.type === 'unsupported'
     )
         return { type: 'blocked', code: 'unsupported', diagnostics };
 
     try {
+        for (const driver of selects.drivers) {
+            const matches = input.airtableFields.filter(
+                (field) => field.id === driver.id || field.name === driver.id
+            );
+            if (
+                matches.length !== 1 ||
+                (driver.name !== driver.id &&
+                    Object.hasOwn(input.data, driver.name))
+            )
+                return {
+                    type: 'blocked',
+                    code: 'ambiguous-reference',
+                    diagnostics,
+                };
+            const value = input.data[driver.id];
+            if (
+                value != null &&
+                (driver.config.type === 'singleSelect'
+                    ? typeof value !== 'string'
+                    : !nativeStringArray(value))
+            )
+                return {
+                    type: 'blocked',
+                    code: 'invalid-native-value',
+                    diagnostics,
+                };
+        }
         for (const reference of extractIdentifiersFromFormula(
             compiled.formula
         )) {

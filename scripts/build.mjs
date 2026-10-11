@@ -3,6 +3,12 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import { compilerMetadata, fingerprint } from './build-metadata.mjs';
+import { withCommonJsSource } from './commonjs-source.mjs';
+import {
+    assertModuleFormats,
+    moduleFormatReceiptPath,
+} from './module-format-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
@@ -12,15 +18,45 @@ for (const directory of ['dist/esm', 'dist/cjs']) {
 }
 
 for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
-    const result = spawnSync(
-        process.execPath,
-        [compiler, '--project', project],
-        {
-            stdio: 'inherit',
-        }
-    );
+    const compile = (actualProject) => {
+        console.error(
+            '[sdk-build-compiler]',
+            JSON.stringify(
+                compilerMetadata(
+                    compiler,
+                    project,
+                    spawnSync,
+                    process.env.NODE_OPTIONS ?? '',
+                    actualProject
+                )
+            )
+        );
+        return spawnSync(
+            process.execPath,
+            [compiler, '--project', actualProject],
+            {
+                stdio: 'inherit',
+            }
+        );
+    };
+    const result =
+        project === 'tsconfig.cjs.json'
+            ? withCommonJsSource(process.cwd(), compile)
+            : compile(project);
+    // A failed CJS compiler must return through stage cleanup before exiting.
     if (result.error) throw result.error;
     if (result.status !== 0) process.exit(result.status ?? 1);
+    const format = project === 'tsconfig.json' ? 'esm' : 'cjs';
+    for (const name of ['auth/flow', 'formulas/index']) {
+        console.error(
+            '[sdk-build-output]',
+            JSON.stringify({
+                path: `dist/${format}/${name}.js`,
+                source: fingerprint(`src/${name}.ts`),
+                output: fingerprint(`dist/${format}/${name}.js`),
+            })
+        );
+    }
 }
 
 mkdirSync('dist/cjs', { recursive: true });
@@ -90,3 +126,9 @@ for (const format of ['esm', 'cjs']) {
         JSON.stringify(publicProvenance, null, 4) + '\n'
     );
 }
+
+// Prepack inherits this boundary: malformed output must never become a TGZ.
+writeFileSync(
+    moduleFormatReceiptPath,
+    JSON.stringify(assertModuleFormats(process.cwd()), null, 4) + '\n'
+);

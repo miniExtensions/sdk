@@ -13,6 +13,26 @@ export function mountCustomField(
     node.append(title, body, status);
     const input = document.createElement('input');
     let retired = false;
+    let durationListeners = false;
+    const onFocus = () => {
+        if (!retired && body.contains(input))
+            binding.scalar?.setFocused?.(true);
+    };
+    const onBlur = () => {
+        if (!retired && body.contains(input))
+            binding.scalar?.setFocused?.(false);
+    };
+    const listenForDuration = (enabled: boolean) => {
+        if (durationListeners === enabled) return;
+        durationListeners = enabled;
+        if (enabled) {
+            input.addEventListener('focus', onFocus);
+            input.addEventListener('blur', onBlur);
+        } else {
+            input.removeEventListener('focus', onFocus);
+            input.removeEventListener('blur', onBlur);
+        }
+    };
     input.addEventListener('input', () => {
         if (retired || !binding.getSnapshot().canEdit) return;
         if (binding.date) binding.date.setInput(input.value);
@@ -23,6 +43,9 @@ export function mountCustomField(
         } else binding.setValue(input.value || null);
     });
     const stop = binding.subscribe((snapshot) => {
+        listenForDuration(
+            !snapshot.retired && snapshot.scalar?.kind === 'duration'
+        );
         node.hidden = snapshot.visibility.type !== 'visible';
         node.inert = snapshot.retired;
         title.textContent = snapshot.field?.title ?? '';
@@ -35,6 +58,25 @@ export function mountCustomField(
         if (snapshot.retired) {
             body.replaceChildren();
             return;
+        }
+        if (
+            !status.textContent &&
+            snapshot.selectAvailability?.status === 'blocked'
+        ) {
+            // Application-owned localized wording; the SDK returns finite codes only.
+            const code = snapshot.selectAvailability.code;
+            status.textContent =
+                code === 'unsupported-condition' || code === 'invalid-condition'
+                    ? 'Choices are unavailable for this configuration.'
+                    : 'Choices are temporarily unavailable.';
+        } else if (
+            !status.textContent &&
+            snapshot.selectAvailability?.status === 'ready' &&
+            snapshot.selection?.options.length === 0
+        ) {
+            status.textContent = snapshot.selection.searchTerm.trim()
+                ? 'No matching choices.'
+                : 'No choices available.';
         }
         if (snapshot.selection && binding.selection) {
             body.replaceChildren();
@@ -106,6 +148,7 @@ export function mountCustomField(
         destroy() {
             if (retired) return;
             retired = true;
+            listenForDuration(false);
             stop();
             node.remove();
         },

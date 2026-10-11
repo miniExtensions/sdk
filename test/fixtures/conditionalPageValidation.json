@@ -1,0 +1,3155 @@
+{
+    "provenance": {
+        "revision": "58f73d575ab10baa0a10693660d8002f204368e1",
+        "tree": "b39e58ead46a311c497def57474cf5ca720542ae",
+        "generator": "scripts/generate-conditional-page-validation-fixtures.mjs",
+        "generatorSha256": "99eaf959c57901a7405aa710573671c6ecd5cc78e48d9fa27a338a9234500469",
+        "casesSourceSha256": "09fdf528576b65ba938f1e96ae67690f6f702bf068b27006e0165e4ee8854063",
+        "sources": {
+            "frontend-validation": "768b7d657fd670c70918f540147fc6abbbd18513ba7605a0f4631999ad333810",
+            "advanced-enabled": "94e1ab19162424a0898db09a79cbbcf103b98047c33751bb34b09685c0f617b0",
+            "scalar-converter": "397b3a1a35ae07d0235d6477078cc10e7cf02ba00e02269272b4b3946f0dd3e1",
+            "formula-runner": "e4169421073e02ce37ecbe0c5e142584634572020781ebeaeec6b6bb48704d7f",
+            "condition-record": "b0f31ce92fab137306cc54d2e79678d38421aa436913f9efdfd49acd8c96f3b7",
+            "ordinary-validation": "4cd7da6d3f7ccb44fe23f46ecf96ebeb8844bb9236c3a3cf33ab8e42113556d9",
+            "email-syntax": "cefb9409ea8d98342d5fe46fa5bf26d26004fb1cf549435874d3c604870d2783",
+            "value-emptiness": "0d4c94bfeeb88d2d180957861d8e1d34f40eeee64d921ba26b9aa5cf16a2785d"
+        },
+        "urlSyntax": {
+            "sourceRole": "email-syntax",
+            "export": "checkIfUrlIsValid",
+            "hrefExport": "getValidUrlHref"
+        },
+        "emailValidator": {
+            "version": "2.0.4",
+            "entrySha256": "72a150940d35695c23e26e262e564dae9397ca9757e2ab57b1c784607d9838b1"
+        },
+        "execution": "pinned frontend ordinary-first and runtime-enabled conditional validation through scalar converter and formula runner against full native synthetic data; result categories only"
+    },
+    "validation": [
+        {
+            "name": "text-false",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "text-true",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": "allow" },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "exact-empty-custom-suppresses",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        },
+                        "customErrorMessageForFieldValidation": ""
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "custom-generic-0",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        },
+                        "customErrorMessageForFieldValidation": null
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "custom-generic-1",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        },
+                        "customErrorMessageForFieldValidation": "Synthetic custom text"
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "required-first",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        },
+                        "required": true
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "", "driver": "deny" },
+            "hidden": false,
+            "expectedCode": "required",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "character-limit-first",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        },
+                        "characterLimit": 2
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "character-limit",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "negative-first",
+            "schemas": {
+                "target": {
+                    "fieldType": "number",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "number", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        },
+                        "allowNegativeNumbers": false
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": -2, "driver": "deny" },
+            "hidden": false,
+            "expectedCode": "negative-number",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "email-first",
+            "schemas": {
+                "target": {
+                    "fieldType": "email",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "email", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "invalid-email", "driver": "deny" },
+            "hidden": false,
+            "expectedCode": "invalid-email",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "url-first",
+            "schemas": {
+                "target": {
+                    "fieldType": "url",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "url", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "invalid-url", "driver": "deny" },
+            "hidden": false,
+            "expectedCode": "invalid-url",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "readonly-skips",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        },
+                        "readOnly": true
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "hidden-skips",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": true,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "computed-skips",
+            "schemas": {
+                "target": {
+                    "fieldType": "formula",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": true,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "formula",
+                            "options": {
+                                "result": {
+                                    "type": "singleLineText",
+                                    "options": null
+                                }
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "no-rules",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": []
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "text-is",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "text-isNot",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "isNot",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "text-contains",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "contains",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "text-doesNotContain",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "doesNotContain",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "text-isEmpty",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "isEmpty",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "text-isNotEmpty",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "isNotEmpty",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "number-true",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "number",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "number",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "number", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 3 },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "number-false",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "number",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "number",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "number", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 2 },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "percent-true",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "percent",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "percent",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "percent", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 0.03 },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "percent-false",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "percent",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "percent",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "percent", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 2 },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "currency-true",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "currency",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "currency",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "currency", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 3 },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "currency-false",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "currency",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "currency",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "currency", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 2 },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "rating-true",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "rating",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "rating",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "rating", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 3 },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "rating-false",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "rating",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "rating",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "rating", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 2 },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "duration-true",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "duration",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "duration",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "duration", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 3 },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "duration-false",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "equals",
+                                        "fieldType": "duration",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": 3
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "duration",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "duration", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": 2 },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "checkbox-true",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "checkbox",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": true
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "checkbox",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "checkbox", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": true },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "checkbox-false",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "checkbox",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": true
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "checkbox",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "checkbox", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": false },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "nested-or-group",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "or",
+                            "conditions": [
+                                {
+                                    "id": "nested",
+                                    "type": "groupCondition",
+                                    "logicalOperator": "and",
+                                    "conditions": [
+                                        {
+                                            "id": "synthetic-rule",
+                                            "type": "singleCondition",
+                                            "setting": {
+                                                "type": "is",
+                                                "fieldType": "singleLineText",
+                                                "idOrName": {
+                                                    "type": "id",
+                                                    "id": "driver"
+                                                },
+                                                "value": "allow"
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "deny"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": null,
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "name-reference",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "name",
+                                            "name": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "conditional-validation",
+            "comparison": "parity",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "unsupported-singleSelect",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleSelect",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "missing-choice"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleSelect", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        },
+        {
+            "name": "unsupported-multipleSelects",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "multipleSelects",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "missing-choice"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "multipleSelects", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        },
+        {
+            "name": "unsupported-date",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "date",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "missing-choice"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "date",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "date", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "unsupported-dateTime",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "dateTime",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "missing-choice"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "dateTime",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "dateTime", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": false }
+        },
+        {
+            "name": "unsupported-multipleRecordLinks",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "multipleRecordLinks",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "missing-choice"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "multipleRecordLinks",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleRecordLinks",
+                            "options": null
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        },
+        {
+            "name": "unsupported-formula",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "formula",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "missing-choice"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "formula",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "formula", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        },
+        {
+            "name": "select-boundary-singleSelect-known-null",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleSelect",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "choice-known"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    {
+                                        "id": "choice-known",
+                                        "name": "Known",
+                                        "color": "blueLight2"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": null },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "select-boundary-singleSelect-known-native",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleSelect",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "choice-known"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    {
+                                        "id": "choice-known",
+                                        "name": "Known",
+                                        "color": "blueLight2"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": { "id": "choice-known", "name": "Known" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        },
+        {
+            "name": "select-boundary-singleSelect-missing-null",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleSelect",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "choice-missing"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    {
+                                        "id": "choice-known",
+                                        "name": "Known",
+                                        "color": "blueLight2"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": null },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "select-boundary-singleSelect-missing-native",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleSelect",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "choice-missing"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    {
+                                        "id": "choice-known",
+                                        "name": "Known",
+                                        "color": "blueLight2"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": { "id": "choice-known", "name": "Known" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "select-boundary-multipleSelects-known-null",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "hasAnyOf",
+                                        "fieldType": "multipleSelects",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": ["choice-known"]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    {
+                                        "id": "choice-known",
+                                        "name": "Known",
+                                        "color": "blueLight2"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": null },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "select-boundary-multipleSelects-known-native",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "hasAnyOf",
+                                        "fieldType": "multipleSelects",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": ["choice-known"]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    {
+                                        "id": "choice-known",
+                                        "name": "Known",
+                                        "color": "blueLight2"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": [{ "id": "choice-known", "name": "Known" }]
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        },
+        {
+            "name": "select-boundary-multipleSelects-missing-null",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "hasAnyOf",
+                                        "fieldType": "multipleSelects",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": ["choice-missing"]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    {
+                                        "id": "choice-known",
+                                        "name": "Known",
+                                        "color": "blueLight2"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": { "target": "Answer", "driver": null },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "select-boundary-multipleSelects-missing-native",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "hasAnyOf",
+                                        "fieldType": "multipleSelects",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": ["choice-missing"]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    {
+                                        "id": "choice-known",
+                                        "name": "Known",
+                                        "color": "blueLight2"
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": [{ "id": "choice-known", "name": "Known" }]
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "missing-schema",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "absent"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "duplicate-name-alias",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "name",
+                                            "name": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "alias": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "alias",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "schema-id-alias",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "alias": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "result", "invalid": true }
+        },
+        {
+            "name": "malformed-native",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": { "text": "synthetic-invalid" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        },
+        {
+            "name": "malformed-rule",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "unknown",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        },
+        {
+            "name": "empty-custom-does-not-suppress-refusal",
+            "schemas": {
+                "target": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "target",
+                        "name": "target",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "fieldValidationConditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleSelect",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "driver"
+                                        },
+                                        "value": "allow"
+                                    }
+                                }
+                            ]
+                        },
+                        "customErrorMessageForFieldValidation": ""
+                    }
+                },
+                "driver": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleSelect", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "target": "Answer",
+                "driver": "deny",
+                "native": { "text": "retained" }
+            },
+            "hidden": false,
+            "expectedCode": "unsupported-validation",
+            "comparison": "refusal",
+            "canonical": { "type": "throws" }
+        }
+    ]
+}

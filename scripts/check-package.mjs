@@ -1,7 +1,43 @@
 import {
+    checkPortalButtonCompositionConsumer,
+    portalButtonCompositionTypedConsumer,
+    portalButtonCompositionReactTypedConsumer,
+} from './portal-button-composition-consumer-checks.mjs';
+import {
     checkLinkedRecordsConsumer,
     linkedRecordsTypedConsumer,
 } from './linked-records-consumer-checks.mjs';
+import { checkLinkedRendererConsumer } from './linked-renderer-consumer-checks.mjs';
+import {
+    checkLinkedChildConsumer,
+    linkedChildTypedConsumer,
+} from './linked-child-consumer-checks.mjs';
+import {
+    checkLinkedChildEditConsumer,
+    linkedChildEditTypedConsumer,
+} from './linked-child-edit-consumer-checks.mjs';
+import {
+    checkLinkedChildEditFreshnessConsumer,
+    linkedChildEditFreshnessConsumerCheckCount,
+} from './linked-child-edit-freshness-consumer-checks.mjs';
+import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
+import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
+import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
+import {
+    checkCrossPageChoiceConsumer,
+    crossPageChoiceTypedConsumer,
+} from './cross-page-choice-consumer-checks.mjs';
+import {
+    checkSelectAvailabilityBridgeConsumer,
+    selectAvailabilityBridgeTypedConsumer,
+} from './select-availability-bridge-consumer-checks.mjs';
+import { checkSelectAvailabilityBridgeRecipe } from './select-availability-bridge-recipe-checks.mjs';
+import { checkSelectOptionDriverConsumer } from './select-option-driver-consumer-checks.mjs';
+import { checkSingleSelectFormDriverConsumer } from './single-select-form-driver-consumer-checks.mjs';
+import { checkSingleSelectFormDriverRecipe } from './single-select-form-driver-recipe-checks.mjs';
+import { checkMultipleSelectFormDriverConsumer } from './multi-select-form-driver-consumer-checks.mjs';
+import { checkMultipleSelectFormDriverRecipe } from './multi-select-form-driver-recipe-checks.mjs';
+import { checkSelectedRecordPolicyConsumer } from './selected-record-policy-checks.mjs';
 import {
     checkButtonConsumer,
     buttonTypedConsumer,
@@ -17,13 +53,27 @@ import {
     checkFormPageConsumer,
     formPageTypedConsumer,
 } from './form-page-consumer-checks.mjs';
+import {
+    checkFormCompositionConsumer,
+    formCompositionTypedConsumer,
+} from './form-composition-consumer-checks.mjs';
+import {
+    checkPortalCompositionConsumer,
+    portalCompositionTypedConsumer,
+} from './portal-composition-consumer-checks.mjs';
 import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
+import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
 import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
+import {
+    checkDurationBindingConsumer,
+    durationTypedConsumer,
+    durationReactTypedConsumer,
+} from './duration-binding-consumer-checks.mjs';
 import { checkReactBindingConsumer } from './react-binding-consumer-checks.mjs';
 import { checkFieldBindingRecipe } from './field-binding-recipe-checks.mjs';
 import { checkSelectConditions } from './select-condition-checks.mjs';
@@ -90,6 +140,7 @@ import { createHash } from 'node:crypto';
 import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
+import { assertModuleFormatReceipt } from './module-format-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const temporaryDirectory = realpathSync(
@@ -226,6 +277,7 @@ try {
         join(temporaryDirectory, packed.filename),
         packed
     );
+    assertModuleFormatReceipt(installedPackage);
     await assertPublicDistribution(
         installedPackage,
         packed.files.map(({ path }) => path),
@@ -572,6 +624,8 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         consumer +
         rendererTypeConsumer +
         buttonTypedConsumer +
+        portalButtonCompositionTypedConsumer +
+        durationTypedConsumer +
         `
 import type { ListConditionalFilterPrimaryValuesInput, ConditionalFilterPrimaryValue, ConditionalFilterData, ListAddressPredictionsInput, AddressPrediction, GetFormattedAddressInput, TriggerConfiguredButtonWebhookInput, ConfiguredButtonWebhookSource, TriggerConfiguredButtonWebhookResult } from '@miniextensions/sdk';
 export async function checkAdditionalRuntimeTypes(client: MiniExtensionsClient, signal: AbortSignal) {
@@ -765,6 +819,16 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             join(temporaryDirectory, linkedRecordsFilename),
             linkedRecordsTypedConsumer
         );
+        const linkedChildFilename = `linked-child-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, linkedChildFilename),
+            linkedChildTypedConsumer
+        );
+        const linkedChildEditFilename = `linked-child-edit-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, linkedChildEditFilename),
+            linkedChildEditTypedConsumer
+        );
         const rendererFilename = `renderers-${filename}`;
         writeFileSync(
             join(temporaryDirectory, rendererFilename),
@@ -790,6 +854,8 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             filename,
             rendererFilename,
             linkedRecordsFilename,
+            linkedChildFilename,
+            linkedChildEditFilename,
             pageFilename,
             ...formulasGuideSources,
         ]);
@@ -884,6 +950,91 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         rendererReactTypedConsumer
     );
     reactSources.push('renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'duration-react-consumer.tsx'),
+        durationReactTypedConsumer
+    );
+    reactSources.push('duration-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'form-composition-consumer.ts'),
+        formCompositionTypedConsumer
+    );
+    reactSources.push('form-composition-consumer.ts');
+    writeFileSync(
+        join(temporaryDirectory, 'cross-page-choice-consumer.ts'),
+        crossPageChoiceTypedConsumer
+    );
+    reactSources.push('cross-page-choice-consumer.ts');
+    writeFileSync(
+        join(temporaryDirectory, 'select-availability-bridge-consumer.ts'),
+        selectAvailabilityBridgeTypedConsumer
+    );
+    reactSources.push('select-availability-bridge-consumer.ts');
+    writeFileSync(
+        join(temporaryDirectory, 'portal-composition-consumer.ts'),
+        portalCompositionTypedConsumer
+    );
+    reactSources.push('portal-composition-consumer.ts');
+    writeFileSync(
+        join(temporaryDirectory, 'portal-button-composition-consumer.ts'),
+        portalButtonCompositionReactTypedConsumer
+    );
+    reactSources.push('portal-button-composition-consumer.ts');
+    const linkedChildRecipes = [
+        ...formsGuide.matchAll(/```tsx\n([\s\S]*?)\n```/g),
+    ].filter(([, code]) =>
+        code.includes('export function createLinkedChildPanel(')
+    );
+    assert.equal(
+        linkedChildRecipes.length,
+        1,
+        'Missing shipped linked-child panel'
+    );
+    writeFileSync(
+        join(temporaryDirectory, 'linked-child-guide.tsx'),
+        linkedChildRecipes[0][1]
+    );
+    reactSources.push('linked-child-guide.tsx');
+    const compositionRecipes = [
+        ...readFileSync(
+            join(installedPackage, 'docs/field-bindings.md'),
+            'utf8'
+        ).matchAll(/```(ts|tsx)\n([\s\S]*?)\n```/g),
+    ].filter(
+        ([, , code]) =>
+            code.includes('export function createFormPresentation(') ||
+            code.includes('export function CustomForm(')
+    );
+    assert.equal(
+        compositionRecipes.length,
+        2,
+        'Missing shipped Form composition recipes'
+    );
+    for (const [, language, code] of compositionRecipes) {
+        const path = `form-composition-guide-${reactSources.length}.${language}`;
+        writeFileSync(join(temporaryDirectory, path), code);
+        reactSources.push(path);
+    }
+    const portalCompositionRecipes = [
+        ...readFileSync(
+            join(installedPackage, 'docs/field-bindings.md'),
+            'utf8'
+        ).matchAll(/```(ts|tsx)\n([\s\S]*?)\n```/g),
+    ].filter(
+        ([, , code]) =>
+            code.includes('export function createPortalPresentation(') ||
+            code.includes('export function CustomPortal(')
+    );
+    assert.equal(
+        portalCompositionRecipes.length,
+        2,
+        'Missing shipped Portal composition recipes'
+    );
+    for (const [, language, code] of portalCompositionRecipes) {
+        const path = `portal-composition-guide-${reactSources.length}.${language}`;
+        writeFileSync(join(temporaryDirectory, path), code);
+        reactSources.push(path);
+    }
     run(process.execPath, [
         require.resolve('typescript/bin/tsc'),
         '--noEmit',
@@ -921,6 +1072,42 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed rich linked records: ${linkedRecordsProof.checks} ESM/CJS groups passed; synthetic transport only.`
     );
+    const linkedChildProof = await checkLinkedChildConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(linkedChildProof, 64);
+    console.log(
+        `Installed configured linked-child create: ${linkedChildProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
+    );
+    const linkedChildEditProof = await checkLinkedChildEditConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(linkedChildEditProof, 34);
+    console.log(
+        `Installed configured linked-child edit: ${linkedChildEditProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
+    );
+    const editFreshnessProof = await checkLinkedChildEditFreshnessConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(
+        editFreshnessProof,
+        linkedChildEditFreshnessConsumerCheckCount
+    );
+    console.log(
+        `Installed linked-child Edit freshness: ${editFreshnessProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
+    );
+    const selectedPolicyProof = await checkSelectedRecordPolicyConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(
+        selectedPolicyProof.checks,
+        selectedPolicyProof.fixtureCases * 2 +
+            selectedPolicyProof.lifecycleGroups
+    );
+    assert.equal(selectedPolicyProof.aliasChecks, 14);
+    console.log(
+        `Installed selected-record policy: ${selectedPolicyProof.checks} ESM/CJS fixture and lifecycle groups plus ${selectedPolicyProof.aliasChecks} dependency-alias checks passed; synthetic transport only.`
+    );
     const rendererProof = await checkRendererConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -929,6 +1116,106 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed renderer hosts: all 33 slots and ${rendererProof.checks} owner/remount groups passed; synthetic transport only.`
     );
+    const linkedRendererProof = await checkLinkedRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(linkedRendererProof.checks, 16);
+    const portalPillProof = await checkPortalLinkedPillConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(portalPillProof.checks, 53);
+    console.log(
+        `Installed Portal linked pills: ${portalPillProof.checks} ESM/CJS and shipped React recipe groups passed; synthetic DOM/transport only.`
+    );
+    console.log(
+        `Installed Form linked renderer bridge: ${linkedRendererProof.checks} ESM/CJS and shipped React recipe groups passed; synthetic transport only.`
+    );
+    assert.equal(
+        await checkFormCompositionConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        26
+    );
+    const conditionalValidationChecks =
+        await checkConditionalPageValidationConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(conditionalValidationChecks, 126);
+    console.log(
+        `Installed configured conditional validation: ${conditionalValidationChecks} ESM/CJS, canonical and shipped React recipe checkpoints passed; synthetic dispatch only.`
+    );
+    const crossPageChoiceChecks = await checkCrossPageChoiceConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(crossPageChoiceChecks, 76);
+    const selectAvailabilityBridgeChecks =
+        await checkSelectAvailabilityBridgeConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    const selectOptionDriverChecks = await checkSelectOptionDriverConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
+    assert.equal(selectOptionDriverChecks, 384);
+    console.log(
+        `Installed select-driven option eligibility: ${selectOptionDriverChecks} ESM/CJS canonical and Form-owner checkpoints passed; synthetic transport only.`
+    );
+    const selectAvailabilityBridgeRecipeChecks =
+        await checkSelectAvailabilityBridgeRecipe({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        });
+    console.log(
+        `Installed select-availability bridge: ${selectAvailabilityBridgeChecks} ESM/CJS groups and ${selectAvailabilityBridgeRecipeChecks} shipped React/custom-renderer groups passed; synthetic DOM/transport only.`
+    );
+    const singleSelectFormDriverChecks =
+        await checkSingleSelectFormDriverConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(singleSelectFormDriverChecks, 220);
+    let singleSelectFormDriverRecipeChecks = 0;
+    for (const flavor of ['esm', 'cjs']) {
+        const result = await checkSingleSelectFormDriverRecipe({
+            consumerDirectory: temporaryDirectory,
+            flavor,
+        });
+        assert.equal(result.checks, 42);
+        singleSelectFormDriverRecipeChecks += result.checks;
+    }
+    console.log(
+        `Installed single-select Form drivers: ${singleSelectFormDriverChecks} ESM/CJS groups and ${singleSelectFormDriverRecipeChecks} actual shipped AirtableForm recipe groups passed; synthetic DOM/transport only.`
+    );
+    const multipleSelectFormDriverChecks =
+        await checkMultipleSelectFormDriverConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(multipleSelectFormDriverChecks, 332);
+    let multipleSelectFormDriverRecipeChecks = 0;
+    for (const flavor of ['esm', 'cjs']) {
+        const result = await checkMultipleSelectFormDriverRecipe({
+            consumerDirectory: temporaryDirectory,
+            flavor,
+        });
+        assert.equal(result.checks, 46);
+        multipleSelectFormDriverRecipeChecks += result.checks;
+    }
+    console.log(
+        `Installed multi-select Form drivers: ${multipleSelectFormDriverChecks} ESM/CJS groups and ${multipleSelectFormDriverRecipeChecks} actual shipped AirtableForm recipe groups passed; synthetic DOM/transport only.`
+    );
+    assert.equal(
+        await checkPortalCompositionConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        37
+    );
+    const portalButtonCompositionProof =
+        await checkPortalButtonCompositionConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        });
+    assert.equal(portalButtonCompositionProof.checks, 66);
     const reactBindingProof = await checkReactBindingConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -1026,11 +1313,20 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 ),
         });
         if (example === 'browser') {
+            await checkDateRangeConsumer({
+                consumerDirectory: temporaryDirectory,
+            });
+            const collaboratorValidationProof =
+                await checkCollaboratorValidationConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    happyDomModulePath: require.resolve('happy-dom'),
+                });
+            assert.equal(collaboratorValidationProof.checks, 94);
             assert.equal(
                 await checkFormPageConsumer({
                     consumerDirectory: temporaryDirectory,
                 }),
-                416
+                1086
             );
             assert.equal(
                 await checkFormDispositionConsumer({
@@ -1191,6 +1487,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             );
         }
         if (example === 'browser') {
+            await checkDurationBindingConsumer({
+                consumerDirectory: temporaryDirectory,
+                starterDirectory: directory,
+                happyDomModulePath: require.resolve('happy-dom'),
+            });
             assert.equal(
                 await checkDateBindingConsumer({
                     consumerDirectory: temporaryDirectory,

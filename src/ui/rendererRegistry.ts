@@ -7,12 +7,17 @@ import type {
 } from '../runtime/types.js';
 import type { FormValidationMessage } from '../forms/helpers.js';
 import type { FieldActionResult } from '../forms/bindings.js';
-import type { ScalarFieldState } from './scalarModels.js';
+import type { ScalarFieldState, DurationFieldState } from './scalarModels.js';
 import type { DateFieldState } from './dateModel.js';
+import type { SelectAvailabilitySnapshot } from './selectAvailability.js';
 import type { SelectionState } from './types.js';
 import type { FormAttachmentSnapshot } from '../forms/attachmentController.js';
 import type { FormSelectChoiceSnapshot } from '../forms/selectChoiceController.js';
 import type { ButtonFieldRenderProps } from './buttonModel.js';
+import type {
+    FormLinkedRecordsFacet,
+    FormLinkedRecordsSnapshot,
+} from '../forms/linkedRecords.js';
 
 export type FieldKind = RuntimeFieldSchema['fieldType'];
 export type FieldSchema<K extends FieldKind> = Extract<
@@ -72,6 +77,13 @@ export type ScalarRendererActions = {
     state: ScalarFieldState;
     setInput(input: string): boolean;
     setChecked(checked: boolean): boolean;
+    /** Present only for the duration specialization. */
+    setFocused?(focused: boolean): boolean;
+};
+export type DurationRendererActions = ScalarRendererActions & {
+    state: DurationFieldState;
+    /** Presentation only; does not round or write native seconds. */
+    setFocused(focused: boolean): boolean;
 };
 export type DateRendererActions = {
     state: DateFieldState;
@@ -128,15 +140,16 @@ export type FieldRendererCapability<K extends FieldKind> =
             : {
                   type: 'editable';
                   setValue(value: FieldWriteValue<K>): FieldActionResult;
-              } & (K extends
-                  | 'number'
-                  | 'percent'
-                  | 'currency'
-                  | 'duration'
-                  | 'rating'
-                  | 'checkbox'
-                  ? { scalar?: ScalarRendererActions }
-                  : {}) &
+              } & (K extends 'duration'
+                  ? { scalar?: DurationRendererActions }
+                  : K extends
+                          | 'number'
+                          | 'percent'
+                          | 'currency'
+                          | 'rating'
+                          | 'checkbox'
+                    ? { scalar?: ScalarRendererActions }
+                    : {}) &
                   (K extends 'date' | 'dateTime'
                       ? { date?: DateRendererActions }
                       : {}) &
@@ -158,6 +171,23 @@ export type FieldPresentation =
           type: 'computed-result';
           config: RuntimeFieldSchema['airtableField']['config'] | null;
       };
+/** Borrowed Form presentation and its existing explicit hydration action. */
+export type FormLinkedRecordsRendererProps = {
+    source: 'form';
+    state: FormLinkedRecordsSnapshot;
+    readSelected: FormLinkedRecordsFacet['readSelected'];
+};
+export type PortalLinkedPillOccurrence =
+    | { nativeIndex: number; state: 'resolved'; label: string }
+    | { nativeIndex: number; state: 'blank' | 'unavailable'; label: null };
+/** Detached primary labels only; no records, nested fields or read actions. */
+export type PortalLinkedPillsRendererProps = {
+    source: 'portal-pills';
+    items: readonly PortalLinkedPillOccurrence[];
+};
+export type LinkedRecordsRendererProps =
+    | FormLinkedRecordsRendererProps
+    | PortalLinkedPillsRendererProps;
 export type FieldRendererProps<K extends FieldKind> = {
     physicalKind: K;
     presentation: FieldPresentation;
@@ -174,7 +204,12 @@ export type FieldRendererProps<K extends FieldKind> = {
     validation: readonly FormValidationMessage[];
     error: string | null;
     capability: FieldRendererCapability<K>;
-};
+} & (K extends 'multipleRecordLinks'
+    ? { linkedRecords?: LinkedRecordsRendererProps }
+    : { linkedRecords?: never }) &
+    (K extends 'singleSelect' | 'multipleSelects'
+        ? { selectAvailability?: SelectAvailabilitySnapshot }
+        : { selectAvailability?: never });
 export type FieldRendererPropsUnion = {
     [K in FieldKind]: FieldRendererProps<K>;
 }[FieldKind];
@@ -254,12 +289,16 @@ export type RendererPropsInput = Omit<
     | 'writeConfig'
     | 'value'
     | 'capability'
+    | 'linkedRecords'
+    | 'selectAvailability'
 > & {
     physicalKind: string;
     field: unknown;
     displayConfig: unknown;
     writeConfig?: unknown;
     value: unknown;
+    linkedRecords?: LinkedRecordsRendererProps;
+    selectAvailability?: SelectAvailabilitySnapshot;
     capability:
         | { type: 'readonly' }
         | {
@@ -580,8 +619,82 @@ export function createRendererProps(
     if (input.capability.type === 'editable' && (computed || kind === 'button'))
         return null;
     if (input.capability.type === 'button' && kind !== 'button') return null;
+    let selectAvailability: SelectAvailabilitySnapshot | undefined;
+    if (input.selectAvailability !== undefined) {
+        const availability = input.selectAvailability;
+        if (
+            input.context !== 'form' ||
+            (kind !== 'singleSelect' && kind !== 'multipleSelects') ||
+            !object(availability)
+        )
+            return null;
+        const keys = Object.keys(availability);
+        const status = availability.status;
+        if (status === 'ready') {
+            if (keys.length !== 1 || keys[0] !== 'status') return null;
+            selectAvailability = { status: 'ready' };
+        } else if (status === 'blocked') {
+            const code = availability.code;
+            if (
+                keys.length !== 2 ||
+                !keys.includes('status') ||
+                !keys.includes('code') ||
+                ![
+                    'unavailable-record',
+                    'unsupported-condition',
+                    'invalid-condition',
+                    'evaluation-error',
+                ].includes(code)
+            )
+                return null;
+            selectAvailability = { status: 'blocked', code };
+        } else return null;
+    }
+    if (input.linkedRecords !== undefined) {
+        const linked = input.linkedRecords;
+        if (!object(linked) || kind !== 'multipleRecordLinks') return null;
+        if (linked.source === 'form') {
+            if (
+                input.context !== 'form' ||
+                typeof linked.readSelected !== 'function' ||
+                !object(linked.state) ||
+                !json(linked.state)
+            )
+                return null;
+        } else if (linked.source === 'portal-pills') {
+            if (
+                !['portal-cell', 'portal-detail', 'linked-detail'].includes(
+                    input.context
+                ) ||
+                !dense(
+                    linked.items,
+                    (item) =>
+                        object(item) &&
+                        Number.isSafeInteger(item.nativeIndex) &&
+                        (item.state === 'resolved'
+                            ? typeof item.label === 'string' &&
+                              item.label.trim() !== ''
+                            : (item.state === 'blank' ||
+                                  item.state === 'unavailable') &&
+                              item.label === null)
+                ) ||
+                linked.items.length !==
+                    (Array.isArray(input.value) ? input.value.length : 0) ||
+                linked.items.some((item, index) => item.nativeIndex !== index)
+            )
+                return null;
+        } else return null;
+    }
     if (input.capability.type === 'editable') {
         const cap = input.capability;
+        if (
+            cap.scalar &&
+            (kind === 'duration'
+                ? cap.scalar.state.kind !== 'duration' ||
+                  typeof cap.scalar.setFocused !== 'function'
+                : cap.scalar.setFocused !== undefined)
+        )
+            return null;
         if (
             typeof cap.setValue !== 'function' ||
             (cap.scalar &&
@@ -608,7 +721,12 @@ export function createRendererProps(
             return null;
     }
     try {
-        const { capability, ...data } = input;
+        const {
+            capability,
+            linkedRecords,
+            selectAvailability: _availability,
+            ...data
+        } = input;
         const config = input.field.config;
         const resultKind =
             kind === 'formula' ||
@@ -626,6 +744,26 @@ export function createRendererProps(
             : { type: 'physical', config };
         return {
             ...structuredClone({ ...data, computed, presentation }),
+            ...(selectAvailability ? { selectAvailability } : {}),
+            ...(linkedRecords
+                ? {
+                      linkedRecords:
+                          linkedRecords.source === 'form'
+                              ? {
+                                    source: linkedRecords.source,
+                                    state: structuredClone(linkedRecords.state),
+                                    readSelected: linkedRecords.readSelected,
+                                }
+                              : {
+                                    source: linkedRecords.source,
+                                    items: linkedRecords.items.map((item) => ({
+                                        nativeIndex: item.nativeIndex,
+                                        state: item.state,
+                                        label: item.label,
+                                    })),
+                                },
+                  }
+                : {}),
             capability,
         } as FieldRendererPropsUnion;
     } catch {

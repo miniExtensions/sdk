@@ -3,6 +3,11 @@ import type { FormControllerSaveOptions } from './controller.js';
 import type { FormDraftSnapshot } from './drafts.js';
 import type { AirtableValue, FormLoadedResult } from '../runtime/index.js';
 import { validatePageField, type FormPageProblem } from './pageValidation.js';
+import { validatePageDateRange } from './pageDateRange.js';
+import {
+    withFormSaveAdmission,
+    requireFormSaveAdmission,
+} from './saveAdmission.js';
 import { normalizeFormLeaseLoaded } from '../ui/formLease.js';
 export type FormPageDescriptor = {
     title: string | null;
@@ -77,6 +82,11 @@ export class FormPageError extends Error {
         this.name = 'FormPageError';
     }
 }
+// Rendering adapters may retain a caller's SDK page owner, but never pair it
+// with another native draft. This identity is not a public /forms API.
+const pageFields = new WeakMap<FormPageOwner, FormFieldBindings>();
+export const readFormPageOwnerFields = (pages: FormPageOwner) =>
+    pageFields.get(pages) ?? null;
 const lastVisible = (
     pages: readonly FormPageDescriptor[],
     before = pages.length
@@ -105,6 +115,10 @@ export function createFormPageOwner(
         navigationRevision = 0;
     let validatedInputRevision: number | null = null;
     let validatedNavigationRevision: number | null = null;
+    let dateRangeFields: {
+        field: NonNullable<FormFieldSnapshot['field']>;
+        hidden: boolean;
+    }[] = [];
     let validationStable = true;
     let fingerprint = '';
     let backBlocked = false;
@@ -315,7 +329,11 @@ export function createFormPageOwner(
                     snapshot.field,
                     control.draft?.data[id],
                     loaded.payload.formRecord.data[id],
-                    snapshot.visibility.type === 'hidden'
+                    snapshot.visibility.type === 'hidden',
+                    {
+                        data: control.draft?.data ?? {},
+                        fieldIdsToSchemas: loaded.payload.fieldIdsToSchemas,
+                    }
                 );
                 if (issue && (active === last || currentIds.includes(id)))
                     problems.push(issue);
@@ -347,6 +365,18 @@ export function createFormPageOwner(
                 validationStable && !retired ? inputTicket : null;
             validatedNavigationRevision =
                 validationStable && !retired ? navigationTicket : null;
+            dateRangeFields = [...snapshots.values()].flatMap((snapshot) =>
+                snapshot.field &&
+                (snapshot.field.fieldType === 'date' ||
+                    snapshot.field.fieldType === 'dateTime')
+                    ? [
+                          {
+                              field: snapshot.field,
+                              hidden: snapshot.visibility.type === 'hidden',
+                          },
+                      ]
+                    : []
+            );
             const blocked = problems.some((p) =>
                 [
                     'unsupported-configuration',
@@ -503,6 +533,8 @@ export function createFormPageOwner(
     const notify = () => publish(true);
     const refusal = (expected: number, back = false): FormPageAction | null => {
         sync();
+        // Publish clock-boundary feedback before rejecting a retained action.
+        publish(false);
         if (intent !== null) return { accepted: false, reason: 'busy' };
         if (retired) return { accepted: false, reason: 'retired' };
         if (expected !== revision)
@@ -526,6 +558,7 @@ export function createFormPageOwner(
         // Field/owner reads may invoke callbacks too. Never authorize an action
         // against a revision older than the final synchronized validation.
         sync();
+        publish(false);
         if (retired) return { accepted: false, reason: 'retired' };
         if (expected !== revision)
             return { accepted: false, reason: 'stale-revision' };
@@ -559,7 +592,7 @@ export function createFormPageOwner(
             /* Missing metadata is reported in the snapshot. */
         }
     }
-    return {
+    const owner: FormPageOwner = {
         getSnapshot: snapshot,
         subscribe(listener) {
             listeners.set(listener, revision);
@@ -651,6 +684,56 @@ export function createFormPageOwner(
                     fields.controller.getState().draftRevision === draftRevision
                 );
             };
+            const rangeFields = dateRangeFields;
+            const admission = () => {
+                if (!owns()) throw new FormPageError('stale-revision');
+                // Read after ownership callbacks; then evaluate the detached
+                // field policy without another application callback. This gate
+                // runs before the journal and again after all dispatch hooks.
+                const control = fields.controller.getState();
+                // Scope/session getters above may change external configuration.
+                // Observe it last, then inspect only captured state and local tickets.
+                // Once observed, a mismatch cannot revive this owner on restoration.
+                try {
+                    const epoch = options.configurationRevision();
+                    if (
+                        !Number.isSafeInteger(epoch) ||
+                        epoch < 0 ||
+                        epoch !== configuration
+                    )
+                        retired = true;
+                } catch {
+                    retired = true;
+                }
+                if (
+                    retired ||
+                    disposed ||
+                    active !== pageIndex ||
+                    inputRevision !== inputTicket ||
+                    navigationRevision !== navigationTicket ||
+                    validatedDraftRevision !== draftRevision ||
+                    control.draftRevision !== draftRevision ||
+                    control.epoch !== initial.epoch ||
+                    control.contextRevision !== initial.contextRevision ||
+                    JSON.stringify(control.ownerScope) !==
+                        JSON.stringify(initial.ownerScope)
+                )
+                    throw new FormPageError('stale-revision');
+                if (
+                    rangeFields.some(({ field, hidden }) =>
+                        validatePageDateRange(
+                            field,
+                            control.draft?.data[field.fieldId],
+                            loaded.payload.formRecord.data[field.fieldId],
+                            hidden
+                        )
+                    )
+                ) {
+                    sync();
+                    publish(false);
+                    throw new FormPageError('validation');
+                }
+            };
             let presentationCurrent: (() => boolean) | undefined;
             const callerOwns = () => {
                 if (!owns()) return false;
@@ -660,8 +743,10 @@ export function createFormPageOwner(
             const fresh = () => {
                 if (!callerOwns()) return false;
                 // Every application callback may synchronously mutate or dispose.
-                if (presentationCurrent && !presentationCurrent()) return false;
-                return callerOwns();
+                return (
+                    !presentationCurrent ||
+                    (presentationCurrent() && callerOwns())
+                );
             };
             try {
                 notify();
@@ -724,26 +809,33 @@ export function createFormPageOwner(
                 return await fields.save({
                     ...saveOptions,
                     signal: operation.abort.signal,
-                    lifecycle: {
-                        dispatch(input, revision) {
-                            if (input.isComputeMode === true)
-                                throw new FormPageError('blocked');
-                            if (!fresh())
-                                throw new FormPageError('stale-revision');
-                            const journal = saveOptions?.lifecycle?.dispatch(
-                                input,
-                                revision
-                            );
-                            return {
-                                accepted(result) {
-                                    journal?.accepted(result);
-                                },
-                                finish(disposition) {
-                                    journal?.finish(disposition);
-                                },
-                            };
+                    lifecycle: withFormSaveAdmission(
+                        {
+                            dispatch(input, revision) {
+                                if (input.isComputeMode === true)
+                                    throw new FormPageError('blocked');
+                                if (!fresh())
+                                    throw new FormPageError('stale-revision');
+                                const journal =
+                                    saveOptions?.lifecycle?.dispatch(
+                                        input,
+                                        revision
+                                    );
+                                return {
+                                    accepted(result) {
+                                        journal?.accepted(result);
+                                    },
+                                    finish(disposition) {
+                                        journal?.finish(disposition);
+                                    },
+                                };
+                            },
                         },
-                    },
+                        () => {
+                            requireFormSaveAdmission(saveOptions?.lifecycle);
+                            admission();
+                        }
+                    ),
                     isCurrent: fresh,
                 });
             } finally {
@@ -766,4 +858,6 @@ export function createFormPageOwner(
             listeners.clear();
         },
     };
+    pageFields.set(owner, fields);
+    return owner;
 }

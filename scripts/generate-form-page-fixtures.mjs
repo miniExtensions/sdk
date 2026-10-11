@@ -10,6 +10,7 @@ import {
 import { resolve, join, relative, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { build } from 'esbuild';
 import { format, resolveConfig } from 'prettier';
 
@@ -17,6 +18,8 @@ const revision = '58f73d575ab10baa0a10693660d8002f204368e1';
 const tree = 'b39e58ead46a311c497def57474cf5ca720542ae';
 // Roles identify evidence without distributing private source locations.
 const expectedSources = {
+    'email-syntax':
+        'cefb9409ea8d98342d5fe46fa5bf26d26004fb1cf549435874d3c604870d2783',
     'ordinary-validation':
         '4cd7da6d3f7ccb44fe23f46ecf96ebeb8844bb9236c3a3cf33ab8e42113556d9',
     'value-emptiness':
@@ -86,6 +89,18 @@ try {
         requireEvidence(bytes.equals(pinned));
         locations[role] = absolute;
     }
+    const emailValidatorEntry = createRequire(
+        locations['email-syntax']
+    ).resolve('email-validator');
+    const emailValidatorPackage = JSON.parse(
+        readFileSync(join(dirname(emailValidatorEntry), 'package.json'), 'utf8')
+    );
+    const emailValidatorSha256 = hash(readFileSync(emailValidatorEntry));
+    requireEvidence(emailValidatorPackage.version === '2.0.4');
+    requireEvidence(
+        emailValidatorSha256 ===
+            '72a150940d35695c23e26e262e564dae9397ca9757e2ab57b1c784607d9838b1'
+    );
     directory = mkdtempSync(join(tmpdir(), 'sdk-page-oracle-'));
     const outfile = join(directory, 'oracle.cjs');
     const importFrom = (role) => JSON.stringify(locations[role]);
@@ -95,12 +110,21 @@ try {
 import {getErrorMessageForNonConditionalFields_frontend as validate} from ${importFrom('ordinary-validation')};
 import {groupFormFieldsBySections as group} from ${importFrom('section-grouping')};
 import {normalizeActivePageIndex as normalize, getNextVisiblePageIndex as next, getPreviousVisiblePageIndex as back} from ${importFrom('page-navigation')};
-import {formPageValidationCases as values, formPageStructureCases as structures} from ${JSON.stringify(casesPath)};
-const validation = values.map(c => ({...c, invalid: !!validate({
+import {formPageValidationCases as values, formPageConservativeRefusalCases as refusals, formPageStructureCases as structures} from ${JSON.stringify(casesPath)};
+const evaluate = c => !!validate({
     miniExtConfig:c.schema.miniExtConfig, airtableFieldConfig:c.schema.airtableField.config,
     value:c.value, storedValue:c.stored, isConditionallyHidden:c.hidden,
     language:'en', isComputeMode:false,
-})}));
+});
+const validation = values.map(c => ({...c, invalid: evaluate(c)}));
+// Refusals are deliberately separate from ordinary parity. Capture only the
+// canonical result/throw category, never exception text or private locations.
+const conservativeRefusal = refusals.map(c => {
+    let canonical;
+    try { canonical = {type:'result', invalid:evaluate(c)}; }
+    catch { canonical = {type:'throws'}; }
+    return {...c, canonical};
+});
 const structure = structures.map(c => ({...c, groups:group(c.fields).map(g =>
     'fieldsInSection' in g ? {title:g.title,fieldIds:g.fieldsInSection.map(f=>f.airtableField.id)} : {fieldId:g.airtableField.id}
 )}));
@@ -109,7 +133,7 @@ const navigation = [
     {pages:[{isHidden:true},{isHidden:true}],index:1},
 ].map(c => ({...c, normalized:normalize({pages:c.pages,activePageIndex:c.index}),
     next:next({pages:c.pages,activePageIndex:c.index}),back:back({pages:c.pages,activePageIndex:c.index})}));
-console.log(JSON.stringify({validation,structure,navigation}));`,
+console.log(JSON.stringify({validation,conservativeRefusal,structure,navigation}));`,
             resolveDir: checkout,
             loader: 'ts',
         },
@@ -135,8 +159,17 @@ console.log(JSON.stringify({validation,structure,navigation}));`,
             generatorSha256: hash(readFileSync(fileURLToPath(import.meta.url))),
             casesSourceSha256: hash(readFileSync(casesPath)),
             sources: expectedSources,
+            urlSyntax: {
+                sourceRole: 'email-syntax',
+                export: 'checkIfUrlIsValid',
+                hrefExport: 'getValidUrlHref',
+            },
+            emailValidator: {
+                version: emailValidatorPackage.version,
+                entrySha256: emailValidatorSha256,
+            },
             execution:
-                'pinned ordinary validation, section grouping and navigation; synthetic values only',
+                'pinned ordinary validation including collaborator ID membership, URL/shared email syntax, section grouping and navigation; separately classified conservative refusals; synthetic values only',
         },
         ...cases,
     };
@@ -148,7 +181,7 @@ console.log(JSON.stringify({validation,structure,navigation}));`,
         })
     );
     console.log(
-        `Canonical page fixtures: ${cases.validation.length} validation, ${cases.structure.length} structures, ${cases.navigation.length} navigation.`
+        `Canonical page fixtures: ${cases.validation.length} validation, ${cases.conservativeRefusal.length} separately classified conservative refusals, ${cases.structure.length} structures, ${cases.navigation.length} navigation.`
     );
 } catch {
     // Build and Git diagnostics can contain private locations; keep them private.

@@ -10,6 +10,14 @@ import {
     type ChangeEvent,
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
+import type {
+    FormRenderScope,
+    FormRenderSnapshot,
+} from '../ui/formRenderScope.js';
+import type {
+    PortalRenderScope,
+    PortalRenderSnapshot,
+} from '../ui/portalRenderScope.js';
 import type { FormFieldBinding, FormFieldSnapshot } from '../forms/bindings.js';
 import type {
     FormAttachmentController,
@@ -272,7 +280,8 @@ export function NumberField({ binding, render }: FieldProps): ReactNode {
     if (
         snapshot.retired ||
         snapshot.visibility.type !== 'visible' ||
-        snapshot.scalar?.kind !== 'number'
+        !snapshot.scalar ||
+        snapshot.scalar.kind === 'checkbox'
     )
         return null;
     return createElement(
@@ -284,16 +293,34 @@ export function NumberField({ binding, render }: FieldProps): ReactNode {
             snapshot.field?.title,
             createElement('input', {
                 type: 'text',
-                inputMode: 'decimal',
+                inputMode:
+                    snapshot.scalar.kind === 'duration' ? 'text' : 'decimal',
+                placeholder:
+                    snapshot.scalar.kind === 'duration'
+                        ? ((snapshot.field?.schema.miniExtConfig &&
+                          'placeholderText' in
+                              snapshot.field.schema.miniExtConfig
+                              ? snapshot.field.schema.miniExtConfig
+                                    .placeholderText
+                              : undefined) ??
+                          snapshot.scalar.durationFormat ??
+                          undefined)
+                        : undefined,
                 value: snapshot.scalar.input,
                 disabled: !snapshot.canEdit,
                 'aria-invalid': !snapshot.scalar.valid,
+                onFocus: () => binding.scalar?.setFocused?.(true),
+                onBlur: () => binding.scalar?.setFocused?.(false),
                 onChange: (event: ChangeEvent<HTMLInputElement>) =>
                     binding.scalar?.setInput(event.currentTarget.value),
             })
         ),
         status(snapshot)
     );
+}
+/** Clock editing shares the existing scalar owner; render may replace all markup. */
+export function DurationField(props: FieldProps): ReactNode {
+    return createElement(NumberField, props);
 }
 export function CheckboxField({ binding, render }: FieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
@@ -898,4 +925,145 @@ export function FieldRenderer({
             )
         )
     );
+}
+
+export type AirtableFormRenderState = Omit<FormRenderSnapshot, 'fields'> & {
+    fields: readonly { fieldId: string; node: ReactNode }[];
+};
+export type AirtableFormProps = {
+    scope: FormRenderScope;
+    renderers: import('../ui/rendererRegistry.js').FieldRendererSlots<ReactNode>;
+    fallback?(state: FieldRendererFallback): ReactNode;
+    /** Layout only; actions retain the revision that produced this render. */
+    children(state: AirtableFormRenderState): ReactNode;
+};
+
+/** A subscription shell: unmount never disposes the supplied rendering scope. */
+export function AirtableForm({
+    scope,
+    renderers,
+    fallback,
+    children,
+}: AirtableFormProps): ReactNode {
+    const store = useMemo(() => {
+        let value = scope.getSnapshot();
+        const read = () => {
+            const next = scope.getSnapshot();
+            if (next.revision !== value.revision) value = next;
+            return value;
+        };
+        return {
+            getSnapshot: read,
+            subscribe: (notify: () => void) => {
+                const refresh = () => {
+                    const before = value;
+                    read();
+                    if (value !== before) notify();
+                };
+                const stop = scope.subscribe(refresh);
+                refresh();
+                return stop;
+            },
+        };
+    }, [scope]);
+    const state = useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+    if (state.retired) return null;
+    return children({
+        ...state,
+        fields: state.fields.map(({ fieldId, host }) => ({
+            fieldId,
+            node: createElement(FieldRenderer, {
+                key: fieldId,
+                host,
+                renderers,
+                fallback: (failure) =>
+                    failure.status === 'hidden' || failure.status === 'retired'
+                        ? null
+                        : (fallback?.(failure) ?? null),
+            }),
+        })),
+    });
+}
+
+export type AirtablePortalRenderState = Omit<PortalRenderSnapshot, 'rows'> & {
+    rows: readonly {
+        recordId: string;
+        cells: readonly { fieldId: string; node: ReactNode }[];
+    }[];
+};
+export type AirtableGridProps = {
+    scope: PortalRenderScope;
+    renderers: import('../ui/rendererRegistry.js').FieldRendererSlots<ReactNode>;
+    fallback?(state: FieldRendererFallback): ReactNode;
+    /** App-owned layout; every action retains this accepted render's revision. */
+    children(state: AirtablePortalRenderState): ReactNode;
+};
+export type AirtableListProps = AirtableGridProps;
+
+function AirtablePortal({
+    scope,
+    renderers,
+    fallback,
+    children,
+}: AirtableGridProps): ReactNode {
+    const store = useMemo(() => {
+        let value = scope.getSnapshot();
+        const read = () => {
+            const next = scope.getSnapshot();
+            if (next.revision !== value.revision) value = next;
+            return value;
+        };
+        return {
+            getSnapshot: read,
+            subscribe: (notify: () => void) => {
+                const refresh = () => {
+                    const before = value;
+                    read();
+                    if (value !== before) notify();
+                };
+                const stop = scope.subscribe(refresh);
+                refresh();
+                return stop;
+            },
+        };
+    }, [scope]);
+    const state = useSyncExternalStore(
+        store.subscribe,
+        store.getSnapshot,
+        store.getSnapshot
+    );
+    if (state.retired) return null;
+    return children({
+        ...state,
+        rows: state.rows.map(({ recordId, cells }) => ({
+            recordId,
+            cells: cells.map(({ fieldId, host }) => ({
+                fieldId,
+                node: createElement(FieldRenderer, {
+                    key: fieldId,
+                    host,
+                    renderers,
+                    fallback: (failure) =>
+                        failure.status === 'hidden' ||
+                        failure.status === 'retired'
+                            ? null
+                            : (fallback?.(failure) ?? null),
+                }),
+            })),
+        })),
+    });
+}
+
+/** Grid layout shell only. Unmount never disposes the supplied scope or owner. */
+export function AirtableGrid(props: AirtableGridProps): ReactNode {
+    return createElement(AirtablePortal, props);
+}
+
+/** List layout shell over the same accepted records, hosts and action authority. */
+export function AirtableList(props: AirtableListProps): ReactNode {
+    return createElement(AirtablePortal, props);
 }

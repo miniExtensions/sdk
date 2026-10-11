@@ -55,11 +55,18 @@ for (const type of ['singleSelect','multipleSelects']) {
   const conditions=def(type,type==='singleSelect'?'is':'hasAllOf',type==='singleSelect'?selected:[selected]);
   const target={fieldType:'singleLineText',airtableField:{...base,id:'target',name:'Target',config:{type:'singleLineText',options:null}},miniExtConfig:{conditionalFields:conditions}};
   const data={fld_choice:value,target:'preserved'};const input={airtableFields:[field,target.airtableField],data,formRecordType:'create',evaluationMode:'runtime',invalidConditionMode:'strict'};
-  assert.equal(evaluateFormFieldVisibility({...input,field:target}).type,'blocked');
+  // Direct multi-select null/empty arrays now have canonical false membership;
+  // single-select arrays retain their malformed-value refusal.
+  assert.equal(evaluateFormFieldVisibility({...input,field:target}).type,type==='multipleSelects'||value===null?'hidden':'blocked');
   for(const project of [createFlatScalarFormRecordProjection,createScalarFormRecordProjection]) assert.equal(project({fieldIds:['target'],fieldIdsToSchemas:{target},airtableFields:input.airtableFields,data,recordId:'rec',invalidConditionMode:'strict'}).type,'blocked');
   const optionField={fieldType:'singleSelect',airtableField:{...base,id:'option',name:'Option'},miniExtConfig:{enableConditionalOptions:true,conditionsForOptions:[{config:{optionForConditions:'sel_a',conditionsForOption:conditions}}]}};
   const availability=resolveSelectFieldAvailability({field:optionField,airtableFields:input.airtableFields,recordForConditionEvaluation:{id:'rec',fields:data},mode:'runtime',invalidConditionMode:'strict'});
-  assert.equal(availability.status,'blocked'); assert.equal(availability.diagnostics[0].code,'unsupported-condition');checks++;
+  if(type==='singleSelect' && Array.isArray(value)) {
+   assert.equal(availability.status,'blocked'); assert.equal(availability.diagnostics[0].code,'invalid-condition');
+  } else {
+   assert.equal(availability.status,'ready'); assert(!availability.options.some(option=>option.id==='sel_a'));
+  }
+  checks++;
  }
 }
 for(const logicalOperator of ['and','or']) for(const mode of ['strict','compatibility']) for(const op of ['is','isNot']) {

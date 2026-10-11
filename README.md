@@ -10,8 +10,10 @@ Your application renders the interface and owns its lifecycle. Optional Form,
 Portal, authentication and selection helpers, plus a local formula engine, are
 included.
 
-Start with the supplied browser application. Use the import and operation maps
-below when adapting it or asking an agent to build a different interface. A
+Start with the supplied browser application, or follow
+[custom Form, Grid and List startup](docs/field-bindings.md#custom-form-grid-and-list-startup)
+to build an app-supplied React interface. Use the import and operation maps
+below when adapting either path or asking an agent to build a different interface. A
 configuration property being typed does not mean the starter implements its UI.
 
 ## Install and run the browser starter
@@ -108,6 +110,25 @@ package name as the delivery route: the source checkout does not contain built
 module output, and the package is not on npm. Building/packing locally does not
 publish the package or change repository visibility.
 
+The build parses every CommonJS JavaScript file without executing it and checks
+the package scopes and import/require entry targets before packing. The small
+`dist/cjs/module-format-receipt.json` records only relative entry paths, sizes
+and SHA256 hashes. Installed package checks compare those bytes with the receipt;
+it is a packaging diagnostic, not proof of an earlier installation failure's cause.
+Build logs identify the resolved compiler version and effective module options,
+and fingerprint two source/output pairs. A CommonJS refusal reports only its
+relative file, read/parse stage, finite exception class, byte size/hash and
+informational static-ESM detection. Read failures have no byte fingerprint;
+exception messages, source text, environment values and private paths are omitted.
+These diagnostics do not replace native parsing or explain historical failures
+whose bytes were not retained.
+
+The CommonJS compiler uses a temporary detached source copy with an explicit
+CommonJS package scope. This keeps native TypeScript emission consistent when a
+Git dependency is prepared beneath `node_modules`. The ESM compiler uses the
+original sources; the temporary copy is removed after compilation, including
+compiler failure, and is not shipped. No source package settings are rewritten.
+
 ## Obtain the actual runtime configuration
 
 - Publish the Form or Portal through the existing miniExtensions workspace,
@@ -139,24 +160,26 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
-| Import                         | Included behavior                                                                                                                                                     | Guide                                    |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                       | [Runtime](docs/runtime.md)               |
-| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                                        | [Form helpers](docs/forms.md)            |
-| `@miniextensions/sdk/portals`  | `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests                  | [Portal helpers](docs/portals.md)        |
-| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                                      | [Authentication](docs/auth.md)           |
-| `@miniextensions/sdk/ui`       | Native selects, static policy and `resolveSelectFieldAvailability`, authorized linked-record loaders, headless selection model and `createAddressAutocompleteControl` | [Selection and address UI](docs/ui.md)   |
-| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                             | [Formulas](docs/formulas.md)             |
-| `@miniextensions/sdk/react`    | Optional React field, Portal list and criteria editor components using owner-held models and replaceable rendering                                                    | [Field bindings](docs/field-bindings.md) |
+| Import                         | Included behavior                                                                                                                                         | Guide                                                                        |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                           | [Runtime](docs/runtime.md)                                                   |
+| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                            | [Form helpers](docs/forms.md)                                                |
+| `@miniextensions/sdk/portals`  | `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests      | [Portal helpers](docs/portals.md)                                            |
+| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                          | [Authentication](docs/auth.md)                                               |
+| `@miniextensions/sdk/ui`       | Typed field hosts/slots, `createFormRenderScope`, `createPortalRenderScope`, selection/scalar/date models, authorized linked loaders and address controls | [Renderer startup](docs/field-bindings.md#custom-form-grid-and-list-startup) |
+| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                 | [Formulas](docs/formulas.md)                                                 |
+| `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
 also includes optional DOM controls. The `/react` subpath provides `TextField`, `NumberField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
-`DateTimeField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
+`DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
 [field-binding usage guide](docs/field-bindings.md) and
-[typed renderer hosts, `FieldRenderer` and named slots](docs/field-bindings.md#typed-renderer-hosts-and-named-slots).
+[typed renderer hosts, `FieldRenderer` and named slots](docs/field-bindings.md#typed-renderer-hosts-and-named-slots), and
+[Form composition with `AirtableForm` and app-owned layout](docs/field-bindings.md#form-composition-with-app-owned-layout), and
+[Portal composition with `AirtableGrid`/`AirtableList`](docs/field-bindings.md#portal-composition-with-app-owned-layout).
 Keep these owners outside renderer mounts; React is optional, and remounting a
 renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and

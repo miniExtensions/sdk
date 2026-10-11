@@ -454,7 +454,23 @@ export function mountBoundFormField(
         input.type = initial.scalar?.kind === 'checkbox' ? 'checkbox' : 'text';
         input.dataset.fieldId = initial.field?.fieldId ?? '';
         if (input.type === 'text' && binding.scalar)
-            input.inputMode = 'decimal';
+            input.inputMode =
+                initial.scalar?.kind === 'duration' ? 'text' : 'decimal';
+        if (initial.scalar?.kind === 'duration') {
+            input.placeholder =
+                (schema.miniExtConfig &&
+                'placeholderText' in schema.miniExtConfig
+                    ? schema.miniExtConfig.placeholderText
+                    : undefined) ??
+                initial.scalar.durationFormat ??
+                '';
+            input.addEventListener('focus', () => {
+                if (!destroyed) binding.scalar?.setFocused?.(true);
+            });
+            input.addEventListener('blur', () => {
+                if (!destroyed) binding.scalar?.setFocused?.(false);
+            });
+        }
         if (binding.date) {
             const privacy = schema.miniExtConfig;
             if (

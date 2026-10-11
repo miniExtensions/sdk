@@ -83,7 +83,13 @@ export type {
     FormLinkedRecordsFacet,
     FormLinkedRecordsSnapshot,
     FormLinkedRecordDetailFields,
+    FormSelectedRecordPolicy,
 } from './linkedRecords.js';
+export type {
+    FormLinkedChildOwner,
+    FormLinkedChildSnapshot,
+    FormLinkedChildRecovery,
+} from './linkedChild.js';
 
 export {
     admittedAttachmentValues,

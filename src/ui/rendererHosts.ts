@@ -2,6 +2,8 @@ import {
     normalizeFormLeaseLoaded,
     normalizeFormLeaseField,
 } from './formLease.js';
+import { createFormLinkedRendererBridge } from './formLinkedRenderer.js';
+import { portalLinkedPills } from './portalLinkedPills.js';
 import type {
     FormFieldBindings,
     FormFieldBinding,
@@ -60,6 +62,8 @@ export type PortalCellRendererHostOptions = LeaseOptions & {
     client: MiniExtensionsClient;
     recordId: string;
     fieldId: string;
+    /** Borrow the same recovery resource used by accepted Portal detail actions. */
+    buttonRecovery?: ButtonFieldRecovery;
 };
 export type PortalDetailRendererHostOptions = LeaseOptions & {
     owner: PortalListOwner;
@@ -151,16 +155,40 @@ const unavailable = (): FieldRendererHostSnapshot => ({
     status: 'unavailable',
     reason: 'Field presentation is unavailable.',
 });
+function subscribeTo(
+    listener: () => void,
+    sources: ((listener: () => void) => () => void)[]
+): (() => void)[] {
+    const stops: (() => void)[] = [];
+    try {
+        for (const source of sources) stops.push(source(listener));
+        return stops;
+    } catch (error) {
+        while (stops.length) {
+            try {
+                stops.pop()!();
+            } catch {}
+        }
+        throw error;
+    }
+}
 function host(
     options: LeaseOptions,
     authority: () => unknown | null,
     read: (current: () => boolean) => FieldRendererHostSnapshot,
-    subscribe: (listener: () => void) => (() => void)[],
+    subscribe: (listener: () => void, current: () => boolean) => (() => void)[],
     disposeOwned: () => void = () => {}
 ): FieldRendererHost {
     let disposed = false,
         retired = false;
-    const revision = options.configurationRevision();
+    let revision: string | number;
+    try {
+        revision = options.configurationRevision();
+    } catch (error) {
+        // Models may already own subscriptions when this application callback runs.
+        disposeOwned();
+        throw error;
+    }
     let accepted: unknown | null = null;
     let key = '';
     try {
@@ -172,14 +200,18 @@ function host(
     const current = () => {
         if (disposed || retired) return false;
         try {
-            const now = authority();
             if (
                 !options.isCurrent() ||
                 options.configurationRevision() !== revision ||
-                now === null ||
-                fingerprint(now) !== key
+                disposed ||
+                retired
             )
                 retired = true;
+            else {
+                // Ownership callbacks may synchronously replace the owner.
+                const now = authority();
+                if (now === null || fingerprint(now) !== key) retired = true;
+            }
         } catch {
             retired = true;
         }
@@ -192,11 +224,19 @@ function host(
                 status: 'retired',
                 reason: 'The accepted field context changed.',
             };
+        let result: FieldRendererHostSnapshot;
         try {
-            return read(current);
+            result = read(current);
         } catch {
-            return unavailable();
+            result = unavailable();
         }
+        // Reading presentation can invoke application ownership callbacks.
+        return current()
+            ? result
+            : {
+                  status: 'retired',
+                  reason: 'The accepted field context changed.',
+              };
     };
     const listeners = new Set<(s: FieldRendererHostSnapshot) => void>();
     const emit = () => {
@@ -208,7 +248,13 @@ function host(
                 } catch {}
             }
     };
-    const stops = subscribe(emit);
+    let stops: (() => void)[];
+    try {
+        stops = subscribe(emit, current);
+    } catch (error) {
+        disposeOwned();
+        throw error;
+    }
     return {
         getSnapshot: snapshot,
         subscribe(listener) {
@@ -284,12 +330,23 @@ function capability(
                 : binding.setValue(value);
         },
     };
-    if (scalar)
-        result.scalar = {
-            state: structuredClone(scalar.getState()),
-            setInput: (input) => editable() && scalar.setInput(input),
-            setChecked: (value) => editable() && scalar.setChecked(value),
+    if (scalar) {
+        const scalarState = scalar.getState();
+        const actions = {
+            setInput: (input: string) => editable() && scalar.setInput(input),
+            setChecked: (value: boolean) =>
+                editable() && scalar.setChecked(value),
         };
+        result.scalar =
+            scalarState.kind === 'duration' && scalar.setFocused
+                ? {
+                      ...actions,
+                      state: structuredClone(scalarState),
+                      setFocused: (value: boolean) =>
+                          editable() && scalar.setFocused!(value),
+                  }
+                : { ...actions, state: structuredClone(scalarState) };
+    }
     if (date)
         result.date = {
             state: structuredClone(date.getState()),
@@ -381,6 +438,12 @@ function base(
         pending: state.pending,
         validation: structuredClone(state.validation),
         error: state.error,
+        ...(context === 'form' &&
+        (field.fieldType === 'singleSelect' ||
+            field.fieldType === 'multipleSelects') &&
+        state.selectAvailability != null
+            ? { selectAvailability: state.selectAvailability }
+            : {}),
         capability: { type: 'readonly' },
     };
 }
@@ -438,6 +501,10 @@ export function createFormFieldRendererHost(
     };
     let attachment: FormAttachmentController | undefined,
         button: ButtonFieldModel | undefined;
+    const linked =
+        binding.getSnapshot().field?.fieldType === 'multipleRecordLinks'
+            ? createFormLinkedRendererBridge(options.fields, options.fieldId)
+            : undefined;
     if (
         binding.getSnapshot().field?.fieldType === 'multipleAttachments' &&
         options.attachmentRecovery
@@ -458,14 +525,45 @@ export function createFormFieldRendererHost(
         options,
         authority,
         (current) =>
-            bindingSnapshot(binding, 'form', current, attachment, button),
-        (listener) => [
-            binding.subscribe(listener),
-            options.fields.controller.subscribe(listener),
-            ...(attachment ? [attachment.subscribe(listener)] : []),
-            ...(button ? [button.subscribe(listener)] : []),
-        ],
-        () => button?.dispose()
+            bindingSnapshot(
+                binding,
+                'form',
+                current,
+                attachment,
+                button,
+                linked
+                    ? (input) => ({
+                          ...input,
+                          linkedRecords: linked.getProps(),
+                      })
+                    : undefined
+            ),
+        (listener, current) =>
+            subscribeTo(listener, [
+                ...(linked
+                    ? [
+                          (notify: () => void) =>
+                              linked.subscribe(notify, current),
+                      ]
+                    : []),
+                ...[binding, options.fields.controller].map(
+                    (source) => (notify: () => void) =>
+                        source.subscribe(() => {
+                            linked?.refresh();
+                            notify();
+                        })
+                ),
+                ...(attachment
+                    ? [(notify: () => void) => attachment.subscribe(notify)]
+                    : []),
+                ...(button
+                    ? [(notify: () => void) => button.subscribe(notify)]
+                    : []),
+            ]),
+        () => {
+            linked?.dispose();
+            button?.dispose();
+        }
     );
 }
 function portalContext(
@@ -642,18 +740,31 @@ export function createPortalDetailRendererHost(
                               },
                           }
                         : { type: 'readonly' },
+                    ...(data.field.config.type === 'multipleRecordLinks'
+                        ? {
+                              linkedRecords: portalLinkedPills({
+                                  field: data.field,
+                                  originalValue:
+                                      context.row.fields[detail.fieldId],
+                                  value: context.row.fields[detail.fieldId],
+                                  tables: context.state.page!
+                                      .tableIdsToLinkedTableStates,
+                              }),
+                          }
+                        : {}),
                 });
                 if (!props) return unavailable();
                 fields.push(props);
             }
             return { status: 'ready', fields };
         },
-        (listener) => [
-            options.owner.subscribe(listener),
-            ...[...buttons.values()].map((button) =>
-                button.subscribe(listener)
-            ),
-        ],
+        (listener) =>
+            subscribeTo(listener, [
+                (notify) => options.owner.subscribe(notify),
+                ...[...buttons.values()].map(
+                    (button) => (notify: () => void) => button.subscribe(notify)
+                ),
+            ]),
         () => buttons.forEach((button) => button.dispose())
     );
 }
@@ -726,6 +837,27 @@ export function createPortalCellRendererHost(
             )
         );
     };
+    // Button actions have returned-detail authority, not inline-write authority.
+    // Keep the cell's provenance checks before creating the existing action model.
+    let accepted: ReturnType<typeof authority> = null;
+    try {
+        accepted = authority();
+    } catch {
+        // Preserve unavailable presentation for malformed accepted cell metadata.
+    }
+    const button =
+        accepted?.data.field.config.type === 'button' && options.buttonRecovery
+            ? createPortalButtonFieldModel({
+                  owner: options.owner,
+                  client: options.client,
+                  portal: accepted.context.portal,
+                  recordId: options.recordId,
+                  fieldId: options.fieldId,
+                  recovery: options.buttonRecovery,
+                  isCurrent: options.isCurrent,
+                  configurationRevision: options.configurationRevision,
+              })
+            : undefined;
     return host(
         options,
         authority,
@@ -735,9 +867,10 @@ export function createPortalCellRendererHost(
                 'portal-cell',
                 current,
                 undefined,
-                undefined,
+                button,
                 (input) => {
-                    const data = authority()!.data;
+                    const accepted = authority()!;
+                    const data = accepted.data;
                     const display = data.detail.miniExtConfig;
                     const blocked = !canEditDisplay();
                     return {
@@ -746,16 +879,40 @@ export function createPortalCellRendererHost(
                             data.detail.titleOverride ?? data.detail.fieldName,
                         displayConfig: display,
                         writeConfig: data.writeConfig,
-                        capability: blocked
-                            ? { type: 'readonly' }
-                            : input.capability,
+                        pending:
+                            input.capability.type === 'button'
+                                ? input.capability.button.busy
+                                : input.pending,
+                        capability:
+                            blocked && input.capability.type !== 'button'
+                                ? { type: 'readonly' }
+                                : input.capability,
+                        ...(data.field.config.type === 'multipleRecordLinks'
+                            ? {
+                                  linkedRecords: portalLinkedPills({
+                                      field: data.field,
+                                      originalValue:
+                                          accepted.context.row.fields[
+                                              options.fieldId
+                                          ],
+                                      value: input.value,
+                                      tables: accepted.context.state.page!
+                                          .tableIdsToLinkedTableStates,
+                                  }),
+                              }
+                            : {}),
                     };
                 },
                 canEditDisplay
             ),
-        (listener) => [
-            options.cell.binding.subscribe(listener),
-            options.owner.subscribe(listener),
-        ]
+        (listener) =>
+            subscribeTo(listener, [
+                (notify) => options.cell.binding.subscribe(notify),
+                (notify) => options.owner.subscribe(notify),
+                ...(button
+                    ? [(notify: () => void) => button.subscribe(notify)]
+                    : []),
+            ]),
+        () => button?.dispose()
     );
 }

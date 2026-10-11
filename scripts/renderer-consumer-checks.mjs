@@ -86,7 +86,8 @@ const slot = (kind) => `render${kind[0].toUpperCase()}${kind.slice(1)}Field`;
 // Compiled before installing React: every callback is contextually correlated by physical kind.
 export const rendererTypedConsumer = `
 import type { AirtableValue, AirtableCollaborator, AirtableAttachment, AirtableBarcodeValue, UploadFileResult } from '@miniextensions/sdk';
-import type { FieldKind, FieldSchema, FieldMetadata, FieldConfig, FieldReadValue, FieldRendererCapability, FieldRendererProps, FieldRendererPropsUnion, FieldRendererSlots } from '@miniextensions/sdk/ui';
+import type { FieldKind, FieldSchema, FieldMetadata, FieldConfig, FieldReadValue, FieldRendererCapability, FieldRendererProps, FieldRendererPropsUnion, FieldRendererSlots, LinkedRecordsRendererProps, FormLinkedRecordsRendererProps, PortalLinkedPillsRendererProps, PortalLinkedPillOccurrence } from '@miniextensions/sdk/ui';
+import type { FormLinkedRecordsSnapshot, FormLinkedRecordsFacet } from '@miniextensions/sdk/forms';
 import { FIELD_RENDERER_SLOTS, dispatchField } from '@miniextensions/sdk/ui';
 const slots: Required<FieldRendererSlots<string>> = {
 ${kinds
@@ -97,6 +98,47 @@ ${kinds
  const value: ${nativeTypes[kind] ?? 'string'} | null | undefined = props.value;
  const config: FieldConfig<'${kind}'> | null = props.displayConfig;
  const capability: FieldRendererCapability<'${kind}'> = props.capability;
+${
+    kind === 'multipleRecordLinks'
+        ? `
+ if (props.linkedRecords?.source === 'form') {
+  const state: FormLinkedRecordsSnapshot = props.linkedRecords.state;
+  const read: FormLinkedRecordsFacet['readSelected'] = props.linkedRecords.readSelected;
+  const bridge: FormLinkedRecordsRendererProps = props.linkedRecords;
+  void [state,read,bridge];
+ } else if (props.linkedRecords?.source === 'portal-pills') {
+  const bridge: PortalLinkedPillsRendererProps = props.linkedRecords;
+  const items: readonly PortalLinkedPillOccurrence[] = bridge.items;
+  for (const item of items) {
+   const index: number = item.nativeIndex;
+   if (item.state === 'resolved') { const label: string = item.label; void label; }
+   else { const label: null = item.label; void label; }
+   // @ts-expect-error pills never expose native record IDs
+   item.recordId;
+   void index;
+  }
+  // @ts-expect-error Portal pills carry no selected-read action
+  bridge.readSelected;
+  // @ts-expect-error Portal pills carry no Form state or raw records
+  bridge.state;
+  // @ts-expect-error Portal pills carry no raw records
+  bridge.records;
+  // @ts-expect-error Portal pills carry no tables
+  bridge.table;
+  // @ts-expect-error Portal pills carry no schema
+  bridge.schema;
+  // @ts-expect-error Portal pills carry no candidates
+  bridge.candidates;
+  void items;
+ }`
+        : `
+ // @ts-expect-error rich linked data is exclusive to the physical linked-record slot
+ props.linkedRecords.state;
+ // @ts-expect-error no rich source on other physical kinds
+ props.linkedRecords.source;
+ // @ts-expect-error no linked selected-read action on other physical kinds
+ props.linkedRecords.readSelected;`
+}
  void [field,value,config,capability]; return kind;
 }`
     )
@@ -105,6 +147,24 @@ ${kinds
 const exhaustive: Record<FieldKind, keyof typeof slots> = FIELD_RENDERER_SLOTS;
 declare const props: FieldRendererPropsUnion;
 const rendered: string = dispatchField(slots, props, () => 'fallback');
+declare const linked: FieldRendererProps<'multipleRecordLinks'>;
+declare const linkedState: FormLinkedRecordsSnapshot;
+declare const linkedRead: FormLinkedRecordsFacet['readSelected'];
+const linkedPresentation: FormLinkedRecordsRendererProps = {source:'form',state:linkedState,readSelected:linkedRead};
+const pillsPresentation: PortalLinkedPillsRendererProps = {source:'portal-pills',items:[{nativeIndex:0,state:'resolved',label:'Synthetic label'},{nativeIndex:1,state:'blank',label:null},{nativeIndex:2,state:'unavailable',label:null}]};
+const pillsUnion: LinkedRecordsRendererProps = pillsPresentation;
+// @ts-expect-error generic occurrences cannot expose labels
+const badPill: PortalLinkedPillOccurrence = {nativeIndex:0,state:'unavailable',label:'private'};
+void [pillsUnion,badPill];
+const optionalLinked: FieldRendererProps<'multipleRecordLinks'> = {...linked,linkedRecords:undefined};
+// @ts-expect-error accepted-detail is not a shipped renderer source
+const fakeAcceptedDetail: LinkedRecordsRendererProps = {source:'accepted-detail',state:linkedState,readSelected:linkedRead};
+// @ts-expect-error a Portal source cannot be assigned to the Form bridge
+const fakePortal: LinkedRecordsRendererProps = {source:'portal',state:linkedState,readSelected:linkedRead};
+declare const ordinary: FieldRendererProps<'singleLineText'>;
+// @ts-expect-error rich Form data cannot be assigned to a non-linked physical field
+const wrongPhysicalKind: FieldRendererProps<'singleLineText'> = {...ordinary,linkedRecords:linkedPresentation};
+void [linkedPresentation,optionalLinked,fakeAcceptedDetail,fakePortal,wrongPhysicalKind];
 declare const attachment: FieldRendererProps<'multipleAttachments'>;
 if(attachment.capability.type==='editable' && attachment.capability.attachment){
  const selected:boolean=attachment.capability.attachment.select([] as readonly File[]);

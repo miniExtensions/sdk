@@ -17,6 +17,7 @@ export {
     type SelectFieldAvailability,
     type SelectFieldAvailabilityInput,
     type SelectFieldAvailabilityDiagnostic,
+    type SelectAvailabilitySnapshot,
 } from './selectAvailability.js';
 export type {
     SelectControlOptions,
@@ -42,9 +43,13 @@ export {
 export {
     createNumberFieldModel,
     createCheckboxFieldModel,
+    createDurationFieldModel,
     type ScalarFieldModel,
     type ScalarFieldState,
     type ScalarFieldModelOptions,
+    type DurationFieldModel,
+    type DurationFieldModelOptions,
+    type DurationFieldState,
 } from './scalarModels.js';
 
 export {
@@ -80,18 +85,38 @@ export type {
     FieldRendererHost,
     FieldRendererHostSnapshot,
     ScalarRendererActions,
+    DurationRendererActions,
     DateRendererActions,
     SelectionRendererActions,
     AttachmentRendererActions,
     ChoiceRendererActions,
+    LinkedRecordsRendererProps,
+    FormLinkedRecordsRendererProps,
+    PortalLinkedPillsRendererProps,
+    PortalLinkedPillOccurrence,
 } from './rendererRegistry.js';
 export {
     createFormFieldRendererHost,
     createPortalCellRendererHost,
     createPortalDetailRendererHost,
 } from './rendererHosts.js';
+export { createFormRenderScope } from './formRenderScope.js';
+export type {
+    FormRenderScopeOptions,
+    FormRenderScope,
+    FormRenderSnapshot,
+    FormRenderField,
+} from './formRenderScope.js';
 export type {
     FormFieldRendererHostOptions,
     PortalCellRendererHostOptions,
     PortalDetailRendererHostOptions,
 } from './rendererHosts.js';
+export { createPortalRenderScope } from './portalRenderScope.js';
+export type {
+    PortalRenderScopeOptions,
+    PortalRenderScope,
+    PortalRenderSnapshot,
+    PortalRenderRow,
+    PortalRenderCell,
+} from './portalRenderScope.js';

@@ -1,5 +1,6 @@
 import { hasSelectCondition } from '../forms/scalarConditionBoundary.js';
 import { compileRuntimeConditions } from '../forms/conditions.js';
+import { evaluateFormFieldVisibility } from '../forms/visibility.js';
 import FormulaRunner from '../formulas/runner.js';
 import { extractIdentifiersFromExpr } from '../formulas/helpers/extractIdentifiersFromExpr.js';
 import type {
@@ -28,6 +29,14 @@ export type SelectFieldAvailabilityDiagnostic = {
         | 'invalid-condition'
         | 'evaluation-error';
 };
+
+/** Detached presentation only; never field validation or Save authority. */
+export type SelectAvailabilitySnapshot =
+    | { readonly status: 'ready' }
+    | {
+          readonly status: 'blocked';
+          readonly code: SelectFieldAvailabilityDiagnostic['code'];
+      };
 
 export type SelectFieldAvailability = {
     /** Static policy retains limits, read-only and Add Choice semantics. */
@@ -122,12 +131,10 @@ export function resolveSelectFieldAvailability(
                         ? 'unsupported-condition'
                         : 'invalid-condition'
                 );
-            if (hasSelectCondition(conditions, input.airtableFields))
-                return blocked('unsupported-condition');
             const runner = new FormulaRunner(compiled.formula);
-            // Saved tagged references become untyped formula identifiers. The
-            // legacy engine also reads a field's name before its native ID.
-            // Refuse ambiguous current metadata instead of reading a sibling.
+            // Preserve the scalar resolver's metadata guards for mixed rules
+            // too. Saved tagged references become untyped identifiers, and
+            // the legacy engine reads a field's name before its native ID.
             for (const identifier of extractIdentifiersFromExpr(runner.expr)) {
                 const matches = input.airtableFields.filter(
                     (field) =>
@@ -144,6 +151,39 @@ export function resolveSelectFieldAvailability(
                     )
                 )
                     return blocked('unsupported-condition');
+            }
+            if (hasSelectCondition(conditions, input.airtableFields)) {
+                // Inspect the original select AST and native values even when
+                // stale choice operands compile to constant FALSE(). Keep the
+                // existing scalar resolver path below unchanged.
+                const visibility = evaluateFormFieldVisibility({
+                    field: {
+                        ...input.field,
+                        miniExtConfig: {
+                            ...input.field.miniExtConfig,
+                            conditionalFields: conditions,
+                            hideFieldIfEmpty: false,
+                        },
+                    },
+                    airtableFields: input.airtableFields,
+                    data: input.recordForConditionEvaluation.fields,
+                    formRecordType: 'create',
+                    evaluationMode: 'runtime',
+                    invalidConditionMode: input.invalidConditionMode,
+                });
+                if (visibility.type === 'blocked')
+                    return blocked(
+                        visibility.code === 'unsupported' ||
+                            visibility.code === 'unsupported-driver'
+                            ? 'unsupported-condition'
+                            : visibility.code === 'evaluation-exception' ||
+                                visibility.code === 'runtime-error' ||
+                                visibility.code === 'non-finite-result'
+                              ? 'evaluation-error'
+                              : 'invalid-condition'
+                    );
+                if (visibility.type === 'visible') eligible.push(option);
+                continue;
             }
             runner.context = {
                 record: {

@@ -1,0 +1,2547 @@
+{
+    "provenance": {
+        "revision": "58f73d575ab10baa0a10693660d8002f204368e1",
+        "tree": "b39e58ead46a311c497def57474cf5ca720542ae",
+        "generator": "scripts/generate-cross-page-choice-fixtures.mjs",
+        "generatorSha256": "aec0c7145a6b4b9597b14ffe38881a9bfbdb22238b03d955d3be72a030bb7380",
+        "casesSourceSha256": "deac81a673dfc16799cf9383821eb8a5015fecc1b1a7c72d68ffb23a3f6aa143",
+        "casesHelpersSourceSha256": "09fdf528576b65ba938f1e96ae67690f6f702bf068b27006e0165e4ee8854063",
+        "sources": {
+            "ordered-projection": "66c1ec59ca43900539406a24fd14764f2a36b3de6a58c2d196fc4d06a593b5ba",
+            "scalar-converter": "397b3a1a35ae07d0235d6477078cc10e7cf02ba00e02269272b4b3946f0dd3e1",
+            "formula-runner": "e4169421073e02ce37ecbe0c5e142584634572020781ebeaeec6b6bb48704d7f",
+            "condition-record": "b0f31ce92fab137306cc54d2e79678d38421aa436913f9efdfd49acd8c96f3b7",
+            "single-select-renderer": "e68eebe28dd2ee0a0f60bf62b8674dc92a44447b0841f1692079f7a37e6ceea3",
+            "multiple-select-renderer": "3fb37cc8eb20e50b28e8e424266111bc0532ed6db685219e33a5ea0c1794d847",
+            "form-surface": "01b02c79812dcf279fa1da43f85dd1f7435d2555937475204337f0db2db59683",
+            "form-pages": "810b89b525ddfa05d520d2f7044f2304c320ff3b0884e810f408ba8ca06518b1"
+        },
+        "execution": "pinned ordered conditional-field projection and renderer option predicates against complete synthetic native records; page index is presentation metadata only"
+    },
+    "choices": [
+        {
+            "name": "singleSelect/inactive-first-page-allows",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/first-page-active-same-record",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 0,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/driver-changed-denies-retains-native",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "deny",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "deny",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Always"],
+                "nativeData": {
+                    "driver": "deny",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/hidden-driver-removed-native-retained",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "First page",
+                        "conditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "show"
+                                        },
+                                        "value": "yes"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "no",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": ["driver"],
+                "eligibleNames": ["Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/visible-driver-allows",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "First page",
+                        "conditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "show"
+                                        },
+                                        "value": "yes"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/hidden-section-next-title-resets",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "First page",
+                        "applyFieldConditionsToSection": true,
+                        "conditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "show"
+                                        },
+                                        "value": "yes"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "no",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "choice": "Allowed",
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": ["driver", "witness"],
+                "eligibleNames": ["Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/hidden-section-without-reset",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "First page",
+                        "applyFieldConditionsToSection": true,
+                        "conditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "show"
+                                        },
+                                        "value": "yes"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "no",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": { "untouched": { "text": "native retained" } },
+                "hiddenFieldIds": ["driver", "witness", "choice", "show"],
+                "eligibleNames": ["Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/list-retains-selected-option",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "list",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "deny",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "deny",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "deny",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/default-mode-equivalent",
+            "fieldId": "choice",
+            "pageMode": null,
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "singleSelect/explicit-one-page-equivalent",
+            "fieldId": "choice",
+            "pageMode": "one-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "singleSelect",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "singleSelect",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": "Allowed",
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": "Allowed",
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/inactive-first-page-allows",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/first-page-active-same-record",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 0,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/driver-changed-denies-retains-native",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "deny",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "deny",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Always"],
+                "nativeData": {
+                    "driver": "deny",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/hidden-driver-removed-native-retained",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "First page",
+                        "conditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "show"
+                                        },
+                                        "value": "yes"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "no",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": ["driver"],
+                "eligibleNames": ["Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/visible-driver-allows",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "First page",
+                        "conditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "show"
+                                        },
+                                        "value": "yes"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/hidden-section-next-title-resets",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "First page",
+                        "applyFieldConditionsToSection": true,
+                        "conditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "show"
+                                        },
+                                        "value": "yes"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "no",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "choice": ["Allowed"],
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": ["driver", "witness"],
+                "eligibleNames": ["Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/hidden-section-without-reset",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "First page",
+                        "applyFieldConditionsToSection": true,
+                        "conditionalFields": {
+                            "logicalOperator": "and",
+                            "conditions": [
+                                {
+                                    "id": "synthetic-rule",
+                                    "type": "singleCondition",
+                                    "setting": {
+                                        "type": "is",
+                                        "fieldType": "singleLineText",
+                                        "idOrName": {
+                                            "type": "id",
+                                            "id": "show"
+                                        },
+                                        "value": "yes"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "no",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": { "untouched": { "text": "native retained" } },
+                "hiddenFieldIds": ["driver", "witness", "choice", "show"],
+                "eligibleNames": ["Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "no",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/list-retains-selected-option",
+            "fieldId": "choice",
+            "pageMode": "multi-page",
+            "activePageIndex": 1,
+            "rendererType": "list",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "deny",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "deny",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "deny",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/default-mode-equivalent",
+            "fieldId": "choice",
+            "pageMode": null,
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        },
+        {
+            "name": "multipleSelects/explicit-one-page-equivalent",
+            "fieldId": "choice",
+            "pageMode": "one-page",
+            "activePageIndex": 1,
+            "rendererType": "dropdown",
+            "fieldIds": ["driver", "witness", "choice", "show"],
+            "schemas": {
+                "driver": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "driver",
+                        "name": "driver",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": { "headerSectionTitle": "First page" }
+                },
+                "witness": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "witness",
+                        "name": "witness",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                },
+                "choice": {
+                    "fieldType": "multipleSelects",
+                    "airtableField": {
+                        "id": "choice",
+                        "name": "choice",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": {
+                            "type": "multipleSelects",
+                            "options": {
+                                "choices": [
+                                    { "id": "sel_allow", "name": "Allowed" },
+                                    { "id": "sel_always", "name": "Always" }
+                                ]
+                            }
+                        }
+                    },
+                    "miniExtConfig": {
+                        "headerSectionTitle": "Second page",
+                        "enableConditionalOptions": true,
+                        "conditionsForOptions": [
+                            {
+                                "config": {
+                                    "optionForConditions": "sel_allow",
+                                    "conditionsForOption": {
+                                        "logicalOperator": "and",
+                                        "conditions": [
+                                            {
+                                                "id": "synthetic-rule",
+                                                "type": "singleCondition",
+                                                "setting": {
+                                                    "type": "is",
+                                                    "fieldType": "singleLineText",
+                                                    "idOrName": {
+                                                        "type": "id",
+                                                        "id": "driver"
+                                                    },
+                                                    "value": "allow"
+                                                }
+                                            }
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                "show": {
+                    "fieldType": "singleLineText",
+                    "airtableField": {
+                        "id": "show",
+                        "name": "show",
+                        "description": null,
+                        "isComputed": false,
+                        "isPrimaryField": false,
+                        "config": { "type": "singleLineText", "options": null }
+                    },
+                    "miniExtConfig": {}
+                }
+            },
+            "data": {
+                "driver": "allow",
+                "witness": "section witness",
+                "choice": ["Allowed"],
+                "show": "yes",
+                "untouched": { "text": "native retained" }
+            },
+            "canonical": {
+                "projectedData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                },
+                "hiddenFieldIds": [],
+                "eligibleNames": ["Allowed", "Always"],
+                "nativeData": {
+                    "driver": "allow",
+                    "witness": "section witness",
+                    "choice": ["Allowed"],
+                    "show": "yes",
+                    "untouched": { "text": "native retained" }
+                }
+            }
+        }
+    ]
+}

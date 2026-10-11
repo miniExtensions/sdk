@@ -21,6 +21,954 @@ import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
+// One public CDP interception owner. Playwright filechooser subscriptions have
+// their own asynchronous enable/disable path and must not share this lease.
+const createFileChooserOwner = async (
+    page,
+    evidence,
+    timers = { setTimeout, clearTimeout }
+) => {
+    assert.equal(page.listenerCount('filechooser'), 0);
+    let session;
+    let retired = false;
+    let active;
+    let failure;
+    let disposal;
+    let sequence = 0;
+    evidence.events = [];
+    evidence.cleanup = {};
+    // Setup and each cleanup command have a separate 5s budget. Expiry does
+    // not cancel a dispatched CDP command; its late result cannot revive us.
+    const bounded = async (label, operation) => {
+        let timer;
+        const deadline = new Promise((_, reject) => {
+            timer = timers.setTimeout(() => {
+                retired = true;
+                reject(new Error(`${label} timed out after 5000ms`));
+            }, 5000);
+        });
+        try {
+            return await Promise.race([
+                Promise.resolve().then(operation),
+                deadline,
+            ]);
+        } finally {
+            timers.clearTimeout(timer);
+        }
+    };
+    const fail = (error) => {
+        failure ??= error;
+        active?.reject?.(failure);
+    };
+    const onChooser = (event) => {
+        if (retired) return;
+        const ticket = active;
+        evidence.events.push({
+            activation: ticket?.sequence ?? null,
+            phase: ticket?.phase ?? 'unarmed',
+            ...event,
+        });
+        if (!ticket || ticket.phase !== 'activated' || ticket.received) {
+            fail(new Error('Duplicate or unarmed CDP file chooser event'));
+            return;
+        }
+        // Consume synchronously: a duplicate cannot start another acceptance.
+        ticket.received = true;
+        try {
+            assert.deepEqual(
+                {
+                    frameId: event.frameId,
+                    backendNodeId: event.backendNodeId,
+                    mode: event.mode,
+                },
+                ticket.expected
+            );
+            ticket.resolve(event);
+        } catch (error) {
+            fail(error);
+        }
+    };
+    const current = (ticket) => {
+        assert(!retired && active === ticket, 'Chooser activation retired');
+        if (failure) throw failure;
+        assert.equal(page.listenerCount('filechooser'), 0);
+    };
+    const identity = async (input, wait) => {
+        const { root } = await wait(session.send('DOM.getDocument'));
+        const { nodeId } = await wait(
+            session.send('DOM.querySelector', {
+                nodeId: root.nodeId,
+                selector: 'dialog[open] input[type=file]',
+            })
+        );
+        assert(nodeId, 'Current dialog file input required');
+        const { node } = await wait(
+            session.send('DOM.describeNode', { nodeId })
+        );
+        const { frameTree } = await wait(session.send('Page.getFrameTree'));
+        const actual = await wait(
+            input.evaluate((element) => ({
+                multiple: element.multiple,
+                current:
+                    element ===
+                    document.querySelector('dialog[open] input[type=file]'),
+            }))
+        );
+        assert(actual.current, 'File input identity changed');
+        return {
+            frameId: frameTree.frame.id,
+            backendNodeId: node.backendNodeId,
+            mode: actual.multiple ? 'selectMultiple' : 'selectSingle',
+        };
+    };
+    const cleanupSession = async (target) => {
+        const errors = [];
+        // Remove the listener before awaiting disable. Even a held/rejected
+        // disable cannot skip detach, which has its own bounded attempt.
+        for (const [name, cleanup] of [
+            ['listener', () => target.off('Page.fileChooserOpened', onChooser)],
+            [
+                'interception',
+                () =>
+                    target.send('Page.setInterceptFileChooserDialog', {
+                        enabled: false,
+                    }),
+            ],
+            ['session', () => target.detach()],
+        ]) {
+            try {
+                await bounded(`Chooser cleanup ${name}`, cleanup);
+                evidence.cleanup[name] = 'completed';
+            } catch (error) {
+                evidence.cleanup[name] = { error: error.message };
+                errors.push(error);
+            }
+        }
+        if (errors.length)
+            throw new AggregateError(errors, 'Chooser cleanup failed');
+    };
+    const dispose = () => {
+        if (disposal) return disposal;
+        retired = true;
+        if (active) {
+            timers.clearTimeout(active.timer);
+            active.reject?.(new Error('Chooser owner disposed'));
+        }
+        // Memoize before cleanup callbacks run, including reentrant disposal.
+        disposal = Promise.resolve().then(() => {
+            if (session) return cleanupSession(session);
+        });
+        return disposal;
+    };
+    try {
+        await bounded('Chooser setup', async () => {
+            const acquired = await page.context().newCDPSession(page);
+            if (retired) {
+                // Acquisition can complete after the setup deadline. It never
+                // installs a listener or enables interception; clean it too.
+                try {
+                    await cleanupSession(acquired);
+                } catch (error) {
+                    evidence.lateSetupCleanup = { error: error.message };
+                    throw error;
+                }
+                return;
+            }
+            session = acquired;
+            session.on('Page.fileChooserOpened', onChooser);
+            await session.send('Page.enable', {
+                enableFileChooserOpenedEvent: true,
+            });
+            assert(!retired, 'Chooser setup retired');
+        });
+    } catch (error) {
+        try {
+            await dispose();
+        } catch (cleanupError) {
+            throw new AggregateError(
+                [error, cleanupError],
+                'Chooser setup and cleanup failed'
+            );
+        }
+        throw error;
+    }
+    return {
+        dispose,
+        async choose(input, activate, files) {
+            assert(!active && !retired, 'Only one chooser activation allowed');
+            if (failure) throw failure;
+            const ticket = { sequence: ++sequence, phase: 'preparing' };
+            active = ticket;
+            // One unchanged 30s deadline covers all activation awaits, not only
+            // delivery after a possibly still-pending interception command.
+            const deadline = new Promise((_, reject) => {
+                ticket.reject = reject;
+                ticket.timer = timers.setTimeout(() => {
+                    if (active === ticket && !retired)
+                        fail(
+                            new Error(
+                                'CDP file chooser timed out after 30000ms'
+                            )
+                        );
+                }, 30000);
+            });
+            deadline.catch(() => {});
+            const wait = async (operation) => {
+                const result = await Promise.race([operation, deadline]);
+                current(ticket);
+                return result;
+            };
+            let error;
+            try {
+                ticket.expected = await identity(input, wait);
+                current(ticket);
+                const received = new Promise((resolve) => {
+                    ticket.resolve = resolve;
+                });
+                ticket.phase = 'enabling';
+                await wait(
+                    session.send('Page.setInterceptFileChooserDialog', {
+                        enabled: true,
+                    })
+                );
+                current(ticket);
+                ticket.phase = 'activated';
+                await wait(activate());
+                await wait(received);
+                current(ticket);
+                ticket.phase = 'completing';
+                assert.deepEqual(await identity(input, wait), ticket.expected);
+                current(ticket);
+                await wait(input.setInputFiles(files));
+                current(ticket);
+            } catch (caught) {
+                error = caught;
+            } finally {
+                timers.clearTimeout(ticket.timer);
+                ticket.phase = 'draining';
+                ticket.reject?.(new Error('Chooser activation settled'));
+                if (!retired) {
+                    try {
+                        await bounded('Chooser activation disable', () =>
+                            session.send('Page.setInterceptFileChooserDialog', {
+                                enabled: false,
+                            })
+                        );
+                        // Same-session response fence drains earlier received
+                        // callbacks while unarmed; it is not an activation ID.
+                        await bounded('Chooser activation drain', () =>
+                            session.send('Page.getFrameTree')
+                        );
+                    } catch (cleanupError) {
+                        fail(cleanupError);
+                        retired = true;
+                        evidence.activationCleanup = {
+                            error: cleanupError.message,
+                        };
+                        error = error
+                            ? new AggregateError(
+                                  [error, cleanupError],
+                                  'Chooser activation cleanup failed'
+                              )
+                            : cleanupError;
+                    }
+                }
+                if (active === ticket) active = undefined;
+            }
+            if (error) throw error;
+            if (failure) throw failure;
+        },
+    };
+};
+
+// Controlled helper ownership only; no browser or SDK behavior is simulated.
+const checkFileChooserOwner = async () => {
+    const deferred = () => {
+        let resolve;
+        const promise = new Promise((done) => {
+            resolve = done;
+        });
+        return { promise, resolve };
+    };
+    const expected = {
+        frameId: 'synthetic-frame',
+        backendNodeId: 2,
+        mode: 'selectMultiple',
+    };
+    const make = (onSend = () => {}) => {
+        const listeners = new Set(),
+            sent = [],
+            completed = [];
+        let detachCalls = 0;
+        const session = {
+            on: (event, listener) => {
+                assert.equal(event, 'Page.fileChooserOpened');
+                listeners.add(listener);
+            },
+            off: (event, listener) => {
+                assert.equal(event, 'Page.fileChooserOpened');
+                listeners.delete(listener);
+            },
+            detach: async () => {
+                detachCalls++;
+                await onSend('detach', {});
+            },
+            send: async (method, params = {}) => {
+                sent.push({ method, ...params });
+                await onSend(method, params);
+                if (method === 'DOM.getDocument')
+                    return { root: { nodeId: 1 } };
+                if (method === 'DOM.querySelector') return { nodeId: 2 };
+                if (method === 'DOM.describeNode')
+                    return { node: { backendNodeId: 2 } };
+                if (method === 'Page.getFrameTree')
+                    return { frameTree: { frame: { id: expected.frameId } } };
+                return {};
+            },
+        };
+        const page = {
+            listenerCount: () => 0,
+            context: () => ({ newCDPSession: async () => session }),
+        };
+        const input = {
+            evaluate: async () => ({ multiple: true, current: true }),
+            setInputFiles: async (files) => completed.push(files),
+        };
+        const emit = (event = expected) =>
+            [...listeners].forEach((listener) => listener(event));
+        const cleaned = () => {
+            assert.equal(listeners.size, 0);
+            assert.equal(detachCalls, 1);
+        };
+        return {
+            page,
+            input,
+            emit,
+            listeners,
+            sent,
+            completed,
+            cleaned,
+            session,
+        };
+    };
+    const groups = [];
+    {
+        const enabled = deferred(),
+            release = deferred();
+        let enables = 0,
+            activations = 0;
+        const f = make(async (method, params) => {
+            if (
+                method === 'Page.setInterceptFileChooserDialog' &&
+                params.enabled &&
+                ++enables === 1
+            ) {
+                enabled.resolve();
+                await release.promise;
+            }
+        });
+        const owner = await createFileChooserOwner(f.page, {});
+        try {
+            const first = owner.choose(
+                f.input,
+                async () => {
+                    activations++;
+                    f.emit();
+                },
+                ['first']
+            );
+            await enabled.promise;
+            assert.equal(activations, 0);
+            release.resolve();
+            await first;
+            await owner.choose(
+                f.input,
+                async () => {
+                    activations++;
+                    f.emit();
+                },
+                []
+            );
+            assert.equal(activations, 2);
+            assert.deepEqual(f.completed, [['first'], []]);
+        } finally {
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push('held acknowledgment and two sequential activations');
+    }
+    {
+        const f = make(),
+            owner = await createFileChooserOwner(f.page, {});
+        let successor = 0;
+        try {
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        f.emit();
+                        f.emit();
+                    },
+                    []
+                ),
+                /Duplicate or unarmed/
+            );
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        successor++;
+                    },
+                    []
+                ),
+                /Duplicate or unarmed/
+            );
+            assert.equal(successor, 0);
+            assert.deepEqual(f.completed, []);
+        } finally {
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push('duplicate event fails closed before successor');
+    }
+    {
+        const enabled = deferred(),
+            release = deferred();
+        const f = make(async (method, params) => {
+            if (
+                method === 'Page.setInterceptFileChooserDialog' &&
+                params.enabled
+            ) {
+                enabled.resolve();
+                await release.promise;
+            }
+        });
+        const owner = await createFileChooserOwner(f.page, {});
+        const oldCallback = [...f.listeners][0];
+        let activations = 0;
+        const pending = owner
+            .choose(
+                f.input,
+                async () => {
+                    activations++;
+                },
+                []
+            )
+            .catch((error) => error);
+        await enabled.promise;
+        await owner.dispose();
+        const fresh = make(),
+            successor = await createFileChooserOwner(fresh.page, {});
+        try {
+            release.resolve();
+            assert.match((await pending).message, /Chooser owner disposed/);
+            assert.equal(activations, 0);
+            assert.deepEqual(f.completed, []);
+            await successor.choose(
+                fresh.input,
+                async () => {
+                    oldCallback(expected);
+                    fresh.emit();
+                },
+                []
+            );
+            assert.deepEqual(fresh.completed, [[]]);
+        } finally {
+            await successor.dispose();
+        }
+        f.cleaned();
+        fresh.cleaned();
+        groups.push('disposed delayed callback cannot settle another owner');
+    }
+    for (const phase of ['disable', 'drain']) {
+        let inject = false;
+        let f;
+        f = make(async (method, params) => {
+            if (
+                inject &&
+                f.completed.length === 1 &&
+                ((phase === 'disable' &&
+                    method === 'Page.setInterceptFileChooserDialog' &&
+                    !params.enabled) ||
+                    (phase === 'drain' && method === 'Page.getFrameTree'))
+            ) {
+                inject = false;
+                f.emit();
+            }
+        });
+        const owner = await createFileChooserOwner(f.page, {});
+        let successor = 0;
+        try {
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        f.emit();
+                        inject = true;
+                    },
+                    []
+                ),
+                /Duplicate or unarmed/
+            );
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        successor++;
+                    },
+                    []
+                ),
+                /Duplicate or unarmed/
+            );
+            assert.equal(successor, 0);
+            assert.deepEqual(f.completed, [[]]);
+        } finally {
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push(`event during ${phase} blocks successor`);
+    }
+    {
+        const f = make(async (method) => {
+            if (method === 'Page.enable')
+                throw Error('controlled setup failure');
+        });
+        await assert.rejects(
+            createFileChooserOwner(f.page, {}),
+            /controlled setup failure/
+        );
+        f.cleaned();
+        assert(
+            f.sent.some(
+                (call) =>
+                    call.method === 'Page.setInterceptFileChooserDialog' &&
+                    call.enabled === false
+            )
+        );
+        groups.push('setup failure cleans every acquired resource');
+    }
+    {
+        const f = make(async (method) => {
+            if (method === 'DOM.describeNode')
+                throw Error('controlled identity failure');
+        });
+        const owner = await createFileChooserOwner(f.page, {});
+        let activations = 0;
+        try {
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        activations++;
+                    },
+                    []
+                ),
+                /controlled identity failure/
+            );
+        } finally {
+            await owner.dispose();
+        }
+        assert.equal(activations, 0);
+        assert.deepEqual(f.completed, []);
+        f.cleaned();
+        groups.push(
+            'identity query failure settles activation and cleans owner'
+        );
+    }
+    {
+        const f = make(),
+            owner = await createFileChooserOwner(f.page, {});
+        try {
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        f.emit({ ...expected, backendNodeId: 99 });
+                    },
+                    []
+                )
+            );
+            assert.deepEqual(f.completed, []);
+        } finally {
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push('wrong chooser identity never completes input');
+    }
+    {
+        const f = make(async (method, params) => {
+            if (
+                method === 'Page.setInterceptFileChooserDialog' &&
+                !params.enabled
+            )
+                throw Error('controlled disable failure');
+            if (method === 'detach') throw Error('controlled detach failure');
+        });
+        const evidence = {},
+            owner = await createFileChooserOwner(f.page, evidence);
+        await assert.rejects(owner.dispose(), (error) => {
+            assert(error instanceof AggregateError);
+            assert.deepEqual(
+                error.errors.map((item) => item.message),
+                ['controlled disable failure', 'controlled detach failure']
+            );
+            return true;
+        });
+        f.cleaned();
+        assert.equal(evidence.cleanup.listener, 'completed');
+        assert.equal(
+            evidence.cleanup.interception.error,
+            'controlled disable failure'
+        );
+        assert.equal(
+            evidence.cleanup.session.error,
+            'controlled detach failure'
+        );
+        groups.push(
+            'disable and detach failures surface without skipping listener cleanup'
+        );
+    }
+    for (const heldPhase of ['identity', 'acknowledgment', 'activation']) {
+        const held = deferred(),
+            release = deferred(),
+            finished = deferred();
+        const scheduled = [],
+            cleared = [];
+        const timers = {
+            setTimeout(callback, milliseconds) {
+                const timer = { callback, milliseconds };
+                scheduled.push(timer);
+                return timer;
+            },
+            clearTimeout(timer) {
+                cleared.push(timer);
+            },
+        };
+        let activations = 0;
+        const f = make(async (method, params) => {
+            if (
+                (heldPhase === 'identity' && method === 'DOM.getDocument') ||
+                (heldPhase === 'acknowledgment' &&
+                    method === 'Page.setInterceptFileChooserDialog' &&
+                    params.enabled)
+            ) {
+                held.resolve();
+                await release.promise;
+                finished.resolve();
+            }
+        });
+        const evidence = {},
+            owner = await createFileChooserOwner(f.page, evidence, timers);
+        let pending;
+        try {
+            pending = owner
+                .choose(
+                    f.input,
+                    async () => {
+                        activations++;
+                        if (heldPhase === 'activation') {
+                            held.resolve();
+                            await release.promise;
+                            f.emit();
+                            finished.resolve();
+                        } else f.emit();
+                    },
+                    []
+                )
+                .catch((error) => error);
+            await held.promise;
+            const activationTimers = scheduled.filter(
+                (timer) => timer.milliseconds === 30000
+            );
+            assert.equal(activationTimers.length, 1);
+            assert.equal(activationTimers[0].milliseconds, 30000);
+            assert.equal(activations, heldPhase === 'activation' ? 1 : 0);
+            activationTimers[0].callback();
+            const error = await pending;
+            assert.match(error.message, /timed out after 30000ms/);
+            assert.deepEqual(f.completed, []);
+            assert(cleared.includes(activationTimers[0]));
+            let successor = 0;
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        successor++;
+                    },
+                    []
+                ),
+                /timed out after 30000ms/
+            );
+            assert.equal(successor, 0);
+            assert.equal(
+                scheduled.filter((timer) => timer.milliseconds === 30000)
+                    .length,
+                1
+            );
+            await owner.dispose();
+            const eventCount = evidence.events.length;
+            const enables = f.sent.filter(
+                (call) =>
+                    call.method === 'Page.setInterceptFileChooserDialog' &&
+                    call.enabled
+            ).length;
+            release.resolve();
+            await finished.promise;
+            await Promise.resolve();
+            assert.deepEqual(f.completed, []);
+            assert.equal(evidence.events.length, eventCount);
+            assert.equal(
+                f.sent.filter(
+                    (call) =>
+                        call.method === 'Page.setInterceptFileChooserDialog' &&
+                        call.enabled
+                ).length,
+                enables
+            );
+            assert.equal(activations, heldPhase === 'activation' ? 1 : 0);
+        } finally {
+            release.resolve();
+            await owner.dispose();
+            if (pending) await pending;
+        }
+        f.cleaned();
+        groups.push(
+            `exact 30000ms deadline rejects held ${heldPhase} without late continuation`
+        );
+    }
+    const fakeClock = () => {
+        const scheduled = [];
+        return {
+            scheduled,
+            setTimeout(callback, milliseconds) {
+                const timer = { callback, milliseconds, cleared: false };
+                scheduled.push(timer);
+                return timer;
+            },
+            clearTimeout(timer) {
+                if (timer) timer.cleared = true;
+            },
+            expire(milliseconds) {
+                const active = scheduled.filter((timer) => !timer.cleared);
+                assert.equal(active.length, 1, 'Exactly one current deadline');
+                assert.equal(active[0].milliseconds, milliseconds);
+                active[0].callback();
+            },
+        };
+    };
+    const drainMicrotasks = async () => {
+        for (let turn = 0; turn < 12; turn++) await Promise.resolve();
+    };
+    for (const heldPhase of [
+        'setup-enable',
+        'acquisition',
+        'activation-disable',
+        'activation-drain',
+        'dispose-disable',
+        'dispose-detach',
+    ]) {
+        const reached = deferred(),
+            release = deferred(),
+            lateCleanup = deferred();
+        const clock = fakeClock(),
+            evidence = {};
+        let heldOnce = false,
+            frameReads = 0;
+        let f;
+        f = make(async (method, params) => {
+            if (method === 'Page.getFrameTree') frameReads++;
+            const selected =
+                (heldPhase === 'setup-enable' && method === 'Page.enable') ||
+                (heldPhase === 'activation-disable' &&
+                    method === 'Page.setInterceptFileChooserDialog' &&
+                    !params.enabled &&
+                    f.completed.length === 1) ||
+                (heldPhase === 'activation-drain' &&
+                    method === 'Page.getFrameTree' &&
+                    frameReads === 3) ||
+                (heldPhase === 'dispose-disable' &&
+                    method === 'Page.setInterceptFileChooserDialog' &&
+                    !params.enabled) ||
+                (heldPhase === 'dispose-detach' && method === 'detach');
+            if (selected && !heldOnce) {
+                heldOnce = true;
+                reached.resolve();
+                await release.promise;
+            }
+            if (method === 'detach') lateCleanup.resolve();
+        });
+        if (heldPhase === 'acquisition')
+            f.page.context = () => ({
+                newCDPSession: async () => {
+                    reached.resolve();
+                    await release.promise;
+                    return f.session;
+                },
+            });
+        let owner, pending;
+        try {
+            if (heldPhase === 'setup-enable' || heldPhase === 'acquisition') {
+                pending = createFileChooserOwner(f.page, evidence, clock).catch(
+                    (error) => error
+                );
+            } else {
+                owner = await createFileChooserOwner(f.page, evidence, clock);
+                pending = (
+                    heldPhase.startsWith('dispose-')
+                        ? owner.dispose()
+                        : owner.choose(f.input, async () => f.emit(), [])
+                ).catch((error) => error);
+            }
+            await reached.promise;
+            clock.expire(5000);
+            const error = await pending;
+            const expectedLabel =
+                heldPhase === 'setup-enable' || heldPhase === 'acquisition'
+                    ? 'Chooser setup'
+                    : heldPhase === 'activation-disable'
+                      ? 'Chooser activation disable'
+                      : heldPhase === 'activation-drain'
+                        ? 'Chooser activation drain'
+                        : 'Chooser cleanup failed';
+            assert.match(error.message, new RegExp(expectedLabel));
+            if (heldPhase.startsWith('dispose-')) {
+                assert(error instanceof AggregateError);
+                assert.match(error.errors[0].message, /timed out after 5000ms/);
+            } else assert.match(error.message, /timed out after 5000ms/);
+            if (owner && heldPhase.startsWith('activation-')) {
+                let successor = 0;
+                await assert.rejects(
+                    owner.choose(
+                        f.input,
+                        async () => {
+                            successor++;
+                        },
+                        []
+                    ),
+                    /Only one chooser activation allowed/
+                );
+                assert.equal(successor, 0);
+                await owner.dispose();
+            }
+            const completed = structuredClone(f.completed),
+                events = evidence.events.length;
+            const cleanup = JSON.stringify(evidence.cleanup);
+            const enables = f.sent.filter(
+                (call) =>
+                    call.method === 'Page.setInterceptFileChooserDialog' &&
+                    call.enabled
+            ).length;
+            release.resolve();
+            if (heldPhase === 'acquisition') await lateCleanup.promise;
+            await drainMicrotasks();
+            assert.deepEqual(f.completed, completed);
+            assert.equal(evidence.events.length, events);
+            assert.equal(
+                f.sent.filter(
+                    (call) =>
+                        call.method === 'Page.setInterceptFileChooserDialog' &&
+                        call.enabled
+                ).length,
+                enables
+            );
+            if (heldPhase !== 'acquisition')
+                assert.equal(
+                    JSON.stringify(evidence.cleanup),
+                    cleanup,
+                    'Late completion preserves recorded cleanup outcome'
+                );
+            if (heldPhase === 'acquisition') {
+                assert.equal(
+                    f.sent.some((call) => call.method === 'Page.enable'),
+                    false
+                );
+                assert.deepEqual(evidence.cleanup, {
+                    listener: 'completed',
+                    interception: 'completed',
+                    session: 'completed',
+                });
+            }
+            f.cleaned();
+        } finally {
+            release.resolve();
+            if (owner) await owner.dispose().catch(() => {});
+            if (pending) await pending;
+        }
+        groups.push(
+            `exact 5000ms bound for held ${heldPhase} and late completion`
+        );
+    }
+    {
+        const clock = fakeClock(),
+            evidence = {},
+            reached = deferred(),
+            release = deferred();
+        const f = make(async (method, params) => {
+            if (method === 'Page.enable')
+                throw Error('controlled setup primary failure');
+            if (
+                method === 'Page.setInterceptFileChooserDialog' &&
+                !params.enabled
+            ) {
+                reached.resolve();
+                await release.promise;
+            }
+        });
+        const pending = createFileChooserOwner(f.page, evidence, clock).catch(
+            (error) => error
+        );
+        try {
+            await reached.promise;
+            clock.expire(5000);
+            const error = await pending;
+            assert(error instanceof AggregateError);
+            assert.equal(
+                error.errors[0].message,
+                'controlled setup primary failure'
+            );
+            assert(error.errors[1] instanceof AggregateError);
+            assert.match(
+                error.errors[1].errors[0].message,
+                /cleanup interception timed out after 5000ms/
+            );
+            f.cleaned();
+            const cleanup = JSON.stringify(evidence.cleanup);
+            release.resolve();
+            await drainMicrotasks();
+            assert.equal(JSON.stringify(evidence.cleanup), cleanup);
+        } finally {
+            release.resolve();
+            await pending;
+        }
+        groups.push('setup primary error and cleanup timeout both surface');
+    }
+    {
+        let owner, reentrant;
+        const f = make();
+        const off = f.session.off;
+        f.session.off = (event, listener) => {
+            reentrant = owner.dispose();
+            off(event, listener);
+        };
+        owner = await createFileChooserOwner(f.page, {});
+        const first = owner.dispose();
+        await first;
+        assert.equal(reentrant, first);
+        assert.equal(owner.dispose(), first);
+        f.cleaned();
+        groups.push('synchronous cleanup reentry returns memoized disposal');
+    }
+    return {
+        checks: groups.length,
+        groups,
+        limits: 'Controlled public-surface ownership checks; chooser events have no browser activation ID.',
+    };
+};
+if (process.argv.includes('--check-file-chooser-owner')) {
+    console.log(JSON.stringify(await checkFileChooserOwner(), null, 2));
+    process.exit(0);
+}
+
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const regular = (path) => {
     assert(lstatSync(path).isFile() && realpathSync(path) === resolve(path));
@@ -96,6 +1044,7 @@ try {
         ],
     };
     try {
+        report.fileChooserOwnerRegressions = await checkFileChooserOwner();
         temporary = mkdtempSync(join(tmpdir(), 'sdk-native-consumer-'));
         writeFileSync(
             join(temporary, 'package.json'),
@@ -538,69 +1487,104 @@ try {
             );
         };
         await run('attachment-picker', async (page, origin) => {
-            await nativeSetup(page, origin, 'attachment');
-            await page.locator('dialog[open]').waitFor();
-            const text = page.locator('dialog input[type=password]');
-            await text.fill('Retained dirty text');
-            const choose = page.getByRole('button', {
-                name: 'Choose files',
-                exact: true,
-            });
-            await choose.focus();
-            let pending = page.waitForEvent('filechooser');
-            await page.keyboard.press('Enter');
-            const chooser = await pending;
-            await chooser.setFiles({
-                name: 'FAKE_QUEUED.txt',
-                mimeType: 'text/plain',
-                buffer: Buffer.from('fake'),
-            });
-            const before = await page.evaluate(() =>
-                window.__nativeProbe.snapshot()
+            const chooserEvidence = {};
+            report.fileChooser = chooserEvidence;
+            const chooserOwner = await createFileChooserOwner(
+                page,
+                chooserEvidence
             );
-            pending = page.waitForEvent('filechooser');
-            await choose.press('Enter');
-            await (await pending).setFiles([]);
-            assert.equal(await page.locator('dialog[open]').count(), 1);
-            let state = await page.evaluate(() =>
-                window.__nativeProbe.snapshot()
-            );
-            assert.deepEqual(state.draft, before.draft);
-            assert.deepEqual(state.pending, ['FAKE_QUEUED.txt']);
-            assert.equal(state.calls.length, 0);
-            // Explicitly supplied cancel event tests bubbling target guard only.
-            await page
-                .locator('dialog input[type=file]')
-                .dispatchEvent('cancel', { bubbles: true, cancelable: true });
-            state = await page.evaluate(() => window.__nativeProbe.snapshot());
-            assert.deepEqual(state.draft, before.draft);
-            assert.deepEqual(state.pending, before.pending);
-            assert.equal(await page.locator('dialog[open]').count(), 1);
-            await page.keyboard.press('Escape');
-            await page.locator('dialog').waitFor({ state: 'detached' });
-            await page
-                .getByRole('button', { name: 'Open attachment editor' })
-                .click();
-            await page.locator('dialog[open]').waitFor();
-            assert.deepEqual(
-                (await page.evaluate(() => window.__nativeProbe.snapshot()))
-                    .pending,
-                before.pending
-            );
-            await page
-                .getByRole('button', { name: 'Clear pending files' })
-                .click();
-            await page
-                .getByRole('button', { name: 'Save synthetic Form' })
-                .click();
-            await page.waitForFunction(
-                () => window.__nativeProbe.snapshot().calls.length === 1
-            );
-            state = await page.evaluate(() => window.__nativeProbe.snapshot());
-            assert.deepEqual(
-                state.calls[0].input.formRecord.data,
-                before.draft.data
-            );
+            let exerciseError;
+            try {
+                await nativeSetup(page, origin, 'attachment');
+                await page.locator('dialog[open]').waitFor();
+                const text = page.locator('dialog input[type=password]');
+                await text.fill('Retained dirty text');
+                const choose = page.getByRole('button', {
+                    name: 'Choose files',
+                    exact: true,
+                });
+                await choose.focus();
+                const fileInput = page.locator('dialog input[type=file]');
+                await chooserOwner.choose(
+                    fileInput,
+                    () => page.keyboard.press('Enter'),
+                    {
+                        name: 'FAKE_QUEUED.txt',
+                        mimeType: 'text/plain',
+                        buffer: Buffer.from('fake'),
+                    }
+                );
+                const before = await page.evaluate(() =>
+                    window.__nativeProbe.snapshot()
+                );
+                await chooserOwner.choose(
+                    fileInput,
+                    () => choose.press('Enter'),
+                    []
+                );
+                assert.equal(await page.locator('dialog[open]').count(), 1);
+                let state = await page.evaluate(() =>
+                    window.__nativeProbe.snapshot()
+                );
+                assert.deepEqual(state.draft, before.draft);
+                assert.deepEqual(state.pending, ['FAKE_QUEUED.txt']);
+                assert.equal(state.calls.length, 0);
+                // Explicitly supplied cancel event tests bubbling target guard only.
+                await page
+                    .locator('dialog input[type=file]')
+                    .dispatchEvent('cancel', {
+                        bubbles: true,
+                        cancelable: true,
+                    });
+                state = await page.evaluate(() =>
+                    window.__nativeProbe.snapshot()
+                );
+                assert.deepEqual(state.draft, before.draft);
+                assert.deepEqual(state.pending, before.pending);
+                assert.equal(await page.locator('dialog[open]').count(), 1);
+                await page.keyboard.press('Escape');
+                await page.locator('dialog').waitFor({ state: 'detached' });
+                await page
+                    .getByRole('button', { name: 'Open attachment editor' })
+                    .click();
+                await page.locator('dialog[open]').waitFor();
+                assert.deepEqual(
+                    (await page.evaluate(() => window.__nativeProbe.snapshot()))
+                        .pending,
+                    before.pending
+                );
+                await page
+                    .getByRole('button', { name: 'Clear pending files' })
+                    .click();
+                await page
+                    .getByRole('button', { name: 'Save synthetic Form' })
+                    .click();
+                await page.waitForFunction(
+                    () => window.__nativeProbe.snapshot().calls.length === 1
+                );
+                state = await page.evaluate(() =>
+                    window.__nativeProbe.snapshot()
+                );
+                assert.deepEqual(
+                    state.calls[0].input.formRecord.data,
+                    before.draft.data
+                );
+                assert.equal(chooserEvidence.events.length, 2);
+            } catch (error) {
+                exerciseError = error;
+                throw error;
+            } finally {
+                try {
+                    await chooserOwner.dispose();
+                } catch (cleanupError) {
+                    throw exerciseError
+                        ? new AggregateError(
+                              [exerciseError, cleanupError],
+                              'Attachment proof and chooser cleanup failed'
+                          )
+                        : cleanupError;
+                }
+            }
         });
         await run('portal-late-criteria', async (page, origin) => {
             await nativeSetup(page, origin, 'portal');

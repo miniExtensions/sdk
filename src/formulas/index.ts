@@ -5,9 +5,11 @@ export {
     FormulaFunctions,
     type InterpreterContext,
 } from './interpreter/interpreter.js';
+export type { TokenizeOptions } from './lexer/lexer.js';
 export { default as Lexer } from './lexer/lexer.js';
 export { default as TokenTypes } from './lexer/tokenTypes.js';
 export type { Token, TokenArray } from './lexer/token.js';
+export type { ParseOptions } from './parser/parser.js';
 export { default as Parser } from './parser/parser.js';
 export {
     Binary,

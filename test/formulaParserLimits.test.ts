@@ -1,0 +1,239 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import {
+    Lexer,
+    Parser,
+    Literal,
+    TokenTypes,
+    extractIdentifiersFromExpr,
+} from '../src/formulas/index.js';
+
+const parse = (source: string, maxDepth?: number) =>
+    new Parser(new Lexer(source).tokenize({ cache: false })).parse({
+        cache: false,
+        maxDepth,
+    });
+const tokenLimit = {
+    name: 'RangeError',
+    message: 'Formula token limit exceeded',
+};
+const depthLimit = {
+    name: 'RangeError',
+    message: 'Formula depth limit exceeded',
+};
+
+describe('opt-in formula parsing bounds', () => {
+    it('accepts exact token limits and ignores trailing whitespace', () => {
+        assert.equal(
+            new Lexer('1 + 2 \n').tokenize({ maxTokens: 3 }).length,
+            3
+        );
+        assert.deepEqual(new Lexer(' \n').tokenize({ maxTokens: 0 }), []);
+        assert.throws(
+            () => new Lexer('1 + 2').tokenize({ maxTokens: 2 }),
+            tokenLimit
+        );
+        assert.throws(
+            () => new Lexer('1').tokenize({ maxTokens: 0 }),
+            tokenLimit
+        );
+    });
+    it('stops before scanning the next token or malformed suffix', () => {
+        assert.throws(
+            () =>
+                new Lexer('1 "unterminated').tokenize({
+                    cache: false,
+                    maxTokens: 1,
+                }),
+            tokenLimit
+        );
+        assert.throws(
+            () => new Lexer('1 {unterminated').tokenize({ maxTokens: 1 }),
+            tokenLimit
+        );
+        const seeded = new Lexer('', [{ type: TokenTypes.NUMBER, value: 1 }]);
+        assert.throws(
+            () => seeded.tokenize({ cache: false, maxTokens: 0 }),
+            tokenLimit
+        );
+    });
+    it('bounds a large token stream at the requested 8192 boundary', () => {
+        const source = '1 '.repeat(8192);
+        assert.equal(
+            new Lexer(source).tokenize({ cache: false, maxTokens: 8192 })
+                .length,
+            8192
+        );
+        assert.throws(
+            () =>
+                new Lexer(source + '"unterminated').tokenize({
+                    cache: false,
+                    maxTokens: 8192,
+                }),
+            tokenLimit
+        );
+    });
+    it('validates limits even when the input was previously cached', () => {
+        const tokens = new Lexer('723 + 4').tokenize();
+        new Parser(tokens).parse();
+        for (const maxTokens of [
+            -1,
+            0.5,
+            NaN,
+            Infinity,
+            Number.MAX_SAFE_INTEGER + 1,
+        ]) {
+            assert.throws(() => new Lexer('723 + 4').tokenize({ maxTokens }), {
+                name: 'RangeError',
+                message: 'maxTokens must be a non-negative safe integer',
+            });
+        }
+        for (const maxDepth of [
+            0,
+            -1,
+            0.5,
+            NaN,
+            Infinity,
+            Number.MAX_SAFE_INTEGER + 1,
+        ]) {
+            assert.throws(() => new Parser(tokens).parse({ maxDepth }), {
+                name: 'RangeError',
+                message: 'maxDepth must be a positive safe integer',
+            });
+        }
+        assert.throws(
+            () => new Lexer('723 + 4').tokenize({ maxTokens: 2 }),
+            tokenLimit
+        );
+        assert.throws(
+            () => new Parser(tokens).parse({ maxDepth: 1 }),
+            depthLimit
+        );
+    });
+    for (const [name, make] of [
+        [
+            'grouping',
+            (n: number) => '('.repeat(n - 1) + '1' + ')'.repeat(n - 1),
+        ],
+        ['unary', (n: number) => '-'.repeat(n - 1) + '1'],
+        [
+            'functions',
+            (n: number) => 'SUM('.repeat(n - 1) + '1' + ')'.repeat(n - 1),
+        ],
+        ['binary', (n: number) => Array(n).fill('1').join('+')],
+    ] as const) {
+        it(`enforces exact AST depth for ${name}`, () => {
+            assert.doesNotThrow(() => parse(make(48), 48));
+            assert.throws(() => parse(make(49), 48), depthLimit);
+            assert.doesNotThrow(() => parse(make(49)));
+            assert.throws(() => parse(make(20000), 48), depthLimit);
+        });
+    }
+    it('accepts leaf/empty-call depth 1 and bounds mixed nested expressions', () => {
+        assert.ok(parse('1', 1) instanceof Literal);
+        assert.doesNotThrow(() => parse('SUM()', 1));
+        assert.throws(() => parse('SUM(1)', 1), depthLimit);
+        assert.doesNotThrow(() => parse('SUM(-(1+2), 3)', 5));
+        assert.throws(() => parse('SUM(-(1+2), 3)', 4), depthLimit);
+        assert.deepEqual(
+            extractIdentifiersFromExpr(parse('{Price}+SUM({Tax})', 3)),
+            ['Price', 'Tax']
+        );
+    });
+    it('stops recursive descent before a malformed deeply nested suffix', () => {
+        for (const prefix of ['(', '-', 'SUM(']) {
+            const tokens = new Lexer(prefix.repeat(10000) + '1').tokenize({
+                cache: false,
+            });
+            assert.throws(
+                () => new Parser(tokens).parse({ maxDepth: 48 }),
+                depthLimit
+            );
+        }
+    });
+    it('rejects before reading tokens beyond the depth budget', () => {
+        for (const source of [
+            '-'.repeat(100),
+            '('.repeat(100),
+            'SUM('.repeat(100),
+            Array(100).fill('1').join('+'),
+        ]) {
+            const tokens = new Lexer(source).tokenize({ cache: false });
+            Object.defineProperty(tokens, 99, {
+                get() {
+                    throw new Error('Read beyond bounded prefix');
+                },
+            });
+            assert.throws(
+                () => new Parser(tokens).parse({ maxDepth: 48 }),
+                depthLimit
+            );
+        }
+    });
+    it('bounds every binary precedence level and wide calls', () => {
+        for (const operator of [
+            '=',
+            '!=',
+            '>',
+            '>=',
+            '<',
+            '<=',
+            '+',
+            '-',
+            '&',
+            '*',
+            '/',
+        ]) {
+            assert.doesNotThrow(() =>
+                parse(Array(48).fill('1').join(operator), 48)
+            );
+            assert.throws(
+                () => parse(Array(49).fill('1').join(operator), 48),
+                depthLimit
+            );
+        }
+        assert.doesNotThrow(() =>
+            parse('SUM(' + Array(4095).fill('1').join(',') + ')', 2)
+        );
+        assert.throws(() => parse('SUM(1+2)', 2), depthLimit);
+    });
+    it('never caches a partial failed result or a bounded AST', () => {
+        const source = 'SUM({NoPartialCache},813)';
+        assert.throws(
+            () => new Lexer(source).tokenize({ maxTokens: 2 }),
+            tokenLimit
+        );
+        const tokens = new Lexer(source).tokenize();
+        assert.equal(tokens.length, 6);
+        assert.throws(
+            () => new Parser(tokens).parse({ maxDepth: 1 }),
+            depthLimit
+        );
+        const bounded = new Parser(tokens).parse({ maxDepth: 2 });
+        assert.notStrictEqual(new Parser(tokens).parse(), bounded);
+    });
+    it('preserves default cache identity and bypasses both cache reads and writes', () => {
+        const source = '{UncachedParserWitness}+711';
+        const first = new Lexer(source).tokenize({ cache: false });
+        const cached = new Lexer(source).tokenize();
+        assert.notStrictEqual(first, cached);
+        assert.strictEqual(new Lexer(source).tokenize(), cached);
+        assert.notStrictEqual(
+            new Lexer(source).tokenize({ cache: false }),
+            cached
+        );
+        const firstExpr = new Parser(cached).parse({ cache: false });
+        const cachedExpr = new Parser(cached).parse();
+        assert.notStrictEqual(firstExpr, cachedExpr);
+        assert.strictEqual(new Parser(cached).parse(), cachedExpr);
+        assert.notStrictEqual(
+            new Parser(cached).parse({ cache: false }),
+            cachedExpr
+        );
+        assert.notStrictEqual(
+            new Parser(cached).parse({ maxDepth: 2 }),
+            cachedExpr
+        );
+        assert.strictEqual(new Parser(cached).parse(), cachedExpr);
+    });
+});

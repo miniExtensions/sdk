@@ -75,6 +75,16 @@
                 "types": "./dist/cjs/react/index.d.ts",
                 "default": "./dist/cjs/react/index.js"
             }
+        },
+        "./field-types": {
+            "import": {
+                "types": "./dist/esm/field-types.d.ts",
+                "default": "./dist/esm/field-types.js"
+            },
+            "require": {
+                "types": "./dist/cjs/field-types.d.ts",
+                "default": "./dist/cjs/field-types.js"
+            }
         }
     },
     "files": [

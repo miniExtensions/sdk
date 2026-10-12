@@ -246,6 +246,22 @@ The engine classes and AST types are exported for integrations that inspect a
 compiled formula. Identifier extraction preserves traversal order and duplicate
 references.
 
+## Field kinds without the formula runtime
+
+Import the documented field-kind enum without loading the evaluator or its
+formatting dependencies:
+
+```ts
+import { AirtableFieldType } from '@miniextensions/sdk/field-types';
+
+const numericKind: AirtableFieldType.NUMBER = AirtableFieldType.NUMBER;
+```
+
+This is the same enum object exported by `@miniextensions/sdk/formulas`, including
+all existing values and their order. Consumers retain their own eligibility
+filters; the export includes `MANUAL_SORT` (`manualSort`). Member documentation
+is preserved in the published declarations.
+
 ## Shared display helpers
 
 The formulas subpath also exposes the existing formatting primitives:

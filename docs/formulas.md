@@ -261,3 +261,37 @@ This is the same enum object exported by `@miniextensions/sdk/formulas`, includi
 all existing values and their order. Consumers retain their own eligibility
 filters; the export includes `MANUAL_SORT` (`manualSort`). Member documentation
 is preserved in the published declarations.
+
+## Shared display helpers
+
+The formulas subpath also exposes the existing formatting primitives:
+
+```ts
+import {
+    formatMultiSelectValue,
+    removeMarkdown,
+    getFormattedDuration,
+    type DurationFormat,
+} from '@miniextensions/sdk/formulas';
+
+formatMultiSelectValue('North, West'); // '"North, West"'
+removeMarkdown('**Hello** [world](https://example.com)'); // 'Hello [world](https://example.com)'
+const format: DurationFormat = 'h:mm:ss.SS';
+getFormattedDuration('-3680.4', format, true); // '-1:01:20.40'
+```
+
+`formatMultiSelectValue` doubles embedded double quotes and wraps an option
+containing a comma or double quote. It formats one option, not a complete CSV
+file or an escaped formula string.
+
+`removeMarkdown` produces readable display text using the same conversion as
+formula field values. It preserves Markdown link/image syntax. It is not an
+HTML sanitizer.
+
+`getFormattedDuration(input, format, isSeconds = false)` preserves the existing
+Airtable-style display rounding and negative sign behavior. An empty input
+returns an empty string. Pass `true` for native numeric seconds; otherwise
+`h:mm` interprets numeric input as minutes, while the other formats use seconds.
+Supported formats are `h:mm`, `h:mm:ss`, `h:mm:ss.S`, `h:mm:ss.SS`, and
+`h:mm:ss.SSS`. This helper formats values; it does not validate editable partial
+input or replace a duration field model.

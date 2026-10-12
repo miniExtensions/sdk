@@ -461,9 +461,37 @@ Visitor A and Visitor B have separate clients and session maps. Switching
 visitors cancels pending UI work; a response from a different visitor or older
 session cannot populate the active visitor's screen or session. Returning to
 a cached Portal keeps its inline draft, but requires **Load records** before
-paging or opening another child Form. Sessions are
-memory-only, so refreshing the page starts them again anonymously. Hosted
-miniExtensions login cookies cannot authenticate either visitor.
+paging or opening another child Form. Sessions are memory-only by default. To opt in, check **Remember each visitor’s
+login in this tab** before **Connect and load**. Only the server-encrypted login
+or extension-password credential is stored in `sessionStorage`, isolated by
+visitor, API origin, path context and share ID. Hosted miniExtensions cookies
+cannot authenticate either visitor. Do not opt in on a shared tab: same-origin
+scripts can access session storage, and a browser may copy it when duplicating a tab.
+
+After refreshing the page, reenter the same connection settings and opt in again.
+The app first loads the published authentication configuration, then validates the
+remembered credential with a fresh read before showing the Form or Portal. A
+revoked credential returns to login. A transport or storage failure shows
+**Retry session restoration** and **Continue with login**; neither action is
+automatic, and a failed check does not authenticate the visitor. Cancelled or
+superseded checks cannot apply a late session. Failed remembering preserves a
+successful memory login and displays the storage error.
+
+**Clear this visitor’s session** forgets only that visitor’s remembered entries
+for this connection and disables restoration for that visitor until you reconnect
+and opt in again, even if storage removal fails. **Disconnect** forgets both visitors for this connection;
+unrelated storage is preserved. If storage cannot be cleared, the app reports it
+instead of promising that the remembered credential is gone. Reconnecting to a
+different share does not erase the former share’s remembered entry; reconnect to
+that share and clear its session to forget it. Drafts, files, entered passwords,
+verification codes and uncertain-write journals are never persisted. Choosing
+Reload still replaces drafts only after a successful read. Reconnecting with
+remembering unchecked explicitly forgets the previously opted-in connection;
+if storage cannot be cleared, reconnect is refused with an explanation.
+
+Restoration supports one authentication gate ending in a Form or Portal. A
+password followed by another login screen requires explicit authentication;
+this starter does not promise restoration of a multi-gate chain.
 
 A successful **Reload** replaces that visitor's drafts with the freshly loaded
 screen; a failed or cancelled reload retains them. Successful save or deletion

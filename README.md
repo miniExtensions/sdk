@@ -248,7 +248,8 @@ archive and intended deployment separately.
   unlink actions. See [Portal controls](examples/browser/README.md#portal-workflow).
 - **Authentication:** password, configured login and verification controls,
   deliberate session application, basic configured signup using the login
-  inputs, and memory-only visitor sessions. Your app supplies any additional
+  inputs, and memory-only visitor sessions by default. The starter offers explicit
+  tab-scoped remembering with fresh server validation, retry and scoped logout. Your app supplies any additional
   configured signup fields or profile editor. Use [auth lifecycle](docs/auth.md) for captured
   screen/owner checks and explicit Reload.
 - **Recovery:** visitor-scoped draft retention, deliberate discard, existing
@@ -311,8 +312,9 @@ nested filter-builder UI; inline attachments are readonly previews. The backend
 still enforces published access and validation rules.
 
 Mounting a renderer performs no Save, upload or linked search. Visitor state is
-memory-only by default; refresh does not restore authentication or uncertain
-operations. Browser/provider compatibility, CORS and live persistence require
+memory-only by default. With the starter’s remembering option, refresh requires
+reconnecting with the same settings and opting in to validate the remembered
+credential. Drafts and uncertain operations are never restored. Browser/provider compatibility, CORS and live persistence require
 separate deployment testing. Use the supplied guides rather than interpreting a
 typed configuration property as an implemented control.
 

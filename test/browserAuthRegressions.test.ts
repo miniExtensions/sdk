@@ -11,7 +11,13 @@ import {
     type LoginPageResult,
     type RuntimeSession,
 } from '../src/runtime/index.js';
-import { deferred, loginPage, verificationSent } from './authFixtures.js';
+import {
+    deferred,
+    loginPage,
+    passwordPage,
+    verificationSent,
+} from './authFixtures.js';
+import { loadedForm } from './formsFixtures.js';
 
 // Exercise the actual browser example and optionally its installed SDK archive.
 // All responses are synthetic; no external request is possible.
@@ -755,6 +761,502 @@ describe(
             assert.deepEqual(Object.values(loadedSessions[1]), [
                 'encrypted_account_b',
             ]);
+        });
+    }
+);
+
+const restartBrowser = async (window: Window) => {
+    const markup = await readFile(
+        join(root, 'examples/browser/index.html'),
+        'utf8'
+    );
+    window.document.body.innerHTML = markup
+        .match(/<body>([\s\S]*?)<\/body>/)![1]
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
+    await import(
+        `${pathToFileURL(join(directory, 'main.mjs')).href}?case=${++moduleRevision}`
+    );
+};
+const browserInput = (window: Window, id: string) => {
+    const input = window.document.getElementById(id);
+    assert.ok(input instanceof window.HTMLInputElement);
+    return input;
+};
+const clickById = (window: Window, id: string) => {
+    const button = window.document.getElementById(id);
+    assert.ok(button instanceof window.HTMLButtonElement);
+    button.click();
+};
+const beginRememberedConnection = (window: Window, page: LoginPageResult) => {
+    browserInput(window, 'api-origin').value = 'https://sdk.example.test';
+    browserInput(window, 'share-id').value = page.payload.shareId;
+    browserInput(window, 'remember-session').checked = true;
+    submitForm(window, 'Connect and load');
+};
+
+describe(
+    'browser starter opt-in remembered sessions',
+    { concurrency: false },
+    () => {
+        const setup = async (test: TestContext) => {
+            const page = browserLoginPage();
+            const accepted = loadedForm();
+            accepted.extensionId = page.extensionId;
+            const calls: RuntimeSession[] = [];
+            let mode: 'accepted' | 'revoked' | 'failure' | 'held' = 'accepted';
+            const held = deferred<Response>();
+            const window = await environment(test, async (url, init) => {
+                const route = new URL(String(url)).searchParams.get('route');
+                const body = JSON.parse(String(init?.body));
+                if (route === 'loginIntoExtensionUsingLoginPageExtension')
+                    return jsonResponse({
+                        type: 'found-record',
+                        encryptedLoginToken: 'SYNTHETIC_REMEMBERED',
+                    });
+                assert.equal(
+                    route,
+                    'fetchExtensionForEndUser',
+                    'No mutation or unrelated read'
+                );
+                calls.push(body.miniExtStorageV4);
+                if (
+                    !Object.values(body.miniExtStorageV4).includes(
+                        'SYNTHETIC_REMEMBERED'
+                    )
+                )
+                    return jsonResponse(page);
+                if (mode === 'failure')
+                    throw new Error('Synthetic validation transport failure');
+                if (mode === 'held') return held.promise;
+                return jsonResponse(mode === 'revoked' ? page : accepted);
+            });
+            beginRememberedConnection(window, page);
+            await waitFor(() => browserIdle(window));
+            enterEmail(window, 'pilot@example.test');
+            submitForm(window, 'Log in and use session');
+            await waitFor(() => browserIdle(window));
+            assert.equal(window.sessionStorage.length, 1);
+            const stored = window.sessionStorage.getItem(
+                window.sessionStorage.key(0)!
+            )!;
+            assert.equal(stored.includes('pilot@example.test'), false);
+            assert.equal(stored.includes('SYNTHETIC_REMEMBERED'), true);
+            return {
+                window,
+                page,
+                accepted,
+                calls,
+                held,
+                mode: (next: typeof mode) => {
+                    mode = next;
+                },
+            };
+        };
+
+        it('does not remember by default, even after a successful login', async (test) => {
+            const page = browserLoginPage();
+            const window = await environment(test, async (url) =>
+                jsonResponse(
+                    new URL(String(url)).searchParams.get('route') ===
+                        'fetchExtensionForEndUser'
+                        ? page
+                        : {
+                              type: 'found-record',
+                              encryptedLoginToken: 'SYNTHETIC_DEFAULT',
+                          }
+                )
+            );
+            await connectBrowser(window, page);
+            assert.equal(
+                browserInput(window, 'remember-session').checked,
+                false
+            );
+            enterEmail(window, 'pilot@example.test');
+            submitForm(window, 'Log in and use session');
+            await waitFor(() => browserIdle(window));
+            assert.equal(window.sessionStorage.length, 0);
+            assert.equal(window.localStorage.length, 0);
+        });
+
+        it('refresh/reconnect validates the remembered credential before publishing a Form and logout forgets it', async (test) => {
+            const f = await setup(test);
+            await restartBrowser(f.window);
+            f.mode('held');
+            beginRememberedConnection(f.window, f.page);
+            await waitFor(() => f.calls.length === 3);
+            assert.equal(
+                findButton(f.window, 'Log in and use session'),
+                undefined
+            );
+            assert.doesNotMatch(
+                f.window.document.getElementById('session-summary')!
+                    .textContent!,
+                /Authenticated/
+            );
+            f.held.resolve(jsonResponse(f.accepted));
+            await waitFor(() => browserIdle(f.window));
+            assert.match(
+                f.window.document.getElementById('status')!.textContent!,
+                /Loaded form/
+            );
+            assert.match(
+                f.window.document.getElementById('session-summary')!
+                    .textContent!,
+                /Authenticated/
+            );
+            clickById(f.window, 'logout');
+            assert.equal(f.window.sessionStorage.length, 0);
+            f.mode('accepted');
+            clickById(f.window, 'reload');
+            await waitFor(() => browserIdle(f.window));
+            assert.deepEqual(f.calls.at(-1), {});
+            assert.ok(findButton(f.window, 'Log in and use session'));
+        });
+
+        it('revoked remembered credentials return to login and remove only the rejected visitor entry', async (test) => {
+            const f = await setup(test);
+            f.window.sessionStorage.setItem('unrelated-app', 'retained');
+            await restartBrowser(f.window);
+            f.mode('revoked');
+            beginRememberedConnection(f.window, f.page);
+            await waitFor(() => browserIdle(f.window));
+            assert.ok(findButton(f.window, 'Log in and use session'));
+            assert.equal(f.window.sessionStorage.length, 1);
+            assert.equal(
+                f.window.sessionStorage.getItem('unrelated-app'),
+                'retained'
+            );
+            assert.doesNotMatch(
+                f.window.document.getElementById('session-summary')!
+                    .textContent!,
+                /Authenticated/
+            );
+        });
+
+        it('validation transport failure remains anonymous, retains the entry, and retries only on explicit action', async (test) => {
+            const f = await setup(test);
+            await restartBrowser(f.window);
+            f.mode('failure');
+            beginRememberedConnection(f.window, f.page);
+            await waitFor(() => browserIdle(f.window));
+            assert.ok(findButton(f.window, 'Retry session restoration'));
+            assert.equal(
+                findButton(f.window, 'Log in and use session'),
+                undefined
+            );
+            assert.equal(f.window.sessionStorage.length, 1);
+            assert.doesNotMatch(
+                f.window.document.getElementById('session-summary')!
+                    .textContent!,
+                /Authenticated/
+            );
+            assert.equal(f.calls.length, 3);
+            f.mode('accepted');
+            findButton(f.window, 'Retry session restoration')!.click();
+            await waitFor(() => browserIdle(f.window));
+            assert.equal(f.calls.length, 5);
+            assert.match(
+                f.window.document.getElementById('status')!.textContent!,
+                /Loaded form/
+            );
+        });
+
+        it('cancelled validation cannot authenticate late and logout still forgets its retired remembered entry', async (test) => {
+            const f = await setup(test);
+            await restartBrowser(f.window);
+            f.mode('held');
+            beginRememberedConnection(f.window, f.page);
+            await waitFor(() => f.calls.length === 3);
+            clickById(f.window, 'cancel');
+            f.held.resolve(jsonResponse(f.accepted));
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            assert.doesNotMatch(
+                f.window.document.getElementById('session-summary')!
+                    .textContent!,
+                /Authenticated/
+            );
+            clickById(f.window, 'logout');
+            assert.equal(f.window.sessionStorage.length, 0);
+        });
+
+        it('a failed authenticated Reload retains the edited Form draft and does not dispatch a Save', async (test) => {
+            const f = await setup(test);
+            clickById(f.window, 'reload');
+            await waitFor(() => browserIdle(f.window));
+            const input = Array.from(
+                f.window.document.querySelectorAll('#screen input')
+            ).find(
+                (node) =>
+                    node instanceof f.window.HTMLInputElement &&
+                    node.value === 'Initial title'
+            );
+            assert.ok(input instanceof f.window.HTMLInputElement);
+            input.value = 'Unsaved draft survives';
+            input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+            f.mode('failure');
+            clickById(f.window, 'reload');
+            await waitFor(() => browserIdle(f.window));
+            assert.equal(input.isConnected, true);
+            assert.equal(input.value, 'Unsaved draft survives');
+            assert.match(
+                f.window.document.getElementById('status')!.textContent!,
+                /failure|failed/i
+            );
+            assert.equal(f.window.sessionStorage.length, 1);
+        });
+
+        it('denied storage offers explicit login without claiming restoration or remembering', async (test) => {
+            const page = browserLoginPage();
+            const window = await environment(test, async (url) =>
+                jsonResponse(
+                    new URL(String(url)).searchParams.get('route') ===
+                        'fetchExtensionForEndUser'
+                        ? page
+                        : {
+                              type: 'found-record',
+                              encryptedLoginToken: 'SYNTHETIC_MEMORY_ONLY',
+                          }
+                )
+            );
+            Object.defineProperty(window, 'sessionStorage', {
+                configurable: true,
+                get() {
+                    throw new Error('Synthetic storage denial');
+                },
+            });
+            beginRememberedConnection(window, page);
+            await waitFor(() => browserIdle(window));
+            assert.ok(findButton(window, 'Retry session restoration'));
+            assert.equal(
+                findButton(window, 'Log in and use session'),
+                undefined
+            );
+            findButton(window, 'Continue with login')!.click();
+            enterEmail(window, 'pilot@example.test');
+            submitForm(window, 'Log in and use session');
+            await waitFor(() => browserIdle(window));
+            assert.match(
+                window.document.getElementById('status')!.textContent!,
+                /storage|remember/i
+            );
+            assert.match(
+                window.document.getElementById('session-summary')!.textContent!,
+                /Authenticated/
+            );
+            clickById(window, 'logout');
+            assert.match(
+                window.document.getElementById('status')!.textContent!,
+                /could not be cleared/
+            );
+            assert.doesNotMatch(
+                window.document.getElementById('session-summary')!.textContent!,
+                /Authenticated/
+            );
+        });
+
+        it('refused opt-out preserves the current Form draft and connection when storage cannot be cleared', async (test) => {
+            const f = await setup(test);
+            clickById(f.window, 'reload');
+            await waitFor(() => browserIdle(f.window));
+            const input = Array.from(
+                f.window.document.querySelectorAll('#screen input')
+            ).find(
+                (node) =>
+                    node instanceof f.window.HTMLInputElement &&
+                    node.value === 'Initial title'
+            );
+            assert.ok(input instanceof f.window.HTMLInputElement);
+            input.value = 'Keep this draft';
+            input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+            const count = f.calls.length;
+            Object.defineProperty(f.window.sessionStorage, 'removeItem', {
+                configurable: true,
+                value() {
+                    throw new Error('Synthetic storage removal denial');
+                },
+            });
+            browserInput(f.window, 'remember-session').checked = false;
+            submitForm(f.window, 'Connect and load');
+            assert.equal(f.calls.length, count);
+            assert.equal(input.isConnected, true);
+            assert.equal(input.value, 'Keep this draft');
+            assert.equal(f.window.sessionStorage.length, 1);
+            assert.match(
+                f.window.document.getElementById('session-summary')!
+                    .textContent!,
+                /Authenticated/
+            );
+            assert.match(
+                f.window.document.getElementById('status')!.textContent!,
+                /drafts are retained/
+            );
+        });
+
+        it('logout with readable but unremovable storage cannot restore the old identity on Reload', async (test) => {
+            const f = await setup(test);
+            Object.defineProperty(f.window.sessionStorage, 'removeItem', {
+                configurable: true,
+                value() {
+                    throw new Error('Synthetic removal denial');
+                },
+            });
+            clickById(f.window, 'logout');
+            assert.equal(f.window.sessionStorage.length, 1);
+            assert.match(
+                f.window.document.getElementById('status')!.textContent!,
+                /could not be cleared/
+            );
+            const before = f.calls.length;
+            clickById(f.window, 'reload');
+            await waitFor(() => browserIdle(f.window));
+            assert.equal(f.calls.length, before + 1);
+            assert.deepEqual(f.calls.at(-1), {});
+            assert.ok(findButton(f.window, 'Log in and use session'));
+            assert.doesNotMatch(
+                f.window.document.getElementById('session-summary')!
+                    .textContent!,
+                /Authenticated/
+            );
+        });
+
+        for (const gate of ['password', 'verification'] as const) {
+            it(`remembers the opted-in ${gate} flow and restores only after fresh validation`, async (test) => {
+                const login = browserLoginPage();
+                const page = gate === 'password' ? passwordPage() : login;
+                const accepted = loadedForm();
+                accepted.extensionId = page.extensionId;
+                let confirmations = 0;
+                const window = await environment(test, async (url, init) => {
+                    const route = new URL(String(url)).searchParams.get(
+                        'route'
+                    );
+                    const body = JSON.parse(String(init?.body));
+                    if (route === 'fetchExtensionForEndUser')
+                        return jsonResponse(
+                            Object.values(body.miniExtStorageV4).includes(
+                                'SYNTHETIC_GATE_CREDENTIAL'
+                            )
+                                ? accepted
+                                : page
+                        );
+                    if (route === 'verifyExtensionPassword')
+                        return jsonResponse({
+                            type: 'correct',
+                            encryptedExtensionPassword:
+                                'SYNTHETIC_GATE_CREDENTIAL',
+                        });
+                    if (route === 'loginIntoExtensionUsingLoginPageExtension')
+                        return jsonResponse(verificationSent());
+                    assert.equal(route, 'confirmVerificationCodeForLogin');
+                    confirmations++;
+                    return jsonResponse(
+                        confirmations === 1
+                            ? {
+                                  error: true,
+                                  message: 'Wrong verification code.',
+                              }
+                            : {
+                                  encryptedLoginToken:
+                                      'SYNTHETIC_GATE_CREDENTIAL',
+                              }
+                    );
+                });
+                beginRememberedConnection(window, login);
+                await waitFor(() => browserIdle(window));
+                if (gate === 'password') {
+                    const input = findButton(window, 'Verify and use password')!
+                        .closest('form')!
+                        .querySelector('input')!;
+                    input.value = 'raw-password-not-retained';
+                    submitForm(window, 'Verify and use password');
+                } else {
+                    enterEmail(window, 'pilot@example.test');
+                    submitForm(window, 'Log in and use session');
+                    await waitFor(() => browserIdle(window));
+                    codeControl(window).code.value = 'wrong';
+                    submitForm(window, 'Confirm and use session');
+                    await waitFor(() => browserIdle(window));
+                    assert.equal(window.sessionStorage.length, 0);
+                    codeControl(window).code.value = '123456';
+                    submitForm(window, 'Confirm and use session');
+                }
+                await waitFor(() => browserIdle(window));
+                assert.equal(window.sessionStorage.length, 1);
+                const saved = window.sessionStorage.getItem(
+                    window.sessionStorage.key(0)!
+                )!;
+                assert.equal(
+                    saved.includes('raw-password-not-retained'),
+                    false
+                );
+                assert.equal(saved.includes('123456'), false);
+                await restartBrowser(window);
+                beginRememberedConnection(window, login);
+                await waitFor(() => browserIdle(window));
+                assert.match(
+                    window.document.getElementById('status')!.textContent!,
+                    /Loaded form/
+                );
+                clickById(window, 'logout');
+                assert.equal(window.sessionStorage.length, 0);
+            });
+        }
+
+        it('opting out on reconnect forgets the earlier remembered credential before reporting logout', async (test) => {
+            const f = await setup(test);
+            browserInput(f.window, 'remember-session').checked = false;
+            submitForm(f.window, 'Connect and load');
+            await waitFor(() => browserIdle(f.window));
+            assert.equal(f.window.sessionStorage.length, 0);
+            assert.deepEqual(f.calls.at(-1), {});
+            clickById(f.window, 'logout');
+            beginRememberedConnection(f.window, f.page);
+            await waitFor(() => browserIdle(f.window));
+            assert.ok(findButton(f.window, 'Log in and use session'));
+            assert.deepEqual(f.calls.at(-1), {});
+        });
+
+        it('cancelled restoration offers a new explicit login flow rather than a retired adapter', async (test) => {
+            const f = await setup(test);
+            await restartBrowser(f.window);
+            f.mode('held');
+            beginRememberedConnection(f.window, f.page);
+            await waitFor(() => f.calls.length === 3);
+            clickById(f.window, 'cancel');
+            assert.ok(findButton(f.window, 'Retry session restoration'));
+            findButton(f.window, 'Continue with login')!.click();
+            enterEmail(f.window, 'pilot@example.test');
+            submitForm(f.window, 'Log in and use session');
+            await waitFor(() => browserIdle(f.window));
+            assert.match(
+                f.window.document.getElementById('status')!.textContent!,
+                /Login applied/
+            );
+            f.held.resolve(jsonResponse(f.accepted));
+            await new Promise<void>((resolve) => setImmediate(resolve));
+            assert.match(
+                f.window.document.getElementById('status')!.textContent!,
+                /Login applied/
+            );
+        });
+
+        it('Visitor B cannot restore A and disconnect clears only this connection’s remembered entries', async (test) => {
+            const f = await setup(test);
+            f.window.sessionStorage.setItem('unrelated-app', 'retained');
+            const selector = f.window.document.getElementById('visitor')!;
+            assert.ok(selector instanceof f.window.HTMLSelectElement);
+            selector.value = 'B';
+            selector.dispatchEvent(new f.window.Event('change'));
+            clickById(f.window, 'reload');
+            await waitFor(() => browserIdle(f.window));
+            assert.deepEqual(f.calls.at(-1), {});
+            assert.ok(findButton(f.window, 'Log in and use session'));
+            clickById(f.window, 'disconnect');
+            assert.equal(f.window.sessionStorage.length, 1);
+            assert.equal(
+                f.window.sessionStorage.getItem('unrelated-app'),
+                'retained'
+            );
         });
     }
 );

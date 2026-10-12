@@ -26,14 +26,26 @@ const depthLimit = {
 };
 
 describe('opt-in formula parsing bounds', () => {
-    it('preserves deep unbounded inputs in fresh Node processes', () => {
+    it('preserves deep input compatibility in fresh Node processes', () => {
         // Isolate each case so JIT warmup from other tests cannot mask it.
-        for (const [prefix, suffix, depth] of [
+        for (const [prefix, suffix, depth, maxDepth] of [
             ['-', '', 4000],
             ['-', '', 6000],
             ['-', '', 8000],
             ['(', ')', 500],
             ['SUM(', ')', 500],
+            ['(', ')', 950],
+            ['SUM(', ')', 950],
+            ['-(', ')', 850],
+            ['-SUM(', ')', 850],
+            ['--(', ')', 780],
+            ['--SUM(', ')', 780],
+            ['---(', ')', 710],
+            ['---SUM(', ')', 710],
+            ['-(', ')', 700, 1401],
+            ['-SUM(', ')', 700, 1401],
+            ['--(', ')', 600, 1801],
+            ['--SUM(', ')', 600, 1801],
         ] as const) {
             execFileSync(
                 process.execPath,
@@ -45,10 +57,17 @@ describe('opt-in formula parsing bounds', () => {
                 import {Lexer, Parser} from ${JSON.stringify(new URL('../src/formulas/index.js', import.meta.url).href)};
                 const source = ${JSON.stringify(prefix)}.repeat(${depth}) + '1' + ${JSON.stringify(suffix)}.repeat(${depth});
                 const tokens = new Lexer(source).tokenize();
-                const expression = new Parser(tokens).parse();
+                const maxDepth = ${maxDepth};
+                const expression = new Parser(tokens).parse({maxDepth});
                 assert.ok(expression);
-                assert.strictEqual(new Parser(tokens).parse(), expression);
-                assert.notStrictEqual(new Parser(tokens).parse({cache:false}), expression);
+                if (maxDepth === undefined) {
+                    assert.strictEqual(new Parser(tokens).parse(), expression);
+                } else {
+                    assert.throws(() => new Parser(tokens).parse({maxDepth:maxDepth-1}), {
+                        name: 'RangeError', message: 'Formula depth limit exceeded'
+                    });
+                }
+                assert.notStrictEqual(new Parser(tokens).parse({cache:false,maxDepth}), expression);
             `,
                 ],
                 { timeout: 15000 }

@@ -640,6 +640,43 @@ assert.throws(() => new Parser(tokens).parse({maxDepth:8000}), {
             imports + unaryChecks
         );
         run(process.execPath, ['--stack-size=256', filename]);
+        // Grouping/calls must also start cold; unary-chain warmup can mask a
+        // larger frame reducing the existing non-unary recursion capacity.
+        for (const [kind, prefix, depth, maxDepth] of [
+            ['groups', '(', 950],
+            ['calls', 'SUM(', 950],
+            ['unary-groups', '-(', 850],
+            ['unary-calls', '-SUM(', 850],
+            ['double-unary-groups', '--(', 780],
+            ['double-unary-calls', '--SUM(', 780],
+            ['triple-unary-groups', '---(', 710],
+            ['triple-unary-calls', '---SUM(', 710],
+            ['bounded-unary-groups', '-(', 700, 1401],
+            ['bounded-unary-calls', '-SUM(', 700, 1401],
+            ['bounded-double-unary-groups', '--(', 600, 1801],
+            ['bounded-double-unary-calls', '--SUM(', 600, 1801],
+        ]) {
+            const nestedFilename = `${kind}-cold.${extension}`;
+            writeFileSync(
+                join(temporaryDirectory, nestedFilename),
+                imports +
+                    `
+const tokens = new Lexer(${JSON.stringify(prefix)}.repeat(${depth}) + '1' + ')'.repeat(${depth})).tokenize();
+const maxDepth = ${maxDepth};
+const expression = new Parser(tokens).parse({maxDepth});
+assert.ok(expression);
+if (maxDepth === undefined) {
+    assert.strictEqual(new Parser(tokens).parse(), expression);
+} else {
+    assert.throws(() => new Parser(tokens).parse({maxDepth:maxDepth-1}), {
+        name: 'RangeError', message: 'Formula depth limit exceeded'
+    });
+}
+assert.notStrictEqual(new Parser(tokens).parse({cache:false,maxDepth}), expression);
+`
+            );
+            run(process.execPath, [nestedFilename]);
+        }
     }
 
     for (const dependency of ['react', 'react-dom', 'vue', 'happy-dom']) {

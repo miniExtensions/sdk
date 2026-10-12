@@ -168,13 +168,26 @@ export default class Parser {
     }
 
     private unary(): Expr {
+        // Keep non-unary descent thin: grouping and function arguments recurse
+        // through this method, so chain bookkeeping must live in another frame.
+        if (this.match(TokenTypes.MINUS)) {
+            if (this.maxDepth !== undefined || this.check(TokenTypes.MINUS))
+                return this.unaryChain();
+            // An isolated unbounded minus keeps the original lightweight
+            // descent, including mixed -(...) and -SUM(...) nesting.
+            return new Unary(this.previous(), this.unary());
+        }
+        return this.functionCall();
+    }
+
+    private unaryChain(): Expr {
         const operators: Token[] = [];
         const outerDepth = this.nestingDepth;
         try {
-            while (this.match(TokenTypes.MINUS)) {
+            do {
                 if (this.maxDepth !== undefined) this.enterNested();
                 operators.push(this.previous());
-            }
+            } while (this.match(TokenTypes.MINUS));
             let expr: Expr = this.functionCall();
             // Fold from the operand outward to retain the original AST and
             // operator identities without one call frame per unary prefix.

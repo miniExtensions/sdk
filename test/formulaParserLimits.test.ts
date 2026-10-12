@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { describe, it } from 'node:test';
 import {
     Lexer,
@@ -23,6 +24,37 @@ const depthLimit = {
 };
 
 describe('opt-in formula parsing bounds', () => {
+    it('preserves base-parser unbounded recursion in fresh Node processes', () => {
+        // These inputs pass 48cb5847's parser; the initial bounded-parser change
+        // overflowed because its callback wrapper added frames even by default.
+        // Isolate each case so JIT warmup from other tests cannot mask it.
+        for (const [prefix, suffix, depth] of [
+            ['-', '', 4000],
+            ['-', '', 6000],
+            ['-', '', 8000],
+            ['(', ')', 500],
+            ['SUM(', ')', 500],
+        ] as const) {
+            execFileSync(
+                process.execPath,
+                [
+                    '--input-type=module',
+                    '--eval',
+                    `
+                import assert from 'node:assert/strict';
+                import {Lexer, Parser} from ${JSON.stringify(new URL('../src/formulas/index.js', import.meta.url).href)};
+                const source = ${JSON.stringify(prefix)}.repeat(${depth}) + '1' + ${JSON.stringify(suffix)}.repeat(${depth});
+                const tokens = new Lexer(source).tokenize();
+                const expression = new Parser(tokens).parse();
+                assert.ok(expression);
+                assert.strictEqual(new Parser(tokens).parse(), expression);
+                assert.notStrictEqual(new Parser(tokens).parse({cache:false}), expression);
+            `,
+                ],
+                { timeout: 15000 }
+            );
+        }
+    });
     it('accepts exact token limits and ignores trailing whitespace', () => {
         assert.equal(
             new Lexer('1 + 2 \n').tokenize({ maxTokens: 3 }).length,

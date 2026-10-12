@@ -14,7 +14,7 @@
  * field_reference  -> "{" [\S\d[:space:]]+ "}"
  */
 
-import type { TokenArray } from '../lexer/token.js';
+import type { Token, TokenArray } from '../lexer/token.js';
 import TokenTypes from '../lexer/tokenTypes.js';
 import {
     Binary,
@@ -62,16 +62,31 @@ export default class Parser {
         return expr;
     }
 
-    private nested<T>(parse: () => T): T {
-        if (this.maxDepth !== undefined && this.nestingDepth >= this.maxDepth) {
+    private enterNested() {
+        if (this.nestingDepth >= this.maxDepth!) {
             throw new RangeError('Formula depth limit exceeded');
         }
         this.nestingDepth++;
+    }
+
+    private nestedExpression(): Expr {
+        this.enterNested();
         try {
-            return parse();
+            return this.expression();
         } finally {
             this.nestingDepth--;
         }
+    }
+
+    private boundedUnary(operator: Token): Expr {
+        this.enterNested();
+        let left: Expr;
+        try {
+            left = this.unary();
+        } finally {
+            this.nestingDepth--;
+        }
+        return this.bounded(new Unary(operator, left), [left]);
     }
 
     private bounded<T extends Expr>(
@@ -166,8 +181,11 @@ export default class Parser {
     private unary(): Expr {
         if (this.match(TokenTypes.MINUS)) {
             const operator = this.previous();
-            const left: Expr = this.nested(() => this.unary());
-            return this.bounded(new Unary(operator, left), [left]);
+            if (this.maxDepth !== undefined) return this.boundedUnary(operator);
+            // Preserve the original direct recursion and stack shape by keeping
+            // bounded callbacks/helpers out of the default path.
+            const left: Expr = this.unary();
+            return new Unary(operator, left);
         }
 
         return this.functionCall();
@@ -193,7 +211,11 @@ export default class Parser {
 
         if (!this.check(TokenTypes.RIGHT_PAREN)) {
             do {
-                fnArguments.push(this.nested(() => this.expression()));
+                fnArguments.push(
+                    this.maxDepth === undefined
+                        ? this.expression()
+                        : this.nestedExpression()
+                );
             } while (this.match(TokenTypes.COMMA));
         }
 
@@ -223,7 +245,10 @@ export default class Parser {
         }
 
         if (this.match(TokenTypes.LEFT_PAREN)) {
-            const expr = this.nested(() => this.expression());
+            const expr =
+                this.maxDepth === undefined
+                    ? this.expression()
+                    : this.nestedExpression();
             this.consume(TokenTypes.RIGHT_PAREN);
             return this.bounded(new Grouping(expr), [expr]);
         }

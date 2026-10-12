@@ -500,6 +500,14 @@ export const numericKind = AirtableFieldType.NUMBER;
     );
 
     const parserChecks = String.raw`
+// Preserve the pre-feature unbounded recursion budget through installed entry points.
+for (const [prefix, suffix, depth] of [['-', '', 8000], ['(', ')', 500], ['SUM(', ')', 500]]) {
+    const source = prefix.repeat(depth) + '1' + suffix.repeat(depth);
+    const tokens = new Lexer(source).tokenize();
+    const expression = new Parser(tokens).parse();
+    if (!expression || new Parser(tokens).parse() !== expression) throw new Error('Default parser compatibility failed');
+    if (new Parser(tokens).parse({cache:false}) === expression) throw new Error('Unbounded parser bypass failed');
+}
 const boundedTokens = new Lexer('{Price}+SUM({Tax})').tokenize({cache:false,maxTokens:8192});
 const boundedExpr = new Parser(boundedTokens).parse({cache:false,maxDepth:48});
 if (extractIdentifiersFromExpr(boundedExpr).join(',') !== 'Price,Tax') throw new Error('Bounded installed parser lost identifiers');

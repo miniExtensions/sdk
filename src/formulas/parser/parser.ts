@@ -14,7 +14,7 @@
  * field_reference  -> "{" [\S\d[:space:]]+ "}"
  */
 
-import type { TokenArray } from '../lexer/token.js';
+import type { Token, TokenArray } from '../lexer/token.js';
 import TokenTypes from '../lexer/tokenTypes.js';
 import {
     Binary,
@@ -26,19 +26,82 @@ import {
     Literal,
 } from './ast.js';
 
+export interface ParseOptions {
+    /** Use the shared AST cache. Defaults to true; bounded parses always bypass it. */
+    cache?: boolean;
+    /** Maximum AST depth (a leaf has depth 1); a positive safe integer. */
+    maxDepth?: number;
+}
+
 const ParserCache = new Map<TokenArray, Expr>();
 
 export default class Parser {
     private currentTokenIndex = 0;
+    private maxDepth: number | undefined;
+    private nestingDepth = 1;
+    private nodeDepths = new WeakMap<Expr, number>();
     constructor(private tokens: TokenArray) {}
 
-    parse() {
-        if (ParserCache.has(this.tokens)) {
+    parse({ cache = true, maxDepth }: ParseOptions = {}) {
+        if (
+            maxDepth !== undefined &&
+            (!Number.isSafeInteger(maxDepth) || maxDepth < 1)
+        ) {
+            throw new RangeError('maxDepth must be a positive safe integer');
+        }
+        this.maxDepth = maxDepth;
+        // A cached AST may be arbitrarily deep. Reparse bounded input so limits
+        // apply during construction without recursively walking cached objects.
+        const useCache = cache && maxDepth === undefined;
+        if (useCache && ParserCache.has(this.tokens)) {
             return ParserCache.get(this.tokens)!;
         }
         const expr = this.expression();
         if (!this.isAtEnd()) throw new Error('Invalid expression');
-        ParserCache.set(this.tokens, expr);
+        if (useCache) ParserCache.set(this.tokens, expr);
+        return expr;
+    }
+
+    private enterNested() {
+        if (this.nestingDepth >= this.maxDepth!) {
+            throw new RangeError('Formula depth limit exceeded');
+        }
+        this.nestingDepth++;
+    }
+
+    private nestedExpression(): Expr {
+        this.enterNested();
+        try {
+            return this.expression();
+        } finally {
+            this.nestingDepth--;
+        }
+    }
+
+    private boundedUnary(operator: Token): Expr {
+        this.enterNested();
+        let left: Expr;
+        try {
+            left = this.unary();
+        } finally {
+            this.nestingDepth--;
+        }
+        return this.bounded(new Unary(operator, left), [left]);
+    }
+
+    private bounded<T extends Expr>(
+        expr: T,
+        children: readonly Expr[] = []
+    ): T {
+        if (this.maxDepth !== undefined) {
+            let depth = 1;
+            for (const child of children)
+                depth = Math.max(depth, 1 + this.nodeDepths.get(child)!);
+            if (this.nestingDepth + depth - 1 > this.maxDepth) {
+                throw new RangeError('Formula depth limit exceeded');
+            }
+            this.nodeDepths.set(expr, depth);
+        }
         return expr;
     }
 
@@ -52,7 +115,10 @@ export default class Parser {
         while (this.match(TokenTypes.NOT_EQ, TokenTypes.EQUAL_TO)) {
             const operator = this.previous();
             const right = this.comparison();
-            expr = new Binary(operator, expr, right);
+            expr = this.bounded(new Binary(operator, expr, right), [
+                expr,
+                right,
+            ]);
         }
 
         return expr;
@@ -71,7 +137,10 @@ export default class Parser {
         ) {
             const operator = this.previous();
             const right = this.term();
-            expr = new Binary(operator, expr, right);
+            expr = this.bounded(new Binary(operator, expr, right), [
+                expr,
+                right,
+            ]);
         }
 
         return expr;
@@ -85,7 +154,10 @@ export default class Parser {
         ) {
             const operator = this.previous();
             const right = this.factor();
-            expr = new Binary(operator, expr, right);
+            expr = this.bounded(new Binary(operator, expr, right), [
+                expr,
+                right,
+            ]);
         }
 
         return expr;
@@ -97,7 +169,10 @@ export default class Parser {
         while (this.match(TokenTypes.FSLASH, TokenTypes.STAR)) {
             const operator = this.previous();
             const right = this.unary();
-            expr = new Binary(operator, expr, right);
+            expr = this.bounded(new Binary(operator, expr, right), [
+                expr,
+                right,
+            ]);
         }
 
         return expr;
@@ -106,6 +181,9 @@ export default class Parser {
     private unary(): Expr {
         if (this.match(TokenTypes.MINUS)) {
             const operator = this.previous();
+            if (this.maxDepth !== undefined) return this.boundedUnary(operator);
+            // Preserve the original direct recursion and stack shape by keeping
+            // bounded callbacks/helpers out of the default path.
             const left: Expr = this.unary();
             return new Unary(operator, left);
         }
@@ -133,13 +211,17 @@ export default class Parser {
 
         if (!this.check(TokenTypes.RIGHT_PAREN)) {
             do {
-                fnArguments.push(this.expression());
+                fnArguments.push(
+                    this.maxDepth === undefined
+                        ? this.expression()
+                        : this.nestedExpression()
+                );
             } while (this.match(TokenTypes.COMMA));
         }
 
         this.consume(TokenTypes.RIGHT_PAREN);
 
-        return new FunctionCall(callee, fnArguments);
+        return this.bounded(new FunctionCall(callee, fnArguments), fnArguments);
     }
 
     private primary() {
@@ -158,14 +240,17 @@ export default class Parser {
             if (prevValue == null) throw new Error('literal token as no value');
 
             return this.previous().type === TokenTypes.IDENTIFIER
-                ? new Identifier(prevValue)
-                : new Literal(prevValue);
+                ? this.bounded(new Identifier(prevValue))
+                : this.bounded(new Literal(prevValue));
         }
 
         if (this.match(TokenTypes.LEFT_PAREN)) {
-            const expr = this.expression();
+            const expr =
+                this.maxDepth === undefined
+                    ? this.expression()
+                    : this.nestedExpression();
             this.consume(TokenTypes.RIGHT_PAREN);
-            return new Grouping(expr);
+            return this.bounded(new Grouping(expr), [expr]);
         }
 
         throw new Error('Expected an expression');

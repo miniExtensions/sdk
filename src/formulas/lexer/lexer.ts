@@ -1,6 +1,13 @@
 import type { TokenArray } from './token.js';
 import TokenTypes from './tokenTypes.js';
 
+export interface TokenizeOptions {
+    /** Use the shared token cache. False skips both reads and writes; defaults to true. */
+    cache?: boolean;
+    /** Maximum token count; a non-negative safe integer. Omitted means unlimited. */
+    maxTokens?: number;
+}
+
 const LexerCache = new Map<string, TokenArray>();
 export default class Lexer {
     private currentCharIndex = 0;
@@ -14,12 +21,42 @@ export default class Lexer {
      *
      * @returns An array of {@link Token}s, each one representing a token in the {@link source}
      */
-    tokenize() {
-        if (LexerCache.has(this.source)) {
-            return LexerCache.get(this.source)!;
+    tokenize({ cache = true, maxTokens }: TokenizeOptions = {}) {
+        if (
+            maxTokens !== undefined &&
+            (!Number.isSafeInteger(maxTokens) || maxTokens < 0)
+        ) {
+            throw new RangeError(
+                'maxTokens must be a non-negative safe integer'
+            );
         }
-        while (!this.atEnd()) this._tokenize();
-        LexerCache.set(this.source, this.currentTokenStream);
+        const tokens = cache ? LexerCache.get(this.source) : undefined;
+        if (tokens) {
+            if (maxTokens !== undefined && tokens.length > maxTokens) {
+                throw new RangeError('Formula token limit exceeded');
+            }
+            return tokens;
+        }
+        if (
+            maxTokens !== undefined &&
+            this.currentTokenStream.length > maxTokens
+        ) {
+            throw new RangeError('Formula token limit exceeded');
+        }
+        while (!this.atEnd()) {
+            // Check before scanning the next token, including long strings/references.
+            // Whitespace emits no token and remains valid at the exact limit.
+            if (
+                maxTokens !== undefined &&
+                this.currentTokenStream.length >= maxTokens &&
+                this.peek() !== ' ' &&
+                this.peek() !== '\n'
+            ) {
+                throw new RangeError('Formula token limit exceeded');
+            }
+            this._tokenize();
+        }
+        if (cache) LexerCache.set(this.source, this.currentTokenStream);
         return this.currentTokenStream;
     }
 

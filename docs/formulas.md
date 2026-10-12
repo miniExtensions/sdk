@@ -17,6 +17,53 @@ The constructor parses the expression. `run()` evaluates it and normally returns
 a string or number. Construct one runner and replace its context when evaluating
 the same formula against different records.
 
+## Opt-in bounded parsing
+
+Use a fresh `Lexer` and `Parser` for each parse when inspecting formulas from
+untrusted sources:
+
+```ts
+import {
+    Lexer,
+    Parser,
+    extractIdentifiersFromExpr,
+} from '@miniextensions/sdk/formulas';
+
+const tokens = new Lexer('{Price} + SUM({Tax})').tokenize({
+    cache: false,
+    maxTokens: 8192,
+});
+const expression = new Parser(tokens).parse({ cache: false, maxDepth: 48 });
+const fields = extractIdentifiersFromExpr(expression); // ['Price', 'Tax']
+```
+
+`TokenizeOptions` and `ParseOptions` are exported types. Existing calls without
+options keep their shared caches and unlimited token/depth defaults, including
+`FormulaRunner` and `extractIdentifiersFromFormula`.
+
+- `cache: false` skips both shared-cache reads and writes.
+- `maxTokens` is a non-negative safe integer. Tokens count punctuation, operators,
+  literals and identifiers; spaces and newlines do not count. Zero accepts only
+  empty input or those whitespace characters. The lexer checks before scanning
+  another token and also enforces the limit on cache hits.
+- `maxDepth` is a positive safe integer measuring AST depth. A literal, identifier
+  or empty call has depth 1. Each unary, grouping, binary or function-call parent
+  adds one to its deepest child. Binary chains count even without parentheses.
+  Parsing checks before recursive descent and as nodes are constructed, rather
+  than traversing a completed tree afterward. A bounded parse always bypasses
+  the shared AST cache, even with `cache: true`, so an older cached tree cannot
+  evade the bound or require an unbounded validation walk.
+
+Invalid limits throw `RangeError`. Exceeding a valid limit throws `RangeError`
+with `Formula token limit exceeded` or `Formula depth limit exceeded`. Failed
+parses do not populate the shared caches. Instances are stateful; use fresh
+instances after failures as well as for subsequent calls.
+
+These limits bound token count and expression nesting, not input character
+length or evaluation time. Callers should separately limit source length before
+lexing: a single string/reference token or whitespace span can still be long.
+They do not impose execution limits on formula functions.
+
 ## Distinguishing values from formula faults
 
 Use `runWithOutcome()` when a caller must distinguish data from an evaluation

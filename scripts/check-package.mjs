@@ -499,6 +499,37 @@ export const numericKind = AirtableFieldType.NUMBER;
         'Field kinds browser entry must not load the formula runtime'
     );
 
+    const parserChecks = String.raw`
+// Preserve the pre-feature unbounded recursion budget through installed entry points.
+for (const [prefix, suffix, depth] of [['-', '', 8000], ['(', ')', 500], ['SUM(', ')', 500]]) {
+    const source = prefix.repeat(depth) + '1' + suffix.repeat(depth);
+    const tokens = new Lexer(source).tokenize();
+    const expression = new Parser(tokens).parse();
+    if (!expression || new Parser(tokens).parse() !== expression) throw new Error('Default parser compatibility failed');
+    if (new Parser(tokens).parse({cache:false}) === expression) throw new Error('Unbounded parser bypass failed');
+}
+const boundedTokens = new Lexer('{Price}+SUM({Tax})').tokenize({cache:false,maxTokens:8192});
+const boundedExpr = new Parser(boundedTokens).parse({cache:false,maxDepth:48});
+if (extractIdentifiersFromExpr(boundedExpr).join(',') !== 'Price,Tax') throw new Error('Bounded installed parser lost identifiers');
+function expectParserLimit(action, message) {
+    try { action(); } catch (error) {
+        if (error instanceof RangeError && error.message === message) return;
+        throw error;
+    }
+    throw new Error('Installed parser limit was not enforced');
+}
+if (new Lexer('1 '.repeat(8192)).tokenize({cache:false,maxTokens:8192}).length !== 8192) throw new Error('Exact token boundary failed');
+expectParserLimit(() => new Lexer('1 "unterminated').tokenize({cache:false,maxTokens:1}), 'Formula token limit exceeded');
+const exactDepth = new Lexer('-'.repeat(47)+'1').tokenize({cache:false});
+new Parser(exactDepth).parse({cache:false,maxDepth:48});
+expectParserLimit(() => new Parser(new Lexer('-'.repeat(20000)+'1').tokenize({cache:false})).parse({cache:false,maxDepth:48}), 'Formula depth limit exceeded');
+const sharedTokens = new Lexer('{InstalledCacheWitness}+7').tokenize();
+if (new Lexer('{InstalledCacheWitness}+7').tokenize({cache:false}) === sharedTokens) throw new Error('Lexer bypass read cache');
+const uncachedExpr = new Parser(sharedTokens).parse({cache:false});
+const sharedExpr = new Parser(sharedTokens).parse();
+if (uncachedExpr === sharedExpr || new Parser(sharedTokens).parse({cache:false}) === sharedExpr) throw new Error('Parser bypass touched cache');
+expectParserLimit(() => new Parser(sharedTokens).parse({maxDepth:1}), 'Formula depth limit exceeded');
+`;
     const formattingChecks = String.raw`
 for (const [input, expected] of [
     ['', ''], ['Alpha', 'Alpha'], ['North, West', '"North, West"'],
@@ -524,7 +555,7 @@ if (getFormattedDuration('60', 'h:mm') !== '1:00') throw new Error('Default dura
 if (getFormattedDuration('60', 'h:mm', true) !== '0:01') throw new Error('Explicit duration seconds failed');
 `;
     const consumer = `
-import { FormulaRunner, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
+import { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { AirtableFieldType as PublicFieldType } from '@miniextensions/sdk/field-types';
 if (PublicFieldType !== AirtableFieldType) throw new Error('ESM field enum identity changed');
 import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
@@ -555,7 +586,7 @@ export const display: string = formatMultiSelectValue(removeMarkdown('**Alpha**'
         .replace('export const display: string', 'export const display');
     writeFileSync(
         join(temporaryDirectory, 'consumer.mjs'),
-        javascriptConsumer + formattingChecks
+        javascriptConsumer + formattingChecks + parserChecks
     );
     run(process.execPath, ['consumer.mjs']);
 
@@ -565,12 +596,13 @@ export const display: string = formatMultiSelectValue(removeMarkdown('**Alpha**'
 const { AirtableFieldType } = require('@miniextensions/sdk/field-types');
 const loaded = Object.keys(require.cache).filter(path => !before.has(path));
 if (!loaded.every(path => path.endsWith('/dist/cjs/field-types.js') || path.endsWith('/dist/cjs/formulas/types.js'))) throw new Error('Field kinds CommonJS entry loaded the formula runtime');
-const { FormulaRunner, AirtableFieldType: FormulaFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
+const { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType: FormulaFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
 if (AirtableFieldType !== FormulaFieldType) throw new Error('CommonJS field enum identity changed');
 const { createMiniExtensionsClient } = require('@miniextensions/sdk');
 if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
-${formattingChecks}`
+${formattingChecks}
+${parserChecks}`
     );
     run(process.execPath, ['consumer.cjs']);
 
@@ -891,7 +923,19 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         ['consumer.cts', 'NodeNext', 'NodeNext'],
         ['browser-consumer.ts', 'ESNext', 'Bundler'],
     ]) {
-        writeFileSync(join(temporaryDirectory, filename), declarationConsumer);
+        writeFileSync(
+            join(temporaryDirectory, filename),
+            declarationConsumer +
+                `
+const tokenOptions: import('@miniextensions/sdk/formulas').TokenizeOptions = {cache:false,maxTokens:8192};
+const parseOptions: import('@miniextensions/sdk/formulas').ParseOptions = {cache:false,maxDepth:48};
+new Parser(new Lexer('{Price}').tokenize(tokenOptions)).parse(parseOptions);
+// @ts-expect-error token limits are numeric
+new Lexer('1').tokenize({maxTokens:'8192'});
+// @ts-expect-error depth limits are numeric
+new Parser([]).parse({maxDepth:'48'});
+`
+        );
         const linkedRecordsFilename = `linked-records-${filename}`;
         writeFileSync(
             join(temporaryDirectory, linkedRecordsFilename),

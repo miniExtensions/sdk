@@ -5,6 +5,8 @@ import {
     Lexer,
     Parser,
     Literal,
+    Binary,
+    Unary,
     TokenTypes,
     extractIdentifiersFromExpr,
 } from '../src/formulas/index.js';
@@ -24,9 +26,7 @@ const depthLimit = {
 };
 
 describe('opt-in formula parsing bounds', () => {
-    it('preserves base-parser unbounded recursion in fresh Node processes', () => {
-        // These inputs pass 48cb5847's parser; the initial bounded-parser change
-        // overflowed because its callback wrapper added frames even by default.
+    it('preserves deep unbounded inputs in fresh Node processes', () => {
         // Isolate each case so JIT warmup from other tests cannot mask it.
         for (const [prefix, suffix, depth] of [
             ['-', '', 4000],
@@ -54,6 +54,56 @@ describe('opt-in formula parsing bounds', () => {
                 { timeout: 15000 }
             );
         }
+    });
+    it('parses cold unary chains with a small stack and exact depth bounds', () => {
+        for (const maxDepth of [undefined, 8001]) {
+            execFileSync(
+                process.execPath,
+                [
+                    '--stack-size=256',
+                    '--input-type=module',
+                    '--eval',
+                    `
+                import assert from 'node:assert/strict';
+                import {Lexer, Parser, Unary, Literal} from ${JSON.stringify(new URL('../src/formulas/index.js', import.meta.url).href)};
+                const tokens = new Lexer('-'.repeat(8000) + '1').tokenize({cache:false});
+                let expression = new Parser(tokens).parse({cache:false,maxDepth:${maxDepth}});
+                for (let index = 0; index < 8000; index++) {
+                    assert.ok(expression instanceof Unary);
+                    assert.strictEqual(expression.operator, tokens[index]);
+                    expression = expression.left;
+                }
+                assert.ok(expression instanceof Literal);
+                assert.equal(expression.value, 1);
+                assert.throws(() => new Parser(tokens).parse({maxDepth:8000}), {
+                    name: 'RangeError', message: 'Formula depth limit exceeded'
+                });
+            `,
+                ],
+                { timeout: 15000 }
+            );
+        }
+    });
+    it('retains unary operator identity and multiplication precedence', () => {
+        const tokens = new Lexer('--1*-2').tokenize({ cache: false });
+        const expected = new Binary(
+            tokens[3]!,
+            new Unary(tokens[0]!, new Unary(tokens[1]!, new Literal(1))),
+            new Unary(tokens[4]!, new Literal(2))
+        );
+        for (const maxDepth of [undefined, 4]) {
+            assert.deepEqual(
+                new Parser(tokens).parse({ cache: false, maxDepth }),
+                expected
+            );
+        }
+        assert.throws(() => parse('--1*-2', 3), depthLimit);
+        for (const source of ['-', '--', '-*1']) {
+            assert.throws(() => parse(source), {
+                message: 'Expected an expression',
+            });
+        }
+        assert.throws(() => parse('--1 2'), { message: 'Invalid expression' });
     });
     it('accepts exact token limits and ignores trailing whitespace', () => {
         assert.equal(

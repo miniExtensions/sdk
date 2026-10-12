@@ -500,7 +500,7 @@ export const numericKind = AirtableFieldType.NUMBER;
     );
 
     const parserChecks = String.raw`
-// Preserve the pre-feature unbounded recursion budget through installed entry points.
+// Preserve deep-input compatibility through installed entry points.
 for (const [prefix, suffix, depth] of [['-', '', 8000], ['(', ')', 500], ['SUM(', ')', 500]]) {
     const source = prefix.repeat(depth) + '1' + suffix.repeat(depth);
     const tokens = new Lexer(source).tokenize();
@@ -605,6 +605,42 @@ ${formattingChecks}
 ${parserChecks}`
     );
     run(process.execPath, ['consumer.cjs']);
+
+    // Start cold with a deliberately small stack: a warm/default-stack process
+    // can hide recursive unary parsing failures on other Node builds.
+    const unaryChecks = `
+const tokens = new Lexer('-'.repeat(8000) + '1').tokenize({cache:false});
+for (const maxDepth of [undefined, 8001]) {
+    let expression = new Parser(tokens).parse({cache:false,maxDepth});
+    for (let index = 0; index < 8000; index++) {
+        assert.ok(expression instanceof Unary);
+        assert.strictEqual(expression.operator, tokens[index]);
+        expression = expression.left;
+    }
+    assert.ok(expression instanceof Literal);
+    assert.equal(expression.value, 1);
+}
+assert.throws(() => new Parser(tokens).parse({maxDepth:8000}), {
+    name: 'RangeError', message: 'Formula depth limit exceeded'
+});
+`;
+    for (const [extension, imports] of [
+        [
+            'mjs',
+            "import assert from 'node:assert/strict'; import {Lexer, Parser, Unary, Literal} from '@miniextensions/sdk/formulas';",
+        ],
+        [
+            'cjs',
+            "const assert = require('node:assert/strict'); const {Lexer, Parser, Unary, Literal} = require('@miniextensions/sdk/formulas');",
+        ],
+    ]) {
+        const filename = `unary-cold.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, filename),
+            imports + unaryChecks
+        );
+        run(process.execPath, ['--stack-size=256', filename]);
+    }
 
     for (const dependency of ['react', 'react-dom', 'vue', 'happy-dom']) {
         assert(

@@ -6,6 +6,7 @@ export type ConfirmationOptions = {
     confirmLabel: string;
     cancelLabel?: string;
     rows?: readonly ConfirmationRow[];
+    signal?: AbortSignal;
 };
 export type ConfirmationRow = {
     fieldId: string;
@@ -14,6 +15,7 @@ export type ConfirmationRow = {
     hideTitle: boolean;
 };
 let pending: (() => void) | null = null;
+let requestVersion = 0;
 
 /** Context changes settle the prompt as cancelled, never as permission. */
 export const cancelConfirmation = (): void => {
@@ -24,7 +26,12 @@ export const cancelConfirmation = (): void => {
 export const requestConfirmation = (
     options: ConfirmationOptions
 ): Promise<boolean> => {
+    if (options.signal?.aborted) return Promise.resolve(false);
+    const version = ++requestVersion;
     cancelConfirmation();
+    // Focus restoration during prior cleanup may itself open a newer prompt.
+    if (version !== requestVersion || options.signal?.aborted)
+        return Promise.resolve(false);
     return new Promise((resolve) => {
         const trigger = document.activeElement;
         const dialog = element('dialog', undefined, 'confirmation');
@@ -40,13 +47,21 @@ export const requestConfirmation = (
         const message = element('p', options.message);
         message.id = 'confirmation-message';
         let settled = false;
+        const cancelOwn = (): void => finish(false);
         const finish = (accepted: boolean): void => {
             if (settled) return;
             settled = true;
-            pending = null;
+            const ownsPrompt = pending === cancelOwn;
+            if (ownsPrompt) pending = null;
+            options.signal?.removeEventListener('abort', cancelOwn);
             if (dialog.open) dialog.close();
             dialog.remove();
-            if (trigger instanceof HTMLElement && trigger.isConnected)
+            if (
+                ownsPrompt &&
+                pending == null &&
+                trigger instanceof HTMLElement &&
+                trigger.isConnected
+            )
                 trigger.focus();
             resolve(accepted);
         };
@@ -93,7 +108,8 @@ export const requestConfirmation = (
             finish(false);
         });
         dialog.addEventListener('close', () => finish(false));
-        pending = () => finish(false);
+        pending = cancelOwn;
+        options.signal?.addEventListener('abort', cancelOwn, { once: true });
         document.body.append(dialog);
         try {
             dialog.showModal();

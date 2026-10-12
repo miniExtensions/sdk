@@ -71,6 +71,7 @@ export function createLinkedReviewPresentation(
         ]);
     const capturedPolicy = policyBytes();
     const labels = new Map<string, Map<string, string>>();
+    let invalidation = new AbortController();
     let epoch = 0,
         retired = false;
     const active = (): boolean => {
@@ -81,10 +82,15 @@ export function createLinkedReviewPresentation(
         retired = true;
         labels.clear();
         epoch++;
+        invalidation.abort();
     };
     const replace = (fieldId: string, next: Map<string, string>) => {
+        if (retired) return;
         labels.set(fieldId, next);
         epoch++;
+        const previous = invalidation;
+        invalidation = new AbortController();
+        previous.abort();
     };
     const build = (
         fieldId: string,
@@ -229,6 +235,7 @@ export function createLinkedReviewPresentation(
         acceptHydration(result: RuntimeTableStates) {
             if (!active()) return;
             for (const [fieldId, policy] of policies) {
+                if (retired) return;
                 const table = result?.[policy.tableId];
                 const records = object(table?.recordIdsToAirtableRecords)
                     ? [...policy.original].flatMap((id) => {
@@ -254,12 +261,14 @@ export function createLinkedReviewPresentation(
         },
         snapshot() {
             const revision = epoch;
+            const signal = invalidation.signal;
             const copy = active()
                 ? new Map(
                       [...labels].map(([id, values]) => [id, new Map(values)])
                   )
                 : new Map<string, Map<string, string>>();
             return {
+                signal,
                 forPage: (loaded: FormLoadedResult) => loaded === page,
                 current: () => active() && epoch === revision,
                 label: (fieldId: string, recordId: string) =>

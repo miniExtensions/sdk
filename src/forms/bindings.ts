@@ -110,6 +110,8 @@ export type FormFieldBindingsOptions = FormControllerOptions & {
 export type FormFieldBindings = {
     controller: FormController;
     getLoaded(): FormLoadedResult;
+    /** Existing owner-held queues only; never constructs an attachment controller. */
+    hasPendingFiles(): boolean;
     attachment(
         fieldId: string,
         recovery: AttachmentRecovery,
@@ -589,7 +591,12 @@ export function createFormFieldBindings(
     };
     const unsubscribe = controller.subscribe(() => refresh());
     refresh();
+    const hasPendingFiles = () =>
+        [...attachments.values()].some(
+            (model) => model.getSnapshot().files.length > 0
+        );
     const owner: FormFieldBindings = {
+        hasPendingFiles,
         controller,
         getLoaded: () => {
             if (!current()) throw new Error('This Form owner is retired.');
@@ -919,9 +926,7 @@ export function createFormFieldBindings(
         save: (supplied) => {
             if (
                 pendingRead !== null ||
-                [...attachments.values()].some(
-                    (model) => model.getSnapshot().files.length > 0
-                ) ||
+                hasPendingFiles() ||
                 !(options.canWrite?.() ?? true) ||
                 attachmentBlocked() ||
                 choiceBlocked() ||
@@ -943,9 +948,10 @@ export function createFormFieldBindings(
                 );
             return controller.save({
                 ...supplied,
-                isCurrent: () =>
-                    (supplied?.isCurrent?.() ?? true) &&
-                    [...entries.values()].every((entry) => {
+                isCurrent: () => {
+                    if (!current() || !(supplied?.isCurrent?.() ?? true))
+                        return false;
+                    const valid = [...entries.values()].every((entry) => {
                         const state = entry.binding.getSnapshot();
                         return (
                             state.visibility.type !== 'visible' ||
@@ -953,7 +959,14 @@ export function createFormFieldBindings(
                             !entry.binding.date ||
                             entry.binding.date.getState().valid
                         );
-                    }),
+                    });
+                    // Field/scope callbacks can synchronously change the draft,
+                    // configuration or owner after the caller's first check.
+                    // No field callback may run after this final caller fence.
+                    return (
+                        valid && current() && (supplied?.isCurrent?.() ?? true)
+                    );
+                },
             });
         },
         setLinkedOptions: (id, supplied, append = false) => {

@@ -390,10 +390,12 @@ export async function checkLinkedReviewRecipe({ consumerDirectory }) {
     );
     checks++;
     const held = scope.snapshot();
+    assert.equal(held.signal.aborted, false);
     owner = false;
     scope.acceptOptions('fld_review_link', fixture.options);
     assert.equal(held.current(), false);
     scope.retire();
+    assert.equal(held.signal.aborted, true);
     owner = true;
     scope.acceptHydration(fixture.tables);
     assert.equal(held.current(), false);
@@ -408,12 +410,43 @@ export async function checkLinkedReviewRecipe({ consumerDirectory }) {
     replacement.acceptOptions('fld_review_link', fixture.options);
     replacement.acceptHydration(fixture.tables);
     assert.equal(a.current(), false);
+    assert.equal(a.signal.aborted, true);
+    assert.equal(replacement.snapshot().signal.aborted, false);
+    // An abort listener sees committed replacement state and may reenter.
+    const old = replacement.snapshot();
+    let reentered;
+    old.signal.addEventListener(
+        'abort',
+        () => {
+            replacement.acceptHydration(fixture.tables);
+            reentered = replacement.snapshot();
+        },
+        { once: true }
+    );
+    replacement.acceptOptions('fld_review_link', fixture.options);
+    assert.equal(old.signal.aborted, true);
+    assert.equal(reentered.signal.aborted, false);
+    assert.equal(reentered.current(), true);
+    const retiredDuringHydration = create(before, () => true);
+    const retiring = retiredDuringHydration.snapshot();
+    retiring.signal.addEventListener(
+        'abort',
+        () => retiredDuringHydration.retire(),
+        { once: true }
+    );
+    retiredDuringHydration.acceptHydration(fixture.tables);
+    assert.equal(retiring.signal.aborted, true);
+    assert.equal(retiredDuringHydration.snapshot().signal.aborted, true);
+    assert.equal(retiredDuringHydration.snapshot().current(), false);
+    retiredDuringHydration.acceptHydration(fixture.tables);
+    assert.equal(retiredDuringHydration.snapshot().signal.aborted, true);
     const configPage = structuredClone(before);
     const configScope = create(configPage, () => true);
     configScope.acceptHydration(fixture.tables);
     const configSnapshot = configScope.snapshot();
     configPage.payload.linkedRecordFieldIdToDetailFields.fld_review_link[0].isHidden = true;
     assert.equal(configSnapshot.current(), false);
+    assert.equal(configSnapshot.signal.aborted, true);
     configPage.payload.linkedRecordFieldIdToDetailFields.fld_review_link[0].isHidden = false;
     assert.equal(
         configSnapshot.current(),

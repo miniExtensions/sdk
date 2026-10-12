@@ -129,5 +129,8 @@ export {
     type FormPageDescriptor,
     type FormPageSnapshot,
     type FormPageAction,
+    type FormPageReviewRequest,
+    type FormPageReviewDecision,
+    type FormPageErrorReason,
 } from './pages.js';
 export type { FormPageProblem } from './pageValidation.js';

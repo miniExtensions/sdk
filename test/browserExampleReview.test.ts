@@ -1287,7 +1287,7 @@ describe('actual browser starter prepared review', () => {
     });
 
     for (const config of [
-        { multiPageFormMode: 'multi-page' as const },
+        { multiPageFormMode: 'unsupported-mode' as 'one-page' },
         { enableFormComputeMode: true },
         { autoSubmitAfterPrefill: true },
     ]) {

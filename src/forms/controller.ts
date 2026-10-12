@@ -493,15 +493,34 @@ export const createFormController = (
                 }
             };
             const attemptSequence = ++saveSequence;
-            const requireAttempt = () => {
+            const ownsAttempt = () =>
+                saveGeneration === generation &&
+                owner === context &&
+                attemptSequence === saveSequence &&
+                active === controller;
+            // This fence must follow every application callback, including
+            // page admission and ownership observations.
+            const requireCapturedAttempt = (beforeDispatch = false) => {
+                controller.signal.throwIfAborted();
                 if (
-                    saveGeneration !== generation ||
-                    owner !== context ||
-                    !(requestOptions.isCurrent?.() ?? true)
+                    !ownsAttempt() ||
+                    (beforeDispatch &&
+                        owner.store.revision(owner.handle) !== draftRevision)
                 )
                     throw scopeError();
+            };
+            const requireAttempt = (beforeDispatch = false) => {
+                if (!ownsAttempt()) throw scopeError();
                 controller.signal.throwIfAborted();
+                // Scope/session getters are application code. Run them before
+                // the caller's final draft/input/configuration freshness check.
                 requireScope();
+                if (!ownsAttempt() || !(requestOptions.isCurrent?.() ?? true))
+                    throw scopeError();
+                // The caller's freshness callback can itself replace the
+                // external scope/session while reporting current input.
+                requireScope();
+                requireCapturedAttempt(beforeDispatch);
             };
             active = controller;
             status = 'saving';
@@ -510,14 +529,18 @@ export const createFormController = (
             try {
                 // A subscriber may have reset/cancelled during the loading emission.
                 controller.signal.throwIfAborted();
-                requireAttempt();
+                requireAttempt(true);
                 requireFormSaveAdmission(requestOptions.lifecycle);
                 operation = requestOptions.lifecycle?.dispatch(
                     structuredClone(input),
                     draftRevision
                 );
-                requireAttempt();
+                requireAttempt(true);
                 requireFormSaveAdmission(requestOptions.lifecycle);
+                // Admission can replace the session; observing it can invalidate
+                // the Review signal or native draft. Finish with local state only.
+                requireScope();
+                requireCapturedAttempt(true);
                 transportInvoked = true;
                 const response = await owner.client.forms.save(input, {
                     signal: controller.signal,

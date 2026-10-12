@@ -78,17 +78,6 @@ export default class Parser {
         }
     }
 
-    private boundedUnary(operator: Token): Expr {
-        this.enterNested();
-        let left: Expr;
-        try {
-            left = this.unary();
-        } finally {
-            this.nestingDepth--;
-        }
-        return this.bounded(new Unary(operator, left), [left]);
-    }
-
     private bounded<T extends Expr>(
         expr: T,
         children: readonly Expr[] = []
@@ -179,16 +168,37 @@ export default class Parser {
     }
 
     private unary(): Expr {
+        // Keep non-unary descent thin: grouping and function arguments recurse
+        // through this method, so chain bookkeeping must live in another frame.
         if (this.match(TokenTypes.MINUS)) {
-            const operator = this.previous();
-            if (this.maxDepth !== undefined) return this.boundedUnary(operator);
-            // Preserve the original direct recursion and stack shape by keeping
-            // bounded callbacks/helpers out of the default path.
-            const left: Expr = this.unary();
-            return new Unary(operator, left);
+            if (this.maxDepth !== undefined || this.check(TokenTypes.MINUS))
+                return this.unaryChain();
+            // An isolated unbounded minus keeps the original lightweight
+            // descent, including mixed -(...) and -SUM(...) nesting.
+            return new Unary(this.previous(), this.unary());
         }
-
         return this.functionCall();
+    }
+
+    private unaryChain(): Expr {
+        const operators: Token[] = [];
+        const outerDepth = this.nestingDepth;
+        try {
+            do {
+                if (this.maxDepth !== undefined) this.enterNested();
+                operators.push(this.previous());
+            } while (this.match(TokenTypes.MINUS));
+            let expr: Expr = this.functionCall();
+            // Fold from the operand outward to retain the original AST and
+            // operator identities without one call frame per unary prefix.
+            for (let index = operators.length - 1; index >= 0; index--) {
+                if (this.maxDepth !== undefined) this.nestingDepth--;
+                expr = this.bounded(new Unary(operators[index]!, expr), [expr]);
+            }
+            return expr;
+        } finally {
+            this.nestingDepth = outerDepth;
+        }
     }
 
     private functionCall() {

@@ -488,6 +488,10 @@ verification codes and uncertain-write journals are never persisted. Choosing
 Reload still replaces drafts only after a successful read. Reconnecting with
 remembering unchecked explicitly forgets the previously opted-in connection;
 if storage cannot be cleared, reconnect is refused with an explanation.
+Failed cleanup remains owned even after logout disables restoration or
+Disconnect clears the in-memory connection. Later logout, unchecked reconnect
+or Disconnect retries those scoped removals, including after connecting to a
+different share. A removal failure is never reported as successful forgetting.
 
 Restoration supports one authentication gate ending in a Form or Portal. A
 password followed by another login screen requires explicit authentication;

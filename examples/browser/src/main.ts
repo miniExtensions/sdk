@@ -87,6 +87,7 @@ import { createRememberedSession } from './rememberedSession.js';
 type Visitor = {
     client: MiniExtensionsClient | null;
     remembered: ReturnType<typeof createRememberedSession> | null;
+    pendingSessionCleanup: Set<ReturnType<typeof createRememberedSession>>;
     authentication: SessionRestoration | null;
     restorationError: {
         page: Extract<
@@ -122,6 +123,7 @@ type Visitor = {
 const newVisitor = (): Visitor => ({
     client: null,
     remembered: null,
+    pendingSessionCleanup: new Set(),
     authentication: null,
     restorationError: null,
     screen: null,
@@ -238,7 +240,7 @@ const sessionSummary = (): void => {
     nodeById('session-summary').textContent =
         connection == null
             ? 'Not connected'
-            : `Visitor ${activeVisitor} · ${count === 0 ? 'Anonymous' : 'Authenticated session'} · ${visitor.remembered ? 'remembering opted in for this tab' : 'memory only'}`;
+            : `Visitor ${activeVisitor} · ${count === 0 ? 'Anonymous' : 'Authenticated session'} · ${visitor.remembered ? 'remembering opted in for this tab' : 'memory only'}${visitor.pendingSessionCleanup.size > 0 ? ' · storage cleanup pending' : ''}`;
 };
 
 /** Every response must still belong to its visitor, session and connection. */
@@ -2488,11 +2490,23 @@ const render = (): void => {
     }
 };
 
+const forgetRememberedSessions = (visitor: Visitor, forgetOnly = false) => {
+    const owners = new Set(visitor.pendingSessionCleanup);
+    if (visitor.remembered) owners.add(visitor.remembered);
+    for (const owner of owners) {
+        if (owner.clear(forgetOnly))
+            visitor.pendingSessionCleanup.delete(owner);
+        else visitor.pendingSessionCleanup.add(owner);
+    }
+    return visitor.pendingSessionCleanup.size === 0;
+};
+
 connectionForm.addEventListener('submit', (event) => {
     event.preventDefault();
     if (!inputById('remember-session').checked) {
         for (const visitor of Object.values(visitors)) {
-            if (visitor.remembered && !visitor.remembered.clear(true)) {
+            if (!forgetRememberedSessions(visitor, true)) {
+                sessionSummary();
                 status(
                     'Remembering could not be disabled because browser storage could not be cleared. Your current connection and drafts are retained.',
                     true
@@ -2574,7 +2588,7 @@ nodeById('reload').addEventListener('click', load);
 nodeById('logout').addEventListener('click', () => {
     recovery.scrubRetainedInput();
     const visitor = visitors[activeVisitor];
-    const forgotten = visitor.remembered?.clear() ?? true;
+    const forgotten = forgetRememberedSessions(visitor);
     visitor.client?.setSession({});
     invalidate(visitor);
     visitor.remembered = null; // Logout disables restoration until a new explicit connection opt-in.
@@ -2605,7 +2619,7 @@ nodeById('disconnect').addEventListener('click', () => {
     recovery.scrubRetainedInput();
     let forgotten = true;
     for (const visitor of Object.values(visitors)) {
-        forgotten = (visitor.remembered?.clear() ?? true) && forgotten;
+        forgotten = forgetRememberedSessions(visitor) && forgotten;
         invalidate(visitor);
         visitor.remembered = null;
         visitor.client = null;

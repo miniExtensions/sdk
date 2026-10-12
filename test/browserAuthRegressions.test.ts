@@ -1119,6 +1119,90 @@ describe(
             );
         });
 
+        for (const action of ['opt-out reconnect', 'Disconnect'] as const) {
+            it(`retains failed logout cleanup through ${action} and retries forgetting without restoration`, async (test) => {
+                const f = await setup(test);
+                const storage = f.window.sessionStorage;
+                storage.setItem('unrelated-app', 'retained');
+                const removeItem = storage.removeItem.bind(storage);
+                Object.defineProperty(storage, 'removeItem', {
+                    configurable: true,
+                    value() {
+                        throw new Error('Synthetic removal denial');
+                    },
+                });
+                clickById(f.window, 'logout');
+                const before = f.calls.length;
+                const retryCleanup = () => {
+                    if (action === 'Disconnect')
+                        clickById(f.window, 'disconnect');
+                    else {
+                        browserInput(f.window, 'remember-session').checked =
+                            false;
+                        submitForm(f.window, 'Connect and load');
+                    }
+                };
+                retryCleanup();
+                await waitFor(() => browserIdle(f.window));
+                assert.equal(f.calls.length, before);
+                assert.equal(storage.length, 2);
+                assert.match(
+                    f.window.document.getElementById('status')!.textContent!,
+                    /could not be cleared/
+                );
+                assert.doesNotMatch(
+                    f.window.document.getElementById('session-summary')!
+                        .textContent!,
+                    /Authenticated/
+                );
+                Object.defineProperty(storage, 'removeItem', {
+                    configurable: true,
+                    value: removeItem,
+                });
+                retryCleanup();
+                await waitFor(() => browserIdle(f.window));
+                assert.equal(storage.length, 1);
+                assert.equal(storage.getItem('unrelated-app'), 'retained');
+                assert.doesNotMatch(
+                    f.window.document.getElementById('status')!.textContent!,
+                    /could not be cleared/
+                );
+                if (action === 'opt-out reconnect') {
+                    assert.deepEqual(f.calls.at(-1), {});
+                    assert.ok(findButton(f.window, 'Log in and use session'));
+                }
+            });
+        }
+
+        it('keeps failed logout cleanup owned after opting in to another connection', async (test) => {
+            const f = await setup(test);
+            const storage = f.window.sessionStorage;
+            const removeItem = storage.removeItem.bind(storage);
+            Object.defineProperty(storage, 'removeItem', {
+                configurable: true,
+                value() {
+                    throw new Error('Synthetic removal denial');
+                },
+            });
+            clickById(f.window, 'logout');
+            browserInput(f.window, 'api-origin').value =
+                'https://other.example.test';
+            submitForm(f.window, 'Connect and load');
+            await waitFor(() => browserIdle(f.window));
+            assert.match(
+                f.window.document.getElementById('session-summary')!
+                    .textContent!,
+                /storage cleanup pending/
+            );
+            assert.deepEqual(f.calls.at(-1), {});
+            Object.defineProperty(storage, 'removeItem', {
+                configurable: true,
+                value: removeItem,
+            });
+            clickById(f.window, 'disconnect');
+            assert.equal(storage.length, 0);
+        });
+
         for (const gate of ['password', 'verification'] as const) {
             it(`remembers the opted-in ${gate} flow and restores only after fresh validation`, async (test) => {
                 const login = browserLoginPage();

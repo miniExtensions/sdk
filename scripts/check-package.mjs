@@ -472,8 +472,37 @@ try {
     });
     assert(formulasGuideSources.length > 0, 'Missing formula context recipes');
 
+    const fieldKindsConsumer = `
+import { AirtableFieldType } from '@miniextensions/sdk/field-types';
+if (AirtableFieldType.NUMBER !== 'number' || AirtableFieldType.MANUAL_SORT !== 'manualSort') throw new Error('Field kind values changed');
+export const numericKind = AirtableFieldType.NUMBER;
+`;
+    writeFileSync(
+        join(temporaryDirectory, 'field-kinds.mjs'),
+        fieldKindsConsumer
+    );
+    run(process.execPath, ['field-kinds.mjs']);
+    const fieldKindsBundle = await build({
+        stdin: { contents: fieldKindsConsumer, resolveDir: temporaryDirectory },
+        bundle: true,
+        platform: 'browser',
+        format: 'esm',
+        write: false,
+        metafile: true,
+    });
+    assert(
+        Object.keys(fieldKindsBundle.metafile.inputs).every(
+            (path) =>
+                path === '<stdin>' ||
+                /\/dist\/esm\/(field-types|formulas\/types)\.js$/.test(path)
+        ),
+        'Field kinds browser entry must not load the formula runtime'
+    );
+
     const consumer = `
 import { FormulaRunner, AirtableFieldType } from '@miniextensions/sdk/formulas';
+import { AirtableFieldType as PublicFieldType } from '@miniextensions/sdk/field-types';
+if (PublicFieldType !== AirtableFieldType) throw new Error('ESM field enum identity changed');
 import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
 const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' });
 client.setSession(withExtensionPassword({}, { extensionId: 'extExample', encryptedExtensionPassword: 'password-token' }));
@@ -502,7 +531,12 @@ export const result = runner.run();
 
     writeFileSync(
         join(temporaryDirectory, 'consumer.cjs'),
-        `const { FormulaRunner } = require('@miniextensions/sdk/formulas');
+        `const before = new Set(Object.keys(require.cache));
+const { AirtableFieldType } = require('@miniextensions/sdk/field-types');
+const loaded = Object.keys(require.cache).filter(path => !before.has(path));
+if (!loaded.every(path => path.endsWith('/dist/cjs/field-types.js') || path.endsWith('/dist/cjs/formulas/types.js'))) throw new Error('Field kinds CommonJS entry loaded the formula runtime');
+const { FormulaRunner, AirtableFieldType: FormulaFieldType } = require('@miniextensions/sdk/formulas');
+if (AirtableFieldType !== FormulaFieldType) throw new Error('CommonJS field enum identity changed');
 const { createMiniExtensionsClient } = require('@miniextensions/sdk');
 if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
@@ -632,6 +666,10 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         portalButtonCompositionTypedConsumer +
         durationTypedConsumer +
         `
+const publicNumber: PublicFieldType.NUMBER = AirtableFieldType.NUMBER;
+const formulaNumber: AirtableFieldType.NUMBER = PublicFieldType.NUMBER;
+// @ts-expect-error unrelated field kinds must not satisfy numeric enum members
+const invalidNumber: PublicFieldType.NUMBER = PublicFieldType.DATE;
 import type { ListConditionalFilterPrimaryValuesInput, ConditionalFilterPrimaryValue, ConditionalFilterData, ListAddressPredictionsInput, AddressPrediction, GetFormattedAddressInput, TriggerConfiguredButtonWebhookInput, ConfiguredButtonWebhookSource, TriggerConfiguredButtonWebhookResult } from '@miniextensions/sdk';
 export async function checkAdditionalRuntimeTypes(client: MiniExtensionsClient, signal: AbortSignal) {
     const filterData: ConditionalFilterData = {previousFilterFieldId:'fldCountry', previousFilterPrimaryValue:'United States'};

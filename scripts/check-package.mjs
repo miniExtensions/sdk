@@ -472,8 +472,32 @@ try {
     });
     assert(formulasGuideSources.length > 0, 'Missing formula context recipes');
 
+    const formattingChecks = String.raw`
+for (const [input, expected] of [
+    ['', ''], ['Alpha', 'Alpha'], ['North, West', '"North, West"'],
+    ['Say "hello"', '"Say ""hello"""'],
+]) {
+    if (formatMultiSelectValue(input) !== expected) throw new Error('Multi-select formatting failed');
+}
+for (const [input, expected] of [
+    ['', ''], ['**Hello** [world](https://example.com)', 'Hello [world](https://example.com)'],
+    ['**Hello** [world](https://example.com)', 'Hello [world](https://example.com)'],
+]) {
+    if (removeMarkdown(input) !== expected) throw new Error('Markdown display formatting failed');
+}
+for (const [format, expected] of [
+    ['h:mm', '-1:01'], ['h:mm:ss', '-1:01:20'],
+    ['h:mm:ss.S', '-1:01:20.4'], ['h:mm:ss.SS', '-1:01:20.40'],
+    ['h:mm:ss.SSS', '-1:01:20.400'],
+]) {
+    if (getFormattedDuration('-3680.4', format, true) !== expected) throw new Error('Native duration formatting failed');
+}
+if (getFormattedDuration('', 'h:mm') !== '') throw new Error('Empty duration formatting failed');
+if (getFormattedDuration('60', 'h:mm') !== '1:00') throw new Error('Default duration minutes failed');
+if (getFormattedDuration('60', 'h:mm', true) !== '0:01') throw new Error('Explicit duration seconds failed');
+`;
     const consumer = `
-import { FormulaRunner, AirtableFieldType } from '@miniextensions/sdk/formulas';
+import { FormulaRunner, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
 const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' });
 client.setSession(withExtensionPassword({}, { extensionId: 'extExample', encryptedExtensionPassword: 'password-token' }));
@@ -492,21 +516,27 @@ runner.context = {
 };
 if (runner.run() !== 12) throw new Error('Formula context did not resolve');
 export const result = runner.run();
+export const display: string = formatMultiSelectValue(removeMarkdown('**Alpha**')) + getFormattedDuration('60', 'h:mm', true);
 `;
-    const javascriptConsumer = consumer.replace(
-        'interface NumericOptions { precision: number; }\nconst numericOptions: NumericOptions',
-        'const numericOptions'
+    const javascriptConsumer = consumer
+        .replace(
+            'interface NumericOptions { precision: number; }\nconst numericOptions: NumericOptions',
+            'const numericOptions'
+        )
+        .replace('export const display: string', 'export const display');
+    writeFileSync(
+        join(temporaryDirectory, 'consumer.mjs'),
+        javascriptConsumer + formattingChecks
     );
-    writeFileSync(join(temporaryDirectory, 'consumer.mjs'), javascriptConsumer);
     run(process.execPath, ['consumer.mjs']);
 
     writeFileSync(
         join(temporaryDirectory, 'consumer.cjs'),
-        `const { FormulaRunner } = require('@miniextensions/sdk/formulas');
+        `const { FormulaRunner, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
 const { createMiniExtensionsClient } = require('@miniextensions/sdk');
 if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
-`
+${formattingChecks}`
     );
     run(process.execPath, ['consumer.cjs']);
 
@@ -632,6 +662,11 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         portalButtonCompositionTypedConsumer +
         durationTypedConsumer +
         `
+import type { DurationFormat } from '@miniextensions/sdk/formulas';
+const publicDurationFormat: DurationFormat = 'h:mm:ss.SSS';
+export const durationDisplay: string = getFormattedDuration('1.234', publicDurationFormat, true);
+// @ts-expect-error unsupported duration display formats are not public inputs
+const unsupportedDurationFormat: DurationFormat = 'mm:ss';
 import type { ListConditionalFilterPrimaryValuesInput, ConditionalFilterPrimaryValue, ConditionalFilterData, ListAddressPredictionsInput, AddressPrediction, GetFormattedAddressInput, TriggerConfiguredButtonWebhookInput, ConfiguredButtonWebhookSource, TriggerConfiguredButtonWebhookResult } from '@miniextensions/sdk';
 export async function checkAdditionalRuntimeTypes(client: MiniExtensionsClient, signal: AbortSignal) {
     const filterData: ConditionalFilterData = {previousFilterFieldId:'fldCountry', previousFilterPrimaryValue:'United States'};

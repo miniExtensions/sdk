@@ -37,7 +37,11 @@ export {
     convertAirtableValueToPrimitive,
     formatAirtablePrimitive,
     arrayJoinSeparator,
+    formatMultiSelectValue,
     type AirtablePrimitive,
     type AirtablePrimitiveWithArrays,
     type GetReadableStringSource,
 } from './valueConversion.js';
+export { removeMarkdown } from './removeMarkdown.js';
+export { getFormattedDuration } from './durationFormatting.js';
+export type { DurationFormat } from './types.js';

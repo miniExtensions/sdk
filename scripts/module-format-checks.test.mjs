@@ -631,3 +631,59 @@ test('exclusive staging preserves preexisting matching directories and symlinks'
         'preserve'
     );
 });
+
+test('the exported Button stylesheet is hashed as an asset and checked on installation', (t) => {
+    const { root, manifest } = fixture(t);
+    manifest.exports['./react/button.css'] = './dist/esm/react/button.css';
+    json(root, 'package.json', manifest);
+    write(
+        root,
+        'dist/esm/react/button.css',
+        '.mx-sdk-button { color: white; }'
+    );
+    const receipt = assertModuleFormats(root);
+    assert.equal(receipt.entries.length, 2);
+    const asset = receipt.entries.find(
+        (entry) => entry.subpath === './react/button.css'
+    ).asset;
+    assert.equal(asset.path, './dist/esm/react/button.css');
+    assert.equal(
+        asset.sha256,
+        createHash('sha256')
+            .update(readFileSync(join(root, asset.path)))
+            .digest('hex')
+    );
+    json(root, moduleFormatReceiptPath, receipt);
+    assert.deepEqual(assertModuleFormatReceipt(root), receipt);
+    write(
+        root,
+        'dist/esm/react/button.css',
+        '.mx-sdk-button { color: black; }'
+    );
+    assert.throws(() => assertModuleFormatReceipt(root));
+});
+
+test('asset support refuses missing, redirected or symlinked CSS and preserves module checks', (t) => {
+    const { root, manifest } = fixture(t);
+    manifest.exports['./react/button.css'] = './dist/esm/react/button.css';
+    json(root, 'package.json', manifest);
+    assert.throws(() => assertModuleFormats(root));
+    write(root, 'dist/esm/react/button.css', 'button {}');
+    write(root, 'dist/cjs/formulas/index.js', 'export const malformed = true;');
+    assert.throws(() => assertModuleFormats(root), /Invalid CommonJS output/);
+    write(root, 'dist/cjs/formulas/index.js', 'exports.valid = true;');
+    manifest.exports['./react/button.css'] = './dist/esm/formulas/index.js';
+    json(root, 'package.json', manifest);
+    assert.throws(() => assertModuleFormats(root));
+    manifest.exports['./react/button.css'] = './dist/esm/react/button.css';
+    json(root, 'package.json', manifest);
+    rmSync(join(root, 'dist/esm/react/button.css'));
+    symlinkSync(
+        join(root, 'dist/esm/formulas/index.js'),
+        join(root, 'dist/esm/react/button.css')
+    );
+    assert.throws(
+        () => assertModuleFormats(root),
+        /CSS export target must be regular/
+    );
+});

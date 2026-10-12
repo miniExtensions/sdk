@@ -133,11 +133,12 @@ for (const format of ['esm', 'cjs']) {
     );
 }
 
+for (const format of ['esm', 'cjs']) {
+    copyFileSync('src/react/button.css', `dist/${format}/react/button.css`);
+}
+
 // Prepack inherits this boundary: malformed output must never become a TGZ.
 writeFileSync(
     moduleFormatReceiptPath,
     JSON.stringify(assertModuleFormats(process.cwd()), null, 4) + '\n'
 );
-for (const format of ['esm', 'cjs']) {
-    copyFileSync('src/react/button.css', `dist/${format}/react/button.css`);
-}

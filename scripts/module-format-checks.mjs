@@ -168,6 +168,29 @@ export function assertModuleFormats(root) {
     const entries = [];
     const require = createRequire(join(root, 'package.json'));
     for (const [subpath, mapping] of Object.entries(manifest.exports).sort()) {
+        // The opt-in stylesheet is an asset, never a JavaScript module.
+        if (subpath === './react/button.css') {
+            assert.equal(mapping, './dist/esm/react/button.css');
+            const file = join(root, mapping);
+            assert(
+                lstatSync(file).isFile(),
+                'CSS export target must be regular'
+            );
+            assert.equal(
+                require.resolve(manifest.name + subpath.slice(1)),
+                file
+            );
+            const bytes = readFileSync(file);
+            entries.push({
+                subpath,
+                asset: {
+                    path: mapping,
+                    size: bytes.length,
+                    sha256: createHash('sha256').update(bytes).digest('hex'),
+                },
+            });
+            continue;
+        }
         assert(subpath === '.' || /^\.\/[A-Za-z0-9_-]+$/.test(subpath));
         assert(
             record(mapping) && record(mapping.import) && record(mapping.require)

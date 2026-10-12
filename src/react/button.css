@@ -1,0 +1,264 @@
+/* Opt-in, scoped Button styles. No reset, framework, or global theme dependency. */
+.mx-sdk-button-field {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.375rem;
+    max-width: 100%;
+}
+.mx-sdk-button {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 1.625rem;
+    max-width: 100%;
+    padding: 3px 10px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: var(--mx-sdk-button-background, #2563eb);
+    color: var(--mx-sdk-button-foreground, #fff);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+    font:
+        500 12px/18px system-ui,
+        sans-serif;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+}
+.mx-sdk-button:hover:not(:disabled):not([aria-disabled='true']) {
+    background: var(--mx-sdk-button-hover, #1d4ed8);
+    color: var(--mx-sdk-button-hover-foreground, #fff);
+}
+.mx-sdk-button:focus-visible {
+    outline: 2px solid var(--mx-sdk-button-focus, #2563eb);
+    outline-offset: 3px;
+}
+.mx-sdk-button:disabled,
+.mx-sdk-button[aria-disabled='true'] {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.mx-sdk-button-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.mx-sdk-button-spinner {
+    box-sizing: border-box;
+    flex: 0 0 12px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: 50%;
+    animation: mx-sdk-button-spin 0.8s linear infinite;
+}
+.mx-sdk-button-empty {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: #6b7280;
+    font:
+        400 14px/20px system-ui,
+        sans-serif;
+}
+.mx-sdk-button-feedback {
+    color: #374151;
+    font:
+        400 12px/18px system-ui,
+        sans-serif;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-button-feedback:empty {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+.mx-sdk-button-feedback[data-kind='error'] {
+    color: #b91c1c;
+}
+.mx-sdk-button-feedback[data-kind='success'] {
+    color: #166534;
+}
+@keyframes mx-sdk-button-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mx-sdk-button-spinner {
+        animation: none;
+    }
+}
+@media (forced-colors: active) {
+    .mx-sdk-button {
+        border-color: ButtonText;
+    }
+}
+
+/* Configured palette; readable foregrounds also cover light/yellow themes. */
+.mx-sdk-button[data-color='indigo'] {
+    --mx-sdk-button-background: rgb(79 70 229);
+    --mx-sdk-button-hover: rgb(67 56 202);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='gray'] {
+    --mx-sdk-button-background: rgb(75 85 99);
+    --mx-sdk-button-hover: rgb(55 65 81);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='zinc'] {
+    --mx-sdk-button-background: rgb(82 82 91);
+    --mx-sdk-button-hover: rgb(63 63 70);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='neutral'] {
+    --mx-sdk-button-background: rgb(82 82 82);
+    --mx-sdk-button-hover: rgb(64 64 64);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='stone'] {
+    --mx-sdk-button-background: rgb(87 83 78);
+    --mx-sdk-button-hover: rgb(68 64 60);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='red-light'] {
+    --mx-sdk-button-background: rgb(245 91 91);
+    --mx-sdk-button-hover: rgb(240 54 54);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #000;
+}
+.mx-sdk-button[data-color='red'] {
+    --mx-sdk-button-background: rgb(220 38 38);
+    --mx-sdk-button-hover: rgb(185 28 28);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='red-dark'] {
+    --mx-sdk-button-background: rgb(185 28 28);
+    --mx-sdk-button-hover: rgb(153 27 27);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='orange-light'] {
+    --mx-sdk-button-background: rgb(255 138 33);
+    --mx-sdk-button-hover: rgb(244 116 0);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #111827;
+}
+.mx-sdk-button[data-color='orange'] {
+    --mx-sdk-button-background: rgb(234 88 12);
+    --mx-sdk-button-hover: rgb(194 65 12);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='orange-dark'] {
+    --mx-sdk-button-background: rgb(194 65 12);
+    --mx-sdk-button-hover: rgb(154 52 18);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='amber'] {
+    --mx-sdk-button-background: rgb(217 119 6);
+    --mx-sdk-button-hover: rgb(180 83 9);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='yellow-light'] {
+    --mx-sdk-button-background: rgb(240 240 0);
+    --mx-sdk-button-hover: rgb(225 225 0);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #111827;
+}
+.mx-sdk-button[data-color='yellow'] {
+    --mx-sdk-button-background: rgb(230 184 0);
+    --mx-sdk-button-hover: rgb(204 163 0);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #111827;
+}
+.mx-sdk-button[data-color='yellow-dark'] {
+    --mx-sdk-button-background: rgb(161 98 7);
+    --mx-sdk-button-hover: rgb(133 77 14);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='lime'] {
+    --mx-sdk-button-background: rgb(101 163 13);
+    --mx-sdk-button-hover: rgb(77 124 15);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='green'] {
+    --mx-sdk-button-background: rgb(22 163 74);
+    --mx-sdk-button-hover: rgb(21 128 61);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='emerald'] {
+    --mx-sdk-button-background: rgb(5 150 105);
+    --mx-sdk-button-hover: rgb(4 120 87);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='teal'] {
+    --mx-sdk-button-background: rgb(13 148 136);
+    --mx-sdk-button-hover: rgb(15 118 110);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='cyan'] {
+    --mx-sdk-button-background: rgb(8 145 178);
+    --mx-sdk-button-hover: rgb(14 116 144);
+    --mx-sdk-button-foreground: #111827;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='sky'] {
+    --mx-sdk-button-background: rgb(2 132 199);
+    --mx-sdk-button-hover: rgb(3 105 161);
+    --mx-sdk-button-foreground: #000;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='blue'] {
+    --mx-sdk-button-background: rgb(37 99 235);
+    --mx-sdk-button-hover: rgb(29 78 216);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='violet'] {
+    --mx-sdk-button-background: rgb(124 58 237);
+    --mx-sdk-button-hover: rgb(109 40 217);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='purple'] {
+    --mx-sdk-button-background: rgb(147 51 234);
+    --mx-sdk-button-hover: rgb(126 34 206);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='fuchsia'] {
+    --mx-sdk-button-background: rgb(192 38 211);
+    --mx-sdk-button-hover: rgb(162 28 175);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='pink'] {
+    --mx-sdk-button-background: rgb(219 39 119);
+    --mx-sdk-button-hover: rgb(190 24 93);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}
+.mx-sdk-button[data-color='rose'] {
+    --mx-sdk-button-background: rgb(225 29 72);
+    --mx-sdk-button-hover: rgb(190 18 60);
+    --mx-sdk-button-foreground: #fff;
+    --mx-sdk-button-hover-foreground: #fff;
+}

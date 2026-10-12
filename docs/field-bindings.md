@@ -516,7 +516,7 @@ or accessibility certification is claimed by synthetic consumer tests.
 
 ## Configured Button actions
 
-Button values are computed or readonly native values, but value editability does not decide whether a configured action is available. The SDK owns action state; the app owns markup, navigation and localized fallback feedback. There is no default visual Button component in this slice.
+Button values are computed or readonly native values, but value editability does not decide whether a configured action is available. The SDK owns action state; the app owns markup, navigation and localized fallback feedback. The optional `/react` entry now includes a polished `ButtonField` renderer and `renderButtonField` slot helper; import its CSS explicitly. See [React Button presentation](ui.md#react-button-presentation).
 
 ```ts
 import { createFormButtonFieldModel } from '@miniextensions/sdk/ui';

@@ -950,13 +950,7 @@ export async function checkRendererConsumer({
                     renderers: {
                         renderButtonField: (props) => {
                             buttonProps = props;
-                            return h(
-                                'span',
-                                null,
-                                props.capability.type === 'button'
-                                    ? props.capability.button.phase
-                                    : 'readonly'
-                            );
+                            return reactApi.renderButtonField(props);
                         },
                     },
                     fallback: () => null,
@@ -978,7 +972,11 @@ export async function checkRendererConsumer({
         await act(async () => root.render(buttonTree()));
         assert.equal(buttonProps.capability.button.phase, 'uncertain');
         assert.equal(buttonProps.capability.button.canTrigger, false);
-        assert.equal(container.querySelector('span').textContent, 'uncertain');
+        assert.equal(container.querySelector('button').disabled, true);
+        assert.equal(
+            container.querySelector('[role=status]').textContent,
+            'Error triggering webhook'
+        );
         await act(async () =>
             assert.equal(
                 (await buttonProps.capability.button.triggerWebhook()).type,

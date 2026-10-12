@@ -256,6 +256,8 @@ try {
     for (const path of [
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'dist/esm/react/button.css',
+        'dist/cjs/react/button.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1263,13 +1265,61 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         }),
         17
     );
+    // Resolve CSS and React through the installed archive, not checkout aliases.
+    const buttonExample = join(temporaryDirectory, 'button-example');
+    mkdirSync(buttonExample);
+    for (const file of ['main.ts', 'styles.css']) {
+        cpSync(
+            join(process.cwd(), 'examples/react-button', file),
+            join(buttonExample, file)
+        );
+    }
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--target',
+        'ES2022',
+        '--module',
+        'NodeNext',
+        '--moduleResolution',
+        'NodeNext',
+        'button-example/main.ts',
+    ]);
+    const buttonBundle = await build({
+        absWorkingDir: temporaryDirectory,
+        entryPoints: ['button-example/main.ts'],
+        bundle: true,
+        platform: 'browser',
+        format: 'esm',
+        target: 'es2022',
+        outdir: 'button-example/dist',
+        write: false,
+    });
+    assert(
+        buttonBundle.outputFiles.some(
+            (file) =>
+                file.path.endsWith('.css') &&
+                file.text.includes('.mx-sdk-button')
+        )
+    );
+    assert.equal(
+        readFileSync(
+            join(installedPackage, 'dist/esm/react/button.css'),
+            'utf8'
+        ),
+        readFileSync(
+            join(installedPackage, 'dist/cjs/react/button.css'),
+            'utf8'
+        )
+    );
     const buttonProof = await checkButtonConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(buttonProof.checks, 67);
     console.log(
-        `Installed Button model and custom React renderers: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
+        `Installed Button model, stock renderer, CSS and local example: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
     );
     const linkedRecordsProof = await checkLinkedRecordsConsumer({
         consumerDirectory: temporaryDirectory,

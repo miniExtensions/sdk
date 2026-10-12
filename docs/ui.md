@@ -1021,3 +1021,80 @@ Deterministic tests and that local browser sandbox prove UI interaction and
 package boundaries. They do not prove a particular staging deployment accepts
 your published extension. Server compatibility remains a separate
 validation step with its own authorized environment and fixtures.
+
+## React Button presentation
+
+The optional `/react` entry exports `ButtonField`, `ButtonFieldProps`,
+`ButtonFieldMessages` and `renderButtonField`. Core and `/ui` remain React-free.
+Import the scoped stylesheet explicitly; no Tailwind setup, global theme variables,
+or CSS side-effect import from JavaScript is required:
+
+```tsx
+import { ButtonField, useButtonField } from '@miniextensions/sdk/react';
+import type { ButtonFieldModel } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/button.css';
+
+export function OwnedButton({ model }: { model: ButtonFieldModel }) {
+    return <ButtonField {...useButtonField(model)} />;
+}
+```
+
+Create the model at the accepted owner/context boundary using the existing
+[Button adapters](field-bindings.md#configured-button-actions). Keep it outside
+renderer lifetime. Unmounting and StrictMode only unsubscribe; they do not create,
+dispose, cancel, retry or replay a Button action. Retire the owner when its accepted
+context changes. You may pass an already subscribed `ButtonFieldRenderProps`
+snapshot directly to `ButtonField` instead of using `useButtonField`.
+
+The same named slot works in `FieldRenderer`, `AirtableForm`, `AirtableGrid` and
+`AirtableList`; supply each shell's existing scope and app-owned layout:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderButtonField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/button.css';
+
+export const buttonRenderers: FieldRendererSlots<ReactNode> = {
+    renderButtonField,
+};
+```
+
+The helper consumes only `capability.type === 'button'` for actions. A read-only
+slot renders an inert, disabled control, even if its raw value contains a URL.
+No value renders a localized empty presentation. Hidden or retired model state
+renders nothing. A read-only slot has no language metadata; to localize its empty
+presentation, use `(props) => renderButtonField(props, { language: 'fr' })`.
+Accepted Button capabilities use their own language.
+
+The compact control preserves configured colors and link targets, with readable
+foregrounds for light colors, keyboard focus, reduced-motion support, unique
+React instance IDs and a labelled pending spinner. Webhook controls use
+`type="button"`. Button activation and keyboard events stop bubbling into Portal
+rows. Native links are prepared by the model and revalidated on click, auxiliary
+click and context menu; a stale capability prevents navigation. Applications must
+still retire accepted owners promptly on context replacement.
+
+Feedback is inline, plain text in a polite live region. Configured messages take
+precedence, including an explicitly empty string. Null messages fall back to the
+accepted language's Button defaults (all 15 supported languages). The optional
+`messages` prop overrides `noValue`, `success` and `error` defaults; it does not
+override configured feedback. No alert/toast effect runs on mount or settlement.
+Reported success describes the response, not downstream persistence. Uncertain
+outcomes remain disabled; this renderer offers no automatic retry or implicit
+`acknowledgeNewIntent`. Applications own explicit new-intent/cancellation flows.
+
+Styles are confined to `mx-sdk-button*` classes. With no configured color, a blue
+palette is supplied; an ancestor can override `--mx-sdk-button-background`,
+`--mx-sdk-button-hover`, `--mx-sdk-button-foreground`,
+`--mx-sdk-button-hover-foreground` and `--mx-sdk-button-focus`. Configured
+`buttonColor` selects its own local palette. `className` decorates the wrapper.
+The CSS asset is copied into both builds and exported as
+`@miniextensions/sdk/react/button.css`; JavaScript remains usable without it.
+
+The local source example in `examples/react-button` demonstrates synthetic
+success, uncertainty, localized/empty feedback, no value, missing capability and
+remounting while pending. After building the SDK, run
+`node examples/react-button/dev.mjs` and open `http://127.0.0.1:4175`.
+It does not issue network requests or require credentials. This local example is
+separate from the packaged vanilla browser starter.

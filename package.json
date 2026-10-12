@@ -85,7 +85,8 @@
                 "types": "./dist/cjs/field-types.d.ts",
                 "default": "./dist/cjs/field-types.js"
             }
-        }
+        },
+        "./react/button.css": "./dist/esm/react/button.css"
     },
     "files": [
         "dist/esm",

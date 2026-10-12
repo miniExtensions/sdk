@@ -675,7 +675,17 @@ if (maxDepth === undefined) {
 assert.notStrictEqual(new Parser(tokens).parse({cache:false,maxDepth}), expression);
 `
             );
-            run(process.execPath, [nestedFilename]);
+            // High nesting is not a portable default-stack promise. Keep an
+            // explicit common budget plus the Linux x64 regression witness.
+            const stackSizes =
+                process.platform === 'linux' && process.arch === 'x64'
+                    ? [2048, 984]
+                    : [2048];
+            for (const stackSize of stackSizes)
+                run(process.execPath, [
+                    `--stack-size=${stackSize}`,
+                    nestedFilename,
+                ]);
         }
     }
 

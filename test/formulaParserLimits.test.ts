@@ -47,12 +47,25 @@ describe('opt-in formula parsing bounds', () => {
             ['--(', ')', 600, 1801],
             ['--SUM(', ')', 600, 1801],
         ] as const) {
-            execFileSync(
-                process.execPath,
-                [
-                    '--input-type=module',
-                    '--eval',
-                    `
+            // Preserve the default-stack unary and 500-level witnesses. Higher
+            // nesting needs an explicit budget across architectures; Linux x64
+            // also retains the 984 KiB witness that catches the larger frame.
+            const stackSizes =
+                prefix === '-' || depth === 500
+                    ? [undefined]
+                    : process.platform === 'linux' && process.arch === 'x64'
+                      ? [2048, 984]
+                      : [2048];
+            for (const stackSize of stackSizes) {
+                execFileSync(
+                    process.execPath,
+                    [
+                        ...(stackSize === undefined
+                            ? []
+                            : [`--stack-size=${stackSize}`]),
+                        '--input-type=module',
+                        '--eval',
+                        `
                 import assert from 'node:assert/strict';
                 import {Lexer, Parser} from ${JSON.stringify(new URL('../src/formulas/index.js', import.meta.url).href)};
                 const source = ${JSON.stringify(prefix)}.repeat(${depth}) + '1' + ${JSON.stringify(suffix)}.repeat(${depth});
@@ -69,9 +82,10 @@ describe('opt-in formula parsing bounds', () => {
                 }
                 assert.notStrictEqual(new Parser(tokens).parse({cache:false,maxDepth}), expression);
             `,
-                ],
-                { timeout: 15000 }
-            );
+                    ],
+                    { timeout: 15000 }
+                );
+            }
         }
     });
     it('parses cold unary chains with a small stack and exact depth bounds', () => {

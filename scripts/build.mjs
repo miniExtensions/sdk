@@ -134,7 +134,12 @@ for (const format of ['esm', 'cjs']) {
 }
 
 for (const format of ['esm', 'cjs']) {
-    copyFileSync('src/react/button.css', `dist/${format}/react/button.css`);
+    for (const name of ['button', 'checkbox']) {
+        copyFileSync(
+            `src/react/${name}.css`,
+            `dist/${format}/react/${name}.css`
+        );
+    }
 }
 
 // Prepack inherits this boundary: malformed output must never become a TGZ.

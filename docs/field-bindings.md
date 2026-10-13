@@ -362,6 +362,13 @@ blocked and retired bindings reject writes. Accepted explicit reload replaces th
 models; old actions cannot edit the replacement. Ordinary remount does not reload
 or Save.
 
+The optional React `CheckboxField` keeps its existing `{ binding, render }` API
+and also accepts `className`. The shared `renderCheckboxField` helper plugs into
+the named Form/Grid/List slot. Both use the same native checkbox presentation;
+import `@miniextensions/sdk/react/checkbox.css` for optional scoped defaults.
+See [React Checkbox presentation](ui.md#react-checkbox-presentation) for capability
+handling, accessibility and the current native-only scope.
+
 ## Duration clock input
 
 Duration uses the existing `binding.scalar` owner and native numeric seconds or

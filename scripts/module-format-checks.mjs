@@ -168,9 +168,9 @@ export function assertModuleFormats(root) {
     const entries = [];
     const require = createRequire(join(root, 'package.json'));
     for (const [subpath, mapping] of Object.entries(manifest.exports).sort()) {
-        // The opt-in stylesheet is an asset, never a JavaScript module.
-        if (subpath === './react/button.css') {
-            assert.equal(mapping, './dist/esm/react/button.css');
+        // Opt-in stylesheets are assets, never JavaScript modules.
+        if (['./react/button.css', './react/checkbox.css'].includes(subpath)) {
+            assert.equal(mapping, `./dist/esm/${subpath.slice(2)}`);
             const file = join(root, mapping);
             assert(
                 lstatSync(file).isFile(),

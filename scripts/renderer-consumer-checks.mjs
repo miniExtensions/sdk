@@ -208,15 +208,20 @@ void [lookupError,malformedLookupError,upload,uploadedNative,nullAttachmentFilen
 `;
 export const rendererReactTypedConsumer = `
 import { createElement, type ReactNode } from 'react';
-import { FieldRenderer } from '@miniextensions/sdk/react';
+import { FieldRenderer, CheckboxField, renderCheckboxField, type CheckboxFieldProps, type AirtableFormProps, type AirtableGridProps, type AirtableListProps } from '@miniextensions/sdk/react';
 import type { FieldRendererHost, FieldRendererSlots } from '@miniextensions/sdk/ui';
 declare const host: FieldRendererHost;
 const renderers: FieldRendererSlots<ReactNode> = {
  renderSingleLineTextField: props => createElement('span', null, props.value),
- renderCheckboxField: props => createElement('span', null, String(props.value)),
+ renderCheckboxField,
 };
 const tree = createElement(FieldRenderer, { host, renderers, fallback: () => null });
-void tree;
+const formSlots: AirtableFormProps['renderers'] = renderers;
+const gridSlots: AirtableGridProps['renderers'] = renderers;
+const listSlots: AirtableListProps['renderers'] = renderers;
+declare const checkboxProps: CheckboxFieldProps;
+const checkbox = createElement(CheckboxField, { ...checkboxProps, className: 'custom' });
+void [tree, formSlots, gridSlots, listSlots, checkbox];
 `;
 
 /** Installed public entrypoints, synthetic public envelopes, no browser/backend claim. */

@@ -1098,3 +1098,72 @@ remounting while pending. After building the SDK, run
 `node examples/react-button/dev.mjs` and open `http://127.0.0.1:4175`.
 It does not issue network requests or require credentials. This local example is
 separate from the packaged vanilla browser starter.
+
+## React Checkbox presentation
+
+The optional `/react` entry exports `CheckboxField`, `CheckboxFieldProps`,
+`CheckboxFieldOptions` and `renderCheckboxField`. The existing binding component
+keeps its `{ binding, render }` API; `render` can still replace all markup.
+
+```tsx
+import { CheckboxField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/checkbox.css';
+
+export function Approval({ binding }: { binding: FormFieldBinding }) {
+    return <CheckboxField binding={binding} className="approval" />;
+}
+```
+
+Use the same named helper with `FieldRenderer`, `AirtableForm`, `AirtableGrid` or
+`AirtableList`. Each shell supplies its accepted owner, scope and layout:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderCheckboxField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/checkbox.css';
+
+export const checkboxRenderers: FieldRendererSlots<ReactNode> = {
+    renderCheckboxField: (props) =>
+        renderCheckboxField(props, { className: 'approval' }),
+};
+```
+
+The helper writes through the accepted editable capability's scalar model, or
+its guarded `setValue` action if no scalar is supplied. A read-only capability
+never becomes editable based on its raw value. Initial `null` or absent values
+appear unchecked and retain their native value until deliberate interaction.
+Changes write booleans to the existing draft; the renderer never invokes Save.
+Keep owners outside React mount lifetimes. StrictMode and remounting do not
+create, destroy, clear or resubmit a scalar model. Stale callbacks remain subject
+to the existing owner/context checks.
+
+Controls use native checkbox and label semantics, unique React instance IDs,
+keyboard focus, `aria-required`, `aria-invalid` and `aria-busy`. `showTitle: false`
+retains an accessible name. Plain-text feedback is associated with the control
+and rendered in a polite live region, preserving explicitly empty error messages.
+Click, pointer and keyboard events stop bubbling into Portal rows. Read-only,
+pending and computed fields are disabled; hidden, blocked and retired hosts
+render no control.
+
+This slice provides the native checkbox appearance. Configured toggle/button
+appearances and their checked/unchecked labels need a custom renderer today.
+Calendly integration is outside this slice: enabling it in either display or
+write configuration disables the stock control, so a boolean click cannot stand
+in for a booking. Required and conditional validation remain with the existing
+owner and canonical Save; the renderer does not create a second validator.
+
+Styles are confined to `mx-sdk-checkbox*` classes and are optional. The provisional
+defaults use a native blue accent, inherited text color and font, compact spacing
+and visible keyboard focus. Override the classes (for example `accent-color`) or
+omit the stylesheet and provide your own. `className` decorates the wrapper; no
+theme system or appearance-prop API is introduced. Core and `/ui` remain React-free,
+and JavaScript does not import the CSS. The asset is exported as
+`@miniextensions/sdk/react/checkbox.css` and copied into both builds.
+
+The local `examples/react-checkbox` example uses public exports and synthetic
+owners, with no backend requests. After building, run
+`node examples/react-checkbox/dev.mjs` and open `http://127.0.0.1:4176`.
+`node scripts/check-checkbox-browser.mjs` verifies the native interactions,
+remounting, permissions, forced colors and narrow layout and captures screenshots.

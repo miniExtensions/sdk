@@ -41,11 +41,27 @@ export type FormulaFieldReferenceResolution = {
     toPrimitive: () => AirtablePrimitive;
 };
 
+export interface FormulaDateValue {
+    isValid(): boolean;
+    format(pattern: string): string;
+    isoWeekday(): number;
+    valueOf(): number;
+    add(amount: number, unit: unitOfTime.Base): FormulaDateValue;
+    startOf(unit: 'day'): FormulaDateValue;
+    clone(): FormulaDateValue;
+}
+
+/** A structural date boundary across host and SDK Moment installations. */
+export interface FormulaDateRuntime {
+    (): FormulaDateValue;
+    utc(value: string | number | Date, format?: string): FormulaDateValue;
+}
+
 export type FormulaInterpreterOptions = {
     /** Preserve the older permissive run()/execute() consumption rules. */
     legacyRuntime?: true;
     /** Preserve the host date runtime, including its locale and timezone defaults. */
-    dateRuntime?: typeof sdkMoment;
+    dateRuntime?: FormulaDateRuntime;
     /**
      * Resolve a field through the host's existing conversion boundary. Both
      * evaluation methods use the same captured native cell. Strict evaluation
@@ -509,14 +525,26 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                 const date2 = unconvertedArgs[1];
                 if (!this.isDateOrString(date1) || !this.isDateOrString(date2))
                     throw new FormulaRuntimeError();
-                return Number(moment.utc(date1).isBefore(moment.utc(date2)));
+                const left = moment.utc(date1);
+                const right = moment.utc(date2);
+                return Number(
+                    left.isValid() &&
+                        right.isValid() &&
+                        left.valueOf() < right.valueOf()
+                );
             }
             case 'IS_AFTER': {
                 const date1 = unconvertedArgs[0];
                 const date2 = unconvertedArgs[1];
                 if (!this.isDateOrString(date1) || !this.isDateOrString(date2))
                     throw new FormulaRuntimeError();
-                return Number(moment.utc(date1).isAfter(moment.utc(date2)));
+                const left = moment.utc(date1);
+                const right = moment.utc(date2);
+                return Number(
+                    left.isValid() &&
+                        right.isValid() &&
+                        left.valueOf() > right.valueOf()
+                );
             }
             case 'DATESTR': {
                 const date = unconvertedArgs[0];
@@ -546,8 +574,7 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
 
                 const format =
                     // Airtable doesn't display time if it's the start of day (00:00)
-                    moment(result).startOf('day').valueOf() ===
-                    moment(result).valueOf()
+                    result.clone().startOf('day').valueOf() === result.valueOf()
                         ? 'YYYY-MM-DD'
                         : 'YYYY-MM-DD h:mma';
 

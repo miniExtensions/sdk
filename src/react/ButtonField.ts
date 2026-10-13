@@ -16,10 +16,14 @@ export type ButtonFieldProps = ButtonFieldRenderProps & {
     className?: string;
 };
 const stop = (event: SyntheticEvent) => event.stopPropagation();
-const noValue = (text: string) =>
+const noValue = (text: string, className?: string) =>
     createElement(
         'span',
-        { className: 'mx-sdk-button-empty' },
+        {
+            className: ['mx-sdk-button-empty', className]
+                .filter(Boolean)
+                .join(' '),
+        },
         createElement('span', { 'aria-hidden': true }, '⊘'),
         text
     );
@@ -32,7 +36,7 @@ export function ButtonField(props: ButtonFieldProps): ReactNode {
         ...buttonMessages[props.language ?? 'en'],
         ...props.messages,
     };
-    if (props.value === null) return noValue(messages.noValue);
+    if (props.value === null) return noValue(messages.noValue, props.className);
     const link = props.canLink ? props.prepareLink() : null;
     const webhook =
         props.config?.openLinkType === 'triggerWebhookGET' ||
@@ -153,7 +157,8 @@ export function renderButtonField(
     if (props.value == null)
         return noValue(
             options.messages?.noValue ??
-                buttonMessages[options.language ?? 'en'].noValue
+                buttonMessages[options.language ?? 'en'].noValue,
+            options.className
         );
     return createElement(
         'span',

@@ -3,6 +3,7 @@ import { it } from 'node:test';
 import { Window } from 'happy-dom';
 import { createElement, StrictMode, act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { renderToStaticMarkup } from 'react-dom/server';
 import {
     ButtonField,
     renderButtonField,
@@ -83,6 +84,66 @@ const fixture = (configure: (data: ButtonFieldData) => void = () => {}) => {
 };
 const ModelButton = ({ model }: { model: ButtonFieldModel }) =>
     createElement(ButtonField, useButtonField(model));
+
+it('Button preserves consumer classes in direct and slotted empty states', async () => {
+    const window = new Window();
+    const container = window.document.createElement('div');
+    const f = fixture((data) => {
+        data.value = null;
+        data.language = 'es';
+    });
+    const readonly: FieldRendererProps<'button'> = {
+        physicalKind: 'button',
+        presentation: { type: 'physical', config: f.data.field.config },
+        fieldId: f.data.field.id,
+        title: f.data.field.name,
+        field: f.data.field,
+        displayConfig: f.data.config,
+        value: null,
+        context: 'portal-cell',
+        computed: true,
+        dirty: false,
+        pending: false,
+        validation: [],
+        error: null,
+        capability: { type: 'readonly' },
+    };
+    try {
+        for (const className of [undefined, 'custom-button compact']) {
+            const options = { className, language: 'es' as const };
+            for (const node of [
+                createElement(ButtonField, {
+                    ...f.model.getRenderProps(),
+                    className,
+                }),
+                renderButtonField(
+                    {
+                        ...readonly,
+                        capability: {
+                            type: 'button',
+                            button: f.model.getRenderProps(),
+                        },
+                    },
+                    options
+                ),
+                renderButtonField(readonly, options),
+                renderButtonField({ ...readonly, value: undefined }, options),
+            ]) {
+                container.innerHTML = renderToStaticMarkup(node);
+                const empty = container.firstElementChild!;
+                assert.ok(empty.classList.contains('mx-sdk-button-empty'));
+                assert.equal(empty.textContent, '⊘Sin Botón');
+                for (const token of ['custom-button', 'compact'])
+                    assert.equal(empty.classList.contains(token), !!className);
+                assert.equal(container.querySelector('a, button'), null);
+            }
+        }
+        assert.equal(f.calls(), 0);
+    } finally {
+        f.model.dispose();
+        await window.happyDOM.close();
+    }
+});
 
 it('Button renders accepted state across StrictMode/remount without replay, submission or row activation', async () => {
     const window = new Window();

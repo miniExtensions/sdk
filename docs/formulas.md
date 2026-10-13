@@ -118,10 +118,17 @@ The optional third constructor argument, `FormulaInterpreterOptions`, lets an
 existing host reuse the evaluator without changing its older `run()` behavior:
 
 ```ts
-const formula = new FormulaRunner(source, false, {
+import { FormulaRunner } from '@miniextensions/sdk/formulas';
+
+const hostValues = new Map<string | number, string>([['Title', 'Hello']]);
+const formula = new FormulaRunner('{Title}', false, {
     legacyRuntime: true,
-    resolveFieldReference: (identifier) => resolveExistingHostValue(identifier),
+    resolveFieldReference: (identifier) => {
+        const nativeValue = hostValues.get(identifier);
+        return { nativeValue, toPrimitive: () => nativeValue ?? '' };
+    },
 });
+formula.run(); // 'Hello'
 ```
 
 `legacyRuntime: true` preserves permissive consumption of non-finite numbers,

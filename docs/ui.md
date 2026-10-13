@@ -1021,3 +1021,227 @@ Deterministic tests and that local browser sandbox prove UI interaction and
 package boundaries. They do not prove a particular staging deployment accepts
 your published extension. Server compatibility remains a separate
 validation step with its own authorized environment and fixtures.
+
+## React Button presentation
+
+The optional `/react` entry exports `ButtonField`, `ButtonFieldProps`,
+`ButtonFieldMessages` and `renderButtonField`. Core and `/ui` remain React-free.
+Import the scoped stylesheet explicitly; no Tailwind setup, global theme variables,
+or CSS side-effect import from JavaScript is required:
+
+```tsx
+import { ButtonField, useButtonField } from '@miniextensions/sdk/react';
+import type { ButtonFieldModel } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/button.css';
+
+export function OwnedButton({ model }: { model: ButtonFieldModel }) {
+    return <ButtonField {...useButtonField(model)} />;
+}
+```
+
+Create the model at the accepted owner/context boundary using the existing
+[Button adapters](field-bindings.md#configured-button-actions). Keep it outside
+renderer lifetime. Unmounting and StrictMode only unsubscribe; they do not create,
+dispose, cancel, retry or replay a Button action. Retire the owner when its accepted
+context changes. You may pass an already subscribed `ButtonFieldRenderProps`
+snapshot directly to `ButtonField` instead of using `useButtonField`.
+
+The same named slot works in `FieldRenderer`, `AirtableForm`, `AirtableGrid` and
+`AirtableList`; supply each shell's existing scope and app-owned layout:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderButtonField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/button.css';
+
+export const buttonRenderers: FieldRendererSlots<ReactNode> = {
+    renderButtonField,
+};
+```
+
+The helper consumes only `capability.type === 'button'` for actions. A read-only
+slot renders an inert, disabled control, even if its raw value contains a URL.
+No value renders a localized empty presentation. Hidden or retired model state
+renders nothing. A read-only slot has no language metadata; to localize its empty
+presentation, use `(props) => renderButtonField(props, { language: 'fr' })`.
+Accepted Button capabilities use their own language.
+
+The compact control preserves configured colors and link targets, with readable
+foregrounds for light colors, keyboard focus, reduced-motion support, unique
+React instance IDs and a labelled pending spinner. Webhook controls use
+`type="button"`. Button activation and keyboard events stop bubbling into Portal
+rows. Native links are prepared by the model and revalidated on click, auxiliary
+click and context menu; a stale capability prevents navigation. Applications must
+still retire accepted owners promptly on context replacement.
+
+Feedback is inline, plain text in a polite live region. Configured messages take
+precedence, including an explicitly empty string. Null messages fall back to the
+accepted language's Button defaults (all 15 supported languages). The optional
+`messages` prop overrides `noValue`, `success` and `error` defaults; it does not
+override configured feedback. No alert/toast effect runs on mount or settlement.
+Reported success describes the response, not downstream persistence. Uncertain
+outcomes remain disabled; this renderer offers no automatic retry or implicit
+`acknowledgeNewIntent`. Applications own explicit new-intent/cancellation flows.
+
+Styles are confined to `mx-sdk-button*` classes. With no configured color, a blue
+palette is supplied; an ancestor can override `--mx-sdk-button-background`,
+`--mx-sdk-button-hover`, `--mx-sdk-button-foreground`,
+`--mx-sdk-button-hover-foreground` and `--mx-sdk-button-focus`. Configured
+`buttonColor` selects its own local palette. `className` decorates the wrapper.
+The CSS asset is copied into both builds and exported as
+`@miniextensions/sdk/react/button.css`; JavaScript remains usable without it.
+
+The local source example in `examples/react-button` demonstrates synthetic
+success, uncertainty, localized/empty feedback, no value, missing capability and
+remounting while pending. After building the SDK, run
+`node examples/react-button/dev.mjs` and open `http://127.0.0.1:4175`.
+It does not issue network requests or require credentials. This local example is
+separate from the packaged vanilla browser starter.
+
+## React Checkbox presentation
+
+The optional `/react` entry exports `CheckboxField`, `CheckboxFieldProps`,
+`CheckboxFieldOptions` and `renderCheckboxField`. The existing binding component
+keeps its `{ binding, render }` API; `render` can still replace all markup.
+
+```tsx
+import { CheckboxField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/checkbox.css';
+
+export function Approval({ binding }: { binding: FormFieldBinding }) {
+    return <CheckboxField binding={binding} className="approval" />;
+}
+```
+
+Use the same named helper with `FieldRenderer`, `AirtableForm`, `AirtableGrid` or
+`AirtableList`. Each shell supplies its accepted owner, scope and layout:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderCheckboxField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/checkbox.css';
+
+export const checkboxRenderers: FieldRendererSlots<ReactNode> = {
+    renderCheckboxField: (props) =>
+        renderCheckboxField(props, { className: 'approval' }),
+};
+```
+
+The helper writes through the accepted editable capability's scalar model, or
+its guarded `setValue` action if no scalar is supplied. A read-only capability
+never becomes editable based on its raw value. Initial `null` or absent values
+appear unchecked and retain their native value until deliberate interaction.
+Changes write booleans to the existing draft; the renderer never invokes Save.
+Keep owners outside React mount lifetimes. StrictMode and remounting do not
+create, destroy, clear or resubmit a scalar model. Stale callbacks remain subject
+to the existing owner/context checks.
+
+Controls use native checkbox and label semantics, unique React instance IDs,
+keyboard focus, `aria-required`, `aria-invalid` and `aria-busy`. `showTitle: false`
+retains an accessible name. Plain-text feedback is associated with the control
+and rendered in a polite live region, preserving explicitly empty error messages.
+Click, pointer and keyboard events stop bubbling into Portal rows. Read-only,
+pending and computed fields are disabled; hidden, blocked and retired hosts
+render no control.
+
+This slice provides the native checkbox appearance. Configured toggle/button
+appearances and their checked/unchecked labels need a custom renderer today.
+Calendly integration is outside this slice: enabling it in either display or
+write configuration disables the stock control, so a boolean click cannot stand
+in for a booking. Required and conditional validation remain with the existing
+owner and canonical Save; the renderer does not create a second validator.
+
+Styles are confined to `mx-sdk-checkbox*` classes and are optional. The provisional
+defaults use a native blue accent, inherited text color and font, compact spacing
+and visible keyboard focus. Override the classes (for example `accent-color`) or
+omit the stylesheet and provide your own. `className` decorates the wrapper; no
+theme system or appearance-prop API is introduced. Core and `/ui` remain React-free,
+and JavaScript does not import the CSS. The asset is exported as
+`@miniextensions/sdk/react/checkbox.css` and copied into both builds.
+
+The local `examples/react-checkbox` example uses public exports and synthetic
+owners, with no backend requests. After building, run
+`node examples/react-checkbox/dev.mjs` and open `http://127.0.0.1:4176`.
+`node scripts/check-checkbox-browser.mjs` verifies the native interactions,
+remounting, permissions, forced colors and narrow layout and captures screenshots.
+
+## React Text presentation
+
+The optional `/react` entry exports `TextField`, `TextFieldProps`,
+`TextFieldOptions` and `renderSingleLineTextField`. The binding component retains
+its `{ binding, render }` API; supplying `render` still replaces all markup.
+
+```tsx
+import { TextField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function ProjectName({ binding }: { binding: FormFieldBinding }) {
+    return <TextField binding={binding} className="project-name" />;
+}
+```
+
+The named helper consumes `FieldRendererProps<'singleLineText'>` in
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderSingleLineTextField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const textRenderers: FieldRendererSlots<ReactNode> = {
+    renderSingleLineTextField: (props) =>
+        renderSingleLineTextField(props, { clearLabel: 'Effacer le texte' }),
+};
+```
+
+Changes call only the accepted editable capability or binding. The native draft
+keeps exact whitespace and literal text; an explicit empty edit or Clear writes
+`null`. An initially absent value stays absent until a deliberate edit. Clear is
+`type="button"` and returns focus to the input. Owners remain outside React;
+mounting, StrictMode and remounting neither create nor dispose an owner, write a
+draft, invoke Save or start network work. Rejected stale edits restore the current
+rendered value; applications must still retire owners when their context changes.
+
+Unfinished IME composition is kept in a local presentation buffer. Completion
+commits once through the captured accepted action. Observed owner, value,
+permission, masking or limit changes cancel that buffer, including an observed
+change away and back. Remounting discards unfinished composition and reflects the
+owner's accepted draft. Native typing retains the input node and caret.
+
+The control honors title visibility, placeholder, required indication, password
+masking, configured read-only state and finite nonnegative integer character
+limits. Masking and read-only restrictions from either display or write config
+apply; when both specify a limit, the smaller applies. Limits count UTF-16 code
+units, matching native `maxlength`, without cutting a surrogate pair in half.
+Only user edits are capped; loaded or externally updated values are never
+silently shortened. Validation remains with the existing owner and canonical Save.
+
+Labels use unique React instance IDs for repeated rows. Hidden titles retain an
+accessible name. Feedback is plain text in an associated polite live region;
+explicitly empty feedback is preserved. Read-only, pending and computed controls
+are disabled. Hidden, blocked and retired hosts render nothing. Click, pointer
+and keyboard events stop bubbling into Portal rows. The optional `clearLabel`
+localizes the Clear control's accessible name; its default is `Clear <title>`.
+
+This slice covers manual single-line entry. Address lookup, QR/barcode scanning,
+camera access, automatic submission, URL buttons and attachment presentation need
+their own accepted integration or custom renderer. Configuration or raw text
+never starts those integrations or grants navigation authority.
+
+The provisional styling is confined to `mx-sdk-text*` classes. Import the CSS,
+override its classes, or omit it and supply your own. `className` decorates the
+wrapper; no theme system or appearance-prop API is introduced. The stylesheet is
+exported as `@miniextensions/sdk/react/text.css` and copied into both builds.
+JavaScript does not import it; core and `/ui` stay React-free.
+
+The local `examples/react-text` example uses public exports and synthetic owners,
+with no backend requests. After building, run `node examples/react-text/dev.mjs`
+and open `http://127.0.0.1:4177`. `node scripts/check-text-browser.mjs` checks native
+typing, selection/caret, clearing, simulated composition, remounting, permissions,
+forced colors and narrow layout and captures screenshots. Simulated composition
+does not certify every platform's input method or screen reader.

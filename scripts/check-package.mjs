@@ -1,3 +1,5 @@
+import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
+import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
     checkPortalButtonCompositionConsumer,
     portalButtonCompositionTypedConsumer,
@@ -256,6 +258,12 @@ try {
     for (const path of [
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'dist/esm/react/button.css',
+        'dist/cjs/react/button.css',
+        'dist/esm/react/checkbox.css',
+        'dist/cjs/react/checkbox.css',
+        'dist/esm/react/text.css',
+        'dist/cjs/react/text.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1263,13 +1271,79 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         }),
         17
     );
+    // Resolve CSS and React through the installed archive, not checkout aliases.
+    for (const name of ['button', 'checkbox', 'text']) {
+        const exampleDirectory = join(temporaryDirectory, `${name}-example`);
+        mkdirSync(exampleDirectory);
+        for (const file of ['main.ts', 'styles.css']) {
+            cpSync(
+                join(process.cwd(), `examples/react-${name}`, file),
+                join(exampleDirectory, file)
+            );
+        }
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            `${name}-example/main.ts`,
+        ]);
+        const exampleBundle = await build({
+            absWorkingDir: temporaryDirectory,
+            entryPoints: [`${name}-example/main.ts`],
+            bundle: true,
+            platform: 'browser',
+            format: 'esm',
+            target: 'es2022',
+            outdir: `${name}-example/dist`,
+            write: false,
+        });
+        assert(
+            exampleBundle.outputFiles.some(
+                (file) =>
+                    file.path.endsWith('.css') &&
+                    file.text.includes(`.mx-sdk-${name}`)
+            )
+        );
+        assert.equal(
+            readFileSync(
+                join(installedPackage, `dist/esm/react/${name}.css`),
+                'utf8'
+            ),
+            readFileSync(
+                join(installedPackage, `dist/cjs/react/${name}.css`),
+                'utf8'
+            )
+        );
+    }
     const buttonProof = await checkButtonConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(buttonProof.checks, 67);
     console.log(
-        `Installed Button model and custom React renderers: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
+        `Installed Button model, stock renderer, CSS and local example: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
+    );
+    const checkboxProof = await checkCheckboxConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(checkboxProof.checks, 6);
+    console.log(
+        `Installed Checkbox renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const textProof = await checkTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(textProof.checks, 8);
+    console.log(
+        `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const linkedRecordsProof = await checkLinkedRecordsConsumer({
         consumerDirectory: temporaryDirectory,

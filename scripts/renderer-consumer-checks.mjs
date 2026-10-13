@@ -208,15 +208,23 @@ void [lookupError,malformedLookupError,upload,uploadedNative,nullAttachmentFilen
 `;
 export const rendererReactTypedConsumer = `
 import { createElement, type ReactNode } from 'react';
-import { FieldRenderer } from '@miniextensions/sdk/react';
+import { FieldRenderer, CheckboxField, renderCheckboxField, type CheckboxFieldProps, TextField, renderSingleLineTextField, type TextFieldProps, type TextFieldOptions, type AirtableFormProps, type AirtableGridProps, type AirtableListProps } from '@miniextensions/sdk/react';
 import type { FieldRendererHost, FieldRendererSlots } from '@miniextensions/sdk/ui';
 declare const host: FieldRendererHost;
 const renderers: FieldRendererSlots<ReactNode> = {
- renderSingleLineTextField: props => createElement('span', null, props.value),
- renderCheckboxField: props => createElement('span', null, String(props.value)),
+ renderSingleLineTextField,
+ renderCheckboxField,
 };
 const tree = createElement(FieldRenderer, { host, renderers, fallback: () => null });
-void tree;
+const formSlots: AirtableFormProps['renderers'] = renderers;
+const gridSlots: AirtableGridProps['renderers'] = renderers;
+const listSlots: AirtableListProps['renderers'] = renderers;
+declare const checkboxProps: CheckboxFieldProps;
+const checkbox = createElement(CheckboxField, { ...checkboxProps, className: 'custom' });
+declare const textProps: TextFieldProps;
+const textOptions: TextFieldOptions = { className: 'custom', clearLabel: 'Effacer' };
+const text = createElement(TextField, { ...textProps, ...textOptions });
+void [tree, formSlots, gridSlots, listSlots, checkbox, text];
 `;
 
 /** Installed public entrypoints, synthetic public envelopes, no browser/backend claim. */
@@ -950,13 +958,7 @@ export async function checkRendererConsumer({
                     renderers: {
                         renderButtonField: (props) => {
                             buttonProps = props;
-                            return h(
-                                'span',
-                                null,
-                                props.capability.type === 'button'
-                                    ? props.capability.button.phase
-                                    : 'readonly'
-                            );
+                            return reactApi.renderButtonField(props);
                         },
                     },
                     fallback: () => null,
@@ -978,7 +980,11 @@ export async function checkRendererConsumer({
         await act(async () => root.render(buttonTree()));
         assert.equal(buttonProps.capability.button.phase, 'uncertain');
         assert.equal(buttonProps.capability.button.canTrigger, false);
-        assert.equal(container.querySelector('span').textContent, 'uncertain');
+        assert.equal(container.querySelector('button').disabled, true);
+        assert.equal(
+            container.querySelector('[role=status]').textContent,
+            'Error triggering webhook'
+        );
         await act(async () =>
             assert.equal(
                 (await buttonProps.capability.button.triggerWebhook()).type,

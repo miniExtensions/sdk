@@ -111,8 +111,12 @@ async function checkPageRendererRemount(f, reactApi, consumer) {
             root.render(tree());
         });
         mounted = true;
+        const edit = [...host.querySelectorAll('button')].find(
+            (button) => button.textContent === 'Edit custom page answer'
+        );
+        assert(edit, 'Custom page edit action must be available');
         await act(async () => {
-            host.querySelector('button').click();
+            edit.click();
         });
         assertViews();
         await act(async () => root.unmount());

@@ -283,6 +283,13 @@ React reflects the owner-held linked search query on remount and replaces it whe
 the binding identity changes. Neither mounting nor StrictMode starts linked reads,
 uploads or Saves.
 
+`TextField` keeps this binding API and adds an accessible Clear control, configured
+placeholder, password masking and character limit. Its named
+`renderSingleLineTextField` helper works in Form/Grid/List slots. Import
+`@miniextensions/sdk/react/text.css` for optional defaults; see
+[React Text presentation](ui.md#react-text-presentation) for composition behavior,
+customization and the manual-entry scope.
+
 `AttachmentField` additionally takes the owner's attachment controller. Selection
 and drop run admission without upload; `upload()` is explicit and uploads the first
 queued File only. Status reports phases, not byte progress. Empty chooser completion
@@ -361,6 +368,13 @@ until an explicit action writes `true` or `false`. Configured read-only, hidden,
 blocked and retired bindings reject writes. Accepted explicit reload replaces the
 models; old actions cannot edit the replacement. Ordinary remount does not reload
 or Save.
+
+The optional React `CheckboxField` keeps its existing `{ binding, render }` API
+and also accepts `className`. The shared `renderCheckboxField` helper plugs into
+the named Form/Grid/List slot. Both use the same native checkbox presentation;
+import `@miniextensions/sdk/react/checkbox.css` for optional scoped defaults.
+See [React Checkbox presentation](ui.md#react-checkbox-presentation) for capability
+handling, accessibility and the current native-only scope.
 
 ## Duration clock input
 
@@ -516,7 +530,7 @@ or accessibility certification is claimed by synthetic consumer tests.
 
 ## Configured Button actions
 
-Button values are computed or readonly native values, but value editability does not decide whether a configured action is available. The SDK owns action state; the app owns markup, navigation and localized fallback feedback. There is no default visual Button component in this slice.
+Button values are computed or readonly native values, but value editability does not decide whether a configured action is available. The SDK owns action state; the app owns markup, navigation and localized fallback feedback. The optional `/react` entry now includes a polished `ButtonField` renderer and `renderButtonField` slot helper; import its CSS explicitly. See [React Button presentation](ui.md#react-button-presentation).
 
 ```ts
 import { createFormButtonFieldModel } from '@miniextensions/sdk/ui';

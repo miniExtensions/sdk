@@ -18,7 +18,7 @@ import {
     Identifier,
 } from '../parser/ast.js';
 import FormulaRunner, { type FormulaRunOutcome } from '../runner.js';
-import moment, { type unitOfTime } from 'moment';
+import sdkMoment, { type unitOfTime } from 'moment';
 import {
     type AirtablePrimitive,
     arrayJoinSeparator,
@@ -32,6 +32,28 @@ export type InterpreterContext = {
     record: AirtableRecord;
     airtableFields: AirtableField[];
     linkedTableLoadingStates: TableIdsToLinkedTableLoadingStates;
+};
+
+export type FormulaFieldReferenceResolution = {
+    /** The native cell captured by the host's single field lookup. */
+    nativeValue: unknown;
+    /** Convert that captured cell after any strict native fault checks. */
+    toPrimitive: () => AirtablePrimitive;
+};
+
+export type FormulaInterpreterOptions = {
+    /** Preserve the older permissive run()/execute() consumption rules. */
+    legacyRuntime?: true;
+    /** Preserve the host date runtime, including its locale and timezone defaults. */
+    dateRuntime?: typeof sdkMoment;
+    /**
+     * Resolve a field through the host's existing conversion boundary. Both
+     * evaluation methods use the same captured native cell. Strict evaluation
+     * retains native fault checks before invoking its primitive conversion.
+     */
+    resolveFieldReference?: (
+        identifier: Identifier['value']
+    ) => FormulaFieldReferenceResolution;
 };
 
 export enum FormulaFunctions {
@@ -81,7 +103,8 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
 
     constructor(
         private expr: Expr,
-        private doNotThrowForUnknownFields = false
+        private doNotThrowForUnknownFields = false,
+        private options: FormulaInterpreterOptions = {}
     ) {}
 
     execute() {
@@ -95,6 +118,20 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
     }
 
     executeWithOutcome(): FormulaRunOutcome {
+        if (this.options.legacyRuntime) {
+            // Keep typed outcomes strict without changing this instance's
+            // options or context during recursive/reentrant evaluation.
+            const strictInterpreter = new Interpreter(
+                this.expr,
+                this.doNotThrowForUnknownFields,
+                {
+                    resolveFieldReference: this.options.resolveFieldReference,
+                    dateRuntime: this.options.dateRuntime,
+                }
+            );
+            strictInterpreter.context = this.context;
+            return strictInterpreter.executeWithOutcome();
+        }
         try {
             const value = this.convertPrimitiveToStringOrNumber(
                 this._execute()
@@ -111,6 +148,7 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
     }
 
     private assertConsumableValue(value: unknown): void {
+        if (this.options.legacyRuntime) return;
         if (
             value == null ||
             (value instanceof Date && !Number.isFinite(value.getTime()))
@@ -256,6 +294,11 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
     }
 
     visitIdentifierExpr(node: Identifier): AirtablePrimitive {
+        if (this.options.resolveFieldReference) {
+            const resolved = this.options.resolveFieldReference(node.value);
+            this.assertNativeFieldValue(resolved.nativeValue, true);
+            return resolved.toPrimitive();
+        }
         const context = this.context;
         if (context == null)
             throw new Error(
@@ -271,11 +314,15 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
             else throw new Error(`Field ${node.value} does not exist.`);
 
         const recordFields = context.record.fields;
-        const value = Object.hasOwn(recordFields, field.name)
-            ? recordFields[field.name]
-            : Object.hasOwn(recordFields, field.id)
-              ? recordFields[field.id]
-              : undefined;
+        const value = this.options.legacyRuntime
+            ? field.name in recordFields
+                ? recordFields[field.name]
+                : recordFields[field.id]
+            : Object.hasOwn(recordFields, field.name)
+              ? recordFields[field.name]
+              : Object.hasOwn(recordFields, field.id)
+                ? recordFields[field.id]
+                : undefined;
         return this.getFieldReferenceValue(field, value);
     }
 
@@ -288,32 +335,7 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                 'Interpreter context must be set for resolving identifiers'
             );
         }
-        // Shared readable formatting deliberately presents native errors as
-        // text. Formula evaluation must retain their provenance before that
-        // conversion; literal marker strings remain ordinary data.
-        const arrayValue = Array.isArray(value);
-        for (const member of arrayValue ? value : [value]) {
-            if (
-                member != null &&
-                typeof member === 'object' &&
-                Object.hasOwn(member, 'error') &&
-                'error' in member &&
-                typeof member.error === 'string'
-            )
-                throw new FormulaRuntimeError();
-            if (
-                arrayValue &&
-                (FormulaRunner.isErrorValue(member) ||
-                    (member != null &&
-                        typeof member === 'object' &&
-                        Object.hasOwn(member, 'specialValue') &&
-                        'specialValue' in member &&
-                        (member.specialValue === 'NaN' ||
-                            member.specialValue === 'Infinity' ||
-                            member.specialValue === '-Infinity')))
-            )
-                throw new FormulaRuntimeError('non-finite-result');
-        }
+        this.assertNativeFieldValue(value);
         const primitive = convertAirtableValueToPrimitive({
             value,
             airtableFieldConfig: field.config,
@@ -338,6 +360,39 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
             .join(arrayJoinSeparator);
     }
 
+    private assertNativeFieldValue(
+        value: unknown,
+        preserveScalarFaults = false
+    ): void {
+        if (this.options.legacyRuntime) return;
+        // Shared readable formatting deliberately presents native errors as
+        // text. Formula evaluation must retain their provenance before that
+        // conversion; literal marker strings remain ordinary data.
+        const arrayValue = Array.isArray(value);
+        for (const member of arrayValue ? value : [value]) {
+            if (
+                member != null &&
+                typeof member === 'object' &&
+                Object.hasOwn(member, 'error') &&
+                'error' in member &&
+                typeof member.error === 'string'
+            )
+                throw new FormulaRuntimeError();
+            if (
+                (arrayValue || preserveScalarFaults) &&
+                (FormulaRunner.isErrorValue(member) ||
+                    (member != null &&
+                        typeof member === 'object' &&
+                        Object.hasOwn(member, 'specialValue') &&
+                        'specialValue' in member &&
+                        (member.specialValue === 'NaN' ||
+                            member.specialValue === 'Infinity' ||
+                            member.specialValue === '-Infinity')))
+            )
+                throw new FormulaRuntimeError('non-finite-result');
+        }
+    }
+
     private isDateOrString(value: AirtablePrimitive): value is Date | string {
         return typeof value === 'string' || value instanceof Date;
     }
@@ -346,6 +401,7 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
         functionName: FormulaFunctionType,
         unconvertedArgs: AirtablePrimitive[]
     ) {
+        const moment = this.options.dateRuntime ?? sdkMoment;
         const convertedArgs = unconvertedArgs.map((arg) =>
             this.convertPrimitiveToStringOrNumber(arg)
         );
@@ -416,17 +472,19 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                     FormulaRunner.isFalsyValue(convertedArgs[0]) ? true : false
                 );
             case 'REGEX_MATCH': {
-                const value = convertedArgs[0];
-                const regexString = convertedArgs[1];
-                if (
-                    typeof regexString !== 'string' ||
-                    typeof value !== 'string'
-                )
-                    throw new FormulaRuntimeError();
                 try {
+                    const value = convertedArgs[0];
+                    const regexString = convertedArgs[1];
+                    if (
+                        typeof regexString !== 'string' ||
+                        typeof value !== 'string'
+                    )
+                        throw new FormulaRuntimeError();
                     const regex = new RegExp(regexString);
                     return Number(regex.test(value));
                 } catch (e) {
+                    if (this.options.legacyRuntime)
+                        return AIRTABLE_FORMULA_ERROR_VALUE;
                     if (e instanceof SyntaxError)
                         throw new FormulaRuntimeError();
                     throw e;
@@ -528,6 +586,8 @@ export default class Interpreter implements Visitor<AirtablePrimitive> {
                     : trueValue;
             }
             case 'ISERROR':
+                if (this.options.legacyRuntime)
+                    return FormulaRunner.isErrorValue(convertedArgs[0]) ? 1 : 0;
                 for (const argument of convertedArgs)
                     this.assertConsumableValue(argument);
                 return 0;

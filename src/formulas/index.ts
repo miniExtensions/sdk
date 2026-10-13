@@ -4,6 +4,8 @@ export {
     default as Interpreter,
     FormulaFunctions,
     type InterpreterContext,
+    type FormulaInterpreterOptions,
+    type FormulaFieldReferenceResolution,
 } from './interpreter/interpreter.js';
 export type { TokenizeOptions } from './lexer/lexer.js';
 export { default as Lexer } from './lexer/lexer.js';

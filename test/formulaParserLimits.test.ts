@@ -5,6 +5,8 @@ import {
     Lexer,
     Parser,
     Literal,
+    Binary,
+    Unary,
     TokenTypes,
     extractIdentifiersFromExpr,
 } from '../src/formulas/index.js';
@@ -24,36 +26,117 @@ const depthLimit = {
 };
 
 describe('opt-in formula parsing bounds', () => {
-    it('preserves base-parser unbounded recursion in fresh Node processes', () => {
-        // These inputs pass 48cb5847's parser; the initial bounded-parser change
-        // overflowed because its callback wrapper added frames even by default.
+    it('preserves deep input compatibility in fresh Node processes', () => {
         // Isolate each case so JIT warmup from other tests cannot mask it.
-        for (const [prefix, suffix, depth] of [
+        for (const [prefix, suffix, depth, maxDepth] of [
             ['-', '', 4000],
             ['-', '', 6000],
             ['-', '', 8000],
             ['(', ')', 500],
             ['SUM(', ')', 500],
+            ['(', ')', 950],
+            ['SUM(', ')', 950],
+            ['-(', ')', 850],
+            ['-SUM(', ')', 850],
+            ['--(', ')', 780],
+            ['--SUM(', ')', 780],
+            ['---(', ')', 710],
+            ['---SUM(', ')', 710],
+            ['-(', ')', 700, 1401],
+            ['-SUM(', ')', 700, 1401],
+            ['--(', ')', 600, 1801],
+            ['--SUM(', ')', 600, 1801],
         ] as const) {
-            execFileSync(
-                process.execPath,
-                [
-                    '--input-type=module',
-                    '--eval',
-                    `
+            // Preserve the default-stack unary and 500-level witnesses. Higher
+            // nesting needs an explicit budget across architectures; Linux x64
+            // also retains the 984 KiB witness that catches the larger frame.
+            const stackSizes =
+                prefix === '-' || depth === 500
+                    ? [undefined]
+                    : process.platform === 'linux' && process.arch === 'x64'
+                      ? [2048, 984]
+                      : [2048];
+            for (const stackSize of stackSizes) {
+                execFileSync(
+                    process.execPath,
+                    [
+                        ...(stackSize === undefined
+                            ? []
+                            : [`--stack-size=${stackSize}`]),
+                        '--input-type=module',
+                        '--eval',
+                        `
                 import assert from 'node:assert/strict';
                 import {Lexer, Parser} from ${JSON.stringify(new URL('../src/formulas/index.js', import.meta.url).href)};
                 const source = ${JSON.stringify(prefix)}.repeat(${depth}) + '1' + ${JSON.stringify(suffix)}.repeat(${depth});
                 const tokens = new Lexer(source).tokenize();
-                const expression = new Parser(tokens).parse();
+                const maxDepth = ${maxDepth};
+                const expression = new Parser(tokens).parse({maxDepth});
                 assert.ok(expression);
-                assert.strictEqual(new Parser(tokens).parse(), expression);
-                assert.notStrictEqual(new Parser(tokens).parse({cache:false}), expression);
+                if (maxDepth === undefined) {
+                    assert.strictEqual(new Parser(tokens).parse(), expression);
+                } else {
+                    assert.throws(() => new Parser(tokens).parse({maxDepth:maxDepth-1}), {
+                        name: 'RangeError', message: 'Formula depth limit exceeded'
+                    });
+                }
+                assert.notStrictEqual(new Parser(tokens).parse({cache:false,maxDepth}), expression);
+            `,
+                    ],
+                    { timeout: 15000 }
+                );
+            }
+        }
+    });
+    it('parses cold unary chains with a small stack and exact depth bounds', () => {
+        for (const maxDepth of [undefined, 8001]) {
+            execFileSync(
+                process.execPath,
+                [
+                    '--stack-size=256',
+                    '--input-type=module',
+                    '--eval',
+                    `
+                import assert from 'node:assert/strict';
+                import {Lexer, Parser, Unary, Literal} from ${JSON.stringify(new URL('../src/formulas/index.js', import.meta.url).href)};
+                const tokens = new Lexer('-'.repeat(8000) + '1').tokenize({cache:false});
+                let expression = new Parser(tokens).parse({cache:false,maxDepth:${maxDepth}});
+                for (let index = 0; index < 8000; index++) {
+                    assert.ok(expression instanceof Unary);
+                    assert.strictEqual(expression.operator, tokens[index]);
+                    expression = expression.left;
+                }
+                assert.ok(expression instanceof Literal);
+                assert.equal(expression.value, 1);
+                assert.throws(() => new Parser(tokens).parse({maxDepth:8000}), {
+                    name: 'RangeError', message: 'Formula depth limit exceeded'
+                });
             `,
                 ],
                 { timeout: 15000 }
             );
         }
+    });
+    it('retains unary operator identity and multiplication precedence', () => {
+        const tokens = new Lexer('--1*-2').tokenize({ cache: false });
+        const expected = new Binary(
+            tokens[3]!,
+            new Unary(tokens[0]!, new Unary(tokens[1]!, new Literal(1))),
+            new Unary(tokens[4]!, new Literal(2))
+        );
+        for (const maxDepth of [undefined, 4]) {
+            assert.deepEqual(
+                new Parser(tokens).parse({ cache: false, maxDepth }),
+                expected
+            );
+        }
+        assert.throws(() => parse('--1*-2', 3), depthLimit);
+        for (const source of ['-', '--', '-*1']) {
+            assert.throws(() => parse(source), {
+                message: 'Expected an expression',
+            });
+        }
+        assert.throws(() => parse('--1 2'), { message: 'Invalid expression' });
     });
     it('accepts exact token limits and ignores trailing whitespace', () => {
         assert.equal(

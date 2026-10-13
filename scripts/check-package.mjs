@@ -501,7 +501,7 @@ export const numericKind = AirtableFieldType.NUMBER;
     );
 
     const parserChecks = String.raw`
-// Preserve the pre-feature unbounded recursion budget through installed entry points.
+// Preserve deep-input compatibility through installed entry points.
 for (const [prefix, suffix, depth] of [['-', '', 8000], ['(', ')', 500], ['SUM(', ')', 500]]) {
     const source = prefix.repeat(depth) + '1' + suffix.repeat(depth);
     const tokens = new Lexer(source).tokenize();
@@ -606,6 +606,89 @@ ${formattingChecks}
 ${parserChecks}`
     );
     run(process.execPath, ['consumer.cjs']);
+
+    // Start cold with a deliberately small stack: a warm/default-stack process
+    // can hide recursive unary parsing failures on other Node builds.
+    const unaryChecks = `
+const tokens = new Lexer('-'.repeat(8000) + '1').tokenize({cache:false});
+for (const maxDepth of [undefined, 8001]) {
+    let expression = new Parser(tokens).parse({cache:false,maxDepth});
+    for (let index = 0; index < 8000; index++) {
+        assert.ok(expression instanceof Unary);
+        assert.strictEqual(expression.operator, tokens[index]);
+        expression = expression.left;
+    }
+    assert.ok(expression instanceof Literal);
+    assert.equal(expression.value, 1);
+}
+assert.throws(() => new Parser(tokens).parse({maxDepth:8000}), {
+    name: 'RangeError', message: 'Formula depth limit exceeded'
+});
+`;
+    for (const [extension, imports] of [
+        [
+            'mjs',
+            "import assert from 'node:assert/strict'; import {Lexer, Parser, Unary, Literal} from '@miniextensions/sdk/formulas';",
+        ],
+        [
+            'cjs',
+            "const assert = require('node:assert/strict'); const {Lexer, Parser, Unary, Literal} = require('@miniextensions/sdk/formulas');",
+        ],
+    ]) {
+        const filename = `unary-cold.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, filename),
+            imports + unaryChecks
+        );
+        run(process.execPath, ['--stack-size=256', filename]);
+        // Grouping/calls must also start cold; unary-chain warmup can mask a
+        // larger frame reducing the existing non-unary recursion capacity.
+        for (const [kind, prefix, depth, maxDepth] of [
+            ['groups', '(', 950],
+            ['calls', 'SUM(', 950],
+            ['unary-groups', '-(', 850],
+            ['unary-calls', '-SUM(', 850],
+            ['double-unary-groups', '--(', 780],
+            ['double-unary-calls', '--SUM(', 780],
+            ['triple-unary-groups', '---(', 710],
+            ['triple-unary-calls', '---SUM(', 710],
+            ['bounded-unary-groups', '-(', 700, 1401],
+            ['bounded-unary-calls', '-SUM(', 700, 1401],
+            ['bounded-double-unary-groups', '--(', 600, 1801],
+            ['bounded-double-unary-calls', '--SUM(', 600, 1801],
+        ]) {
+            const nestedFilename = `${kind}-cold.${extension}`;
+            writeFileSync(
+                join(temporaryDirectory, nestedFilename),
+                imports +
+                    `
+const tokens = new Lexer(${JSON.stringify(prefix)}.repeat(${depth}) + '1' + ')'.repeat(${depth})).tokenize();
+const maxDepth = ${maxDepth};
+const expression = new Parser(tokens).parse({maxDepth});
+assert.ok(expression);
+if (maxDepth === undefined) {
+    assert.strictEqual(new Parser(tokens).parse(), expression);
+} else {
+    assert.throws(() => new Parser(tokens).parse({maxDepth:maxDepth-1}), {
+        name: 'RangeError', message: 'Formula depth limit exceeded'
+    });
+}
+assert.notStrictEqual(new Parser(tokens).parse({cache:false,maxDepth}), expression);
+`
+            );
+            // High nesting is not a portable default-stack promise. Keep an
+            // explicit common budget plus the Linux x64 regression witness.
+            const stackSizes =
+                process.platform === 'linux' && process.arch === 'x64'
+                    ? [2048, 984]
+                    : [2048];
+            for (const stackSize of stackSizes)
+                run(process.execPath, [
+                    `--stack-size=${stackSize}`,
+                    nestedFilename,
+                ]);
+        }
+    }
 
     for (const dependency of ['react', 'react-dom', 'vue', 'happy-dom']) {
         assert(

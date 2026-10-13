@@ -236,12 +236,19 @@ export async function checkReactBindingConsumer({
         await act(async () =>
             owner.field(textId).setValue('Shared native text')
         );
+        const stockLabel = [...container.querySelectorAll('label')].find(
+            (label) =>
+                label.textContent ===
+                owner.field(textId).getSnapshot().field.title
+        );
         const textInputs = [
-            ...container.querySelectorAll(
-                'div > label > input:not([type=checkbox]), input[aria-label="Custom text"]'
-            ),
+            stockLabel?.control,
+            container.querySelector('input[aria-label="Custom text"]'),
         ];
-        assert.equal(textInputs.length, 2);
+        assert(
+            textInputs.every(Boolean),
+            'Both text controls must be labelled'
+        );
         textInputs.forEach((input) =>
             assert.equal(input.value, 'Shared native text')
         );

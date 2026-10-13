@@ -11,6 +11,15 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import {
+    TextControl,
+    textConfiguration,
+    type TextFieldOptions,
+} from './TextField.js';
+export {
+    renderSingleLineTextField,
+    type TextFieldOptions,
+} from './TextField.js';
+import {
     CheckboxControl,
     checkboxConfiguration,
     type CheckboxFieldOptions,
@@ -254,33 +263,39 @@ const status = (snapshot: FormFieldSnapshot) =>
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
-export function TextField({ binding, render }: FieldProps): ReactNode {
+export type TextFieldProps = FieldProps & TextFieldOptions;
+export function TextField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: TextFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
-    const obscure = snapshot.field?.schema.miniExtConfig;
-    return createElement(
-        'div',
-        null,
-        createElement(
-            'label',
-            null,
-            snapshot.field?.title,
-            createElement('input', {
-                type:
-                    obscure &&
-                    'obscurePassword' in obscure &&
-                    obscure.obscurePassword === true
-                        ? 'password'
-                        : 'text',
-                value: typeof snapshot.value === 'string' ? snapshot.value : '',
-                disabled: !snapshot.canEdit,
-                onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                    binding.setValue(event.currentTarget.value || null),
-            })
-        ),
-        status(snapshot)
-    );
+    const config = textConfiguration(snapshot.field?.schema.miniExtConfig);
+    return createElement(TextControl, {
+        ...config,
+        className,
+        clearLabel,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : (snapshot.field?.schema.airtableField.name ?? ''),
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        disabled:
+            config.configuredReadOnly || !snapshot.canEdit || snapshot.pending,
+        pending: snapshot.pending,
+        invalid:
+            snapshot.scalar?.error != null ||
+            snapshot.error !== null ||
+            snapshot.validation.length > 0,
+        feedback:
+            snapshot.scalar?.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: (value) => binding.setValue(value).accepted,
+    });
 }
 /** Numeric input uses native units, including fractional percent values. */
 export function NumberField({ binding, render }: FieldProps): ReactNode {

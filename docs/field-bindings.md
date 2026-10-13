@@ -283,6 +283,13 @@ React reflects the owner-held linked search query on remount and replaces it whe
 the binding identity changes. Neither mounting nor StrictMode starts linked reads,
 uploads or Saves.
 
+`TextField` keeps this binding API and adds an accessible Clear control, configured
+placeholder, password masking and character limit. Its named
+`renderSingleLineTextField` helper works in Form/Grid/List slots. Import
+`@miniextensions/sdk/react/text.css` for optional defaults; see
+[React Text presentation](ui.md#react-text-presentation) for composition behavior,
+customization and the manual-entry scope.
+
 `AttachmentField` additionally takes the owner's attachment controller. Selection
 and drop run admission without upload; `upload()` is explicit and uploads the first
 queued File only. Status reports phases, not byte progress. Empty chooser completion

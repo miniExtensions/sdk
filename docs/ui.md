@@ -1167,3 +1167,81 @@ owners, with no backend requests. After building, run
 `node examples/react-checkbox/dev.mjs` and open `http://127.0.0.1:4176`.
 `node scripts/check-checkbox-browser.mjs` verifies the native interactions,
 remounting, permissions, forced colors and narrow layout and captures screenshots.
+
+## React Text presentation
+
+The optional `/react` entry exports `TextField`, `TextFieldProps`,
+`TextFieldOptions` and `renderSingleLineTextField`. The binding component retains
+its `{ binding, render }` API; supplying `render` still replaces all markup.
+
+```tsx
+import { TextField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function ProjectName({ binding }: { binding: FormFieldBinding }) {
+    return <TextField binding={binding} className="project-name" />;
+}
+```
+
+The named helper consumes `FieldRendererProps<'singleLineText'>` in
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderSingleLineTextField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const textRenderers: FieldRendererSlots<ReactNode> = {
+    renderSingleLineTextField: (props) =>
+        renderSingleLineTextField(props, { clearLabel: 'Effacer le texte' }),
+};
+```
+
+Changes call only the accepted editable capability or binding. The native draft
+keeps exact whitespace and literal text; an explicit empty edit or Clear writes
+`null`. An initially absent value stays absent until a deliberate edit. Clear is
+`type="button"` and returns focus to the input. Owners remain outside React;
+mounting, StrictMode and remounting neither create nor dispose an owner, write a
+draft, invoke Save or start network work. Rejected stale edits restore the current
+rendered value; applications must still retire owners when their context changes.
+
+Unfinished IME composition is kept in a local presentation buffer. Completion
+commits once through the captured accepted action. Observed owner, value,
+permission, masking or limit changes cancel that buffer, including an observed
+change away and back. Remounting discards unfinished composition and reflects the
+owner's accepted draft. Native typing retains the input node and caret.
+
+The control honors title visibility, placeholder, required indication, password
+masking, configured read-only state and finite nonnegative integer character
+limits. Masking and read-only restrictions from either display or write config
+apply; when both specify a limit, the smaller applies. Limits count UTF-16 code
+units, matching native `maxlength`, without cutting a surrogate pair in half.
+Only user edits are capped; loaded or externally updated values are never
+silently shortened. Validation remains with the existing owner and canonical Save.
+
+Labels use unique React instance IDs for repeated rows. Hidden titles retain an
+accessible name. Feedback is plain text in an associated polite live region;
+explicitly empty feedback is preserved. Read-only, pending and computed controls
+are disabled. Hidden, blocked and retired hosts render nothing. Click, pointer
+and keyboard events stop bubbling into Portal rows. The optional `clearLabel`
+localizes the Clear control's accessible name; its default is `Clear <title>`.
+
+This slice covers manual single-line entry. Address lookup, QR/barcode scanning,
+camera access, automatic submission, URL buttons and attachment presentation need
+their own accepted integration or custom renderer. Configuration or raw text
+never starts those integrations or grants navigation authority.
+
+The provisional styling is confined to `mx-sdk-text*` classes. Import the CSS,
+override its classes, or omit it and supply your own. `className` decorates the
+wrapper; no theme system or appearance-prop API is introduced. The stylesheet is
+exported as `@miniextensions/sdk/react/text.css` and copied into both builds.
+JavaScript does not import it; core and `/ui` stay React-free.
+
+The local `examples/react-text` example uses public exports and synthetic owners,
+with no backend requests. After building, run `node examples/react-text/dev.mjs`
+and open `http://127.0.0.1:4177`. `node scripts/check-text-browser.mjs` checks native
+typing, selection/caret, clearing, simulated composition, remounting, permissions,
+forced colors and narrow layout and captures screenshots. Simulated composition
+does not certify every platform's input method or screen reader.

@@ -87,7 +87,8 @@
             }
         },
         "./react/button.css": "./dist/esm/react/button.css",
-        "./react/checkbox.css": "./dist/esm/react/checkbox.css"
+        "./react/checkbox.css": "./dist/esm/react/checkbox.css",
+        "./react/text.css": "./dist/esm/react/text.css"
     },
     "files": [
         "dist/esm",

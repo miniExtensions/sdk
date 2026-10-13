@@ -155,6 +155,17 @@ try {
     });
     await first.fill('  Exact text  ');
     assert.equal(await first.inputValue(), '  Exact text  ');
+    // Exercise the browser's Enter default action in the synthetic host form.
+    const beforeEnter = await writes();
+    await first.press('Enter');
+    assert.equal(await first.inputValue(), '  Exact text  ');
+    assert.equal(await writes(), beforeEnter);
+    assert.equal(await page.locator('#rows').textContent(), '0');
+    assert.equal(await page.locator('#submits').textContent(), '0');
+    assert.equal(
+        await first.evaluate((node) => node === document.activeElement),
+        true
+    );
     const beforeRemount = await writes();
     await page.getByRole('button', { name: 'Remount renderers' }).click();
     assert.equal(await first.inputValue(), '  Exact text  ');
@@ -209,6 +220,12 @@ try {
     await compositionInput(capped, composed);
     assert.equal(await capped.inputValue(), composed);
     assert.equal(await writes(), beforeComposition);
+    // Enter must not prematurely commit the simulated composition or submit.
+    await capped.press('Enter');
+    assert.equal(await capped.inputValue(), composed);
+    assert.equal(await writes(), beforeComposition);
+    assert.equal(await page.locator('#rows').textContent(), '0');
+    assert.equal(await page.locator('#submits').textContent(), '0');
     await compose(capped, 'compositionend');
     assert.equal(await capped.inputValue(), composed.slice(0, 12));
     assert.equal(await writes(), beforeComposition + 1);
@@ -274,6 +291,7 @@ try {
                 externalRequests: 0,
                 checks: [
                     'native keyboard typing and caret',
+                    'native Enter preserves draft without row activation or form submission',
                     'visible keyboard focus',
                     'unique IDs',
                     'exact whitespace',
@@ -285,6 +303,7 @@ try {
                     'clear and focus',
                     'StrictMode/remount preserves owner',
                     'simulated IME commits once',
+                    'Enter during simulated IME does not commit or submit',
                     'replacement during composition cancels',
                     'permission changes',
                     'no Portal row activation or implicit submission',

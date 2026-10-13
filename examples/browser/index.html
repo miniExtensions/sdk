@@ -49,6 +49,16 @@
                             />
                         </label>
                     </div>
+                    <label>
+                        <input id="remember-session" type="checkbox" />
+                        Remember each visitor’s login in this tab (optional)
+                    </label>
+                    <p class="hint">
+                        Stores only encrypted login/password credentials in this
+                        tab’s session storage. After refresh, reconnect with the
+                        same settings and opt in to validate the remembered
+                        session. Drafts and files are never stored.
+                    </p>
                     <div class="actions">
                         <button type="submit">Connect and load</button>
                         <button id="disconnect" type="button" class="secondary">
@@ -58,8 +68,8 @@
                 </form>
                 <p class="hint">
                     Hosted miniExtensions cookies are never sent. Visitor
-                    sessions stay in this page's memory. No data is written
-                    until you choose a write action.
+                    sessions stay in this page's memory unless you opt in above.
+                    No data is written until you choose a write action.
                 </p>
             </section>
             <section class="session-bar" aria-label="Visitor sessions">

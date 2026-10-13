@@ -57,7 +57,10 @@ used by its actual handlers.
 sessions, revisions, pending actions and drafts. Authentication returns a
 credential result; the app deliberately applies a current result and reloads
 the screen. Browser cookies or another visitor's session do not authenticate
-this client. Sessions are memory-only in this example.
+this client. Sessions are memory-only by default. The starter’s optional
+**Remember each visitor’s login in this tab** control wires the existing
+restoration adapter; see [refresh, retry and logout](../examples/browser/README.md#authentication-and-visitor-isolation).
+Connection settings, drafts, files and uncertain operations are not restored.
 
 Capture the current owner, client, session and revision before an asynchronous
 action. Apply its result only while that context is still current. Advance the

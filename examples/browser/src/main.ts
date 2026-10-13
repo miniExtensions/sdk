@@ -21,6 +21,9 @@ import {
 import {
     shouldMaskLoginFieldInput,
     getLoginVerificationDestination,
+    type SessionRestoration,
+    type AuthVerificationChallenge,
+    type AuthCredentialGrant,
 } from '@miniextensions/sdk/auth';
 import {
     composeFormFieldVisibility,
@@ -79,8 +82,20 @@ import {
     type ConfirmationOptions,
 } from './confirmation.js';
 
+import { createRememberedSession } from './rememberedSession.js';
+
 type Visitor = {
     client: MiniExtensionsClient | null;
+    remembered: ReturnType<typeof createRememberedSession> | null;
+    pendingSessionCleanup: Set<ReturnType<typeof createRememberedSession>>;
+    authentication: SessionRestoration | null;
+    restorationError: {
+        page: Extract<
+            LoadExtensionResult,
+            { extensionScreen: 'password' | 'login_page' }
+        >;
+        message: string;
+    } | null;
     screen: LoadExtensionResult | null;
     root: PortalLoadedResult | null;
     portal: PortalView | null;
@@ -99,10 +114,18 @@ type Visitor = {
         | null;
     drafts: FormDraftStore<AirtableValue>;
     uncertainFormDraftScopes: Set<string>;
-    verification: { loginPage: LoginPageResult; verificationId: string } | null;
+    verification: {
+        loginPage: LoginPageResult;
+        verificationId: string;
+        challenge?: AuthVerificationChallenge;
+    } | null;
 };
 const newVisitor = (): Visitor => ({
     client: null,
+    remembered: null,
+    pendingSessionCleanup: new Set(),
+    authentication: null,
+    restorationError: null,
     screen: null,
     root: null,
     portal: null,
@@ -124,6 +147,7 @@ const recovery = new RecoveryJournal();
 let formLoadSequence = 0;
 let connection: {
     apiOrigin: string;
+    remember: boolean;
     input: Extract<LoadExtensionInput, { shareId: string }>;
 } | null = null;
 let request: AbortController | null = null;
@@ -216,7 +240,7 @@ const sessionSummary = (): void => {
     nodeById('session-summary').textContent =
         connection == null
             ? 'Not connected'
-            : `Visitor ${activeVisitor} · ${count === 0 ? 'Anonymous' : 'Authenticated session'} · memory only`;
+            : `Visitor ${activeVisitor} · ${count === 0 ? 'Anonymous' : 'Authenticated session'} · ${visitor.remembered ? 'remembering opted in for this tab' : 'memory only'}${visitor.pendingSessionCleanup.size > 0 ? ' · storage cleanup pending' : ''}`;
 };
 
 /** Every response must still belong to its visitor, session and connection. */
@@ -302,6 +326,9 @@ const confirmCurrent = async (
 const invalidate = (visitor: Visitor): void => {
     cancelConfirmation();
     visitor.portal?.destroy();
+    visitor.remembered?.destroy();
+    visitor.authentication = null;
+    visitor.restorationError = null;
     visitor.revision += 1;
     visitor.screen = null;
     visitor.root = null;
@@ -344,10 +371,59 @@ const load = (): void => {
         async ({ visitor, client, signal, current }) => {
             if (connection == null) return;
             const query = structuredClone(connection.input.query ?? {});
-            const result = await client.loadExtension(connection.input, {
+            let result = await client.loadExtension(connection.input, {
                 signal,
             });
             if (!current()) return;
+            if (
+                visitor.remembered &&
+                (result.extensionScreen === 'password' ||
+                    result.extensionScreen === 'login_page')
+            ) {
+                const provisional = result;
+                const adapter = visitor.remembered.prepare(provisional);
+                visitor.authentication = adapter;
+                visitor.restorationError = null;
+                status('Checking this visitor’s remembered session…');
+                const cancel = () => {
+                    adapter.destroy();
+                    if (visitor.authentication === adapter) {
+                        visitor.authentication = null;
+                        visitor.restorationError = {
+                            page: provisional,
+                            message:
+                                'Session restoration was cancelled. Retry or continue with login explicitly.',
+                        };
+                    }
+                };
+                signal.addEventListener('abort', cancel, { once: true });
+                let restored: LoadExtensionResult | null;
+                try {
+                    restored = await adapter.restore();
+                } finally {
+                    signal.removeEventListener('abort', cancel);
+                }
+                if (!current()) return;
+                const state = adapter.getSnapshot();
+                if (restored && state.phase === 'restored') result = restored;
+                else if (state.phase !== 'login-required') {
+                    visitor.restorationError = {
+                        page: provisional,
+                        message:
+                            state.message ??
+                            'The remembered session could not be checked.',
+                    };
+                    render();
+                    status(
+                        'Session not restored. Retry or explicitly continue with login.',
+                        true
+                    );
+                    return;
+                }
+            }
+            visitor.remembered?.accept(result, current);
+            if (!current()) return;
+            visitor.restorationError = null;
             // Reload replaces this visitor's drafts only after a fresh read.
             visitor.drafts.clear();
             visitor.uncertainFormDraftScopes.clear();
@@ -386,22 +462,31 @@ const load = (): void => {
 const applyLogin = (
     visitor: Visitor,
     page: LoginPageResult,
-    token: string
+    token: string,
+    grant?: AuthCredentialGrant
 ): void => {
     if (visitor.client == null) return;
+    if (grant && visitor.authentication)
+        visitor.authentication.applySession(grant);
+    const rememberedMessage = grant
+        ? visitor.authentication?.getSnapshot().message
+        : null;
     replaceSession(
         visitor,
-        withLoginToken(visitor.client.getSession(), {
-            extensionId: page.extensionId,
-            tableId: page.payload.tableId,
-            loginFieldNames: page.payload.loginFieldNames,
-            encryptedLoginToken: token,
-        })
+        grant
+            ? visitor.client.getSession()
+            : withLoginToken(visitor.client.getSession(), {
+                  extensionId: page.extensionId,
+                  tableId: page.payload.tableId,
+                  loginFieldNames: page.payload.loginFieldNames,
+                  encryptedLoginToken: token,
+              })
     );
     visitor.screen = null;
     render();
     status(
-        'Login applied to this visitor. Choose Reload to load the authenticated screen.'
+        rememberedMessage ??
+            'Login applied to this visitor. Choose Reload to load the authenticated screen.'
     );
 };
 
@@ -423,13 +508,20 @@ const renderPassword = (
         void run(
             'Verifying the password…',
             async ({ visitor, client, signal, current }) => {
-                const result = await client.auth.verifyExtensionPassword(
-                    {
-                        extensionId: page.extensionId,
-                        extensionPassword: password.value,
-                    },
-                    { signal }
-                );
+                const flow = visitor.authentication?.flow;
+                const result =
+                    flow?.screen === 'password'
+                        ? await flow.verifyPassword(
+                              { extensionPassword: password.value },
+                              { signal }
+                          )
+                        : await client.auth.verifyExtensionPassword(
+                              {
+                                  extensionId: page.extensionId,
+                                  extensionPassword: password.value,
+                              },
+                              { signal }
+                          );
                 if (!current()) return;
                 password.value = '';
                 if (result.type !== 'correct') {
@@ -441,18 +533,27 @@ const renderPassword = (
                     );
                     return;
                 }
+                if ('grant' in result)
+                    visitor.authentication!.applySession(result.grant);
+                const rememberedMessage =
+                    'grant' in result
+                        ? visitor.authentication?.getSnapshot().message
+                        : null;
                 replaceSession(
                     visitor,
-                    withExtensionPassword(client.getSession(), {
-                        extensionId: page.extensionId,
-                        encryptedExtensionPassword:
-                            result.encryptedExtensionPassword,
-                    })
+                    'grant' in result
+                        ? client.getSession()
+                        : withExtensionPassword(client.getSession(), {
+                              extensionId: page.extensionId,
+                              encryptedExtensionPassword:
+                                  result.encryptedExtensionPassword,
+                          })
                 );
                 visitor.screen = null;
                 render();
                 status(
-                    'Password applied to this visitor. Choose Reload to continue.'
+                    rememberedMessage ??
+                        'Password applied to this visitor. Choose Reload to continue.'
                 );
             }
         );
@@ -545,22 +646,39 @@ const renderLogin = (page: LoginPageResult): void => {
                     return;
                 const loginCredentials = credentials();
                 retireVerification(owner);
-                const result = await client.auth.login(
-                    {
-                        extensionId: page.extensionId,
-                        loginCredentials,
-                    },
-                    { signal }
-                );
+                const flow = owner.authentication?.flow;
+                const result =
+                    flow?.screen === 'login_page'
+                        ? await flow.login({ loginCredentials }, { signal })
+                        : await client.auth.login(
+                              {
+                                  extensionId: page.extensionId,
+                                  loginCredentials,
+                              },
+                              { signal }
+                          );
                 if (!current()) return;
                 if (result.type === 'found-record')
-                    applyLogin(owner, page, result.encryptedLoginToken);
+                    applyLogin(
+                        owner,
+                        page,
+                        'encryptedLoginToken' in result
+                            ? result.encryptedLoginToken
+                            : '',
+                        'grant' in result ? result.grant : undefined
+                    );
                 else if (result.type === 'no-record')
                     status('No matching login record was found.', true);
                 else {
                     owner.verification = {
                         loginPage: page,
-                        verificationId: result.verificationId,
+                        verificationId:
+                            'verificationId' in result
+                                ? result.verificationId
+                                : '',
+                        ...('challenge' in result
+                            ? { challenge: result.challenge }
+                            : {}),
                     };
                     render();
                     status(
@@ -596,14 +714,27 @@ const renderLogin = (page: LoginPageResult): void => {
                         return;
                     const verificationCode = code.value;
                     code.value = '';
-                    const result = await client.auth.confirmVerificationCode(
-                        {
-                            verificationId: verification.verificationId,
-                            verificationCode,
-                            language: page.language,
-                        },
-                        { signal }
-                    );
+                    const flow = owner.authentication?.flow;
+                    const grant =
+                        flow?.screen === 'login_page' && verification.challenge
+                            ? await flow.confirmVerificationCode(
+                                  {
+                                      challenge: verification.challenge,
+                                      verificationCode,
+                                  },
+                                  { signal }
+                              )
+                            : null;
+                    const result = grant
+                        ? null
+                        : await client.auth.confirmVerificationCode(
+                              {
+                                  verificationId: verification.verificationId,
+                                  verificationCode,
+                                  language: page.language,
+                              },
+                              { signal }
+                          );
                     if (
                         current() &&
                         owner.screen === page &&
@@ -612,7 +743,8 @@ const renderLogin = (page: LoginPageResult): void => {
                         applyLogin(
                             owner,
                             verification.loginPage,
-                            result.encryptedLoginToken
+                            result?.encryptedLoginToken ?? '',
+                            grant ?? undefined
                         );
                 }
             );
@@ -2250,6 +2382,45 @@ const render = (): void => {
     sessionSummary();
     const visitor = visitors[activeVisitor];
     const page = visitor.screen;
+    const restoration = visitor.restorationError;
+    if (restoration) {
+        const card = element('section', undefined, 'card');
+        card.append(
+            element('h2', 'Session could not be restored'),
+            element('p', restoration.message)
+        );
+        card.append(
+            button('Retry session restoration', () => {
+                if (
+                    visitors[activeVisitor] === visitor &&
+                    visitor.restorationError === restoration
+                )
+                    load();
+            })
+        );
+        card.append(
+            button('Continue with login', () => {
+                if (
+                    request ||
+                    visitors[activeVisitor] !== visitor ||
+                    visitor.restorationError !== restoration
+                )
+                    return;
+                if (!visitor.authentication?.flow.isCurrent()) {
+                    visitor.authentication =
+                        visitor.remembered?.prepare(restoration.page) ?? null;
+                }
+                visitor.restorationError = null;
+                visitor.screen = restoration.page;
+                render();
+                status(
+                    'Log in explicitly. The failed restoration did not authenticate this visitor.'
+                );
+            })
+        );
+        screenNode.append(card);
+        return;
+    }
     if (page == null) {
         screenNode.append(element('p', 'Choose Reload when ready.', 'hint'));
         return;
@@ -2319,10 +2490,33 @@ const render = (): void => {
     }
 };
 
+const forgetRememberedSessions = (visitor: Visitor, forgetOnly = false) => {
+    const owners = new Set(visitor.pendingSessionCleanup);
+    if (visitor.remembered) owners.add(visitor.remembered);
+    for (const owner of owners) {
+        if (owner.clear(forgetOnly))
+            visitor.pendingSessionCleanup.delete(owner);
+        else visitor.pendingSessionCleanup.add(owner);
+    }
+    return visitor.pendingSessionCleanup.size === 0;
+};
+
 connectionForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    for (const visitor of Object.values(visitors)) invalidate(visitor);
+    if (!inputById('remember-session').checked) {
+        for (const visitor of Object.values(visitors)) {
+            if (!forgetRememberedSessions(visitor, true)) {
+                sessionSummary();
+                status(
+                    'Remembering could not be disabled because browser storage could not be cleared. Your current connection and drafts are retained.',
+                    true
+                );
+                return;
+            }
+        }
+    }
     try {
+        for (const visitor of Object.values(visitors)) invalidate(visitor);
         const apiOrigin = inputById('api-origin').value.trim();
         const shareId = inputById('share-id').value.trim();
         const recordId = inputById('record-id').value.trim() || null;
@@ -2332,7 +2526,8 @@ connectionForm.addEventListener('submit', (event) => {
                 apiOrigin,
             });
         connection = {
-            apiOrigin,
+            apiOrigin: new URL(apiOrigin).origin,
+            remember: inputById('remember-session').checked,
             input: {
                 shareId,
                 recordId,
@@ -2342,11 +2537,26 @@ connectionForm.addEventListener('submit', (event) => {
                     Intl.DateTimeFormat().resolvedOptions().timeZone,
             },
         };
+        for (const [identity, visitor] of Object.entries(visitors)) {
+            visitor.remembered = connection.remember
+                ? createRememberedSession({
+                      client: visitor.client!,
+                      apiOrigin: connection.apiOrigin,
+                      input: connection.input,
+                      visitor: identity,
+                      context: location.pathname.split('/')[1] ?? '',
+                      storage: () => document.defaultView!.sessionStorage,
+                  })
+                : null;
+        }
         render();
         load();
     } catch (error) {
         connection = null;
-        for (const visitor of Object.values(visitors)) visitor.client = null;
+        for (const visitor of Object.values(visitors)) {
+            invalidate(visitor);
+            visitor.client = null;
+        }
         render();
         status(
             error instanceof Error
@@ -2378,28 +2588,50 @@ nodeById('reload').addEventListener('click', load);
 nodeById('logout').addEventListener('click', () => {
     recovery.scrubRetainedInput();
     const visitor = visitors[activeVisitor];
+    const forgotten = forgetRememberedSessions(visitor);
     visitor.client?.setSession({});
     invalidate(visitor);
+    visitor.remembered = null; // Logout disables restoration until a new explicit connection opt-in.
     render();
-    status('This visitor is anonymous again. Choose Reload to continue.');
+    status(
+        forgotten
+            ? 'This visitor is anonymous again. Remembering is off for this visitor until you reconnect and opt in.'
+            : 'This visitor is anonymous, but browser storage could not be cleared. Clear this site’s session storage before using a shared tab.',
+        !forgotten
+    );
 });
 nodeById('cancel').addEventListener('click', () => {
     request?.abort();
     request = null;
     setBusy(false);
+    if (visitors[activeVisitor].restorationError) {
+        render();
+        status(
+            'Session restoration cancelled. No late response can authenticate this visitor.'
+        );
+        return;
+    }
     status(
         'Request cancelled. A write may already have committed; reload and inspect before submitting again.'
     );
 });
 nodeById('disconnect').addEventListener('click', () => {
     recovery.scrubRetainedInput();
+    let forgotten = true;
     for (const visitor of Object.values(visitors)) {
+        forgotten = forgetRememberedSessions(visitor) && forgotten;
         invalidate(visitor);
+        visitor.remembered = null;
         visitor.client = null;
     }
     connection = null;
     render();
-    status('Disconnected. Both visitor sessions have been cleared.');
+    status(
+        forgotten
+            ? 'Disconnected. Both visitor sessions have been cleared.'
+            : 'Disconnected. Browser storage could not be cleared; clear this site’s session storage before using a shared tab.',
+        !forgotten
+    );
     setBusy(false);
 });
 setBusy(false);

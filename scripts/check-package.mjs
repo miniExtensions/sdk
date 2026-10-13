@@ -200,6 +200,7 @@ const browserStarterFiles = [
     'src/childQueries.ts',
     'src/portalSort.ts',
     'src/portalFilter.ts',
+    'src/rememberedSession.ts',
 ].map((path) => `examples/browser/${path}`);
 
 function run(command, args, cwd = temporaryDirectory) {

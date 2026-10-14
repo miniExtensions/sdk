@@ -1,6 +1,38 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
+import {
+    checkMultilineTextConsumer,
+    multilineTextReactTypedConsumer,
+} from './multiline-text-consumer-checks.mjs';
+import {
+    checkPhoneNumberConsumer,
+    phoneNumberReactTypedConsumer,
+} from './phone-number-consumer-checks.mjs';
+import {
+    checkUrlConsumer,
+    urlReactTypedConsumer,
+} from './url-consumer-checks.mjs';
+import {
+    checkEmailConsumer,
+    emailReactTypedConsumer,
+} from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
+import {
+    checkCountConsumer,
+    countReactTypedConsumer,
+} from './count-consumer-checks.mjs';
+import {
+    checkAutoNumberConsumer,
+    autoNumberReactTypedConsumer,
+} from './autonumber-consumer-checks.mjs';
+import {
+    checkRatingConsumer,
+    ratingReactTypedConsumer,
+} from './rating-consumer-checks.mjs';
+import {
+    checkPercentConsumer,
+    percentReactTypedConsumer,
+} from './percent-consumer-checks.mjs';
 import {
     checkDateRendererConsumer,
     dateRendererReactTypedConsumer,
@@ -1192,6 +1224,46 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'count-react-consumer.tsx'),
+        countReactTypedConsumer
+    );
+    reactSources.push('count-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
+        autoNumberReactTypedConsumer
+    );
+    reactSources.push('autonumber-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'rating-react-consumer.tsx'),
+        ratingReactTypedConsumer
+    );
+    reactSources.push('rating-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'multiline-text-react-consumer.tsx'),
+        multilineTextReactTypedConsumer
+    );
+    reactSources.push('multiline-text-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'percent-react-consumer.tsx'),
+        percentReactTypedConsumer
+    );
+    reactSources.push('percent-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'phone-number-react-consumer.tsx'),
+        phoneNumberReactTypedConsumer
+    );
+    reactSources.push('phone-number-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'url-react-consumer.tsx'),
+        urlReactTypedConsumer
+    );
+    reactSources.push('url-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'email-react-consumer.tsx'),
+        emailReactTypedConsumer
+    );
+    reactSources.push('email-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'duration-react-consumer.tsx'),
         durationReactTypedConsumer
     );
@@ -1323,12 +1395,72 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'multiline-text',
+        'phone-number',
+        'url',
         'number',
+        'autonumber',
+        'rating',
+        'percent',
+        'count',
         'date',
         'datetime',
         'duration',
+        'email',
         'currency',
     ]) {
+        const stylesheet = [
+            'autonumber',
+            'percent',
+            'rating',
+            'count',
+        ].includes(name)
+            ? 'number'
+            : ['email', 'url', 'phone-number', 'multiline-text'].includes(name)
+              ? 'text'
+              : name;
+        if (name === 'autonumber') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'build.mjs',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+            ].map((file) => `examples/react-autonumber/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing AutoNumber example source: ${path}`
+                );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-autonumber/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'AutoNumber preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'AutoNumber example sources must remain unignored'
+            );
+        }
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1371,9 +1503,64 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 'Currency example sources must remain unignored'
             );
         }
+        if (name === 'count') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-count/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Count example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Count example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-count/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Count preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Count example sources must remain unignored'
+            );
+        }
         const exampleDirectory = join(temporaryDirectory, `${name}-example`);
         mkdirSync(exampleDirectory);
-        for (const file of ['main.ts', 'styles.css']) {
+        const exampleFiles = ['main.ts', 'styles.css'];
+        if (name === 'email') exampleFiles.push('owners.ts');
+        for (const file of exampleFiles) {
             cpSync(
                 join(process.cwd(), `examples/react-${name}`, file),
                 join(exampleDirectory, file)
@@ -1405,16 +1592,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             exampleBundle.outputFiles.some(
                 (file) =>
                     file.path.endsWith('.css') &&
-                    file.text.includes(`.mx-sdk-${name}`)
+                    file.text.includes(`.mx-sdk-${stylesheet}`)
             )
         );
         assert.equal(
             readFileSync(
-                join(installedPackage, `dist/esm/react/${name}.css`),
+                join(installedPackage, `dist/esm/react/${stylesheet}.css`),
                 'utf8'
             ),
             readFileSync(
-                join(installedPackage, `dist/cjs/react/${name}.css`),
+                join(installedPackage, `dist/cjs/react/${stylesheet}.css`),
                 'utf8'
             )
         );
@@ -1443,6 +1630,38 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
+    const multilineTextProof = await checkMultilineTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(multilineTextProof.checks, 20);
+    console.log(
+        `Installed Multiline Text renderer, binding, shared Text CSS and local example: ${multilineTextProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const phoneNumberProof = await checkPhoneNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(phoneNumberProof.checks, 12);
+    console.log(
+        `Installed Phone Number renderer, binding, shared Text CSS and local example: ${phoneNumberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const urlProof = await checkUrlConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(urlProof.checks, 12);
+    console.log(
+        `Installed URL renderer, binding, shared Text CSS and local example: ${urlProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const emailProof = await checkEmailConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(emailProof.checks, 12);
+    console.log(
+        `Installed Email renderer, binding, shared Text CSS and local example: ${emailProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
     const numberProof = await checkNumberConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -1450,6 +1669,38 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const countProof = await checkCountConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(countProof.checks, 20);
+    console.log(
+        `Installed Count renderer, readonly native display, shared Number CSS and local example: ${countProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const autoNumberProof = await checkAutoNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(autoNumberProof.checks, 16);
+    console.log(
+        `Installed AutoNumber renderer, readonly owners, shared Number CSS and local example: ${autoNumberProof.checks} ESM/CJS groups passed; synthetic data only.`
+    );
+    const ratingProof = await checkRatingConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(ratingProof.checks, 18);
+    console.log(
+        `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const percentProof = await checkPercentConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(percentProof.checks, 16);
+    console.log(
+        `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const dateRendererProof = await checkDateRendererConsumer({
         consumerDirectory: temporaryDirectory,

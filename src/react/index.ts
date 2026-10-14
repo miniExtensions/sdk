@@ -26,6 +26,22 @@ export {
     type TextFieldOptions,
 } from './TextField.js';
 import {
+    MultilineTextControl,
+    multilineTextConfiguration,
+    multilineTextUnavailable,
+    type MultilineTextFieldOptions,
+} from './MultilineTextField.js';
+export {
+    renderMultilineTextField,
+    type MultilineTextFieldOptions,
+} from './MultilineTextField.js';
+export {
+    renderPhoneNumberField,
+    type PhoneNumberFieldOptions,
+} from './PhoneNumberField.js';
+export { renderUrlField, type UrlFieldOptions } from './UrlField.js';
+export { renderEmailField, type EmailFieldOptions } from './EmailField.js';
+import {
     CheckboxControl,
     checkboxConfiguration,
     type CheckboxFieldOptions,
@@ -40,6 +56,17 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
+import { countInput, type CountFieldOptions } from './CountField.js';
+export { renderCountField, type CountFieldOptions } from './CountField.js';
+export {
+    renderAutoNumberField,
+    type AutoNumberFieldOptions,
+} from './AutoNumberField.js';
+export { renderRatingField, type RatingFieldOptions } from './RatingField.js';
+export {
+    renderPercentField,
+    type PercentFieldOptions,
+} from './PercentField.js';
 import {
     CurrencyControl,
     currencyConfiguration,
@@ -302,6 +329,78 @@ const status = (snapshot: FormFieldSnapshot) =>
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
+export type CountFieldProps = FieldProps & CountFieldOptions;
+/** Computed Count metadata and native values remain owned by the binding. */
+export function CountField({
+    binding,
+    render,
+    className,
+}: CountFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'count' ||
+        schema.airtableField.config.type !== 'count'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Count fields.'
+        );
+    return createElement(NumberControl, {
+        ...numberConfiguration(schema.miniExtConfig),
+        className,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input: countInput(snapshot.value, schema.airtableField.config),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+    });
+}
+export type AutoNumberFieldProps = FieldProps & NumberFieldOptions;
+/** Computed native numbers have no local input model or write action. */
+export function AutoNumberField({
+    binding,
+    render,
+    className,
+}: AutoNumberFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'autoNumber' ||
+        schema.airtableField.config.type !== 'autoNumber'
+    )
+        return status(snapshot);
+    return createElement(NumberControl, {
+        ...numberConfiguration(schema.miniExtConfig),
+        className,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input:
+            typeof snapshot.value === 'number' &&
+            Number.isFinite(snapshot.value)
+                ? String(snapshot.value)
+                : '',
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+    });
+}
 export type TextFieldProps = FieldProps & TextFieldOptions;
 export function TextField({
     binding,
@@ -336,8 +435,74 @@ export function TextField({
         setValue: (value) => binding.setValue(value).accepted,
     });
 }
+/** Plain multiline text borrows the owner setter and never submits on Enter. */
+export type MultilineTextFieldProps = FieldProps & MultilineTextFieldOptions;
+export function MultilineTextField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: MultilineTextFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const title = snapshot.field?.title.trim()
+        ? snapshot.field.title
+        : (snapshot.field?.schema.airtableField.name ?? '');
+    const config = multilineTextConfiguration(
+        snapshot.field?.schema.miniExtConfig ?? null
+    );
+    const unavailable =
+        snapshot.field?.schema.fieldType !== 'multilineText'
+            ? 'This control supports plain multiline text fields.'
+            : config.unavailable;
+    if (unavailable)
+        return multilineTextUnavailable(
+            title,
+            unavailable,
+            className,
+            config.showTitle
+        );
+    return createElement(MultilineTextControl, {
+        ...config,
+        className,
+        clearLabel,
+        source: binding,
+        title,
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        disabled:
+            config.configuredReadOnly || !snapshot.canEdit || snapshot.pending,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: (value) => binding.setValue(value).accepted,
+    });
+}
+/** Phone drafts stay literal text without formatting or dialing actions. */
+export type PhoneNumberFieldProps = TextFieldProps;
+export function PhoneNumberField(props: PhoneNumberFieldProps): ReactNode {
+    return createElement(TextField, props);
+}
+/** URL drafts stay literal text and grant no navigation authority. */
+export type UrlFieldProps = TextFieldProps;
+export function UrlField(props: UrlFieldProps): ReactNode {
+    return createElement(TextField, props);
+}
+/** Email preserves exact text; surrounding page and server owners validate it. */
+export type EmailFieldProps = TextFieldProps;
+export function EmailField(props: EmailFieldProps): ReactNode {
+    return createElement(TextField, props);
+}
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
+export type RatingFieldProps = NumberFieldProps;
+/** Native numeric rating drafts stay with the accepted scalar owner. */
+export function RatingField(props: RatingFieldProps): ReactNode {
+    return createElement(NumberField, props);
+}
+export type PercentFieldProps = NumberFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
 export function NumberField({
@@ -360,7 +525,11 @@ export function NumberField({
         snapshot.scalar.kind === 'checkbox'
     )
         return null;
-    if (snapshot.field?.schema.fieldType === 'number') {
+    if (
+        snapshot.field?.schema.fieldType === 'number' ||
+        snapshot.field?.schema.fieldType === 'percent' ||
+        snapshot.field?.schema.fieldType === 'rating'
+    ) {
         if (snapshot.scalar.retired || snapshot.scalar.kind !== 'number')
             return null;
         const config = numberConfiguration(snapshot.field.schema.miniExtConfig);
@@ -498,6 +667,10 @@ export function NumberField({
         ),
         status(snapshot)
     );
+}
+/** Percent input preserves native fractions without display conversion. */
+export function PercentField(props: PercentFieldProps): ReactNode {
+    return createElement(NumberField, props);
 }
 /** Currency adornment shares the existing numeric owner and raw native units. */
 export function CurrencyField(props: CurrencyFieldProps): ReactNode {

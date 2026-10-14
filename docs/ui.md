@@ -1510,8 +1510,9 @@ Pending, computed and unavailable controls are disabled. Retired scalar states
 render nothing. Input events stop bubbling into Portal rows.
 
 The Number presentation styles ordinary Number fields. `NumberField` percent
-and rating bindings retain their prior presentation and native units. Currency
-bindings use the dedicated [Currency presentation](#react-currency-presentation);
+bindings use the same control through the [Percent presentation](#react-percent-presentation),
+with native fractional units. Rating bindings retain their prior presentation and
+native units. Currency bindings use the dedicated [Currency presentation](#react-currency-presentation);
 duration bindings use the dedicated [Duration presentation](#react-duration-presentation)
 and its existing clock-input model. Broader theme APIs remain separate work.
 Canonical Save remains
@@ -1530,6 +1531,85 @@ native typing/caret, Enter in the example host, incomplete and invalid drafts,
 remounts, permissions, external updates, repeated IDs, focus, forced colors and
 narrow layout, and writes screenshots and a JSON receipt. It does not certify
 every platform's input method, screen reader or surrounding form layout.
+
+## React Percent presentation
+
+The optional `/react` entry exports `PercentField`, `PercentFieldProps`,
+`PercentFieldOptions` and `renderPercentField`. `PercentField` delegates to
+`NumberField`, whose physical percent bindings use the same Number control.
+`PercentFieldOptions` aliases `NumberFieldOptions` and accepts only `className`.
+The existing `{ binding, render }` override still replaces all stock markup.
+
+```tsx
+import { PercentField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+
+export function Ratio({ binding }: { binding: FormFieldBinding }) {
+    return <PercentField binding={binding} className="ratio" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'percent'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderPercentField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/number.css';
+
+export const percentRenderers: FieldRendererSlots<ReactNode> = {
+    renderPercentField: (props) =>
+        renderPercentField(props, { className: 'ratio' }),
+};
+```
+
+This is manual native-unit entry. A native fraction of `0.25` appears as `0.25`
+and editing `0.5` sets the native draft to `0.5`. The renderer does not multiply
+or divide by 100, append `%`, clamp to a range, round to configured precision or
+apply locale separators. It uses a text input with decimal input mode, or a
+password input when accepted login masking requires it. There is no additional
+percent parser or independent draft.
+
+Edits go through the accepted numeric scalar's `setInput`. Partial or invalid
+text such as `-` or `1e` stays visible across remounts alongside the last valid
+native value. Existing owner validation blocks deliberate Save while editable visible
+input is invalid. Repairing the draft accepts the owner's parsed number; an
+explicit empty edit sets the native draft to `null`, and zero remains zero.
+Untouched absent values stay absent. Focus and blur add no formatting or native
+writes. There is no stock Clear button; applications may clear through the
+existing owner or provide a custom renderer.
+
+Editing requires the accepted editable numeric scalar for the percent field.
+A raw value and `setValue` action do not replace that capability. Missing or
+mismatched scalar capabilities and readonly controls display finite native values
+without scaling and remain disabled. Read-only configuration, pending and
+computed restrictions are preserved. Retired scalar states and hidden, blocked
+or retired hosts omit the control; stale callbacks retain the owner's guards.
+
+The Number control supplies unique label IDs, hidden-title accessible names,
+placeholder and required indication, associated plain-text feedback and keyboard
+focus styles. Mounting, StrictMode, remounting and unmounting do not create or
+destroy an owner, reset unfinished input, invoke Save or start requests. Owners
+remain outside React and Save remains explicit. Stopped event bubbling does not
+prevent native Enter submission; applications own their enclosing form policy.
+
+`showAsProgressBar`, grouped display and separator metadata do not turn this input
+into a progress bar or change its numeric syntax. Those presentations need a
+separate accepted custom integration. Existing page/server numeric policy remains
+authoritative. Number, Currency and Duration bindings keep their existing routes
+and native units.
+
+There is no separate Percent stylesheet. Import the existing optional
+`@miniextensions/sdk/react/number.css`, override its `mx-sdk-number*` classes or
+supply your own styles. JavaScript does not import CSS; `className` decorates the
+wrapper. Core and `/ui` remain React-free.
+
+After building, `node examples/react-percent/dev.mjs` serves synthetic presentation
+fixtures at `http://127.0.0.1:4186`. `node scripts/check-percent-browser.mjs` checks
+native entry, retained partial drafts, remounts, restrictions and enclosing-form
+Enter behavior. Simulated composition does not certify real OS input methods.
 
 ## React Date presentation
 

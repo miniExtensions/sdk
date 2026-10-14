@@ -121,6 +121,24 @@ Chromium proof. Native form submission and stopped event bubbling are distinct;
 simulated composition does not certify a real input method. These checks do not
 establish a navigation policy or contact a live backend.
 
+## Percent presentation checks
+
+`pnpm check:package` exercises installed Percent exports in ESM and CommonJS
+with synthetic scalar owners. Checks cover unchanged native fractions, values
+outside zero-to-one, precision and progress metadata, partial drafts and remounts,
+empty-to-null edits, zero, blocked invalid Save, stale actions, missing or wrong
+scalar capabilities, readonly/masked controls and custom binding overrides.
+They also retain Number, Currency and Duration dispatch and assert no implicit
+Save. Public props/options, the percent-only slot, Form/Grid/List composition and
+guide recipes are typechecked. The example is compiled and bundled against the
+archive with shared `number.css`; Percent adds no stylesheet export.
+
+After building, `node scripts/check-percent-browser.mjs` runs the separate local
+Chromium proof. Native enclosing-form submission and stopped event bubbling are
+distinct. Simulated composition does not certify a real input method. All values
+are synthetic; the checks do not contact a live backend or introduce a progress
+bar or percent-formatting policy.
+
 ## Phone Number presentation checks
 
 `pnpm check:package` exercises installed Phone Number exports in ESM and CommonJS

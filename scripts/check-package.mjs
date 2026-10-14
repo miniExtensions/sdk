@@ -14,6 +14,10 @@ import {
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
+    checkPercentConsumer,
+    percentReactTypedConsumer,
+} from './percent-consumer-checks.mjs';
+import {
     checkDateRendererConsumer,
     dateRendererReactTypedConsumer,
 } from './date-renderer-consumer-checks.mjs';
@@ -1204,6 +1208,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'percent-react-consumer.tsx'),
+        percentReactTypedConsumer
+    );
+    reactSources.push('percent-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'phone-number-react-consumer.tsx'),
         phoneNumberReactTypedConsumer
     );
@@ -1353,6 +1362,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'phone-number',
         'url',
         'number',
+        'percent',
         'date',
         'datetime',
         'duration',
@@ -1360,9 +1370,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'currency',
     ]) {
         const stylesheet =
-            name === 'email' || name === 'url' || name === 'phone-number'
-                ? 'text'
-                : name;
+            name === 'percent'
+                ? 'number'
+                : name === 'email' || name === 'url' || name === 'phone-number'
+                  ? 'text'
+                  : name;
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1510,6 +1522,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const percentProof = await checkPercentConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(percentProof.checks, 16);
+    console.log(
+        `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const dateRendererProof = await checkDateRendererConsumer({
         consumerDirectory: temporaryDirectory,

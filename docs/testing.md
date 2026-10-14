@@ -142,6 +142,28 @@ Chromium proof. Native form submission and stopped event bubbling are distinct;
 simulated composition does not certify a real input method. These checks do not
 establish a navigation policy or contact a live backend.
 
+## Count presentation checks
+
+`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+They cover readonly Form bindings without a scalar, finite native displays,
+null/missing values, invalid metadata retaining a nonempty native number,
+same-owner validity changes through explicit synthetic reloads, malformed metadata
+rejection by hosts and blank direct-helper display, forged capabilities,
+masking from either configuration, associated feedback, stale controls, custom
+rendering and hidden or retired owners. The adjacent Number field remains editable.
+
+Actual Form composition and Portal Grid/List detail hosts retain readonly Count
+capabilities. The Portal fixture makes one explicit synthetic load; rendering and
+rerendering add no reads, writes or Save. It does not fabricate a computed inline
+cell binding. Public props/options, readonly negative types, wrong-slot rejection,
+Form/Grid/List composition and both guide recipes are typechecked. The local
+example compiles and bundles with shared optional `number.css`; Count adds no
+stylesheet export, and its sources remain tracked while preview outputs are ignored.
+
+After building, `node scripts/check-count-browser.mjs` runs the separate local
+Chromium proof. All fixtures are synthetic. These checks do not calculate linked
+record counts, introduce integer/range policy or contact a live backend.
+
 ## Rating presentation checks
 
 `pnpm check:package` runs 18 installed ESM/CommonJS groups with synthetic owners.

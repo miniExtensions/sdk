@@ -83,6 +83,12 @@ after application callbacks or dispatches that can replace the context.
 remain held. The optional dispatch/cancellation callbacks let an existing store
 retire page or draft eligibility before transport or abort callbacks run.
 Application callbacks may throw; cancellation still aborts the transport.
+The cancellation callback runs at most once per dispatched attempt. Its first
+cancellation reason, including `null`, is retained when the callback cancels
+again, destroys the owner, or starts a replacement read. Cancellation invokes
+the callback before its final abort and preserves any error the callback throws.
+That final abort belongs to the cancelled attempt; it does not abort a replacement
+read started by the callback.
 
 Collections retain their existing whole-record page replacement, explicit
 criteria-cleanup acceptance, child eligibility and session checks. Applications

@@ -45,6 +45,67 @@ const setup = (concurrency: 'reject' | 'supersede' = 'reject') => {
 };
 
 describe('shared Portal read-attempt ownership', () => {
+    for (const reason of [
+        new Error('Synthetic acceptance cancellation'),
+        null,
+    ]) {
+        const label = reason === null ? 'null' : 'Error object';
+        it(`preserves explicit ${label} cancellation during raw receipt cloning`, async () => {
+            const s = setup();
+            let cancelled = 0;
+            const pending = s.coordinator.read(input(), {
+                onCancelledAfterDispatch: () => {
+                    cancelled++;
+                },
+            });
+            const rejected = assert.rejects(
+                pending,
+                (error) => error === reason
+            );
+            s.calls[0].pending.resolve({
+                get recordIds() {
+                    s.coordinator.cancel(reason);
+                    return ['record_never_accepted'];
+                },
+            });
+            await rejected;
+            assert.equal(cancelled, 1);
+            assert.equal(s.calls[0].signal.reason, reason);
+            assert.equal(s.coordinator.hasPendingRead(), false);
+        });
+        it(`preserves explicit ${label} cancellation during an acceptance lease check`, async () => {
+            const reply = deferredPortal<Result>();
+            let armed = false;
+            let cancelled = 0;
+            let coordinator: PortalReadCoordinator<Input, Result>;
+            coordinator = createPortalReadCoordinator<Input, Result>({
+                concurrency: 'reject',
+                getScope: () => ({ ownerId: 'visitor_A', revision: 1 }),
+                isContextCurrent: () => {
+                    if (armed) {
+                        armed = false;
+                        coordinator.cancel(reason);
+                    }
+                    return true;
+                },
+                load: async () => reply.promise,
+            });
+            const pending = coordinator.read(input(), {
+                onCancelledAfterDispatch: () => {
+                    cancelled++;
+                },
+            });
+            const rejected = assert.rejects(
+                pending,
+                (error) => error === reason
+            );
+            armed = true;
+            reply.resolve(result());
+            await rejected;
+            assert.equal(cancelled, 1);
+            assert.equal(coordinator.hasPendingRead(), false);
+        });
+    }
     for (const source of ['external', 'internal'] as const) {
         it(`accepts a read when the real ${source} signal has no throwIfAborted method`, async () => {
             const s = setup();
@@ -307,6 +368,149 @@ describe('shared Portal read-attempt ownership', () => {
         await assert.rejects(read, (error) => error === reason);
         assert.equal(s.coordinator.hasPendingRead(), false);
     });
+
+    for (const firstReason of [
+        new Error('Synthetic first cancellation'),
+        null,
+    ]) {
+        const reasonLabel = firstReason === null ? 'null' : 'Error object';
+
+        it(`invokes a nested cancellation callback once and preserves the first ${reasonLabel} reason`, async () => {
+            const s = setup();
+            const nestedReason = new Error('Synthetic nested cancellation');
+            const events: string[] = [];
+            let callbacks = 0;
+            const read = s.coordinator.read(input(), {
+                onCancelledAfterDispatch: () => {
+                    callbacks++;
+                    events.push('callback:start');
+                    assert.equal(s.calls[0].signal.aborted, false);
+                    // Bound recursion so a missing latch fails without exhausting the stack.
+                    if (callbacks === 1) s.coordinator.cancel(nestedReason);
+                    events.push('callback:end');
+                },
+            });
+            const settled = read.then(
+                (receipt) => receipt,
+                (error: unknown) => error
+            );
+            s.calls[0].signal.addEventListener('abort', () =>
+                events.push('abort')
+            );
+            s.coordinator.cancel(firstReason);
+            assert.equal(s.coordinator.hasPendingRead(), true);
+            s.calls[0].pending.resolve(result('record_late'));
+            const outcome = await settled;
+            assert.equal(callbacks, 1);
+            assert.deepEqual(events, [
+                'callback:start',
+                'callback:end',
+                'abort',
+            ]);
+            assert.equal(s.calls[0].signal.reason, firstReason);
+            assert.equal(outcome, firstReason);
+            assert.equal(s.coordinator.hasPendingRead(), false);
+        });
+
+        it(`preserves the original callback error and first ${reasonLabel} reason during nested cancellation`, async () => {
+            const s = setup();
+            const callbackError = new Error(
+                'Synthetic original callback failure'
+            );
+            const unexpectedNestedError = new Error(
+                'A nested callback must not run'
+            );
+            const events: string[] = [];
+            let callbacks = 0;
+            const read = s.coordinator.read(input(), {
+                onCancelledAfterDispatch: () => {
+                    callbacks++;
+                    events.push('callback:start');
+                    assert.equal(s.calls[0].signal.aborted, false);
+                    if (callbacks > 1) throw unexpectedNestedError;
+                    s.coordinator.cancel(
+                        new Error('Synthetic nested cancellation')
+                    );
+                    events.push('callback:throw');
+                    throw callbackError;
+                },
+            });
+            const settled = read.then(
+                (receipt) => receipt,
+                (error: unknown) => error
+            );
+            s.calls[0].signal.addEventListener('abort', () =>
+                events.push('abort')
+            );
+            let observedError: unknown;
+            try {
+                s.coordinator.cancel(firstReason);
+            } catch (error) {
+                observedError = error;
+            }
+            s.calls[0].pending.resolve(result('record_late'));
+            const outcome = await settled;
+            assert.equal(observedError, callbackError);
+            assert.equal(callbacks, 1);
+            assert.deepEqual(events, [
+                'callback:start',
+                'callback:throw',
+                'abort',
+            ]);
+            assert.equal(s.calls[0].signal.reason, firstReason);
+            assert.equal(outcome, firstReason);
+            assert.equal(s.coordinator.hasPendingRead(), false);
+        });
+
+        it(`preserves the first ${reasonLabel} reason when a cancellation callback starts a successor`, async () => {
+            const s = setup('supersede');
+            let successor: Promise<PortalReadReceipt<Result>> | undefined;
+            let callbacks = 0;
+            const old = s.coordinator.read(input('Old'), {
+                onCancelledAfterDispatch: () => {
+                    callbacks++;
+                    assert.equal(s.calls[0].signal.aborted, false);
+                    successor = s.coordinator.read(input('Successor'));
+                },
+            });
+            s.coordinator.cancel(firstReason);
+            assert.equal(callbacks, 1);
+            assert.equal(s.calls.length, 2);
+            assert.equal(s.calls[1].signal.aborted, false);
+            assert.equal(s.coordinator.hasPendingRead(), true);
+            assert.equal(s.coordinator.isCurrent(), true);
+            s.calls[0].pending.resolve(result('record_old'));
+            s.calls[1].pending.resolve(result('record_successor'));
+            assert.deepEqual(await old, { type: 'retired' });
+            const receipt = accepted(await successor!);
+            assert.equal(s.calls[0].signal.reason, firstReason);
+            assert.equal(s.calls[1].signal.aborted, false);
+            assert.equal(receipt.isCurrent(), true);
+            assert.deepEqual(receipt.raw, result('record_successor'));
+            assert.equal(s.coordinator.hasPendingRead(), false);
+        });
+
+        it(`preserves the first ${reasonLabel} reason when a cancellation callback destroys its owner`, async () => {
+            const s = setup();
+            let callbacks = 0;
+            const read = s.coordinator.read(input(), {
+                onCancelledAfterDispatch: () => {
+                    callbacks++;
+                    assert.equal(s.calls[0].signal.aborted, false);
+                    s.coordinator.destroy(
+                        new Error('Synthetic owner disposal')
+                    );
+                },
+            });
+            s.coordinator.cancel(firstReason);
+            s.calls[0].pending.resolve(result('record_late'));
+            assert.deepEqual(await read, { type: 'retired' });
+            assert.equal(callbacks, 1);
+            assert.equal(s.calls[0].signal.reason, firstReason);
+            assert.equal(s.coordinator.isCurrent(), false);
+            assert.equal(s.coordinator.hasPendingRead(), false);
+        });
+    }
 
     for (const oldOutcome of ['success', 'error'] as const) {
         it(`retires an abort-ignoring superseded ${oldOutcome} without affecting its successor`, async () => {

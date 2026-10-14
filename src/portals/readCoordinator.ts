@@ -66,6 +66,7 @@ export function createPortalReadCoordinator<
         generation: number;
         dispatched: boolean;
         retired: boolean;
+        cancellation: { reason: unknown } | null;
         cancelled(): void;
     };
     let active: Attempt | null = null;
@@ -78,6 +79,12 @@ export function createPortalReadCoordinator<
                 ? 'The Portal collection was disposed.'
                 : 'The Portal owner or session changed. Create a fresh collection.'
         );
+    const abortAttempt = (attempt: Attempt, supplied?: unknown) =>
+        attempt.controller.abort(
+            attempt.cancellation === null
+                ? supplied
+                : attempt.cancellation.reason
+        );
     const retire = (next: 'stale' | 'disposed', supplied?: unknown) => {
         if (phase !== 'active') return;
         const previous = active;
@@ -89,11 +96,11 @@ export function createPortalReadCoordinator<
         reason = supplied;
         if (preparation) {
             preparation.retired = true;
-            preparation.controller.abort(lifecycleError());
+            abortAttempt(preparation, lifecycleError());
         }
         if (previous) {
             previous.retired = true;
-            previous.controller.abort(lifecycleError());
+            abortAttempt(previous, lifecycleError());
         }
     };
     const isCurrent = (): boolean => {
@@ -127,9 +134,12 @@ export function createPortalReadCoordinator<
     const cancel = (attempt: Attempt, supplied?: unknown) => {
         if (
             (active !== attempt && preparing !== attempt) ||
-            attempt.controller.signal.aborted
+            attempt.controller.signal.aborted ||
+            attempt.cancellation !== null
         )
             return;
+        // Reserve cancellation before application callbacks can cancel or replace it.
+        attempt.cancellation = { reason: supplied };
         try {
             if (attempt.dispatched) {
                 generation++;
@@ -137,7 +147,7 @@ export function createPortalReadCoordinator<
             }
         } finally {
             // Reject-mode single-flight stays occupied until ignored-abort I/O settles.
-            attempt.controller.abort(supplied);
+            abortAttempt(attempt);
         }
     };
     return {
@@ -163,6 +173,7 @@ export function createPortalReadCoordinator<
                 generation,
                 dispatched: false,
                 retired: false,
+                cancellation: null,
                 cancelled: () => undefined,
             };
             // Reserve intent before application-owned scope, options or input getters.
@@ -172,13 +183,20 @@ export function createPortalReadCoordinator<
             preparing = attempt;
             if (previousPreparation) {
                 previousPreparation.retired = true;
-                previousPreparation.controller.abort();
+                abortAttempt(previousPreparation);
             }
             let signal: AbortSignal | undefined;
             const forwardAbort = () => cancel(attempt, signal?.reason);
+            const checkedLease = (current: boolean): boolean => {
+                // Freshness callbacks/getters can cancel while producing a false lease.
+                // Explicit cancellation rejects; superseded/disposed attempts retire.
+                if (!attempt.retired)
+                    requireNotAborted(attempt.controller.signal);
+                return current;
+            };
             try {
-                if (!isCurrent()) throw lifecycleError();
-                if (preparing !== attempt || attempt.retired)
+                if (!checkedLease(isCurrent())) throw lifecycleError();
+                if (!checkedLease(preparing === attempt && !attempt.retired))
                     return { type: 'retired' };
                 const {
                     signal: capturedSignal,
@@ -186,7 +204,7 @@ export function createPortalReadCoordinator<
                     onCancelledAfterDispatch,
                     onAccepted,
                 } = supplied;
-                if (preparing !== attempt || attempt.retired)
+                if (!checkedLease(preparing === attempt && !attempt.retired))
                     return { type: 'retired' };
                 signal = capturedSignal;
                 attempt.cancelled = () => onCancelledAfterDispatch?.();
@@ -195,7 +213,11 @@ export function createPortalReadCoordinator<
                 if (signal?.aborted) forwardAbort();
                 requireNotAborted(attempt.controller.signal);
                 const copied = structuredClone(input);
-                if (!isCurrent() || preparing !== attempt || attempt.retired)
+                if (
+                    !checkedLease(
+                        isCurrent() && preparing === attempt && !attempt.retired
+                    )
+                )
                     return { type: 'retired' };
                 requireNotAborted(attempt.controller.signal);
                 const previous = active;
@@ -205,24 +227,24 @@ export function createPortalReadCoordinator<
                 // Install dispatch ownership before synchronous old abort callbacks.
                 if (previous) {
                     previous.retired = true;
-                    previous.controller.abort();
+                    abortAttempt(previous);
                 }
                 requireNotAborted(attempt.controller.signal);
-                if (!owned(attempt) || active !== attempt)
+                if (!checkedLease(owned(attempt) && active === attempt))
                     return { type: 'retired' };
                 attempt.dispatched = true;
                 onDispatch?.();
                 requireNotAborted(attempt.controller.signal);
-                if (!owned(attempt) || active !== attempt)
+                if (!checkedLease(owned(attempt) && active === attempt))
                     return { type: 'retired' };
                 const raw = await options.load(copied, {
                     signal: attempt.controller.signal,
                 });
                 requireNotAborted(attempt.controller.signal);
-                if (!owned(attempt) || active !== attempt)
+                if (!checkedLease(owned(attempt) && active === attempt))
                     return { type: 'retired' };
                 const detached = structuredClone(raw);
-                if (!owned(attempt) || active !== attempt)
+                if (!checkedLease(owned(attempt) && active === attempt))
                     return { type: 'retired' };
                 const receipt: Extract<
                     PortalReadReceipt<Result>,
@@ -237,15 +259,17 @@ export function createPortalReadCoordinator<
                 };
                 onAccepted?.(receipt);
                 requireNotAborted(attempt.controller.signal);
-                if (!owned(attempt) || active !== attempt)
+                if (!checkedLease(owned(attempt) && active === attempt))
                     return { type: 'retired' };
                 return receipt;
             } catch (error) {
                 if (attempt.retired) return { type: 'retired' };
                 requireNotAborted(attempt.controller.signal);
                 if (
-                    !owned(attempt) ||
-                    (active !== attempt && preparing !== attempt)
+                    !checkedLease(
+                        owned(attempt) &&
+                            (active === attempt || preparing === attempt)
+                    )
                 )
                     return { type: 'retired' };
                 throw error;

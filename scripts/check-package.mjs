@@ -1,6 +1,10 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkExternalSyncSourceConsumer,
+    externalSyncSourceReactTypedConsumer,
+} from './external-sync-source-consumer-checks.mjs';
+import {
     checkMultilineTextConsumer,
     multilineTextReactTypedConsumer,
 } from './multiline-text-consumer-checks.mjs';
@@ -1216,6 +1220,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'external-sync-source-react-consumer.tsx'),
+        externalSyncSourceReactTypedConsumer
+    );
+    reactSources.push('external-sync-source-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'rating-react-consumer.tsx'),
         ratingReactTypedConsumer
     );
@@ -1377,6 +1386,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'external-sync-source',
         'multiline-text',
         'phone-number',
         'url',
@@ -1391,7 +1401,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     ]) {
         const stylesheet = ['percent', 'rating'].includes(name)
             ? 'number'
-            : ['email', 'url', 'phone-number', 'multiline-text'].includes(name)
+            : [
+                    'email',
+                    'url',
+                    'phone-number',
+                    'multiline-text',
+                    'external-sync-source',
+                ].includes(name)
               ? 'text'
               : name;
         if (name === 'currency') {
@@ -1434,6 +1450,60 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     error.status === 1 &&
                     String(error.stdout ?? '').trim() === '',
                 'Currency example sources must remain unignored'
+            );
+        }
+        if (name === 'external-sync-source') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-external-sync-source/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing External Sync Source example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'External Sync Source example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) =>
+                    `examples/react-external-sync-source/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'External Sync Source preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'External Sync Source example sources must remain unignored'
             );
         }
         const exampleDirectory = join(temporaryDirectory, `${name}-example`);
@@ -1501,6 +1571,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(checkboxProof.checks, 6);
     console.log(
         `Installed Checkbox renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const externalSyncSourceProof = await checkExternalSyncSourceConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(externalSyncSourceProof.checks, 20);
+    console.log(
+        `Installed External Sync Source renderer, readonly SDK strings, shared Text CSS and local example: ${externalSyncSourceProof.checks} ESM/CJS groups passed; synthetic owners only.`
     );
     const textProof = await checkTextConsumer({
         consumerDirectory: temporaryDirectory,

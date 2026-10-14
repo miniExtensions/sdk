@@ -25,6 +25,11 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+import type { ExternalSyncSourceFieldOptions } from './ExternalSyncSourceField.js';
+export {
+    renderExternalSyncSourceField,
+    type ExternalSyncSourceFieldOptions,
+} from './ExternalSyncSourceField.js';
 import {
     MultilineTextControl,
     multilineTextConfiguration,
@@ -323,6 +328,46 @@ const status = (snapshot: FormFieldSnapshot) =>
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
+export type ExternalSyncSourceFieldProps = FieldProps &
+    ExternalSyncSourceFieldOptions;
+/** The supplied source name stays readonly regardless of forged editing state. */
+export function ExternalSyncSourceField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: ExternalSyncSourceFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'externalSyncSource' ||
+        schema.airtableField.config.type !== 'externalSyncSource'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports External Sync Source fields.'
+        );
+    return createElement(TextControl, {
+        ...textConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: () => false,
+    });
+}
 export type TextFieldProps = FieldProps & TextFieldOptions;
 export function TextField({
     binding,

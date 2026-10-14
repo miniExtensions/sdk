@@ -171,7 +171,7 @@ The SDK has no administrative workspace/configure/publish API.
 | `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `CheckboxField`,
+also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `ExternalSyncSourceField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
@@ -201,6 +201,12 @@ single-line text drafts; page and server validation remain authoritative.
 `UrlFieldProps`, `UrlFieldOptions` and the typed `renderUrlField` slot. It reuses
 the Text control and optional `@miniextensions/sdk/react/text.css` for manual
 single-line entry. URL text does not create links or grant navigation authority.
+
+[External Sync Source presentation](docs/ui.md#react-external-sync-source-presentation)
+exports `ExternalSyncSourceField`, `ExternalSyncSourceFieldProps`,
+`ExternalSyncSourceFieldOptions` and the typed `renderExternalSyncSourceField` slot.
+It displays the supplied SDK string with the disabled Text control and optional
+`@miniextensions/sdk/react/text.css`, without resolving choice IDs or changing values.
 
 [Rating presentation](docs/ui.md#react-rating-presentation) exports `RatingField`,
 `RatingFieldProps`, `RatingFieldOptions` and the typed `renderRatingField` slot.

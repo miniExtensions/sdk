@@ -142,6 +142,31 @@ Chromium proof. Native form submission and stopped event bubbling are distinct;
 simulated composition does not certify a real input method. These checks do not
 establish a navigation policy or contact a live backend.
 
+## External Sync Source presentation checks
+
+`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+They cover canonical computed Form bindings, literal SDK strings and unknown
+labels, empty/null/missing values, metadata choice changes on the same owner,
+forged editable capabilities and model access traps. Defensive direct helper
+checks reject object-to-name extraction and coercion. Disabled input and Clear,
+masking from either configuration, associated feedback, stale controls, custom
+rendering and hidden or retired owners remain covered. The adjacent Text field
+continues to accept explicit edits.
+
+Actual Form composition and Portal Grid/List detail hosts retain readonly
+capabilities. The Portal fixture makes one explicit synthetic load; rendering
+adds no reads, writes or Save. It creates no computed inline editing binding.
+A separate malformed `isComputed: false` fixture preserves the existing host
+rejection while proving that the direct wrapper remains inert. Public props and
+options, readonly negative types, the SDK string value contract, wrong-slot
+rejection, Form/Grid/List composition and both guide recipes are typechecked.
+The example compiles and bundles with shared optional `text.css`; its seven source
+files remain tracked and unignored while generated preview outputs are ignored.
+
+After building, `node scripts/check-external-sync-source-browser.mjs` runs the
+separate local Chromium proof. All fixtures are synthetic. These checks do not
+claim support for arbitrary raw Airtable objects or perform synchronization.
+
 ## Rating presentation checks
 
 `pnpm check:package` runs 18 installed ESM/CommonJS groups with synthetic owners.

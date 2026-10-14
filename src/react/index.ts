@@ -40,6 +40,15 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
+import {
+    DateTimeControl,
+    dateTimeConfiguration,
+    type DateTimeFieldOptions,
+} from './DateTimeField.js';
+export {
+    renderDateTimeField,
+    type DateTimeFieldOptions,
+} from './DateTimeField.js';
 import type {
     FormRenderScope,
     FormRenderSnapshot,
@@ -744,6 +753,7 @@ export function PortalList({
 
 /** Calendar-only date or explicit-offset dateTime; no browser local-time conversion. */
 export type DateFieldProps = FieldProps & DateFieldOptions;
+export type DateTimeFieldProps = FieldProps & DateTimeFieldOptions;
 export function DateField({
     binding,
     render,
@@ -797,43 +807,32 @@ export function DateField({
             { role: 'status' },
             'Load a fresh Form before editing this date.'
         );
-    const privacy = snapshot.field?.schema.miniExtConfig;
-    const masked =
-        privacy != null &&
-        'obscurePassword' in privacy &&
-        privacy.obscurePassword === true;
-    return createElement(
-        'div',
-        null,
-        createElement(
-            'label',
-            null,
-            snapshot.field?.title,
-            createElement('input', {
-                type: masked ? 'password' : 'text',
-                value: snapshot.date.input,
-                disabled: !snapshot.date.canEdit,
-                'aria-invalid': !snapshot.date.valid,
-                placeholder: 'YYYY-MM-DDTHH:mm:ssZ',
-                onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                    binding.date?.setInput(event.currentTarget.value),
-            })
-        ),
-        createElement(
-            'p',
-            { role: 'status' },
-            snapshot.date.error ?? snapshot.error ?? ''
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                disabled: !snapshot.date.canEdit,
-                onClick: () => binding.date?.clear(),
-            },
-            'Clear date'
-        )
-    );
+    const config = dateTimeConfiguration(snapshot.field?.schema.miniExtConfig);
+    return createElement(DateTimeControl, {
+        ...config,
+        className,
+        clearLabel,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : (snapshot.field?.schema.airtableField.name ?? ''),
+        input: snapshot.date.input,
+        disabled:
+            config.configuredReadOnly ||
+            !snapshot.canEdit ||
+            !snapshot.date.canEdit ||
+            snapshot.pending,
+        pending: snapshot.pending,
+        invalid:
+            !snapshot.date.valid ||
+            snapshot.error !== null ||
+            snapshot.validation.length > 0,
+        feedback:
+            snapshot.date.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: (value) => binding.date?.setInput(value),
+        clear: () => binding.date?.clear(),
+    });
 }
 /** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
 export const DateTimeField = DateField;

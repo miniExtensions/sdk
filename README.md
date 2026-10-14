@@ -192,6 +192,12 @@ owner's date model for manual `YYYY-MM-DD` input, retained partial drafts and
 explicit clearing. Optional styles are exported at
 `@miniextensions/sdk/react/date.css`; see [React Date presentation](docs/ui.md#react-date-presentation).
 
+For explicit-offset timestamps, `/react` also exports the `renderDateTimeField`
+named slot, `DateTimeFieldProps` and `DateTimeFieldOptions`. Both the slot and
+`DateTimeField` use the owner's date model for manual input, retained partial
+drafts and explicit clearing. Optional styles are exported at
+`@miniextensions/sdk/react/datetime.css`; see [React DateTime presentation](docs/ui.md#react-datetime-presentation).
+
 ## Runtime operation map
 
 The client exposes **23 canonical operations**. v1 routes use POST at

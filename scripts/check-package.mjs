@@ -2,6 +2,18 @@ import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
+    checkDateRendererConsumer,
+    dateRendererReactTypedConsumer,
+} from './date-renderer-consumer-checks.mjs';
+import {
+    checkDateTimeRendererConsumer,
+    dateTimeRendererReactTypedConsumer,
+} from './datetime-renderer-consumer-checks.mjs';
+import {
+    checkDurationRendererConsumer,
+    durationRendererReactTypedConsumer,
+} from './duration-renderer-consumer-checks.mjs';
+import {
     checkCurrencyRendererConsumer,
     currencyRendererReactTypedConsumer,
 } from './currency-renderer-consumer-checks.mjs';
@@ -271,6 +283,12 @@ try {
         'dist/cjs/react/text.css',
         'dist/esm/react/number.css',
         'dist/cjs/react/number.css',
+        'dist/esm/react/date.css',
+        'dist/cjs/react/date.css',
+        'dist/esm/react/datetime.css',
+        'dist/cjs/react/datetime.css',
+        'dist/esm/react/duration.css',
+        'dist/cjs/react/duration.css',
         'dist/esm/react/currency.css',
         'dist/cjs/react/currency.css',
         ...browserStarterFiles,
@@ -1179,6 +1197,21 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('duration-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'date-renderer-react-consumer.tsx'),
+        dateRendererReactTypedConsumer
+    );
+    reactSources.push('date-renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'datetime-renderer-react-consumer.tsx'),
+        dateTimeRendererReactTypedConsumer
+    );
+    reactSources.push('datetime-renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'duration-renderer-react-consumer.tsx'),
+        durationRendererReactTypedConsumer
+    );
+    reactSources.push('duration-renderer-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'currency-renderer-react-consumer.tsx'),
         currencyRendererReactTypedConsumer
     );
@@ -1286,7 +1319,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         17
     );
     // Resolve CSS and React through the installed archive, not checkout aliases.
-    for (const name of ['button', 'checkbox', 'text', 'number', 'currency']) {
+    for (const name of [
+        'button',
+        'checkbox',
+        'text',
+        'number',
+        'date',
+        'datetime',
+        'duration',
+        'currency',
+    ]) {
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1408,6 +1450,30 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const dateRendererProof = await checkDateRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(dateRendererProof.checks, 16);
+    console.log(
+        `Installed Date renderer, binding, CSS and local example: ${dateRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const dateTimeRendererProof = await checkDateTimeRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(dateTimeRendererProof.checks, 18);
+    console.log(
+        `Installed DateTime renderer, binding, CSS and local example: ${dateTimeRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const durationRendererProof = await checkDurationRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(durationRendererProof.checks, 80);
+    console.log(
+        `Installed Duration renderer, binding, CSS and local example: ${durationRendererProof.checks} ESM/CJS groups across five formats passed; synthetic drafts only.`
     );
     const currencyRendererProof = await checkCurrencyRendererConsumer({
         consumerDirectory: temporaryDirectory,

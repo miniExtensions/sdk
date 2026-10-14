@@ -11,6 +11,12 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import {
+    DateControl,
+    dateConfiguration,
+    type DateFieldOptions,
+} from './DateField.js';
+export { renderDateField, type DateFieldOptions } from './DateField.js';
+import {
     TextControl,
     textConfiguration,
     type TextFieldOptions,
@@ -43,6 +49,24 @@ export {
     renderCurrencyField,
     type CurrencyFieldOptions,
 } from './CurrencyField.js';
+import {
+    DurationControl,
+    durationConfiguration,
+    type DurationFieldOptions,
+} from './DurationField.js';
+export {
+    renderDurationField,
+    type DurationFieldOptions,
+} from './DurationField.js';
+import {
+    DateTimeControl,
+    dateTimeConfiguration,
+    type DateTimeFieldOptions,
+} from './DateTimeField.js';
+export {
+    renderDateTimeField,
+    type DateTimeFieldOptions,
+} from './DateTimeField.js';
 import type {
     FormRenderScope,
     FormRenderSnapshot,
@@ -315,13 +339,19 @@ export function TextField({
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
+export type DurationFieldProps = FieldProps & DurationFieldOptions;
 export function NumberField({
     binding,
     render,
     className,
     clearLabel,
-}: NumberFieldProps & CurrencyFieldOptions): ReactNode {
-    const snapshot = useFieldBinding(binding);
+}: NumberFieldProps & DurationFieldOptions & CurrencyFieldOptions): ReactNode {
+    const subscribed = useFieldBinding(binding);
+    // Accepted duration metadata can change without a native write.
+    const snapshot =
+        subscribed.scalar?.kind === 'duration'
+            ? binding.getSnapshot()
+            : subscribed;
     if (render) return render({ snapshot, binding });
     if (
         snapshot.retired ||
@@ -396,6 +426,45 @@ export function NumberField({
             clear: () => binding.scalar?.setInput(''),
         });
     }
+    if (snapshot.field?.schema.fieldType === 'duration') {
+        if (snapshot.scalar.kind !== 'duration' || snapshot.scalar.retired)
+            return null;
+        const config = durationConfiguration(
+            snapshot.field.schema.miniExtConfig,
+            undefined,
+            snapshot.scalar.durationFormat
+        );
+        return createElement(DurationControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field.title.trim()
+                ? snapshot.field.title
+                : snapshot.field.schema.airtableField.name,
+            input: snapshot.scalar.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.scalar.canEdit ||
+                snapshot.scalar.durationFormat === null ||
+                typeof binding.scalar?.setFocused !== 'function' ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.scalar.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (input) => binding.scalar?.setInput(input),
+            setFocused: (focused) => binding.scalar?.setFocused?.(focused),
+            clear: () => binding.scalar?.setInput(''),
+        });
+    }
     return createElement(
         'div',
         null,
@@ -435,7 +504,7 @@ export function CurrencyField(props: CurrencyFieldProps): ReactNode {
     return createElement(NumberField, props);
 }
 /** Clock editing shares the existing scalar owner; render may replace all markup. */
-export function DurationField(props: FieldProps): ReactNode {
+export function DurationField(props: DurationFieldProps): ReactNode {
     return createElement(NumberField, props);
 }
 export type CheckboxFieldProps = FieldProps & CheckboxFieldOptions;
@@ -786,7 +855,14 @@ export function PortalList({
 }
 
 /** Calendar-only date or explicit-offset dateTime; no browser local-time conversion. */
-export function DateField({ binding, render }: FieldProps): ReactNode {
+export type DateFieldProps = FieldProps & DateFieldOptions;
+export type DateTimeFieldProps = FieldProps & DateTimeFieldOptions;
+export function DateField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: DateFieldProps): ReactNode {
     useFieldBinding(binding);
     // Date context can change independently of a native write; observe it on rerender.
     const snapshot = binding.getSnapshot();
@@ -797,52 +873,69 @@ export function DateField({ binding, render }: FieldProps): ReactNode {
         snapshot.date == null
     )
         return null;
+    if (snapshot.date.kind === 'date') {
+        if (snapshot.date.retired) return null;
+        const config = dateConfiguration(snapshot.field?.schema.miniExtConfig);
+        return createElement(DateControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field?.title.trim()
+                ? snapshot.field.title
+                : (snapshot.field?.schema.airtableField.name ?? ''),
+            input: snapshot.date.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.date.canEdit ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.date.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.date.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (value) => binding.date?.setInput(value),
+            clear: () => binding.date?.clear(),
+        });
+    }
     if (snapshot.date.retired)
         return createElement(
             'p',
             { role: 'status' },
             'Load a fresh Form before editing this date.'
         );
-    const privacy = snapshot.field?.schema.miniExtConfig;
-    const masked =
-        privacy != null &&
-        'obscurePassword' in privacy &&
-        privacy.obscurePassword === true;
-    return createElement(
-        'div',
-        null,
-        createElement(
-            'label',
-            null,
-            snapshot.field?.title,
-            createElement('input', {
-                type: masked ? 'password' : 'text',
-                value: snapshot.date.input,
-                disabled: !snapshot.date.canEdit,
-                'aria-invalid': !snapshot.date.valid,
-                placeholder:
-                    snapshot.date.kind === 'date'
-                        ? 'YYYY-MM-DD'
-                        : 'YYYY-MM-DDTHH:mm:ssZ',
-                onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                    binding.date?.setInput(event.currentTarget.value),
-            })
-        ),
-        createElement(
-            'p',
-            { role: 'status' },
-            snapshot.date.error ?? snapshot.error ?? ''
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                disabled: !snapshot.date.canEdit,
-                onClick: () => binding.date?.clear(),
-            },
-            'Clear date'
-        )
-    );
+    const config = dateTimeConfiguration(snapshot.field?.schema.miniExtConfig);
+    return createElement(DateTimeControl, {
+        ...config,
+        className,
+        clearLabel,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : (snapshot.field?.schema.airtableField.name ?? ''),
+        input: snapshot.date.input,
+        disabled:
+            config.configuredReadOnly ||
+            !snapshot.canEdit ||
+            !snapshot.date.canEdit ||
+            snapshot.pending,
+        pending: snapshot.pending,
+        invalid:
+            !snapshot.date.valid ||
+            snapshot.error !== null ||
+            snapshot.validation.length > 0,
+        feedback:
+            snapshot.date.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: (value) => binding.date?.setInput(value),
+        clear: () => binding.date?.clear(),
+    });
 }
 /** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
 export const DateTimeField = DateField;

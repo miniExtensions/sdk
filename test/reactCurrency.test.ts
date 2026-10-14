@@ -31,7 +31,8 @@ async function fixture(
     initial: number | null = null,
     missing = false,
     symbol = '$',
-    precision = 2
+    precision = 2,
+    includeDuration = false
 ) {
     const window = new Window();
     for (const key of ['AbortController', 'AbortSignal'] as const)
@@ -88,6 +89,25 @@ async function fixture(
         },
         miniExtConfig: {},
     };
+    if (includeDuration) {
+        loaded.payload.fieldIdsInForm.push('duration');
+        loaded.payload.formRecord.data.duration = 90.125;
+        loaded.payload.fieldIdsToSchemas.duration = {
+            fieldType: 'duration',
+            airtableField: {
+                id: 'duration',
+                name: 'Elapsed time',
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: {
+                    type: 'duration',
+                    options: { durationFormat: 'h:mm:ss' },
+                },
+            },
+            miniExtConfig: {},
+        };
+    }
     let requests = 0;
     const scope = {
         current: true,
@@ -231,6 +251,81 @@ it('retains raw precision, finite exponent edits and invalid drafts across Stric
     }
     await act(async () => f.binding.setValue(9876.54321987));
     assert.equal(f.input().value, '9876.54321987');
+});
+
+it('one mounted NumberField isolates currency and duration drafts, actions and borrowed model retirement', async (t) => {
+    const initial = 1234.56789;
+    const f = await fixture(t, {}, initial, false, 'CHF', 2, true);
+    const duration = f.owner.field('duration');
+    const currencyModel = f.binding.scalar!;
+    const durationModel = duration.scalar!;
+    const show = (binding: typeof duration) =>
+        f.render(h(NumberField, { key: 'same-numeric-field', binding }));
+
+    await show(f.binding);
+    assert.ok(f.container.querySelector('.mx-sdk-currency-field'));
+    assert.equal(f.container.querySelector('.mx-sdk-duration-field'), null);
+    assert.equal(f.input().inputMode, 'decimal');
+    assert.equal(
+        f.container.querySelector('.mx-sdk-currency-symbol')!.textContent,
+        'CHF'
+    );
+    await f.edit('1e');
+
+    await show(duration);
+    assert.ok(f.container.querySelector('.mx-sdk-duration-field'));
+    assert.equal(f.container.querySelector('.mx-sdk-currency-field'), null);
+    assert.equal(f.container.querySelector('.mx-sdk-currency-symbol'), null);
+    assert.equal(f.input().inputMode, 'text');
+    assert.equal(f.input().placeholder, 'h:mm:ss');
+    await f.focus(true);
+    await f.edit('1:');
+    await f.focus(false);
+
+    for (const [binding, draft, control] of [
+        [f.binding, '1e', '.mx-sdk-currency-field'],
+        [duration, '1:', '.mx-sdk-duration-field'],
+        [f.binding, '1e', '.mx-sdk-currency-field'],
+    ] as const) {
+        await show(binding);
+        assert.ok(f.container.querySelector(control));
+        assert.equal(f.input().value, draft);
+        assert.equal(f.input().getAttribute('aria-invalid'), 'true');
+        assert.equal(binding.getSnapshot().dirty, false);
+    }
+    assert.equal(f.binding.getSnapshot().value, initial);
+    assert.equal(duration.getSnapshot().value, 90.125);
+    assert.equal(f.binding.scalar, currencyModel);
+    assert.equal(duration.scalar, durationModel);
+    assert.equal(currencyModel.getState().retired, false);
+    assert.equal(durationModel.getState().retired, false);
+
+    await act(async () => f.container.querySelector('button')!.click());
+    assert.equal(f.binding.getSnapshot().value, null);
+    assert.equal(duration.getSnapshot().value, 90.125);
+    assert.equal(durationModel.getState().input, '1:');
+    await f.edit('1e');
+    await show(duration);
+    assert.equal(f.input().value, '1:');
+    await act(async () => f.container.querySelector('button')!.click());
+    assert.equal(duration.getSnapshot().value, null);
+    assert.equal(currencyModel.getState().input, '1e');
+
+    await act(async () => durationModel.destroy());
+    assert.equal(duration.getSnapshot().retired, false);
+    assert.equal(f.container.innerHTML, '');
+    assert.equal(durationModel.setInput('2:00'), false);
+    assert.equal(duration.getSnapshot().value, null);
+    await show(f.binding);
+    assert.equal(f.input().value, '1e');
+    assert.equal(
+        f.container.querySelector('.mx-sdk-currency-symbol')!.textContent,
+        'CHF'
+    );
+    assert.equal(currencyModel.getState().retired, false);
+    await f.edit('1e2');
+    assert.equal(f.binding.getSnapshot().value, 100);
+    assert.equal(duration.getSnapshot().value, null);
 });
 
 it('does not parse grouped or localized numbers, nonfinite text or symbols, and focus never writes or rounds', async (t) => {

@@ -198,6 +198,12 @@ named slot, `DateTimeFieldProps` and `DateTimeFieldOptions`. Both the slot and
 drafts and explicit clearing. Optional styles are exported at
 `@miniextensions/sdk/react/datetime.css`; see [React DateTime presentation](docs/ui.md#react-datetime-presentation).
 
+For duration clocks, `/react` also exports the `renderDurationField` named slot,
+`DurationFieldProps` and `DurationFieldOptions`. Both the slot and `DurationField`
+use the existing scalar model for native seconds, retained partial input and
+formatting on blur. Optional styles are exported at
+`@miniextensions/sdk/react/duration.css`; see [React Duration presentation](docs/ui.md#react-duration-presentation).
+
 ## Runtime operation map
 
 The client exposes **23 canonical operations**. v1 routes use POST at

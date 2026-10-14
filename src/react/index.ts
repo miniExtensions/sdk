@@ -41,6 +41,15 @@ import {
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
 import {
+    DurationControl,
+    durationConfiguration,
+    type DurationFieldOptions,
+} from './DurationField.js';
+export {
+    renderDurationField,
+    type DurationFieldOptions,
+} from './DurationField.js';
+import {
     DateTimeControl,
     dateTimeConfiguration,
     type DateTimeFieldOptions,
@@ -320,12 +329,19 @@ export function TextField({
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
+export type DurationFieldProps = FieldProps & DurationFieldOptions;
 export function NumberField({
     binding,
     render,
     className,
-}: NumberFieldProps): ReactNode {
-    const snapshot = useFieldBinding(binding);
+    clearLabel,
+}: NumberFieldProps & DurationFieldOptions): ReactNode {
+    const subscribed = useFieldBinding(binding);
+    // Accepted duration metadata can change without a native write.
+    const snapshot =
+        subscribed.scalar?.kind === 'duration'
+            ? binding.getSnapshot()
+            : subscribed;
     if (render) return render({ snapshot, binding });
     if (
         snapshot.retired ||
@@ -364,8 +380,45 @@ export function NumberField({
             setInput: (input) => binding.scalar?.setInput(input),
         });
     }
-    // Existing currency/percent/rating and DurationField binding markup remains
-    // compatible; this presentation slice is restricted to plain Number.
+    if (snapshot.field?.schema.fieldType === 'duration') {
+        if (snapshot.scalar.kind !== 'duration' || snapshot.scalar.retired)
+            return null;
+        const config = durationConfiguration(
+            snapshot.field.schema.miniExtConfig,
+            undefined,
+            snapshot.scalar.durationFormat
+        );
+        return createElement(DurationControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field.title.trim()
+                ? snapshot.field.title
+                : snapshot.field.schema.airtableField.name,
+            input: snapshot.scalar.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.scalar.canEdit ||
+                snapshot.scalar.durationFormat === null ||
+                typeof binding.scalar?.setFocused !== 'function' ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.scalar.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (input) => binding.scalar?.setInput(input),
+            setFocused: (focused) => binding.scalar?.setFocused?.(focused),
+            clear: () => binding.scalar?.setInput(''),
+        });
+    }
     return createElement(
         'div',
         null,
@@ -401,7 +454,7 @@ export function NumberField({
     );
 }
 /** Clock editing shares the existing scalar owner; render may replace all markup. */
-export function DurationField(props: FieldProps): ReactNode {
+export function DurationField(props: DurationFieldProps): ReactNode {
     return createElement(NumberField, props);
 }
 export type CheckboxFieldProps = FieldProps & CheckboxFieldOptions;

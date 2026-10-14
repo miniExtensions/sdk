@@ -1300,10 +1300,10 @@ numeric login masking from either configuration is preserved.
 Pending, computed and unavailable controls are disabled. Retired scalar states
 render nothing. Input events stop bubbling into Portal rows.
 
-This slice styles ordinary Number fields. Existing `NumberField` currency,
-percent, rating and duration bindings retain their prior presentation and native
-units; `DurationField` keeps its clock-input behavior. Their dedicated styling,
-unit formatting and broader theme APIs are separate work. Canonical Save remains
+The Number presentation styles ordinary Number fields. `NumberField` currency,
+percent and rating bindings retain their prior presentation and native units.
+Duration bindings use the dedicated [Duration presentation](#react-duration-presentation)
+and its existing clock-input model. Broader theme APIs remain separate work. Canonical Save remains
 authoritative for numeric field policy.
 Input uses the scalar's native dot-decimal syntax. Configured decimal/thousands
 separators, grouped display, scanning and login searches need their own accepted
@@ -1485,5 +1485,98 @@ The local `examples/react-datetime` example uses public exports and synthetic
 owners without backend requests. After building, run
 `node examples/react-datetime/dev.mjs`. `node scripts/check-datetime-browser.mjs`
 checks native interaction, invalid drafts, remounting, clearing, permissions,
+layout and forced colors. Synthetic interaction does not certify every platform's
+input method or screen reader.
+
+## React Duration presentation
+
+The optional `/react` entry exports `DurationField`, `DurationFieldProps`,
+`DurationFieldOptions` and `renderDurationField` for duration clocks. The binding
+component keeps its `{ binding, render }` API; supplying `render` still replaces
+all markup. `NumberField` continues to recognize duration bindings and retains its
+ordinary numeric behavior.
+
+```tsx
+import { DurationField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/duration.css';
+
+export function ElapsedTime({ binding }: { binding: FormFieldBinding }) {
+    return <DurationField binding={binding} className="elapsed-time" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'duration'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderDurationField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/duration.css';
+
+export const durationRenderers: FieldRendererSlots<ReactNode> = {
+    renderDurationField: (props) =>
+        renderDurationField(props, { clearLabel: 'Effacer la durée' }),
+};
+```
+
+The renderer borrows `binding.scalar` or the accepted duration scalar bridge.
+Native answers remain numeric seconds or `null`; there is no additional draft or
+owner. It calls the existing `setInput` for edits and `setFocused` on focus/blur.
+Focusing preserves raw input, and blurring formats a valid answer without writing
+or rounding its native seconds. Partial or invalid text stays visible across
+remounts without replacing the last accepted answer. Existing owner validation
+blocks deliberate Save while editable visible input is invalid. Clear and an
+explicit empty edit write `null`; zero remains zero.
+
+The physical field's accepted `durationFormat` selects one of `h:mm`, `h:mm:ss`,
+`h:mm:ss.S`, `h:mm:ss.SS` or `h:mm:ss.SSS`. Bare numbers use minutes for `h:mm` and
+seconds for the other formats; two components mean hours/minutes for `h:mm` and
+minutes/seconds otherwise. The complete [duration input contract](field-bindings.md#duration-clock-input)
+defines three-part values, negative values, overflow, decimal precision and
+invalid syntax. The renderer adds no parsing rules or unit conversion.
+
+Editing requires the matching physical duration field and editable scalar bridge,
+including its `setFocused` action. A generic value setter, another scalar kind or
+a bridge without focus support does not grant duration editing. Readonly values
+and values without an editable bridge use the existing duration formatter with
+validated format metadata and explicit native-seconds units. They remain
+disabled. Missing or unsupported formats produce generic unavailable feedback.
+Pending, computed and configured read-only controls are also disabled.
+
+The bridge and binding retain existing permission, configuration and current-owner
+checks on every action. An observed format change retires the old model; accept
+a fresh owner before editing the replacement. Hidden, blocked and retired hosts
+render nothing. Owners remain outside React: mounting, StrictMode and remounting
+neither create nor dispose an owner, write a draft, invoke Save nor start network
+work. Save and cancellation remain explicit owner actions.
+
+The control uses a text input, or a password input when masked. Its default
+placeholder is the accepted duration format. Title visibility, configured
+placeholder, required indication, masking and read-only restrictions are honored;
+masking and read-only settings from either display or write config apply. Native
+seconds and formatted previews are not echoed beside masked input.
+
+Labels use unique React instance IDs for repeated rows, and hidden titles retain
+an accessible name. Feedback is plain text in an associated polite live region.
+Clear is `type="button"` and returns focus to the input. Its optional `clearLabel`
+localizes the accessible name, with `Clear <title>` as the default. Click, pointer,
+keyboard and composition events stop bubbling into Portal rows. Event containment
+does not cancel native implicit form submission: pressing Enter can submit a
+single-input form or activate an enclosing form's submit button. Applications own
+the surrounding form's submission policy and must route Save deliberately through
+the owner. `className` decorates the wrapper.
+
+The provisional stylesheet is scoped to `mx-sdk-duration*` classes and is exported
+as `@miniextensions/sdk/react/duration.css`, with copies in both builds. Import it,
+override its classes, or omit it and supply your own styles. JavaScript does not
+import CSS; core and `/ui` remain React-free. No theme or appearance-prop API is
+introduced.
+
+The local `examples/react-duration` example uses public exports and synthetic
+owners without backend requests. After building, run
+`node examples/react-duration/dev.mjs`. `node scripts/check-duration-browser.mjs`
+checks native interaction, unfinished drafts, remounting, clearing, permissions,
 layout and forced colors. Synthetic interaction does not certify every platform's
 input method or screen reader.

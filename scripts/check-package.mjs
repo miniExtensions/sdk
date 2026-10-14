@@ -1,6 +1,10 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkCurrencyRendererConsumer,
+    currencyRendererReactTypedConsumer,
+} from './currency-renderer-consumer-checks.mjs';
+import {
     checkPortalButtonCompositionConsumer,
     portalButtonCompositionTypedConsumer,
     portalButtonCompositionReactTypedConsumer,
@@ -264,6 +268,8 @@ try {
         'dist/cjs/react/checkbox.css',
         'dist/esm/react/text.css',
         'dist/cjs/react/text.css',
+        'dist/esm/react/currency.css',
+        'dist/cjs/react/currency.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1170,6 +1176,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('duration-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'currency-renderer-react-consumer.tsx'),
+        currencyRendererReactTypedConsumer
+    );
+    reactSources.push('currency-renderer-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'form-composition-consumer.ts'),
         formCompositionTypedConsumer
     );
@@ -1272,7 +1283,49 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         17
     );
     // Resolve CSS and React through the installed archive, not checkout aliases.
-    for (const name of ['button', 'checkbox', 'text']) {
+    for (const name of ['button', 'checkbox', 'text', 'currency']) {
+        if (name === 'currency') {
+            const sourcePaths = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-currency/${file}`);
+            for (const path of sourcePaths)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Currency example source: ${path}`
+                );
+            const generatedPaths = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-currency/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generatedPaths],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generatedPaths,
+                'Currency preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sourcePaths],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Currency example sources must remain unignored'
+            );
+        }
         const exampleDirectory = join(temporaryDirectory, `${name}-example`);
         mkdirSync(exampleDirectory);
         for (const file of ['main.ts', 'styles.css']) {
@@ -1344,6 +1397,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(textProof.checks, 8);
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const currencyRendererProof = await checkCurrencyRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(currencyRendererProof.checks, 20);
+    console.log(
+        `Installed Currency renderer, binding, CSS and local example: ${currencyRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const linkedRecordsProof = await checkLinkedRecordsConsumer({
         consumerDirectory: temporaryDirectory,

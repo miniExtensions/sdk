@@ -186,6 +186,12 @@ renderer does not replace its owner. The shipped guides also include
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
 
+For currency input, `/react` also exports `CurrencyField`, `CurrencyFieldProps`,
+`CurrencyFieldOptions` and the `renderCurrencyField` named slot. These use the
+existing numeric scalar model and show a literal currency symbol beside raw
+native-unit input. Optional styles are exported at
+`@miniextensions/sdk/react/currency.css`; see [React Currency presentation](docs/ui.md#react-currency-presentation).
+
 ## Runtime operation map
 
 The client exposes **23 canonical operations**. v1 routes use POST at

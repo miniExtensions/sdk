@@ -5,6 +5,10 @@ import {
     multilineTextReactTypedConsumer,
 } from './multiline-text-consumer-checks.mjs';
 import {
+    checkPhoneNumberConsumer,
+    phoneNumberReactTypedConsumer,
+} from './phone-number-consumer-checks.mjs';
+import {
     checkUrlConsumer,
     urlReactTypedConsumer,
 } from './url-consumer-checks.mjs';
@@ -13,6 +17,10 @@ import {
     emailReactTypedConsumer,
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
+import {
+    checkPercentConsumer,
+    percentReactTypedConsumer,
+} from './percent-consumer-checks.mjs';
 import {
     checkDateRendererConsumer,
     dateRendererReactTypedConsumer,
@@ -1209,6 +1217,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('multiline-text-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'percent-react-consumer.tsx'),
+        percentReactTypedConsumer
+    );
+    reactSources.push('percent-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'phone-number-react-consumer.tsx'),
+        phoneNumberReactTypedConsumer
+    );
+    reactSources.push('phone-number-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'url-react-consumer.tsx'),
         urlReactTypedConsumer
     );
@@ -1351,17 +1369,24 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'checkbox',
         'text',
         'multiline-text',
+        'phone-number',
         'url',
         'number',
+        'percent',
         'date',
         'datetime',
         'duration',
         'email',
         'currency',
     ]) {
-        const stylesheet = ['email', 'url', 'multiline-text'].includes(name)
-            ? 'text'
-            : name;
+        const stylesheet =
+            name === 'percent'
+                ? 'number'
+                : ['email', 'url', 'phone-number', 'multiline-text'].includes(
+                        name
+                    )
+                  ? 'text'
+                  : name;
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1486,6 +1511,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed Multiline Text renderer, binding, shared Text CSS and local example: ${multilineTextProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
+    const phoneNumberProof = await checkPhoneNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(phoneNumberProof.checks, 12);
+    console.log(
+        `Installed Phone Number renderer, binding, shared Text CSS and local example: ${phoneNumberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
     const urlProof = await checkUrlConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -1509,6 +1542,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const percentProof = await checkPercentConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(percentProof.checks, 16);
+    console.log(
+        `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const dateRendererProof = await checkDateRendererConsumer({
         consumerDirectory: temporaryDirectory,

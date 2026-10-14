@@ -81,12 +81,20 @@ try {
         Number(await page.locator('#writes').textContent());
     const native = async (index = 0) =>
         page.locator(`#native-${index}`).textContent();
-    const noEvents = async () => {
+    // This gallery has multiple text inputs and no submit button. Its lack of
+    // implicit submission is not a guarantee for other enclosing form layouts.
+    const noGalleryEvents = async () => {
         assert.equal(await page.locator('#rows').textContent(), '0');
         assert.equal(await page.locator('#submits').textContent(), '0');
     };
     assert.equal(await writes(), 0);
-    assert.equal(await page.locator('input').count(), 7);
+    assert.equal(
+        await page
+            .getByRole('form', { name: 'Date gallery' })
+            .locator('input')
+            .count(),
+        7
+    );
     assert.equal(await first.inputValue(), '2026-10-14');
     assert.equal(await native(), '"2026-10-14"');
     assert.equal(await first.getAttribute('type'), 'text');
@@ -165,7 +173,7 @@ try {
     assert.equal(await native(), '"2026-10-14"');
     const beforeRemount = await writes();
     await first.press('Enter');
-    await noEvents();
+    await noGalleryEvents();
     await page.getByRole('button', { name: 'Remount renderers' }).click();
     assert.equal(await first.inputValue(), '2024-');
     assert.equal(await native(), '"2026-10-14"');
@@ -200,7 +208,7 @@ try {
             .isDisabled(),
         true
     );
-    await noEvents();
+    await noGalleryEvents();
 
     // The binding API uses the same owner-held partial/valid/clear semantics.
     await binding.fill('2028-02-');
@@ -221,7 +229,7 @@ try {
         await binding.evaluate((node) => node === document.activeElement),
         true
     );
-    await noEvents();
+    await noGalleryEvents();
 
     await first.fill('2030-');
     const beforeExternal = await writes();
@@ -247,6 +255,157 @@ try {
     await page.getByRole('button', { name: 'Show first field' }).click();
     assert.equal(await first.inputValue(), '2011-12-30');
     assert.equal(await writes(), beforeExternal);
+
+    // Native submission is owned by the enclosing form. Test both layouts
+    // explicitly; stopping propagation alone does not cancel the default action.
+    const nativeEnterHosts = [];
+    for (const host of [
+        {
+            id: 'single',
+            form: 'Single-input form',
+            input: 'Single-input date',
+            submitButton: false,
+        },
+        {
+            id: 'button',
+            form: 'Form with a submit button',
+            input: 'Submit-button date',
+            submitButton: true,
+        },
+    ]) {
+        const form = page.getByRole('form', { name: host.form, exact: true });
+        const input = form.getByRole('textbox', {
+            name: host.input,
+            exact: true,
+        });
+        assert.equal(await form.locator('input').count(), 1);
+        assert.equal(await input.getAttribute('type'), 'text');
+        assert.equal(await input.isEnabled(), true);
+        assert.equal(
+            await form.locator('button[type="submit"]').count(),
+            host.submitButton ? 1 : 0
+        );
+        // Keep event references so defaultPrevented is read after propagation,
+        // including the synthetic host's submit handler, has finished.
+        await input.evaluate((node) => {
+            node.dateEnterEvents = [];
+            node.addEventListener(
+                'keydown',
+                (event) => {
+                    if (event.key === 'Enter') node.dateEnterEvents.push(event);
+                },
+                true
+            );
+        });
+        await form.evaluate((node) => {
+            node.dateSubmitEvents = [];
+            node.addEventListener(
+                'submit',
+                (event) => node.dateSubmitEvents.push(event),
+                true
+            );
+        });
+        const count = async (suffix) =>
+            Number(
+                await page.locator(`#enter-${host.id}-${suffix}`).textContent()
+            );
+        const beforeWrites = await writes();
+        const phases = {};
+        const observe = async (name, action) => {
+            const beforeSubmits = await count('submits');
+            const beforeClicks = await count('clicks');
+            await action();
+            phases[name] = {
+                submissions: (await count('submits')) - beforeSubmits,
+                submitButtonActivations: (await count('clicks')) - beforeClicks,
+                enter: await input.evaluate((node) => {
+                    const event = node.dateEnterEvents.at(-1);
+                    return {
+                        isTrusted: event.isTrusted,
+                        isComposing: event.isComposing,
+                        defaultPrevented: event.defaultPrevented,
+                    };
+                }),
+            };
+            assert.equal(await count('keys'), 0);
+            assert.equal(await input.inputValue(), '2024-02-29');
+            assert.equal(await native(`enter-${host.id}`), '"2024-02-29"');
+            assert.equal(await writes(), beforeWrites);
+            assert.equal(page.url(), origin + '/');
+        };
+        await observe('nativeEnter', () => input.press('Enter'));
+        await observe('untrustedComposingKey', async () => {
+            await input.dispatchEvent('compositionstart', { data: '' });
+            for (const type of ['keydown', 'keyup']) {
+                await input.dispatchEvent(type, {
+                    key: 'Enter',
+                    code: 'Enter',
+                    isComposing: true,
+                    bubbles: true,
+                    cancelable: true,
+                });
+            }
+            await input.dispatchEvent('compositionend', { data: '' });
+        });
+        // A synthetic composition lifecycle does not turn native keyboard input
+        // into an OS IME session. Record isComposing instead of assuming it.
+        await observe('nativeEnterDuringSimulatedLifecycle', async () => {
+            await input.dispatchEvent('compositionstart', { data: '' });
+            await input.press('Enter');
+            await input.dispatchEvent('compositionend', { data: '' });
+        });
+        const receipt = {
+            host: host.form,
+            inputCount: 1,
+            submitButton: host.submitButton,
+            phases,
+            submissions: await form.evaluate((node) =>
+                node.dateSubmitEvents.map((event) => ({
+                    isTrusted: event.isTrusted,
+                    defaultPrevented: event.defaultPrevented,
+                    submitter: event.submitter?.textContent ?? null,
+                }))
+            ),
+            bubbledKeydowns: await count('keys'),
+            draftWrites: (await writes()) - beforeWrites,
+        };
+        console.log(`Native Enter observation: ${JSON.stringify(receipt)}`);
+        const nativeResult = {
+            submissions: 1,
+            submitButtonActivations: host.submitButton ? 1 : 0,
+            enter: {
+                isTrusted: true,
+                isComposing: false,
+                defaultPrevented: false,
+            },
+        };
+        assert.deepEqual(phases.nativeEnter, nativeResult);
+        assert.deepEqual(
+            phases.nativeEnterDuringSimulatedLifecycle,
+            nativeResult
+        );
+        assert.deepEqual(phases.untrustedComposingKey, {
+            submissions: 0,
+            submitButtonActivations: 0,
+            enter: {
+                isTrusted: false,
+                isComposing: true,
+                defaultPrevented: false,
+            },
+        });
+        assert.deepEqual(
+            receipt.submissions,
+            Array.from({ length: 2 }, () => ({
+                isTrusted: true,
+                defaultPrevented: true,
+                submitter: host.submitButton ? 'Count native submission' : null,
+            }))
+        );
+        nativeEnterHosts.push(receipt);
+    }
+    await page.getByRole('region', { name: 'Native Enter hosts' }).screenshot({
+        path: join(output, 'date-native-enter-hosts.png'),
+    });
 
     await page.emulateMedia({ forcedColors: 'active' });
     await first.focus();
@@ -277,7 +436,7 @@ try {
     await page.getByRole('button', { name: 'Remount renderers' }).click();
     assert.equal(await first.count(), 0);
     assert.equal(await writes(), beforeExternal);
-    await noEvents();
+    await noGalleryEvents();
     assert.equal(await page.locator('iframe,video,a').count(), 0);
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
@@ -290,6 +449,9 @@ try {
                 timezone: 'Pacific/Apia',
                 writes: await writes(),
                 externalRequests: 0,
+                nativeEnterHosts,
+                compositionScope:
+                    'Synthetic composition events only; no OS IME certification. Untrusted key events do not exercise native submission.',
                 checks: [
                     'native keyboard typing and caret',
                     'partial input retains the accepted native draft',
@@ -306,13 +468,16 @@ try {
                     'validation association and unique IDs',
                     'hidden title accessible name',
                     'visible keyboard focus',
-                    'no Portal row activation or implicit form submission',
+                    'no Portal row activation; no submission in the multi-input gallery without a submit button',
+                    'native Enter submits both single-input and submit-button hosts without draft writes; host prevents navigation',
+                    'simulated composition stays distinct from native IME; renderer isolation does not cancel native Enter',
                     'forced colors',
                     'mobile overflow',
                 ],
                 screenshots: [
                     'date-idle.png',
                     'date-invalid-focus.png',
+                    'date-native-enter-hosts.png',
                     'date-forced-colors.png',
                     'date-mobile.png',
                 ],

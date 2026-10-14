@@ -236,12 +236,28 @@ const cards = [
         ...make('Binding date', '2024-02-29'),
     },
 ];
+const enterHosts = [
+    {
+        id: 'single',
+        title: 'Single-input form',
+        note: 'One text input and no submit button. The host counts submit events and prevents navigation.',
+        submitButton: false,
+        ...make('Single-input date', '2024-02-29'),
+    },
+    {
+        id: 'button',
+        title: 'Form with a submit button',
+        note: 'A native submit button belongs to this host. Counting its activation never calls Save.',
+        submitButton: true,
+        ...make('Submit-button date', '2024-02-29'),
+    },
+];
 function NativeValue({
     card,
     index,
 }: {
-    card: (typeof cards)[number];
-    index: number;
+    card: ReturnType<typeof make>;
+    index: number | string;
 }) {
     const value = useSyncExternalStore(
         card.subscribe,
@@ -253,6 +269,54 @@ function NativeValue({
         { className: 'native' },
         'Native draft: ',
         h('code', { id: `native-${index}` }, value)
+    );
+}
+function EnterHostExample({ host }: { host: (typeof enterHosts)[number] }) {
+    const [submits, setSubmits] = useState(0);
+    const [buttonClicks, setButtonClicks] = useState(0);
+    const [keyEvents, setKeyEvents] = useState(0);
+    return h(
+        'form',
+        {
+            className: 'card enter-host',
+            'aria-label': host.title,
+            onSubmit: (event: import('react').FormEvent) => {
+                // The enclosing application owns submission policy. This
+                // synthetic host only observes it; no Save is connected.
+                event.preventDefault();
+                setSubmits((count) => count + 1);
+            },
+            onKeyDown: () => setKeyEvents((count) => count + 1),
+        },
+        h('h2', null, host.title),
+        h('p', { className: 'note' }, host.note),
+        h(FieldRenderer, {
+            host: host.host,
+            renderers: { renderDateField },
+            fallback: () => null,
+        }),
+        host.submitButton
+            ? h(
+                  'button',
+                  {
+                      type: 'submit',
+                      className: 'host-submit',
+                      onClick: () => setButtonClicks((count) => count + 1),
+                  },
+                  'Count native submission'
+              )
+            : null,
+        h(NativeValue, { card: host, index: `enter-${host.id}` }),
+        h(
+            'p',
+            { className: 'host-events' },
+            'Native submissions: ',
+            h('strong', { id: `enter-${host.id}-submits` }, submits),
+            ' · Submit-button activations: ',
+            h('strong', { id: `enter-${host.id}-clicks` }, buttonClicks),
+            ' · Bubbled keydowns: ',
+            h('strong', { id: `enter-${host.id}-keys` }, keyEvents)
+        )
     );
 }
 function App() {
@@ -341,6 +405,7 @@ function App() {
             {
                 key: mount,
                 className: 'cards',
+                'aria-label': 'Date gallery',
                 onSubmit: (event: import('react').FormEvent) => {
                     event.preventDefault();
                     setSubmits(submits + 1);
@@ -393,6 +458,23 @@ function App() {
                 h('strong', { id: 'submits' }, submits)
             ),
             h('span', null, 'Backend requests: 0')
+        ),
+        h(
+            'section',
+            { className: 'enter-hosts', 'aria-label': 'Native Enter hosts' },
+            h('h2', null, 'Native Enter belongs to the host form'),
+            h(
+                'p',
+                { className: 'intro' },
+                'Stopping keyboard events from reaching a row does not cancel native form submission. These isolated hosts show the browser behavior; the application decides when to Save.'
+            ),
+            h(
+                'div',
+                { className: 'cards' },
+                ...enterHosts.map((host) =>
+                    h(EnterHostExample, { key: host.id, host })
+                )
+            )
         )
     );
 }

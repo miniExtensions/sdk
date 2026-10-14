@@ -89,6 +89,7 @@
         "./react/button.css": "./dist/esm/react/button.css",
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
         "./react/text.css": "./dist/esm/react/text.css",
+        "./react/number.css": "./dist/esm/react/number.css",
         "./react/date.css": "./dist/esm/react/date.css"
     },
     "files": [

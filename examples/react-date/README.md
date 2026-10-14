@@ -22,9 +22,20 @@ Save in the existing owner; invalid editable date input blocks that owner's
 deliberate Save. See `docs/field-bindings.md` for the owner contract and
 `docs/ui.md` for renderer APIs.
 
+The gallery has several text inputs and no submit button. Its Enter check is
+specific to that form layout: stopping a keyboard event from bubbling to a
+Portal row does not cancel the browser's native form submission. Two additional
+hosts demonstrate a single-input form without a submit button and a form with a
+submit button. Their submit handlers count events and prevent navigation; they
+never call Save. Applications retain responsibility for native submission,
+composition handling, and the decision to invoke their owner's deliberate Save.
+
 After building, `node scripts/check-date-browser.mjs` runs synthetic Chromium
 checks and writes screenshots plus `result.json` to `dist/date-browser`. Set
 `SDK_DATE_CHROMIUM` to an installed Chromium executable, for example
 `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` on macOS; the
-default is `/usr/bin/chromium`. Browser tests cover native keyboard behavior but
-do not certify screen readers or OS input methods.
+default is `/usr/bin/chromium`. The receipt separates native Enter results from
+simulated composition events. Untrusted synthetic key events do not exercise the
+browser's native submission action, and synthetic composition events do not
+activate an OS input method. These checks do not certify screen readers or real
+IME behavior.

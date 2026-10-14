@@ -77,7 +77,18 @@ describe('explicit hosted partial-table cache policy', () => {
                 id: 'rec_updated',
                 fields: { fld_title: 'new title' },
             },
-            rec_new: { id: 'rec_new', fields: { fld_title: 'new record' } },
+            rec_new: {
+                id: 'rec_new',
+                fields: {
+                    fld_title: 'new record',
+                    fld_files: [
+                        {
+                            url: 'https://uploads.example.test/incoming.png',
+                            filename: 'incoming.png',
+                        },
+                    ],
+                },
+            },
         });
         const before = structuredClone({ previous, incoming });
         const result = mergePortalPartialTableState(previous, incoming);
@@ -95,9 +106,28 @@ describe('explicit hosted partial-table cache policy', () => {
                 id: 'rec_unfetched',
                 fields: { fld_done: true, fld_title: 'not in this fetch' },
             },
-            rec_new: { id: 'rec_new', fields: { fld_title: 'new record' } },
+            rec_new: {
+                id: 'rec_new',
+                fields: {
+                    fld_title: 'new record',
+                    fld_files: [
+                        {
+                            url: 'https://uploads.example.test/incoming.png',
+                            filename: 'incoming.png',
+                        },
+                    ],
+                },
+            },
         });
         assert.deepEqual({ previous, incoming }, before);
+        assert.equal(
+            result.recordIdsToAirtableRecords.rec_updated.fields.fld_links,
+            previous.recordIdsToAirtableRecords.rec_updated.fields.fld_links
+        );
+        assert.equal(
+            result.recordIdsToAirtableRecords.rec_new.fields.fld_files,
+            incoming.recordIdsToAirtableRecords.rec_new.fields.fld_files
+        );
         assert.notEqual(result, previous);
         assert.notEqual(
             result.recordIdsToAirtableRecords.rec_updated.fields,

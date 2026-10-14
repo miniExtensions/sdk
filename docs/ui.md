@@ -1383,3 +1383,82 @@ native typing/caret, Enter in the example host, incomplete and invalid drafts,
 remounts, permissions, external updates, repeated IDs, focus, forced colors and
 narrow layout, and writes screenshots and a JSON receipt. It does not certify
 every platform's input method, screen reader or surrounding form layout.
+
+## React Date presentation
+
+The optional `/react` entry exports `DateField`, `DateFieldProps`,
+`DateFieldOptions` and `renderDateField` for calendar dates. The binding component
+keeps its `{ binding, render }` API; supplying `render` still replaces all markup.
+The existing explicit-offset `DateTimeField` binding presentation is unchanged.
+
+```tsx
+import { DateField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/date.css';
+
+export function DueDate({ binding }: { binding: FormFieldBinding }) {
+    return <DateField binding={binding} className="due-date" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'date'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderDateField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/date.css';
+
+export const dateRenderers: FieldRendererSlots<ReactNode> = {
+    renderDateField: (props) =>
+        renderDateField(props, { clearLabel: 'Effacer la date' }),
+};
+```
+
+Editing uses the existing owner-held date model, which accepts valid calendar
+`YYYY-MM-DD` values. Partial or invalid input remains visible across remounts
+without replacing the last accepted native value. The owner blocks deliberate
+Save while editable date input is invalid. Repairing the text accepts the exact
+calendar string; an explicit empty edit or Clear writes `null`. Untouched loaded
+missing, null or blank values are not normalized. See the
+[date model contract](field-bindings.md#calendar-dates-and-explicit-offset-datetimes)
+for parsing, configuration retirement and validation details.
+
+The slot requires an editable capability with a matching calendar-date bridge.
+A generic value setter, a dateTime bridge or a readonly capability does not grant
+date editing. Pending, computed and configured read-only controls are disabled.
+The bridge and binding enforce existing current-owner checks on every action.
+Hidden, blocked and retired hosts render nothing; applications must retire owners
+on context replacement. Mounting, StrictMode and remounting neither create nor
+dispose the owner, change its draft, invoke Save or start requests. Save and
+cancellation remain explicit owner actions.
+
+Controls use text inputs, or password inputs when masked, so unfinished calendar
+text remains visible to its owner. This presentation adds no date picker,
+natural-language parsing, timezone conversion or automatic submission. Title
+visibility, placeholder, required indication, masking and read-only restrictions
+are honored; masking and read-only settings from either display or write config
+apply. The default placeholder is `YYYY-MM-DD`. Formatted model previews are not
+written into native answers or shown alongside masked input.
+
+Labels use unique React instance IDs for repeated rows, and hidden titles retain
+an accessible name. Feedback is plain text in an associated polite live region.
+Clear is `type="button"` and returns focus to the input. Its optional `clearLabel`
+localizes the accessible name, with `Clear <title>` as the default. Click, pointer,
+keyboard and composition events stop bubbling into Portal rows. Event containment
+does not cancel native implicit form submission: pressing Enter can submit a
+single-input form or activate an enclosing form's submit button. Applications own
+the surrounding form's submission policy and must route Save deliberately through
+the owner. `className` decorates the wrapper.
+
+The provisional stylesheet is scoped to `mx-sdk-date*` classes and is exported as
+`@miniextensions/sdk/react/date.css` in both builds. Import it, override its
+classes, or omit it and supply your own styles. JavaScript does not import CSS;
+core and `/ui` remain React-free. No theme or appearance-prop API is introduced.
+
+The local `examples/react-date` example uses public exports and synthetic owners
+without backend requests. After building, run `node examples/react-date/dev.mjs`.
+`node scripts/check-date-browser.mjs` checks native interaction, invalid drafts,
+remounting, clearing, permissions, layout and forced colors. Synthetic interaction
+does not certify every platform's input method or screen reader.

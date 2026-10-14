@@ -1,6 +1,14 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkMultilineTextConsumer,
+    multilineTextReactTypedConsumer,
+} from './multiline-text-consumer-checks.mjs';
+import {
+    checkPhoneNumberConsumer,
+    phoneNumberReactTypedConsumer,
+} from './phone-number-consumer-checks.mjs';
+import {
     checkUrlConsumer,
     urlReactTypedConsumer,
 } from './url-consumer-checks.mjs';
@@ -13,6 +21,14 @@ import {
     checkAutoNumberConsumer,
     autoNumberReactTypedConsumer,
 } from './autonumber-consumer-checks.mjs';
+import {
+    checkRatingConsumer,
+    ratingReactTypedConsumer,
+} from './rating-consumer-checks.mjs';
+import {
+    checkPercentConsumer,
+    percentReactTypedConsumer,
+} from './percent-consumer-checks.mjs';
 import {
     checkDateRendererConsumer,
     dateRendererReactTypedConsumer,
@@ -1209,6 +1225,26 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('autonumber-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'rating-react-consumer.tsx'),
+        ratingReactTypedConsumer
+    );
+    reactSources.push('rating-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'multiline-text-react-consumer.tsx'),
+        multilineTextReactTypedConsumer
+    );
+    reactSources.push('multiline-text-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'percent-react-consumer.tsx'),
+        percentReactTypedConsumer
+    );
+    reactSources.push('percent-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'phone-number-react-consumer.tsx'),
+        phoneNumberReactTypedConsumer
+    );
+    reactSources.push('phone-number-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'url-react-consumer.tsx'),
         urlReactTypedConsumer
     );
@@ -1350,21 +1386,24 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'multiline-text',
+        'phone-number',
         'url',
         'number',
         'autonumber',
+        'rating',
+        'percent',
         'date',
         'datetime',
         'duration',
         'email',
         'currency',
     ]) {
-        const stylesheet =
-            name === 'autonumber'
-                ? 'number'
-                : ['email', 'url'].includes(name)
-                  ? 'text'
-                  : name;
+        const stylesheet = ['autonumber', 'percent', 'rating'].includes(name)
+            ? 'number'
+            : ['email', 'url', 'phone-number', 'multiline-text'].includes(name)
+              ? 'text'
+              : name;
         if (name === 'autonumber') {
             const sources = [
                 '.gitignore',
@@ -1523,6 +1562,22 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
+    const multilineTextProof = await checkMultilineTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(multilineTextProof.checks, 20);
+    console.log(
+        `Installed Multiline Text renderer, binding, shared Text CSS and local example: ${multilineTextProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const phoneNumberProof = await checkPhoneNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(phoneNumberProof.checks, 12);
+    console.log(
+        `Installed Phone Number renderer, binding, shared Text CSS and local example: ${phoneNumberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
     const urlProof = await checkUrlConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -1554,6 +1609,22 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(autoNumberProof.checks, 16);
     console.log(
         `Installed AutoNumber renderer, readonly owners, shared Number CSS and local example: ${autoNumberProof.checks} ESM/CJS groups passed; synthetic data only.`
+    );
+    const ratingProof = await checkRatingConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(ratingProof.checks, 18);
+    console.log(
+        `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const percentProof = await checkPercentConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(percentProof.checks, 16);
+    console.log(
+        `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const dateRendererProof = await checkDateRendererConsumer({
         consumerDirectory: temporaryDirectory,

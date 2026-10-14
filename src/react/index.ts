@@ -25,6 +25,10 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+export {
+    renderPhoneNumberField,
+    type PhoneNumberFieldOptions,
+} from './PhoneNumberField.js';
 import {
     CheckboxControl,
     checkboxConfiguration,
@@ -326,6 +330,11 @@ export function TextField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setValue: (value) => binding.setValue(value).accepted,
     });
+}
+/** Phone drafts stay literal text without formatting or dialing actions. */
+export type PhoneNumberFieldProps = TextFieldProps;
+export function PhoneNumberField(props: PhoneNumberFieldProps): ReactNode {
+    return createElement(TextField, props);
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;

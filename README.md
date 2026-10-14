@@ -171,7 +171,7 @@ The SDK has no administrative workspace/configure/publish API.
 | `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `NumberField`, `CheckboxField`,
+also includes optional DOM controls. The `/react` subpath provides `TextField`, `PhoneNumberField`, `NumberField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
@@ -185,6 +185,12 @@ renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
+
+[Phone Number presentation](docs/ui.md#react-phone-number-presentation) exports
+`PhoneNumberField`, `PhoneNumberFieldProps`, `PhoneNumberFieldOptions` and the typed
+`renderPhoneNumberField` slot. It reuses the Text control and optional
+`@miniextensions/sdk/react/text.css` for literal single-line drafts, with no phone
+normalization, country selector or dialing action.
 
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the

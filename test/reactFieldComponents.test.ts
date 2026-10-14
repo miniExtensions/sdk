@@ -56,6 +56,14 @@ async function fixture() {
     const loaded = loadedForm();
     for (const [id, type, options, value] of [
         ['number', 'number', { precision: 2 }, 1.25],
+        ['percent', 'percent', { precision: 2 }, 0.25],
+        ['currency', 'currency', { precision: 2, symbol: '$' }, 12.5],
+        [
+            'rating',
+            'rating',
+            { max: 5, icon: 'star', color: 'yellowBright' },
+            3,
+        ],
         ['duration', 'duration', { durationFormat: 'h:mm:ss' }, 60],
         [
             'checkbox',
@@ -211,6 +219,42 @@ it('NumberField retains invalid draft text without corrupting native value, reco
         assert.equal(f.window.document.querySelector('input'), null);
         assert.equal(binding.scalar!.setInput('999'), false);
         assert.equal(binding.getSnapshot().value, null);
+        assert.equal(f.requests(), 0);
+    } finally {
+        await f.close();
+    }
+});
+
+it('NumberField retains existing percent, currency and rating native units and custom markup', async () => {
+    const f = await fixture();
+    try {
+        const cases = [
+            ['percent', '0.25'],
+            ['currency', '12.5'],
+            ['rating', '3'],
+        ].map(([id, initial]) => ({ binding: f.owner.field(id), initial }));
+        for (const { binding, initial } of cases) {
+            await f.render(createElement(NumberField, { binding }));
+            assert.equal(f.input().value, initial);
+            assert.equal(f.input().inputMode, 'decimal');
+            await f.edit('0.125');
+            assert.equal(binding.getSnapshot().value, 0.125);
+            await f.edit('-');
+            assert.equal(f.input().value, '-');
+            assert.equal(binding.getSnapshot().value, 0.125);
+            await f.render(
+                createElement(NumberField, {
+                    binding,
+                    render: ({ snapshot }) =>
+                        createElement('output', null, snapshot.scalar?.input),
+                })
+            );
+            assert.equal(f.window.document.querySelector('input'), null);
+            assert.equal(
+                f.window.document.querySelector('output')!.textContent,
+                '-'
+            );
+        }
         assert.equal(f.requests(), 0);
     } finally {
         await f.close();

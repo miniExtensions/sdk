@@ -10,7 +10,10 @@ import { resolve, join } from 'node:path';
 const output = resolve(process.argv[2] ?? 'dist/datetime-browser');
 mkdirSync(output, { recursive: true });
 const bundle = await build({
-    entryPoints: ['examples/react-datetime/main.ts'],
+    entryPoints: {
+        main: 'examples/react-datetime/main.ts',
+        enter: 'examples/react-datetime/enter-fixture.ts',
+    },
     bundle: true,
     platform: 'browser',
     format: 'esm',
@@ -29,6 +32,11 @@ const server = createServer((request, response) => {
     if (path === '/') {
         response.setHeader('content-type', 'text/html');
         response.end(readFileSync('examples/react-datetime/index.html'));
+    } else if (path === '/enter') {
+        response.setHeader('content-type', 'text/html');
+        response.end(
+            '<!doctype html><html><head><title>DateTime Enter host cases</title></head><body><div id="enter-app"></div><script type="module" src="/enter.js"></script></body></html>'
+        );
     } else if (assets.has(path)) {
         response.setHeader(
             'content-type',
@@ -82,6 +90,8 @@ try {
         Number(await page.locator('#writes').textContent());
     const native = async (index = 0) =>
         page.locator(`#native-${index}`).textContent();
+    // These counters describe this eight-input form without a submit button.
+    // Stopped input bubbling is not a guarantee against browser default submit.
     const noEvents = async () => {
         assert.equal(await page.locator('#rows').textContent(), '0');
         assert.equal(await page.locator('#submits').textContent(), '0');
@@ -311,6 +321,132 @@ try {
     assert.equal(await writes(), beforeExternal);
     await noEvents();
     assert.equal(await page.locator('iframe,video,a').count(), 0);
+
+    // Enter's native default action depends on the enclosing form. Keep these
+    // single-input host arrangements separate from the eight-input showcase.
+    const enterPage = await context.newPage();
+    enterPage.on('pageerror', (error) => errors.push(error.message));
+    await enterPage.goto(`${origin}/enter`);
+    await enterPage.locator('#enter-single input').waitFor();
+    const enterCases = [];
+    const evidence = (id) =>
+        enterPage.evaluate(
+            (id) =>
+                window.datetimeEnterEvidence().find((host) => host.id === id),
+            id
+        );
+    for (const id of ['single', 'submit-button']) {
+        const form = enterPage.locator(`#enter-${id}`);
+        const input = form.locator('input[type=text]');
+        assert.equal(await input.count(), 1);
+        assert.equal(
+            await form.locator('button[type=submit]').count(),
+            id === 'single' ? 0 : 1
+        );
+        const before = await evidence(id);
+        await input.press('Enter');
+        const nativeEnter = await evidence(id);
+        assert.equal(
+            nativeEnter.submissions.length - before.submissions.length,
+            1
+        );
+        assert.equal(nativeEnter.writes, 0);
+        assert.equal(nativeEnter.native, before.native);
+        assert.equal(nativeEnter.input, before.input);
+        assert.equal(nativeEnter.parentKeyDowns, 0);
+        assert.deepEqual(nativeEnter.keys.at(-1), {
+            trusted: true,
+            isComposing: false,
+        });
+        assert.deepEqual(nativeEnter.submissions.at(-1), {
+            trusted: true,
+            defaultPreventedBeforeOwner: false,
+            submitter: id === 'single' ? null : 'submit-button-submit',
+        });
+        assert.equal(nativeEnter.submitButtonClicks, id === 'single' ? 0 : 1);
+
+        // Synthetic composition is deliberately not OS IME certification.
+        // dispatchEvent does not exercise the browser's trusted Enter default.
+        const composingKey = await input.evaluate((node) => {
+            node.dispatchEvent(
+                new CompositionEvent('compositionstart', {
+                    bubbles: true,
+                    data: 'あ',
+                })
+            );
+            const key = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                isComposing: true,
+                bubbles: true,
+                cancelable: true,
+            });
+            const dispatchAccepted = node.dispatchEvent(key);
+            node.dispatchEvent(
+                new KeyboardEvent('keyup', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    isComposing: true,
+                    bubbles: true,
+                })
+            );
+            node.dispatchEvent(
+                new CompositionEvent('compositionend', {
+                    bubbles: true,
+                    data: 'あ',
+                })
+            );
+            return {
+                dispatchAccepted,
+                defaultPrevented: key.defaultPrevented,
+                trusted: key.isTrusted,
+                isComposing: key.isComposing,
+            };
+        });
+        const composed = await evidence(id);
+        assert.deepEqual(composingKey, {
+            dispatchAccepted: true,
+            defaultPrevented: false,
+            trusted: false,
+            isComposing: true,
+        });
+        assert.equal(
+            composed.submissions.length,
+            nativeEnter.submissions.length
+        );
+        assert.equal(composed.parentKeyDowns, 0);
+        assert.equal(composed.parentCompositions, 0);
+        assert.equal(composed.writes, 0);
+        assert.equal(composed.native, before.native);
+        enterCases.push({
+            host:
+                id === 'single'
+                    ? 'one text input, no submit button'
+                    : 'one text input, enabled submit button',
+            normalEnter: {
+                submitEvents:
+                    nativeEnter.submissions.length - before.submissions.length,
+                submission: nativeEnter.submissions.at(-1),
+                key: nativeEnter.keys.at(-1),
+                submitButtonClicks: nativeEnter.submitButtonClicks,
+                parentKeyDowns: nativeEnter.parentKeyDowns,
+            },
+            simulatedComposingEnter: {
+                ...composingKey,
+                submitEvents:
+                    composed.submissions.length -
+                    nativeEnter.submissions.length,
+                parentKeyDowns: composed.parentKeyDowns,
+                parentCompositions: composed.parentCompositions,
+                scope: 'Untrusted synthetic events only; no browser default action or OS IME guarantee.',
+            },
+            nativeWrites: composed.writes,
+            nativeUnchanged: composed.native === before.native,
+            ownerPolicy:
+                'The host counts submit then preventDefault() blocks navigation; no Save action exists in this fixture.',
+        });
+    }
+    await enterPage.close();
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     writeFileSync(
@@ -322,6 +458,7 @@ try {
                 timezone: 'America/Los_Angeles',
                 writes: await writes(),
                 externalRequests: 0,
+                enterCases,
                 checks: [
                     'native keyboard typing and caret',
                     'partial input retains the accepted native draft',
@@ -340,7 +477,9 @@ try {
                     'validation association and unique IDs',
                     'hidden title accessible name',
                     'visible keyboard focus',
-                    'no Portal row activation or implicit form submission',
+                    'input bubbling does not activate Portal rows or submit the eight-input/no-submit-button showcase',
+                    'native Enter submits each tested single-input host form; host submit policy prevents navigation without Save',
+                    'synthetic composing Enter stays unprevented but does not certify trusted browser default actions or OS IMEs',
                     'forced colors',
                     'mobile overflow',
                 ],

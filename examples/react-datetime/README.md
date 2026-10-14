@@ -34,3 +34,14 @@ Set `SDK_DATETIME_CHROMIUM` to an installed Chromium executable, for example
 `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` on macOS; the default
 is `/usr/bin/chromium`. The browser context blocks external network requests.
 Native keyboard checks do not certify OS input methods or screen readers.
+
+The browser check also mounts two isolated hosts from `enter-fixture.ts`: one
+text input without a submit button, and one text input with an enabled submit
+button. Native Enter can submit either host even though the renderer stops the
+input's key events from bubbling. The host counts the submit event and calls
+`preventDefault()` to prevent navigation; it has no Save action. Applications
+must keep their own submit policy and deliberate Save authorization. The main
+eight-input example's zero-submit counter does not prove universal Enter
+suppression. `result.json` records both native Enter and untrusted simulated
+composing Enter; the latter does not exercise a trusted browser default action
+or certify an OS input method.

@@ -6,6 +6,13 @@ import type { PortalOwnerScope } from './types.js';
 import { readOwnerScope, sameOwner } from './helpers.js';
 import { PortalCollectionError } from './error.js';
 
+const requireNotAborted = (signal: AbortSignal | undefined): void => {
+    if (signal?.aborted)
+        throw 'reason' in signal
+            ? signal.reason
+            : new DOMException('The operation was aborted.', 'AbortError');
+};
+
 export type PortalReadReceipt<Result> =
     | { type: 'accepted'; raw: Result; isCurrent(): boolean }
     | { type: 'retired' };
@@ -183,14 +190,14 @@ export function createPortalReadCoordinator<
                     return { type: 'retired' };
                 signal = capturedSignal;
                 attempt.cancelled = () => onCancelledAfterDispatch?.();
-                signal?.throwIfAborted();
+                requireNotAborted(signal);
                 signal?.addEventListener('abort', forwardAbort, { once: true });
                 if (signal?.aborted) forwardAbort();
-                attempt.controller.signal.throwIfAborted();
+                requireNotAborted(attempt.controller.signal);
                 const copied = structuredClone(input);
                 if (!isCurrent() || preparing !== attempt || attempt.retired)
                     return { type: 'retired' };
-                attempt.controller.signal.throwIfAborted();
+                requireNotAborted(attempt.controller.signal);
                 const previous = active;
                 attempt.generation = ++generation;
                 active = attempt;
@@ -200,18 +207,18 @@ export function createPortalReadCoordinator<
                     previous.retired = true;
                     previous.controller.abort();
                 }
-                attempt.controller.signal.throwIfAborted();
+                requireNotAborted(attempt.controller.signal);
                 if (!owned(attempt) || active !== attempt)
                     return { type: 'retired' };
                 attempt.dispatched = true;
                 onDispatch?.();
-                attempt.controller.signal.throwIfAborted();
+                requireNotAborted(attempt.controller.signal);
                 if (!owned(attempt) || active !== attempt)
                     return { type: 'retired' };
                 const raw = await options.load(copied, {
                     signal: attempt.controller.signal,
                 });
-                attempt.controller.signal.throwIfAborted();
+                requireNotAborted(attempt.controller.signal);
                 if (!owned(attempt) || active !== attempt)
                     return { type: 'retired' };
                 const detached = structuredClone(raw);
@@ -229,14 +236,13 @@ export function createPortalReadCoordinator<
                         owned(attempt),
                 };
                 onAccepted?.(receipt);
-                attempt.controller.signal.throwIfAborted();
+                requireNotAborted(attempt.controller.signal);
                 if (!owned(attempt) || active !== attempt)
                     return { type: 'retired' };
                 return receipt;
             } catch (error) {
                 if (attempt.retired) return { type: 'retired' };
-                if (attempt.controller.signal.aborted)
-                    throw attempt.controller.signal.reason ?? error;
+                requireNotAborted(attempt.controller.signal);
                 if (
                     !owned(attempt) ||
                     (active !== attempt && preparing !== attempt)

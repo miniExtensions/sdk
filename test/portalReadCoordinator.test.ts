@@ -12,6 +12,13 @@ type Input = { criteria: { searchTerm: string } };
 type Result = { recordIds: string[] };
 const input = (searchTerm = 'Current') => ({ criteria: { searchTerm } });
 const result = (recordId = 'record_current') => ({ recordIds: [recordId] });
+const withoutThrowIfAborted = (signal: AbortSignal): AbortSignal => {
+    Object.defineProperty(signal, 'throwIfAborted', {
+        value: undefined,
+        configurable: true,
+    });
+    return signal;
+};
 const accepted = (receipt: PortalReadReceipt<Result>) => {
     assert.equal(receipt.type, 'accepted');
     if (receipt.type !== 'accepted')
@@ -38,6 +45,92 @@ const setup = (concurrency: 'reject' | 'supersede' = 'reject') => {
 };
 
 describe('shared Portal read-attempt ownership', () => {
+    for (const source of ['external', 'internal'] as const) {
+        it(`accepts a read when the real ${source} signal has no throwIfAborted method`, async () => {
+            const s = setup();
+            const external = new AbortController();
+            if (source === 'external') withoutThrowIfAborted(external.signal);
+            const read = s.coordinator.read(input(), {
+                signal: external.signal,
+            });
+            assert.equal(s.calls.length, 1);
+            if (source === 'internal') withoutThrowIfAborted(s.calls[0].signal);
+            s.calls[0].pending.resolve(result());
+            const receipt = accepted(await read);
+            assert.deepEqual(receipt.raw, result());
+            assert.equal(receipt.isCurrent(), true);
+            assert.equal(s.calls[0].signal.aborted, false);
+        });
+
+        for (const reason of [new Error('Synthetic abort identity'), null]) {
+            it(`preserves the ${reason === null ? 'null' : 'Error object'} reason when the real ${source} signal lacks throwIfAborted`, async () => {
+                const s = setup();
+                const external = new AbortController();
+                if (source === 'external')
+                    withoutThrowIfAborted(external.signal);
+                const read = s.coordinator.read(input(), {
+                    signal: external.signal,
+                });
+                assert.equal(s.calls.length, 1);
+                if (source === 'internal')
+                    withoutThrowIfAborted(s.calls[0].signal);
+                const rejected = assert.rejects(
+                    read,
+                    (error) => error === reason
+                );
+                if (source === 'external') external.abort(reason);
+                else s.coordinator.cancel(reason);
+                assert.equal(s.calls[0].signal.aborted, true);
+                assert.equal(s.calls[0].signal.reason, reason);
+                // An abort-ignoring loader failure must not replace a present null reason.
+                s.calls[0].pending.reject(
+                    new Error('Synthetic ignored-abort failure')
+                );
+                await rejected;
+                assert.equal(s.coordinator.hasPendingRead(), false);
+                assert.equal(s.calls.length, 1);
+            });
+        }
+    }
+
+    it('preserves a pre-aborted null reason without invoking the transport or signal method', async () => {
+        const s = setup();
+        const controller = new AbortController();
+        withoutThrowIfAborted(controller.signal);
+        controller.abort(null);
+        await assert.rejects(
+            s.coordinator.read(input(), { signal: controller.signal }),
+            (error) => error === null
+        );
+        assert.equal(s.calls.length, 0);
+        assert.equal(s.coordinator.hasPendingRead(), false);
+    });
+
+    it('uses AbortError only when an older pre-aborted signal has no reason property', async () => {
+        const s = setup();
+        const controller = new AbortController();
+        withoutThrowIfAborted(controller.signal);
+        controller.abort();
+        const olderSignal = new Proxy(controller.signal, {
+            has: (target, key) => key !== 'reason' && Reflect.has(target, key),
+            get: (target, key) => {
+                if (key === 'reason') return undefined;
+                if (key === 'addEventListener')
+                    return target.addEventListener.bind(target);
+                if (key === 'removeEventListener')
+                    return target.removeEventListener.bind(target);
+                return Reflect.get(target, key, target);
+            },
+        });
+        await assert.rejects(
+            s.coordinator.read(input(), { signal: olderSignal }),
+            (error) =>
+                error instanceof DOMException && error.name === 'AbortError'
+        );
+        assert.equal(s.calls.length, 0);
+        assert.equal(s.coordinator.hasPendingRead(), false);
+    });
+
     it('detaches the requested criteria and raw incoming page without accumulating pages', async () => {
         const s = setup();
         const request = input();

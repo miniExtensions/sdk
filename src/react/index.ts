@@ -26,6 +26,14 @@ export {
     type TextFieldOptions,
 } from './TextField.js';
 import type { ExternalSyncSourceFieldOptions } from './ExternalSyncSourceField.js';
+import {
+    lastModifiedByName,
+    type LastModifiedByFieldOptions,
+} from './LastModifiedByField.js';
+export {
+    renderLastModifiedByField,
+    type LastModifiedByFieldOptions,
+} from './LastModifiedByField.js';
 export {
     renderExternalSyncSourceField,
     type ExternalSyncSourceFieldOptions,
@@ -334,6 +342,45 @@ const status = (snapshot: FormFieldSnapshot) =>
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
+export type LastModifiedByFieldProps = FieldProps & LastModifiedByFieldOptions;
+/** The supplied modifier name stays readonly regardless of forged editing state. */
+export function LastModifiedByField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: LastModifiedByFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'lastModifiedBy' ||
+        schema.airtableField.config.type !== 'lastModifiedBy'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Last Modified By fields.'
+        );
+    return createElement(TextControl, {
+        ...textConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        value: lastModifiedByName(snapshot.value),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: () => false,
+    });
+}
 export type ExternalSyncSourceFieldProps = FieldProps &
     ExternalSyncSourceFieldOptions;
 /** The supplied source name stays readonly regardless of forged editing state. */

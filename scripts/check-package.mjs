@@ -1,6 +1,10 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkPhoneNumberConsumer,
+    phoneNumberReactTypedConsumer,
+} from './phone-number-consumer-checks.mjs';
+import {
     checkUrlConsumer,
     urlReactTypedConsumer,
 } from './url-consumer-checks.mjs';
@@ -1209,6 +1213,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('percent-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'phone-number-react-consumer.tsx'),
+        phoneNumberReactTypedConsumer
+    );
+    reactSources.push('phone-number-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'url-react-consumer.tsx'),
         urlReactTypedConsumer
     );
@@ -1350,6 +1359,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'phone-number',
         'url',
         'number',
         'percent',
@@ -1362,7 +1372,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         const stylesheet =
             name === 'percent'
                 ? 'number'
-                : name === 'email' || name === 'url'
+                : name === 'email' || name === 'url' || name === 'phone-number'
                   ? 'text'
                   : name;
         if (name === 'currency') {
@@ -1480,6 +1490,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(textProof.checks, 8);
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const phoneNumberProof = await checkPhoneNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(phoneNumberProof.checks, 12);
+    console.log(
+        `Installed Phone Number renderer, binding, shared Text CSS and local example: ${phoneNumberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const urlProof = await checkUrlConsumer({
         consumerDirectory: temporaryDirectory,

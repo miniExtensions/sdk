@@ -1382,6 +1382,79 @@ fixtures at `http://127.0.0.1:4184`. `node scripts/check-url-browser.mjs` checks
 native entry, clearing, remounts, inert text and enclosing-form Enter behavior.
 Simulated composition does not certify real OS input methods.
 
+## React Phone Number presentation
+
+The optional `/react` entry exports `PhoneNumberField`, `PhoneNumberFieldProps`,
+`PhoneNumberFieldOptions` and `renderPhoneNumberField`. `PhoneNumberField`
+delegates to `TextField`; its props and options are aliases of `TextFieldProps`
+and `TextFieldOptions`. The existing `{ binding, render }` override replaces all
+stock markup.
+
+```tsx
+import { PhoneNumberField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function Telephone({ binding }: { binding: FormFieldBinding }) {
+    return <PhoneNumberField binding={binding} clearLabel="Clear telephone" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'phoneNumber'>` in the existing
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList` slots:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderPhoneNumberField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const phoneRenderers: FieldRendererSlots<ReactNode> = {
+    renderPhoneNumberField: (props) =>
+        renderPhoneNumberField(props, { className: 'telephone' }),
+};
+```
+
+This is manual single-line text entry. Input uses `type="text"`, or `password`
+when accepted masking config requires it. Plus signs, leading zeros, punctuation,
+extensions, Unicode digits, entered whitespace and incomplete or non-phone strings
+remain literal native drafts. The renderer does not trim, normalize, format,
+coerce to a number or add a country prefix. Native single-line inputs strip
+embedded line breaks. An explicit empty edit or Clear sets the native draft to
+`null`; an initially absent value stays absent until an edit.
+
+Existing accepted-owner, page and server validation remains authoritative. The
+renderer displays supplied errors and adds no phone-syntax validator. Country-code
+configuration, including `showCountryCodes` and `defaultCountryCode`, is metadata
+without an accepted selector or formatter contract in this presentation. A country
+selector or formatting policy needs a separate accepted custom integration.
+
+The shared Text control supplies labels, placeholder and required indication,
+plain-text associated feedback, Clear focus restoration and local composition
+buffering. Read-only, masked, pending and computed restrictions are preserved;
+hidden, blocked and retired hosts omit the control. Stale callbacks continue
+through their accepted owner's guards. Custom `render` overrides keep ownership
+of their presentation.
+
+Keep owners outside React mounts: mounting, StrictMode, remounting and unmounting
+do not create or destroy owners, write a draft or save it. Saving remains an
+explicit owner action. Values such as `tel:+12025550123` or `sms:+12025550123`
+are inert input text. This renderer creates no links, dialing or messaging action;
+it performs no SMS, OTP, verification, lookup or network request.
+
+Applications own their enclosing HTML form's submit policy: stopped key-event
+bubbling does not prevent native Enter submission. Clear is `type="button"`.
+There is no separate Phone Number stylesheet. Import the existing optional
+`@miniextensions/sdk/react/text.css`, override its `mx-sdk-text*` classes or supply
+your own styles. JavaScript does not import CSS; `className` decorates the wrapper.
+Core and `/ui` remain React-free.
+
+After building, `node examples/react-phone-number/dev.mjs` serves synthetic
+presentation fixtures at `http://127.0.0.1:4185`.
+`node scripts/check-phone-number-browser.mjs` checks native entry, clearing,
+remounts, inert text and enclosing-form Enter behavior. Simulated composition does
+not certify real OS input methods.
+
 ## React Number presentation
 
 The optional `/react` entry exports `NumberField`, `NumberFieldProps`,

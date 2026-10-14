@@ -138,3 +138,21 @@ Chromium proof. Native enclosing-form submission and stopped event bubbling are
 distinct. Simulated composition does not certify a real input method. All values
 are synthetic; the checks do not contact a live backend or introduce a progress
 bar or percent-formatting policy.
+
+## Phone Number presentation checks
+
+`pnpm check:package` exercises installed Phone Number exports in ESM and CommonJS
+with synthetic owners. The checks cover literal single-line values, including
+leading zeros, punctuation, extensions, Unicode digits and `tel:`/`sms:` strings;
+explicit null clearing; composition completion; stale actions; readonly and masked
+controls; binding overrides; and retired hosts. Country-code metadata does not
+add a selector or format a value. The checks assert no links, navigation, requests
+or implicit Save. Public props/options, the phone-number-only slot, Form/Grid/List
+composition and guide recipes are typechecked. The example is compiled and bundled
+against the archive using shared optional `text.css`; Phone Number adds no
+stylesheet export.
+
+After building, `node scripts/check-phone-number-browser.mjs` runs the separate
+local Chromium proof. Native form submission and stopped event bubbling are
+distinct; simulated composition does not certify a real input method. These checks
+use synthetic drafts and do not establish a dialing policy or contact a live backend.

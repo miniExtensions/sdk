@@ -171,7 +171,7 @@ The SDK has no administrative workspace/configure/publish API.
 | `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `EmailField`, `UrlField`, `NumberField`, `PercentField`, `CheckboxField`,
+also includes optional DOM controls. The `/react` subpath provides `TextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
@@ -200,6 +200,12 @@ single-line entry. URL text does not create links or grant navigation authority.
 `PercentFieldProps`, `PercentFieldOptions` and the typed `renderPercentField` slot.
 It reuses the Number control and optional `@miniextensions/sdk/react/number.css`:
 native fractions such as `0.25` remain `0.25`, without percent scaling or a suffix.
+
+[Phone Number presentation](docs/ui.md#react-phone-number-presentation) exports
+`PhoneNumberField`, `PhoneNumberFieldProps`, `PhoneNumberFieldOptions` and the typed
+`renderPhoneNumberField` slot. It reuses the Text control and optional
+`@miniextensions/sdk/react/text.css` for literal single-line drafts, with no phone
+normalization, country selector or dialing action.
 
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the

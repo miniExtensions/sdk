@@ -25,6 +25,10 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+export {
+    renderPhoneNumberField,
+    type PhoneNumberFieldOptions,
+} from './PhoneNumberField.js';
 export { renderUrlField, type UrlFieldOptions } from './UrlField.js';
 export { renderEmailField, type EmailFieldOptions } from './EmailField.js';
 import {
@@ -341,6 +345,11 @@ export function TextField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setValue: (value) => binding.setValue(value).accepted,
     });
+}
+/** Phone drafts stay literal text without formatting or dialing actions. */
+export type PhoneNumberFieldProps = TextFieldProps;
+export function PhoneNumberField(props: PhoneNumberFieldProps): ReactNode {
+    return createElement(TextField, props);
 }
 /** URL drafts stay literal text and grant no navigation authority. */
 export type UrlFieldProps = TextFieldProps;

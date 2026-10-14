@@ -1615,9 +1615,9 @@ Styles reuse optional `@miniextensions/sdk/react/text.css` and its `mx-sdk-text*
 classes. `className` decorates the wrapper. There is no Created By stylesheet
 export or JavaScript CSS import; core and `/ui` remain React-free.
 
-The [Created By example](../examples/react-created-by/README.md) uses public exports
-and synthetic data. After building, run `node examples/react-created-by/dev.mjs`
-and open `http://127.0.0.1:4192`. The local browser check is
+The `examples/react-created-by` fixture uses public exports and synthetic data.
+After building, run `node examples/react-created-by/dev.mjs` and open
+`http://127.0.0.1:4192`. The local browser check is
 `node scripts/check-created-by-browser.mjs`; see [Created By presentation checks](testing.md#created-by-presentation-checks).
 
 ## React External Sync Source presentation

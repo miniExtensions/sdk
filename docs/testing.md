@@ -163,9 +163,9 @@ compiles and bundles with shared optional `text.css`; its source files remain
 tracked and unignored while generated preview outputs stay ignored.
 
 After building, `node scripts/check-created-by-browser.mjs` runs the separate local
-Chromium proof. The [synthetic example](../examples/react-created-by/README.md)
-serves on `http://127.0.0.1:4192`. These checks perform no identity lookup and load
-no avatar resources.
+Chromium proof. The `examples/react-created-by` synthetic fixture serves on
+`http://127.0.0.1:4192`. These checks perform no identity lookup and load no avatar
+resources.
 
 ## External Sync Source presentation checks
 

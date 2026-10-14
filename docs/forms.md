@@ -2202,3 +2202,76 @@ unknown outcome. Keep the recovery journal, inspect the outcome, and explicitly
 reload or resolve it before proceeding. There is no automatic mutation retry.
 The installed checks use synthetic load, validation and known-saved responses;
 they demonstrate the recipe and native reconciliation, not live persistence.
+
+## Browser-local Form progress
+
+`createFormProgressStorage` from `/forms` is an optional storage protocol for
+unsaved create drafts. Creating it performs no I/O and accesses no browser
+globals. The application explicitly chooses lazy local and session storage
+adapters, an identity generator, optional Web Locks and an unavailable callback:
+
+```ts
+import { createFormProgressStorage } from '@miniextensions/sdk/forms';
+
+const progress = createFormProgressStorage({
+    getLocalStorage: () => window.localStorage,
+    getSessionStorage: () => window.sessionStorage,
+    getLocks: () => navigator.locks,
+    createWriterId: () => crypto.randomUUID(),
+    onUnavailable: (operation) => {
+        console.warn(`Local Form progress ${operation} is unavailable.`);
+    },
+});
+```
+
+Those browser references belong to the application's adapters and are evaluated
+only when an operation needs them. An adapter can return `undefined` or throw
+when its storage is unavailable; reads/removals/writes preserve their existing
+no-progress, false or `unavailable` results. Web Locks access is optional; its
+resolver should return `undefined` when unavailable. The identity generator and
+unavailable callback should not throw. The callback receives only the operation,
+never record data, credentials or the storage error. Reuse one owner to retain
+fallback writer identities per share when session storage is denied.
+
+`makeFormProgressKey(shareId)` preserves `form-progress-${shareId}`.
+`parseStoredFormProgressValue` accepts version-one
+`miniExtensions-form-progress` envelopes and historical plain-object drafts.
+Legacy records have revision zero and no writer, so the first write with
+`expectedRevision: 0` upgrades them without discarding values. Invalid
+matching-kind envelopes cannot become legacy field data; reading them removes
+only the current share's key. Parsing is shallow and establishes no field,
+record or visitor authority.
+
+Read the accepted snapshot, obtain `getFormProgressWriterId(shareId)`, and pass
+the observed revision (or `null` for absence), chosen native `record`, share ID
+and writer ID to `writeStoredFormProgress`. A successful write returns the next
+revision; a stale revision returns `conflict` without replacing the current
+draft. Comparison is revision-only, allowing an accepted newer writer to take
+ownership. `removeStoredFormProgressIfOwned` preserves another writer's valid
+envelope and removes an owned, legacy or absent draft. Unconditional removal is
+also explicit. A rejected lock request returns `unavailable` and never retries
+the operation without a lock.
+
+Web Locks serialize writes and owned cleanup across cooperating tabs using the
+same share lock. Without Web Locks, the read/write critical section is not
+atomic across tabs. Keep storage-event conflict handling in the application and
+stop stale mounted writers; this helper does not install listeners. For hosted
+compatibility, a failed read still appears absent to revision comparison. An
+independently permitted write with `expectedRevision: null` can then proceed;
+the helper does not claim a stronger failure or cross-tab guarantee.
+
+Persistent private drafts require a deliberate application opt-in. Supply only
+chosen native field values, never access/login credentials, visitor sessions or
+request contexts. The envelope contains only that record, revision and local
+writer metadata; writer IDs grant no authorization. Eligibility, initial
+hydration, restore/discard decisions, current-schema validation, conditional
+visibility and final submission remain with the consuming application and
+canonical server. Preserve previously entered hidden values in the local create
+draft while retaining current conditional rules for the eventual save.
+
+This progress store is separate from `FormDraftStore`'s in-memory state, the
+uncertain-write recovery journal and authentication restoration. It performs no
+transport, save, compute, retry or credential persistence. It cannot establish
+whether a dispatched mutation committed and must not clear or resolve an
+unknown-outcome journal. Synthetic storage and queued-lock tests prove this
+protocol; they do not establish native browser or live persistence acceptance.

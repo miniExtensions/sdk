@@ -25,6 +25,7 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+export { renderUrlField, type UrlFieldOptions } from './UrlField.js';
 export { renderEmailField, type EmailFieldOptions } from './EmailField.js';
 import {
     CheckboxControl,
@@ -336,6 +337,11 @@ export function TextField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setValue: (value) => binding.setValue(value).accepted,
     });
+}
+/** URL drafts stay literal text and grant no navigation authority. */
+export type UrlFieldProps = TextFieldProps;
+export function UrlField(props: UrlFieldProps): ReactNode {
+    return createElement(TextField, props);
 }
 /** Email preserves exact text; surrounding page and server owners validate it. */
 export type EmailFieldProps = TextFieldProps;

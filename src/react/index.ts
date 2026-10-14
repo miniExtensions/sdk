@@ -25,6 +25,16 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+import {
+    MultilineTextControl,
+    multilineTextConfiguration,
+    multilineTextUnavailable,
+    type MultilineTextFieldOptions,
+} from './MultilineTextField.js';
+export {
+    renderMultilineTextField,
+    type MultilineTextFieldOptions,
+} from './MultilineTextField.js';
 export {
     renderPhoneNumberField,
     type PhoneNumberFieldOptions,
@@ -341,6 +351,51 @@ export function TextField({
             snapshot.validation.length > 0,
         feedback:
             snapshot.scalar?.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: (value) => binding.setValue(value).accepted,
+    });
+}
+/** Plain multiline text borrows the owner setter and never submits on Enter. */
+export type MultilineTextFieldProps = FieldProps & MultilineTextFieldOptions;
+export function MultilineTextField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: MultilineTextFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const title = snapshot.field?.title.trim()
+        ? snapshot.field.title
+        : (snapshot.field?.schema.airtableField.name ?? '');
+    const config = multilineTextConfiguration(
+        snapshot.field?.schema.miniExtConfig ?? null
+    );
+    const unavailable =
+        snapshot.field?.schema.fieldType !== 'multilineText'
+            ? 'This control supports plain multiline text fields.'
+            : config.unavailable;
+    if (unavailable)
+        return multilineTextUnavailable(
+            title,
+            unavailable,
+            className,
+            config.showTitle
+        );
+    return createElement(MultilineTextControl, {
+        ...config,
+        className,
+        clearLabel,
+        source: binding,
+        title,
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        disabled:
+            config.configuredReadOnly || !snapshot.canEdit || snapshot.pending,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setValue: (value) => binding.setValue(value).accepted,

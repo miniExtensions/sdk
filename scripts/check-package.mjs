@@ -1,6 +1,10 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkMultilineTextConsumer,
+    multilineTextReactTypedConsumer,
+} from './multiline-text-consumer-checks.mjs';
+import {
     checkPhoneNumberConsumer,
     phoneNumberReactTypedConsumer,
 } from './phone-number-consumer-checks.mjs';
@@ -1208,6 +1212,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'multiline-text-react-consumer.tsx'),
+        multilineTextReactTypedConsumer
+    );
+    reactSources.push('multiline-text-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'percent-react-consumer.tsx'),
         percentReactTypedConsumer
     );
@@ -1359,6 +1368,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'multiline-text',
         'phone-number',
         'url',
         'number',
@@ -1372,7 +1382,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         const stylesheet =
             name === 'percent'
                 ? 'number'
-                : name === 'email' || name === 'url' || name === 'phone-number'
+                : ['email', 'url', 'phone-number', 'multiline-text'].includes(
+                        name
+                    )
                   ? 'text'
                   : name;
         if (name === 'currency') {
@@ -1490,6 +1502,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(textProof.checks, 8);
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const multilineTextProof = await checkMultilineTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(multilineTextProof.checks, 20);
+    console.log(
+        `Installed Multiline Text renderer, binding, shared Text CSS and local example: ${multilineTextProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const phoneNumberProof = await checkPhoneNumberConsumer({
         consumerDirectory: temporaryDirectory,

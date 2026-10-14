@@ -1246,6 +1246,89 @@ typing, selection/caret, clearing, simulated composition, remounting, permission
 forced colors and narrow layout and captures screenshots. Simulated composition
 does not certify every platform's input method or screen reader.
 
+## React Multiline Text presentation
+
+The optional `/react` entry exports `MultilineTextField`,
+`MultilineTextFieldProps`, `MultilineTextFieldOptions` and
+`renderMultilineTextField`. The binding component accepts the existing
+`{ binding, render }` contract plus `className` and `clearLabel`. Supplying
+`render` replaces all markup, including the unsupported-mode status.
+
+```tsx
+import { MultilineTextField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function ProjectNotes({ binding }: { binding: FormFieldBinding }) {
+    return <MultilineTextField binding={binding} clearLabel="Clear notes" />;
+}
+```
+
+The named helper consumes only `FieldRendererProps<'multilineText'>` and works
+with `FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderMultilineTextField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const multilineRenderers: FieldRendererSlots<ReactNode> = {
+    renderMultilineTextField: (props) =>
+        renderMultilineTextField(props, { className: 'project-notes' }),
+};
+```
+
+The control is a plain four-row textarea. Accepted edits retain spaces, blank
+lines and trailing whitespace; this renderer does not trim based on
+`preserveTrailingWhitespace`. Literal markup remains text. The owner retains its
+native string or `null`; an empty edit or Clear sets the native draft to `null`.
+Loaded CRLF values remain unchanged in the owner when mounting or remounting.
+Browsers normalize textarea DOM line endings to LF, so a deliberate edit can
+write that DOM representation. Mounting never writes a normalized value back.
+
+Title visibility, placeholder, required indication and configured read-only state
+are honored. Finite nonnegative integer character limits from either display or
+write configuration apply; the smaller limit wins. Limits count UTF-16 code
+units without splitting surrogate pairs and cap edits only, never loaded values.
+Unfinished composition stays in a local buffer. Completion uses the captured
+accepted action; observed owner, value, permission or limit changes cancel that
+buffer. Remounting discards unfinished composition and reflects the owner's
+accepted draft. Validation and deliberate Save remain with the existing owner.
+
+Append-only (`addOnlyMode`), attachment display (`displayAsAttachments`) and
+explicit password or masking signals (`obscurePassword` or
+`maskPasswordOnLoginScreen`) from either configuration are unsupported. Only
+`false` or an absent signal allows the plain control; malformed values such as
+`null`, strings or numbers also fail closed. Instead of a textarea, these modes
+show an accessible status asking for a custom renderer. No native value, Clear
+button, character count or value-derived feedback is rendered. A binding whose
+physical field kind is not `multilineText` also renders a status. This does not
+add password or login support, rich-text editing, append operations or attachment
+workflows; those require a separately accepted custom integration.
+
+Supported controls use unique label and feedback IDs, and hidden titles retain an
+accessible name. Feedback is plain text in an associated polite live region.
+Read-only, pending and computed controls are disabled. Hidden, blocked and retired
+hosts render nothing. Clear is `type="button"`, has a localized accessible name
+through `clearLabel`, and restores textarea focus. Click, pointer and keyboard
+events stop bubbling into Portal rows. Native Enter inserts a newline; the
+renderer never invokes Save. The application owns enclosing form submission and
+any explicit Save action.
+
+The optional shared `@miniextensions/sdk/react/text.css` styles `mx-sdk-text*`
+classes and adds vertical resizing for `textarea.mx-sdk-multiline-text`.
+`className` decorates the wrapper. There is no separate multiline stylesheet
+export or JavaScript CSS import; core and `/ui` remain React-free.
+
+The public `examples/react-multiline-text` example uses synthetic presentation
+hosts and bindings. After building, run
+`node examples/react-multiline-text/dev.mjs` and open
+`http://127.0.0.1:4187`. `node scripts/check-multiline-text-browser.mjs` checks
+native multiline entry, line endings, Enter, clearing, simulated composition,
+unsupported modes, remounting and layout. Simulated composition does not certify
+every platform input method or screen reader. The example contacts no backend.
+
 ## React Email presentation
 
 The optional `/react` entry exports `EmailField`, `EmailFieldProps`,

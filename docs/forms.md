@@ -974,6 +974,59 @@ cannot write into a new draft with the same scope string. `addChoice` retains
 local choice metadata only; it does not call `forms.addSelectOption` or save a
 record. Never share a store across visitors or connections.
 
+## Reconcile an accepted compute response
+
+`reconcileFormComputeResult` shares the hosted Form's successful compute
+reconciliation. Call it only after accepting a current successful response from
+the existing backend. Supply the tracked unfiltered request-start native snapshot,
+which can include hidden values omitted from the write, latest full browser
+draft and ordered dirty IDs, returned native fields, the conditionally hidden
+dirty IDs omitted from that request, and add-only text field IDs. The required
+`areValuesEquivalent(latestValue, requestStartValue)` callback keeps your
+application's rich-text and native-value comparison policy explicit.
+
+The result retains hidden, newly edited and unsubmitted dirty values. Committed
+fields retain their request-start frontend value, including attachment arrays,
+so cosmetic server normalization does not cause editor remount/compute loops.
+Only committed add-only text is cleared to `''`; a newer or conditionally hidden
+add-only entry stays dirty. Server-only computed values remain in the result.
+Dirty IDs keep their original order and duplicates. Input records, sets and
+arrays are not modified; native value references are preserved.
+
+```ts
+import { reconcileFormComputeResult } from '@miniextensions/sdk/forms';
+
+// Only after the caller has accepted a current successful compute response.
+const reconciled = reconcileFormComputeResult({
+    requestStartData: { fld_title: 'Original title', fld_quantity: 1 },
+    latestData: { fld_title: 'Original title', fld_quantity: 2 },
+    latestDirtyFieldIds: ['fld_title', 'fld_quantity'],
+    serverData: {
+        fld_title: 'Original title',
+        fld_quantity: 1,
+        fld_total: 10,
+    },
+    conditionallyHiddenDirtyFieldIds: new Set(),
+    addOnlyTextFieldIds: new Set(),
+    areValuesEquivalent: Object.is, // Appropriate for these scalar answers only.
+});
+// quantity stays 2 and dirty; title stays committed; server total stays 10.
+console.info(reconciled.data, reconciled.dirtyFieldIds);
+```
+
+Presence follows the hosted `fieldId in requestStartData` rule, including
+inherited keys, while only own enumerable request-start keys are restored as
+committed values. Prefer ordinary ID-keyed native records. An absent retained
+draft value remains absent/undefined rather than being coerced to a new value.
+Own special keys such as `__proto__` are copied as field data.
+
+This pure function has no request dispatch, storage, authentication, record
+identity or recovery authority. Keep stale-response and visitor/session checks
+before **and after** reconciliation: getters or the comparison callback can
+replace ownership. Callback exceptions propagate; do not apply a failed result
+or retry a write automatically. The helper does not modify `FormDraftStore`,
+clear final-save dirty state or implement automatic compute in the controller.
+
 ## Headless controller with explicit Save
 
 `createFormController` binds one loaded Form, complete save options and the

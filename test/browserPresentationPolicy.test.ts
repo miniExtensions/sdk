@@ -5,6 +5,7 @@ import {
     primaryFieldPresentationPolicy,
     presentPublicLabel,
     safeLinkedRecordLabel,
+    presentPortalCellSummary,
 } from '../examples/browser/src/presentation.js';
 import {
     createLinkedReviewPresentation,
@@ -32,6 +33,48 @@ const table = { airtableFields: [primary], recordIdsToAirtableRecords: {} };
 const nativeRecord = (value = 'Visible target'): AirtableRecord => ({
     id: 'rec_synthetic_native',
     fields: { [primary.id]: value },
+});
+it('checks Portal summary policy before reading native cells and again after formatting', () => {
+    for (const type of ['masked', 'hidden', 'unavailable'] as const) {
+        let reads = 0;
+        const record = nativeRecord();
+        Object.defineProperty(record.fields, primary.id, {
+            enumerable: true,
+            get() {
+                reads++;
+                return 'SYNTHETIC_SECRET_DO_NOT_DISPLAY';
+            },
+        });
+        assert.equal(
+            presentPortalCellSummary(
+                () => ({ type }),
+                () => String(record.fields[primary.id])
+            ),
+            type === 'masked' ? '••••••••' : 'Value unavailable'
+        );
+        assert.equal(reads, 0);
+    }
+    let current = true;
+    let reads = 0;
+    assert.equal(
+        presentPortalCellSummary(
+            () => ({ type: current ? 'visible' : 'unavailable' }),
+            () => {
+                reads++;
+                current = false;
+                return 'SYNTHETIC_SECRET_DO_NOT_DISPLAY';
+            }
+        ),
+        'Value unavailable'
+    );
+    assert.equal(reads, 1);
+    assert.equal(
+        presentPortalCellSummary(
+            () => ({ type: 'visible' }),
+            () => 'Permitted summary'
+        ),
+        'Permitted summary'
+    );
 });
 it('honors both accepted password mask settings before reading or formatting captions', () => {
     for (const flag of ['obscurePassword', 'maskPasswordOnLoginScreen']) {

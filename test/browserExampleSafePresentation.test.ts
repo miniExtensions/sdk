@@ -407,7 +407,12 @@ const selectChoice = (window: Window, node: DOMElement) => {
 const mountPortal = async (
     test: TestContext,
     policy: Policy,
-    nameKeyChoices = false
+    nameKeyChoices = false,
+    summary?: {
+        field: RuntimeAirtableField;
+        detail: RuntimeLinkedRecordDetailField;
+        value: import('../src/runtime/index.js').AirtableValue;
+    }
 ) => {
     const window = new Window({ url: 'https://app.example.test' });
     installGlobals(test, window);
@@ -426,16 +431,22 @@ const mountPortal = async (
         ],
         [linkedField.id]: [primaryDetail(policy)],
     };
+    if (summary)
+        page.payload.linkedRecordFieldIdToDetailFields.fld_children = [
+            summary.detail,
+        ];
     const fixture = portalFixture(async () =>
         portalListPage({
             recordIds: ['record_synthetic_child'],
             tableIdsToLinkedTableStates: {
                 table_children: {
-                    airtableFields: [structuredClone(linkedField)],
+                    airtableFields: [
+                        structuredClone(summary?.field ?? linkedField),
+                    ],
                     recordIdsToAirtableRecords: {
                         record_synthetic_child: {
                             id: 'record_synthetic_child',
-                            fields: { [linkedField.id]: [] },
+                            fields: { [linkedField.id]: summary?.value ?? [] },
                         },
                     },
                 },
@@ -517,6 +528,100 @@ describe(
     'actual starter safe public presentation',
     { concurrency: false },
     () => {
+        for (const mode of [
+            'number-mask',
+            'text-mask',
+            'write-mask-only',
+            'missing',
+            'malformed',
+        ] as const)
+            it(`uses accepted Portal display policy for ${mode} row summaries without promoting child write policy`, async (test) => {
+                const numeric = mode === 'number-mask';
+                const field: RuntimeAirtableField = numeric
+                    ? {
+                          ...linkedField,
+                          name: 'Synthetic summary',
+                          config: {
+                              type: AirtableFieldType.NUMBER,
+                              options: { precision: 0 },
+                          },
+                      }
+                    : {
+                          ...linkedField,
+                          name: 'Synthetic summary',
+                          config: {
+                              type: AirtableFieldType.SINGLE_LINE_TEXT,
+                              options: null,
+                          },
+                      };
+                const display =
+                    mode === 'missing'
+                        ? undefined
+                        : mode === 'malformed'
+                          ? { maskPasswordOnLoginScreen: 'false' }
+                          : numeric
+                            ? { maskPasswordOnLoginScreen: true }
+                            : { obscurePassword: mode === 'text-mask' };
+                const write =
+                    mode === 'write-mask-only' ? { obscurePassword: true } : {};
+                const detail = {
+                    fieldId: field.id,
+                    fieldName: field.name,
+                    titleOverride: null,
+                    isHidden: false,
+                    fieldIsInEditingChildForm: true,
+                    childFormField: {
+                        idOrName: { type: 'id', id: field.id },
+                        config: { type: field.config.type, config: write },
+                    },
+                    miniExtConfig: display,
+                } as RuntimeLinkedRecordDetailField;
+                const value = numeric ? 1234 : secret;
+                const h = await mountPortal(test, 'visible', false, {
+                    field,
+                    detail,
+                    value,
+                });
+                await h.click('Load records');
+                const cell = h.view.node.querySelector('tbody td');
+                assert.ok(cell);
+                const expected =
+                    mode === 'number-mask' || mode === 'text-mask'
+                        ? '••••••••'
+                        : mode === 'write-mask-only'
+                          ? secret
+                          : 'Value unavailable';
+                assert.equal(cell.textContent, `${expected}Edit cell`);
+                assert.equal(cell.title, '');
+                if (mode !== 'write-mask-only') assertNoSecret(h.window);
+                assert.equal(h.updates.length, 0);
+                if (numeric || mode === 'write-mask-only') {
+                    await h.click('Edit cell');
+                    const input = formInput(h.window, field.id);
+                    assert.equal(input.value, String(value));
+                    if (!numeric) assert.equal(input.type, 'password');
+                    input.value = numeric ? '5678' : 'Permitted new summary';
+                    input.dispatchEvent(
+                        new h.window.Event('input', { bubbles: true })
+                    );
+                    const form = input.closest('form');
+                    assert.ok(form);
+                    submit(h.window, form);
+                    await h.settle();
+                    assert.equal(h.updates.length, 1);
+                    assert.equal(
+                        h.updates[0].value,
+                        numeric ? 5678 : 'Permitted new summary'
+                    );
+                    assert.equal(
+                        h.view.node.querySelector('tbody td')?.textContent,
+                        `${numeric ? '••••••••' : 'Permitted new summary'}Edit cell`
+                    );
+                }
+                assert.deepEqual(detail.miniExtConfig, display);
+                assert.deepEqual(detail.childFormField?.config.config, write);
+            });
+
         for (const outcome of ['validation', 'unknown'] as const)
             it(`withholds a login-masked Number from ${outcome} presentation while preserving its native Save input`, async (test) => {
                 const form = recoveryForm();

@@ -682,6 +682,14 @@ configuration replacement, including A → B → A. The browser starter shares
 these presentation checks in its private `src/presentation.ts` helper; backend
 authority, native cells and Save inputs remain unchanged.
 
+The starter's row summaries use the exact returned detail `miniExtConfig`
+(the column's `displayConfig`), while child-first settings remain inline-write
+authority. A child write setting cannot weaken or replace that returned display
+policy. Both password mask flags produce a fixed mask for text and numeric cells
+before reading native values, including empty values; unknown or malformed
+display policy produces neutral text. Owner/session, collection, criteria and
+field/view revisions are checked before and after formatting.
+
 ### Renderer-neutral bounded criteria editors
 
 `createPortalSortEditor` and `createPortalFilterEditor` from `/portals` prepare

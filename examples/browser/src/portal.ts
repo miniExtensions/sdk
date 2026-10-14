@@ -30,7 +30,11 @@ import {
 } from '@miniextensions/sdk/portals';
 import { button, element, labeled } from './dom.js';
 import { selectionOptionsFromRecords } from '@miniextensions/sdk/ui';
-import { safeLinkedRecordLabel } from './presentation.js';
+import {
+    safeLinkedRecordLabel,
+    primaryFieldPresentationPolicy,
+    presentPortalCellSummary,
+} from './presentation.js';
 import {
     displayValue,
     mountBoundFormField,
@@ -317,6 +321,14 @@ export const createPortalView = (options: {
     );
     let data: PortalCollectionSnapshot | null = null;
     let dataScope: PortalOwnerScope | null = null;
+    let dataSession: string | null = null;
+    const sessionSignature = (): string | null => {
+        try {
+            return JSON.stringify(options.client.getSession());
+        } catch {
+            return null;
+        }
+    };
     let collection: PortalCollection | null = null;
     let needsRefresh = false;
     let readRequired = false;
@@ -1185,17 +1197,61 @@ export const createPortalView = (options: {
         const columns = detailFields(data.detailFields).filter((column) =>
             state.airtableFields.some((field) => field.id === column.fieldId)
         );
+        const renderedData = data;
+        const renderedOwner = dataScope == null ? null : { ...dataScope };
+        const renderedCollection = collection;
+        const renderedSession = dataSession;
+        const renderedCriteriaEpoch = criteriaEpoch;
+        const renderedMountEpoch = mountEpoch;
+        const renderedFieldId = fieldSelect.value;
+        const renderedViewId = viewSelect.value;
+        const ownsRenderedRows = (): boolean => {
+            const owner = options.getScope();
+            return (
+                !destroyed &&
+                card.isConnected &&
+                data === renderedData &&
+                renderedOwner !== null &&
+                dataScope?.ownerId === renderedOwner.ownerId &&
+                dataScope.revision === renderedOwner.revision &&
+                owner.ownerId === renderedOwner.ownerId &&
+                owner.revision === renderedOwner.revision &&
+                collection === renderedCollection &&
+                // A confirmed Grid response keeps a display-only snapshot
+                // after retiring read/action eligibility. Its accepted session
+                // and owner still govern presentation; it grants no new read.
+                (renderedCollection === null ||
+                    renderedCollection.isCurrent()) &&
+                renderedSession !== null &&
+                dataSession === renderedSession &&
+                sessionSignature() === renderedSession &&
+                criteriaEpoch === renderedCriteriaEpoch &&
+                mountEpoch === renderedMountEpoch &&
+                fieldSelect.value === renderedFieldId &&
+                viewSelect.value === renderedViewId
+            );
+        };
+        const columnPolicy = (column: DetailField) =>
+            primaryFieldPresentationPolicy({
+                fieldId: column.fieldId,
+                // This is the exact returned display projection. Child-first
+                // column.miniExtConfig remains separate inline-write authority.
+                detailFields: renderedData.detailFields,
+                isCurrent: ownsRenderedRows(),
+            });
         const table = element('table');
         const head = element('tr');
         for (const column of columns)
             head.append(
                 element(
                     'th',
-                    column.title ??
-                        state.airtableFields.find(
-                            (entry) => entry.id === column.fieldId
-                        )?.name ??
-                        column.fieldId
+                    columnPolicy(column).type === 'unavailable'
+                        ? 'Field unavailable'
+                        : (column.title ??
+                              state.airtableFields.find(
+                                  (entry) => entry.id === column.fieldId
+                              )?.name ??
+                              'Field')
                 )
             );
         head.append(element('th', 'Actions'));
@@ -1205,10 +1261,6 @@ export const createPortalView = (options: {
         const tbody = element('tbody');
         const view = selectedView();
         const allowEditing = view?.config?.disableEditingForCustomView !== true;
-        const renderedData = data;
-        const renderedOwner = dataScope == null ? null : { ...dataScope };
-        const renderedFieldId = fieldSelect.value;
-        const renderedViewId = viewSelect.value;
         for (const recordId of data.recordIds) {
             const record = state.recordIdsToAirtableRecords[recordId];
             if (record == null) continue;
@@ -1218,23 +1270,18 @@ export const createPortalView = (options: {
                 const recordField = state.airtableFields.find(
                     (entry) => entry.id === column.fieldId
                 );
-                const value = record.fields[column.fieldId];
-                const obscured =
-                    recordField?.config.type ===
-                        AirtableFieldType.SINGLE_LINE_TEXT &&
-                    column.miniExtConfig != null &&
-                    'obscurePassword' in column.miniExtConfig &&
-                    column.miniExtConfig.obscurePassword === true &&
-                    typeof value === 'string' &&
-                    value.length > 0;
                 const cell = element(
                     'td',
-                    recordField?.config.type ===
-                        AirtableFieldType.MULTIPLE_ATTACHMENTS
-                        ? attachmentSummary(value, column.displayConfig)
-                        : obscured
-                          ? '••••••••'
-                          : displayValue(value)
+                    presentPortalCellSummary(
+                        () => columnPolicy(column),
+                        () => {
+                            const value = record.fields[column.fieldId];
+                            return recordField?.config.type ===
+                                AirtableFieldType.MULTIPLE_ATTACHMENTS
+                                ? attachmentSummary(value, column.displayConfig)
+                                : displayValue(value);
+                        }
+                    )
                 );
                 const gridMode = (layoutSetting('layout') ?? 'grid') === 'grid';
                 if (
@@ -1526,6 +1573,7 @@ export const createPortalView = (options: {
                     if (result != null) {
                         data = result.snapshot;
                         dataScope = { ...options.getScope() };
+                        dataSession = sessionSignature();
                     }
                     criteriaReadRequired = false;
                     readRequired = false;

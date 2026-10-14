@@ -37,6 +37,12 @@ const waitFor = async (predicate) => {
 };
 const editablePortal = () => {
     const portal = makePortal();
+    // Positive synthetic row fixtures grant explicit plain display policy.
+    // Omitted/malformed display policy is tested separately and cannot inherit
+    // child write settings as permission to disclose a cell.
+    for (const field of portal.payload.linkedRecordFieldIdToDetailFields
+        .fld_children)
+        field.miniExtConfig = {};
     const config = portal.payload.fieldIdsToSchemas.fld_children.miniExtConfig;
     config.disableInlineEdit = false;
     config.customViews = [
@@ -987,7 +993,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'resolved child password config masks cells before and after native Grid saves',
+            'returned unmasked display overrides retain readable rows while child password config preserves native Grid editor and saves',
             async () => {
                 const portal = editablePortal();
                 const detail =
@@ -1016,9 +1022,9 @@ export async function checkBrowserPortalExample({
                 });
                 await h.click('Load records');
                 const cell = () => h.view.node.querySelector('tbody td');
-                assert.equal(cell().textContent, '••••••••Edit cell');
+                assert.equal(cell().textContent, `${original}Edit cell`);
                 assert.equal(cell().title, '');
-                assert.equal(h.view.node.textContent.includes(original), false);
+                assert.equal(h.view.node.textContent.includes(original), true);
                 await h.click('Edit cell');
                 let input = h.view.node.querySelector(
                     'input[data-field-id="fld_title"]'
@@ -1029,8 +1035,8 @@ export async function checkBrowserPortalExample({
                 change(h.window, input, 'input');
                 submit(h.window, input.closest('form'));
                 await h.settle();
-                assert.equal(cell().textContent, '••••••••Edit cell');
-                assert.equal(h.view.node.textContent.includes(saved), false);
+                assert.equal(cell().textContent, `${saved}Edit cell`);
+                assert.equal(h.view.node.textContent.includes(saved), true);
                 assert.deepEqual(
                     h.calls
                         .filter(({ operation }) => operation === 'grid')
@@ -1049,7 +1055,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'published detail password config masks nonempty cells while empty values stay empty',
+            'published detail password config returns a fixed mask without disclosing native emptiness',
             async () => {
                 const portal = editablePortal();
                 portal.payload.linkedRecordFieldIdToDetailFields.fld_children[0].miniExtConfig =
@@ -1070,7 +1076,11 @@ export async function checkBrowserPortalExample({
                     [...h.view.node.querySelectorAll('tbody tr')].map(
                         (row) => row.querySelector('td').textContent
                     ),
-                    ['••••••••Edit cell', 'Edit cell', 'Edit cell']
+                    [
+                        '••••••••Edit cell',
+                        '••••••••Edit cell',
+                        '••••••••Edit cell',
+                    ]
                 );
                 assert.equal(
                     h.view.node.textContent.includes('Private content'),
@@ -1086,7 +1096,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'ordinary cells and authoritative nonmasked child config preserve their display values',
+            'returned masked display policy is not weakened by an unmasked child write config',
             async () => {
                 const portal = editablePortal();
                 const detail =
@@ -1112,7 +1122,7 @@ export async function checkBrowserPortalExample({
                     [...h.view.node.querySelectorAll('tbody td')]
                         .slice(0, 2)
                         .map((cell) => cell.textContent),
-                    ['Ordinary titleEdit cell', '42Edit cell']
+                    ['••••••••Edit cell', '42Edit cell']
                 );
                 assert.equal(
                     h.calls.filter(({ operation }) => operation === 'grid')

@@ -228,6 +228,24 @@ const privatePolicy = (
                 : 'visible',
 });
 
+/** Private Portal row projection; policy is checked before any native value read. */
+export function presentPortalCellSummary(
+    policy: () => FieldPresentationPolicy,
+    format: () => string
+): string {
+    try {
+        const before = policy();
+        const text = before.type === 'visible' ? format() : undefined;
+        const accepted = privatePolicy(before, policy());
+        if (accepted.type === 'masked') return '••••••••';
+        return accepted.type === 'visible' && typeof text === 'string'
+            ? text
+            : 'Value unavailable';
+    } catch {
+        return 'Value unavailable';
+    }
+}
+
 const primaryIdentity = (
     table: { airtableFields: readonly RuntimeAirtableField[] } | undefined
 ): { id: string; name: string } | null => {

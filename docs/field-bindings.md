@@ -500,6 +500,13 @@ model; their `render` prop supports custom markup without custom conversion.
 The copied starter's stock and custom adapters also use this model. Keep the
 binding owner through ordinary remounts; dispose it on visitor/context replacement.
 
+For calendar dates, `DateField` also accepts `className` and `clearLabel`, and
+`renderDateField` supplies the named Form/Grid/List slot using its accepted date
+bridge. Import `@miniextensions/sdk/react/date.css` for optional scoped defaults.
+See [React Date presentation](ui.md#react-date-presentation) for the manual-entry
+contract and customization. The existing explicit-offset `DateTimeField` binding
+presentation remains unchanged.
+
 Dates accept only valid calendar `YYYY-MM-DD` strings. Calendar parsing and
 preview avoid a local-midnight or implicit UTC shift, including skipped civil
 calendar days. DateTime editing accepts only

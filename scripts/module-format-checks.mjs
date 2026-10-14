@@ -175,6 +175,7 @@ export function assertModuleFormats(root) {
                 './react/checkbox.css',
                 './react/text.css',
                 './react/number.css',
+                './react/date.css',
                 './react/datetime.css',
             ].includes(subpath)
         ) {

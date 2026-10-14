@@ -627,7 +627,7 @@ it('retains the retired dateTime status and custom renderer, and omits non-date 
     assert.equal(f.container.textContent, 'true:true');
 });
 
-it('DateField keeps calendar-only legacy editing through either component alias', async (t) => {
+it('DateField keeps calendar-only editing through either component alias', async (t) => {
     const f = await fixture(t);
     const binding = f.owner.field('date');
     for (const Component of [DateField, DateTimeField]) {
@@ -644,3 +644,127 @@ it('DateField keeps calendar-only legacy editing through either component alias'
         await act(async () => binding.setValue('2011-12-30'));
     }
 });
+
+for (const [name, Component] of [
+    ['DateField', DateField],
+    ['DateTimeField', DateTimeField],
+] as const) {
+    it(`${name} switches one mounted alias between calendar and timestamp controls without losing either draft`, async (t) => {
+        const initialTimestamp = '2024-02-29T12:30:00.120+05:45';
+        const f = await fixture(t, {}, initialTimestamp);
+        const calendar = f.owner.field('date');
+        const calendarModel = calendar.date!;
+        const timestampModel = f.binding.date!;
+        const show = (binding: typeof calendar) =>
+            f.render(
+                h(Component, {
+                    key: 'same-mounted-alias',
+                    binding,
+                    className: 'active-date',
+                    clearLabel: 'Clear active date',
+                })
+            );
+
+        await show(calendar);
+        assert.ok(f.container.querySelector('.mx-sdk-date-field.active-date'));
+        assert.equal(f.container.querySelector('.mx-sdk-datetime-field'), null);
+        assert.equal(f.input().placeholder, 'YYYY-MM-DD');
+        assert.equal(
+            f.container.querySelector('label')!.textContent,
+            'Due date'
+        );
+        await f.edit('2030-');
+
+        await show(f.binding);
+        assert.ok(
+            f.container.querySelector('.mx-sdk-datetime-field.active-date')
+        );
+        assert.equal(f.container.querySelector('.mx-sdk-date-field'), null);
+        assert.equal(f.input().placeholder, 'YYYY-MM-DDTHH:mm:ssZ');
+        assert.equal(
+            f.container.querySelector('label')!.textContent,
+            'Appointment'
+        );
+        assert.equal(f.input().value, initialTimestamp);
+        await f.edit('2031-02-28T12:');
+
+        for (const [binding, draft] of [
+            [calendar, '2030-'],
+            [f.binding, '2031-02-28T12:'],
+            [calendar, '2030-'],
+            [f.binding, '2031-02-28T12:'],
+        ] as const) {
+            await show(binding);
+            assert.equal(f.input().value, draft);
+            assert.equal(f.input().getAttribute('aria-invalid'), 'true');
+            assert.equal(binding.getSnapshot().dirty, false);
+        }
+        assert.equal(calendar.date, calendarModel);
+        assert.equal(f.binding.date, timestampModel);
+        assert.equal(calendarModel.getState().retired, false);
+        assert.equal(timestampModel.getState().retired, false);
+        assert.equal(calendar.getSnapshot().value, '2011-12-30');
+        assert.equal(f.binding.getSnapshot().value, initialTimestamp);
+
+        const clear = f.container.querySelector('button')!;
+        assert.equal(clear.getAttribute('aria-label'), 'Clear active date');
+        await act(async () => clear.click());
+        assert.equal(f.binding.getSnapshot().value, null);
+        assert.equal(calendar.getSnapshot().value, '2011-12-30');
+        await show(calendar);
+        assert.equal(f.input().value, '2030-');
+        await act(async () => f.container.querySelector('button')!.click());
+        assert.equal(calendar.getSnapshot().value, null);
+    });
+
+    it(`${name} distinguishes borrowed model retirement and suppresses both controls for hidden or retired owners`, async (t) => {
+        const initialTimestamp = '2024-02-29T12:30:00.120+05:45';
+        const f = await fixture(t, {}, initialTimestamp);
+        const calendar = f.owner.field('date');
+        const show = (binding: typeof calendar) =>
+            f.render(h(Component, { key: 'same-mounted-alias', binding }));
+
+        await show(calendar);
+        await act(async () => calendar.date!.destroy());
+        assert.equal(calendar.getSnapshot().retired, false);
+        assert.equal(calendar.getSnapshot().date!.retired, true);
+        assert.equal(f.container.innerHTML, '');
+        assert.equal(calendar.getSnapshot().value, '2011-12-30');
+
+        await show(f.binding);
+        assert.equal(f.input().value, initialTimestamp);
+        await act(async () => f.binding.date!.destroy());
+        assert.equal(f.binding.getSnapshot().retired, false);
+        assert.equal(f.binding.getSnapshot().date!.retired, true);
+        assert.equal(f.container.querySelector('input, button'), null);
+        assert.equal(
+            f.container.querySelector('[role=status]')!.textContent,
+            'Load a fresh Form before editing this date.'
+        );
+        assert.equal(f.binding.getSnapshot().value, initialTimestamp);
+
+        await act(async () => {
+            f.scope.visible = false;
+            f.owner.refresh();
+        });
+        for (const binding of [calendar, f.binding]) {
+            await show(binding);
+            assert.equal(f.container.innerHTML, '');
+        }
+
+        await act(async () => {
+            f.scope.visible = true;
+            f.owner.refresh();
+        });
+        assert.equal(
+            f.container.querySelector('[role=status]')!.textContent,
+            'Load a fresh Form before editing this date.'
+        );
+        await act(async () => f.owner.destroy());
+        for (const binding of [calendar, f.binding]) {
+            await show(binding);
+            assert.equal(binding.getSnapshot().retired, true);
+            assert.equal(f.container.innerHTML, '');
+        }
+    });
+}

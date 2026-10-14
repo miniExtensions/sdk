@@ -11,6 +11,12 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import {
+    DateControl,
+    dateConfiguration,
+    type DateFieldOptions,
+} from './DateField.js';
+export { renderDateField, type DateFieldOptions } from './DateField.js';
+import {
     TextControl,
     textConfiguration,
     type TextFieldOptions,
@@ -746,13 +752,14 @@ export function PortalList({
 }
 
 /** Calendar-only date or explicit-offset dateTime; no browser local-time conversion. */
+export type DateFieldProps = FieldProps & DateFieldOptions;
 export type DateTimeFieldProps = FieldProps & DateTimeFieldOptions;
 export function DateField({
     binding,
     render,
     className,
     clearLabel,
-}: DateTimeFieldProps): ReactNode {
+}: DateFieldProps): ReactNode {
     useFieldBinding(binding);
     // Date context can change independently of a native write; observe it on rerender.
     const snapshot = binding.getSnapshot();
@@ -763,17 +770,10 @@ export function DateField({
         snapshot.date == null
     )
         return null;
-    if (snapshot.date.retired)
-        return createElement(
-            'p',
-            { role: 'status' },
-            'Load a fresh Form before editing this date.'
-        );
-    if (snapshot.date.kind === 'dateTime') {
-        const config = dateTimeConfiguration(
-            snapshot.field?.schema.miniExtConfig
-        );
-        return createElement(DateTimeControl, {
+    if (snapshot.date.kind === 'date') {
+        if (snapshot.date.retired) return null;
+        const config = dateConfiguration(snapshot.field?.schema.miniExtConfig);
+        return createElement(DateControl, {
             ...config,
             className,
             clearLabel,
@@ -801,43 +801,38 @@ export function DateField({
             clear: () => binding.date?.clear(),
         });
     }
-    const privacy = snapshot.field?.schema.miniExtConfig;
-    const masked =
-        privacy != null &&
-        'obscurePassword' in privacy &&
-        privacy.obscurePassword === true;
-    return createElement(
-        'div',
-        null,
-        createElement(
-            'label',
-            null,
-            snapshot.field?.title,
-            createElement('input', {
-                type: masked ? 'password' : 'text',
-                value: snapshot.date.input,
-                disabled: !snapshot.date.canEdit,
-                'aria-invalid': !snapshot.date.valid,
-                placeholder: 'YYYY-MM-DD',
-                onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                    binding.date?.setInput(event.currentTarget.value),
-            })
-        ),
-        createElement(
+    if (snapshot.date.retired)
+        return createElement(
             'p',
             { role: 'status' },
-            snapshot.date.error ?? snapshot.error ?? ''
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                disabled: !snapshot.date.canEdit,
-                onClick: () => binding.date?.clear(),
-            },
-            'Clear date'
-        )
-    );
+            'Load a fresh Form before editing this date.'
+        );
+    const config = dateTimeConfiguration(snapshot.field?.schema.miniExtConfig);
+    return createElement(DateTimeControl, {
+        ...config,
+        className,
+        clearLabel,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : (snapshot.field?.schema.airtableField.name ?? ''),
+        input: snapshot.date.input,
+        disabled:
+            config.configuredReadOnly ||
+            !snapshot.canEdit ||
+            !snapshot.date.canEdit ||
+            snapshot.pending,
+        pending: snapshot.pending,
+        invalid:
+            !snapshot.date.valid ||
+            snapshot.error !== null ||
+            snapshot.validation.length > 0,
+        feedback:
+            snapshot.date.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: (value) => binding.date?.setInput(value),
+        clear: () => binding.date?.clear(),
+    });
 }
 /** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
 export const DateTimeField = DateField;

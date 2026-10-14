@@ -359,7 +359,12 @@ export async function checkDateTimeRendererConsumer({
                 );
                 assert.equal(input().value, '2011-12-30');
                 assert.equal(input().placeholder, 'YYYY-MM-DD');
-                assert.equal(clear().textContent, 'Clear date');
+                assert.equal(
+                    clear().getAttribute('aria-label'),
+                    'Clear Due date'
+                );
+                assert.equal(clear().type, 'button');
+                assert.equal(clear().getAttribute('aria-controls'), input().id);
                 await edit('2024-02-29');
                 assert.equal(date.getSnapshot().value, '2024-02-29');
                 checks++;

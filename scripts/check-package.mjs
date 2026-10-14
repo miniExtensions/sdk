@@ -1,10 +1,26 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
+import {
+    checkEmailConsumer,
+    emailReactTypedConsumer,
+} from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
     checkDateRendererConsumer,
     dateRendererReactTypedConsumer,
 } from './date-renderer-consumer-checks.mjs';
+import {
+    checkDateTimeRendererConsumer,
+    dateTimeRendererReactTypedConsumer,
+} from './datetime-renderer-consumer-checks.mjs';
+import {
+    checkDurationRendererConsumer,
+    durationRendererReactTypedConsumer,
+} from './duration-renderer-consumer-checks.mjs';
+import {
+    checkCurrencyRendererConsumer,
+    currencyRendererReactTypedConsumer,
+} from './currency-renderer-consumer-checks.mjs';
 import {
     checkPortalButtonCompositionConsumer,
     portalButtonCompositionTypedConsumer,
@@ -274,6 +290,12 @@ try {
         'dist/cjs/react/number.css',
         'dist/esm/react/date.css',
         'dist/cjs/react/date.css',
+        'dist/esm/react/datetime.css',
+        'dist/cjs/react/datetime.css',
+        'dist/esm/react/duration.css',
+        'dist/cjs/react/duration.css',
+        'dist/esm/react/currency.css',
+        'dist/cjs/react/currency.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1175,6 +1197,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'email-react-consumer.tsx'),
+        emailReactTypedConsumer
+    );
+    reactSources.push('email-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'duration-react-consumer.tsx'),
         durationReactTypedConsumer
     );
@@ -1184,6 +1211,21 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         dateRendererReactTypedConsumer
     );
     reactSources.push('date-renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'datetime-renderer-react-consumer.tsx'),
+        dateTimeRendererReactTypedConsumer
+    );
+    reactSources.push('datetime-renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'duration-renderer-react-consumer.tsx'),
+        durationRendererReactTypedConsumer
+    );
+    reactSources.push('duration-renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'currency-renderer-react-consumer.tsx'),
+        currencyRendererReactTypedConsumer
+    );
+    reactSources.push('currency-renderer-react-consumer.tsx');
     writeFileSync(
         join(temporaryDirectory, 'form-composition-consumer.ts'),
         formCompositionTypedConsumer
@@ -1287,10 +1329,65 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         17
     );
     // Resolve CSS and React through the installed archive, not checkout aliases.
-    for (const name of ['button', 'checkbox', 'text', 'number', 'date']) {
+    for (const name of [
+        'button',
+        'checkbox',
+        'text',
+        'number',
+        'date',
+        'datetime',
+        'duration',
+        'email',
+        'currency',
+    ]) {
+        const stylesheet = name === 'email' ? 'text' : name;
+        if (name === 'currency') {
+            const sourcePaths = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-currency/${file}`);
+            for (const path of sourcePaths)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Currency example source: ${path}`
+                );
+            const generatedPaths = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-currency/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generatedPaths],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generatedPaths,
+                'Currency preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sourcePaths],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Currency example sources must remain unignored'
+            );
+        }
         const exampleDirectory = join(temporaryDirectory, `${name}-example`);
         mkdirSync(exampleDirectory);
-        for (const file of ['main.ts', 'styles.css']) {
+        const exampleFiles = ['main.ts', 'styles.css'];
+        if (name === 'email') exampleFiles.push('owners.ts');
+        for (const file of exampleFiles) {
             cpSync(
                 join(process.cwd(), `examples/react-${name}`, file),
                 join(exampleDirectory, file)
@@ -1322,16 +1419,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             exampleBundle.outputFiles.some(
                 (file) =>
                     file.path.endsWith('.css') &&
-                    file.text.includes(`.mx-sdk-${name}`)
+                    file.text.includes(`.mx-sdk-${stylesheet}`)
             )
         );
         assert.equal(
             readFileSync(
-                join(installedPackage, `dist/esm/react/${name}.css`),
+                join(installedPackage, `dist/esm/react/${stylesheet}.css`),
                 'utf8'
             ),
             readFileSync(
-                join(installedPackage, `dist/cjs/react/${name}.css`),
+                join(installedPackage, `dist/cjs/react/${stylesheet}.css`),
                 'utf8'
             )
         );
@@ -1360,6 +1457,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
+    const emailProof = await checkEmailConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(emailProof.checks, 12);
+    console.log(
+        `Installed Email renderer, binding, shared Text CSS and local example: ${emailProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
     const numberProof = await checkNumberConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -1375,6 +1480,30 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(dateRendererProof.checks, 16);
     console.log(
         `Installed Date renderer, binding, CSS and local example: ${dateRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const dateTimeRendererProof = await checkDateTimeRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(dateTimeRendererProof.checks, 18);
+    console.log(
+        `Installed DateTime renderer, binding, CSS and local example: ${dateTimeRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const durationRendererProof = await checkDurationRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(durationRendererProof.checks, 80);
+    console.log(
+        `Installed Duration renderer, binding, CSS and local example: ${durationRendererProof.checks} ESM/CJS groups across five formats passed; synthetic drafts only.`
+    );
+    const currencyRendererProof = await checkCurrencyRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(currencyRendererProof.checks, 20);
+    console.log(
+        `Installed Currency renderer, binding, CSS and local example: ${currencyRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const linkedRecordsProof = await checkLinkedRecordsConsumer({
         consumerDirectory: temporaryDirectory,

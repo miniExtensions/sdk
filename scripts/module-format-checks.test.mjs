@@ -632,7 +632,16 @@ test('exclusive staging preserves preexisting matching directories and symlinks'
     );
 });
 
-for (const name of ['button', 'checkbox', 'text', 'number', 'date']) {
+for (const name of [
+    'button',
+    'checkbox',
+    'text',
+    'number',
+    'date',
+    'datetime',
+    'duration',
+    'currency',
+]) {
     test(`the exported ${name} stylesheet is hashed as an asset and checked on installation`, (t) => {
         const { root, manifest } = fixture(t);
         manifest.exports[`./react/${name}.css`] =

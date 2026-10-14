@@ -186,6 +186,12 @@ renderer does not replace its owner. The shipped guides also include
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
 
+For calendar dates, `/react` also exports the `renderDateField` named slot,
+`DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the
+owner's date model for manual `YYYY-MM-DD` input, retained partial drafts and
+explicit clearing. Optional styles are exported at
+`@miniextensions/sdk/react/date.css`; see [React Date presentation](docs/ui.md#react-date-presentation).
+
 ## Runtime operation map
 
 The client exposes **23 canonical operations**. v1 routes use POST at

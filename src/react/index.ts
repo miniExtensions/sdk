@@ -11,6 +11,12 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import {
+    DateControl,
+    dateConfiguration,
+    type DateFieldOptions,
+} from './DateField.js';
+export { renderDateField, type DateFieldOptions } from './DateField.js';
+import {
     TextControl,
     textConfiguration,
     type TextFieldOptions,
@@ -737,7 +743,13 @@ export function PortalList({
 }
 
 /** Calendar-only date or explicit-offset dateTime; no browser local-time conversion. */
-export function DateField({ binding, render }: FieldProps): ReactNode {
+export type DateFieldProps = FieldProps & DateFieldOptions;
+export function DateField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: DateFieldProps): ReactNode {
     useFieldBinding(binding);
     // Date context can change independently of a native write; observe it on rerender.
     const snapshot = binding.getSnapshot();
@@ -748,6 +760,37 @@ export function DateField({ binding, render }: FieldProps): ReactNode {
         snapshot.date == null
     )
         return null;
+    if (snapshot.date.kind === 'date') {
+        if (snapshot.date.retired) return null;
+        const config = dateConfiguration(snapshot.field?.schema.miniExtConfig);
+        return createElement(DateControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field?.title.trim()
+                ? snapshot.field.title
+                : (snapshot.field?.schema.airtableField.name ?? ''),
+            input: snapshot.date.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.date.canEdit ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.date.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.date.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (value) => binding.date?.setInput(value),
+            clear: () => binding.date?.clear(),
+        });
+    }
     if (snapshot.date.retired)
         return createElement(
             'p',
@@ -771,10 +814,7 @@ export function DateField({ binding, render }: FieldProps): ReactNode {
                 value: snapshot.date.input,
                 disabled: !snapshot.date.canEdit,
                 'aria-invalid': !snapshot.date.valid,
-                placeholder:
-                    snapshot.date.kind === 'date'
-                        ? 'YYYY-MM-DD'
-                        : 'YYYY-MM-DDTHH:mm:ssZ',
+                placeholder: 'YYYY-MM-DDTHH:mm:ssZ',
                 onChange: (event: ChangeEvent<HTMLInputElement>) =>
                     binding.date?.setInput(event.currentTarget.value),
             })

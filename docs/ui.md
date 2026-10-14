@@ -1538,6 +1538,88 @@ presentation fixtures at `http://127.0.0.1:4185`.
 remounts, inert text and enclosing-form Enter behavior. Simulated composition does
 not certify real OS input methods.
 
+## React Created By presentation
+
+The optional `/react` entry exports `CreatedByField`, `CreatedByFieldProps`,
+`CreatedByFieldOptions` and `renderCreatedByField`. The binding component accepts
+`{ binding, render }` plus `className` and `clearLabel`. Supplying `render` replaces
+all stock markup. The options alias `TextFieldOptions`.
+
+```tsx
+import { CreatedByField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function RecordCreator({ binding }: { binding: FormFieldBinding }) {
+    return <CreatedByField binding={binding} className="record-creator" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'createdBy'>` in
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderCreatedByField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const creatorRenderers: FieldRendererSlots<ReactNode> = {
+    renderCreatedByField: (props) =>
+        renderCreatedByField(props, { className: 'record-creator' }),
+};
+```
+
+The accepted SDK value is a native collaborator object, `null` or missing. A
+canonical collaborator has string `id`, `email` and `name` fields and an optional
+string `profilePicUrl`. The control displays only the supplied `name`. It does
+not fall back to email, ID, avatar, metadata choices or an identity lookup, and
+metadata choice changes do not rewrite the native object. Blank names remain
+blank. Whitespace, Unicode, markup-looking and URL-looking names are plain input
+text; they do not create links or images. A single-line input removes line breaks
+from its DOM value without writing that representation back to the owner.
+
+Null, missing and malformed values display blank in defensive direct helper calls.
+The helper applies the existing native collaborator shape check; renderer hosts
+may reject malformed values before invoking it. Rendering never changes or drops
+the native object's other fields.
+
+The Text input and its existing Clear button are always disabled. `clearLabel`
+customizes the accessible label of that disabled button. The renderer borrows no
+setter, scalar, date or selection model, including when malformed runtime props
+claim editing authority. Created By remains readonly through its physical kind
+even when returned metadata says `isComputed: false`. It adds no collaborator
+picker, account lookup, avatar request, navigation, Save or automatic network read.
+
+Configured title visibility is honored; blank titles use the field name and hidden
+titles keep an accessible name. Repeated instances have unique label and feedback
+IDs. Accepted masking from either display or write configuration uses a password
+input. Pending state and existing error or validation messages are shown without
+changing the native value. Feedback is plain text in an associated polite live
+region; an explicitly empty error remains empty. Created By adds no formatting,
+placeholder or character-limit policy.
+
+The stock binding component requires physical Created By schema and configuration;
+other kinds show a status. Custom rendering keeps precedence. Hidden, blocked and
+retired bindings or hosts omit the control. Mounting, StrictMode, remounting and
+unmounting do not replace or destroy owners, mutate values or invoke Save. A
+replacement binding displays its own accepted state. Editable Text neighbors keep
+their existing behavior.
+
+Use accepted Form bindings and Portal detail hosts. Grid and List composition
+show Created By through those detail hosts without creating a computed inline
+editing binding. Loading data and submitting forms remain explicit application
+operations.
+
+Styles reuse optional `@miniextensions/sdk/react/text.css` and its `mx-sdk-text*`
+classes. `className` decorates the wrapper. There is no Created By stylesheet
+export or JavaScript CSS import; core and `/ui` remain React-free.
+
+The `examples/react-created-by` fixture uses public exports and synthetic data.
+After building, run `node examples/react-created-by/dev.mjs` and open
+`http://127.0.0.1:4192`. The local browser check is
+`node scripts/check-created-by-browser.mjs`; see [Created By presentation checks](testing.md#created-by-presentation-checks).
+
 ## React External Sync Source presentation
 
 The optional `/react` entry exports `ExternalSyncSourceField`,

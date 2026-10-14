@@ -272,6 +272,69 @@ it('keeps false-returning partial drafts in the owner across StrictMode, binding
     assert.equal(f.binding.getSnapshot().dirty, false);
 });
 
+it('one mounted NumberField keeps number and duration drafts isolated when bindings switch', async (t) => {
+    const f = await fixture(t, {}, 7);
+    const number = f.owner.field('number');
+    const numberModel = number.scalar!;
+    const durationModel = f.binding.scalar!;
+    const show = (binding: typeof number) =>
+        f.render(h(NumberField, { key: 'same-number-field', binding }));
+    const durationFocused = () => {
+        const state = durationModel.getState();
+        assert.equal(state.kind, 'duration');
+        return state.kind === 'duration' && state.focused;
+    };
+
+    await show(number);
+    assert.ok(f.container.querySelector('.mx-sdk-number-field'));
+    assert.equal(f.container.querySelector('.mx-sdk-duration-field'), null);
+    assert.equal(f.input().inputMode, 'decimal');
+    assert.equal(f.container.querySelector('button'), null);
+    await f.edit('-');
+
+    await show(f.binding);
+    assert.ok(f.container.querySelector('.mx-sdk-duration-field'));
+    assert.equal(f.container.querySelector('.mx-sdk-number-field'), null);
+    assert.equal(f.input().inputMode, 'text');
+    assert.equal(f.input().placeholder, 'h:mm:ss');
+    await f.focus(true);
+    assert.equal(durationFocused(), true);
+    await f.edit('1:');
+    await f.focus(false);
+    assert.equal(durationFocused(), false);
+
+    for (const [binding, draft, inputMode] of [
+        [number, '-', 'decimal'],
+        [f.binding, '1:', 'text'],
+        [number, '-', 'decimal'],
+    ] as const) {
+        await show(binding);
+        assert.equal(f.input().value, draft);
+        assert.equal(f.input().inputMode, inputMode);
+        assert.equal(f.input().getAttribute('aria-invalid'), 'true');
+        assert.equal(binding.getSnapshot().dirty, false);
+    }
+    await f.focus(true);
+    assert.equal(durationFocused(), false);
+    await f.focus(false);
+    assert.equal(number.scalar, numberModel);
+    assert.equal(f.binding.scalar, durationModel);
+    assert.equal(numberModel.getState().retired, false);
+    assert.equal(durationModel.getState().retired, false);
+    assert.equal(number.getSnapshot().value, 1.25);
+    assert.equal(f.binding.getSnapshot().value, 7);
+
+    await show(f.binding);
+    assert.equal(f.input().value, '1:');
+    await act(async () => f.container.querySelector('button')!.click());
+    assert.equal(f.binding.getSnapshot().value, null);
+    assert.equal(f.input().value, '');
+    assert.equal(number.getSnapshot().value, 1.25);
+    await show(number);
+    assert.equal(f.input().value, '-');
+    assert.equal(f.container.querySelector('button'), null);
+});
+
 it('external seconds observed while focused preserve typed input until valid blur without overwriting the replacement', async (t) => {
     const f = await fixture(t, {}, 7);
     await f.render(h(DurationField, { binding: f.binding }));

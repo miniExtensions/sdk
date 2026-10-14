@@ -204,6 +204,12 @@ use the existing scalar model for native seconds, retained partial input and
 formatting on blur. Optional styles are exported at
 `@miniextensions/sdk/react/duration.css`; see [React Duration presentation](docs/ui.md#react-duration-presentation).
 
+For currency input, `/react` also exports `CurrencyField`, `CurrencyFieldProps`,
+`CurrencyFieldOptions` and the `renderCurrencyField` named slot. These use the
+existing numeric scalar model and show a literal currency symbol beside raw
+native-unit input. Optional styles are exported at
+`@miniextensions/sdk/react/currency.css`; see [React Currency presentation](docs/ui.md#react-currency-presentation).
+
 ## Runtime operation map
 
 The client exposes **23 canonical operations**. v1 routes use POST at

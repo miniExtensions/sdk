@@ -383,6 +383,16 @@ editor from the native value alone. Import `@miniextensions/sdk/react/number.css
 for scoped defaults. See [React Number presentation](ui.md#react-number-presentation)
 for accessibility, draft behavior and compatibility with other numeric bindings.
 
+The optional React `CurrencyField` and `renderCurrencyField` helper reuse the
+numeric scalar model and native units. The accepted currency symbol is literal
+text beside the input, associated through its accessible description. Input stays
+raw: precision, number separators and thousands-separator settings do not round,
+group or reinterpret an answer. `CurrencyField` supports the existing
+`{ binding, render }` API plus `className` and `clearLabel`; `NumberField` continues
+to recognize currency bindings. Import `@miniextensions/sdk/react/currency.css`
+for optional defaults. See [React Currency presentation](ui.md#react-currency-presentation)
+for the bounded input contract, readonly fallback and Form/Grid/List usage.
+
 ## Duration clock input
 
 Duration uses the existing `binding.scalar` owner and native numeric seconds or

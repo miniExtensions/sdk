@@ -142,6 +142,7 @@ for (const format of ['esm', 'cjs']) {
         'date',
         'datetime',
         'duration',
+        'currency',
     ]) {
         copyFileSync(
             `src/react/${name}.css`,

@@ -41,6 +41,15 @@ import {
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
 import {
+    CurrencyControl,
+    currencyConfiguration,
+    type CurrencyFieldOptions,
+} from './CurrencyField.js';
+export {
+    renderCurrencyField,
+    type CurrencyFieldOptions,
+} from './CurrencyField.js';
+import {
     DurationControl,
     durationConfiguration,
     type DurationFieldOptions,
@@ -329,13 +338,14 @@ export function TextField({
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
+export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
 export function NumberField({
     binding,
     render,
     className,
     clearLabel,
-}: NumberFieldProps & DurationFieldOptions): ReactNode {
+}: NumberFieldProps & DurationFieldOptions & CurrencyFieldOptions): ReactNode {
     const subscribed = useFieldBinding(binding);
     // Accepted duration metadata can change without a native write.
     const snapshot =
@@ -378,6 +388,42 @@ export function NumberField({
                     .map((error) => error.errorMessage)
                     .join('\n'),
             setInput: (input) => binding.scalar?.setInput(input),
+        });
+    }
+    if (snapshot.field?.schema.fieldType === 'currency') {
+        if (snapshot.scalar.kind !== 'number' || snapshot.scalar.retired)
+            return null;
+        const config = currencyConfiguration(
+            snapshot.field.schema.miniExtConfig
+        );
+        const metadata = snapshot.field.schema.airtableField.config;
+        return createElement(CurrencyControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field.title.trim()
+                ? snapshot.field.title
+                : snapshot.field.schema.airtableField.name,
+            symbol: metadata.type === 'currency' ? metadata.options.symbol : '',
+            input: snapshot.scalar.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.scalar.canEdit ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.scalar.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (input) => binding.scalar?.setInput(input),
+            clear: () => binding.scalar?.setInput(''),
         });
     }
     if (snapshot.field?.schema.fieldType === 'duration') {
@@ -452,6 +498,10 @@ export function NumberField({
         ),
         status(snapshot)
     );
+}
+/** Currency adornment shares the existing numeric owner and raw native units. */
+export function CurrencyField(props: CurrencyFieldProps): ReactNode {
+    return createElement(NumberField, props);
 }
 /** Clock editing shares the existing scalar owner; render may replace all markup. */
 export function DurationField(props: DurationFieldProps): ReactNode {

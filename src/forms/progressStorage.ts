@@ -192,7 +192,8 @@ export const createFormProgressStorage = (
             const key = makeFormProgressWriterKey(shareId);
             const storage = requireStorage(() => options.getSessionStorage());
             const storedWriterId = storage.getItem(key);
-            if (storedWriterId != null) return storedWriterId;
+            if (storedWriterId != null && storedWriterId.length > 0)
+                return storedWriterId;
 
             const writerId = fallbackWriterId ?? options.createWriterId();
             storage.setItem(key, writerId);
@@ -213,17 +214,22 @@ export const createFormProgressStorage = (
         shareId: string;
         writerId: string;
     }): Promise<FormProgressWriteResult> => {
+        const { expectedRevision, record, shareId, writerId } = args;
+        if (writerId.length === 0) {
+            options.onUnavailable?.('write');
+            return { status: 'unavailable' };
+        }
         const lockManager = options.getLocks?.();
         const writeIfCurrent = (): FormProgressWriteResult => {
             try {
                 const storage = requireStorage(() => options.getLocalStorage());
                 const currentSnapshot = readSnapshotFromStorage(
                     storage,
-                    args.shareId
+                    shareId
                 );
                 const currentRevision = currentSnapshot?.revision ?? null;
 
-                if (currentRevision !== args.expectedRevision) {
+                if (currentRevision !== expectedRevision) {
                     return { status: 'conflict' };
                 }
 
@@ -236,12 +242,12 @@ export const createFormProgressStorage = (
                     kind: formProgressEnvelopeKind,
                     schemaVersion: formProgressEnvelopeVersion,
                     revision,
-                    writerId: args.writerId,
-                    record: args.record,
+                    writerId,
+                    record,
                 };
 
                 storage.setItem(
-                    makeFormProgressKey(args.shareId),
+                    makeFormProgressKey(shareId),
                     JSON.stringify(envelope)
                 );
                 return { status: 'written', revision };
@@ -258,7 +264,7 @@ export const createFormProgressStorage = (
 
         try {
             return await lockManager.request(
-                makeFormProgressLockName(args.shareId),
+                makeFormProgressLockName(shareId),
                 writeIfCurrent
             );
         } catch {
@@ -271,23 +277,24 @@ export const createFormProgressStorage = (
         shareId: string;
         writerId: string;
     }): Promise<FormProgressRemovalResult> => {
+        const { shareId, writerId } = args;
         const lockManager = options.getLocks?.();
         const removeIfCurrentOwner = (): FormProgressRemovalResult => {
             try {
                 const storage = requireStorage(() => options.getLocalStorage());
                 const currentSnapshot = readSnapshotFromStorage(
                     storage,
-                    args.shareId
+                    shareId
                 );
 
                 if (
                     currentSnapshot?.writerId != null &&
-                    currentSnapshot.writerId !== args.writerId
+                    currentSnapshot.writerId !== writerId
                 ) {
                     return { status: 'preserved-newer-progress' };
                 }
 
-                storage.removeItem(makeFormProgressKey(args.shareId));
+                storage.removeItem(makeFormProgressKey(shareId));
                 return { status: 'removed' };
             } catch {
                 options.onUnavailable?.('remove');
@@ -299,7 +306,7 @@ export const createFormProgressStorage = (
 
         try {
             return await lockManager.request(
-                makeFormProgressLockName(args.shareId),
+                makeFormProgressLockName(shareId),
                 removeIfCurrentOwner
             );
         } catch {

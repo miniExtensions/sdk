@@ -2231,7 +2231,10 @@ adapter once and uses that same adapter throughout. An adapter can return
 unconditional removal returns false, and writes or owned cleanup return
 `unavailable`. Web Locks access is optional; its
 resolver should return `undefined` when unavailable. The identity generator and
-unavailable callback should not throw. The callback receives only the operation,
+unavailable callback should not throw. The identity generator must return a
+nonempty string. Empty stored writer identities are replaced; an empty explicit
+write identity returns `unavailable` before resolving storage or locks.
+The callback receives only the operation,
 never record data, credentials or the storage error. Reuse one owner to retain
 fallback writer identities per share when session storage is denied.
 
@@ -2259,7 +2262,11 @@ or absent draft. Unconditional removal is also explicit. A rejected lock request
 returns `unavailable` and never retries the operation without a lock.
 
 Web Locks serialize writes and owned cleanup across cooperating tabs using the
-same share lock. Without Web Locks, the read/write critical section is not
+same share lock. Each write captures its share, writer, expected revision and
+chosen native record reference before resolving locks; owned cleanup captures
+its share and writer. Reassigning arguments while queued cannot redirect either
+operation. Native record contents remain caller-owned and are not cloned.
+Without Web Locks, the read/write critical section is not
 atomic across tabs. Keep storage-event conflict handling in the application and
 stop stale mounted writers; this helper does not install listeners. A failed
 storage read cannot establish absence, the current revision or ownership.

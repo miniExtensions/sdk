@@ -232,6 +232,61 @@ describe('opt-in Form progress storage', () => {
         assert.equal(freshOwner.getFormProgressWriterId('shr_first'), first);
     });
 
+    it('replaces an empty session writer identity with a restorable draft owner', async () => {
+        const { owner, session } = setup();
+        const shareId = 'shr_empty_session_writer';
+        const writerKey = `form-progress-writer-${shareId}`;
+        const record = { fld_name: 'Draft with a recovered writer' };
+        session.setItem(writerKey, '');
+
+        const writerId = owner.getFormProgressWriterId(shareId);
+        assert.equal(writerId, 'writer-1');
+        assert.equal(session.getItem(writerKey), writerId);
+        assert.equal(owner.getFormProgressWriterId(shareId), writerId);
+        assert.deepEqual(
+            await owner.writeStoredFormProgress({
+                expectedRevision: null,
+                record,
+                shareId,
+                writerId,
+            }),
+            { status: 'written', revision: 1 }
+        );
+        assert.deepEqual(owner.readStoredFormProgressSnapshot(shareId), {
+            record,
+            revision: 1,
+            writerId,
+        });
+    });
+
+    it('refuses an empty explicit writer identity before resolving any browser capability', async () => {
+        let accesses = 0;
+        const unavailable: string[] = [];
+        const denied = () => {
+            accesses++;
+            throw new Error('Browser capability must not be resolved');
+        };
+        const owner = createFormProgressStorage({
+            getLocalStorage: denied,
+            getSessionStorage: denied,
+            getLocks: denied,
+            createWriterId: denied,
+            onUnavailable: (operation) => unavailable.push(operation),
+        });
+
+        assert.deepEqual(
+            await owner.writeStoredFormProgress({
+                expectedRevision: null,
+                record: { fld_name: 'Must not become an unreadable draft' },
+                shareId: 'shr_empty_explicit_writer',
+                writerId: '',
+            }),
+            { status: 'unavailable' }
+        );
+        assert.equal(accesses, 0);
+        assert.deepEqual(unavailable, ['write']);
+    });
+
     it('retains the historical fallback identity when storing a new identity is denied', () => {
         const session = new MemoryStorage();
         const { owner } = setup({
@@ -314,6 +369,87 @@ describe('opt-in Form progress storage', () => {
                 writerId: 'writer-b',
             }),
             { status: 'removed' }
+        );
+    });
+
+    it('keeps a queued write on its original share, writer, revision and native record reference', async () => {
+        const shareId = 'shr_queued_write';
+        const adjacentShareId = 'shr_queued_write_adjacent';
+        const locks = new QueuedLocks();
+        const release = locks.hold(`form-progress-lock-${shareId}`);
+        const record = { fld_name: 'Chosen draft', fld_hidden: 'Keep hidden' };
+        const args = {
+            expectedRevision: 3,
+            record,
+            shareId,
+            writerId: 'writer-a',
+        };
+        const { owner, local } = setup({
+            getLocks: () => {
+                args.expectedRevision = 900;
+                return locks;
+            },
+        });
+        const original = envelope({ revision: 3 });
+        const adjacent = envelope({ revision: 8, writerId: 'writer-b' });
+        local.setItem(makeFormProgressKey(shareId), original);
+        local.setItem(makeFormProgressKey(adjacentShareId), adjacent);
+
+        const pending = owner.writeStoredFormProgress(args);
+        assert.deepEqual(locks.names, [`form-progress-lock-${shareId}`]);
+        assert.equal(local.getItem(makeFormProgressKey(shareId)), original);
+        args.shareId = adjacentShareId;
+        args.writerId = '';
+        args.expectedRevision = 8;
+        args.record = { fld_name: 'Redirected draft', fld_hidden: 'Wrong' };
+        record.fld_name = 'Updated chosen native reference';
+        release();
+
+        assert.deepEqual(await pending, { status: 'written', revision: 4 });
+        assert.deepEqual(owner.readStoredFormProgressSnapshot(shareId), {
+            record,
+            revision: 4,
+            writerId: 'writer-a',
+        });
+        assert.equal(
+            local.getItem(makeFormProgressKey(adjacentShareId)),
+            adjacent
+        );
+        assert.deepEqual(args.record, {
+            fld_name: 'Redirected draft',
+            fld_hidden: 'Wrong',
+        });
+    });
+
+    it('keeps queued owned cleanup on its original share and writer', async () => {
+        const shareId = 'shr_queued_cleanup';
+        const adjacentShareId = 'shr_queued_cleanup_adjacent';
+        const locks = new QueuedLocks();
+        const release = locks.hold(`form-progress-lock-${shareId}`);
+        const args = { shareId, writerId: 'writer-a' };
+        const { owner, local } = setup({
+            getLocks: () => {
+                args.writerId = 'writer-b';
+                return locks;
+            },
+        });
+        const original = envelope();
+        const adjacent = envelope({ writerId: 'writer-b' });
+        local.setItem(makeFormProgressKey(shareId), original);
+        local.setItem(makeFormProgressKey(adjacentShareId), adjacent);
+
+        const pending = owner.removeStoredFormProgressIfOwned(args);
+        assert.deepEqual(locks.names, [`form-progress-lock-${shareId}`]);
+        assert.equal(local.getItem(makeFormProgressKey(shareId)), original);
+        args.shareId = adjacentShareId;
+        args.writerId = 'writer-b';
+        release();
+
+        assert.deepEqual(await pending, { status: 'removed' });
+        assert.equal(local.getItem(makeFormProgressKey(shareId)), null);
+        assert.equal(
+            local.getItem(makeFormProgressKey(adjacentShareId)),
+            adjacent
         );
     });
 

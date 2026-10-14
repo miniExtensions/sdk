@@ -171,7 +171,7 @@ The SDK has no administrative workspace/configure/publish API.
 | `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `ExternalSyncSourceField`, `CheckboxField`,
+also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
@@ -207,6 +207,18 @@ exports `ExternalSyncSourceField`, `ExternalSyncSourceFieldProps`,
 `ExternalSyncSourceFieldOptions` and the typed `renderExternalSyncSourceField` slot.
 It displays the supplied SDK string with the disabled Text control and optional
 `@miniextensions/sdk/react/text.css`, without resolving choice IDs or changing values.
+
+[Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
+`CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
+It displays supplied finite Count values only when Count metadata is valid,
+using the disabled Number control and optional `@miniextensions/sdk/react/number.css`.
+It does not calculate counts, normalize native values or grant write authority.
+
+[AutoNumber presentation](docs/ui.md#react-autonumber-presentation) exports
+`AutoNumberField`, `AutoNumberFieldProps`, `AutoNumberFieldOptions` and the typed
+`renderAutoNumberField` slot. It displays supplied finite native numbers in a
+disabled control using optional `@miniextensions/sdk/react/number.css`. It never
+generates, increments or writes an identifier.
 
 [Rating presentation](docs/ui.md#react-rating-presentation) exports `RatingField`,
 `RatingFieldProps`, `RatingFieldOptions` and the typed `renderRatingField` slot.

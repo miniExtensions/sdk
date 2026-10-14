@@ -1704,6 +1704,81 @@ remounts, permissions, external updates, repeated IDs, focus, forced colors and
 narrow layout, and writes screenshots and a JSON receipt. It does not certify
 every platform's input method, screen reader or surrounding form layout.
 
+## React AutoNumber presentation
+
+The optional `/react` entry exports `AutoNumberField`, `AutoNumberFieldProps`,
+`AutoNumberFieldOptions` and `renderAutoNumberField`. The dedicated binding
+component accepts `{ binding, render }` and `className`; supplying `render`
+replaces all stock markup. It does not delegate to the editable `NumberField`.
+
+```tsx
+import { AutoNumberField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+
+export function RecordSequence({ binding }: { binding: FormFieldBinding }) {
+    return <AutoNumberField binding={binding} className="record-sequence" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'autoNumber'>` in
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderAutoNumberField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/number.css';
+
+export const autoNumberRenderers: FieldRendererSlots<ReactNode> = {
+    renderAutoNumberField: (props) =>
+        renderAutoNumberField(props, { className: 'record-sequence' }),
+};
+```
+
+This is a read-only presentation of the supplied native number. Finite numbers
+display through `String(value)`, preserving zero, negatives and fractions and
+using JavaScript's exponent notation when applicable. Null or missing values
+display blank; defensive nonfinite or nonnumeric runtime values also display
+blank. The renderer never generates a sequence, increments a value, clamps,
+rounds, groups or applies locale formatting. The server and accepted owner
+remain responsible for the value.
+
+The shared Number control is always disabled. No scalar model or write setter
+is borrowed, even if malformed runtime props claim an editable capability or
+mark the field noncomputed. Programmatic input events do not grant editing
+authority. There is no Clear button, local draft, parsing or Save action.
+`AutoNumberFieldOptions` accepts only `className`; it adds no range, generation
+or editing options. Existing Number, Currency and Duration routes are unchanged.
+
+The control honors configured title visibility and uses the field name when the
+title is blank. Repeated instances have unique label and feedback IDs, and hidden
+titles retain an accessible name. Accepted login masking from either display or
+write configuration uses a password input; this does not add login searches,
+scanning or authentication. Pending state and existing error/validation feedback
+are reflected without changing the supplied number. Feedback is plain text in
+an associated polite live region; an explicitly empty error remains empty.
+AutoNumber configuration does not declare a placeholder option.
+
+The stock binding component requires physical `autoNumber` schema/configuration;
+other binding kinds render status only. Hidden, blocked and retired bindings or
+hosts omit the control. Custom rendering remains available through the existing
+override. Mounting, StrictMode, remounting and unmounting do not create, destroy
+or write an owner, trigger Save or start requests. A replacement binding displays
+its own current value. Applications continue to own their surrounding forms.
+
+Styles reuse optional `@miniextensions/sdk/react/number.css` and its
+`mx-sdk-number*` classes. `className` decorates the wrapper. There is no separate
+AutoNumber stylesheet export or JavaScript CSS import; core and `/ui` remain
+React-free.
+
+The synthetic `examples/react-autonumber` fixture uses public exports. After
+building the SDK, run `node examples/react-autonumber/build.mjs`, then
+`node examples/react-autonumber/dev.mjs`, and open
+`http://127.0.0.1:4189`. `node scripts/check-autonumber-browser.mjs` verifies
+disabled controls, native displays, masking, owner changes and layout locally.
+These fixtures do not generate records or contact a backend.
+
 ## React Percent presentation
 
 The optional `/react` entry exports `PercentField`, `PercentFieldProps`,
@@ -1782,6 +1857,86 @@ After building, `node examples/react-percent/dev.mjs` serves synthetic presentat
 fixtures at `http://127.0.0.1:4186`. `node scripts/check-percent-browser.mjs` checks
 native entry, retained partial drafts, remounts, restrictions and enclosing-form
 Enter behavior. Simulated composition does not certify real OS input methods.
+
+## React Count presentation
+
+The optional `/react` entry exports `CountField`, `CountFieldProps`,
+`CountFieldOptions` and `renderCountField`. The binding component accepts the
+existing `{ binding, render }` contract and `className`; supplying `render`
+replaces all stock markup. `CountFieldOptions` aliases `NumberFieldOptions`.
+
+```tsx
+import { CountField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+
+export function RecordCount({ binding }: { binding: FormFieldBinding }) {
+    return <CountField binding={binding} className="record-count" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'count'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderCountField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/number.css';
+
+export const countRenderers: FieldRendererSlots<ReactNode> = {
+    renderCountField: (props) =>
+        renderCountField(props, { className: 'record-count' }),
+};
+```
+
+This is a read-only presentation of the supplied native value. Count metadata
+must declare `field.config.options.isValid === true` before a finite number is
+shown through `String(value)`. Zero, negative and fractional values remain native;
+JavaScript exponent notation is retained when applicable. Accepted metadata with
+`isValid: false` displays blank even when the owner still holds a number such as
+`42`. Null or missing native values also display blank. Direct helper calls
+defensively display blank for missing or malformed validity metadata and nonfinite
+or nonnumeric values; renderer hosts may reject malformed fields before invoking
+the helper. Rendering never clears or normalizes that native value. Changes to
+accepted metadata update the display without calculating a count from linked
+records, rounding, clamping, imposing integer constraints or applying locale
+formatting.
+
+The shared Number control is always disabled. Count has no scalar, local draft,
+Clear button, parser or editing action. Neither a forged editable capability nor
+`computed: false` grants authority: rendering does not read a scalar or call a
+setter. The accepted owner and server supply Count values. Existing editable
+Number, Percent, Rating, Currency and Duration routes keep their behavior.
+
+Configured title visibility is honored, blank titles use the field name, and
+hidden titles retain an accessible name. Repeated controls have unique label and
+feedback IDs. Accepted masking from either display or write configuration uses
+a password input. Pending state and existing error or validation messages remain
+visible without changing the supplied value; feedback is plain text in an
+associated polite live region, and an explicitly empty error stays empty.
+Count configuration declares no placeholder or range options.
+
+The stock binding component requires physical Count schema and configuration;
+a different field kind renders a status. Hidden, blocked and retired bindings or
+hosts omit the control. Custom rendering keeps precedence. Mounting, StrictMode,
+remounting and unmounting do not create or destroy owners, write data, invoke Save
+or start reads. A replacement binding displays its own accepted state.
+
+Use existing readonly Form bindings and accepted Portal detail hosts. Grid and
+List composition can display Count through those detail hosts without creating
+an editable computed cell binding. Loading Portal data and submitting a surrounding
+form remain explicit application-owned actions.
+
+Styles reuse optional `@miniextensions/sdk/react/number.css` and its
+`mx-sdk-number*` classes. `className` decorates the wrapper. There is no separate
+Count stylesheet export or JavaScript CSS import; core and `/ui` remain React-free.
+
+The `examples/react-count` fixture uses public exports and synthetic data. After
+building, run `node examples/react-count/dev.mjs` and open `http://127.0.0.1:4190`.
+`node scripts/check-count-browser.mjs` checks disabled controls, validity changes,
+native display, masking, owner replacement and layout. These fixtures do not
+calculate linked-record counts or contact a backend.
 
 ## React Rating presentation
 

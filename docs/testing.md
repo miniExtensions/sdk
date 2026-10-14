@@ -167,6 +167,47 @@ After building, `node scripts/check-external-sync-source-browser.mjs` runs the
 separate local Chromium proof. All fixtures are synthetic. These checks do not
 claim support for arbitrary raw Airtable objects or perform synchronization.
 
+## Count presentation checks
+
+`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+They cover readonly Form bindings without a scalar, finite native displays,
+null/missing values, invalid metadata retaining a nonempty native number,
+same-owner validity changes through explicit synthetic reloads, malformed metadata
+rejection by hosts and blank direct-helper display, forged capabilities,
+masking from either configuration, associated feedback, stale controls, custom
+rendering and hidden or retired owners. The adjacent Number field remains editable.
+
+Actual Form composition and Portal Grid/List detail hosts retain readonly Count
+capabilities. The Portal fixture makes one explicit synthetic load; rendering and
+rerendering add no reads, writes or Save. It does not fabricate a computed inline
+cell binding. Public props/options, readonly negative types, wrong-slot rejection,
+Form/Grid/List composition and both guide recipes are typechecked. The local
+example compiles and bundles with shared optional `number.css`; Count adds no
+stylesheet export, and its sources remain tracked while preview outputs are ignored.
+
+After building, `node scripts/check-count-browser.mjs` runs the separate local
+Chromium proof. All fixtures are synthetic. These checks do not calculate linked
+record counts, introduce integer/range policy or contact a live backend.
+
+## AutoNumber presentation checks
+
+`pnpm check:package` runs 16 installed ESM/CommonJS groups with synthetic Form
+owners. They verify disabled native-number display, zero/fraction/negative/exponent
+values, null and missing values, no writes on mount/remount, and defensive blank
+display for nonfinite or nonnumeric input. Forged editable capabilities with
+throwing scalar accessors and setters remain unused. Masking from either config,
+unique labels, feedback, pending state, wrong-kind status, custom rendering,
+owner replacement and retirement are covered without Save or requests.
+
+Public props/options, readonly AutoNumber capabilities, wrong-slot rejection,
+Form/Grid/List composition and guide recipes are typechecked. The example is
+compiled and bundled against the archive with shared optional `number.css`;
+there is no AutoNumber stylesheet export. Its seven source files must remain
+unignored and generated preview files ignored. After building,
+`node scripts/check-autonumber-browser.mjs` runs a separate local Chromium proof.
+These checks do not test server-side number generation or introduce a local
+sequence, editing action or validation policy.
+
 ## Rating presentation checks
 
 `pnpm check:package` runs 18 installed ESM/CommonJS groups with synthetic owners.

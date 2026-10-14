@@ -1,6 +1,10 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkMultilineTextConsumer,
+    multilineTextReactTypedConsumer,
+} from './multiline-text-consumer-checks.mjs';
+import {
     checkUrlConsumer,
     urlReactTypedConsumer,
 } from './url-consumer-checks.mjs';
@@ -1200,6 +1204,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'multiline-text-react-consumer.tsx'),
+        multilineTextReactTypedConsumer
+    );
+    reactSources.push('multiline-text-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'url-react-consumer.tsx'),
         urlReactTypedConsumer
     );
@@ -1341,6 +1350,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'multiline-text',
         'url',
         'number',
         'date',
@@ -1349,7 +1359,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'email',
         'currency',
     ]) {
-        const stylesheet = name === 'email' || name === 'url' ? 'text' : name;
+        const stylesheet = ['email', 'url', 'multiline-text'].includes(name)
+            ? 'text'
+            : name;
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1465,6 +1477,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(textProof.checks, 8);
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const multilineTextProof = await checkMultilineTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(multilineTextProof.checks, 20);
+    console.log(
+        `Installed Multiline Text renderer, binding, shared Text CSS and local example: ${multilineTextProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const urlProof = await checkUrlConsumer({
         consumerDirectory: temporaryDirectory,

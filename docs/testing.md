@@ -89,6 +89,27 @@ The Node 24 check name is unchanged. If repository protection still requires
 `check (22)`, a repository administrator must remove that retired requirement;
 the workflow does not change repository protection settings.
 
+## Multiline Text presentation checks
+
+`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+They cover whitespace, blank and trailing lines, literal markup, native string/null
+drafts, explicit clearing, composition completion and cancellation, character
+limits, readonly controls, stale actions, owner replacement, custom binding
+rendering and retired hosts. Unsupported append-only, attachment-display and
+explicit masking signals from either configuration render only a status; the
+checks assert that native values, controls, counts and value-derived feedback are
+absent. The suite asserts no implicit Save or external request. Public exports,
+the multiline-only slot, Form/Grid/List composition and guide recipes are
+typechecked; the example is bundled using shared optional `text.css`.
+
+Happy DOM retains textarea CRLF line endings. Its checks prove that mounting and
+remounting leave the owner unchanged, and that a deliberate LF edit is accepted;
+they do not establish native DOM line-ending normalization. After building,
+`node scripts/check-multiline-text-browser.mjs` runs the separate local Chromium
+proof, including native textarea line endings and Enter inserting a newline.
+Simulated composition is not a real input-method certification. These checks do
+not implement rich text, append operations, attachment workflows or login.
+
 ## Email presentation checks
 
 `pnpm check:package` exercises the installed Email exports in ESM and CommonJS,

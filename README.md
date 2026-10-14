@@ -171,7 +171,7 @@ The SDK has no administrative workspace/configure/publish API.
 | `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `EmailField`, `UrlField`, `NumberField`, `CheckboxField`,
+also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `NumberField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
@@ -185,6 +185,12 @@ renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
+
+[Multiline Text presentation](docs/ui.md#react-multiline-text-presentation) exports
+`MultilineTextField`, `MultilineTextFieldProps`, `MultilineTextFieldOptions` and the
+typed `renderMultilineTextField` slot. It uses a plain textarea and optional
+`@miniextensions/sdk/react/text.css` for native string/null drafts. Append-only,
+attachment-display and explicit masking modes require a custom renderer.
 
 [Email presentation](docs/ui.md#react-email-presentation) exports `EmailField`,
 `EmailFieldProps`, `EmailFieldOptions` and the typed `renderEmailField` slot. It

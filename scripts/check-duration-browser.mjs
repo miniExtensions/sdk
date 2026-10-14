@@ -25,11 +25,85 @@ const assets = new Map(
         file.contents,
     ])
 );
+// Keep native implicit submission separate from the dashboard's multiple-input
+// form. This public-model fixture contains exactly one form-associated text input.
+const enterBundle = await build({
+    stdin: {
+        resolveDir: process.cwd(),
+        sourcefile: 'duration-enter-fixture.js',
+        contents: `
+import { createElement as h, StrictMode, useSyncExternalStore } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createDurationFieldModel } from '@miniextensions/sdk/ui';
+import { renderDurationField } from '@miniextensions/sdk/react';
+let native = 61.23456;
+const counters = { submissions: [], parentKeyDowns: 0, writes: 0, keys: [] };
+const report = () => {
+    document.getElementById('enter-result').textContent = JSON.stringify({ ...counters, native });
+};
+document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    queueMicrotask(() => {
+        counters.keys.push({ isTrusted: event.isTrusted, isComposing: event.isComposing, defaultPrevented: event.defaultPrevented });
+        report();
+    });
+}, true);
+const model = createDurationFieldModel({
+    getValue: () => native,
+    getDurationFormat: () => 'h:mm:ss.SSS',
+    canEdit: () => true,
+    isCurrent: () => true,
+    write: (value) => { native = value; counters.writes++; report(); return true; },
+});
+const config = { type: 'duration', options: { durationFormat: 'h:mm:ss.SSS' } };
+const submitButton = new URLSearchParams(location.search).get('submit') === 'button';
+function App() {
+    useSyncExternalStore(model.subscribe, () => model.getState().revision);
+    const props = {
+        physicalKind: 'duration', presentation: { type: 'physical', config },
+        fieldId: 'enter-duration', title: 'Enter duration',
+        field: { id: 'enter-duration', name: 'Enter duration', description: null, isPrimaryField: false, isComputed: false, config },
+        displayConfig: {}, writeConfig: {}, value: native, context: 'form',
+        computed: false, dirty: counters.writes > 0, pending: false, validation: [], error: null,
+        capability: {
+            type: 'editable',
+            setValue: () => { throw Error('No direct value fallback'); },
+            scalar: { state: model.getState(), setInput: model.setInput, setChecked: model.setChecked, setFocused: model.setFocused },
+        },
+    };
+    return h('form', {
+        id: 'enter-form',
+        onKeyDown: () => { counters.parentKeyDowns++; report(); },
+        onSubmit: (event) => {
+            // Observe the browser submit event, then prevent navigation. No SDK Save.
+            event.preventDefault();
+            counters.submissions.push({ submitter: event.nativeEvent.submitter?.textContent ?? null });
+            report();
+        },
+    }, renderDurationField(props), submitButton ? h('button', { type: 'submit' }, 'Native submit') : null);
+}
+report();
+createRoot(document.getElementById('enter-app')).render(h(StrictMode, null, h(App)));
+`,
+    },
+    bundle: true,
+    platform: 'browser',
+    format: 'esm',
+    target: 'es2022',
+    outfile: join(output, 'duration-enter.js'),
+    write: false,
+});
+assets.set('/duration-enter.js', enterBundle.outputFiles[0].contents);
 const server = createServer((request, response) => {
     const path = new URL(request.url, 'http://localhost').pathname;
     if (path === '/') {
         response.setHeader('content-type', 'text/html');
         response.end(readFileSync('examples/react-duration/index.html'));
+    } else if (path === '/enter') {
+        response.setHeader('content-type', 'text/html');
+        response.end(
+            '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Duration native Enter fixture</title></head><body><main id="enter-app"></main><pre id="enter-result"></pre><script type="module" src="/duration-enter.js"></script></body></html>'
+        );
     } else if (assets.has(path)) {
         response.setHeader(
             'content-type',
@@ -81,7 +155,7 @@ try {
         Number(await page.locator('#writes').textContent());
     const native = async (index = 0) =>
         page.locator(`#native-${index}`).textContent();
-    const noEvents = async () => {
+    const noDashboardEvents = async () => {
         assert.equal(await page.locator('#rows').textContent(), '0');
         assert.equal(await page.locator('#submits').textContent(), '0');
     };
@@ -233,7 +307,7 @@ try {
     assert.equal(await first.inputValue(), '1:');
     assert.equal(await writes(), beforeRawRemount);
     await first.press('Enter');
-    await noEvents();
+    await noDashboardEvents();
     for (const input of ['-', '1e3', '1..2', '1:2:3.1234', '9'.repeat(310)]) {
         await first.fill(input);
         assert.equal(await first.inputValue(), input);
@@ -303,7 +377,7 @@ try {
             .isDisabled(),
         true
     );
-    await noEvents();
+    await noDashboardEvents();
 
     await binding.fill('001:02.120');
     assert.equal(await native(10), '62.12');
@@ -332,7 +406,7 @@ try {
         await binding.evaluate((node) => node === document.activeElement),
         true
     );
-    await noEvents();
+    await noDashboardEvents();
 
     await first.fill('1:');
     const beforeExternal = await writes();
@@ -403,8 +477,117 @@ try {
     await page.getByRole('button', { name: 'Remount renderers' }).click();
     assert.equal(await first.count(), 0);
     assert.equal(await writes(), beforeExternal);
-    await noEvents();
+    await noDashboardEvents();
     assert.equal(await page.locator('iframe,video,a').count(), 0);
+
+    const implicitSubmission = [];
+    for (const submitButton of [false, true]) {
+        const enterPage = await context.newPage();
+        enterPage.on('pageerror', (error) => errors.push(error.message));
+        try {
+            await enterPage.goto(
+                `${origin}/enter?submit=${submitButton ? 'button' : 'none'}`
+            );
+            const input = enterPage.getByRole('textbox', {
+                name: 'Enter duration',
+                exact: true,
+            });
+            await input.waitFor();
+            const state = async () =>
+                JSON.parse(
+                    await enterPage.locator('#enter-result').textContent()
+                );
+            assert.equal(
+                await enterPage.locator('#enter-form input').count(),
+                1
+            );
+            assert.equal(
+                await enterPage
+                    .locator('#enter-form button[type="submit"]')
+                    .count(),
+                submitButton ? 1 : 0
+            );
+            const initialInput = await input.inputValue();
+            await input.press('Enter');
+            const normal = await state();
+            assert.equal(normal.submissions.length, 1);
+            assert.equal(
+                normal.submissions[0].submitter,
+                submitButton ? 'Native submit' : null
+            );
+            assert.deepEqual(normal.keys.at(-1), {
+                isTrusted: true,
+                isComposing: false,
+                defaultPrevented: false,
+            });
+            assert.equal(normal.parentKeyDowns, 0);
+
+            // Dispatching composition events does not engage the OS/browser IME.
+            // An untrusted isComposing key has no native submit default action;
+            // it records cancellation behavior, not real IME submission safety.
+            await input.dispatchEvent('compositionstart', { data: '' });
+            const syntheticKey = await input.evaluate((node) => {
+                const event = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    isComposing: true,
+                    bubbles: true,
+                    cancelable: true,
+                });
+                node.dispatchEvent(event);
+                return {
+                    isTrusted: event.isTrusted,
+                    isComposing: event.isComposing,
+                    defaultPrevented: event.defaultPrevented,
+                };
+            });
+            assert.deepEqual(syntheticKey, {
+                isTrusted: false,
+                isComposing: true,
+                defaultPrevented: false,
+            });
+            const afterSynthetic = await state();
+            assert.equal(afterSynthetic.submissions.length, 1);
+            await input.press('Enter');
+            const duringSyntheticComposition = await state();
+            assert.equal(duringSyntheticComposition.submissions.length, 2);
+            assert.deepEqual(duringSyntheticComposition.keys.at(-1), {
+                isTrusted: true,
+                isComposing: false,
+                defaultPrevented: false,
+            });
+            await input.dispatchEvent('compositionend', { data: '' });
+            const final = await state();
+            assert.equal(final.parentKeyDowns, 0);
+            assert.equal(final.writes, 0);
+            assert.equal(final.native, 61.23456);
+            assert.equal(await input.inputValue(), initialInput);
+            implicitSubmission.push({
+                form: submitButton
+                    ? 'one input with submit button'
+                    : 'one input without submit button',
+                normalEnter: {
+                    submissions: normal.submissions.length,
+                    key: normal.keys.at(-1),
+                },
+                simulatedComposition: {
+                    syntheticKey,
+                    syntheticKeySubmissions:
+                        afterSynthetic.submissions.length -
+                        normal.submissions.length,
+                    trustedEnterSubmissions:
+                        duringSyntheticComposition.submissions.length -
+                        afterSynthetic.submissions.length,
+                    trustedKey: duringSyntheticComposition.keys.at(-1),
+                    provesNativeImeBehavior: false,
+                },
+                parentKeyDowns: final.parentKeyDowns,
+                nativeDraftWrites: final.writes,
+            });
+        } finally {
+            await enterPage.close();
+        }
+    }
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     writeFileSync(
@@ -415,6 +598,7 @@ try {
                 transport: 'synthetic local drafts only',
                 writes: await writes(),
                 externalRequests: 0,
+                implicitSubmission,
                 checks: [
                     'all five canonical duration formats',
                     'native precision survives focus, blur and remount without writes',
@@ -436,7 +620,9 @@ try {
                     'validation association and unique IDs',
                     'hidden title accessible name',
                     'visible keyboard focus',
-                    'no Portal row activation or implicit submission',
+                    'no Portal row activation in the dashboard; its multiple-input form without a submit button did not submit',
+                    'native Enter submits a single-input form with or without a submit button despite stopped key bubbling',
+                    'simulated composition records uncancelled keys; it does not prove native IME behavior',
                     'forced colors',
                     'mobile overflow',
                 ],

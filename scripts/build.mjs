@@ -134,7 +134,7 @@ for (const format of ['esm', 'cjs']) {
 }
 
 for (const format of ['esm', 'cjs']) {
-    for (const name of ['button', 'checkbox', 'text', 'duration']) {
+    for (const name of ['button', 'checkbox', 'text', 'number', 'duration']) {
         copyFileSync(
             `src/react/${name}.css`,
             `dist/${format}/react/${name}.css`

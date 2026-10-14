@@ -7,8 +7,8 @@ The fixture demonstrates `h:mm`, `h:mm:ss`, `h:mm:ss.S`, `h:mm:ss.SS` and
 `h:mm:ss.SSS`. Native values remain seconds. The canonical formatter controls
 display precision; focusing, blurring or remounting never rounds the native draft.
 Raw accepted input stays visible while focused, and partial or invalid text is
-retained separately from the last accepted value. Clear writes `null`; zero stays
-a distinct native answer.
+retained separately from the last accepted value. Clear sets the native draft to
+`null`; zero stays a distinct native answer.
 
 Try `90` or `1:90` in the minutes field, `1:90` in a seconds field, and a negative
 clock such as `-1:02:03.125`. The existing owner defines component overflow and
@@ -34,3 +34,14 @@ Set `SDK_DURATION_CHROMIUM` to an installed Chromium executable, for example
 `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome` on macOS; the default
 is `/usr/bin/chromium`. External browser requests are blocked. Browser keyboard
 checks do not certify OS input methods or screen readers.
+
+The dashboard's form contains multiple inputs and no submit button. Its lack of
+Enter submission does not establish suppression in other form layouts. Separate
+browser cases use a real single-input form with and without a submit button:
+native Enter submits both, even though the renderer stops key-event bubbling.
+The fixture counts each submit event and prevents navigation; it never calls SDK
+Save. Applications must control their enclosing form's submit policy.
+
+Simulated composition cases distinguish an untrusted `isComposing` key from a
+native Enter key after synthetic composition events. Synthetic events do not
+activate a real input method, so these checks make no OS IME submission claim.

@@ -1616,6 +1616,81 @@ remounts, permissions, external updates, repeated IDs, focus, forced colors and
 narrow layout, and writes screenshots and a JSON receipt. It does not certify
 every platform's input method, screen reader or surrounding form layout.
 
+## React AutoNumber presentation
+
+The optional `/react` entry exports `AutoNumberField`, `AutoNumberFieldProps`,
+`AutoNumberFieldOptions` and `renderAutoNumberField`. The dedicated binding
+component accepts `{ binding, render }` and `className`; supplying `render`
+replaces all stock markup. It does not delegate to the editable `NumberField`.
+
+```tsx
+import { AutoNumberField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+
+export function RecordSequence({ binding }: { binding: FormFieldBinding }) {
+    return <AutoNumberField binding={binding} className="record-sequence" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'autoNumber'>` in
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderAutoNumberField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/number.css';
+
+export const autoNumberRenderers: FieldRendererSlots<ReactNode> = {
+    renderAutoNumberField: (props) =>
+        renderAutoNumberField(props, { className: 'record-sequence' }),
+};
+```
+
+This is a read-only presentation of the supplied native number. Finite numbers
+display through `String(value)`, preserving zero, negatives and fractions and
+using JavaScript's exponent notation when applicable. Null or missing values
+display blank; defensive nonfinite or nonnumeric runtime values also display
+blank. The renderer never generates a sequence, increments a value, clamps,
+rounds, groups or applies locale formatting. The server and accepted owner
+remain responsible for the value.
+
+The shared Number control is always disabled. No scalar model or write setter
+is borrowed, even if malformed runtime props claim an editable capability or
+mark the field noncomputed. Programmatic input events do not grant editing
+authority. There is no Clear button, local draft, parsing or Save action.
+`AutoNumberFieldOptions` accepts only `className`; it adds no range, generation
+or editing options. Existing Number, Currency and Duration routes are unchanged.
+
+The control honors configured title visibility and uses the field name when the
+title is blank. Repeated instances have unique label and feedback IDs, and hidden
+titles retain an accessible name. Accepted login masking from either display or
+write configuration uses a password input; this does not add login searches,
+scanning or authentication. Pending state and existing error/validation feedback
+are reflected without changing the supplied number. Feedback is plain text in
+an associated polite live region; an explicitly empty error remains empty.
+AutoNumber configuration does not declare a placeholder option.
+
+The stock binding component requires physical `autoNumber` schema/configuration;
+other binding kinds render status only. Hidden, blocked and retired bindings or
+hosts omit the control. Custom rendering remains available through the existing
+override. Mounting, StrictMode, remounting and unmounting do not create, destroy
+or write an owner, trigger Save or start requests. A replacement binding displays
+its own current value. Applications continue to own their surrounding forms.
+
+Styles reuse optional `@miniextensions/sdk/react/number.css` and its
+`mx-sdk-number*` classes. `className` decorates the wrapper. There is no separate
+AutoNumber stylesheet export or JavaScript CSS import; core and `/ui` remain
+React-free.
+
+The synthetic `examples/react-autonumber` fixture uses public exports. After
+building the SDK, run `node examples/react-autonumber/build.mjs`, then
+`node examples/react-autonumber/dev.mjs`, and open
+`http://127.0.0.1:4189`. `node scripts/check-autonumber-browser.mjs` verifies
+disabled controls, native displays, masking, owner changes and layout locally.
+These fixtures do not generate records or contact a backend.
+
 ## React Percent presentation
 
 The optional `/react` entry exports `PercentField`, `PercentFieldProps`,

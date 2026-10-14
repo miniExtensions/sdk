@@ -164,6 +164,25 @@ After building, `node scripts/check-count-browser.mjs` runs the separate local
 Chromium proof. All fixtures are synthetic. These checks do not calculate linked
 record counts, introduce integer/range policy or contact a live backend.
 
+## AutoNumber presentation checks
+
+`pnpm check:package` runs 16 installed ESM/CommonJS groups with synthetic Form
+owners. They verify disabled native-number display, zero/fraction/negative/exponent
+values, null and missing values, no writes on mount/remount, and defensive blank
+display for nonfinite or nonnumeric input. Forged editable capabilities with
+throwing scalar accessors and setters remain unused. Masking from either config,
+unique labels, feedback, pending state, wrong-kind status, custom rendering,
+owner replacement and retirement are covered without Save or requests.
+
+Public props/options, readonly AutoNumber capabilities, wrong-slot rejection,
+Form/Grid/List composition and guide recipes are typechecked. The example is
+compiled and bundled against the archive with shared optional `number.css`;
+there is no AutoNumber stylesheet export. Its seven source files must remain
+unignored and generated preview files ignored. After building,
+`node scripts/check-autonumber-browser.mjs` runs a separate local Chromium proof.
+These checks do not test server-side number generation or introduce a local
+sequence, editing action or validation policy.
+
 ## Rating presentation checks
 
 `pnpm check:package` runs 18 installed ESM/CommonJS groups with synthetic owners.

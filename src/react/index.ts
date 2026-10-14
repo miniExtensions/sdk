@@ -58,6 +58,10 @@ import {
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
 import { countInput, type CountFieldOptions } from './CountField.js';
 export { renderCountField, type CountFieldOptions } from './CountField.js';
+export {
+    renderAutoNumberField,
+    type AutoNumberFieldOptions,
+} from './AutoNumberField.js';
 export { renderRatingField, type RatingFieldOptions } from './RatingField.js';
 export {
     renderPercentField,
@@ -352,6 +356,42 @@ export function CountField({
             ? snapshot.field.title
             : schema.airtableField.name,
         input: countInput(snapshot.value, schema.airtableField.config),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+    });
+}
+export type AutoNumberFieldProps = FieldProps & NumberFieldOptions;
+/** Computed native numbers have no local input model or write action. */
+export function AutoNumberField({
+    binding,
+    render,
+    className,
+}: AutoNumberFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'autoNumber' ||
+        schema.airtableField.config.type !== 'autoNumber'
+    )
+        return status(snapshot);
+    return createElement(NumberControl, {
+        ...numberConfiguration(schema.miniExtConfig),
+        className,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input:
+            typeof snapshot.value === 'number' &&
+            Number.isFinite(snapshot.value)
+                ? String(snapshot.value)
+                : '',
         disabled: true,
         pending: snapshot.pending,
         invalid: snapshot.error !== null || snapshot.validation.length > 0,

@@ -1245,3 +1245,77 @@ and open `http://127.0.0.1:4177`. `node scripts/check-text-browser.mjs` checks n
 typing, selection/caret, clearing, simulated composition, remounting, permissions,
 forced colors and narrow layout and captures screenshots. Simulated composition
 does not certify every platform's input method or screen reader.
+
+## React Number presentation
+
+The optional `/react` entry exports `NumberField`, `NumberFieldProps`,
+`NumberFieldOptions` and `renderNumberField`. `NumberField` preserves the existing
+`{ binding, render }` API; `render` replaces all markup. `className` decorates the
+plain Number wrapper. Styles are optional and confined to `mx-sdk-number*` classes:
+
+```tsx
+import { NumberField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+
+export function Quantity({ binding }: { binding: FormFieldBinding }) {
+    return <NumberField binding={binding} className="quantity" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'number'>` in the existing
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList` slot map:
+
+```tsx
+import type { ReactNode } from 'react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import { renderNumberField } from '@miniextensions/sdk/react';
+
+export const numberRenderers: FieldRendererSlots<ReactNode> = {
+    renderNumberField,
+};
+```
+
+Edits go through the accepted scalar's `setInput`. The control is a text input
+with decimal input mode, so incomplete entries such as `-` and `1e` remain in the
+owner alongside the last valid native value. A refused commit can represent
+retained invalid input; the renderer uses the next owner snapshot instead of
+discarding it. Decimal/exponent parsing, finite-number checks, validation and
+explicit Save remain with the existing owner. An empty edit writes `null`; a zero
+stays `0`. Initially absent values remain absent until editing. Loaded precision
+and native units are retained without display rounding or conversion.
+
+Keep owners outside React mounts. Mounting, StrictMode, remounting and styling do
+not create or destroy a model, reset unfinished input, invoke Save or start a
+request. A missing scalar capability is displayed disabled; raw numeric values
+and a `setValue` action do not supply the missing input owner. Stale callbacks
+still go through the owner/context guards. Applications own surrounding form
+submission and must notify bindings when permissions or accepted context change.
+
+The plain Number presentation includes unique label IDs, a hidden-title accessible
+name, configured placeholder and required indication, associated plain-text polite
+feedback, and visible keyboard focus. Explicitly empty feedback is preserved.
+Read-only settings from display or write configuration further restrict editing;
+numeric login masking from either configuration is preserved.
+Pending, computed and unavailable controls are disabled. Retired scalar states
+render nothing. Input events stop bubbling into Portal rows.
+
+This slice styles ordinary Number fields. Existing `NumberField` currency,
+percent, rating and duration bindings retain their prior presentation and native
+units; `DurationField` keeps its clock-input behavior. Their dedicated styling,
+unit formatting and broader theme APIs are separate work. Canonical Save remains
+authoritative for numeric field policy.
+Input uses the scalar's native dot-decimal syntax. Configured decimal/thousands
+separators, grouped display, scanning and login searches need their own accepted
+integration or custom presentation; this renderer does not start those features.
+
+The Number stylesheet is exported as `@miniextensions/sdk/react/number.css` and
+copied into both builds. JavaScript does not import it, and core and `/ui` remain
+React-free. Override the classes, omit the CSS, or supply a custom render function.
+
+After building, `node examples/react-number/dev.mjs` serves a local synthetic
+example at `http://127.0.0.1:4178`. `node scripts/check-number-browser.mjs` checks
+native typing/caret, Enter in the example host, incomplete and invalid drafts,
+remounts, permissions, external updates, repeated IDs, focus, forced colors and
+narrow layout, and writes screenshots and a JSON receipt. It does not certify
+every platform's input method, screen reader or surrounding form layout.

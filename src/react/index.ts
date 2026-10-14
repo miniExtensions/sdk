@@ -25,6 +25,7 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+export { renderUrlField, type UrlFieldOptions } from './UrlField.js';
 import {
     CheckboxControl,
     checkboxConfiguration,
@@ -326,6 +327,11 @@ export function TextField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setValue: (value) => binding.setValue(value).accepted,
     });
+}
+/** URL drafts stay literal text and grant no navigation authority. */
+export type UrlFieldProps = TextFieldProps;
+export function UrlField(props: UrlFieldProps): ReactNode {
+    return createElement(TextField, props);
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;

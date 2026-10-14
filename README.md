@@ -171,7 +171,7 @@ The SDK has no administrative workspace/configure/publish API.
 | `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `EmailField`, `UrlField`, `NumberField`, `RatingField`, `CheckboxField`,
+also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
@@ -185,6 +185,12 @@ renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
+
+[Multiline Text presentation](docs/ui.md#react-multiline-text-presentation) exports
+`MultilineTextField`, `MultilineTextFieldProps`, `MultilineTextFieldOptions` and the
+typed `renderMultilineTextField` slot. It uses a plain textarea and optional
+`@miniextensions/sdk/react/text.css` for native string/null drafts. Append-only,
+attachment-display and explicit masking modes require a custom renderer.
 
 [Email presentation](docs/ui.md#react-email-presentation) exports `EmailField`,
 `EmailFieldProps`, `EmailFieldOptions` and the typed `renderEmailField` slot. It
@@ -201,6 +207,17 @@ single-line entry. URL text does not create links or grant navigation authority.
 It reuses the Number control and optional `@miniextensions/sdk/react/number.css`
 for manual native numeric entry. Rating maximum, icon and color metadata do not
 add stars, clamping or rounding; existing page validation remains authoritative.
+
+[Percent presentation](docs/ui.md#react-percent-presentation) exports `PercentField`,
+`PercentFieldProps`, `PercentFieldOptions` and the typed `renderPercentField` slot.
+It reuses the Number control and optional `@miniextensions/sdk/react/number.css`:
+native fractions such as `0.25` remain `0.25`, without percent scaling or a suffix.
+
+[Phone Number presentation](docs/ui.md#react-phone-number-presentation) exports
+`PhoneNumberField`, `PhoneNumberFieldProps`, `PhoneNumberFieldOptions` and the typed
+`renderPhoneNumberField` slot. It reuses the Text control and optional
+`@miniextensions/sdk/react/text.css` for literal single-line drafts, with no phone
+normalization, country selector or dialing action.
 
 For calendar dates, `/react` also exports the `renderDateField` named slot,
 `DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the

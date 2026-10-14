@@ -1246,6 +1246,89 @@ typing, selection/caret, clearing, simulated composition, remounting, permission
 forced colors and narrow layout and captures screenshots. Simulated composition
 does not certify every platform's input method or screen reader.
 
+## React Multiline Text presentation
+
+The optional `/react` entry exports `MultilineTextField`,
+`MultilineTextFieldProps`, `MultilineTextFieldOptions` and
+`renderMultilineTextField`. The binding component accepts the existing
+`{ binding, render }` contract plus `className` and `clearLabel`. Supplying
+`render` replaces all markup, including the unsupported-mode status.
+
+```tsx
+import { MultilineTextField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function ProjectNotes({ binding }: { binding: FormFieldBinding }) {
+    return <MultilineTextField binding={binding} clearLabel="Clear notes" />;
+}
+```
+
+The named helper consumes only `FieldRendererProps<'multilineText'>` and works
+with `FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderMultilineTextField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const multilineRenderers: FieldRendererSlots<ReactNode> = {
+    renderMultilineTextField: (props) =>
+        renderMultilineTextField(props, { className: 'project-notes' }),
+};
+```
+
+The control is a plain four-row textarea. Accepted edits retain spaces, blank
+lines and trailing whitespace; this renderer does not trim based on
+`preserveTrailingWhitespace`. Literal markup remains text. The owner retains its
+native string or `null`; an empty edit or Clear sets the native draft to `null`.
+Loaded CRLF values remain unchanged in the owner when mounting or remounting.
+Browsers normalize textarea DOM line endings to LF, so a deliberate edit can
+write that DOM representation. Mounting never writes a normalized value back.
+
+Title visibility, placeholder, required indication and configured read-only state
+are honored. Finite nonnegative integer character limits from either display or
+write configuration apply; the smaller limit wins. Limits count UTF-16 code
+units without splitting surrogate pairs and cap edits only, never loaded values.
+Unfinished composition stays in a local buffer. Completion uses the captured
+accepted action; observed owner, value, permission or limit changes cancel that
+buffer. Remounting discards unfinished composition and reflects the owner's
+accepted draft. Validation and deliberate Save remain with the existing owner.
+
+Append-only (`addOnlyMode`), attachment display (`displayAsAttachments`) and
+explicit password or masking signals (`obscurePassword` or
+`maskPasswordOnLoginScreen`) from either configuration are unsupported. Only
+`false` or an absent signal allows the plain control; malformed values such as
+`null`, strings or numbers also fail closed. Instead of a textarea, these modes
+show an accessible status asking for a custom renderer. No native value, Clear
+button, character count or value-derived feedback is rendered. A binding whose
+physical field kind is not `multilineText` also renders a status. This does not
+add password or login support, rich-text editing, append operations or attachment
+workflows; those require a separately accepted custom integration.
+
+Supported controls use unique label and feedback IDs, and hidden titles retain an
+accessible name. Feedback is plain text in an associated polite live region.
+Read-only, pending and computed controls are disabled. Hidden, blocked and retired
+hosts render nothing. Clear is `type="button"`, has a localized accessible name
+through `clearLabel`, and restores textarea focus. Click, pointer and keyboard
+events stop bubbling into Portal rows. Native Enter inserts a newline; the
+renderer never invokes Save. The application owns enclosing form submission and
+any explicit Save action.
+
+The optional shared `@miniextensions/sdk/react/text.css` styles `mx-sdk-text*`
+classes and adds vertical resizing for `textarea.mx-sdk-multiline-text`.
+`className` decorates the wrapper. There is no separate multiline stylesheet
+export or JavaScript CSS import; core and `/ui` remain React-free.
+
+The public `examples/react-multiline-text` example uses synthetic presentation
+hosts and bindings. After building, run
+`node examples/react-multiline-text/dev.mjs` and open
+`http://127.0.0.1:4187`. `node scripts/check-multiline-text-browser.mjs` checks
+native multiline entry, line endings, Enter, clearing, simulated composition,
+unsupported modes, remounting and layout. Simulated composition does not certify
+every platform input method or screen reader. The example contacts no backend.
+
 ## React Email presentation
 
 The optional `/react` entry exports `EmailField`, `EmailFieldProps`,
@@ -1382,6 +1465,79 @@ fixtures at `http://127.0.0.1:4184`. `node scripts/check-url-browser.mjs` checks
 native entry, clearing, remounts, inert text and enclosing-form Enter behavior.
 Simulated composition does not certify real OS input methods.
 
+## React Phone Number presentation
+
+The optional `/react` entry exports `PhoneNumberField`, `PhoneNumberFieldProps`,
+`PhoneNumberFieldOptions` and `renderPhoneNumberField`. `PhoneNumberField`
+delegates to `TextField`; its props and options are aliases of `TextFieldProps`
+and `TextFieldOptions`. The existing `{ binding, render }` override replaces all
+stock markup.
+
+```tsx
+import { PhoneNumberField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function Telephone({ binding }: { binding: FormFieldBinding }) {
+    return <PhoneNumberField binding={binding} clearLabel="Clear telephone" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'phoneNumber'>` in the existing
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList` slots:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderPhoneNumberField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const phoneRenderers: FieldRendererSlots<ReactNode> = {
+    renderPhoneNumberField: (props) =>
+        renderPhoneNumberField(props, { className: 'telephone' }),
+};
+```
+
+This is manual single-line text entry. Input uses `type="text"`, or `password`
+when accepted masking config requires it. Plus signs, leading zeros, punctuation,
+extensions, Unicode digits, entered whitespace and incomplete or non-phone strings
+remain literal native drafts. The renderer does not trim, normalize, format,
+coerce to a number or add a country prefix. Native single-line inputs strip
+embedded line breaks. An explicit empty edit or Clear sets the native draft to
+`null`; an initially absent value stays absent until an edit.
+
+Existing accepted-owner, page and server validation remains authoritative. The
+renderer displays supplied errors and adds no phone-syntax validator. Country-code
+configuration, including `showCountryCodes` and `defaultCountryCode`, is metadata
+without an accepted selector or formatter contract in this presentation. A country
+selector or formatting policy needs a separate accepted custom integration.
+
+The shared Text control supplies labels, placeholder and required indication,
+plain-text associated feedback, Clear focus restoration and local composition
+buffering. Read-only, masked, pending and computed restrictions are preserved;
+hidden, blocked and retired hosts omit the control. Stale callbacks continue
+through their accepted owner's guards. Custom `render` overrides keep ownership
+of their presentation.
+
+Keep owners outside React mounts: mounting, StrictMode, remounting and unmounting
+do not create or destroy owners, write a draft or save it. Saving remains an
+explicit owner action. Values such as `tel:+12025550123` or `sms:+12025550123`
+are inert input text. This renderer creates no links, dialing or messaging action;
+it performs no SMS, OTP, verification, lookup or network request.
+
+Applications own their enclosing HTML form's submit policy: stopped key-event
+bubbling does not prevent native Enter submission. Clear is `type="button"`.
+There is no separate Phone Number stylesheet. Import the existing optional
+`@miniextensions/sdk/react/text.css`, override its `mx-sdk-text*` classes or supply
+your own styles. JavaScript does not import CSS; `className` decorates the wrapper.
+Core and `/ui` remain React-free.
+
+After building, `node examples/react-phone-number/dev.mjs` serves synthetic
+presentation fixtures at `http://127.0.0.1:4185`.
+`node scripts/check-phone-number-browser.mjs` checks native entry, clearing,
+remounts, inert text and enclosing-form Enter behavior. Simulated composition does
+not certify real OS input methods.
+
 ## React Number presentation
 
 The optional `/react` entry exports `NumberField`, `NumberFieldProps`,
@@ -1436,10 +1592,11 @@ numeric login masking from either configuration is preserved.
 Pending, computed and unavailable controls are disabled. Retired scalar states
 render nothing. Input events stop bubbling into Portal rows.
 
-The Number presentation styles ordinary Number and Rating fields; see the
-[Rating presentation](#react-rating-presentation) for its manual native-unit
-contract. `NumberField` percent bindings retain their prior presentation and native units. Currency
-bindings use the dedicated [Currency presentation](#react-currency-presentation);
+The Number presentation styles ordinary Number, Percent and Rating fields.
+`NumberField` percent bindings use the same control through the
+[Percent presentation](#react-percent-presentation), with native fractional units.
+See the [Rating presentation](#react-rating-presentation) for its manual native-unit
+contract. Currency bindings use the dedicated [Currency presentation](#react-currency-presentation);
 duration bindings use the dedicated [Duration presentation](#react-duration-presentation)
 and its existing clock-input model. Broader theme APIs remain separate work.
 Canonical Save remains
@@ -1458,6 +1615,85 @@ native typing/caret, Enter in the example host, incomplete and invalid drafts,
 remounts, permissions, external updates, repeated IDs, focus, forced colors and
 narrow layout, and writes screenshots and a JSON receipt. It does not certify
 every platform's input method, screen reader or surrounding form layout.
+
+## React Percent presentation
+
+The optional `/react` entry exports `PercentField`, `PercentFieldProps`,
+`PercentFieldOptions` and `renderPercentField`. `PercentField` delegates to
+`NumberField`, whose physical percent bindings use the same Number control.
+`PercentFieldOptions` aliases `NumberFieldOptions` and accepts only `className`.
+The existing `{ binding, render }` override still replaces all stock markup.
+
+```tsx
+import { PercentField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+
+export function Ratio({ binding }: { binding: FormFieldBinding }) {
+    return <PercentField binding={binding} className="ratio" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'percent'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderPercentField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/number.css';
+
+export const percentRenderers: FieldRendererSlots<ReactNode> = {
+    renderPercentField: (props) =>
+        renderPercentField(props, { className: 'ratio' }),
+};
+```
+
+This is manual native-unit entry. A native fraction of `0.25` appears as `0.25`
+and editing `0.5` sets the native draft to `0.5`. The renderer does not multiply
+or divide by 100, append `%`, clamp to a range, round to configured precision or
+apply locale separators. It uses a text input with decimal input mode, or a
+password input when accepted login masking requires it. There is no additional
+percent parser or independent draft.
+
+Edits go through the accepted numeric scalar's `setInput`. Partial or invalid
+text such as `-` or `1e` stays visible across remounts alongside the last valid
+native value. Existing owner validation blocks deliberate Save while editable visible
+input is invalid. Repairing the draft accepts the owner's parsed number; an
+explicit empty edit sets the native draft to `null`, and zero remains zero.
+Untouched absent values stay absent. Focus and blur add no formatting or native
+writes. There is no stock Clear button; applications may clear through the
+existing owner or provide a custom renderer.
+
+Editing requires the accepted editable numeric scalar for the percent field.
+A raw value and `setValue` action do not replace that capability. Missing or
+mismatched scalar capabilities and readonly controls display finite native values
+without scaling and remain disabled. Read-only configuration, pending and
+computed restrictions are preserved. Retired scalar states and hidden, blocked
+or retired hosts omit the control; stale callbacks retain the owner's guards.
+
+The Number control supplies unique label IDs, hidden-title accessible names,
+placeholder and required indication, associated plain-text feedback and keyboard
+focus styles. Mounting, StrictMode, remounting and unmounting do not create or
+destroy an owner, reset unfinished input, invoke Save or start requests. Owners
+remain outside React and Save remains explicit. Stopped event bubbling does not
+prevent native Enter submission; applications own their enclosing form policy.
+
+`showAsProgressBar`, grouped display and separator metadata do not turn this input
+into a progress bar or change its numeric syntax. Those presentations need a
+separate accepted custom integration. Existing page/server numeric policy remains
+authoritative. Number, Currency and Duration bindings keep their existing routes
+and native units.
+
+There is no separate Percent stylesheet. Import the existing optional
+`@miniextensions/sdk/react/number.css`, override its `mx-sdk-number*` classes or
+supply your own styles. JavaScript does not import CSS; `className` decorates the
+wrapper. Core and `/ui` remain React-free.
+
+After building, `node examples/react-percent/dev.mjs` serves synthetic presentation
+fixtures at `http://127.0.0.1:4186`. `node scripts/check-percent-browser.mjs` checks
+native entry, retained partial drafts, remounts, restrictions and enclosing-form
+Enter behavior. Simulated composition does not certify real OS input methods.
 
 ## React Rating presentation
 

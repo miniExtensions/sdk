@@ -30,6 +30,11 @@ export {
     renderExternalSyncSourceField,
     type ExternalSyncSourceFieldOptions,
 } from './ExternalSyncSourceField.js';
+import { createdByName, type CreatedByFieldOptions } from './CreatedByField.js';
+export {
+    renderCreatedByField,
+    type CreatedByFieldOptions,
+} from './CreatedByField.js';
 import {
     MultilineTextControl,
     multilineTextConfiguration,
@@ -334,6 +339,45 @@ const status = (snapshot: FormFieldSnapshot) =>
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
+export type CreatedByFieldProps = FieldProps & CreatedByFieldOptions;
+/** The supplied creator name stays readonly regardless of forged editing state. */
+export function CreatedByField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: CreatedByFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'createdBy' ||
+        schema.airtableField.config.type !== 'createdBy'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Created By fields.'
+        );
+    return createElement(TextControl, {
+        ...textConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        value: createdByName(snapshot.value),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: () => false,
+    });
+}
 export type ExternalSyncSourceFieldProps = FieldProps &
     ExternalSyncSourceFieldOptions;
 /** The supplied source name stays readonly regardless of forged editing state. */

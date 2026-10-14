@@ -392,11 +392,18 @@ physical field's `options.durationFormat`: `h:mm`, `h:mm:ss`, `h:mm:ss.S`,
 `h:mm:ss.SS` or `h:mm:ss.SSS`. Missing or unsupported formats produce generic
 feedback rather than a guessed display.
 
-Use `/react` `DurationField`, the existing `renderDurationField` slot, or a custom
-renderer. Duration scalar actions include typed `setFocused(boolean)`; focusing
+Use `/react` `DurationField`, its `renderDurationField` helper for the named slot,
+or a custom renderer. Duration scalar actions include typed `setFocused(boolean)`; focusing
 preserves raw input, and blurring formats the committed native seconds without
 rounding or writing them. Owner lifetime stays outside mounts, so remounting keeps
 unfinished input. Existing `NumberField` also recognizes duration bindings.
+
+`DurationField` also accepts `className` and `clearLabel`; its existing `render`
+prop still replaces all markup. The helper requires the accepted duration scalar
+bridge, including `setFocused`, for editing. Import
+`@miniextensions/sdk/react/duration.css` for optional scoped defaults. See
+[React Duration presentation](ui.md#react-duration-presentation) for binding and
+Form/Grid/List usage, readonly display and customization.
 
 ```tsx
 import { DurationField, type FieldProps } from '@miniextensions/sdk/react';
@@ -500,12 +507,19 @@ model; their `render` prop supports custom markup without custom conversion.
 The copied starter's stock and custom adapters also use this model. Keep the
 binding owner through ordinary remounts; dispose it on visitor/context replacement.
 
-For calendar dates, `DateField` also accepts `className` and `clearLabel`, and
+For calendar dates, `DateField` accepts `className` and `clearLabel`, and
 `renderDateField` supplies the named Form/Grid/List slot using its accepted date
 bridge. Import `@miniextensions/sdk/react/date.css` for optional scoped defaults.
 See [React Date presentation](ui.md#react-date-presentation) for the manual-entry
-contract and customization. The existing explicit-offset `DateTimeField` binding
-presentation remains unchanged.
+contract and customization.
+
+For explicit-offset timestamps, `DateTimeField` accepts the same options, and
+`renderDateTimeField` supplies the named slot using its accepted dateTime bridge.
+Import `@miniextensions/sdk/react/datetime.css` for optional scoped defaults. See
+[React DateTime presentation](ui.md#react-datetime-presentation) for its
+manual-entry contract. `DateTimeField` remains an alias of `DateField`; the shared
+binding component chooses the calendar or timestamp control from the accepted
+model kind. Both preserve custom render overrides.
 
 Dates accept only valid calendar `YYYY-MM-DD` strings. Calendar parsing and
 preview avoid a local-midnight or implicit UTC shift, including skipped civil

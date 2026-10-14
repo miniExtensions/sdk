@@ -310,7 +310,12 @@ export async function checkDateRendererConsumer({
                 );
                 assert.equal(input().value, '2024-11-03T01:30:00.120-07:00');
                 assert.equal(input().placeholder, 'YYYY-MM-DDTHH:mm:ssZ');
-                assert.equal(clear().textContent, 'Clear date');
+                assert.equal(
+                    clear().getAttribute('aria-label'),
+                    'Clear Timestamp'
+                );
+                assert.equal(clear().type, 'button');
+                assert.equal(clear().getAttribute('aria-controls'), input().id);
                 await edit('2024-11-03T01:30:00.120-08:00');
                 assert.equal(
                     time.getSnapshot().value,

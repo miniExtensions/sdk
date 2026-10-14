@@ -89,6 +89,38 @@ The Node 24 check name is unchanged. If repository protection still requires
 `check (22)`, a repository administrator must remove that retired requirement;
 the workflow does not change repository protection settings.
 
+## Email presentation checks
+
+`pnpm check:package` exercises the installed Email exports in ESM and CommonJS,
+including single-line whitespace/case/Unicode, invalid address drafts, explicit null
+clearing, composition completion, stale actions, readonly and masked controls,
+custom binding rendering and retired hosts. These tests use synthetic owners and
+assert that no implicit Save occurs. Installed declaration checks cover public
+props/options, the Email-only slot and Form/Grid/List composition. The public
+example is typechecked and bundled against the archive using the existing
+optional `text.css`; Email adds no stylesheet export.
+
+After building, `node scripts/check-email-browser.mjs` runs the separate local
+Chromium proof. It distinguishes stopped event bubbling from native enclosing
+form submission. Simulated composition is not a real input-method certification.
+Neither suite validates delivery, sends mail or contacts a live backend.
+
+## URL presentation checks
+
+`pnpm check:package` exercises installed URL exports in ESM and CommonJS with
+synthetic owners. The checks cover literal single-line values, including relative
+paths and `javascript:`/`data:` strings, without links, navigation or requests;
+explicit null clearing; composition completion; stale actions; readonly and
+masked controls; binding overrides; and retired hosts. They assert no implicit
+Save. Public props/options, the URL-only slot, Form/Grid/List composition and guide
+recipes are typechecked. The example is compiled and bundled against the archive
+using the shared optional `text.css`; URL adds no stylesheet export.
+
+After building, `node scripts/check-url-browser.mjs` runs the separate local
+Chromium proof. Native form submission and stopped event bubbling are distinct;
+simulated composition does not certify a real input method. These checks do not
+establish a navigation policy or contact a live backend.
+
 ## Phone Number presentation checks
 
 `pnpm check:package` exercises installed Phone Number exports in ESM and CommonJS

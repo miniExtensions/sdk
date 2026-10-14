@@ -181,7 +181,7 @@ describe('opt-in Form progress storage', () => {
         envelope({ record: null }),
         envelope({ record: [] }),
     ]) {
-        it(`discards invalid progress without treating it as field data: ${stored}`, () => {
+        it(`ignores invalid progress without modifying storage: ${stored}`, () => {
             const { owner, local } = setup();
             local.setItem(makeFormProgressKey('shr_invalid'), stored);
             local.setItem(makeFormProgressKey('shr_adjacent'), '{}');
@@ -191,7 +191,7 @@ describe('opt-in Form progress storage', () => {
             );
             assert.equal(
                 local.getItem(makeFormProgressKey('shr_invalid')),
-                null
+                stored
             );
             assert.equal(
                 local.getItem(makeFormProgressKey('shr_adjacent')),
@@ -400,16 +400,10 @@ describe('opt-in Form progress storage', () => {
             }),
             { status: 'unavailable' }
         );
-        assert.deepEqual(unavailable, [
-            'read',
-            'read',
-            'write',
-            'read',
-            'remove',
-        ]);
+        assert.deepEqual(unavailable, ['read', 'write', 'remove']);
     });
 
-    it('preserves revision-only comparison when a browser read fails independently', async () => {
+    it('returns unavailable when a failed browser read cannot establish the current revision', async () => {
         const local = new MemoryStorage();
         const { owner, unavailable } = setup({
             getLocalStorage: () => ({
@@ -423,18 +417,18 @@ describe('opt-in Form progress storage', () => {
         assert.deepEqual(
             await owner.writeStoredFormProgress({
                 expectedRevision: null,
-                record: { fld_name: 'Historical behavior' },
+                record: { fld_name: 'Unverified absence' },
                 shareId: 'shr_read_denied',
                 writerId: 'writer-a',
             }),
-            { status: 'written', revision: 1 }
+            { status: 'unavailable' }
         );
-        assert.deepEqual(unavailable, ['read']);
+        assert.deepEqual(unavailable, ['write']);
         assert.equal(
             parseStoredFormProgressValue(
                 local.getItem(makeFormProgressKey('shr_read_denied'))
             )?.revision,
-            1
+            undefined
         );
     });
 
@@ -510,5 +504,227 @@ describe('opt-in Form progress storage', () => {
                 record: input.record,
             }
         );
+    });
+});
+
+describe('Form progress storage review regressions', () => {
+    it('uses one local adapter for a locked compare-and-swap operation', async () => {
+        const first = new MemoryStorage();
+        const second = new MemoryStorage();
+        const key = makeFormProgressKey('shr_adapter_cas');
+        first.setItem(key, envelope({ record: { fld_name: 'First adapter' } }));
+        const foreignProgress = envelope({
+            revision: 6,
+            writerId: 'writer-b',
+            record: { fld_name: 'Second adapter foreign draft' },
+        });
+        second.setItem(key, foreignProgress);
+        let adapterResolutions = 0;
+        const locks = new QueuedLocks();
+        const { owner } = setup({
+            getLocalStorage: () =>
+                ++adapterResolutions === 1 ? first : second,
+            getLocks: () => locks,
+        });
+
+        assert.deepEqual(
+            await owner.writeStoredFormProgress({
+                expectedRevision: 1,
+                record: { fld_name: 'Accepted edit' },
+                shareId: 'shr_adapter_cas',
+                writerId: 'writer-a',
+            }),
+            { status: 'written', revision: 2 }
+        );
+        assert.equal(second.getItem(key), foreignProgress);
+        assert.deepEqual(parseStoredFormProgressValue(first.getItem(key)), {
+            record: { fld_name: 'Accepted edit' },
+            revision: 2,
+            writerId: 'writer-a',
+        });
+        assert.equal(adapterResolutions, 1);
+        assert.deepEqual(locks.names, ['form-progress-lock-shr_adapter_cas']);
+    });
+
+    it('preserves foreign progress when owned cleanup cannot read its owner', async () => {
+        const local = new MemoryStorage();
+        const key = makeFormProgressKey('shr_cleanup_denied');
+        const foreignProgress = envelope({
+            writerId: 'writer-b',
+            record: { fld_name: 'Foreign draft remains' },
+        });
+        local.setItem(key, foreignProgress);
+        let removals = 0;
+        const locks = new QueuedLocks();
+        const { owner, unavailable } = setup({
+            getLocalStorage: () => ({
+                getItem: () => {
+                    throw new Error('Read denied');
+                },
+                setItem: (itemKey, value) => local.setItem(itemKey, value),
+                removeItem: (itemKey) => {
+                    removals++;
+                    local.removeItem(itemKey);
+                },
+            }),
+            getLocks: () => locks,
+        });
+
+        assert.deepEqual(
+            await owner.removeStoredFormProgressIfOwned({
+                shareId: 'shr_cleanup_denied',
+                writerId: 'writer-a',
+            }),
+            { status: 'unavailable' }
+        );
+        assert.equal(local.getItem(key), foreignProgress);
+        assert.equal(removals, 0);
+        assert.ok(unavailable.length > 0);
+        assert.deepEqual(unavailable, ['remove']);
+    });
+
+    it('rejects unsafe integer revisions as invalid concurrency metadata', () => {
+        for (const revision of [
+            Number.MAX_SAFE_INTEGER + 1,
+            Number.MAX_SAFE_INTEGER + 2,
+            1e30,
+        ]) {
+            assert.equal(
+                parseStoredFormProgressValue(envelope({ revision })),
+                undefined,
+                `Unsafe revision ${revision} must not become a snapshot`
+            );
+        }
+    });
+
+    it('does not overwrite foreign progress when a compare-and-swap read fails', async () => {
+        const local = new MemoryStorage();
+        const key = makeFormProgressKey('shr_write_denied');
+        const foreignProgress = envelope({
+            writerId: 'writer-b',
+            record: { fld_name: 'Foreign draft remains' },
+        });
+        local.setItem(key, foreignProgress);
+        let writes = 0;
+        const locks = new QueuedLocks();
+        const { owner, unavailable } = setup({
+            getLocalStorage: () => ({
+                getItem: () => {
+                    throw new Error('Read denied');
+                },
+                setItem: (itemKey, value) => {
+                    writes++;
+                    local.setItem(itemKey, value);
+                },
+                removeItem: (itemKey) => local.removeItem(itemKey),
+            }),
+            getLocks: () => locks,
+        });
+
+        assert.deepEqual(
+            await owner.writeStoredFormProgress({
+                expectedRevision: null,
+                record: { fld_name: 'Cannot establish absence' },
+                shareId: 'shr_write_denied',
+                writerId: 'writer-a',
+            }),
+            { status: 'unavailable' }
+        );
+        assert.equal(local.getItem(key), foreignProgress);
+        assert.equal(writes, 0);
+        assert.deepEqual(unavailable, ['write']);
+    });
+
+    it('uses one session adapter when assigning a writer identity', () => {
+        const first = new MemoryStorage();
+        const second = new MemoryStorage();
+        const key = 'form-progress-writer-shr_session_adapter';
+        second.setItem(key, 'writer-b');
+        let adapterResolutions = 0;
+        const { owner } = setup({
+            getSessionStorage: () =>
+                ++adapterResolutions === 1 ? first : second,
+        });
+
+        assert.equal(
+            owner.getFormProgressWriterId('shr_session_adapter'),
+            'writer-1'
+        );
+        assert.equal(first.getItem(key), 'writer-1');
+        assert.equal(second.getItem(key), 'writer-b');
+        assert.equal(adapterResolutions, 1);
+    });
+
+    it('does not advance a valid revision beyond the safe integer range', async () => {
+        const { owner, local } = setup();
+        const key = makeFormProgressKey('shr_revision_exhausted');
+        const progress = envelope({ revision: Number.MAX_SAFE_INTEGER });
+        local.setItem(key, progress);
+
+        assert.deepEqual(
+            await owner.writeStoredFormProgress({
+                expectedRevision: Number.MAX_SAFE_INTEGER,
+                record: { fld_name: 'Cannot safely advance' },
+                shareId: 'shr_revision_exhausted',
+                writerId: 'writer-a',
+            }),
+            { status: 'unavailable' }
+        );
+        assert.equal(local.getItem(key), progress);
+    });
+
+    it('does not let a stale invalid read remove a newer draft written under the share lock', async () => {
+        const local = new MemoryStorage();
+        const key = makeFormProgressKey('shr_invalid_read_race');
+        local.setItem(key, '{broken');
+        const locks: FormProgressLockManager = {
+            request: async (_name, callback) => callback(),
+        };
+        const newerOwner = setup({
+            getLocalStorage: () => local,
+            getLocks: () => locks,
+        }).owner;
+        let acceptedWrite:
+            | ReturnType<typeof newerOwner.writeStoredFormProgress>
+            | undefined;
+        let removals = 0;
+        const staleOwner = setup({
+            getLocalStorage: () => ({
+                getItem: (itemKey) => {
+                    const staleValue = local.getItem(itemKey);
+                    // Deterministic second-context handoff: return the bytes
+                    // captured before the cooperating writer acquired its lock.
+                    acceptedWrite = newerOwner.writeStoredFormProgress({
+                        expectedRevision: null,
+                        record: { fld_name: 'Newer valid draft' },
+                        shareId: 'shr_invalid_read_race',
+                        writerId: 'writer-b',
+                    });
+                    return staleValue;
+                },
+                setItem: (itemKey, value) => local.setItem(itemKey, value),
+                removeItem: (itemKey) => {
+                    removals++;
+                    local.removeItem(itemKey);
+                },
+            }),
+            getLocks: () => locks,
+        }).owner;
+
+        assert.equal(
+            staleOwner.readStoredFormProgressSnapshot('shr_invalid_read_race'),
+            undefined
+        );
+        assert.ok(acceptedWrite);
+        assert.deepEqual(await acceptedWrite, {
+            status: 'written',
+            revision: 1,
+        });
+        assert.equal(removals, 0);
+        assert.deepEqual(parseStoredFormProgressValue(local.getItem(key)), {
+            record: { fld_name: 'Newer valid draft' },
+            revision: 1,
+            writerId: 'writer-b',
+        });
     });
 });

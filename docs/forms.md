@@ -2225,9 +2225,11 @@ const progress = createFormProgressStorage({
 ```
 
 Those browser references belong to the application's adapters and are evaluated
-only when an operation needs them. An adapter can return `undefined` or throw
-when its storage is unavailable; reads/removals/writes preserve their existing
-no-progress, false or `unavailable` results. Web Locks access is optional; its
+only when an operation needs them. Each operation resolves its chosen storage
+adapter once and uses that same adapter throughout. An adapter can return
+`undefined` or throw when its storage is unavailable; reads return no progress,
+unconditional removal returns false, and writes or owned cleanup return
+`unavailable`. Web Locks access is optional; its
 resolver should return `undefined` when unavailable. The identity generator and
 unavailable callback should not throw. The callback receives only the operation,
 never record data, credentials or the storage error. Reuse one owner to retain
@@ -2237,9 +2239,12 @@ fallback writer identities per share when session storage is denied.
 `parseStoredFormProgressValue` accepts version-one
 `miniExtensions-form-progress` envelopes and historical plain-object drafts.
 Legacy records have revision zero and no writer, so the first write with
-`expectedRevision: 0` upgrades them without discarding values. Invalid
-matching-kind envelopes cannot become legacy field data; reading them removes
-only the current share's key. Parsing is shallow and establishes no field,
+`expectedRevision: 0` upgrades them without discarding values. Envelope revisions
+must be positive safe integers. Invalid matching-kind envelopes cannot become
+legacy field data. Reads return no snapshot for invalid bytes and leave storage
+unchanged; a stale read must not remove a newer draft written by another tab.
+Replacing invalid bytes requires an explicit write with `expectedRevision:
+null`, or an explicit removal. Parsing is shallow and establishes no field,
 record or visitor authority.
 
 Read the accepted snapshot, obtain `getFormProgressWriterId(shareId)`, and pass
@@ -2247,18 +2252,22 @@ the observed revision (or `null` for absence), chosen native `record`, share ID
 and writer ID to `writeStoredFormProgress`. A successful write returns the next
 revision; a stale revision returns `conflict` without replacing the current
 draft. Comparison is revision-only, allowing an accepted newer writer to take
-ownership. `removeStoredFormProgressIfOwned` preserves another writer's valid
-envelope and removes an owned, legacy or absent draft. Unconditional removal is
-also explicit. A rejected lock request returns `unavailable` and never retries
-the operation without a lock.
+ownership. A write cannot advance `Number.MAX_SAFE_INTEGER`; it returns
+`unavailable` and leaves that draft unchanged. `removeStoredFormProgressIfOwned`
+preserves another writer's valid envelope and removes an owned, legacy, invalid
+or absent draft. Unconditional removal is also explicit. A rejected lock request
+returns `unavailable` and never retries the operation without a lock.
 
 Web Locks serialize writes and owned cleanup across cooperating tabs using the
 same share lock. Without Web Locks, the read/write critical section is not
 atomic across tabs. Keep storage-event conflict handling in the application and
-stop stale mounted writers; this helper does not install listeners. For hosted
-compatibility, a failed read still appears absent to revision comparison. An
-independently permitted write with `expectedRevision: null` can then proceed;
-the helper does not claim a stronger failure or cross-tab guarantee.
+stop stale mounted writers; this helper does not install listeners. A failed
+storage read cannot establish absence, the current revision or ownership.
+Writes and owned cleanup therefore return `unavailable` without modifying
+storage when their read fails, even if a later write or removal would succeed.
+This deliberately corrects the former behavior that could overwrite or remove
+another tab's progress after a read failure. Invalid stored bytes are distinct
+from an unavailable read and may still be replaced or removed explicitly.
 
 Persistent private drafts require a deliberate application opt-in. Supply only
 chosen native field values, never access/login credentials, visitor sessions or

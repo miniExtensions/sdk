@@ -1538,6 +1538,94 @@ presentation fixtures at `http://127.0.0.1:4185`.
 remounts, inert text and enclosing-form Enter behavior. Simulated composition does
 not certify real OS input methods.
 
+## React External Sync Source presentation
+
+The optional `/react` entry exports `ExternalSyncSourceField`,
+`ExternalSyncSourceFieldProps`, `ExternalSyncSourceFieldOptions` and
+`renderExternalSyncSourceField`. The binding component accepts the existing
+`{ binding, render }` contract plus `className` and `clearLabel`. Supplying
+`render` replaces all stock markup. The options alias `TextFieldOptions`.
+
+```tsx
+import { ExternalSyncSourceField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function RecordSource({ binding }: { binding: FormFieldBinding }) {
+    return (
+        <ExternalSyncSourceField
+            binding={binding}
+            className="record-source"
+            clearLabel="Clear source"
+        />
+    );
+}
+```
+
+The named helper accepts only `FieldRendererProps<'externalSyncSource'>` in
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderExternalSyncSourceField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const sourceRenderers: FieldRendererSlots<ReactNode> = {
+    renderExternalSyncSourceField: (props) =>
+        renderExternalSyncSourceField(props, { className: 'record-source' }),
+};
+```
+
+The accepted SDK value is a string, `null` or missing. Supplied strings are passed
+to the single-line Text control, including unknown labels, whitespace, Unicode,
+markup-looking text and URL-looking text. Empty, null and missing values display
+blank. No choice lookup maps an ID to a name, and changes to metadata choices do
+not rewrite or normalize the owner value. This renderer does not interpret raw
+Airtable objects: direct helper calls with nonstring values display blank without
+reading a `name` property or coercing the object. Renderer hosts may reject
+malformed values before invoking the helper. Native single-line inputs remove
+line breaks from their DOM value; rendering does not write that representation
+back to the owner.
+
+The Text input and its existing Clear button are always disabled. `clearLabel`
+customizes the accessible label of that disabled button; it grants no clearing
+action. The renderer borrows no selection or scalar model, does not read an
+editable capability or call a setter, and keeps that behavior even if malformed
+runtime props claim editing authority or mark the field noncomputed. It adds no
+source selector, links, navigation, login search, synchronization or network read.
+The accepted owner and server remain responsible for the value.
+
+Configured title visibility is honored, blank titles use the field name, and
+hidden titles retain an accessible name. Repeated instances have unique label
+and feedback IDs. Accepted masking from either display or write configuration
+uses a password input. Pending state and existing error or validation messages
+are reflected without changing the string. Feedback is plain text in an associated
+polite live region; an explicitly empty error remains empty. External Sync Source
+configuration adds no placeholder or character-limit policy.
+
+The binding component requires physical External Sync Source schema and
+configuration; another field kind renders a status. Custom rendering keeps
+precedence. Hidden, blocked and retired bindings or hosts omit the control.
+Mounting, StrictMode, remounting and unmounting do not create or destroy owners,
+change native values or invoke Save. A replacement binding displays its own
+accepted state. Existing editable Text controls keep their behavior.
+
+Use canonical computed Form bindings and accepted Portal detail hosts. Grid and
+List composition display this readonly field through those detail hosts without
+creating a computed inline editing binding. Loading data and submitting an
+application form remain explicit application-owned actions.
+
+Styles reuse optional `@miniextensions/sdk/react/text.css` and its `mx-sdk-text*`
+classes. `className` decorates the wrapper. There is no separate External Sync
+Source stylesheet export or JavaScript CSS import; core and `/ui` remain React-free.
+
+The `examples/react-external-sync-source` fixture uses public exports and synthetic
+data. After building, run `node examples/react-external-sync-source/dev.mjs` and
+open `http://127.0.0.1:4191`. `node scripts/check-external-sync-source-browser.mjs`
+checks disabled controls, native strings, masking, owner replacement and layout.
+These fixtures contact no backend and do not synchronize records.
+
 ## React Number presentation
 
 The optional `/react` entry exports `NumberField`, `NumberFieldProps`,

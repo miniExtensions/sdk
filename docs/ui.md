@@ -1245,3 +1245,433 @@ and open `http://127.0.0.1:4177`. `node scripts/check-text-browser.mjs` checks n
 typing, selection/caret, clearing, simulated composition, remounting, permissions,
 forced colors and narrow layout and captures screenshots. Simulated composition
 does not certify every platform's input method or screen reader.
+
+## React Number presentation
+
+The optional `/react` entry exports `NumberField`, `NumberFieldProps`,
+`NumberFieldOptions` and `renderNumberField`. `NumberField` preserves the existing
+`{ binding, render }` API; `render` replaces all markup. `className` decorates the
+plain Number wrapper. Styles are optional and confined to `mx-sdk-number*` classes:
+
+```tsx
+import { NumberField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+
+export function Quantity({ binding }: { binding: FormFieldBinding }) {
+    return <NumberField binding={binding} className="quantity" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'number'>` in the existing
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList` slot map:
+
+```tsx
+import type { ReactNode } from 'react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import { renderNumberField } from '@miniextensions/sdk/react';
+
+export const numberRenderers: FieldRendererSlots<ReactNode> = {
+    renderNumberField,
+};
+```
+
+Edits go through the accepted scalar's `setInput`. The control is a text input
+with decimal input mode, so incomplete entries such as `-` and `1e` remain in the
+owner alongside the last valid native value. A refused commit can represent
+retained invalid input; the renderer uses the next owner snapshot instead of
+discarding it. Decimal/exponent parsing, finite-number checks, validation and
+explicit Save remain with the existing owner. An empty edit writes `null`; a zero
+stays `0`. Initially absent values remain absent until editing. Loaded precision
+and native units are retained without display rounding or conversion.
+
+Keep owners outside React mounts. Mounting, StrictMode, remounting and styling do
+not create or destroy a model, reset unfinished input, invoke Save or start a
+request. A missing scalar capability is displayed disabled; raw numeric values
+and a `setValue` action do not supply the missing input owner. Stale callbacks
+still go through the owner/context guards. Applications own surrounding form
+submission and must notify bindings when permissions or accepted context change.
+
+The plain Number presentation includes unique label IDs, a hidden-title accessible
+name, configured placeholder and required indication, associated plain-text polite
+feedback, and visible keyboard focus. Explicitly empty feedback is preserved.
+Read-only settings from display or write configuration further restrict editing;
+numeric login masking from either configuration is preserved.
+Pending, computed and unavailable controls are disabled. Retired scalar states
+render nothing. Input events stop bubbling into Portal rows.
+
+The Number presentation styles ordinary Number fields. `NumberField` percent
+and rating bindings retain their prior presentation and native units. Currency
+bindings use the dedicated [Currency presentation](#react-currency-presentation);
+duration bindings use the dedicated [Duration presentation](#react-duration-presentation)
+and its existing clock-input model. Broader theme APIs remain separate work.
+Canonical Save remains
+authoritative for numeric field policy.
+Input uses the scalar's native dot-decimal syntax. Configured decimal/thousands
+separators, grouped display, scanning and login searches need their own accepted
+integration or custom presentation; this renderer does not start those features.
+
+The Number stylesheet is exported as `@miniextensions/sdk/react/number.css` and
+copied into both builds. JavaScript does not import it, and core and `/ui` remain
+React-free. Override the classes, omit the CSS, or supply a custom render function.
+
+After building, `node examples/react-number/dev.mjs` serves a local synthetic
+example at `http://127.0.0.1:4178`. `node scripts/check-number-browser.mjs` checks
+native typing/caret, Enter in the example host, incomplete and invalid drafts,
+remounts, permissions, external updates, repeated IDs, focus, forced colors and
+narrow layout, and writes screenshots and a JSON receipt. It does not certify
+every platform's input method, screen reader or surrounding form layout.
+
+## React Date presentation
+
+The optional `/react` entry exports `DateField`, `DateFieldProps`,
+`DateFieldOptions` and `renderDateField` for calendar dates. The binding component
+keeps its `{ binding, render }` API; supplying `render` still replaces all markup.
+The shared binding component selects the calendar or timestamp control from the
+accepted model kind; `DateTimeField` remains its compatibility alias.
+
+```tsx
+import { DateField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/date.css';
+
+export function DueDate({ binding }: { binding: FormFieldBinding }) {
+    return <DateField binding={binding} className="due-date" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'date'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderDateField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/date.css';
+
+export const dateRenderers: FieldRendererSlots<ReactNode> = {
+    renderDateField: (props) =>
+        renderDateField(props, { clearLabel: 'Effacer la date' }),
+};
+```
+
+Editing uses the existing owner-held date model, which accepts valid calendar
+`YYYY-MM-DD` values. Partial or invalid input remains visible across remounts
+without replacing the last accepted native value. The owner blocks deliberate
+Save while editable date input is invalid. Repairing the text accepts the exact
+calendar string; an explicit empty edit or Clear writes `null`. Untouched loaded
+missing, null or blank values are not normalized. See the
+[date model contract](field-bindings.md#calendar-dates-and-explicit-offset-datetimes)
+for parsing, configuration retirement and validation details.
+
+The slot requires an editable capability with a matching calendar-date bridge.
+A generic value setter, a dateTime bridge or a readonly capability does not grant
+date editing. Pending, computed and configured read-only controls are disabled.
+The bridge and binding enforce existing current-owner checks on every action.
+Hidden, blocked and retired hosts render nothing; applications must retire owners
+on context replacement. Mounting, StrictMode and remounting neither create nor
+dispose the owner, change its draft, invoke Save or start requests. Save and
+cancellation remain explicit owner actions.
+
+Controls use text inputs, or password inputs when masked, so unfinished calendar
+text remains visible to its owner. This presentation adds no date picker,
+natural-language parsing, timezone conversion or automatic submission. Title
+visibility, placeholder, required indication, masking and read-only restrictions
+are honored; masking and read-only settings from either display or write config
+apply. The default placeholder is `YYYY-MM-DD`. Formatted model previews are not
+written into native answers or shown alongside masked input.
+
+Labels use unique React instance IDs for repeated rows, and hidden titles retain
+an accessible name. Feedback is plain text in an associated polite live region.
+Clear is `type="button"` and returns focus to the input. Its optional `clearLabel`
+localizes the accessible name, with `Clear <title>` as the default. Click, pointer,
+keyboard and composition events stop bubbling into Portal rows. Event containment
+does not cancel native implicit form submission: pressing Enter can submit a
+single-input form or activate an enclosing form's submit button. Applications own
+the surrounding form's submission policy and must route Save deliberately through
+the owner. `className` decorates the wrapper.
+
+The provisional stylesheet is scoped to `mx-sdk-date*` classes and is exported as
+`@miniextensions/sdk/react/date.css` in both builds. Import it, override its
+classes, or omit it and supply your own styles. JavaScript does not import CSS;
+core and `/ui` remain React-free. No theme or appearance-prop API is introduced.
+
+The local `examples/react-date` example uses public exports and synthetic owners
+without backend requests. After building, run `node examples/react-date/dev.mjs`.
+`node scripts/check-date-browser.mjs` checks native interaction, invalid drafts,
+remounting, clearing, permissions, layout and forced colors. Synthetic interaction
+does not certify every platform's input method or screen reader.
+
+## React DateTime presentation
+
+The optional `/react` entry exports `DateTimeField`, `DateTimeFieldProps`,
+`DateTimeFieldOptions` and `renderDateTimeField` for explicit-offset timestamps.
+The binding component keeps its `{ binding, render }` API; supplying `render`
+still replaces all markup. `DateTimeField` remains an alias of `DateField`; the
+shared binding component selects the calendar or timestamp control from the
+accepted model kind.
+
+```tsx
+import { DateTimeField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/datetime.css';
+
+export function EventTime({ binding }: { binding: FormFieldBinding }) {
+    return <DateTimeField binding={binding} className="event-time" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'dateTime'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderDateTimeField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/datetime.css';
+
+export const dateTimeRenderers: FieldRendererSlots<ReactNode> = {
+    renderDateTimeField: (props) =>
+        renderDateTimeField(props, { clearLabel: 'Effacer la date et heure' }),
+};
+```
+
+Editing uses the existing owner-held date model. Accepted input has the shape
+`YYYY-MM-DDTHH:mm:ss[.S|.SS|.SSS](Z|±HH:mm)`: seconds and an explicit offset are
+required. The model preserves the exact accepted offset and fractional-second
+spelling; the renderer does not normalize answers through JavaScript `Date`, a
+local-time input or a formatted preview. Partial or invalid input stays visible
+across remounts without replacing the last accepted native value. Naive timestamps
+remain invalid; an offset is never guessed from a timezone or daylight-saving rule.
+
+The owner blocks deliberate Save while editable dateTime input is invalid.
+Repairing the text accepts its exact native string; an explicit empty edit or
+Clear writes `null`. Untouched loaded missing, null or blank answers are not
+normalized. See the [date model contract](field-bindings.md#calendar-dates-and-explicit-offset-datetimes)
+for parsing, configuration/client-zone retirement and validation details.
+
+The slot requires an editable capability with a matching dateTime bridge. A
+generic value setter, a calendar-date bridge or a readonly capability does not
+grant timestamp editing. Pending, computed and configured read-only controls are
+disabled. The bridge and binding enforce existing current-owner checks on every
+action. Hidden, blocked and retired hosts render nothing. A retired date model
+in the binding component retains its existing status asking for a fresh Form.
+Applications must retire owners on context replacement. Mounting, StrictMode and
+remounting neither create nor dispose the owner, change its draft, invoke Save or
+start requests. Save and cancellation remain explicit owner actions.
+
+The control uses a text input, or a password input when masked, with
+`YYYY-MM-DDTHH:mm:ssZ` as its default placeholder. Title visibility, configured
+placeholder, required indication, masking and read-only restrictions are honored;
+masking and read-only settings from either display or write config apply. Formatted
+model previews are not shown alongside masked input. This presentation adds no
+date picker, timezone picker, natural-language parsing or automatic submission.
+
+Labels use unique React instance IDs for repeated rows, and hidden titles retain
+an accessible name. Feedback is plain text in an associated polite live region.
+Clear is `type="button"` and returns focus to the input. Its optional `clearLabel`
+localizes the accessible name, with `Clear <title>` as the default. Click, pointer,
+keyboard and composition events stop bubbling into Portal rows. Event containment
+does not cancel native implicit form submission: pressing Enter can submit a
+single-input form or activate an enclosing form's submit button. Applications own
+the surrounding form's submission policy and must route Save deliberately through
+the owner. `className` decorates the wrapper.
+
+The provisional stylesheet is scoped to `mx-sdk-datetime*` classes and is exported
+as `@miniextensions/sdk/react/datetime.css`, with copies in both builds. Import it,
+override its classes, or omit it and supply your own styles. JavaScript does not
+import CSS; core and `/ui` remain React-free. No theme or appearance-prop API is
+introduced.
+
+The local `examples/react-datetime` example uses public exports and synthetic
+owners without backend requests. After building, run
+`node examples/react-datetime/dev.mjs`. `node scripts/check-datetime-browser.mjs`
+checks native interaction, invalid drafts, remounting, clearing, permissions,
+layout and forced colors. Synthetic interaction does not certify every platform's
+input method or screen reader.
+
+## React Duration presentation
+
+The optional `/react` entry exports `DurationField`, `DurationFieldProps`,
+`DurationFieldOptions` and `renderDurationField` for duration clocks. The binding
+component keeps its `{ binding, render }` API; supplying `render` still replaces
+all markup. `NumberField` continues to recognize duration bindings and retains its
+ordinary numeric behavior.
+
+```tsx
+import { DurationField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/duration.css';
+
+export function ElapsedTime({ binding }: { binding: FormFieldBinding }) {
+    return <DurationField binding={binding} className="elapsed-time" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'duration'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderDurationField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/duration.css';
+
+export const durationRenderers: FieldRendererSlots<ReactNode> = {
+    renderDurationField: (props) =>
+        renderDurationField(props, { clearLabel: 'Effacer la durée' }),
+};
+```
+
+The renderer borrows `binding.scalar` or the accepted duration scalar bridge.
+Native answers remain numeric seconds or `null`; there is no additional draft or
+owner. It calls the existing `setInput` for edits and `setFocused` on focus/blur.
+Focusing preserves raw input, and blurring formats a valid answer without writing
+or rounding its native seconds. Partial or invalid text stays visible across
+remounts without replacing the last accepted answer. Existing owner validation
+blocks deliberate Save while editable visible input is invalid. Clear and an
+explicit empty edit write `null`; zero remains zero.
+
+The physical field's accepted `durationFormat` selects one of `h:mm`, `h:mm:ss`,
+`h:mm:ss.S`, `h:mm:ss.SS` or `h:mm:ss.SSS`. Bare numbers use minutes for `h:mm` and
+seconds for the other formats; two components mean hours/minutes for `h:mm` and
+minutes/seconds otherwise. The complete [duration input contract](field-bindings.md#duration-clock-input)
+defines three-part values, negative values, overflow, decimal precision and
+invalid syntax. The renderer adds no parsing rules or unit conversion.
+
+Editing requires the matching physical duration field and editable scalar bridge,
+including its `setFocused` action. A generic value setter, another scalar kind or
+a bridge without focus support does not grant duration editing. Readonly values
+and values without an editable bridge use the existing duration formatter with
+validated format metadata and explicit native-seconds units. They remain
+disabled. Missing or unsupported formats produce generic unavailable feedback.
+Pending, computed and configured read-only controls are also disabled.
+
+The bridge and binding retain existing permission, configuration and current-owner
+checks on every action. An observed format change retires the old model; accept
+a fresh owner before editing the replacement. Hidden, blocked and retired hosts
+render nothing. Owners remain outside React: mounting, StrictMode and remounting
+neither create nor dispose an owner, write a draft, invoke Save nor start network
+work. Save and cancellation remain explicit owner actions.
+
+The control uses a text input, or a password input when masked. Its default
+placeholder is the accepted duration format. Title visibility, configured
+placeholder, required indication, masking and read-only restrictions are honored;
+masking and read-only settings from either display or write config apply. Native
+seconds and formatted previews are not echoed beside masked input.
+
+Labels use unique React instance IDs for repeated rows, and hidden titles retain
+an accessible name. Feedback is plain text in an associated polite live region.
+Clear is `type="button"` and returns focus to the input. Its optional `clearLabel`
+localizes the accessible name, with `Clear <title>` as the default. Click, pointer,
+keyboard and composition events stop bubbling into Portal rows. Event containment
+does not cancel native implicit form submission: pressing Enter can submit a
+single-input form or activate an enclosing form's submit button. Applications own
+the surrounding form's submission policy and must route Save deliberately through
+the owner. `className` decorates the wrapper.
+
+The provisional stylesheet is scoped to `mx-sdk-duration*` classes and is exported
+as `@miniextensions/sdk/react/duration.css`, with copies in both builds. Import it,
+override its classes, or omit it and supply your own styles. JavaScript does not
+import CSS; core and `/ui` remain React-free. No theme or appearance-prop API is
+introduced.
+
+The local `examples/react-duration` example uses public exports and synthetic
+owners without backend requests. After building, run
+`node examples/react-duration/dev.mjs`. `node scripts/check-duration-browser.mjs`
+checks native interaction, unfinished drafts, remounting, clearing, permissions,
+layout and forced colors. Synthetic interaction does not certify every platform's
+input method or screen reader.
+
+## React Currency presentation
+
+The optional `/react` entry exports `CurrencyField`, `CurrencyFieldProps`,
+`CurrencyFieldOptions` and `renderCurrencyField`. The binding component supports
+the existing `{ binding, render }` API; supplying `render` replaces all markup.
+`NumberField` also recognizes physical currency bindings and retains its ordinary
+numeric behavior for other numeric fields.
+
+```tsx
+import { CurrencyField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/currency.css';
+
+export function Amount({ binding }: { binding: FormFieldBinding }) {
+    return <CurrencyField binding={binding} className="invoice-amount" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'currency'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderCurrencyField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/currency.css';
+
+export const currencyRenderers: FieldRendererSlots<ReactNode> = {
+    renderCurrencyField: (props) =>
+        renderCurrencyField(props, { clearLabel: 'Effacer le montant' }),
+};
+```
+
+This is a native-unit input with a currency-symbol label. The symbol comes from
+the accepted physical field's `options.symbol` and renders as literal text outside
+the input. It is associated through `aria-describedby`; HTML-looking symbols are
+never interpreted as markup. The raw input uses the existing numeric scalar
+model. Decimal and exponent syntax must produce a finite number; partial or
+invalid input remains visible across remounts without replacing the last accepted
+native answer. See [scalar inputs](field-bindings.md#checkbox-and-numeric-inputs)
+for the owner and validation contract.
+
+For example, a native `1234.56789` remains `1234.56789` with configured precision
+two. `precision`, `numberSeparator` and `showThousandsSeparator` do not alter input,
+round native values or introduce a locale parser. Comma-separated input is not
+automatically converted. Currency conversion, grouping, precision rounding and
+canonical formatted-display parity are outside this presentation. Canonical
+formatting may place signs and symbols differently; this control keeps the literal
+symbol separate from the raw signed number.
+
+Edits and Clear use only the accepted scalar bridge's `setInput`; Clear sends an
+empty input, which sets the native draft to `null`. Zero remains zero. Untouched empty answers are
+not normalized. Focus and blur do not reformat or write values, and this component
+adds no focus-state model. Existing owner validation blocks deliberate Save while
+editable visible input is invalid. Save and cancellation remain explicit owner
+actions.
+
+Editing requires an editable capability with the matching numeric scalar bridge.
+A generic value setter or another scalar kind does not grant currency editing.
+Readonly slots and slots without that bridge show `String(value)` for finite
+native numbers and remain disabled. Pending, computed and configured read-only
+controls are also disabled. Existing permission, configuration and current-owner
+checks still guard every action. Hidden, blocked and retired hosts render nothing.
+Owners stay outside React: mounting, StrictMode and remounting neither create nor
+dispose owners, change drafts, invoke Save nor start requests.
+
+The control uses a text input with decimal input mode, or a password input when
+masked. Title visibility, configured placeholder, required indication, masking and
+read-only restrictions are honored; masking and read-only settings from either
+display or write config apply. Native amounts are not echoed beside masked input.
+Labels use unique React instance IDs for repeated rows, and hidden titles retain
+an accessible name. Feedback is plain text in an associated polite live region.
+
+Clear is `type="button"` and returns focus to the input. Its optional `clearLabel`
+localizes the accessible name, with `Clear <title>` as the default. Click, pointer,
+keyboard, focus and composition events stop bubbling into Portal rows. Event
+containment does not cancel native implicit form submission. Applications own the
+surrounding form's submission policy and must route Save deliberately through the
+owner. `className` decorates the wrapper.
+
+The provisional stylesheet is scoped to `mx-sdk-currency*` classes and is exported
+as `@miniextensions/sdk/react/currency.css`, with copies in both builds. Import it,
+override its classes, or omit it and supply your own styles. JavaScript does not
+import CSS; core and `/ui` remain React-free. No theme or appearance-prop API is
+introduced.
+
+The local `examples/react-currency` example uses public exports and synthetic
+owners without backend requests. After building, run
+`node examples/react-currency/dev.mjs` and open `http://127.0.0.1:4182`.
+`node scripts/check-currency-browser.mjs` checks native interaction, unfinished
+drafts, remounting, clearing, permissions, layout and forced colors. Synthetic
+interaction does not certify every platform's input method or screen reader.

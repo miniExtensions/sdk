@@ -4,6 +4,7 @@ import {
     createPortalReadCoordinator,
     PortalCollectionError,
     type PortalReadCoordinator,
+    type PortalReadCoordinatorOptions,
     type PortalReadReceipt,
 } from '../src/portals/index.js';
 import { deferredPortal } from './portalFixtures.js';
@@ -45,6 +46,139 @@ const setup = (concurrency: 'reject' | 'supersede' = 'reject') => {
 };
 
 describe('shared Portal read-attempt ownership', () => {
+    it('does not dispatch after a configured loader getter destroys its owner', async () => {
+        let calls = 0;
+        let coordinator: PortalReadCoordinator<Input, Result>;
+        coordinator = createPortalReadCoordinator<Input, Result>({
+            concurrency: 'reject',
+            getScope: () => ({ ownerId: 'visitor_A', revision: 1 }),
+            get load() {
+                coordinator.destroy();
+                return async () => {
+                    calls++;
+                    return result('record_never_dispatched');
+                };
+            },
+        });
+        assert.deepEqual(await coordinator.read(input()), { type: 'retired' });
+        assert.equal(calls, 0);
+        assert.equal(coordinator.isCurrent(), false);
+        assert.equal(coordinator.hasPendingRead(), false);
+    });
+
+    for (const reason of [
+        new Error('Synthetic loader getter cancellation'),
+        null,
+    ]) {
+        it(`does not dispatch after a configured loader getter cancels with ${reason === null ? 'null' : 'the first Error object'}`, async () => {
+            let calls = 0;
+            let cancelled = 0;
+            let coordinator: PortalReadCoordinator<Input, Result>;
+            coordinator = createPortalReadCoordinator<Input, Result>({
+                concurrency: 'reject',
+                getScope: () => ({ ownerId: 'visitor_A', revision: 1 }),
+                get load() {
+                    coordinator.cancel(reason);
+                    return async () => {
+                        calls++;
+                        throw new Error(
+                            'Synthetic ignored-abort loader failure'
+                        );
+                    };
+                },
+            });
+            await assert.rejects(
+                coordinator.read(input(), {
+                    onCancelledAfterDispatch: () => {
+                        cancelled++;
+                        coordinator.cancel(
+                            new Error('Synthetic nested reason')
+                        );
+                    },
+                }),
+                (error) => error === reason
+            );
+            assert.equal(calls, 0);
+            assert.equal(cancelled, 1);
+            assert.equal(coordinator.hasPendingRead(), false);
+        });
+    }
+
+    it('does not dispatch an older intent after a configured loader getter starts a successor', async () => {
+        const calls: Array<{ input: Input; signal: AbortSignal }> = [];
+        let getters = 0;
+        let successor: Promise<PortalReadReceipt<Result>> | undefined;
+        let coordinator: PortalReadCoordinator<Input, Result>;
+        coordinator = createPortalReadCoordinator<Input, Result>({
+            concurrency: 'supersede',
+            getScope: () => ({ ownerId: 'visitor_A', revision: 1 }),
+            get load() {
+                if (++getters === 1)
+                    successor = coordinator.read(input('Successor'));
+                return async (
+                    value: Input,
+                    { signal }: { signal: AbortSignal }
+                ) => {
+                    calls.push({ input: value, signal });
+                    return result(value.criteria.searchTerm);
+                };
+            },
+        });
+        assert.deepEqual(await coordinator.read(input('Older')), {
+            type: 'retired',
+        });
+        assert.ok(successor);
+        const receipt = accepted(await successor);
+        assert.deepEqual(receipt.raw, result('Successor'));
+        assert.equal(receipt.isCurrent(), true);
+        assert.equal(getters, 2);
+        assert.deepEqual(
+            calls.map((call) => call.input),
+            [input('Successor')]
+        );
+        assert.equal(calls[0].signal.aborted, false);
+        assert.equal(coordinator.hasPendingRead(), false);
+    });
+
+    it('retains the configured loader receiver and resolves its current function for each read', async () => {
+        let version = 1;
+        let getters = 0;
+        const receivers: Array<PortalReadCoordinatorOptions<Input, Result>> =
+            [];
+        const options: PortalReadCoordinatorOptions<Input, Result> = {
+            concurrency: 'reject',
+            getScope: () => ({ ownerId: 'visitor_A', revision: 1 }),
+            get load() {
+                getters++;
+                const captured = version;
+                const load = async function (
+                    this: PortalReadCoordinatorOptions<Input, Result>
+                ) {
+                    receivers.push(this);
+                    return result(`record_version_${captured}`);
+                };
+                Object.defineProperty(load, 'call', {
+                    get() {
+                        throw new Error(
+                            'Configured loader.call must not be read'
+                        );
+                    },
+                });
+                return load;
+            },
+        };
+        const coordinator = createPortalReadCoordinator(options);
+        const first = accepted(await coordinator.read(input()));
+        version = 2;
+        const second = accepted(await coordinator.read(input('Next')));
+        assert.deepEqual(first.raw, result('record_version_1'));
+        assert.deepEqual(second.raw, result('record_version_2'));
+        assert.equal(first.isCurrent(), false);
+        assert.equal(second.isCurrent(), true);
+        assert.equal(getters, 2);
+        assert.deepEqual(receivers, [options, options]);
+    });
+
     for (const reason of [
         new Error('Synthetic acceptance cancellation'),
         null,

@@ -237,9 +237,15 @@ export function createPortalReadCoordinator<
                 requireNotAborted(attempt.controller.signal);
                 if (!checkedLease(owned(attempt) && active === attempt))
                     return { type: 'retired' };
-                const raw = await options.load(copied, {
-                    signal: attempt.controller.signal,
-                });
+                const load = options.load;
+                // A configured loader getter can retire or replace this attempt.
+                requireNotAborted(attempt.controller.signal);
+                if (!checkedLease(owned(attempt) && active === attempt))
+                    return { type: 'retired' };
+                const raw = await Reflect.apply(load, options, [
+                    copied,
+                    { signal: attempt.controller.signal },
+                ]);
                 requireNotAborted(attempt.controller.signal);
                 if (!checkedLease(owned(attempt) && active === attempt))
                     return { type: 'retired' };

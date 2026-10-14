@@ -1,0 +1,84 @@
+/* Optional scoped defaults; native input behavior is independent of this file. */
+.mx-sdk-duration-field {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    width: 100%;
+    max-width: 100%;
+    color: inherit;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+.mx-sdk-duration-label {
+    overflow-wrap: anywhere;
+}
+.mx-sdk-duration-control {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+}
+.mx-sdk-duration {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid #8795a5;
+    border-radius: 0.375rem;
+    background: #fff;
+    color: #172b3a;
+    font: inherit;
+}
+.mx-sdk-duration::placeholder {
+    color: #59697a;
+    opacity: 1;
+}
+.mx-sdk-duration:disabled {
+    background: #f3f5f7;
+    color: #59697a;
+}
+.mx-sdk-duration[aria-invalid='true'] {
+    border-color: #b91c1c;
+}
+.mx-sdk-duration-clear {
+    flex: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+.mx-sdk-duration-clear:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+.mx-sdk-duration-clear:hover:not(:disabled) {
+    background: #edf1f5;
+}
+.mx-sdk-duration:focus-visible,
+.mx-sdk-duration-clear:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+.mx-sdk-duration-feedback {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-duration-feedback:empty {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+@media (forced-colors: active) {
+    .mx-sdk-duration-clear {
+        border-color: ButtonText;
+    }
+}

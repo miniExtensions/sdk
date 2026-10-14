@@ -42,6 +42,7 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
+export { renderRatingField, type RatingFieldOptions } from './RatingField.js';
 import {
     CurrencyControl,
     currencyConfiguration,
@@ -350,6 +351,11 @@ export function EmailField(props: EmailFieldProps): ReactNode {
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
+export type RatingFieldProps = NumberFieldProps;
+/** Native numeric rating drafts stay with the accepted scalar owner. */
+export function RatingField(props: RatingFieldProps): ReactNode {
+    return createElement(NumberField, props);
+}
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
 export function NumberField({
@@ -372,7 +378,10 @@ export function NumberField({
         snapshot.scalar.kind === 'checkbox'
     )
         return null;
-    if (snapshot.field?.schema.fieldType === 'number') {
+    if (
+        snapshot.field?.schema.fieldType === 'number' ||
+        snapshot.field?.schema.fieldType === 'rating'
+    ) {
         if (snapshot.scalar.retired || snapshot.scalar.kind !== 'number')
             return null;
         const config = numberConfiguration(snapshot.field.schema.miniExtConfig);

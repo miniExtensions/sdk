@@ -10,6 +10,10 @@ import {
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
+    checkRatingConsumer,
+    ratingReactTypedConsumer,
+} from './rating-consumer-checks.mjs';
+import {
     checkDateRendererConsumer,
     dateRendererReactTypedConsumer,
 } from './date-renderer-consumer-checks.mjs';
@@ -1200,6 +1204,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'rating-react-consumer.tsx'),
+        ratingReactTypedConsumer
+    );
+    reactSources.push('rating-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'url-react-consumer.tsx'),
         urlReactTypedConsumer
     );
@@ -1343,13 +1352,19 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'text',
         'url',
         'number',
+        'rating',
         'date',
         'datetime',
         'duration',
         'email',
         'currency',
     ]) {
-        const stylesheet = name === 'email' || name === 'url' ? 'text' : name;
+        const stylesheet =
+            name === 'rating'
+                ? 'number'
+                : ['email', 'url'].includes(name)
+                  ? 'text'
+                  : name;
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1489,6 +1504,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const ratingProof = await checkRatingConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(ratingProof.checks, 18);
+    console.log(
+        `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const dateRendererProof = await checkDateRendererConsumer({
         consumerDirectory: temporaryDirectory,

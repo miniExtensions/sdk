@@ -1436,8 +1436,9 @@ numeric login masking from either configuration is preserved.
 Pending, computed and unavailable controls are disabled. Retired scalar states
 render nothing. Input events stop bubbling into Portal rows.
 
-The Number presentation styles ordinary Number fields. `NumberField` percent
-and rating bindings retain their prior presentation and native units. Currency
+The Number presentation styles ordinary Number and Rating fields; see the
+[Rating presentation](#react-rating-presentation) for its manual native-unit
+contract. `NumberField` percent bindings retain their prior presentation and native units. Currency
 bindings use the dedicated [Currency presentation](#react-currency-presentation);
 duration bindings use the dedicated [Duration presentation](#react-duration-presentation)
 and its existing clock-input model. Broader theme APIs remain separate work.
@@ -1457,6 +1458,92 @@ native typing/caret, Enter in the example host, incomplete and invalid drafts,
 remounts, permissions, external updates, repeated IDs, focus, forced colors and
 narrow layout, and writes screenshots and a JSON receipt. It does not certify
 every platform's input method, screen reader or surrounding form layout.
+
+## React Rating presentation
+
+The optional `/react` entry exports `RatingField`, `RatingFieldProps`,
+`RatingFieldOptions` and `renderRatingField`. `RatingField` delegates to
+`NumberField`, whose physical rating bindings use the same Number control.
+`RatingFieldProps` aliases `NumberFieldProps`; `RatingFieldOptions` aliases
+`NumberFieldOptions` and accepts only `className`.
+The existing `{ binding, render }` override still replaces all stock markup.
+
+```tsx
+import { RatingField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/number.css';
+
+export function Score({ binding }: { binding: FormFieldBinding }) {
+    return <RatingField binding={binding} className="score" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'rating'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderRatingField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/number.css';
+
+export const ratingRenderers: FieldRendererSlots<ReactNode> = {
+    renderRatingField: (props) =>
+        renderRatingField(props, { className: 'score' }),
+};
+```
+
+This is manual native numeric entry. A native value of `3.5` appears as `3.5`;
+editing `7.25` sets the native draft to `7.25`, even when field metadata says
+`max: 5`. Finite negative, fractional and exponent inputs use the existing numeric
+scalar. The renderer adds no stars, slider, range clamp, integer-only restriction,
+rounding or locale formatting. It uses a text input with decimal input mode, or a
+password input when accepted login masking requires it. There is no additional
+rating parser or independent draft.
+
+Edits go through the accepted numeric scalar's `setInput`. Partial or invalid
+text such as `-` or `1e` stays visible across remounts alongside the last valid
+native value. The existing scalar owner refuses Save while editable visible input
+is invalid. Repairing the draft accepts the owner's parsed number; an
+explicit empty edit sets the native draft to `null`, and zero remains zero.
+Untouched absent values stay absent. The existing page owner treats required
+Rating zero as empty for Next and final Submit admission: this validation does
+not change the native zero or make the scalar input invalid. It is distinct from
+scalar invalid-input refusal; lower-level binding Save is not a substitute for
+page-owner admission. Focus and blur add no formatting or native writes. There is
+no stock Clear button; applications may clear through the
+existing owner or provide a custom renderer.
+
+Editing requires the accepted editable numeric scalar for the rating field.
+A raw value and `setValue` action do not replace that capability. Missing or
+mismatched scalar capabilities and readonly controls display finite native values
+without scaling and remain disabled. Read-only configuration, pending and
+computed restrictions are preserved. Retired scalar states and hidden, blocked
+or retired hosts omit the control; stale callbacks retain the owner's guards.
+
+The Number control supplies unique label IDs, hidden-title accessible names,
+required indication, associated plain-text feedback and keyboard focus styles.
+Rating configuration does not declare a placeholder option. Mounting, StrictMode,
+remounting and unmounting do not create or
+destroy an owner, reset unfinished input, invoke Save or start requests. Owners
+remain outside React and Save remains explicit. Stopped event bubbling does not
+prevent native Enter submission; applications own their enclosing form policy.
+
+Rating `max`, `icon` and `color` metadata do not create a star picker, set input
+range attributes or change numeric syntax. A visual rating picker or a custom
+range policy needs its own accepted integration. Existing page/server numeric policy remains
+authoritative. Number, Currency and Duration bindings keep their existing routes
+and native units.
+
+There is no separate Rating stylesheet. Import the existing optional
+`@miniextensions/sdk/react/number.css`, override its `mx-sdk-number*` classes or
+supply your own styles. JavaScript does not import CSS; `className` decorates the
+wrapper. Core and `/ui` remain React-free.
+
+After building, `node examples/react-rating/dev.mjs` serves synthetic presentation
+fixtures at `http://127.0.0.1:4188`. `node scripts/check-rating-browser.mjs` checks
+native entry, retained partial drafts, remounts, restrictions and enclosing-form
+Enter behavior. Simulated composition does not certify real OS input methods.
 
 ## React Date presentation
 

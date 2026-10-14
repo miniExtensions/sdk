@@ -28,6 +28,15 @@ export {
     renderCheckboxField,
     type CheckboxFieldOptions,
 } from './CheckboxField.js';
+import {
+    DateTimeControl,
+    dateTimeConfiguration,
+    type DateTimeFieldOptions,
+} from './DateTimeField.js';
+export {
+    renderDateTimeField,
+    type DateTimeFieldOptions,
+} from './DateTimeField.js';
 import type {
     FormRenderScope,
     FormRenderSnapshot,
@@ -694,7 +703,13 @@ export function PortalList({
 }
 
 /** Calendar-only date or explicit-offset dateTime; no browser local-time conversion. */
-export function DateField({ binding, render }: FieldProps): ReactNode {
+export type DateTimeFieldProps = FieldProps & DateTimeFieldOptions;
+export function DateField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: DateTimeFieldProps): ReactNode {
     useFieldBinding(binding);
     // Date context can change independently of a native write; observe it on rerender.
     const snapshot = binding.getSnapshot();
@@ -711,6 +726,38 @@ export function DateField({ binding, render }: FieldProps): ReactNode {
             { role: 'status' },
             'Load a fresh Form before editing this date.'
         );
+    if (snapshot.date.kind === 'dateTime') {
+        const config = dateTimeConfiguration(
+            snapshot.field?.schema.miniExtConfig
+        );
+        return createElement(DateTimeControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field?.title.trim()
+                ? snapshot.field.title
+                : (snapshot.field?.schema.airtableField.name ?? ''),
+            input: snapshot.date.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.date.canEdit ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.date.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.date.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (value) => binding.date?.setInput(value),
+            clear: () => binding.date?.clear(),
+        });
+    }
     const privacy = snapshot.field?.schema.miniExtConfig;
     const masked =
         privacy != null &&
@@ -728,10 +775,7 @@ export function DateField({ binding, render }: FieldProps): ReactNode {
                 value: snapshot.date.input,
                 disabled: !snapshot.date.canEdit,
                 'aria-invalid': !snapshot.date.valid,
-                placeholder:
-                    snapshot.date.kind === 'date'
-                        ? 'YYYY-MM-DD'
-                        : 'YYYY-MM-DDTHH:mm:ssZ',
+                placeholder: 'YYYY-MM-DD',
                 onChange: (event: ChangeEvent<HTMLInputElement>) =>
                     binding.date?.setInput(event.currentTarget.value),
             })

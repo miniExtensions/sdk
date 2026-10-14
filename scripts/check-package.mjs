@@ -1,6 +1,10 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkDateTimeRendererConsumer,
+    dateTimeRendererReactTypedConsumer,
+} from './datetime-renderer-consumer-checks.mjs';
+import {
     checkPortalButtonCompositionConsumer,
     portalButtonCompositionTypedConsumer,
     portalButtonCompositionReactTypedConsumer,
@@ -264,6 +268,8 @@ try {
         'dist/cjs/react/checkbox.css',
         'dist/esm/react/text.css',
         'dist/cjs/react/text.css',
+        'dist/esm/react/datetime.css',
+        'dist/cjs/react/datetime.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1170,6 +1176,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('duration-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'datetime-renderer-react-consumer.tsx'),
+        dateTimeRendererReactTypedConsumer
+    );
+    reactSources.push('datetime-renderer-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'form-composition-consumer.ts'),
         formCompositionTypedConsumer
     );
@@ -1272,7 +1283,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         17
     );
     // Resolve CSS and React through the installed archive, not checkout aliases.
-    for (const name of ['button', 'checkbox', 'text']) {
+    for (const name of ['button', 'checkbox', 'text', 'datetime']) {
         const exampleDirectory = join(temporaryDirectory, `${name}-example`);
         mkdirSync(exampleDirectory);
         for (const file of ['main.ts', 'styles.css']) {
@@ -1344,6 +1355,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(textProof.checks, 8);
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const dateTimeRendererProof = await checkDateTimeRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(dateTimeRendererProof.checks, 18);
+    console.log(
+        `Installed DateTime renderer, binding, CSS and local example: ${dateTimeRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const linkedRecordsProof = await checkLinkedRecordsConsumer({
         consumerDirectory: temporaryDirectory,

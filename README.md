@@ -186,6 +186,12 @@ renderer does not replace its owner. The shipped guides also include
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
 
+For explicit-offset timestamps, `/react` also exports the `renderDateTimeField`
+named slot, `DateTimeFieldProps` and `DateTimeFieldOptions`. Both the slot and
+`DateTimeField` use the owner's date model for manual input, retained partial
+drafts and explicit clearing. Optional styles are exported at
+`@miniextensions/sdk/react/datetime.css`; see [React DateTime presentation](docs/ui.md#react-datetime-presentation).
+
 ## Runtime operation map
 
 The client exposes **23 canonical operations**. v1 routes use POST at

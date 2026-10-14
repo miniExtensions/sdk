@@ -493,6 +493,14 @@ model; their `render` prop supports custom markup without custom conversion.
 The copied starter's stock and custom adapters also use this model. Keep the
 binding owner through ordinary remounts; dispose it on visitor/context replacement.
 
+For explicit-offset timestamps, `DateTimeField` also accepts `className` and
+`clearLabel`, and `renderDateTimeField` supplies the named Form/Grid/List slot
+using its accepted dateTime bridge. Import
+`@miniextensions/sdk/react/datetime.css` for optional scoped defaults. See
+[React DateTime presentation](ui.md#react-datetime-presentation) for the
+manual-entry contract. `DateTimeField` remains an alias of `DateField`; custom
+render overrides and the existing calendar-date binding presentation are retained.
+
 Dates accept only valid calendar `YYYY-MM-DD` strings. Calendar parsing and
 preview avoid a local-midnight or implicit UTC shift, including skipped civil
 calendar days. DateTime editing accepts only

@@ -1246,6 +1246,70 @@ typing, selection/caret, clearing, simulated composition, remounting, permission
 forced colors and narrow layout and captures screenshots. Simulated composition
 does not certify every platform's input method or screen reader.
 
+## React Email presentation
+
+The optional `/react` entry exports `EmailField`, `EmailFieldProps`,
+`EmailFieldOptions` and `renderEmailField`. `EmailField` delegates to `TextField`;
+its props and options are aliases of `TextFieldProps` and `TextFieldOptions`.
+The existing `{ binding, render }` override replaces all stock markup.
+
+```tsx
+import { EmailField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function ContactEmail({ binding }: { binding: FormFieldBinding }) {
+    return <EmailField binding={binding} clearLabel="Clear email address" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'email'>` and works in the
+existing `FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList` slots:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderEmailField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const emailRenderers: FieldRendererSlots<ReactNode> = {
+    renderEmailField: (props) =>
+        renderEmailField(props, { className: 'contact-email' }),
+};
+```
+
+The control uses a text input, or a password input when accepted masking config
+requires it. For native single-line entry, whitespace, mixed case, Unicode and
+invalid address strings remain native drafts. The renderer does not trim, change case or apply
+`emailLetterCase`; page and server validation own email syntax and configured
+policy. An explicit empty edit or Clear sets the native draft to `null`. An
+initially absent value stays absent until an edit. Invalid text is not silently
+replaced with the last syntactically valid address. Native single-line inputs
+strip embedded line breaks; this is not a multiline editor.
+
+The shared Text control supplies labels, placeholder and required indication,
+plain-text associated feedback, Clear focus restoration and local composition
+buffering. Read-only settings, masking, pending and computed restrictions are
+preserved. Hidden, blocked and retired hosts omit the control; stale callbacks
+remain guarded by their accepted owner. A supplied `render` override continues
+to own its presentation. Keep owners outside React mounts: mounting, StrictMode,
+remounting and unmounting do not create or destroy owners or save drafts.
+
+Email entry does not send mail, create `mailto:` links, navigate, verify an
+address or start a request. Saving remains an explicit `owner.save()` action.
+Applications own their enclosing HTML form's submit policy: stopping key-event
+bubbling does not prevent native Enter submission. Clear is `type="button"`.
+
+Email uses the existing optional `@miniextensions/sdk/react/text.css` stylesheet
+and `mx-sdk-text*` classes. There is no separate Email stylesheet. JavaScript does
+not import CSS; `className` decorates the wrapper and the stylesheet can be
+overridden or omitted. Core and `/ui` stay React-free.
+
+After building, `node examples/react-email/dev.mjs` serves the synthetic public
+API example at `http://127.0.0.1:4183`. `node scripts/check-email-browser.mjs`
+checks native entry, clearing, remounts and surrounding-form Enter behavior.
+Simulated composition checks do not certify real OS input methods.
+
 ## React URL presentation
 
 The optional `/react` entry exports `UrlField`, `UrlFieldProps`, `UrlFieldOptions`
@@ -1372,10 +1436,12 @@ numeric login masking from either configuration is preserved.
 Pending, computed and unavailable controls are disabled. Retired scalar states
 render nothing. Input events stop bubbling into Portal rows.
 
-The Number presentation styles ordinary Number fields. `NumberField` currency,
-percent and rating bindings retain their prior presentation and native units.
-Duration bindings use the dedicated [Duration presentation](#react-duration-presentation)
-and its existing clock-input model. Broader theme APIs remain separate work. Canonical Save remains
+The Number presentation styles ordinary Number fields. `NumberField` percent
+and rating bindings retain their prior presentation and native units. Currency
+bindings use the dedicated [Currency presentation](#react-currency-presentation);
+duration bindings use the dedicated [Duration presentation](#react-duration-presentation)
+and its existing clock-input model. Broader theme APIs remain separate work.
+Canonical Save remains
 authoritative for numeric field policy.
 Input uses the scalar's native dot-decimal syntax. Configured decimal/thousands
 separators, grouped display, scanning and login searches need their own accepted
@@ -1652,3 +1718,96 @@ owners without backend requests. After building, run
 checks native interaction, unfinished drafts, remounting, clearing, permissions,
 layout and forced colors. Synthetic interaction does not certify every platform's
 input method or screen reader.
+
+## React Currency presentation
+
+The optional `/react` entry exports `CurrencyField`, `CurrencyFieldProps`,
+`CurrencyFieldOptions` and `renderCurrencyField`. The binding component supports
+the existing `{ binding, render }` API; supplying `render` replaces all markup.
+`NumberField` also recognizes physical currency bindings and retains its ordinary
+numeric behavior for other numeric fields.
+
+```tsx
+import { CurrencyField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/currency.css';
+
+export function Amount({ binding }: { binding: FormFieldBinding }) {
+    return <CurrencyField binding={binding} className="invoice-amount" />;
+}
+```
+
+The named helper accepts `FieldRendererProps<'currency'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderCurrencyField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/currency.css';
+
+export const currencyRenderers: FieldRendererSlots<ReactNode> = {
+    renderCurrencyField: (props) =>
+        renderCurrencyField(props, { clearLabel: 'Effacer le montant' }),
+};
+```
+
+This is a native-unit input with a currency-symbol label. The symbol comes from
+the accepted physical field's `options.symbol` and renders as literal text outside
+the input. It is associated through `aria-describedby`; HTML-looking symbols are
+never interpreted as markup. The raw input uses the existing numeric scalar
+model. Decimal and exponent syntax must produce a finite number; partial or
+invalid input remains visible across remounts without replacing the last accepted
+native answer. See [scalar inputs](field-bindings.md#checkbox-and-numeric-inputs)
+for the owner and validation contract.
+
+For example, a native `1234.56789` remains `1234.56789` with configured precision
+two. `precision`, `numberSeparator` and `showThousandsSeparator` do not alter input,
+round native values or introduce a locale parser. Comma-separated input is not
+automatically converted. Currency conversion, grouping, precision rounding and
+canonical formatted-display parity are outside this presentation. Canonical
+formatting may place signs and symbols differently; this control keeps the literal
+symbol separate from the raw signed number.
+
+Edits and Clear use only the accepted scalar bridge's `setInput`; Clear sends an
+empty input, which sets the native draft to `null`. Zero remains zero. Untouched empty answers are
+not normalized. Focus and blur do not reformat or write values, and this component
+adds no focus-state model. Existing owner validation blocks deliberate Save while
+editable visible input is invalid. Save and cancellation remain explicit owner
+actions.
+
+Editing requires an editable capability with the matching numeric scalar bridge.
+A generic value setter or another scalar kind does not grant currency editing.
+Readonly slots and slots without that bridge show `String(value)` for finite
+native numbers and remain disabled. Pending, computed and configured read-only
+controls are also disabled. Existing permission, configuration and current-owner
+checks still guard every action. Hidden, blocked and retired hosts render nothing.
+Owners stay outside React: mounting, StrictMode and remounting neither create nor
+dispose owners, change drafts, invoke Save nor start requests.
+
+The control uses a text input with decimal input mode, or a password input when
+masked. Title visibility, configured placeholder, required indication, masking and
+read-only restrictions are honored; masking and read-only settings from either
+display or write config apply. Native amounts are not echoed beside masked input.
+Labels use unique React instance IDs for repeated rows, and hidden titles retain
+an accessible name. Feedback is plain text in an associated polite live region.
+
+Clear is `type="button"` and returns focus to the input. Its optional `clearLabel`
+localizes the accessible name, with `Clear <title>` as the default. Click, pointer,
+keyboard, focus and composition events stop bubbling into Portal rows. Event
+containment does not cancel native implicit form submission. Applications own the
+surrounding form's submission policy and must route Save deliberately through the
+owner. `className` decorates the wrapper.
+
+The provisional stylesheet is scoped to `mx-sdk-currency*` classes and is exported
+as `@miniextensions/sdk/react/currency.css`, with copies in both builds. Import it,
+override its classes, or omit it and supply your own styles. JavaScript does not
+import CSS; core and `/ui` remain React-free. No theme or appearance-prop API is
+introduced.
+
+The local `examples/react-currency` example uses public exports and synthetic
+owners without backend requests. After building, run
+`node examples/react-currency/dev.mjs` and open `http://127.0.0.1:4182`.
+`node scripts/check-currency-browser.mjs` checks native interaction, unfinished
+drafts, remounting, clearing, permissions, layout and forced colors. Synthetic
+interaction does not certify every platform's input method or screen reader.

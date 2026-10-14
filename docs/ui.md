@@ -616,6 +616,33 @@ derive labels from returned primary-field metadata. If a label cannot be
 resolved, the record ID remains visible. They never request direct Airtable
 credentials or infer access from a label.
 
+The default metadata formatter does not interpret hidden or masked display
+configuration. For privacy-aware captions, supply the existing
+`formatRecordLabel(record, table)` callback to either loader and as the third
+argument to `selectionOptionsFromRecords`. The application must check the exact
+accepted target-primary display policy and current owner before and after
+formatting. Always return nonempty safe text: the SDK replaces blank captions
+with record IDs.
+
+The shipped browser starter shares a private
+`examples/browser/src/presentation.ts` helper for linked captions and Form
+validation/recovery messages. Its `safeLinkedRecordLabel` uses the accepted
+linked-field detail projection, masks configured values and returns
+`Linked record` for private, missing or blank labels. It is an example-local
+helper, not an export from `/ui`. When copying the starter, keep its owner
+guards and retire old presentation on every accepted context or configuration
+replacement, including A → B → A. Canonical native values and validation errors
+remain available for Save and recovery. Both `obscurePassword` and
+`maskPasswordOnLoginScreen` withhold plain-text labels and field-specific
+validation/recovery messages; malformed mask settings remain unavailable.
+
+For a visible primary permitted by that exact accepted detail projection, the
+private formatter uses an own ID-keyed value first. Only when that ID property
+is absent may it use the unique physical primary's own field-name property.
+An own blank or undefined ID value never falls through to a name. Hidden,
+masked, omitted, ambiguous or retired display policy never reads a name value;
+omitting the primary from Form subtitle details supplies no caption authority.
+
 This Form helper uses a loaded, canonical linked field. The optional selected
 record hydration reads only the Form's existing selected records; it does not
 accept arbitrary IDs to look up. Abort and dispose it before replacing the
@@ -1003,7 +1030,10 @@ Pass `label`, `description`, `search: false` or `messages` overrides to
 `mountSelectionControl`; message keys are `searchLabel`, `loading`, `empty`,
 `errorPrefix`, `retry`, `more`, `clear` and `selectedLabel`. `formatLabel`
 customizes displayed option text. Linked loaders also accept
-`formatRecordLabel(record, table)` for application-specific labels. Renderers
+`formatRecordLabel(record, table)` for application-specific labels. A custom
+formatter owns visibility, masking and currentness; physical metadata alone
+does not supply display permission. Return a nonempty neutral caption when
+policy is unavailable so the SDK cannot substitute a record ID. Renderers
 assign text through text APIs; they never interpret labels/messages as HTML.
 For fully custom layout or styling, use the headless model directly.
 

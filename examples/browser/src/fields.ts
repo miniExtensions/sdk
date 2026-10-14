@@ -15,7 +15,41 @@ import {
     type SelectFieldAvailability,
 } from '@miniextensions/sdk/ui';
 import { element, labeled } from './dom.js';
-import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import {
+    getFieldPresentationPolicy,
+    formValidationPresentation,
+} from './presentation.js';
+import type {
+    FormFieldBinding,
+    FormFieldSnapshot,
+} from '@miniextensions/sdk/forms';
+
+const bindingErrorMessage = (state: FormFieldSnapshot): string => {
+    if (state.retired) return '';
+    const field = state.field;
+    const policy = getFieldPresentationPolicy({
+        fieldId: field?.fieldId ?? '',
+        descriptor: field
+            ? {
+                  fieldId: field.fieldId,
+                  displayConfig:
+                      field.schema.miniExtConfig === undefined
+                          ? {}
+                          : field.schema.miniExtConfig,
+              }
+            : undefined,
+        visible: state.visibility.type === 'visible',
+        isCurrent: !state.retired,
+    });
+    const error = state.date?.error ?? state.scalar?.error ?? state.error;
+    if (error != null && error !== '')
+        return policy.type === 'visible'
+            ? error
+            : 'This field needs attention.';
+    return formValidationPresentation(state.validation, () => policy)
+        .map((message) => message.errorMessage)
+        .join('\n');
+};
 
 export type FieldControl = {
     node: HTMLDivElement;
@@ -513,11 +547,7 @@ export function mountBoundFormField(
                 )
             );
             node.setAttribute('aria-busy', String(state.pending));
-            status.textContent =
-                state.date?.error ??
-                state.scalar?.error ??
-                state.error ??
-                state.validation.map((error) => error.errorMessage).join('\n');
+            status.textContent = bindingErrorMessage(state);
         };
         const stop = binding.subscribe(render);
         return {
@@ -577,10 +607,7 @@ export function mountBoundFormField(
     let revision = initial.revision;
     const stop = binding.subscribe((state) => {
         control.node.setAttribute('aria-busy', String(state.pending));
-        status.textContent = state.retired
-            ? ''
-            : (state.error ??
-              state.validation.map((error) => error.errorMessage).join('\n'));
+        status.textContent = bindingErrorMessage(state);
         control.node.hidden = state.visibility.type !== 'visible';
         control.node.inert = !state.canEdit;
         if (!state.retired && state.revision !== revision) {

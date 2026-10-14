@@ -33,6 +33,7 @@ const starterFiles = [
     'styles.css',
     'src/main.ts',
     'src/fields.ts',
+    'src/presentation.ts',
     'src/portal.ts',
     'src/dom.ts',
     'src/drafts.ts',
@@ -3511,7 +3512,7 @@ Choose Reload before either teardown: the active Form must contain Fresh public 
 
 ## Prepared review scenarios
 
-hide-empty-edit uses explicit edit-mode hideFieldIfEmpty:true on twelve matching direct scalar families, including richText. Readonly null, blank text, false checkbox, zero rating and blank native barcode remain hidden; ordinary number/currency/percent zero stay visible. Replace the populated required answer with one SPACE in one native key command, then edit the visible sibling and Save. The complete whitespace/native snapshot, readonly/unrendered values, initial dirty ID, URL-prefilled ID and accepted edits must appear in the single Save. The synthetic returned hidden-field required error remains visible. Visitor A-to-B-to-A retains the accepted hidden draft without a read or replay; Discard restores initial controls without another Save. This is presentation and returned-error handling, not hosted required-rule evaluation, hidden-write authority or persistence.
+hide-empty-edit uses explicit edit-mode hideFieldIfEmpty:true on twelve matching direct scalar families, including richText. Readonly null, blank text, false checkbox, zero rating and blank native barcode remain hidden; ordinary number/currency/percent zero stay visible. Replace the populated required answer with one SPACE in one native key command, then edit the visible sibling and Save. The complete whitespace/native snapshot, readonly/unrendered values, initial dirty ID, URL-prefilled ID and accepted edits must appear in the single Save. The synthetic returned hidden-field required error produces a generic visible blocker without disclosing its field title or message. The canonical error and native Save trace remain unchanged. Visitor A-to-B-to-A retains the accepted hidden draft without a read or replay; Discard restores initial controls without another Save. This is presentation and returned-error handling, not hosted required-rule evaluation, hidden-write authority or persistence.
 
 hide-empty-create keeps the same empty scalar controls visible because ordinary empty hiding is inactive in create mode. The installed/packed checks assert the exact create envelope and full native data after an adjacent edit. hide-empty-unavailable retains a nonblank disabled section title: active edit empty hiding is blocked, the unavailable alert is visible and deliberate Save dispatches zero requests. Visitor round trip keeps the adjacent accepted draft. A normal Reload supplies the explicitly supported no-section/hide-false configuration; only a later explicit Save may dispatch. Review's separate row preparation supports eleven direct scalar types and excludes richText; these empty-hiding scenarios use promptUserBeforeSubmission:false/absent and grant no Review richText support.
 

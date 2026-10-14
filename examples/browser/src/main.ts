@@ -38,7 +38,13 @@ import {
     getSelectFieldPolicy,
     type SelectionLoader,
     resolveSelectFieldAvailability,
+    selectionOptionsFromRecords,
 } from '@miniextensions/sdk/ui';
+import {
+    getFieldPresentationPolicy,
+    formValidationPresentation,
+    safeLinkedRecordLabel,
+} from './presentation.js';
 import {
     button,
     element,
@@ -144,6 +150,8 @@ const newVisitor = (): Visitor => ({
 const visitors = { A: newVisitor(), B: newVisitor() };
 let activeVisitor: keyof typeof visitors = 'A';
 const recovery = new RecoveryJournal();
+// Presentation provenance only; the existing journal remains the recovery owner.
+const retainedInputFields = new WeakMap<object, string | null>();
 let formLoadSequence = 0;
 let connection: {
     apiOrigin: string;
@@ -994,27 +1002,34 @@ const renderForm = (page: FormLoadedResult): void => {
         attempt: RecoveryAttempt,
         selectedFile?: { fieldId: string }
     ): void => {
+        const draftRevision = visitor.drafts.revision(draft);
         const snapshot = visitor.drafts.snapshot(draft);
+        const configuration = observeReviewConfiguration();
         attempt.retainedInput = (snapshot?.dirtyFieldIds ?? []).flatMap(
             (fieldId) => {
                 const schema = page.payload.fieldIdsToSchemas[fieldId];
                 const control = controls.get(fieldId);
                 if (schema == null || control == null) return [];
-                const config = schema.miniExtConfig;
-                // Masked values must never enter the reference journal.
+                if (fieldDisplayPolicy(fieldId).type !== 'visible') return [];
                 if (
-                    config != null &&
-                    'obscurePassword' in config &&
-                    config.obscurePassword === true
+                    schema.fieldType ===
+                        AirtableFieldType.MULTIPLE_ATTACHMENTS ||
+                    schema.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS
                 )
-                    return [];
-                if (schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS)
                     return [];
                 if (!control.editable) return [];
                 const text = displayValue(snapshot!.data[fieldId]);
-                return [{ title: schema.airtableField.name, value: text }];
+                const entry = { title: schema.airtableField.name, value: text };
+                retainedInputFields.set(entry, fieldId);
+                return [entry];
             }
         );
+        if (
+            !ownsForm() ||
+            observeReviewConfiguration() !== configuration ||
+            visitor.drafts.revision(draft) !== draftRevision
+        )
+            attempt.retainedInput = [];
         if (
             selectedFile != null ||
             (snapshot?.dirtyFieldIds ?? []).some(
@@ -1022,11 +1037,14 @@ const renderForm = (page: FormLoadedResult): void => {
                     page.payload.fieldIdsToSchemas[fieldId]?.fieldType ===
                     AirtableFieldType.MULTIPLE_ATTACHMENTS
             )
-        )
-            attempt.retainedInput.push({
+        ) {
+            const notice = {
                 title: 'Attachment activity',
                 value: 'Attachment details are not retained.',
-            });
+            };
+            retainedInputFields.set(notice, null);
+            attempt.retainedInput.push(notice);
+        }
     };
     const formControlDisposers: Array<() => void> = [];
     disposeFormControls = () => {
@@ -1052,6 +1070,26 @@ const renderForm = (page: FormLoadedResult): void => {
     );
     visibilityMessage.setAttribute('role', 'alert');
     let fieldVisibility: Readonly<Record<string, FormFieldVisibility>> = {};
+    let refreshFieldPresentation = (): void => {};
+    const fieldDisplayPolicy = (fieldId: string) => {
+        const schema = Object.hasOwn(page.payload.fieldIdsToSchemas, fieldId)
+            ? page.payload.fieldIdsToSchemas[fieldId]
+            : undefined;
+        return getFieldPresentationPolicy({
+            fieldId,
+            descriptor: schema
+                ? {
+                      fieldId: schema.airtableField.id,
+                      displayConfig:
+                          schema.miniExtConfig === undefined
+                              ? {}
+                              : schema.miniExtConfig,
+                  }
+                : undefined,
+            visible: fieldVisibility[fieldId]?.type === 'visible',
+            isCurrent: ownsForm(),
+        });
+    };
     const ownsAddressReads = (): boolean =>
         ownsLinkedFilters() && !screenNode.inert && !fields.inert;
     updateFormActivity = () => {
@@ -1088,6 +1126,7 @@ const renderForm = (page: FormLoadedResult): void => {
         visibilityMessage.hidden = !Object.values(fieldVisibility).some(
             (result) => result.type === 'blocked'
         );
+        refreshFieldPresentation();
     };
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
@@ -1483,18 +1522,26 @@ const renderForm = (page: FormLoadedResult): void => {
                                     ? schema.airtableField.config.options
                                           .linkedTableId
                                     : '';
-                            const primary = result.tableIdsToLinkedTableStates[
-                                tableId
-                            ]?.airtableFields.find(
-                                (field) => field.isPrimaryField
-                            );
                             choices.append(
                                 labeled(
-                                    primary == null
-                                        ? record.id
-                                        : displayValue(
-                                              record.fields[primary.id]
-                                          ) || record.id,
+                                    selectionOptionsFromRecords(
+                                        [record],
+                                        result.tableIdsToLinkedTableStates[
+                                            tableId
+                                        ],
+                                        (record, table) =>
+                                            safeLinkedRecordLabel({
+                                                record,
+                                                table,
+                                                detailFields:
+                                                    page.payload
+                                                        .linkedRecordFieldIdToDetailFields[
+                                                        fieldId
+                                                    ],
+                                                isCurrent: accepted,
+                                                formatValue: displayValue,
+                                            })
+                                    )[0].label,
                                     choice
                                 )
                             );
@@ -1750,6 +1797,25 @@ const renderForm = (page: FormLoadedResult): void => {
     card.append(visibilityMessage, fields);
     const errors = element('ul', undefined, 'error-list');
     errors.setAttribute('role', 'alert');
+    let validationFailure: Extract<
+        ReturnType<typeof normalizeFormSaveResult>,
+        { type: 'error' }
+    > | null = null;
+    const updateValidationPresentation = (): void => {
+        if (validationFailure == null) return;
+        errors.replaceChildren();
+        for (const error of formValidationPresentation(
+            validationFailure.validationErrors,
+            fieldDisplayPolicy
+        ))
+            errors.append(
+                element('li', `${error.fieldTitle}: ${error.errorMessage}`)
+            );
+        if (validationFailure.concurrentEditErrorMessage != null)
+            errors.append(
+                element('li', validationFailure.concurrentEditErrorMessage)
+            );
+    };
     const uncertainSaveMessage =
         'We could not confirm the earlier attempt. It may have completed. Check the latest requests before taking another action.';
     if (visitor.uncertainFormDraftScopes.has(draft.scope))
@@ -1878,10 +1944,19 @@ const renderForm = (page: FormLoadedResult): void => {
                     'These were local values at the earlier dispatch, not the freshly loaded server values. They are never copied back or submitted automatically. Attachment details are not retained.'
                 )
             );
-            for (const field of earlier.retainedInput)
+            for (const field of earlier.retainedInput) {
+                const fieldId = retainedInputFields.get(field);
+                if (
+                    fieldId === undefined ||
+                    (fieldId !== null &&
+                        fieldDisplayPolicy(fieldId).type !== 'visible')
+                )
+                    continue;
+                if (!ownsForm()) break;
                 reference.append(
                     element('p', `${field.title}: ${field.value}`)
                 );
+            }
             recoveryPanel.append(reference);
         }
         if (expired)
@@ -1999,6 +2074,10 @@ const renderForm = (page: FormLoadedResult): void => {
                     );
                 })
             );
+    };
+    refreshFieldPresentation = () => {
+        updateRecovery();
+        updateValidationPresentation();
     };
     updateRecovery();
     const save = (prepared?: {
@@ -2123,6 +2202,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 });
                 if (!current() || !ownsForm()) return;
             } catch (error) {
+                validationFailure = null;
                 if (current() && ownsForm())
                     errors.replaceChildren(
                         element(
@@ -2137,19 +2217,12 @@ const renderForm = (page: FormLoadedResult): void => {
             visitor.uncertainFormDraftScopes.delete(draft.scope);
             submit.disabled = false;
             discard.disabled = false;
+            validationFailure = null;
             errors.replaceChildren();
             if (normalized.type === 'error') {
-                for (const error of normalized.validationErrors)
-                    errors.append(
-                        element(
-                            'li',
-                            `${error.fieldTitle}: ${error.errorMessage}`
-                        )
-                    );
-                if (normalized.concurrentEditErrorMessage != null)
-                    errors.append(
-                        element('li', normalized.concurrentEditErrorMessage)
-                    );
+                validationFailure = normalized;
+                updateFieldVisibility();
+                if (!current() || !ownsForm()) return;
                 status(
                     'The Form was not saved. Review the validation errors.',
                     true

@@ -979,12 +979,21 @@ export async function checkBrowserEditHideEmptyExample({
                     },
                     ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail']
                 );
+                const errors = doc.querySelector('.error-list');
+                assert(errors);
+                assert.equal(errors.isConnected, true);
+                assert.equal(errors.getAttribute('role'), 'alert');
+                assert.equal(errors.closest('[hidden]'), null);
                 assert(
-                    doc
-                        .querySelector('.error-list')
-                        .textContent.includes(
-                            `Hidden required answer: ${fixture.state.expected.validationMessage}`
-                        )
+                    errors.textContent.includes(
+                        'The Form could not be saved. A configured field needs attention.'
+                    )
+                );
+                assert(!errors.textContent.includes('Hidden required answer'));
+                assert(
+                    !errors.textContent.includes(
+                        fixture.state.expected.validationMessage
+                    )
                 );
                 roundTrip();
                 assert.equal(shown('title'), false);

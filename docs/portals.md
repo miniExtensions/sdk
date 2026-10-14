@@ -672,6 +672,16 @@ cell text**: custom renderers must honor returned detail display/privacy policy
 and must never derive Save data from presentation. This is list/table ownership,
 not a complete grid editor or support for every Portal layout.
 
+Use the existing `owner.getRecords(revision)` native facet and its returned
+detail policy for custom row summaries, action captions, tooltips and accessible
+names. The application owns the formatter: suppress hidden values, mask
+configured values and keep unknown policy neutral. Record IDs are identity
+only and must not become caption fallbacks. Check the accepted owner revision
+before and after formatting, and retire old presentation on owner or
+configuration replacement, including A → B → A. The browser starter shares
+these presentation checks in its private `src/presentation.ts` helper; backend
+authority, native cells and Save inputs remain unchanged.
+
 ### Renderer-neutral bounded criteria editors
 
 `createPortalSortEditor` and `createPortalFilterEditor` from `/portals` prepare

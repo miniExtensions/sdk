@@ -29,6 +29,8 @@ import {
     type PortalOwnerScope,
 } from '@miniextensions/sdk/portals';
 import { button, element, labeled } from './dom.js';
+import { selectionOptionsFromRecords } from '@miniextensions/sdk/ui';
+import { safeLinkedRecordLabel } from './presentation.js';
 import {
     displayValue,
     mountBoundFormField,
@@ -1025,18 +1027,42 @@ export const createPortalView = (options: {
                                 AirtableFieldType.MULTIPLE_RECORD_LINKS
                                     ? recordField.config.options.linkedTableId
                                     : '';
-                            const primary = result.tableIdsToLinkedTableStates[
-                                linkedTableId
-                            ]?.airtableFields.find(
-                                (column) => column.isPrimaryField
-                            );
                             choices.append(
                                 labeled(
-                                    primary == null
-                                        ? option.id
-                                        : displayValue(
-                                              option.fields[primary.id]
-                                          ) || option.id,
+                                    selectionOptionsFromRecords(
+                                        [option],
+                                        result.tableIdsToLinkedTableStates[
+                                            linkedTableId
+                                        ],
+                                        (record, table) =>
+                                            safeLinkedRecordLabel({
+                                                record,
+                                                table,
+                                                detailFields:
+                                                    acceptedData.customViewDetailFields ===
+                                                    null
+                                                        ? page.payload
+                                                              .linkedRecordFieldIdToDetailFields[
+                                                              recordField.id
+                                                          ]
+                                                        : Object.hasOwn(
+                                                                acceptedData.customViewDetailFields,
+                                                                recordField.id
+                                                            )
+                                                          ? acceptedData
+                                                                .customViewDetailFields[
+                                                                recordField.id
+                                                            ]
+                                                          : undefined,
+                                                isCurrent: () =>
+                                                    current() &&
+                                                    editorIsCurrent() &&
+                                                    optionGeneration ===
+                                                        expectedGeneration &&
+                                                    search.value === query,
+                                                formatValue: displayValue,
+                                            })
+                                    )[0].label,
                                     checkbox
                                 )
                             );

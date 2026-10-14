@@ -42,6 +42,10 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
+export {
+    renderAutoNumberField,
+    type AutoNumberFieldOptions,
+} from './AutoNumberField.js';
 import {
     CurrencyControl,
     currencyConfiguration,
@@ -304,6 +308,42 @@ const status = (snapshot: FormFieldSnapshot) =>
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
+export type AutoNumberFieldProps = FieldProps & NumberFieldOptions;
+/** Computed native numbers have no local input model or write action. */
+export function AutoNumberField({
+    binding,
+    render,
+    className,
+}: AutoNumberFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'autoNumber' ||
+        schema.airtableField.config.type !== 'autoNumber'
+    )
+        return status(snapshot);
+    return createElement(NumberControl, {
+        ...numberConfiguration(schema.miniExtConfig),
+        className,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input:
+            typeof snapshot.value === 'number' &&
+            Number.isFinite(snapshot.value)
+                ? String(snapshot.value)
+                : '',
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+    });
+}
 export type TextFieldProps = FieldProps & TextFieldOptions;
 export function TextField({
     binding,

@@ -10,6 +10,10 @@ import {
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
+    checkAutoNumberConsumer,
+    autoNumberReactTypedConsumer,
+} from './autonumber-consumer-checks.mjs';
+import {
     checkDateRendererConsumer,
     dateRendererReactTypedConsumer,
 } from './date-renderer-consumer-checks.mjs';
@@ -1200,6 +1204,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
+        autoNumberReactTypedConsumer
+    );
+    reactSources.push('autonumber-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'url-react-consumer.tsx'),
         urlReactTypedConsumer
     );
@@ -1343,13 +1352,61 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'text',
         'url',
         'number',
+        'autonumber',
         'date',
         'datetime',
         'duration',
         'email',
         'currency',
     ]) {
-        const stylesheet = name === 'email' || name === 'url' ? 'text' : name;
+        const stylesheet =
+            name === 'autonumber'
+                ? 'number'
+                : ['email', 'url'].includes(name)
+                  ? 'text'
+                  : name;
+        if (name === 'autonumber') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'build.mjs',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+            ].map((file) => `examples/react-autonumber/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing AutoNumber example source: ${path}`
+                );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-autonumber/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'AutoNumber preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'AutoNumber example sources must remain unignored'
+            );
+        }
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1489,6 +1546,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const autoNumberProof = await checkAutoNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(autoNumberProof.checks, 16);
+    console.log(
+        `Installed AutoNumber renderer, readonly owners, shared Number CSS and local example: ${autoNumberProof.checks} ESM/CJS groups passed; synthetic data only.`
     );
     const dateRendererProof = await checkDateRendererConsumer({
         consumerDirectory: temporaryDirectory,

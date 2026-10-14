@@ -186,6 +186,12 @@ renderer does not replace its owner. The shipped guides also include
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
 
+For duration clocks, `/react` also exports the `renderDurationField` named slot,
+`DurationFieldProps` and `DurationFieldOptions`. Both the slot and `DurationField`
+use the existing scalar model for native seconds, retained partial input and
+formatting on blur. Optional styles are exported at
+`@miniextensions/sdk/react/duration.css`; see [React Duration presentation](docs/ui.md#react-duration-presentation).
+
 ## Runtime operation map
 
 The client exposes **23 canonical operations**. v1 routes use POST at

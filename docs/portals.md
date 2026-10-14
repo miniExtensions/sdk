@@ -34,6 +34,60 @@ layout settings. Reading a lookup grants no parent linking or unlinking rights;
 the starter exposes parent unlink controls only for direct linked fields.
 The canonical server still validates each requested action and current scope.
 
+## Shared read coordination
+
+`createPortalReadCoordinator` is the lower-level read-attempt owner used by
+`createPortalCollection`. Use it when integrating an existing application store
+and transport. It supplies cancellation and current-result receipts; it does not
+supply credentials, retry reads, plan pagination, merge records, persist
+preferences, or authorize access. Its injected `load` must call the existing
+canonical backend. The backend retains visitor, record, field and action checks.
+
+Choose `concurrency: 'reject'` to preserve collection single-flight behavior.
+After cancellation, an abort-ignoring transport keeps that slot occupied until
+it settles. Choose `'supersede'` when a store already retains displayed rows
+while starting a replacement read. A superseded or retired response resolves as
+`{ type: 'retired' }`, including a late transport failure. Current transport or
+application-callback failures still reject. Neither mode retries automatically.
+
+```ts
+import type { MiniExtensionsClient } from '@miniextensions/sdk';
+import {
+    createPortalReadCoordinator,
+    type PortalOwnerScope,
+} from '@miniextensions/sdk/portals';
+
+export function createPortalStoreReads(
+    client: MiniExtensionsClient,
+    getScope: () => PortalOwnerScope
+) {
+    return createPortalReadCoordinator({
+        getScope,
+        concurrency: 'supersede',
+        load: (input, { signal }) =>
+            client.portals.listLinkedRecords(input, { signal }),
+    });
+}
+```
+
+Call `read` with the same canonical request that the application's transport
+already sends. Publish only an `accepted` receipt whose `isCurrent()` remains
+true. Destroy this owner and create a fresh one on every context transition.
+
+Advance the owner revision on every context transition and destroy the previous
+owner. An optional `isContextCurrent` callback can also bind a current token or
+configuration lease; it is a frontend ownership check, not backend authority.
+Recheck the receipt immediately before each store publication, particularly
+after application callbacks or dispatches that can replace the context.
+`onAccepted` runs synchronously while cancellation and single-flight ownership
+remain held. The optional dispatch/cancellation callbacks let an existing store
+retire page or draft eligibility before transport or abort callbacks run.
+Application callbacks may throw; cancellation still aborts the transport.
+
+Collections retain their existing whole-record page replacement, explicit
+criteria-cleanup acceptance, child eligibility and session checks. Applications
+using the lower-level coordinator continue to own those policies independently.
+
 ## Executable application boundary
 
 Save this as `portal-owner.ts` in your application. Call its methods from

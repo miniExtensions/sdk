@@ -18,6 +18,10 @@ import {
 } from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
+    checkRatingConsumer,
+    ratingReactTypedConsumer,
+} from './rating-consumer-checks.mjs';
+import {
     checkPercentConsumer,
     percentReactTypedConsumer,
 } from './percent-consumer-checks.mjs';
@@ -1212,6 +1216,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'rating-react-consumer.tsx'),
+        ratingReactTypedConsumer
+    );
+    reactSources.push('rating-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'multiline-text-react-consumer.tsx'),
         multilineTextReactTypedConsumer
     );
@@ -1372,6 +1381,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'phone-number',
         'url',
         'number',
+        'rating',
         'percent',
         'date',
         'datetime',
@@ -1379,14 +1389,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'email',
         'currency',
     ]) {
-        const stylesheet =
-            name === 'percent'
-                ? 'number'
-                : ['email', 'url', 'phone-number', 'multiline-text'].includes(
-                        name
-                    )
-                  ? 'text'
-                  : name;
+        const stylesheet = ['percent', 'rating'].includes(name)
+            ? 'number'
+            : ['email', 'url', 'phone-number', 'multiline-text'].includes(name)
+              ? 'text'
+              : name;
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1542,6 +1549,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const ratingProof = await checkRatingConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(ratingProof.checks, 18);
+    console.log(
+        `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const percentProof = await checkPercentConsumer({
         consumerDirectory: temporaryDirectory,

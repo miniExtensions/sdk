@@ -142,6 +142,25 @@ Chromium proof. Native form submission and stopped event bubbling are distinct;
 simulated composition does not certify a real input method. These checks do not
 establish a navigation policy or contact a live backend.
 
+## Rating presentation checks
+
+`pnpm check:package` runs 18 installed ESM/CommonJS groups with synthetic owners.
+They cover native negatives, fractions, above-maximum values, exponents, retained
+partial input, empty/null/zero distinctions, readonly/masked controls, missing or
+mismatched scalar bridges, custom rendering and stale actions. A separate actual
+page owner proves that required Rating zero blocks Next and final Submit without
+rewriting the zero or reaching transport. This is distinct from the scalar's
+invalid-input Save refusal and does not claim universal validation by a lower-level
+binding Save call. Number, Currency and Duration dispatch remain covered.
+
+Public props/options, the Rating-only slot, Form/Grid/List composition and guide
+recipes are typechecked. The example is compiled and bundled against the archive
+using shared optional `number.css`; Rating adds no stylesheet export. After
+building, `node scripts/check-rating-browser.mjs` runs the separate local Chromium
+proof. Applications own native enclosing-form submission; simulated composition
+does not certify real OS input methods. These checks do not introduce stars,
+range enforcement or a rating-specific parser and contact no live backend.
+
 ## Percent presentation checks
 
 `pnpm check:package` exercises installed Percent exports in ESM and CommonJS

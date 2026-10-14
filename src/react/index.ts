@@ -56,6 +56,7 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
+export { renderRatingField, type RatingFieldOptions } from './RatingField.js';
 export {
     renderPercentField,
     type PercentFieldOptions,
@@ -418,6 +419,11 @@ export function EmailField(props: EmailFieldProps): ReactNode {
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
+export type RatingFieldProps = NumberFieldProps;
+/** Native numeric rating drafts stay with the accepted scalar owner. */
+export function RatingField(props: RatingFieldProps): ReactNode {
+    return createElement(NumberField, props);
+}
 export type PercentFieldProps = NumberFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
@@ -443,7 +449,8 @@ export function NumberField({
         return null;
     if (
         snapshot.field?.schema.fieldType === 'number' ||
-        snapshot.field?.schema.fieldType === 'percent'
+        snapshot.field?.schema.fieldType === 'percent' ||
+        snapshot.field?.schema.fieldType === 'rating'
     ) {
         if (snapshot.scalar.retired || snapshot.scalar.kind !== 'number')
             return null;

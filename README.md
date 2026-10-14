@@ -186,6 +186,24 @@ renderer does not replace its owner. The shipped guides also include
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
 
+For calendar dates, `/react` also exports the `renderDateField` named slot,
+`DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the
+owner's date model for manual `YYYY-MM-DD` input, retained partial drafts and
+explicit clearing. Optional styles are exported at
+`@miniextensions/sdk/react/date.css`; see [React Date presentation](docs/ui.md#react-date-presentation).
+
+For explicit-offset timestamps, `/react` also exports the `renderDateTimeField`
+named slot, `DateTimeFieldProps` and `DateTimeFieldOptions`. Both the slot and
+`DateTimeField` use the owner's date model for manual input, retained partial
+drafts and explicit clearing. Optional styles are exported at
+`@miniextensions/sdk/react/datetime.css`; see [React DateTime presentation](docs/ui.md#react-datetime-presentation).
+
+For duration clocks, `/react` also exports the `renderDurationField` named slot,
+`DurationFieldProps` and `DurationFieldOptions`. Both the slot and `DurationField`
+use the existing scalar model for native seconds, retained partial input and
+formatting on blur. Optional styles are exported at
+`@miniextensions/sdk/react/duration.css`; see [React Duration presentation](docs/ui.md#react-duration-presentation).
+
 ## Runtime operation map
 
 The client exposes **23 canonical operations**. v1 routes use POST at

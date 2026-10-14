@@ -758,8 +758,9 @@ const cache = mergePortalPartialRecords(
 
 Accept responses using the existing visitor, configuration, view and request
 owners **before** applying this policy. Keep a cache within that scope and retire
-it on scope changes. A field or record in the cache union proves completeness
-only; it never admits a read, edit, child Form, action or display projection.
+it on scope changes. Retained partial metadata and cells establish neither
+current completeness nor read, edit, child Form, action or display-projection
+authority.
 Use the accepted current response and existing capability checks for those
 decisions. Backend authorization, field/action enforcement and privileged
 persistence remain in the existing miniExtensions backend.

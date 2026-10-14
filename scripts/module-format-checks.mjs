@@ -174,6 +174,10 @@ export function assertModuleFormats(root) {
                 './react/button.css',
                 './react/checkbox.css',
                 './react/text.css',
+                './react/number.css',
+                './react/date.css',
+                './react/datetime.css',
+                './react/duration.css',
             ].includes(subpath)
         ) {
             assert.equal(mapping, `./dist/esm/${subpath.slice(2)}`);

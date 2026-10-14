@@ -113,8 +113,9 @@ export const mergePortalPartialFields = <Field extends { id: string }>(
 /**
  * Merge already accepted states within one caller-owned cache scope. Detect
  * ID-keyed records by matching any own cell key in either state against an
- * incoming field ID; otherwise use incoming field names. Metadata union is
- * cache completeness only: do not use it to admit actions or view projections.
+ * incoming field ID; otherwise use incoming field names. Retained partial
+ * metadata and cells establish neither current completeness nor action/view
+ * authority.
  */
 export const mergePortalPartialTableState = <
     Field extends PortalPartialField,

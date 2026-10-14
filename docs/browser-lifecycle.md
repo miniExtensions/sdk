@@ -55,8 +55,11 @@ used by its actual handlers.
 
 [`src/main.ts`](../examples/browser/src/main.ts) owns separate visitor clients,
 sessions, revisions, pending actions and drafts. Authentication returns a
-credential result; the app deliberately applies a current result and reloads
-the screen. Browser cookies or another visitor's session do not authenticate
+credential result; after a successful explicit login, password or code submission,
+the app applies the current result and loads the authenticated screen without a
+second click. Session application itself remains read-free. If that load fails,
+**Reload** retries the read without repeating authentication. Browser cookies or
+another visitor's session do not authenticate
 this client. Sessions are memory-only by default. The starter’s optional
 **Remember each visitor’s login in this tab** control wires the existing
 restoration adapter; see [refresh, retry and logout](../examples/browser/README.md#authentication-and-visitor-isolation).

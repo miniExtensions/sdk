@@ -176,6 +176,300 @@ describe(
     'deep review browser authentication ownership',
     { concurrency: false },
     () => {
+        for (const remember of [false, true]) {
+            it(`continues an explicit login with one authenticated load (remember=${remember})`, async (test) => {
+                const page = browserLoginPage();
+                const accepted = loadedForm();
+                accepted.extensionId = page.extensionId;
+                const calls: { route: string; session: RuntimeSession }[] = [];
+                const window = await environment(test, async (url, init) => {
+                    const route = new URL(String(url)).searchParams.get(
+                        'route'
+                    )!;
+                    const body = JSON.parse(String(init?.body));
+                    calls.push({ route, session: body.miniExtStorageV4 });
+                    assert.equal(init?.credentials, 'omit');
+                    if (route === 'loginIntoExtensionUsingLoginPageExtension') {
+                        assert.deepEqual(body.loginCredentials, {
+                            Email: 'pilot@example.test',
+                        });
+                        return jsonResponse({
+                            type: 'found-record',
+                            encryptedLoginToken: 'SYNTHETIC_CONTINUE',
+                        });
+                    }
+                    assert.equal(route, 'fetchExtensionForEndUser');
+                    return jsonResponse(
+                        Object.values(body.miniExtStorageV4).includes(
+                            'SYNTHETIC_CONTINUE'
+                        )
+                            ? accepted
+                            : page
+                    );
+                });
+                browserInput(window, 'remember-session').checked = remember;
+                await connectBrowser(window, page);
+                enterEmail(window, 'pilot@example.test');
+                submitForm(window, 'Log in and use session');
+                await waitFor(
+                    () =>
+                        calls.length === 3 &&
+                        browserIdle(window) &&
+                        window.document
+                            .getElementById('status')!
+                            .textContent!.includes('Loaded form')
+                );
+                assert.deepEqual(
+                    calls.map(({ route }) => route),
+                    [
+                        'fetchExtensionForEndUser',
+                        'loginIntoExtensionUsingLoginPageExtension',
+                        'fetchExtensionForEndUser',
+                    ]
+                );
+                assert.deepEqual(calls[0].session, {});
+                assert.deepEqual(Object.values(calls[2].session), [
+                    'SYNTHETIC_CONTINUE',
+                ]);
+                assert.equal(
+                    findButton(window, 'Log in and use session'),
+                    undefined
+                );
+                assert.match(
+                    window.document.getElementById('session-summary')!
+                        .textContent!,
+                    /Authenticated/
+                );
+                assert.equal(window.sessionStorage.length, remember ? 1 : 0);
+            });
+
+            it(`retries a failed post-login load without replaying authentication (remember=${remember})`, async (test) => {
+                const page = browserLoginPage();
+                const accepted = loadedForm();
+                accepted.extensionId = page.extensionId;
+                const sessions: RuntimeSession[] = [];
+                let logins = 0;
+                let failLoad = true;
+                const window = await environment(test, async (url, init) => {
+                    const route = new URL(String(url)).searchParams.get(
+                        'route'
+                    );
+                    const body = JSON.parse(String(init?.body));
+                    if (route === 'loginIntoExtensionUsingLoginPageExtension') {
+                        logins++;
+                        return jsonResponse({
+                            type: 'found-record',
+                            encryptedLoginToken: 'SYNTHETIC_READ_RETRY',
+                        });
+                    }
+                    assert.equal(route, 'fetchExtensionForEndUser');
+                    sessions.push(body.miniExtStorageV4);
+                    if (Object.keys(body.miniExtStorageV4).length === 0)
+                        return jsonResponse(page);
+                    if (failLoad)
+                        throw new Error('Synthetic authenticated read failed');
+                    return jsonResponse(accepted);
+                });
+                browserInput(window, 'remember-session').checked = remember;
+                await connectBrowser(window, page);
+                enterEmail(window, 'pilot@example.test');
+                submitForm(window, 'Log in and use session');
+                await waitFor(
+                    () =>
+                        sessions.length === 2 &&
+                        browserIdle(window) &&
+                        window.document
+                            .getElementById('status')!
+                            .classList.contains('error')
+                );
+                assert.equal(logins, 1);
+                assert.match(
+                    window.document.getElementById('session-summary')!
+                        .textContent!,
+                    /Authenticated/
+                );
+                assert.equal(
+                    findButton(window, 'Log in and use session'),
+                    undefined
+                );
+                assert.equal(window.sessionStorage.length, remember ? 1 : 0);
+                failLoad = false;
+                clickById(window, 'reload');
+                await waitFor(
+                    () =>
+                        sessions.length === 3 &&
+                        browserIdle(window) &&
+                        window.document
+                            .getElementById('status')!
+                            .textContent!.includes('Loaded form')
+                );
+                assert.equal(logins, 1);
+                assert.deepEqual(sessions[1], sessions[2]);
+                assert.deepEqual(Object.values(sessions[2]), [
+                    'SYNTHETIC_READ_RETRY',
+                ]);
+            });
+        }
+
+        it('does not continue loading when explicit login finds no record', async (test) => {
+            const page = browserLoginPage();
+            const routes: string[] = [];
+            const window = await environment(test, async (url) => {
+                const route = new URL(String(url)).searchParams.get('route')!;
+                routes.push(route);
+                return jsonResponse(
+                    route === 'fetchExtensionForEndUser'
+                        ? page
+                        : { type: 'no-record' }
+                );
+            });
+            await connectBrowser(window, page);
+            enterEmail(window, 'missing@example.test');
+            submitForm(window, 'Log in and use session');
+            await waitFor(() => browserIdle(window));
+            assert.deepEqual(routes, [
+                'fetchExtensionForEndUser',
+                'loginIntoExtensionUsingLoginPageExtension',
+            ]);
+            assert.ok(findButton(window, 'Log in and use session'));
+            assert.match(
+                window.document.getElementById('status')!.textContent!,
+                /No matching login record/
+            );
+        });
+
+        for (const resultType of ['correct', 'wrong'] as const) {
+            it(`continues only a successful explicit password submission (${resultType})`, async (test) => {
+                const page = passwordPage();
+                const accepted = loadedForm();
+                accepted.extensionId = page.extensionId;
+                const routes: string[] = [];
+                const sessions: RuntimeSession[] = [];
+                const window = await environment(test, async (url, init) => {
+                    const route = new URL(String(url)).searchParams.get(
+                        'route'
+                    )!;
+                    const body = JSON.parse(String(init?.body));
+                    routes.push(route);
+                    if (route === 'verifyExtensionPassword') {
+                        assert.equal(body.extensionPassword, 'Exact Password');
+                        return jsonResponse(
+                            resultType === 'correct'
+                                ? {
+                                      type: 'correct',
+                                      encryptedExtensionPassword:
+                                          'SYNTHETIC_PASSWORD_CONTINUE',
+                                  }
+                                : { type: 'wrong' }
+                        );
+                    }
+                    assert.equal(route, 'fetchExtensionForEndUser');
+                    sessions.push(body.miniExtStorageV4);
+                    return jsonResponse(
+                        Object.keys(body.miniExtStorageV4).length === 0
+                            ? page
+                            : accepted
+                    );
+                });
+                browserInput(window, 'api-origin').value =
+                    'https://sdk.example.test';
+                browserInput(window, 'share-id').value =
+                    browserLoginPage().payload.shareId;
+                submitForm(window, 'Connect and load');
+                await waitFor(() => browserIdle(window));
+                const password = findButton(window, 'Verify and use password')!
+                    .closest('form')!
+                    .querySelector('input')!;
+                password.value = 'Exact Password';
+                submitForm(window, 'Verify and use password');
+                await waitFor(() => browserIdle(window));
+                assert.deepEqual(routes, [
+                    'fetchExtensionForEndUser',
+                    'verifyExtensionPassword',
+                    ...(resultType === 'correct'
+                        ? ['fetchExtensionForEndUser']
+                        : []),
+                ]);
+                if (resultType === 'correct') {
+                    assert.deepEqual(Object.values(sessions[1]), [
+                        'SYNTHETIC_PASSWORD_CONTINUE',
+                    ]);
+                    assert.match(
+                        window.document.getElementById('status')!.textContent!,
+                        /Loaded form/
+                    );
+                } else {
+                    assert.equal(sessions.length, 1);
+                    assert.match(
+                        window.document.getElementById('status')!.textContent!,
+                        /Incorrect password/
+                    );
+                }
+            });
+        }
+
+        for (const action of ['cancel', 'visitor switch'] as const) {
+            it(`rejects a late post-login load after ${action}`, async (test) => {
+                const page = browserLoginPage();
+                const accepted = loadedForm();
+                accepted.extensionId = page.extensionId;
+                const held = deferred<Response>();
+                const sessions: RuntimeSession[] = [];
+                let logins = 0;
+                const window = await environment(test, async (url, init) => {
+                    const route = new URL(String(url)).searchParams.get(
+                        'route'
+                    );
+                    const body = JSON.parse(String(init?.body));
+                    if (route === 'loginIntoExtensionUsingLoginPageExtension') {
+                        logins++;
+                        return jsonResponse({
+                            type: 'found-record',
+                            encryptedLoginToken: 'SYNTHETIC_HELD_LOAD',
+                        });
+                    }
+                    assert.equal(route, 'fetchExtensionForEndUser');
+                    sessions.push(body.miniExtStorageV4);
+                    return Object.keys(body.miniExtStorageV4).length > 0
+                        ? held.promise
+                        : jsonResponse(page);
+                });
+                await connectBrowser(window, page);
+                enterEmail(window, 'pilot@example.test');
+                submitForm(window, 'Log in and use session');
+                await waitFor(() => sessions.length === 2);
+                assert.equal(browserIdle(window), false);
+                if (action === 'cancel') clickById(window, 'cancel');
+                else {
+                    const selector = window.document.getElementById('visitor');
+                    assert.ok(selector instanceof window.HTMLSelectElement);
+                    selector.value = 'B';
+                    selector.dispatchEvent(new window.Event('change'));
+                }
+                held.resolve(jsonResponse(accepted));
+                await new Promise<void>((resolve) => setImmediate(resolve));
+                assert.equal(logins, 1);
+                assert.equal(sessions.length, 2);
+                assert.equal(browserIdle(window), true);
+                assert.equal(
+                    window.document.body.textContent!.includes('Initial title'),
+                    false
+                );
+                assert.doesNotMatch(
+                    window.document.getElementById('status')!.textContent!,
+                    /Loaded form/
+                );
+                if (action === 'visitor switch') {
+                    clickById(window, 'reload');
+                    await waitFor(
+                        () => sessions.length === 3 && browserIdle(window)
+                    );
+                    assert.deepEqual(sessions[2], {});
+                    assert.equal(logins, 1);
+                }
+            });
+        }
+
         for (const [title, expected] of [
             ['Portal PIN', 'password'],
             ['Account password', 'password'],
@@ -220,6 +514,8 @@ describe(
         for (const verificationType of ['email', 'phoneNumber'] as const) {
             it(`masks the configured ${verificationType} verification destination and still confirms`, async (test) => {
                 const page = browserLoginPage();
+                const accepted = loadedForm();
+                accepted.extensionId = page.extensionId;
                 const name = verificationType === 'email' ? 'Email' : 'Phone';
                 if (verificationType === 'phoneNumber') {
                     const schema: LoginPageResult['payload']['fieldNamesToSchemas'][string] =
@@ -263,7 +559,13 @@ describe(
                     const body = JSON.parse(String(init?.body));
                     calls.push({ route, body });
                     if (route === 'fetchExtensionForEndUser')
-                        return jsonResponse(page);
+                        return jsonResponse(
+                            Object.values(
+                                body.miniExtStorageV4 as RuntimeSession
+                            ).includes('synthetic_confirmed_token')
+                                ? accepted
+                                : page
+                        );
                     if (route === 'loginIntoExtensionUsingLoginPageExtension')
                         return jsonResponse({
                             ...verificationSent(),
@@ -306,6 +608,7 @@ describe(
                         'fetchExtensionForEndUser',
                         'loginIntoExtensionUsingLoginPageExtension',
                         'confirmVerificationCodeForLogin',
+                        'fetchExtensionForEndUser',
                     ]
                 );
                 assert.deepEqual(calls[1].body.loginCredentials, {
@@ -316,6 +619,16 @@ describe(
                     'verification_example'
                 );
                 assert.equal(calls[2].body.verificationCode, '123456');
+                assert.deepEqual(
+                    Object.values(
+                        calls[3].body.miniExtStorageV4 as RuntimeSession
+                    ),
+                    ['synthetic_confirmed_token']
+                );
+                assert.match(
+                    window.document.getElementById('status')!.textContent!,
+                    /Loaded form/
+                );
             });
         }
 
@@ -664,13 +977,7 @@ describe(
                 { id: 'verification_account_a', code: 'wrong_code' },
                 { id: 'verification_account_a', code: 'correct_code' },
             ]);
-            assert.equal(loadedSessions.length, 1);
-            const reload = window.document.getElementById('reload');
-            assert.ok(reload instanceof window.HTMLButtonElement);
-            reload.click();
-            await waitFor(
-                () => loadedSessions.length === 2 && browserIdle(window)
-            );
+            assert.equal(loadedSessions.length, 2);
             assert.deepEqual(Object.values(loadedSessions[1]), [
                 'encrypted_account_a',
             ]);
@@ -751,13 +1058,7 @@ describe(
                     ) === true && browserIdle(window)
             );
             assert.deepEqual(confirmedIds, ['verification_account_b']);
-            assert.equal(loadedSessions.length, 1);
-            const reload = window.document.getElementById('reload');
-            assert.ok(reload instanceof window.HTMLButtonElement);
-            reload.click();
-            await waitFor(
-                () => loadedSessions.length === 2 && browserIdle(window)
-            );
+            assert.equal(loadedSessions.length, 2);
             assert.deepEqual(Object.values(loadedSessions[1]), [
                 'encrypted_account_b',
             ]);
@@ -835,6 +1136,7 @@ describe(
             enterEmail(window, 'pilot@example.test');
             submitForm(window, 'Log in and use session');
             await waitFor(() => browserIdle(window));
+            assert.equal(calls.length, 2);
             assert.equal(window.sessionStorage.length, 1);
             const stored = window.sessionStorage.getItem(
                 window.sessionStorage.key(0)!
@@ -883,7 +1185,7 @@ describe(
             await restartBrowser(f.window);
             f.mode('held');
             beginRememberedConnection(f.window, f.page);
-            await waitFor(() => f.calls.length === 3);
+            await waitFor(() => f.calls.length === 4);
             assert.equal(
                 findButton(f.window, 'Log in and use session'),
                 undefined
@@ -950,11 +1252,11 @@ describe(
                     .textContent!,
                 /Authenticated/
             );
-            assert.equal(f.calls.length, 3);
+            assert.equal(f.calls.length, 4);
             f.mode('accepted');
             findButton(f.window, 'Retry session restoration')!.click();
             await waitFor(() => browserIdle(f.window));
-            assert.equal(f.calls.length, 5);
+            assert.equal(f.calls.length, 6);
             assert.match(
                 f.window.document.getElementById('status')!.textContent!,
                 /Loaded form/
@@ -966,7 +1268,7 @@ describe(
             await restartBrowser(f.window);
             f.mode('held');
             beginRememberedConnection(f.window, f.page);
-            await waitFor(() => f.calls.length === 3);
+            await waitFor(() => f.calls.length === 4);
             clickById(f.window, 'cancel');
             f.held.resolve(jsonResponse(f.accepted));
             await new Promise<void>((resolve) => setImmediate(resolve));
@@ -1007,17 +1309,30 @@ describe(
 
         it('denied storage offers explicit login without claiming restoration or remembering', async (test) => {
             const page = browserLoginPage();
-            const window = await environment(test, async (url) =>
-                jsonResponse(
-                    new URL(String(url)).searchParams.get('route') ===
-                        'fetchExtensionForEndUser'
-                        ? page
-                        : {
-                              type: 'found-record',
-                              encryptedLoginToken: 'SYNTHETIC_MEMORY_ONLY',
-                          }
-                )
-            );
+            const accepted = loadedForm();
+            const calls: { route: string | null; session: RuntimeSession }[] =
+                [];
+            const window = await environment(test, async (url, init) => {
+                const route = new URL(String(url)).searchParams.get('route');
+                const body = JSON.parse(String(init?.body)) as {
+                    miniExtStorageV4: RuntimeSession;
+                };
+                calls.push({ route, session: body.miniExtStorageV4 });
+                if (route === 'fetchExtensionForEndUser')
+                    return jsonResponse(
+                        Object.values(body.miniExtStorageV4).includes(
+                            'SYNTHETIC_MEMORY_ONLY'
+                        )
+                            ? accepted
+                            : page
+                    );
+                if (route === 'loginIntoExtensionUsingLoginPageExtension')
+                    return jsonResponse({
+                        type: 'found-record',
+                        encryptedLoginToken: 'SYNTHETIC_MEMORY_ONLY',
+                    });
+                throw new Error(`Unexpected synthetic route ${route}.`);
+            });
             Object.defineProperty(window, 'sessionStorage', {
                 configurable: true,
                 get() {
@@ -1043,6 +1358,21 @@ describe(
                 window.document.getElementById('session-summary')!.textContent!,
                 /Authenticated/
             );
+            assert.match(
+                window.document.getElementById('status')!.textContent!,
+                /Loaded form loaded/
+            );
+            assert.deepEqual(
+                calls.map((call) => call.route),
+                [
+                    'fetchExtensionForEndUser',
+                    'loginIntoExtensionUsingLoginPageExtension',
+                    'fetchExtensionForEndUser',
+                ]
+            );
+            assert.deepEqual(Object.values(calls[2].session), [
+                'SYNTHETIC_MEMORY_ONLY',
+            ]);
             clickById(window, 'logout');
             assert.match(
                 window.document.getElementById('status')!.textContent!,
@@ -1274,6 +1604,10 @@ describe(
                     false
                 );
                 assert.equal(saved.includes('123456'), false);
+                assert.match(
+                    window.document.getElementById('status')!.textContent!,
+                    /Loaded form/
+                );
                 await restartBrowser(window);
                 beginRememberedConnection(window, login);
                 await waitFor(() => browserIdle(window));
@@ -1305,10 +1639,11 @@ describe(
             await restartBrowser(f.window);
             f.mode('held');
             beginRememberedConnection(f.window, f.page);
-            await waitFor(() => f.calls.length === 3);
+            await waitFor(() => f.calls.length === 4);
             clickById(f.window, 'cancel');
             assert.ok(findButton(f.window, 'Retry session restoration'));
             findButton(f.window, 'Continue with login')!.click();
+            f.mode('accepted');
             enterEmail(f.window, 'pilot@example.test');
             submitForm(f.window, 'Log in and use session');
             await waitFor(() => browserIdle(f.window));

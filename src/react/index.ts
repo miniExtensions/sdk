@@ -42,6 +42,10 @@ import {
     type NumberFieldOptions,
 } from './NumberField.js';
 export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
+export {
+    renderPercentField,
+    type PercentFieldOptions,
+} from './PercentField.js';
 import {
     CurrencyControl,
     currencyConfiguration,
@@ -350,6 +354,7 @@ export function EmailField(props: EmailFieldProps): ReactNode {
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
+export type PercentFieldProps = NumberFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 export type DurationFieldProps = FieldProps & DurationFieldOptions;
 export function NumberField({
@@ -372,7 +377,10 @@ export function NumberField({
         snapshot.scalar.kind === 'checkbox'
     )
         return null;
-    if (snapshot.field?.schema.fieldType === 'number') {
+    if (
+        snapshot.field?.schema.fieldType === 'number' ||
+        snapshot.field?.schema.fieldType === 'percent'
+    ) {
         if (snapshot.scalar.retired || snapshot.scalar.kind !== 'number')
             return null;
         const config = numberConfiguration(snapshot.field.schema.miniExtConfig);
@@ -510,6 +518,10 @@ export function NumberField({
         ),
         status(snapshot)
     );
+}
+/** Percent input preserves native fractions without display conversion. */
+export function PercentField(props: PercentFieldProps): ReactNode {
+    return createElement(NumberField, props);
 }
 /** Currency adornment shares the existing numeric owner and raw native units. */
 export function CurrencyField(props: CurrencyFieldProps): ReactNode {

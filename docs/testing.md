@@ -88,3 +88,19 @@ introduced.
 The Node 24 check name is unchanged. If repository protection still requires
 `check (22)`, a repository administrator must remove that retired requirement;
 the workflow does not change repository protection settings.
+
+## Email presentation checks
+
+`pnpm check:package` exercises the installed Email exports in ESM and CommonJS,
+including single-line whitespace/case/Unicode, invalid address drafts, explicit null
+clearing, composition completion, stale actions, readonly and masked controls,
+custom binding rendering and retired hosts. These tests use synthetic owners and
+assert that no implicit Save occurs. Installed declaration checks cover public
+props/options, the Email-only slot and Form/Grid/List composition. The public
+example is typechecked and bundled against the archive using the existing
+optional `text.css`; Email adds no stylesheet export.
+
+After building, `node scripts/check-email-browser.mjs` runs the separate local
+Chromium proof. It distinguishes stopped event bubbling from native enclosing
+form submission. Simulated composition is not a real input-method certification.
+Neither suite validates delivery, sends mail or contacts a live backend.

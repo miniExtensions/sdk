@@ -1,5 +1,9 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
+import {
+    checkEmailConsumer,
+    emailReactTypedConsumer,
+} from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
     checkPortalButtonCompositionConsumer,
@@ -1168,6 +1172,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'email-react-consumer.tsx'),
+        emailReactTypedConsumer
+    );
+    reactSources.push('email-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'duration-react-consumer.tsx'),
         durationReactTypedConsumer
     );
@@ -1275,10 +1284,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         17
     );
     // Resolve CSS and React through the installed archive, not checkout aliases.
-    for (const name of ['button', 'checkbox', 'text', 'number']) {
+    for (const name of ['button', 'checkbox', 'text', 'number', 'email']) {
+        const stylesheet = name === 'email' ? 'text' : name;
         const exampleDirectory = join(temporaryDirectory, `${name}-example`);
         mkdirSync(exampleDirectory);
-        for (const file of ['main.ts', 'styles.css']) {
+        const exampleFiles = ['main.ts', 'styles.css'];
+        if (name === 'email') exampleFiles.push('owners.ts');
+        for (const file of exampleFiles) {
             cpSync(
                 join(process.cwd(), `examples/react-${name}`, file),
                 join(exampleDirectory, file)
@@ -1310,16 +1322,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             exampleBundle.outputFiles.some(
                 (file) =>
                     file.path.endsWith('.css') &&
-                    file.text.includes(`.mx-sdk-${name}`)
+                    file.text.includes(`.mx-sdk-${stylesheet}`)
             )
         );
         assert.equal(
             readFileSync(
-                join(installedPackage, `dist/esm/react/${name}.css`),
+                join(installedPackage, `dist/esm/react/${stylesheet}.css`),
                 'utf8'
             ),
             readFileSync(
-                join(installedPackage, `dist/cjs/react/${name}.css`),
+                join(installedPackage, `dist/cjs/react/${stylesheet}.css`),
                 'utf8'
             )
         );
@@ -1347,6 +1359,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(textProof.checks, 8);
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const emailProof = await checkEmailConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(emailProof.checks, 12);
+    console.log(
+        `Installed Email renderer, binding, shared Text CSS and local example: ${emailProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const numberProof = await checkNumberConsumer({
         consumerDirectory: temporaryDirectory,

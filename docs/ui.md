@@ -1246,6 +1246,70 @@ typing, selection/caret, clearing, simulated composition, remounting, permission
 forced colors and narrow layout and captures screenshots. Simulated composition
 does not certify every platform's input method or screen reader.
 
+## React Email presentation
+
+The optional `/react` entry exports `EmailField`, `EmailFieldProps`,
+`EmailFieldOptions` and `renderEmailField`. `EmailField` delegates to `TextField`;
+its props and options are aliases of `TextFieldProps` and `TextFieldOptions`.
+The existing `{ binding, render }` override replaces all stock markup.
+
+```tsx
+import { EmailField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/text.css';
+
+export function ContactEmail({ binding }: { binding: FormFieldBinding }) {
+    return <EmailField binding={binding} clearLabel="Clear email address" />;
+}
+```
+
+The named helper accepts only `FieldRendererProps<'email'>` and works in the
+existing `FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList` slots:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderEmailField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/text.css';
+
+export const emailRenderers: FieldRendererSlots<ReactNode> = {
+    renderEmailField: (props) =>
+        renderEmailField(props, { className: 'contact-email' }),
+};
+```
+
+The control uses a text input, or a password input when accepted masking config
+requires it. For native single-line entry, whitespace, mixed case, Unicode and
+invalid address strings remain native drafts. The renderer does not trim, change case or apply
+`emailLetterCase`; page and server validation own email syntax and configured
+policy. An explicit empty edit or Clear sets the native draft to `null`. An
+initially absent value stays absent until an edit. Invalid text is not silently
+replaced with the last syntactically valid address. Native single-line inputs
+strip embedded line breaks; this is not a multiline editor.
+
+The shared Text control supplies labels, placeholder and required indication,
+plain-text associated feedback, Clear focus restoration and local composition
+buffering. Read-only settings, masking, pending and computed restrictions are
+preserved. Hidden, blocked and retired hosts omit the control; stale callbacks
+remain guarded by their accepted owner. A supplied `render` override continues
+to own its presentation. Keep owners outside React mounts: mounting, StrictMode,
+remounting and unmounting do not create or destroy owners or save drafts.
+
+Email entry does not send mail, create `mailto:` links, navigate, verify an
+address or start a request. Saving remains an explicit `owner.save()` action.
+Applications own their enclosing HTML form's submit policy: stopping key-event
+bubbling does not prevent native Enter submission. Clear is `type="button"`.
+
+Email uses the existing optional `@miniextensions/sdk/react/text.css` stylesheet
+and `mx-sdk-text*` classes. There is no separate Email stylesheet. JavaScript does
+not import CSS; `className` decorates the wrapper and the stylesheet can be
+overridden or omitted. Core and `/ui` stay React-free.
+
+After building, `node examples/react-email/dev.mjs` serves the synthetic public
+API example at `http://127.0.0.1:4183`. `node scripts/check-email-browser.mjs`
+checks native entry, clearing, remounts and surrounding-form Enter behavior.
+Simulated composition checks do not certify real OS input methods.
+
 ## React Number presentation
 
 The optional `/react` entry exports `NumberField`, `NumberFieldProps`,

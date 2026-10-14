@@ -19,6 +19,7 @@ export {
     renderSingleLineTextField,
     type TextFieldOptions,
 } from './TextField.js';
+export { renderEmailField, type EmailFieldOptions } from './EmailField.js';
 import {
     CheckboxControl,
     checkboxConfiguration,
@@ -302,6 +303,11 @@ export function TextField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setValue: (value) => binding.setValue(value).accepted,
     });
+}
+/** Email preserves exact text; surrounding page and server owners validate it. */
+export type EmailFieldProps = TextFieldProps;
+export function EmailField(props: EmailFieldProps): ReactNode {
+    return createElement(TextField, props);
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;

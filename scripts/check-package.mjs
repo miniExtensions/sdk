@@ -18,6 +18,10 @@ import {
     durationRendererReactTypedConsumer,
 } from './duration-renderer-consumer-checks.mjs';
 import {
+    checkCurrencyRendererConsumer,
+    currencyRendererReactTypedConsumer,
+} from './currency-renderer-consumer-checks.mjs';
+import {
     checkPortalButtonCompositionConsumer,
     portalButtonCompositionTypedConsumer,
     portalButtonCompositionReactTypedConsumer,
@@ -289,6 +293,8 @@ try {
         'dist/cjs/react/datetime.css',
         'dist/esm/react/duration.css',
         'dist/cjs/react/duration.css',
+        'dist/esm/react/currency.css',
+        'dist/cjs/react/currency.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1215,6 +1221,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('duration-renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'currency-renderer-react-consumer.tsx'),
+        currencyRendererReactTypedConsumer
+    );
+    reactSources.push('currency-renderer-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'form-composition-consumer.ts'),
         formCompositionTypedConsumer
     );
@@ -1326,8 +1337,51 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'datetime',
         'duration',
         'email',
+        'currency',
     ]) {
         const stylesheet = name === 'email' ? 'text' : name;
+        if (name === 'currency') {
+            const sourcePaths = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-currency/${file}`);
+            for (const path of sourcePaths)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Currency example source: ${path}`
+                );
+            const generatedPaths = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-currency/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generatedPaths],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generatedPaths,
+                'Currency preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sourcePaths],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Currency example sources must remain unignored'
+            );
+        }
         const exampleDirectory = join(temporaryDirectory, `${name}-example`);
         mkdirSync(exampleDirectory);
         const exampleFiles = ['main.ts', 'styles.css'];
@@ -1441,6 +1495,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(durationRendererProof.checks, 80);
     console.log(
         `Installed Duration renderer, binding, CSS and local example: ${durationRendererProof.checks} ESM/CJS groups across five formats passed; synthetic drafts only.`
+    );
+    const currencyRendererProof = await checkCurrencyRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(currencyRendererProof.checks, 20);
+    console.log(
+        `Installed Currency renderer, binding, CSS and local example: ${currencyRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const linkedRecordsProof = await checkLinkedRecordsConsumer({
         consumerDirectory: temporaryDirectory,

@@ -88,3 +88,152 @@ introduced.
 The Node 24 check name is unchanged. If repository protection still requires
 `check (22)`, a repository administrator must remove that retired requirement;
 the workflow does not change repository protection settings.
+
+## Multiline Text presentation checks
+
+`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+They cover whitespace, blank and trailing lines, literal markup, native string/null
+drafts, explicit clearing, composition completion and cancellation, character
+limits, readonly controls, stale actions, owner replacement, custom binding
+rendering and retired hosts. Unsupported append-only, attachment-display and
+explicit masking signals from either configuration render only a status; the
+checks assert that native values, controls, counts and value-derived feedback are
+absent. The suite asserts no implicit Save or external request. Public exports,
+the multiline-only slot, Form/Grid/List composition and guide recipes are
+typechecked; the example is bundled using shared optional `text.css`.
+
+Happy DOM retains textarea CRLF line endings. Its checks prove that mounting and
+remounting leave the owner unchanged, and that a deliberate LF edit is accepted;
+they do not establish native DOM line-ending normalization. After building,
+`node scripts/check-multiline-text-browser.mjs` runs the separate local Chromium
+proof, including native textarea line endings and Enter inserting a newline.
+Simulated composition is not a real input-method certification. These checks do
+not implement rich text, append operations, attachment workflows or login.
+
+## Email presentation checks
+
+`pnpm check:package` exercises the installed Email exports in ESM and CommonJS,
+including single-line whitespace/case/Unicode, invalid address drafts, explicit null
+clearing, composition completion, stale actions, readonly and masked controls,
+custom binding rendering and retired hosts. These tests use synthetic owners and
+assert that no implicit Save occurs. Installed declaration checks cover public
+props/options, the Email-only slot and Form/Grid/List composition. The public
+example is typechecked and bundled against the archive using the existing
+optional `text.css`; Email adds no stylesheet export.
+
+After building, `node scripts/check-email-browser.mjs` runs the separate local
+Chromium proof. It distinguishes stopped event bubbling from native enclosing
+form submission. Simulated composition is not a real input-method certification.
+Neither suite validates delivery, sends mail or contacts a live backend.
+
+## URL presentation checks
+
+`pnpm check:package` exercises installed URL exports in ESM and CommonJS with
+synthetic owners. The checks cover literal single-line values, including relative
+paths and `javascript:`/`data:` strings, without links, navigation or requests;
+explicit null clearing; composition completion; stale actions; readonly and
+masked controls; binding overrides; and retired hosts. They assert no implicit
+Save. Public props/options, the URL-only slot, Form/Grid/List composition and guide
+recipes are typechecked. The example is compiled and bundled against the archive
+using the shared optional `text.css`; URL adds no stylesheet export.
+
+After building, `node scripts/check-url-browser.mjs` runs the separate local
+Chromium proof. Native form submission and stopped event bubbling are distinct;
+simulated composition does not certify a real input method. These checks do not
+establish a navigation policy or contact a live backend.
+
+## Count presentation checks
+
+`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+They cover readonly Form bindings without a scalar, finite native displays,
+null/missing values, invalid metadata retaining a nonempty native number,
+same-owner validity changes through explicit synthetic reloads, malformed metadata
+rejection by hosts and blank direct-helper display, forged capabilities,
+masking from either configuration, associated feedback, stale controls, custom
+rendering and hidden or retired owners. The adjacent Number field remains editable.
+
+Actual Form composition and Portal Grid/List detail hosts retain readonly Count
+capabilities. The Portal fixture makes one explicit synthetic load; rendering and
+rerendering add no reads, writes or Save. It does not fabricate a computed inline
+cell binding. Public props/options, readonly negative types, wrong-slot rejection,
+Form/Grid/List composition and both guide recipes are typechecked. The local
+example compiles and bundles with shared optional `number.css`; Count adds no
+stylesheet export, and its sources remain tracked while preview outputs are ignored.
+
+After building, `node scripts/check-count-browser.mjs` runs the separate local
+Chromium proof. All fixtures are synthetic. These checks do not calculate linked
+record counts, introduce integer/range policy or contact a live backend.
+
+## AutoNumber presentation checks
+
+`pnpm check:package` runs 16 installed ESM/CommonJS groups with synthetic Form
+owners. They verify disabled native-number display, zero/fraction/negative/exponent
+values, null and missing values, no writes on mount/remount, and defensive blank
+display for nonfinite or nonnumeric input. Forged editable capabilities with
+throwing scalar accessors and setters remain unused. Masking from either config,
+unique labels, feedback, pending state, wrong-kind status, custom rendering,
+owner replacement and retirement are covered without Save or requests.
+
+Public props/options, readonly AutoNumber capabilities, wrong-slot rejection,
+Form/Grid/List composition and guide recipes are typechecked. The example is
+compiled and bundled against the archive with shared optional `number.css`;
+there is no AutoNumber stylesheet export. Its seven source files must remain
+unignored and generated preview files ignored. After building,
+`node scripts/check-autonumber-browser.mjs` runs a separate local Chromium proof.
+These checks do not test server-side number generation or introduce a local
+sequence, editing action or validation policy.
+
+## Rating presentation checks
+
+`pnpm check:package` runs 18 installed ESM/CommonJS groups with synthetic owners.
+They cover native negatives, fractions, above-maximum values, exponents, retained
+partial input, empty/null/zero distinctions, readonly/masked controls, missing or
+mismatched scalar bridges, custom rendering and stale actions. A separate actual
+page owner proves that required Rating zero blocks Next and final Submit without
+rewriting the zero or reaching transport. This is distinct from the scalar's
+invalid-input Save refusal and does not claim universal validation by a lower-level
+binding Save call. Number, Currency and Duration dispatch remain covered.
+
+Public props/options, the Rating-only slot, Form/Grid/List composition and guide
+recipes are typechecked. The example is compiled and bundled against the archive
+using shared optional `number.css`; Rating adds no stylesheet export. After
+building, `node scripts/check-rating-browser.mjs` runs the separate local Chromium
+proof. Applications own native enclosing-form submission; simulated composition
+does not certify real OS input methods. These checks do not introduce stars,
+range enforcement or a rating-specific parser and contact no live backend.
+
+## Percent presentation checks
+
+`pnpm check:package` exercises installed Percent exports in ESM and CommonJS
+with synthetic scalar owners. Checks cover unchanged native fractions, values
+outside zero-to-one, precision and progress metadata, partial drafts and remounts,
+empty-to-null edits, zero, blocked invalid Save, stale actions, missing or wrong
+scalar capabilities, readonly/masked controls and custom binding overrides.
+They also retain Number, Currency and Duration dispatch and assert no implicit
+Save. Public props/options, the percent-only slot, Form/Grid/List composition and
+guide recipes are typechecked. The example is compiled and bundled against the
+archive with shared `number.css`; Percent adds no stylesheet export.
+
+After building, `node scripts/check-percent-browser.mjs` runs the separate local
+Chromium proof. Native enclosing-form submission and stopped event bubbling are
+distinct. Simulated composition does not certify a real input method. All values
+are synthetic; the checks do not contact a live backend or introduce a progress
+bar or percent-formatting policy.
+
+## Phone Number presentation checks
+
+`pnpm check:package` exercises installed Phone Number exports in ESM and CommonJS
+with synthetic owners. The checks cover literal single-line values, including
+leading zeros, punctuation, extensions, Unicode digits and `tel:`/`sms:` strings;
+explicit null clearing; composition completion; stale actions; readonly and masked
+controls; binding overrides; and retired hosts. Country-code metadata does not
+add a selector or format a value. The checks assert no links, navigation, requests
+or implicit Save. Public props/options, the phone-number-only slot, Form/Grid/List
+composition and guide recipes are typechecked. The example is compiled and bundled
+against the archive using shared optional `text.css`; Phone Number adds no
+stylesheet export.
+
+After building, `node scripts/check-phone-number-browser.mjs` runs the separate
+local Chromium proof. Native form submission and stopped event bubbling are
+distinct; simulated composition does not certify a real input method. These checks
+use synthetic drafts and do not establish a dialing policy or contact a live backend.

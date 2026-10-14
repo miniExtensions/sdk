@@ -30,6 +30,9 @@
     color: #172b3a;
     font: inherit;
 }
+textarea.mx-sdk-multiline-text {
+    resize: vertical;
+}
 .mx-sdk-text::placeholder {
     color: #59697a;
     opacity: 1;

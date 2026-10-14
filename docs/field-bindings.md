@@ -376,6 +376,13 @@ import `@miniextensions/sdk/react/checkbox.css` for optional scoped defaults.
 See [React Checkbox presentation](ui.md#react-checkbox-presentation) for capability
 handling, accessibility and the current native-only scope.
 
+For plain Number fields, `NumberField` retains its `{ binding, render }` API and
+accepts `className`. The optional `renderNumberField` helper consumes the existing
+scalar capability in Form/Grid/List slots; an absent scalar does not become an
+editor from the native value alone. Import `@miniextensions/sdk/react/number.css`
+for scoped defaults. See [React Number presentation](ui.md#react-number-presentation)
+for accessibility, draft behavior and compatibility with other numeric bindings.
+
 The optional React `CurrencyField` and `renderCurrencyField` helper reuse the
 numeric scalar model and native units. The accepted currency symbol is literal
 text beside the input, associated through its accessible description. Input stays

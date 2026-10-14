@@ -471,7 +471,7 @@ try {
                     'validation association and unique IDs',
                     'hidden title accessible name',
                     'visible keyboard focus',
-                    'no Portal row activation or implicit submission',
+                    'no Portal row activation; no submission in the multi-input gallery without a submit button',
                     'forced colors',
                     'desktop and narrow layout without horizontal overflow, including long symbol',
                 ],

@@ -29,6 +29,12 @@ export {
     type CheckboxFieldOptions,
 } from './CheckboxField.js';
 import {
+    NumberControl,
+    numberConfiguration,
+    type NumberFieldOptions,
+} from './NumberField.js';
+export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
+import {
     CurrencyControl,
     currencyConfiguration,
     type CurrencyFieldOptions,
@@ -307,13 +313,14 @@ export function TextField({
     });
 }
 /** Numeric input uses native units, including fractional percent values. */
+export type NumberFieldProps = FieldProps & NumberFieldOptions;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
 export function NumberField({
     binding,
     render,
     className,
     clearLabel,
-}: CurrencyFieldProps): ReactNode {
+}: NumberFieldProps & CurrencyFieldOptions): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (
@@ -323,6 +330,36 @@ export function NumberField({
         snapshot.scalar.kind === 'checkbox'
     )
         return null;
+    if (snapshot.field?.schema.fieldType === 'number') {
+        if (snapshot.scalar.retired || snapshot.scalar.kind !== 'number')
+            return null;
+        const config = numberConfiguration(snapshot.field.schema.miniExtConfig);
+        return createElement(NumberControl, {
+            ...config,
+            className,
+            title: snapshot.field.title.trim()
+                ? snapshot.field.title
+                : snapshot.field.schema.airtableField.name,
+            input: snapshot.scalar.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.scalar.canEdit ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.scalar.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (input) => binding.scalar?.setInput(input),
+        });
+    }
     if (snapshot.field?.schema.fieldType === 'currency') {
         if (snapshot.scalar.kind !== 'number' || snapshot.scalar.retired)
             return null;

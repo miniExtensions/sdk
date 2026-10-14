@@ -1,5 +1,6 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
+import { checkNumberConsumer } from './number-consumer-checks.mjs';
 import {
     checkCurrencyRendererConsumer,
     currencyRendererReactTypedConsumer,
@@ -268,6 +269,8 @@ try {
         'dist/cjs/react/checkbox.css',
         'dist/esm/react/text.css',
         'dist/cjs/react/text.css',
+        'dist/esm/react/number.css',
+        'dist/cjs/react/number.css',
         'dist/esm/react/currency.css',
         'dist/cjs/react/currency.css',
         ...browserStarterFiles,
@@ -1283,7 +1286,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         17
     );
     // Resolve CSS and React through the installed archive, not checkout aliases.
-    for (const name of ['button', 'checkbox', 'text', 'currency']) {
+    for (const name of ['button', 'checkbox', 'text', 'number', 'currency']) {
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1397,6 +1400,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(textProof.checks, 8);
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const numberProof = await checkNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(numberProof.checks, 8);
+    console.log(
+        `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const currencyRendererProof = await checkCurrencyRendererConsumer({
         consumerDirectory: temporaryDirectory,

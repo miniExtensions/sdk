@@ -208,12 +208,13 @@ void [lookupError,malformedLookupError,upload,uploadedNative,nullAttachmentFilen
 `;
 export const rendererReactTypedConsumer = `
 import { createElement, type ReactNode } from 'react';
-import { FieldRenderer, CheckboxField, renderCheckboxField, type CheckboxFieldProps, TextField, renderSingleLineTextField, type TextFieldProps, type TextFieldOptions, type AirtableFormProps, type AirtableGridProps, type AirtableListProps } from '@miniextensions/sdk/react';
+import { FieldRenderer, CheckboxField, renderCheckboxField, type CheckboxFieldProps, TextField, renderSingleLineTextField, type TextFieldProps, type TextFieldOptions, NumberField, renderNumberField, type NumberFieldProps, type NumberFieldOptions, type AirtableFormProps, type AirtableGridProps, type AirtableListProps } from '@miniextensions/sdk/react';
 import type { FieldRendererHost, FieldRendererSlots } from '@miniextensions/sdk/ui';
 declare const host: FieldRendererHost;
 const renderers: FieldRendererSlots<ReactNode> = {
  renderSingleLineTextField,
  renderCheckboxField,
+ renderNumberField,
 };
 const tree = createElement(FieldRenderer, { host, renderers, fallback: () => null });
 const formSlots: AirtableFormProps['renderers'] = renderers;
@@ -224,7 +225,10 @@ const checkbox = createElement(CheckboxField, { ...checkboxProps, className: 'cu
 declare const textProps: TextFieldProps;
 const textOptions: TextFieldOptions = { className: 'custom', clearLabel: 'Effacer' };
 const text = createElement(TextField, { ...textProps, ...textOptions });
-void [tree, formSlots, gridSlots, listSlots, checkbox, text];
+declare const numberProps: NumberFieldProps;
+const numberOptions: NumberFieldOptions = { className: 'custom' };
+const numberField = createElement(NumberField, { ...numberProps, ...numberOptions });
+void [tree, formSlots, gridSlots, listSlots, checkbox, text, numberField];
 `;
 
 /** Installed public entrypoints, synthetic public envelopes, no browser/backend claim. */

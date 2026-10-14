@@ -1,6 +1,30 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
+import {
+    checkMultilineTextConsumer,
+    multilineTextReactTypedConsumer,
+} from './multiline-text-consumer-checks.mjs';
+import {
+    checkPhoneNumberConsumer,
+    phoneNumberReactTypedConsumer,
+} from './phone-number-consumer-checks.mjs';
+import {
+    checkUrlConsumer,
+    urlReactTypedConsumer,
+} from './url-consumer-checks.mjs';
+import {
+    checkEmailConsumer,
+    emailReactTypedConsumer,
+} from './email-consumer-checks.mjs';
 import { checkNumberConsumer } from './number-consumer-checks.mjs';
+import {
+    checkRatingConsumer,
+    ratingReactTypedConsumer,
+} from './rating-consumer-checks.mjs';
+import {
+    checkPercentConsumer,
+    percentReactTypedConsumer,
+} from './percent-consumer-checks.mjs';
 import {
     checkDateRendererConsumer,
     dateRendererReactTypedConsumer,
@@ -1192,6 +1216,36 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'rating-react-consumer.tsx'),
+        ratingReactTypedConsumer
+    );
+    reactSources.push('rating-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'multiline-text-react-consumer.tsx'),
+        multilineTextReactTypedConsumer
+    );
+    reactSources.push('multiline-text-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'percent-react-consumer.tsx'),
+        percentReactTypedConsumer
+    );
+    reactSources.push('percent-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'phone-number-react-consumer.tsx'),
+        phoneNumberReactTypedConsumer
+    );
+    reactSources.push('phone-number-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'url-react-consumer.tsx'),
+        urlReactTypedConsumer
+    );
+    reactSources.push('url-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'email-react-consumer.tsx'),
+        emailReactTypedConsumer
+    );
+    reactSources.push('email-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'duration-react-consumer.tsx'),
         durationReactTypedConsumer
     );
@@ -1323,12 +1377,23 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'multiline-text',
+        'phone-number',
+        'url',
         'number',
+        'rating',
+        'percent',
         'date',
         'datetime',
         'duration',
+        'email',
         'currency',
     ]) {
+        const stylesheet = ['percent', 'rating'].includes(name)
+            ? 'number'
+            : ['email', 'url', 'phone-number', 'multiline-text'].includes(name)
+              ? 'text'
+              : name;
         if (name === 'currency') {
             const sourcePaths = [
                 '.gitignore',
@@ -1373,7 +1438,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         }
         const exampleDirectory = join(temporaryDirectory, `${name}-example`);
         mkdirSync(exampleDirectory);
-        for (const file of ['main.ts', 'styles.css']) {
+        const exampleFiles = ['main.ts', 'styles.css'];
+        if (name === 'email') exampleFiles.push('owners.ts');
+        for (const file of exampleFiles) {
             cpSync(
                 join(process.cwd(), `examples/react-${name}`, file),
                 join(exampleDirectory, file)
@@ -1405,16 +1472,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             exampleBundle.outputFiles.some(
                 (file) =>
                     file.path.endsWith('.css') &&
-                    file.text.includes(`.mx-sdk-${name}`)
+                    file.text.includes(`.mx-sdk-${stylesheet}`)
             )
         );
         assert.equal(
             readFileSync(
-                join(installedPackage, `dist/esm/react/${name}.css`),
+                join(installedPackage, `dist/esm/react/${stylesheet}.css`),
                 'utf8'
             ),
             readFileSync(
-                join(installedPackage, `dist/cjs/react/${name}.css`),
+                join(installedPackage, `dist/cjs/react/${stylesheet}.css`),
                 'utf8'
             )
         );
@@ -1443,6 +1510,38 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
+    const multilineTextProof = await checkMultilineTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(multilineTextProof.checks, 20);
+    console.log(
+        `Installed Multiline Text renderer, binding, shared Text CSS and local example: ${multilineTextProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const phoneNumberProof = await checkPhoneNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(phoneNumberProof.checks, 12);
+    console.log(
+        `Installed Phone Number renderer, binding, shared Text CSS and local example: ${phoneNumberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const urlProof = await checkUrlConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(urlProof.checks, 12);
+    console.log(
+        `Installed URL renderer, binding, shared Text CSS and local example: ${urlProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const emailProof = await checkEmailConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(emailProof.checks, 12);
+    console.log(
+        `Installed Email renderer, binding, shared Text CSS and local example: ${emailProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
     const numberProof = await checkNumberConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -1450,6 +1549,22 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const ratingProof = await checkRatingConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(ratingProof.checks, 18);
+    console.log(
+        `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const percentProof = await checkPercentConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(percentProof.checks, 16);
+    console.log(
+        `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const dateRendererProof = await checkDateRendererConsumer({
         consumerDirectory: temporaryDirectory,

@@ -36,3 +36,15 @@ export type {
     PortalFilterEditorModel,
     PortalFilterEditorSnapshot,
 } from './editors.js';
+
+export {
+    mergePortalPartialRecords,
+    mergePortalPartialFields,
+    mergePortalPartialTableState,
+} from './partialTable.js';
+export type {
+    PortalPartialField,
+    PortalPartialRecord,
+    PortalPartialRecords,
+    PortalPartialTableState,
+} from './partialTable.js';

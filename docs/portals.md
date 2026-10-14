@@ -706,3 +706,60 @@ remounts. Destroy it on owner/page/criteria replacement or editor cancellation.
 Retained handlers fail closed after observed owner/configuration changes,
 including observed A→B→A; unobserved in-place restoration is not detectable.
 The core subpath has no React dependency.
+
+## Hosted partial-table cache compatibility
+
+`mergePortalPartialRecords`, `mergePortalPartialFields` and
+`mergePortalPartialTableState` are explicit pure cache policies for applications
+that combine already accepted partial linked-table responses. They reuse the
+hosted Form/Portal cache behavior without requests, storage, renderers or server
+operations. Normal SDK collection page merging still replaces each incoming
+record in full and takes the incoming table metadata.
+
+The partial policy unions record IDs and lets incoming cells overwrite earlier
+cells. An omitted incoming record preserves all earlier cells. In a returned
+record, an omitted non-boolean cell stays cached even if its field appears in the
+table metadata: that metadata can be a union of several partial fetches. Only an
+earlier boolean is removed when its fetched key is absent or explicitly null or
+undefined. Explicit null replaces an earlier text, numeric or formula value.
+Earlier field metadata wins for matching IDs; all incoming fields whose IDs were
+absent from the earlier array are appended, including repeated new IDs.
+
+`mergePortalPartialTableState` infers the hosted key mode by looking for any
+incoming field ID among own cell keys in **both** record maps. If one matches,
+all fetched keys use incoming field IDs; otherwise they use incoming field
+names. For repeated incoming IDs, the final occurrence supplies the fetched
+name. If the caller has an exact fetched-key list, use
+`mergePortalPartialRecords` directly instead. Own special keys such as
+`__proto__` remain ordinary data. Inputs are not mutated; nested cell values and
+field metadata are retained by reference.
+
+```ts
+import { mergePortalPartialRecords } from '@miniextensions/sdk/portals';
+
+const cache = mergePortalPartialRecords(
+    {
+        recordIdsToAirtableRecords: {
+            rec_example: {
+                id: 'rec_example',
+                fields: { fld_title: 'Earlier title', fld_done: true },
+            },
+        },
+    },
+    {
+        fieldKeysIncludedInRecords: ['fld_done'],
+        recordIdsToAirtableRecords: {
+            rec_example: { id: 'rec_example', fields: {} },
+        },
+    }
+);
+// cache retains fld_title and removes the fetched, now blank fld_done.
+```
+
+Accept responses using the existing visitor, configuration, view and request
+owners **before** applying this policy. Keep a cache within that scope and retire
+it on scope changes. A field or record in the cache union proves completeness
+only; it never admits a read, edit, child Form, action or display projection.
+Use the accepted current response and existing capability checks for those
+decisions. Backend authorization, field/action enforcement and privileged
+persistence remain in the existing miniExtensions backend.

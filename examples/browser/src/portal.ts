@@ -80,6 +80,7 @@ type CustomView = {
 };
 type DetailField = {
     fieldId: string;
+    airtableField: RuntimeAirtableField;
     title: string | null;
     miniExtConfig?: RuntimeFieldSchema['miniExtConfig'];
     displayConfig: unknown;
@@ -181,9 +182,27 @@ const configuredChildId = (
     return typeof value === 'string' && value !== '' ? value : null;
 };
 const detailFields = (
-    value: RuntimeLinkedRecordDetailField[] | undefined
+    value: RuntimeLinkedRecordDetailField[] | undefined,
+    rawDetails: RuntimeLinkedRecordDetailField[] | undefined,
+    tableId: string,
+    tables: PortalCollectionSnapshot['tableIdsToLinkedTableStates']
 ): DetailField[] => {
-    if (!Array.isArray(value)) return [];
+    if (!Array.isArray(value) || !Array.isArray(rawDetails)) return [];
+    // Count the selected raw projection before considering visible descriptors.
+    // Hidden siblings still make a field identity ambiguous.
+    const detailCounts = new Map<string, number>();
+    for (const field of rawDetails) {
+        if (isObject(field) && typeof field.fieldId === 'string')
+            detailCounts.set(
+                field.fieldId,
+                (detailCounts.get(field.fieldId) ?? 0) + 1
+            );
+    }
+    const tableFields = tables[tableId]?.airtableFields;
+    if (!Array.isArray(tableFields)) return [];
+    const returnedFields = Object.values(tables).flatMap((table) =>
+        Array.isArray(table?.airtableFields) ? table.airtableFields : []
+    );
     return value.flatMap((field): DetailField[] => {
         if (
             !isObject(field) ||
@@ -191,16 +210,40 @@ const detailFields = (
             field.isHidden === true
         )
             return [];
+        const matches = tableFields.filter(
+            (entry) => isObject(entry) && entry.id === field.fieldId
+        );
+        if (
+            detailCounts.get(field.fieldId) !== 1 ||
+            matches.length !== 1 ||
+            returnedFields.filter(
+                (entry) => isObject(entry) && entry.id === field.fieldId
+            ).length !== 1
+        )
+            return [];
+        const airtableField = matches[0];
+        if (!isObject(airtableField.config)) return [];
+        const child = field.childFormField;
+        if (
+            child != null &&
+            (!isObject(child) ||
+                !isObject(child.idOrName) ||
+                child.idOrName.type !== 'id' ||
+                child.idOrName.id !== field.fieldId ||
+                !isObject(child.config) ||
+                child.config.type !== airtableField.config.type)
+        )
+            return [];
         // Inline authorization uses the child Form config when present,
         // including its defaults, and otherwise the published detail config.
+        // The editing-membership flag is not an additional admission gate.
         const config =
-            field.childFormField != null
-                ? field.childFormField.config.config
-                : field.miniExtConfig;
+            child != null ? child.config.config : field.miniExtConfig;
         const miniExtConfig = isObject(config) ? config : undefined;
         return [
             {
                 fieldId: field.fieldId,
+                airtableField,
                 title:
                     typeof field.titleOverride === 'string'
                         ? field.titleOverride
@@ -1156,8 +1199,20 @@ export const createPortalView = (options: {
             results.append(element('p', 'No table data was returned.', 'hint'));
             return;
         }
-        const columns = detailFields(data.detailFields).filter((column) =>
-            state.airtableFields.some((field) => field.id === column.fieldId)
+        // Non-null returned maps replace the legacy map, even when their
+        // selected key is missing or empty. Keep the SDK's visible projection.
+        const rawDetailMap =
+            data.customViewDetailFields === null
+                ? page.payload.linkedRecordFieldIdToDetailFields
+                : data.customViewDetailFields;
+        const rawDetails = Object.hasOwn(rawDetailMap, fieldSelect.value)
+            ? rawDetailMap[fieldSelect.value]
+            : [];
+        const columns = detailFields(
+            data.detailFields,
+            rawDetails,
+            linkedTableId,
+            data.tableIdsToLinkedTableStates
         );
         const table = element('table');
         const head = element('tr');
@@ -1165,11 +1220,7 @@ export const createPortalView = (options: {
             head.append(
                 element(
                     'th',
-                    column.title ??
-                        state.airtableFields.find(
-                            (entry) => entry.id === column.fieldId
-                        )?.name ??
-                        column.fieldId
+                    column.title ?? column.airtableField.name ?? column.fieldId
                 )
             );
         head.append(element('th', 'Actions'));
@@ -1189,12 +1240,10 @@ export const createPortalView = (options: {
             const row = element('tr');
             row.dataset.recordId = recordId;
             for (const column of columns) {
-                const recordField = state.airtableFields.find(
-                    (entry) => entry.id === column.fieldId
-                );
+                const recordField = column.airtableField;
                 const value = record.fields[column.fieldId];
                 const obscured =
-                    recordField?.config.type ===
+                    recordField.config.type ===
                         AirtableFieldType.SINGLE_LINE_TEXT &&
                     column.miniExtConfig != null &&
                     'obscurePassword' in column.miniExtConfig &&
@@ -1203,7 +1252,7 @@ export const createPortalView = (options: {
                     value.length > 0;
                 const cell = element(
                     'td',
-                    recordField?.config.type ===
+                    recordField.config.type ===
                         AirtableFieldType.MULTIPLE_ATTACHMENTS
                         ? attachmentSummary(value, column.displayConfig)
                         : obscured
@@ -1215,7 +1264,6 @@ export const createPortalView = (options: {
                     gridMode &&
                     allowEditing &&
                     column.inlineEditable &&
-                    recordField != null &&
                     !recordField.isComputed &&
                     layoutSetting('disableInlineEdit') !== true
                 ) {

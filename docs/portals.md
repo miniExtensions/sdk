@@ -579,6 +579,19 @@ empty projections stay empty. A configured custom view also replaces layout
 settings, including settings it omits. These are UI hints; the backend
 authorizes every action.
 
+The browser starter admits a detail column only when its field ID identifies
+one detail in the selected raw list and one physical field across the returned
+tables. Raw detail identity counts include hidden descriptors, before applying
+the accepted visible projection. Only a null returned map uses the legacy list;
+a missing or empty selected entry stays empty. A supplied child Form field must use that exact ID and physical type; malformed
+or ambiguous identities expose neither the native value nor an inline editor.
+Null child metadata keeps the returned detail configuration as the supported
+write-policy fallback. `fieldIsInEditingChildForm` is informational and is not
+an additional admission gate. A valid child configuration remains write policy;
+the returned detail configuration is retained separately for attachment
+presentation. Display names do not resolve physical identity, so distinct field
+IDs may share a label.
+
 When a read returns `criteria-cleanup-required`, show the actual returned
 `raw.endUserSortCleanup`/`raw.endUserFilterCleanup` to the application. After
 the visitor accepts, replace the relevant persisted criteria, call

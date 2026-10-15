@@ -11,6 +11,14 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import {
+    renderMultipleSelectsField,
+    type MultipleSelectFieldOptions,
+} from './MultipleSelectField.js';
+export {
+    renderMultipleSelectsField,
+    type MultipleSelectFieldOptions,
+} from './MultipleSelectField.js';
+import {
     DateControl,
     dateConfiguration,
     type DateFieldOptions,
@@ -954,6 +962,87 @@ export function CheckboxField({
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setChecked: (checked) => binding.scalar?.setChecked(checked) ?? false,
     });
+}
+
+export type MultipleSelectFieldProps = FieldProps & MultipleSelectFieldOptions;
+/** Borrow a Form binding; the existing owner retains every selection policy. */
+export function MultipleSelectField({
+    binding,
+    render,
+    ...options
+}: MultipleSelectFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'multipleSelects' ||
+        (snapshot.value != null &&
+            (!Array.isArray(snapshot.value) ||
+                !snapshot.value.every((value) => typeof value === 'string')))
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Multiple Select fields.'
+        );
+    const selection = binding.selection;
+    const choice = binding.choiceCreation;
+    return renderMultipleSelectsField(
+        {
+            physicalKind: 'multipleSelects',
+            presentation: {
+                type: 'physical',
+                config: schema.airtableField.config,
+            },
+            fieldId: schema.airtableField.id,
+            title: snapshot.field!.title,
+            field: schema.airtableField,
+            displayConfig: schema.miniExtConfig ?? null,
+            writeConfig: schema.miniExtConfig ?? null,
+            value: snapshot.value as readonly string[] | null | undefined,
+            context: 'form',
+            computed: schema.airtableField.isComputed === true,
+            dirty: snapshot.dirty,
+            pending: snapshot.pending,
+            error: snapshot.error,
+            validation: snapshot.validation,
+            selectAvailability: snapshot.selectAvailability ?? undefined,
+            capability: snapshot.readOnly
+                ? { type: 'readonly' }
+                : {
+                      type: 'editable',
+                      setValue: binding.setValue,
+                      selection:
+                          selection && snapshot.selection
+                              ? {
+                                    choose: selection.choose,
+                                    toggle: selection.toggle,
+                                    clear: selection.clear,
+                                    setSearchInput: selection.setSearchInput,
+                                    reload: selection.reload,
+                                    loadMore: selection.loadMore,
+                                    cancel: selection.cancel,
+                                    state: {
+                                        ...snapshot.selection,
+                                        disabled:
+                                            snapshot.selection.disabled ||
+                                            !snapshot.canEdit,
+                                    },
+                                }
+                              : undefined,
+                      choice:
+                          choice && snapshot.choiceCreation
+                              ? {
+                                    state: snapshot.choiceCreation,
+                                    create: choice.create,
+                                    cancel: choice.cancel,
+                                }
+                              : undefined,
+                  },
+        },
+        options
+    );
 }
 
 export function SelectField({ binding, render }: FieldProps): ReactNode {

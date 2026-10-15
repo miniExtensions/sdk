@@ -1402,3 +1402,24 @@ Calendar ordering, nested/computed/date conditions and sorts are outside this sl
 For an outer Portal list, call `owner.getRecords(owner.getSnapshot().revision)` after an accepted read. It returns detached records and physical table metadata for that field, or null while no accepted presentation exists or the revision/owner is stale. These snapshots grant no new write capability and trigger no reads. Retire the owner when its visitor, session, or configuration changes.
 
 The installed package checks use synthetic transports for these owner and race guarantees. They do not establish live backend filtering behavior or native browser presentation.
+
+## Multiple Select presentation
+
+`MultipleSelectField` from `@miniextensions/sdk/react` borrows a Form field
+binding. `renderMultipleSelectsField` is the corresponding named slot for existing
+Form, Grid and List hosts. Import the optional
+`@miniextensions/sdk/react/multiple-select.css` stylesheet, or supply your own
+styles with `className`. `clearLabel` overrides the accessible Clear label and
+the binding wrapper supports the existing `render` override.
+
+Native values remain ordered choice-name arrays; labels and IDs never replace
+them. Missing selection capability is read-only. The existing selection owner
+retains filters, limits, conditional availability and stale-action guards.
+Unavailable selected names remain visible, and blocked availability does not
+disable authorized removal or Clear. The component never saves a record.
+
+Add Choice appears only in Form context when the application has explicitly
+installed the existing choice-creation controller. It calls that controller's
+creation/cancellation actions and displays its pending/error/result state;
+creation and record Save remain separate actions. Generic `SelectField` is
+unchanged. See `examples/react-multiple-select` for local synthetic hosts.

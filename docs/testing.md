@@ -1,5 +1,14 @@
 # Source test coverage
 
+Multiple Select presentation is covered by `test/reactMultipleSelect.test.ts`:
+native array order, limits and unavailable selections, aliases, blocked/read-only/
+pending controls, stale callbacks, optional Form creation, no implicit Save and
+actual Portal Grid/List hosts. `pnpm check:package` also verifies installed
+ESM/CommonJS components, public Form/Grid/List declarations, the CSS export and
+the example bundle. After build, run
+`node scripts/check-multiple-select-browser.mjs` for local packed-package
+Chromium checks and screenshots. All these scenarios use synthetic owners.
+
 Run `pnpm test` for the source coverage gate or `pnpm check` for formatting,
 types, source coverage and the existing installed-package/recipe guards.
 `pnpm test:unit` and `pnpm test:component` are focused diagnostic runs; only

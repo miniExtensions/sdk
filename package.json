@@ -93,7 +93,8 @@
         "./react/date.css": "./dist/esm/react/date.css",
         "./react/datetime.css": "./dist/esm/react/datetime.css",
         "./react/duration.css": "./dist/esm/react/duration.css",
-        "./react/currency.css": "./dist/esm/react/currency.css"
+        "./react/currency.css": "./dist/esm/react/currency.css",
+        "./react/multiple-select.css": "./dist/esm/react/multiple-select.css"
     },
     "files": [
         "dist/esm",

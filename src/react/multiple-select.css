@@ -1,0 +1,72 @@
+.mx-sdk-multiple-select-field {
+    min-width: 0;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font: inherit;
+    color: inherit;
+}
+.mx-sdk-multiple-select-field legend {
+    padding: 0 4px;
+    font-weight: 600;
+}
+.mx-sdk-multiple-select-values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
+}
+.mx-sdk-multiple-select-values li {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    background: #eef2ff;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-multiple-select-field button,
+.mx-sdk-multiple-select-create input {
+    font: inherit;
+}
+.mx-sdk-multiple-select-field button {
+    cursor: pointer;
+}
+.mx-sdk-multiple-select-field button:disabled {
+    cursor: default;
+    opacity: 0.55;
+}
+.mx-sdk-multiple-select-field :focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 3px;
+}
+.mx-sdk-multiple-select-options {
+    display: grid;
+    gap: 8px;
+    margin: 12px 0;
+}
+.mx-sdk-multiple-select-options label {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-multiple-select-create {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+.mx-sdk-multiple-select-feedback {
+    display: block;
+    white-space: pre-wrap;
+    margin-top: 8px;
+    font-size: 0.875em;
+}
+.mx-sdk-multiple-select-empty {
+    color: #64748b;
+}

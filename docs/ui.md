@@ -2186,6 +2186,76 @@ without backend requests. After building, run `node examples/react-date/dev.mjs`
 remounting, clearing, permissions, layout and forced colors. Synthetic interaction
 does not certify every platform's input method or screen reader.
 
+## React Created Time presentation
+
+The optional `/react` entry exports `CreatedTimeField`, `CreatedTimeFieldProps`,
+`CreatedTimeFieldOptions` and `renderCreatedTimeField`. The binding component
+accepts `{ binding, render }` plus `className` and `clearLabel`; a supplied `render`
+replaces its stock markup. The options alias `DateTimeFieldOptions`.
+
+```tsx
+import { CreatedTimeField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/datetime.css';
+
+export function RecordCreatedTime({ binding }: { binding: FormFieldBinding }) {
+    return (
+        <CreatedTimeField binding={binding} className="record-created-time" />
+    );
+}
+```
+
+The named helper accepts `FieldRendererProps<'createdTime'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { renderCreatedTimeField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/datetime.css';
+
+export const createdTimeRenderers: FieldRendererSlots<ReactNode> = {
+    renderCreatedTimeField: (props) =>
+        renderCreatedTimeField(props, { className: 'record-created-time' }),
+};
+```
+
+The control presents the supplied native timestamp string without parsing,
+formatting, validation or timezone conversion. It retains offset spelling,
+fractional seconds, whitespace, naive timestamps and invalid strings accepted by
+the owner. Nested `date` or `dateTime` result metadata is not interpreted, and
+metadata changes do not normalize the native answer. Use a custom renderer for
+formatted dates. The single-line input sanitizes CR/LF in its displayed value;
+rendering does not write that DOM representation back to the owner.
+
+Null, missing and nonstring values display blank in direct helper calls without
+object coercion. Hosts may reject malformed native values before calling the
+helper. The DateTime input and its existing Clear button are always disabled;
+`clearLabel` changes only the disabled button's accessible label. The renderer
+creates no date model and reads no editing capability, even if malformed runtime
+props claim write authority. Physical Created Time remains readonly when metadata
+reports `isComputed: false`. Rendering does not generate timestamps, invoke Save
+or read a backend.
+
+Existing title visibility, fallback titles, unique label IDs, masking from either
+display or write configuration, pending state and plain-text error/validation
+feedback apply. The shared control retains its `YYYY-MM-DDTHH:mm:ssZ` default
+placeholder; it is not a parser or an editing prompt for this disabled field.
+Wrong physical bindings show a status, while custom rendering keeps precedence.
+Hidden, blocked and retired bindings or hosts omit the control. Mounting,
+StrictMode, owner replacement and remounting preserve the accepted native value.
+
+Form composition uses accepted Form owners. Grid and List use accepted Portal
+detail hosts without fabricating computed inline editing bindings. Data loading
+and form submission remain explicit application operations. Editable DateTime and
+Text controls keep their existing behavior.
+
+Styles reuse optional `@miniextensions/sdk/react/datetime.css` and the
+`mx-sdk-datetime*` classes; no Created Time stylesheet is added. The synthetic
+`examples/react-created-time` fixture uses public exports. See [Created Time
+presentation checks](testing.md#created-time-presentation-checks) for package and
+local browser verification.
+
 ## React DateTime presentation
 
 The optional `/react` entry exports `DateTimeField`, `DateTimeFieldProps`,

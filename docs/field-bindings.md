@@ -1423,3 +1423,18 @@ installed the existing choice-creation controller. It calls that controller's
 creation/cancellation actions and displays its pending/error/result state;
 creation and record Save remain separate actions. Generic `SelectField` is
 unchanged. See `examples/react-multiple-select` for local synthetic hosts.
+
+The default Multiple Select presentation masks selected/option names, removal
+labels and value-derived feedback when either display or write configuration
+enables `obscurePassword` or `maskPasswordOnLoginScreen`. Its optional creation
+input uses password presentation; selection and creation actions still receive
+the original native names.
+
+Unsubmitted creation text belongs to the current React presentation. The Form
+binding wrapper and `FieldRenderer` use stable binding/host identity so ordinary
+snapshots preserve that text. Each observed source replacement retires it,
+including A→B→A, and late creation completion cannot clear a successor's input.
+For standalone `renderMultipleSelectsField(props)` calls outside those wrappers,
+the incoming props object is the conservative source: local input rerenders
+retain text, but a new props object clears it. Refreshed standalone snapshots do
+not guarantee retention. This internal identity is never an owner or write lease.

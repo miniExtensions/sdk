@@ -66,9 +66,32 @@ try {
             join(root, 'examples/react-multiple-select', file),
             join(consumer, file)
         );
+    // Exercise both masking flags from each configuration source against the
+    // installed package, reusing the synthetic example's native-value receipts.
+    const maskingEntries = [];
+    const example = readFileSync(join(consumer, 'main.ts'), 'utf8');
+    for (const flag of ['obscurePassword', 'maskPasswordOnLoginScreen']) {
+        for (const source of ['displayConfig', 'writeConfig']) {
+            const name = `masking-${source}-${flag}`;
+            const config = 'displayConfig: schema.miniExtConfig ?? null,';
+            assert.ok(example.includes(config));
+            const modified = example
+                .replace(
+                    config,
+                    `displayConfig: { ...schema.miniExtConfig, ${flag}: ${source === 'displayConfig'} },\nwriteConfig: { ${flag}: ${source === 'writeConfig'} },`
+                )
+                .replace(
+                    'error: null,\n                validation: [],',
+                    "error: 'Private feedback about Red and Blue',\n                validation: [],"
+                );
+            assert.notEqual(modified, example);
+            writeFileSync(join(consumer, `${name}.ts`), modified);
+            maskingEntries.push(name);
+        }
+    }
     const bundle = await build({
         absWorkingDir: consumer,
-        entryPoints: ['main.ts'],
+        entryPoints: ['main.ts', ...maskingEntries.map((name) => `${name}.ts`)],
         bundle: true,
         platform: 'browser',
         format: 'esm',
@@ -86,10 +109,13 @@ try {
     );
     server = createServer((request, response) => {
         const path = new URL(request.url, 'http://localhost').pathname;
-        if (path === '/') {
+        if (path === '/' || maskingEntries.includes(path.slice(1))) {
             response.setHeader('content-type', 'text/html');
             response.end(
-                readFileSync('examples/react-multiple-select/index.html')
+                readFileSync(
+                    'examples/react-multiple-select/index.html',
+                    'utf8'
+                ).replace('/main.js', path === '/' ? '/main.js' : `${path}.js`)
             );
         } else if (assets.has(path)) {
             response.setHeader(
@@ -163,6 +189,16 @@ try {
     await page.keyboard.press('Space');
     assert.deepEqual(await native(1), ['Red', 'Green']);
     const form = group('Form colors');
+    const draftInput = form.getByRole('textbox', { name: 'New choice name' });
+    await draftInput.fill('Unsubmitted name');
+    await form.getByRole('checkbox', { name: 'Azure', exact: true }).check();
+    assert.deepEqual(await native(0), ['Red', 'Blue']);
+    assert.equal(await draftInput.inputValue(), 'Unsubmitted name');
+    await form
+        .getByRole('button', { name: 'Remove Azure', exact: true })
+        .click();
+    assert.deepEqual(await native(0), ['Red']);
+    assert.equal(await draftInput.inputValue(), 'Unsubmitted name');
     await form.getByRole('textbox', { name: 'New choice name' }).fill('Mint');
     await page.keyboard.press('Enter');
     await counters();
@@ -206,6 +242,85 @@ try {
     });
     await page.getByRole('button', { name: 'Retire Form owner' }).click();
     assert.equal(await group('Form colors').count(), 0);
+    for (const entry of maskingEntries) {
+        await page.goto(`${origin}/${entry}`);
+        await group('Form colors').waitFor();
+        const maskedGroups = page.getByRole('group');
+        assert.equal(await maskedGroups.count(), 6);
+        for (const field of await maskedGroups.all()) {
+            const exposed = await field.evaluate((node) => ({
+                text: node.textContent,
+                labels: [...node.querySelectorAll('[aria-label], [title]')]
+                    .map(
+                        (item) =>
+                            `${item.getAttribute('aria-label')} ${item.getAttribute('title')}`
+                    )
+                    .join(' '),
+            }));
+            assert.doesNotMatch(
+                exposed.text,
+                /Red|Blue|Green|Azure|Legacy|Private feedback/
+            );
+            assert.doesNotMatch(exposed.labels, /Red|Blue|Green|Azure|Legacy/);
+            assert.match(exposed.text, /••••/);
+            assert.match(exposed.text, /Selection feedback is hidden/);
+        }
+        const maskedForm = group('Form colors');
+        const input = maskedForm.getByLabel('New choice name');
+        assert.equal(await input.getAttribute('type'), 'password');
+        assert.equal(await input.getAttribute('autocomplete'), 'off');
+        await input.fill('Mint');
+        await page.keyboard.press('Enter');
+        assert.equal(await page.locator('#creations').textContent(), '0');
+        await maskedForm
+            .getByRole('button', { name: 'Add choice', exact: true })
+            .click();
+        assert.deepEqual(await native(0), ['Red', 'Mint']);
+        assert.doesNotMatch(await maskedForm.textContent(), /Red|Mint/);
+        await maskedForm
+            .getByRole('button', {
+                name: 'Remove selected choice 1',
+                exact: true,
+            })
+            .click();
+        assert.deepEqual(await native(0), ['Mint']);
+        const maskedGrid = group('Grid colors');
+        await maskedGrid
+            .getByRole('button', {
+                name: 'Remove selected choice 1',
+                exact: true,
+            })
+            .click();
+        assert.deepEqual(await native(1), ['Red']);
+        await maskedGrid
+            .getByRole('checkbox', { name: 'Masked choice 3', exact: true })
+            .focus();
+        await page.keyboard.press('Space');
+        assert.deepEqual(await native(1), ['Red', 'Green']);
+        const maskedBlocked = group('Blocked colors');
+        await maskedBlocked
+            .getByRole('button', {
+                name: 'Remove selected choice 1',
+                exact: true,
+            })
+            .click();
+        assert.deepEqual(await native(3), ['Red']);
+        for (const title of [
+            'List colors',
+            'Read-only colors',
+            'Pending colors',
+        ])
+            for (const control of await group(title)
+                .locator('button,input')
+                .all())
+                assert.equal(await control.isDisabled(), true);
+        for (const title of ['Grid colors', 'List colors'])
+            assert.equal(
+                await group(title).locator('input[type=password]').count(),
+                0
+            );
+        await counters();
+    }
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);
     assert.deepEqual(transports, []);
@@ -222,6 +337,9 @@ try {
                 maxRemoval: true,
                 retainedUnavailable: true,
                 formOnlyCreation: true,
+                maskingConfigurations: maskingEntries.length,
+                maskedNativeNames: true,
+                sameHostDraftRetention: true,
                 implicitSave: false,
                 rowEvents: 0,
                 formSubmissions: 0,

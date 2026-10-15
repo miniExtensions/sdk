@@ -9,6 +9,12 @@ the example bundle. After build, run
 `node scripts/check-multiple-select-browser.mjs` for local packed-package
 Chromium checks and screenshots. All these scenarios use synthetic owners.
 
+Review regressions cover both masking flags from display and write configuration,
+direct slots and real Form/Grid/List hosts, same-host snapshot retention,
+binding/host A→B→A retirement, conservative standalone props replacement, and
+creation completion after source replacement or unmount. The packed Chromium
+proof also checks all four masking configurations and same-host draft retention.
+
 Run `pnpm test` for the source coverage gate or `pnpm check` for formatting,
 types, source coverage and the existing installed-package/recipe guards.
 `pnpm test:unit` and `pnpm test:component` are focused diagnostic runs; only

@@ -10,6 +10,7 @@ import {
     type ChangeEvent,
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
+import { FieldRendererSource } from './fieldRendererSource.js';
 import {
     renderMultipleSelectsField,
     type MultipleSelectFieldOptions,
@@ -988,7 +989,7 @@ export function MultipleSelectField({
         );
     const selection = binding.selection;
     const choice = binding.choiceCreation;
-    return renderMultipleSelectsField(
+    const control = renderMultipleSelectsField(
         {
             physicalKind: 'multipleSelects',
             presentation: {
@@ -1042,6 +1043,11 @@ export function MultipleSelectField({
                   },
         },
         options
+    );
+    return createElement(
+        FieldRendererSource.Provider,
+        { value: binding },
+        control
     );
 }
 
@@ -1626,8 +1632,8 @@ export function FieldRenderer({
     const snapshot = useFieldRendererHost(host);
     if (snapshot.status !== 'ready') return fallback?.(snapshot) ?? null;
     return createElement(
-        Fragment,
-        null,
+        FieldRendererSource.Provider,
+        { value: host },
         ...snapshot.fields.map((field) =>
             createElement(
                 Fragment,

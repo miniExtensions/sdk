@@ -1,16 +1,17 @@
 import {
     createElement as h,
+    useContext,
+    useEffect,
     useId,
+    useRef,
     useState,
     type ChangeEvent,
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
-import type {
-    ChoiceRendererActions,
-    FieldRendererProps,
-} from '../ui/rendererRegistry.js';
+import type { FieldRendererProps } from '../ui/rendererRegistry.js';
 import { getSelectFieldPolicy } from '../ui/selectPolicy.js';
+import { FieldRendererSource } from './fieldRendererSource.js';
 
 export type MultipleSelectFieldOptions = {
     /** Optional wrapper class; all default styles are component-specific. */
@@ -30,11 +31,32 @@ function MultipleSelectControl({
     field: FieldRendererProps<'multipleSelects'>;
 }): ReactNode {
     const id = useId();
-    const [intent, setIntent] = useState<{
-        action?: ChoiceRendererActions['create'];
-        name: string;
-    }>({ name: '' });
+    // A direct slot has no accepted owner source: new incoming props retire its text.
+    const source = useContext(FieldRendererSource) ?? props;
+    const lifetime = useRef({ source, token: {} });
+    if (lifetime.current.source !== source)
+        lifetime.current = { source, token: {} };
+    const token = lifetime.current.token;
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
+    const current = () => mounted.current && lifetime.current.token === token;
+    const [intent, setIntent] = useState({ token, name: '' });
+    // Keep one generation only, including when a prior source returns after B.
+    if (intent.token !== token) setIntent({ token, name: '' });
+    const name = intent.token === token ? intent.name : '';
     const title = props.title.trim() ? props.title : props.field.name;
+    const password = [props.displayConfig, props.writeConfig].some(
+        (config) =>
+            config &&
+            (('obscurePassword' in config && config.obscurePassword === true) ||
+                ('maskPasswordOnLoginScreen' in config &&
+                    config.maskPasswordOnLoginScreen === true))
+    );
     const capability = props.capability;
     const selection =
         capability.type === 'editable' && capability.selection?.state.multiple
@@ -69,9 +91,7 @@ function MultipleSelectControl({
         props.context === 'form' && capability.type === 'editable' && selection
             ? capability.choice
             : undefined;
-    // Unsubmitted text belongs to the captured creation owner, never its successor.
-    const name = intent.action === choice?.create ? intent.name : '';
-    const feedback = [
+    const rawFeedback = [
         props.error ?? state?.error,
         ...props.validation.map((message) => message.errorMessage),
         blocked
@@ -88,6 +108,11 @@ function MultipleSelectControl({
     ]
         .filter(Boolean)
         .join('\n');
+    // Owner errors may contain native names; masking also covers live feedback.
+    const feedback =
+        password && rawFeedback
+            ? 'Selection feedback is hidden for this masked field.'
+            : rawFeedback;
     const showTitle = !(
         props.displayConfig &&
         'showTitle' in props.displayConfig &&
@@ -121,13 +146,21 @@ function MultipleSelectControl({
                 h(
                     'li',
                     { key: `${index}:${nativeName}` },
-                    h('span', null, labels.get(nativeName) ?? nativeName),
+                    h(
+                        'span',
+                        null,
+                        password
+                            ? '••••'
+                            : (labels.get(nativeName) ?? nativeName)
+                    ),
                     h(
                         'button',
                         {
                             type: 'button',
                             disabled,
-                            'aria-label': `Remove ${labels.get(nativeName) ?? nativeName}`,
+                            'aria-label': password
+                                ? `Remove selected choice ${index + 1}`
+                                : `Remove ${labels.get(nativeName) ?? nativeName}`,
                             onClick: () => {
                                 if (!disabled) selection?.toggle(nativeName);
                             },
@@ -155,6 +188,9 @@ function MultipleSelectControl({
                     h('input', {
                         id: `${id}-${index}`,
                         type: 'checkbox',
+                        'aria-label': password
+                            ? `Masked choice ${index + 1}`
+                            : undefined,
                         checked: selected,
                         disabled:
                             disabled ||
@@ -169,7 +205,7 @@ function MultipleSelectControl({
                                 selection?.toggle(option.value);
                         },
                     }),
-                    h('span', null, option.label)
+                    h('span', null, password ? '••••' : option.label)
                 );
             })
         ),
@@ -179,9 +215,10 @@ function MultipleSelectControl({
                 type: 'button',
                 className: 'mx-sdk-multiple-select-clear',
                 disabled: disabled || value.length === 0,
-                'aria-label': clearLabel?.trim()
-                    ? clearLabel
-                    : `Clear ${title}`,
+                'aria-label':
+                    !password && clearLabel?.trim()
+                        ? clearLabel
+                        : `Clear ${title}`,
                 onClick: () => {
                     if (!disabled && value.length) selection?.clear();
                 },
@@ -195,14 +232,23 @@ function MultipleSelectControl({
                   h('label', { htmlFor: `${id}-new` }, 'New choice name'),
                   h('input', {
                       id: `${id}-new`,
+                      type: password ? 'password' : 'text',
+                      autoComplete: 'off',
+                      spellCheck: false,
                       value: name,
                       disabled: disabled || blocked || !choice.state.canCreate,
                       onChange: (event: ChangeEvent<HTMLInputElement>) => {
                           event.stopPropagation();
-                          setIntent({
-                              action: choice.create,
-                              name: event.currentTarget.value,
-                          });
+                          if (
+                              current() &&
+                              !disabled &&
+                              !blocked &&
+                              choice.state.canCreate
+                          )
+                              setIntent({
+                                  token,
+                                  name: event.currentTarget.value,
+                              });
                       },
                       onKeyDown: (
                           event: import('react').KeyboardEvent<HTMLInputElement>
@@ -221,12 +267,26 @@ function MultipleSelectControl({
                               !name.trim(),
                           onClick: () => {
                               if (
+                                  current() &&
                                   !disabled &&
                                   !blocked &&
                                   choice.state.canCreate &&
                                   name.trim()
-                              )
-                                  void choice.create(name);
+                              ) {
+                                  const captured = name;
+                                  void choice.create(captured).then(
+                                      (accepted) => {
+                                          if (accepted && current())
+                                              setIntent((now) =>
+                                                  now.token === token &&
+                                                  now.name === captured
+                                                      ? { token, name: '' }
+                                                      : now
+                                              );
+                                      },
+                                      () => {}
+                                  );
+                              }
                           },
                       },
                       'Add choice'
@@ -237,7 +297,8 @@ function MultipleSelectControl({
                           type: 'button',
                           disabled: !choice.state.busy,
                           onClick: () => {
-                              if (choice.state.busy) choice.cancel();
+                              if (current() && choice.state.busy)
+                                  choice.cancel();
                           },
                       },
                       'Cancel choice creation'

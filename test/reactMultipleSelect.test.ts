@@ -160,6 +160,198 @@ async function fixture(
     };
 }
 
+type Fixture = Awaited<ReturnType<typeof fixture>>;
+const installCreation = (f: Fixture) =>
+    f.owner.selectChoice('multi', {
+        journal: new RecoveryJournal(),
+        scope: {
+            owner: 'multiple-select',
+            parentFieldId: null,
+            tableId: null,
+            childExtensionId: 'form',
+            context: 'modal',
+        },
+        loadVersion: 1,
+    });
+const creationInput = (f: Fixture) => {
+    const input = f.container.querySelector('input:not([type=checkbox])');
+    assert.ok(input instanceof f.window.HTMLInputElement);
+    return input;
+};
+const typeCreation = async (f: Fixture, text: string) => {
+    const input = creationInput(f);
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(
+            f.window.HTMLInputElement.prototype,
+            'value'
+        )!.set!.call(input, text);
+        input.dispatchEvent(new f.window.Event('input', { bubbles: true }));
+    });
+    return input;
+};
+const assertMasked = (f: Fixture) => {
+    assert.doesNotMatch(
+        f.container.innerHTML,
+        /Red|Blue|Legacy|secret-option|secret-error|secret-validation|secret-creation/
+    );
+    assert.ok(f.container.textContent?.includes('••••'));
+};
+const creationProps = (
+    f: Fixture,
+    create: (name: string) => Promise<boolean>
+): FieldRendererProps<'multipleSelects'> => {
+    installCreation(f);
+    const props = f.props();
+    if (props.capability.type !== 'editable' || !props.capability.choice)
+        throw Error('Creation expected');
+    return {
+        ...props,
+        capability: {
+            ...props.capability,
+            choice: { ...props.capability.choice, create },
+        },
+    };
+};
+
+for (const flag of ['obscurePassword', 'maskPasswordOnLoginScreen'] as const) {
+    for (const source of ['displayConfig', 'writeConfig'] as const) {
+        for (const context of ['form', 'portal-cell', 'portal-detail'] as const)
+            it(`masks direct ${context} names, labels, feedback and creation text from ${source}.${flag}`, async (t) => {
+                const f = await fixture(t, { allowAddingNewOptions: true }, [
+                    'Legacy',
+                    'Red',
+                ]);
+                installCreation(f);
+                const props = f.props();
+                assert.equal(props.capability.type, 'editable');
+                if (
+                    props.capability.type !== 'editable' ||
+                    !props.capability.selection ||
+                    !props.capability.choice
+                )
+                    throw Error('Selection and creation expected');
+                const selection = props.capability.selection;
+                const masked = {
+                    ...props,
+                    context,
+                    displayConfig: { [flag]: false },
+                    writeConfig: { [flag]: false },
+                    [source]: { [flag]: true },
+                    error: 'secret-error Red',
+                    validation: [
+                        {
+                            fieldId: 'multi',
+                            fieldTitle: 'Colors',
+                            errorMessage: 'secret-validation Blue',
+                        },
+                    ],
+                    capability: {
+                        ...props.capability,
+                        selection: {
+                            ...selection,
+                            state: {
+                                ...selection.state,
+                                error: 'secret-error Blue',
+                                options: selection.state.options.map(
+                                    (option) => ({
+                                        ...option,
+                                        label: `secret-option ${option.value}`,
+                                    })
+                                ),
+                            },
+                        },
+                        choice: {
+                            ...props.capability.choice,
+                            state: {
+                                ...props.capability.choice.state,
+                                error: 'secret-creation Red',
+                            },
+                        },
+                    },
+                };
+                await f.render(renderMultipleSelectsField(masked));
+                assertMasked(f);
+                assert.equal(
+                    f.button('Remove selected choice 1').disabled,
+                    false
+                );
+                if (context === 'form') {
+                    const input = await typeCreation(
+                        f,
+                        'Unsubmitted private name'
+                    );
+                    assert.equal(input.type, 'password');
+                    assert.equal(input.value, 'Unsubmitted private name');
+                    assert.equal(input.autocomplete, 'off');
+                } else {
+                    assert.equal(
+                        f.container.querySelector('input:not([type=checkbox])'),
+                        null
+                    );
+                }
+                await act(async () =>
+                    f.button('Remove selected choice 1').click()
+                );
+                assert.deepEqual(f.binding.getSnapshot().value, ['Red']);
+                const checkbox = [
+                    ...f.container.querySelectorAll('input'),
+                ].filter((node) => node.type === 'checkbox')[1];
+                assert.equal(
+                    checkbox.getAttribute('aria-label'),
+                    'Masked choice 2'
+                );
+                await act(async () => checkbox.click());
+                assert.deepEqual(f.binding.getSnapshot().value, [
+                    'Red',
+                    'Blue',
+                ]);
+                await f.render(
+                    renderMultipleSelectsField({
+                        ...masked,
+                        capability: { type: 'readonly' },
+                    })
+                );
+                assertMasked(f);
+                assert.equal(
+                    f.button('Remove selected choice 1').disabled,
+                    true
+                );
+                assert.equal(f.container.querySelectorAll('input').length, 0);
+            });
+    }
+
+    for (const presentation of ['binding', 'host'] as const)
+        it(`masks the real Form ${presentation} with ${flag} while preserving native selection and creation names`, async (t) => {
+            const f = await fixture(t, {
+                [flag]: true,
+                allowAddingNewOptions: true,
+            });
+            installCreation(f);
+            let created = '';
+            f.client.forms.addSelectOption = async (input) => {
+                created = input.newChoiceText;
+                return { newChoice: { id: 'mint', name: input.newChoiceText } };
+            };
+            await f.render(
+                presentation === 'binding'
+                    ? h(MultipleSelectField, { binding: f.binding })
+                    : h(FieldRenderer, {
+                          host: f.host,
+                          renderers: { renderMultipleSelectsField },
+                      })
+            );
+            assertMasked(f);
+            const input = await typeCreation(f, 'Mint');
+            assert.equal(input.type, 'password');
+            await act(async () => f.button('Add choice').click());
+            assert.equal(created, 'Mint');
+            assert.deepEqual(f.binding.getSnapshot().value, ['Red', 'Mint']);
+            assert.doesNotMatch(f.container.textContent!, /Red|Mint/);
+            await act(async () => f.button('Remove selected choice 1').click());
+            assert.deepEqual(f.binding.getSnapshot().value, ['Mint']);
+        });
+}
+
 it('preserves native choice-name order through binding edits, slot remounts and explicit clear; generic SelectField stays compatible', async (t) => {
     const f = await fixture(t, {}, null);
     await f.render(h(MultipleSelectField, { binding: f.binding }));
@@ -544,126 +736,285 @@ it('does not carry an unfinished creation name to a replacement Form owner with 
     assert.ok(fresh instanceof f.window.HTMLInputElement);
     assert.equal(fresh.value, '');
     assert.equal(f.button('Add choice').disabled, true);
+    await f.render(h(MultipleSelectField, { binding: f.binding }));
+    const returned = f.container.querySelector('input:not([type=checkbox])');
+    assert.ok(returned instanceof f.window.HTMLInputElement);
+    assert.equal(
+        returned.value,
+        '',
+        'A→B→A must not revive the retired A draft'
+    );
     await act(async () => f.owner.destroy());
     assert.equal(await captured('Unsubmitted name'), false);
     assert.deepEqual(replacement.field('multi').getSnapshot().value, ['Red']);
 });
 
-for (const layout of ['grid', 'list'] as const)
-    it(`integrates with actual Portal ${layout} hosts without reads on render or automatic writes`, async (t) => {
-        const f = await fixture(t);
-        const schema = f.loaded.payload.fieldIdsToSchemas.multi;
-        const api = portalFixture(async () =>
-            portalListPage({
-                recordIds: ['record_1'],
-                customViewDetailFields: {
-                    fld_children: [
-                        {
-                            fieldId: 'multi',
-                            fieldName: 'Colors',
-                            titleOverride: '',
-                            isHidden: false,
-                            fieldIsInEditingChildForm: true,
-                            childFormField: null,
-                            miniExtConfig: schema.miniExtConfig,
-                        },
-                    ],
-                },
-                tableIdsToLinkedTableStates: {
-                    table_children: {
-                        airtableFields: [schema.airtableField],
-                        recordIdsToAirtableRecords: {
-                            record_1: {
-                                id: 'record_1',
-                                fields: { multi: ['Red'] },
-                            },
-                        },
-                    },
-                },
-            })
-        );
-        const owner = createPortalListOwner({
-            client: api.client,
-            portal: portalPage({ disableInlineEdit: false, layout }),
-            portalFieldId: 'fld_children',
-            criteria: {
-                selectedCustomViewId: 'view_example',
-                searchTerm: '',
-                searchParamsMap: {},
-                sortFieldsByEndUser: null,
-                filtersByEndUser: null,
-                supportsEndUserSortCleanup: true,
-                supportsEndUserFilterCleanup: true,
-            },
-            getScope: () => ({
-                ownerId: 'multiple-select-portal',
-                revision: 0,
-            }),
-        });
-        await owner.readFirst(owner.getSnapshot().revision, {
-            pagesToFetch: 1,
-            refreshLoggedInPortalRecord: false,
-        });
-        const cell = createPortalCellBinding({
-            client: api.client,
-            schema,
-            value: ['Red'],
-            input: {
-                portalExtensionAccessToken: 'portal_access_example',
-                portalFieldId: 'fld_children',
-                recordId: 'record_1',
-                recordFieldId: 'multi',
-                selectedCustomViewId: 'view_example',
-            },
-            getScope: () => ({
-                ownerId: 'multiple-select-portal',
-                revision: 0,
-            }),
-            isCurrent: () => true,
-            recovery: {
-                journal: new RecoveryJournal(),
-                scope: {
-                    owner: 'multiple-select-portal',
-                    parentFieldId: 'fld_children',
-                    tableId: 'table_children',
-                    childExtensionId: '',
-                    context: 'modal',
-                },
-                loadVersion: 1,
-            },
-        });
-        const options = {
-            owner,
-            client: api.client,
-            recordId: 'record_1',
-            isCurrent: () => true,
-            configurationRevision: () => 0,
-        };
-        const host =
-            layout === 'grid'
-                ? createPortalCellRendererHost({
-                      ...options,
-                      cell,
-                      fieldId: 'multi',
-                  })
-                : createPortalDetailRendererHost(options);
-        t.after(() => {
-            host.dispose();
-            cell.destroy();
-            owner.destroy();
-            assert.equal(api.calls.length, 1);
-            assert.equal(api.mutations, 0);
-        });
-        await f.render(
+it('preserves creation text across ordinary snapshots from the same real Form host', async (t) => {
+    const f = await fixture(t, { allowAddingNewOptions: true });
+    installCreation(f);
+    await f.render(
+        h(FieldRenderer, {
+            host: f.host,
+            renderers: { renderMultipleSelectsField },
+        })
+    );
+    const input = await typeCreation(f, 'Unsubmitted name');
+    assert.equal(input.value, 'Unsubmitted name');
+    await act(async () => f.binding.selection!.toggle('Blue'));
+    assert.deepEqual(f.binding.getSnapshot().value, ['Red', 'Blue']);
+    assert.equal(input.value, 'Unsubmitted name');
+    assert.equal(f.button('Add choice').disabled, false);
+});
+
+it('retires creation text on host A→B→A even when both hosts borrow the same binding', async (t) => {
+    const f = await fixture(t, { allowAddingNewOptions: true });
+    installCreation(f);
+    const replacement = createFormFieldRendererHost({
+        fields: f.owner,
+        fieldId: 'multi',
+        isCurrent: () => true,
+        configurationRevision: () => 0,
+    });
+    t.after(() => replacement.dispose());
+    const show = (host: typeof f.host) =>
+        f.render(
             h(FieldRenderer, {
                 host,
                 renderers: { renderMultipleSelectsField },
             })
         );
-        assert.ok(f.container.textContent?.includes('Red'));
-        assert.equal(f.button('Remove Red').disabled, layout === 'list');
-        if (layout === 'grid') {
-            await act(async () => f.checkbox('Blue').click());
-            assert.deepEqual(cell.binding.getSnapshot().value, ['Red', 'Blue']);
-        }
+    await show(f.host);
+    await typeCreation(f, 'Retired text');
+    await show(replacement);
+    assert.equal(creationInput(f).value, '');
+    await show(f.host);
+    assert.equal(creationInput(f).value, '');
+});
+
+it('standalone creation retains local rerenders but new incoming props retire text even with the same actions', async (t) => {
+    const f = await fixture(t, { allowAddingNewOptions: true });
+    const props = creationProps(f, async () => true);
+    await f.render(renderMultipleSelectsField(props));
+    await typeCreation(f, 'Unsubmitted name');
+    assert.equal(f.button('Add choice').disabled, false);
+    await f.render(renderMultipleSelectsField(props));
+    assert.equal(creationInput(f).value, 'Unsubmitted name');
+    await f.render(renderMultipleSelectsField({ ...props }));
+    assert.equal(creationInput(f).value, '');
+    await f.render(renderMultipleSelectsField(props));
+    assert.equal(creationInput(f).value, '');
+});
+
+it('clears accepted creation text only if the current generation still contains the submitted name', async (t) => {
+    const f = await fixture(t, { allowAddingNewOptions: true });
+    let accept!: (accepted: boolean) => void;
+    const names: string[] = [];
+    const props = creationProps(f, (name) => {
+        names.push(name);
+        return new Promise<boolean>((resolve) => {
+            accept = resolve;
+        });
     });
+    await f.render(renderMultipleSelectsField(props));
+    await typeCreation(f, 'First');
+    await act(async () => f.button('Add choice').click());
+    await typeCreation(f, 'Newer unfinished text');
+    await act(async () => accept(true));
+    assert.equal(creationInput(f).value, 'Newer unfinished text');
+    await act(async () => f.button('Add choice').click());
+    await act(async () => accept(false));
+    assert.equal(creationInput(f).value, 'Newer unfinished text');
+    await act(async () => f.button('Add choice').click());
+    await act(async () => accept(true));
+    assert.equal(creationInput(f).value, '');
+    assert.deepEqual(names, [
+        'First',
+        'Newer unfinished text',
+        'Newer unfinished text',
+    ]);
+    assert.deepEqual(f.binding.getSnapshot().value, ['Red']);
+});
+
+it('late creation completion cannot clear an A→B→A successor with the same text', async (t) => {
+    const f = await fixture(t, { allowAddingNewOptions: true });
+    let accept!: (accepted: boolean) => void;
+    const props = creationProps(
+        f,
+        () =>
+            new Promise<boolean>((resolve) => {
+                accept = resolve;
+            })
+    );
+    await f.render(renderMultipleSelectsField(props));
+    await typeCreation(f, 'Same name');
+    await act(async () => f.button('Add choice').click());
+    await f.render(renderMultipleSelectsField({ ...props }));
+    await f.render(renderMultipleSelectsField(props));
+    await typeCreation(f, 'Same name');
+    await act(async () => accept(true));
+    assert.equal(creationInput(f).value, 'Same name');
+    assert.deepEqual(f.binding.getSnapshot().value, ['Red']);
+});
+
+it('late completion and rejection after unmount cannot change a remounted creation input', async (t) => {
+    const f = await fixture(t, { allowAddingNewOptions: true });
+    let accept!: (accepted: boolean) => void;
+    let reject!: (error: Error) => void;
+    const props = creationProps(
+        f,
+        () =>
+            new Promise<boolean>((resolve, refuse) => {
+                accept = resolve;
+                reject = refuse;
+            })
+    );
+    await f.render(renderMultipleSelectsField(props));
+    await typeCreation(f, 'Same name');
+    await act(async () => f.button('Add choice').click());
+    await f.render(null);
+    await f.render(renderMultipleSelectsField(props));
+    await typeCreation(f, 'Same name');
+    await act(async () => accept(true));
+    assert.equal(creationInput(f).value, 'Same name');
+    await act(async () => f.button('Add choice').click());
+    await act(async () => reject(Error('Creation refused')));
+    assert.equal(creationInput(f).value, 'Same name');
+    assert.deepEqual(f.binding.getSnapshot().value, ['Red']);
+});
+
+for (const flag of [
+    undefined,
+    'obscurePassword',
+    'maskPasswordOnLoginScreen',
+] as const)
+    for (const layout of ['grid', 'list'] as const)
+        it(`integrates with actual Portal ${layout} hosts ${flag ?? 'unmasked'} without reads on render or automatic writes`, async (t) => {
+            const f = await fixture(t, flag ? { [flag]: true } : {});
+            const schema = f.loaded.payload.fieldIdsToSchemas.multi;
+            const api = portalFixture(async () =>
+                portalListPage({
+                    recordIds: ['record_1'],
+                    customViewDetailFields: {
+                        fld_children: [
+                            {
+                                fieldId: 'multi',
+                                fieldName: 'Colors',
+                                titleOverride: '',
+                                isHidden: false,
+                                fieldIsInEditingChildForm: true,
+                                childFormField: null,
+                                miniExtConfig: schema.miniExtConfig,
+                            },
+                        ],
+                    },
+                    tableIdsToLinkedTableStates: {
+                        table_children: {
+                            airtableFields: [schema.airtableField],
+                            recordIdsToAirtableRecords: {
+                                record_1: {
+                                    id: 'record_1',
+                                    fields: { multi: ['Red'] },
+                                },
+                            },
+                        },
+                    },
+                })
+            );
+            const owner = createPortalListOwner({
+                client: api.client,
+                portal: portalPage({ disableInlineEdit: false, layout }),
+                portalFieldId: 'fld_children',
+                criteria: {
+                    selectedCustomViewId: 'view_example',
+                    searchTerm: '',
+                    searchParamsMap: {},
+                    sortFieldsByEndUser: null,
+                    filtersByEndUser: null,
+                    supportsEndUserSortCleanup: true,
+                    supportsEndUserFilterCleanup: true,
+                },
+                getScope: () => ({
+                    ownerId: 'multiple-select-portal',
+                    revision: 0,
+                }),
+            });
+            await owner.readFirst(owner.getSnapshot().revision, {
+                pagesToFetch: 1,
+                refreshLoggedInPortalRecord: false,
+            });
+            const cell = createPortalCellBinding({
+                client: api.client,
+                schema,
+                value: ['Red'],
+                input: {
+                    portalExtensionAccessToken: 'portal_access_example',
+                    portalFieldId: 'fld_children',
+                    recordId: 'record_1',
+                    recordFieldId: 'multi',
+                    selectedCustomViewId: 'view_example',
+                },
+                getScope: () => ({
+                    ownerId: 'multiple-select-portal',
+                    revision: 0,
+                }),
+                isCurrent: () => true,
+                recovery: {
+                    journal: new RecoveryJournal(),
+                    scope: {
+                        owner: 'multiple-select-portal',
+                        parentFieldId: 'fld_children',
+                        tableId: 'table_children',
+                        childExtensionId: '',
+                        context: 'modal',
+                    },
+                    loadVersion: 1,
+                },
+            });
+            const options = {
+                owner,
+                client: api.client,
+                recordId: 'record_1',
+                isCurrent: () => true,
+                configurationRevision: () => 0,
+            };
+            const host =
+                layout === 'grid'
+                    ? createPortalCellRendererHost({
+                          ...options,
+                          cell,
+                          fieldId: 'multi',
+                      })
+                    : createPortalDetailRendererHost(options);
+            t.after(() => {
+                host.dispose();
+                cell.destroy();
+                owner.destroy();
+                assert.equal(api.calls.length, 1);
+                assert.equal(api.mutations, 0);
+            });
+            await f.render(
+                h(FieldRenderer, {
+                    host,
+                    renderers: { renderMultipleSelectsField },
+                })
+            );
+            if (flag) assertMasked(f);
+            else assert.ok(f.container.textContent?.includes('Red'));
+            assert.equal(
+                f.button(flag ? 'Remove selected choice 1' : 'Remove Red')
+                    .disabled,
+                layout === 'list'
+            );
+            if (layout === 'grid') {
+                await act(async () =>
+                    [...f.container.querySelectorAll('input')]
+                        .filter((node) => node.type === 'checkbox')[1]
+                        .click()
+                );
+                assert.deepEqual(cell.binding.getSnapshot().value, [
+                    'Red',
+                    'Blue',
+                ]);
+                if (flag) assertMasked(f);
+            }
+        });

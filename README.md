@@ -172,7 +172,7 @@ The SDK has no administrative workspace/configure/publish API.
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
 also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CreatedByField`, `LastModifiedByField`, `CheckboxField`,
-`SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
+`SelectField`, `SingleSelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `CreatedTimeField`, `LastModifiedTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
@@ -185,6 +185,14 @@ renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
+
+[Single Select presentation](docs/ui.md#react-single-select-presentation) exports
+`SingleSelectField`, `SingleSelectFieldProps`, `SingleSelectFieldOptions` and the
+`renderSingleSelectField` slot. It uses a native dropdown with optional
+`@miniextensions/sdk/react/single-select.css`, existing owner options and native
+choice-name drafts. Configured choice creation remains an explicit Form-owner
+action; saving the record remains separate. List/radio layouts and choice-color
+presentation require a custom renderer.
 
 [Multiline Text presentation](docs/ui.md#react-multiline-text-presentation) exports
 `MultilineTextField`, `MultilineTextFieldProps`, `MultilineTextFieldOptions` and the

@@ -89,6 +89,41 @@ The Node 24 check name is unchanged. If repository protection still requires
 `check (22)`, a repository administrator must remove that retired requirement;
 the workflow does not change repository protection settings.
 
+## Single Select presentation checks
+
+`test/reactSingleSelect.test.ts` exercises the binding component, named helper and
+the single-select path of `SelectField`. `pnpm check:package` exercises installed
+ESM/CommonJS exports, public props/options, physical-kind and capability types,
+Form/Grid/List recipes, optional `single-select.css`, and the local example.
+
+Synthetic owners cover native choice-name/null drafts, configured display labels,
+retained unavailable selections, static limits and ready/blocked availability.
+Blocked availability keeps retained selections and owner-permitted Clear distinct
+from admitting new choices. Readonly detail hosts remain distinct from accepted
+static Grid cell editors; conditional inline editing is refused. Masks omit private values, options and
+choice actions. Repeated controls, titles, associated feedback, pending state,
+custom rendering, retirement and stale callbacks are checked without changing the
+shared selection model or adding implicit Save.
+
+Configured choice creation and cancellation use existing Form-owner actions with
+held synthetic responses. Checks distinguish local create-name text from native
+drafts, retain owner authority through remounts, and prevent old completion from
+clearing a successor's text. They do not establish backend persistence or resolve
+an uncertain choice operation by retrying it.
+
+After building, run `node examples/react-single-select/dev.mjs` for the local
+synthetic example at `http://127.0.0.1:4196`. The separate native Chromium proof runs
+with `SDK_SINGLE_SELECT_CHROMIUM=/path/to/chromium node scripts/check-single-select-browser.mjs`.
+It covers native dropdown interaction, keyboard type-ahead and Tab/Space access, row-event containment,
+layout and forced colors. Generated preview outputs remain ignored while the
+example sources remain tracked and unignored. No live data or backend is involved.
+
+Task IDs: 3815.
+
+The macOS headless run does not prove native popup arrow navigation: the same
+limitation was reproduced with a plain native select. The receipt identifies this
+limit separately from the passing type-ahead and keyboard Clear checks.
+
 ## Multiline Text presentation checks
 
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.

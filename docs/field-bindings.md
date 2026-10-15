@@ -184,8 +184,9 @@ Search does not narrow the set used to admit a choice.
 Configured Add Choice is explicit. Attach `owner.selectChoice(fieldId, recovery,
 adapter)` with the same `RecoveryJournal`, accepted scope and load version as
 Save/upload. This owner-held controller also appears as `binding.choiceCreation`
-and `snapshot.choiceCreation`; optional React `SelectField` stock markup and a
-custom `render` consume the same state/actions. Mounting never creates a choice.
+and `snapshot.choiceCreation`; optional React `SingleSelectField` and `SelectField`
+stock markup, plus custom rendering, consume the same state/actions. Mounting
+never creates a choice.
 
 `create(name)` reuses configured permission, visibility, selection limits and
 conditional availability. Refused preflight creates no request or journal attempt.
@@ -263,9 +264,9 @@ or persistence across a page refresh.
 
 ## Optional React components
 
-Import `TextField`, `NumberField`, `CheckboxField`, `SelectField`, `LinkedField`, `AttachmentField` and
-`AttachmentDialog` from `@miniextensions/sdk/react`. React is an optional peer
-only for this entry point; use the supported React 18.3.1 or React 19 range from
+Import `TextField`, `NumberField`, `CheckboxField`, `SelectField`, `SingleSelectField`,
+`LinkedField`, `AttachmentField` and `AttachmentDialog` from
+`@miniextensions/sdk/react`. React is an optional peer only for this entry point; use the supported React 18.3.1 or React 19 range from
 `package.json`. No UI library is required. Each field supports a `render(state)`
 function replacing its default markup, using the same snapshot/actions.
 
@@ -277,6 +278,15 @@ export function AppTextField({ binding, render }: FieldProps) {
     return <TextField binding={binding} render={render} />;
 }
 ```
+
+For a stock single-choice dropdown, use `SingleSelectField` with an accepted Form
+binding or `renderSingleSelectField` in a named slot. Both borrow existing owner
+state/actions and preserve native choice names. `SelectField` uses the same stock
+single-select presentation while retaining its existing multi-select path. The
+[Single Select guide](ui.md#react-single-select-presentation) covers optional CSS,
+masking, configured Add Choice and the standalone helper's presentation identity.
+The stock helper does not create conditional Portal inline editing authority;
+accepted detail hosts remain readonly.
 
 Unmount removes subscriptions, not the owner, draft or pending File identities.
 React reflects the owner-held linked search query on remount and replaces it when

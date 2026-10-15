@@ -5,6 +5,11 @@ import {
 } from './created-time-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkReactSingleSelectConsumer,
+    reactSingleSelectTypedConsumer,
+    reactSingleSelectCommonJsTypedConsumer,
+} from './react-single-select-consumer-checks.mjs';
+import {
     checkLastModifiedTimeConsumer,
     lastModifiedTimeReactTypedConsumer,
 } from './last-modified-time-consumer-checks.mjs';
@@ -331,6 +336,8 @@ try {
         'dist/cjs/react/button.css',
         'dist/esm/react/checkbox.css',
         'dist/cjs/react/checkbox.css',
+        'dist/esm/react/single-select.css',
+        'dist/cjs/react/single-select.css',
         'dist/esm/react/text.css',
         'dist/cjs/react/text.css',
         'dist/esm/react/number.css',
@@ -1165,10 +1172,18 @@ new Parser([]).parse({maxDepth:'48'});
         metafile: true,
     });
     assert(
-        !Object.keys(bundled.metafile.inputs).some((path) =>
-            /\/sdk\/dist\/esm\/(?:ui|forms|portals|auth)\//.test(path)
-        ),
-        'Core consumer unexpectedly bundled optional UI/Form/Portal/Auth helpers'
+        !Object.keys(bundled.metafile.inputs).some((path) => {
+            const normalized = path.replace(/\\/g, '/');
+            return (
+                /\/sdk\/dist\/(?:esm|cjs)\/(?:ui|forms|portals|auth|react)\//.test(
+                    normalized
+                ) ||
+                /(?:^|\/)node_modules\/(?:react|react-dom)(?:\/|$)/.test(
+                    normalized
+                )
+            );
+        }),
+        'Core consumer unexpectedly bundled optional UI/Form/Portal/Auth/React helpers'
     );
     const browserContext = { URL, TextEncoder, fetch };
     runInNewContext(bundled.outputFiles[0].text, browserContext, {
@@ -1243,6 +1258,27 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         rendererReactTypedConsumer
     );
     reactSources.push('renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'single-select-react-consumer.tsx'),
+        reactSingleSelectTypedConsumer
+    );
+    reactSources.push('single-select-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'single-select-react-consumer.cts'),
+        reactSingleSelectCommonJsTypedConsumer
+    );
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--target',
+        'ES2022',
+        '--module',
+        'NodeNext',
+        '--moduleResolution',
+        'NodeNext',
+        'single-select-react-consumer.cts',
+    ]);
     writeFileSync(
         join(temporaryDirectory, 'last-modified-time-react-consumer.tsx'),
         lastModifiedTimeReactTypedConsumer
@@ -1439,6 +1475,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     for (const name of [
         'button',
         'checkbox',
+        'single-select',
         'text',
         'last-modified-time',
         'last-modified-by',
@@ -1612,6 +1649,59 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     error.status === 1 &&
                     String(error.stdout ?? '').trim() === '',
                 'Count example sources must remain unignored'
+            );
+        }
+        if (name === 'single-select') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-single-select/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Single Select example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Single Select example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-single-select/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Single Select preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Single Select example sources must remain unignored'
             );
         }
         if (name === 'last-modified-time') {
@@ -1945,6 +2035,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(checkboxProof.checks, 6);
     console.log(
         `Installed Checkbox renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const singleSelectProof = await checkReactSingleSelectConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(singleSelectProof.checks, 24);
+    console.log(
+        `Installed Single Select renderer, native choice drafts, explicit Add Choice/Save, accepted Portal surfaces, CSS and local example: ${singleSelectProof.checks} ESM/CJS groups passed; synthetic owners only.`
     );
     const lastModifiedTimeProof = await checkLastModifiedTimeConsumer({
         consumerDirectory: temporaryDirectory,

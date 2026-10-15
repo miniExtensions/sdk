@@ -143,6 +143,7 @@ for (const format of ['esm', 'cjs']) {
         'datetime',
         'duration',
         'currency',
+        'single-select',
     ]) {
         copyFileSync(
             `src/react/${name}.css`,

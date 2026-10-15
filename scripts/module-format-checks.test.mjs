@@ -641,6 +641,7 @@ for (const name of [
     'datetime',
     'duration',
     'currency',
+    'single-select',
 ]) {
     test(`the exported ${name} stylesheet is hashed as an asset and checked on installation`, (t) => {
         const { root, manifest } = fixture(t);

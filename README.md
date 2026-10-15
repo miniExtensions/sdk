@@ -173,7 +173,7 @@ The SDK has no administrative workspace/configure/publish API.
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
 also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CreatedByField`, `LastModifiedByField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
-`DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
+`DateTimeField`, `LastModifiedTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
 [field-binding usage guide](docs/field-bindings.md) and
@@ -201,6 +201,14 @@ single-line text drafts; page and server validation remain authoritative.
 `UrlFieldProps`, `UrlFieldOptions` and the typed `renderUrlField` slot. It reuses
 the Text control and optional `@miniextensions/sdk/react/text.css` for manual
 single-line entry. URL text does not create links or grant navigation authority.
+
+[Last Modified Time presentation](docs/ui.md#react-last-modified-time-presentation)
+exports `LastModifiedTimeField`, `LastModifiedTimeFieldProps`,
+`LastModifiedTimeFieldOptions` and the typed `renderLastModifiedTimeField` slot.
+It presents supplied raw timestamp strings only when Last Modified Time metadata
+has `options.isValid === true`, using the disabled DateTime control and optional
+`@miniextensions/sdk/react/datetime.css`. It does not format dates, calculate
+modification times or change native values.
 
 [Last Modified By presentation](docs/ui.md#react-last-modified-by-presentation) exports
 `LastModifiedByField`, `LastModifiedByFieldProps`, `LastModifiedByFieldOptions` and the typed

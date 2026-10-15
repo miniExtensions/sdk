@@ -2273,6 +2273,96 @@ without backend requests. After building, run `node examples/react-date/dev.mjs`
 remounting, clearing, permissions, layout and forced colors. Synthetic interaction
 does not certify every platform's input method or screen reader.
 
+## React Last Modified Time presentation
+
+The optional `/react` entry exports `LastModifiedTimeField`,
+`LastModifiedTimeFieldProps`, `LastModifiedTimeFieldOptions` and
+`renderLastModifiedTimeField`. The binding component accepts `{ binding, render }`
+plus `className` and `clearLabel`; a supplied `render` replaces its stock markup.
+The options alias `DateTimeFieldOptions`.
+
+```tsx
+import { LastModifiedTimeField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/datetime.css';
+
+export function RecordModifiedTime({ binding }: { binding: FormFieldBinding }) {
+    return (
+        <LastModifiedTimeField
+            binding={binding}
+            className="record-modified-time"
+        />
+    );
+}
+```
+
+The named helper accepts `FieldRendererProps<'lastModifiedTime'>` in
+`FieldRenderer`, `AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import {
+    renderLastModifiedTimeField,
+    type DateTimeFieldOptions,
+} from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/datetime.css';
+
+const timestampOptions: DateTimeFieldOptions = {
+    className: 'record-modified-time',
+    clearLabel: 'Keep modification time',
+};
+export const lastModifiedTimeRenderers: FieldRendererSlots<ReactNode> = {
+    renderLastModifiedTimeField: (props) =>
+        renderLastModifiedTimeField(props, timestampOptions),
+};
+```
+
+The control presents a supplied native string only when Last Modified Time
+metadata has `options.isValid === true`. False, missing or malformed validity
+metadata displays blank without replacing the owner's value. Null, missing and
+nonstring values also display blank in direct helper calls, without coercion.
+Hosts may reject malformed native values or metadata before calling the helper;
+accepted `isValid: false` metadata still needs a valid nested result configuration.
+
+Valid presentation preserves supplied offsets, fractional seconds, whitespace,
+naive timestamps and invalid strings accepted by the owner. The renderer does
+not parse or validate timestamp text, format nested `date`/`dateTime` results, or
+convert timezones. It does not interpret `referencedFieldIds`, inspect record
+changes or generate a modification timestamp. Changing validity can change whether
+the string is shown; changing nested result or referenced-field metadata does not
+reinterpret it. None of these changes normalizes the native answer. Use a custom
+renderer for formatted dates. The single-line input sanitizes CR/LF in its displayed
+value; those native bytes remain unchanged in the owner.
+
+The DateTime input and its existing Clear button are always disabled. `clearLabel`
+changes only the disabled button's accessible label. The renderer creates no date
+model and borrows no editing capability, even if malformed runtime props claim
+write authority. Physical Last Modified Time remains readonly when metadata reports
+`isComputed: false`. Rendering does not invoke Save, read records or start requests.
+
+Existing title visibility, fallback titles, configured placeholder, required
+indication, unique label IDs and accessible hidden titles apply. Masking from either
+display or write configuration hides the input text without a separate native-value
+readout. Pending state and supplied error/validation messages use associated
+plain-text feedback; `isValid: false` alone does not add an error message.
+The shared `YYYY-MM-DDTHH:mm:ssZ` placeholder is a presentation default, not a parser.
+Control events remain contained within the shared control.
+
+Wrong physical bindings show a status, while custom rendering keeps precedence.
+Hidden, blocked and retired bindings or hosts omit the stock control. Mounting,
+StrictMode, owner replacement and remounting preserve accepted native values.
+Form composition uses accepted Form owners. Grid and List use accepted Portal
+detail hosts without fabricating computed inline editing bindings. Loading and
+submission remain explicit application operations; editable DateTime and Text
+controls keep their existing behavior.
+
+Styles reuse optional `@miniextensions/sdk/react/datetime.css` and the
+`mx-sdk-datetime*` classes; no Last Modified Time stylesheet is added. The local
+`examples/react-last-modified-time` fixture uses public exports and synthetic
+owners. See [Last Modified Time presentation checks](testing.md#last-modified-time-presentation-checks)
+for source, package and native browser verification.
+
 ## React DateTime presentation
 
 The optional `/react` entry exports `DateTimeField`, `DateTimeFieldProps`,

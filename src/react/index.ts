@@ -52,6 +52,14 @@ export {
     type LastModifiedTimeFieldOptions,
 } from './LastModifiedTimeField.js';
 import {
+    createdTimeInput,
+    type CreatedTimeFieldOptions,
+} from './CreatedTimeField.js';
+export {
+    renderCreatedTimeField,
+    type CreatedTimeFieldOptions,
+} from './CreatedTimeField.js';
+import {
     MultilineTextControl,
     multilineTextConfiguration,
     multilineTextUnavailable,
@@ -388,6 +396,45 @@ export function LastModifiedTimeField({
             snapshot.value,
             schema.airtableField.config
         ),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+        clear: () => {},
+    });
+}
+export type CreatedTimeFieldProps = FieldProps & CreatedTimeFieldOptions;
+/** The supplied creation timestamp stays readonly regardless of result metadata. */
+export function CreatedTimeField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: CreatedTimeFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'createdTime' ||
+        schema.airtableField.config.type !== 'createdTime'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Created Time fields.'
+        );
+    return createElement(DateTimeControl, {
+        ...dateTimeConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input: createdTimeInput(snapshot.value),
         disabled: true,
         pending: snapshot.pending,
         invalid: snapshot.error !== null || snapshot.validation.length > 0,

@@ -174,6 +174,31 @@ composition does not certify every platform's input method or screen reader.
 
 Task IDs: 3815.
 
+## Created Time presentation checks
+
+`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+They cover raw timestamp strings, offsets and fractional seconds, naive and
+invalid strings, null/missing/nonstring values, and single-line CR/LF sanitization
+without native normalization. Accepted nested date/dateTime metadata changes leave
+the same owner's answer intact. Direct metadata and capability traps verify that
+the renderer borrows no formatter, date model or write authority.
+
+Checks include disabled input/Clear, masking, title fallback, associated feedback,
+repeated IDs, custom rendering, wrong-kind bindings and stale/retired controls.
+Physical Created Time remains readonly with `isComputed: false`. Real synthetic
+Form composition and Portal Grid/List detail hosts preserve native strings; each
+Portal fixture makes one explicit synthetic load, with no render-triggered reads,
+writes or Save. Editable DateTime and Text neighbors remain functional.
+
+Public props/options, readonly negative types, physical-kind slot rejection,
+Form/Grid/List compositions and both guide recipes are typechecked. The example
+uses shared optional `datetime.css`, with tracked source files and ignored preview
+outputs. After building, `node scripts/check-created-time-browser.mjs` runs the
+separate local browser proof using `examples/react-created-time`. No live data or
+production backend is involved.
+
+Task IDs: 3815.
+
 ## Last Modified By presentation checks
 
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.

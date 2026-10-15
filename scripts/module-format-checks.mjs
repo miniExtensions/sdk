@@ -179,6 +179,7 @@ export function assertModuleFormats(root) {
                 './react/datetime.css',
                 './react/duration.css',
                 './react/currency.css',
+                './react/multiple-select.css',
             ].includes(subpath)
         ) {
             assert.equal(mapping, `./dist/esm/${subpath.slice(2)}`);

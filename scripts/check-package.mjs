@@ -1,5 +1,9 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import {
+    checkMultipleSelectConsumer,
+    multipleSelectReactTypedConsumer,
+} from './multiple-select-consumer-checks.mjs';
+import {
     checkCreatedTimeConsumer,
     createdTimeReactTypedConsumer,
 } from './created-time-consumer-checks.mjs';
@@ -343,6 +347,8 @@ try {
         'dist/cjs/react/duration.css',
         'dist/esm/react/currency.css',
         'dist/cjs/react/currency.css',
+        'dist/esm/react/multiple-select.css',
+        'dist/cjs/react/multiple-select.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1234,6 +1240,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('field-bindings-react.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'multiple-select-react-consumer.tsx'),
+        multipleSelectReactTypedConsumer
+    );
+    reactSources.push('multiple-select-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'button-react-consumer.tsx'),
         buttonReactTypedConsumer
     );
@@ -1439,6 +1450,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     for (const name of [
         'button',
         'checkbox',
+        'multiple-select',
         'text',
         'last-modified-time',
         'last-modified-by',
@@ -1945,6 +1957,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(checkboxProof.checks, 6);
     console.log(
         `Installed Checkbox renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const multipleSelectProof = await checkMultipleSelectConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(multipleSelectProof.checks, 4);
+    console.log(
+        `Installed Multiple Select component, Form/Grid/List declarations, CSS and example: ${multipleSelectProof.checks} ESM/CJS groups passed.`
     );
     const lastModifiedTimeProof = await checkLastModifiedTimeConsumer({
         consumerDirectory: temporaryDirectory,

@@ -279,19 +279,18 @@ const run = async (
         await action({ visitor, client, signal: controller.signal, current });
     } catch (error) {
         if (current() && ownsUI()) {
-            if (error instanceof SDKError) {
-                status(
-                    `${error.message}${error.code == null ? '' : ` (${error.code})`}${error.status == null ? '' : ` · HTTP ${error.status}`}`,
-                    true
-                );
-            } else {
-                status(
-                    error instanceof Error
-                        ? error.message
-                        : 'The request failed.',
-                    true
-                );
-            }
+            const statusCode = error instanceof SDKError ? error.status : null;
+            const httpStatus =
+                typeof statusCode === 'number' &&
+                Number.isInteger(statusCode) &&
+                statusCode >= 100 &&
+                statusCode <= 599
+                    ? ` · HTTP ${statusCode}`
+                    : '';
+            status(
+                `The request failed. Reload and inspect the current state before deciding whether to retry.${httpStatus}`,
+                true
+            );
         }
     } finally {
         if (request === controller) {

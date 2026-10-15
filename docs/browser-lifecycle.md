@@ -62,6 +62,11 @@ this client. Sessions are memory-only by default. The starter’s optional
 restoration adapter; see [refresh, retry and logout](../examples/browser/README.md#authentication-and-visitor-isolation).
 Connection settings, drafts, files and uncertain operations are not restored.
 
+Starter request failures use fixed recovery text and optionally an integer HTTP
+status from 100 through 599. Server messages, error codes and exception messages
+may contain private inputs; keep them out of visitor feedback. A failure does
+not establish whether a write committed. Inspect the record before retrying.
+
 Capture the current owner, client, session and revision before an asynchronous
 action. Apply its result only while that context is still current. Advance the
 owner revision on visitor, connection, credential, token or loaded-context

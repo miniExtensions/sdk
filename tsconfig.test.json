@@ -6,7 +6,12 @@
         "declaration": false,
         "sourceMap": true,
         "inlineSources": true,
-        "types": ["node", "moment-duration-format"]
+        "types": ["node", "moment-duration-format"],
+        "paths": {
+            "@miniextensions/sdk": ["./src/runtime/index.ts"],
+            "@miniextensions/sdk/forms": ["./src/forms/index.ts"],
+            "@miniextensions/sdk/formulas": ["./src/formulas/index.ts"]
+        }
     },
     "include": ["src/**/*.ts", "test/**/*.ts"]
 }

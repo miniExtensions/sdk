@@ -5,6 +5,7 @@ import type {
     RuntimeTableStates,
 } from '@miniextensions/sdk';
 import { getReadableStringFromAirtableValue } from '@miniextensions/sdk/formulas';
+import { primaryFieldPresentationPolicy } from './presentation.js';
 
 export const unavailableLinkedAnswer = 'Selected record — details unavailable';
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -49,9 +50,9 @@ export function createLinkedReviewPresentation(
                 string,
                 unknown
             >,
-            details: structuredClone(
-                page.payload.linkedRecordFieldIdToDetailFields?.[fieldId]
-            ),
+            // Retain the accepted metadata; cloning must not normalize a
+            // malformed custom prototype into display permission.
+            details: page.payload.linkedRecordFieldIdToDetailFields?.[fieldId],
             original: new Set(
                 Array.isArray(value)
                     ? value.filter(
@@ -149,6 +150,14 @@ export function createLinkedReviewPresentation(
         );
         if (primaries.length !== 1) return next;
         const primary = primaries[0];
+        if (
+            fields.filter((field) => field.name === primary.name).length !==
+                1 ||
+            fields.some(
+                (field) => field.id !== primary.id && field.id === primary.name
+            )
+        )
+            return next;
         const detail = policy.details.find(
             (detail) => detail.fieldId === primary.id
         );
@@ -160,10 +169,12 @@ export function createLinkedReviewPresentation(
         )
             return next;
         const config = detail.miniExtConfig ?? {};
-        if (
-            config.obscurePassword !== undefined &&
-            typeof config.obscurePassword !== 'boolean'
-        )
+        const presentation = primaryFieldPresentationPolicy({
+            fieldId: primary.id,
+            detailFields: policy.details,
+            isCurrent: active(),
+        });
+        if (presentation.type !== 'visible' && presentation.type !== 'masked')
             return next;
         if (primary.isComputed === true || !plainTypes.has(primary.config.type))
             return next;
@@ -179,10 +190,7 @@ export function createLinkedReviewPresentation(
                 return new Map<string, string>();
             recordIds.add(record.id);
             // Never retain raw values; privacy decisions precede value access.
-            if (
-                primary.config.type === 'singleLineText' &&
-                config.obscurePassword === true
-            ) {
+            if (presentation.type === 'masked') {
                 next.set(record.id, '••••••••');
                 continue;
             }
@@ -192,7 +200,12 @@ export function createLinkedReviewPresentation(
                 config.displayAsButton === true
             )
                 continue;
-            const value = record.fields[primary.id];
+            const key = Object.hasOwn(record.fields, primary.id)
+                ? primary.id
+                : Object.hasOwn(record.fields, primary.name)
+                  ? primary.name
+                  : null;
+            const value = key === null ? undefined : record.fields[key];
             if (
                 value == null ||
                 (typeof value === 'string' && value.trim() === '') ||

@@ -179,6 +179,17 @@ const makeForm = ({
     };
     form.payload.formFieldIdsWithUnsavedChanges = [];
     form.payload.urlPrefilledFieldIds = [];
+    form.payload.linkedRecordFieldIdToDetailFields.fld_projects = [
+        {
+            fieldId: primaryField.id,
+            fieldName: primaryField.name,
+            titleOverride: null,
+            isHidden: false,
+            fieldIsInEditingChildForm: false,
+            childFormField: null,
+            miniExtConfig: {},
+        },
+    ];
     if (secondOuter) {
         const extra = structuredClone(linked);
         extra.airtableField.id = 'fld_other_projects';
@@ -187,6 +198,10 @@ const makeForm = ({
         form.payload.fieldIdsToSchemas.fld_other_projects = extra;
         form.payload.fieldNamesToSchemas['Other projects'] = extra;
         form.payload.formRecord.data.fld_other_projects = [];
+        form.payload.linkedRecordFieldIdToDetailFields.fld_other_projects =
+            structuredClone(
+                form.payload.linkedRecordFieldIdToDetailFields.fld_projects
+            );
     }
     return form;
 };

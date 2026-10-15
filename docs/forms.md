@@ -61,6 +61,14 @@ The selection model below supplies reads/paging only: the renderer separately
 checks `canChange`, readonly and current ownership before deliberate native link
 edits. No selection callback writes drafts automatically.
 
+This complete recipe deliberately supplies nonempty neutral captions through
+the existing `formatRecordLabel` callback. SDK default or blank formatter
+results may otherwise fall back to record IDs. For readable captions, the
+copied browser starter's private `safeLinkedRecordLabel` helper checks the raw
+accepted detail projection and current owner before and after formatting; do
+not clone unvalidated metadata into display permission. Native IDs, draft
+values and Save inputs remain unchanged.
+
 ```ts
 import type {
     AirtableValue,
@@ -137,6 +145,7 @@ export function createConfiguredCascadeAdapter(args: {
         const loader = createFormLinkedRecordLoader({
             client,
             linkedTableId: schema.airtableField.config.options.linkedTableId,
+            formatRecordLabel: () => 'Linked record',
             input: {
                 extensionAccessToken: loaded.payload.extensionAccessToken,
                 linkedRecordFieldId: fieldId,
@@ -147,7 +156,10 @@ export function createConfiguredCascadeAdapter(args: {
         selection.reset({
             multiple: true,
             value: native,
-            selectedOptions: native.map((value) => ({ value, label: value })),
+            selectedOptions: native.map((value) => ({
+                value,
+                label: 'Linked record',
+            })),
             readOnly: descriptor.readOnly,
             loadOptions: async (request) => {
                 if (!owned() || generation !== cascade.state().generation)

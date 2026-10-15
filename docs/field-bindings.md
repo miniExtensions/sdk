@@ -887,6 +887,13 @@ observes the same state and returns an unsubscribe function. Every snapshot's
 actions capture its page revision; retained callbacks cannot act against a later
 page revision or retired context.
 
+`validationErrors` remain canonical errors. The browser starter uses private
+helpers in `examples/browser/src/presentation.ts` to derive visible messages
+from the current accepted display policy: private or unknown fields retain a
+generic visible blocker without their title or message. Apply that projection
+at presentation time and preserve canonical errors and native drafts for
+validation, Save and recovery.
+
 Optional React `AirtableForm` takes a scope, `FieldRendererSlots<ReactNode>`, an
 optional field `fallback` and a required `children(state)` layout render prop.
 Its state supplies `{ fieldId, node }` field entries, the same page/controller

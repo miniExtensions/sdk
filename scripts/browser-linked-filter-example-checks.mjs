@@ -143,6 +143,17 @@ const makeForm = (scenario) => {
     };
     form.payload.formFieldIdsWithUnsavedChanges = [];
     form.payload.urlPrefilledFieldIds = [];
+    form.payload.linkedRecordFieldIdToDetailFields.fld_projects = [
+        {
+            fieldId: 'fld_project_name',
+            fieldName: 'Project name',
+            titleOverride: null,
+            isHidden: false,
+            fieldIsInEditingChildForm: false,
+            childFormField: null,
+            miniExtConfig: {},
+        },
+    ];
     return form;
 };
 const outer = (window) => {

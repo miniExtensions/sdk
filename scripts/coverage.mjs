@@ -23,6 +23,9 @@ function run(script, args) {
 }
 
 // An isolated clean compile prevents stale test/source files entering coverage.
+// Copied starter helpers use the package's public runtime imports. Prepare
+// current self-exports before executing their source tests on a clean checkout.
+run(path.join(root, 'scripts/build.mjs'), []);
 await rm(path.join(root, 'coverage', ...(mode === 'all' ? [] : [mode])), {
     recursive: true,
     force: true,

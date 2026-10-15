@@ -1,4 +1,8 @@
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
+import {
+    checkCreatedTimeConsumer,
+    createdTimeReactTypedConsumer,
+} from './created-time-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
     checkLastModifiedByConsumer,
@@ -1236,6 +1240,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'created-time-react-consumer.tsx'),
+        createdTimeReactTypedConsumer
+    );
+    reactSources.push('created-time-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'last-modified-by-react-consumer.tsx'),
         lastModifiedByReactTypedConsumer
     );
@@ -1424,6 +1433,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'text',
         'last-modified-by',
         'created-by',
+        'created-time',
         'external-sync-source',
         'multiline-text',
         'phone-number',
@@ -1456,7 +1466,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     'external-sync-source',
                 ].includes(name)
               ? 'text'
-              : name;
+              : name === 'created-time'
+                ? 'datetime'
+                : name;
         if (name === 'autonumber') {
             const sources = [
                 '.gitignore',
@@ -1592,6 +1604,59 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     error.status === 1 &&
                     String(error.stdout ?? '').trim() === '',
                 'Count example sources must remain unignored'
+            );
+        }
+        if (name === 'created-time') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-created-time/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Created Time example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Created Time example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-created-time/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Created Time preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Created Time example sources must remain unignored'
             );
         }
         if (name === 'last-modified-by') {
@@ -1819,6 +1884,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(checkboxProof.checks, 6);
     console.log(
         `Installed Checkbox renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const createdTimeProof = await checkCreatedTimeConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(createdTimeProof.checks, 20);
+    console.log(
+        `Installed Created Time renderer, readonly native timestamp text, shared DateTime CSS and local example: ${createdTimeProof.checks} ESM/CJS groups passed; synthetic owners only.`
     );
     const lastModifiedByProof = await checkLastModifiedByConsumer({
         consumerDirectory: temporaryDirectory,

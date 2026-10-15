@@ -5,6 +5,10 @@ import {
 } from './created-time-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkLastModifiedByConsumer,
+    lastModifiedByReactTypedConsumer,
+} from './last-modified-by-consumer-checks.mjs';
+import {
     checkCreatedByConsumer,
     createdByReactTypedConsumer,
 } from './created-by-consumer-checks.mjs';
@@ -1241,6 +1245,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('created-time-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'last-modified-by-react-consumer.tsx'),
+        lastModifiedByReactTypedConsumer
+    );
+    reactSources.push('last-modified-by-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'created-by-react-consumer.tsx'),
         createdByReactTypedConsumer
     );
@@ -1422,6 +1431,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'last-modified-by',
         'created-by',
         'created-time',
         'external-sync-source',
@@ -1451,6 +1461,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     'url',
                     'phone-number',
                     'multiline-text',
+                    'last-modified-by',
                     'created-by',
                     'external-sync-source',
                 ].includes(name)
@@ -1648,6 +1659,59 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 'Created Time example sources must remain unignored'
             );
         }
+        if (name === 'last-modified-by') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-last-modified-by/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Last Modified By example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Last Modified By example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-last-modified-by/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Last Modified By preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Last Modified By example sources must remain unignored'
+            );
+        }
         if (name === 'created-by') {
             const sources = [
                 '.gitignore',
@@ -1828,6 +1892,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(createdTimeProof.checks, 20);
     console.log(
         `Installed Created Time renderer, readonly native timestamp text, shared DateTime CSS and local example: ${createdTimeProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const lastModifiedByProof = await checkLastModifiedByConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(lastModifiedByProof.checks, 20);
+    console.log(
+        `Installed Last Modified By renderer, readonly native names, shared Text CSS and local example: ${lastModifiedByProof.checks} ESM/CJS groups passed; synthetic owners only.`
     );
     const createdByProof = await checkCreatedByConsumer({
         consumerDirectory: temporaryDirectory,

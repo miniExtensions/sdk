@@ -171,7 +171,7 @@ The SDK has no administrative workspace/configure/publish API.
 | `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
 
 Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CreatedByField`, `CheckboxField`,
+also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CreatedByField`, `LastModifiedByField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `CreatedTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
@@ -207,6 +207,12 @@ single-line entry. URL text does not create links or grant navigation authority.
 `renderCreatedTimeField` slot. It presents supplied raw timestamp strings through
 the disabled DateTime control and optional `@miniextensions/sdk/react/datetime.css`,
 without parsing, formatting, timezone conversion or writes.
+
+[Last Modified By presentation](docs/ui.md#react-last-modified-by-presentation) exports
+`LastModifiedByField`, `LastModifiedByFieldProps`, `LastModifiedByFieldOptions` and the typed
+`renderLastModifiedByField` slot. It displays the supplied native collaborator name
+with the disabled Text control and optional `@miniextensions/sdk/react/text.css`.
+It does not resolve identities, display email or avatar data, or grant writes.
 
 [Created By presentation](docs/ui.md#react-created-by-presentation) exports
 `CreatedByField`, `CreatedByFieldProps`, `CreatedByFieldOptions` and the typed

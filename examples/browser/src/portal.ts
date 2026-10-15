@@ -1390,19 +1390,24 @@ export const createPortalView = (options: {
             if (record == null) continue;
             const row = element('tr');
             row.dataset.recordId = recordId;
-            const rowIsCurrent = (): boolean => {
-                const owner = options.getScope();
+            const rowSelectionCurrent = (): boolean => {
                 return (
                     !destroyed &&
                     row.isConnected &&
                     card.isConnected &&
                     data === renderedData &&
-                    renderedOwner != null &&
-                    owner.ownerId === renderedOwner.ownerId &&
-                    owner.revision === renderedOwner.revision &&
                     fieldSelect.value === renderedFieldId &&
                     viewSelect.value === renderedViewId &&
                     selectionAvailable()
+                );
+            };
+            const rowIsCurrent = (): boolean => {
+                const owner = options.getScope();
+                return (
+                    rowSelectionCurrent() &&
+                    renderedOwner != null &&
+                    owner.ownerId === renderedOwner.ownerId &&
+                    owner.revision === renderedOwner.revision
                 );
             };
             for (const column of columns) {
@@ -1600,7 +1605,15 @@ export const createPortalView = (options: {
                         void run(
                             'Moving the record category…',
                             async ({ client, signal, current }) => {
-                                if (!current() || !rowIsCurrent()) return;
+                                // A fresh explicit Run may use the displayed
+                                // cached category choices after a visitor round
+                                // trip; it does not revive the retired collection.
+                                if (
+                                    !current() ||
+                                    client !== options.client ||
+                                    !rowSelectionCurrent()
+                                )
+                                    return;
                                 if (needsRefresh)
                                     throw new Error(
                                         'Reload the Portal before moving another category.'

@@ -15,6 +15,8 @@ import {
     type PortalLoadedResult,
     type RuntimeAirtableField,
     type RuntimeConditionsDefinition,
+    type SetKanbanCategoryInput,
+    type SetKanbanCategoryResult,
     type UpdateGridCellInput,
 } from '../src/runtime/index.js';
 import { portalListPage, portalPage } from './portalFixtures.js';
@@ -105,6 +107,7 @@ const mount = async (
     responses: {
         list?: ListPortalLinkedRecordsResult;
         child?: FormLoadedResult;
+        kanban?: SetKanbanCategoryResult;
     } = {}
 ) => {
     const window = new Window({
@@ -149,6 +152,7 @@ const mount = async (
     );
     const reads: ListPortalLinkedRecordsInput[] = [];
     const writes: UpdateGridCellInput[] = [];
+    const categoryWrites: SetKanbanCategoryInput[] = [];
     const childLoads: LoadExtensionInput[] = [];
     const children: { page: FormLoadedResult; isCurrent(): boolean }[] = [];
     const failures: unknown[] = [];
@@ -168,6 +172,15 @@ const mount = async (
             if (route === 'fetchExtensionForEndUser' && responses.child) {
                 childLoads.push(JSON.parse(String(init?.body)));
                 return new Response(JSON.stringify(responses.child));
+            }
+            if (
+                route === '/api/trpc/airtable.updateRecordKanbanCategory' &&
+                responses.kanban
+            ) {
+                categoryWrites.push(JSON.parse(String(init?.body)));
+                return new Response(
+                    JSON.stringify({ result: { data: responses.kanban } })
+                );
             }
             if (route === '/api/trpc/airtable.updatePortalRecord') {
                 const update = JSON.parse(
@@ -279,6 +292,7 @@ const mount = async (
         first,
         reads,
         writes,
+        categoryWrites,
         childLoads,
         children,
         scope,
@@ -576,5 +590,102 @@ describe('Portal eligibility compatibility and retained actions', () => {
         await app.settle();
         assert.equal(app.childLoads.length, 1);
         assert.equal(app.children.length, 1);
+    });
+
+    it('keeps conditional Kanban choices across an owner round trip and retires actions when the accepted move hides the view', async (test) => {
+        const fixture = actionFixture();
+        const config = linkedConfig(fixture.page);
+        config.layout = 'kanban';
+        config.kanbanCategoryField = 'fld_status';
+        const categoryField: RuntimeAirtableField = {
+            id: 'fld_status',
+            name: 'Synthetic status',
+            description: null,
+            isComputed: false,
+            isPrimaryField: false,
+            config: {
+                type: 'singleSelect',
+                options: {
+                    choices: [
+                        {
+                            id: 'sel_pending',
+                            name: 'Pending',
+                            color: 'blueBright',
+                        },
+                        { id: 'sel_done', name: 'Done', color: 'greenBright' },
+                    ],
+                },
+            },
+        };
+        const table = fixture.list.tableIdsToLinkedTableStates.table_children;
+        assert.ok(table);
+        table.airtableFields.push(categoryField);
+        table.recordIdsToAirtableRecords[fixture.recordId]!.fields.fld_status =
+            'Pending';
+        const app = await mount(test, fixture.page, {
+            ...fixture,
+            kanban: {
+                type: 'logged-in',
+                loggedInUserRecord: {
+                    id: fixture.page.payload.formRecord.recordId,
+                    fields: {
+                        fld_prefill: 'prefill_Title=Example',
+                        [driver.id]: false,
+                    },
+                },
+            },
+        });
+        await app.invokeRead();
+        const category = app.node.querySelector<HTMLSelectElement>(
+            `select[aria-label="Category for ${fixture.recordId}"]`
+        );
+        assert.ok(category);
+        assert.equal(category.value, 'Pending');
+        category.value = 'Done';
+        dispatch(category, 'change');
+        const move = buttonNamed(app.node, 'Move category');
+        const open = buttonNamed(app.node, 'Open Form');
+        const host = app.node.parentElement;
+        assert.ok(host);
+        const firstOwner = app.scope.ownerId;
+        app.scope.ownerId = 'synthetic-other-owner';
+        app.scope.revision += 1;
+        app.view.retireCollection();
+        app.node.remove();
+        app.scope.ownerId = firstOwner;
+        app.scope.revision += 1;
+        app.view.retireCollection();
+        host.append(app.node);
+        assert.equal(
+            app.node.querySelector(
+                `select[aria-label="Category for ${fixture.recordId}"]`
+            ),
+            category
+        );
+        assert.equal(category.value, 'Done');
+        assert.equal(app.reads.length, 1);
+        assert.equal(app.categoryWrites.length, 0);
+        dispatch(move, 'click');
+        await app.settle();
+        assert.deepEqual(app.categoryWrites, [
+            {
+                extensionAccessToken: fixture.page.payload.extensionAccessToken,
+                portalFieldId: 'fld_children',
+                recordId: fixture.recordId,
+                categoryFieldValue: 'Done',
+                selectedCustomViewId: 'view_conditional',
+            },
+        ]);
+        assert.deepEqual(app.offered(), []);
+        dispatch(move, 'click');
+        dispatch(open, 'click');
+        await app.settle();
+        assert.equal(app.categoryWrites.length, 1);
+        assert.equal(app.childLoads.length, 0);
+        assert.equal(
+            app.reads.length,
+            1,
+            'The accepted move does not automatically reread.'
+        );
     });
 });

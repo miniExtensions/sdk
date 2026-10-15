@@ -1577,6 +1577,7 @@ export async function checkBrowserPortalExample({
                 const childCalls = h.calls.filter(
                     (call) => call.operation === 'child'
                 ).length;
+                const childHandoffs = h.handoffs.length;
                 for (const old of oldChildren) {
                     old.click();
                     await h.settle();
@@ -1585,12 +1586,8 @@ export async function checkBrowserPortalExample({
                     h.calls.filter((call) => call.operation === 'child').length,
                     childCalls
                 );
-                assert.equal(h.failures.length, 2);
-                assert(
-                    h.failures.every(
-                        (error) => error.code === 'record-not-listed'
-                    )
-                );
+                assert.equal(h.handoffs.length, childHandoffs);
+                assert.equal(h.failures.length, 0);
                 await h.click('Open Form');
                 assert.equal(h.handoffs.length, 3);
                 assert.equal(
@@ -1688,7 +1685,8 @@ export async function checkBrowserPortalExample({
                     h.calls.filter((call) => call.operation === 'child').length,
                     0
                 );
-                assert.equal(h.failures[0]?.code, 'child-not-configured');
+                assert.equal(h.handoffs.length, 0);
+                assert.equal(h.failures.length, 0);
                 await h.dispose();
 
                 const portal = editablePortal();

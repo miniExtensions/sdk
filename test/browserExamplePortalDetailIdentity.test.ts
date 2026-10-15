@@ -105,7 +105,8 @@ const suppliedChild = (): NonNullable<
 
 const mount = async (
     test: TestContext,
-    returned: ListPortalLinkedRecordsResult
+    returned: ListPortalLinkedRecordsResult,
+    page = portalPage({ disableInlineEdit: false })
 ) => {
     const window = new Window({
         url: 'https://app.example.test',
@@ -147,7 +148,6 @@ const mount = async (
     const { createPortalView } = await import(
         `${pathToFileURL(join(directory, 'portal.mjs')).href}?case=${++revision}`
     );
-    const page = portalPage({ disableInlineEdit: false });
     const saves: UpdateGridCellInput[] = [];
     const routes: string[] = [];
     const failures: unknown[] = [];
@@ -171,7 +171,9 @@ const mount = async (
                             data: {
                                 record: {
                                     id: recordId,
-                                    fields: { [fieldId]: save.value },
+                                    fields: {
+                                        [save.recordFieldId]: save.value,
+                                    },
                                 },
                                 auditTrail: null,
                                 auditTrails: [],
@@ -546,6 +548,213 @@ describe('additional Portal identity controls beyond the seven peer diagnostics'
             const returned = listPage();
             change(returned);
             await refuseDetail(test, returned);
+        });
+    }
+});
+
+type HiddenDuplicateCase = {
+    name: string;
+    source: 'selected-custom-view' | 'legacy-fallback';
+    hiddenFirst: boolean;
+};
+// Keep these pure fixtures usable by the separate installed-starter native proof.
+const hiddenDuplicateCases: HiddenDuplicateCase[] = [
+    {
+        name: 'selected custom view: visible then hidden duplicate',
+        source: 'selected-custom-view',
+        hiddenFirst: false,
+    },
+    {
+        name: 'selected custom view: hidden then visible duplicate',
+        source: 'selected-custom-view',
+        hiddenFirst: true,
+    },
+    {
+        name: 'legacy fallback: visible then hidden duplicate',
+        source: 'legacy-fallback',
+        hiddenFirst: false,
+    },
+    {
+        name: 'legacy fallback: hidden then visible duplicate',
+        source: 'legacy-fallback',
+        hiddenFirst: true,
+    },
+];
+const hiddenDuplicateFixture = (fixtureCase: HiddenDuplicateCase) => {
+    const page = portalPage({ disableInlineEdit: false });
+    const returned = listPage();
+    const neighborId = 'fld_neighbor_title';
+    const neighborValue = 'Synthetic neighboring value';
+    const neighborEditedValue = 'Synthetic neighboring edit';
+    const visible = detailField();
+    const hidden = { ...detailField(), isHidden: true };
+    const rawDetails = [
+        ...(fixtureCase.hiddenFirst ? [hidden, visible] : [visible, hidden]),
+        {
+            ...detailField(),
+            fieldId: neighborId,
+            fieldName: 'Neighbor title',
+            childFormField: {
+                ...suppliedChild(),
+                idOrName: { type: 'id' as const, id: neighborId },
+            },
+        },
+    ];
+    if (fixtureCase.source === 'legacy-fallback') {
+        returned.customViewDetailFields = null;
+        page.payload.linkedRecordFieldIdToDetailFields.fld_children =
+            rawDetails;
+    } else {
+        returned.customViewDetailFields = { fld_children: rawDetails };
+    }
+    returned.tableIdsToLinkedTableStates[tableId]!.airtableFields.push({
+        ...physicalField(),
+        id: neighborId,
+        name: 'Neighbor title',
+    });
+    returned.tableIdsToLinkedTableStates[tableId]!.recordIdsToAirtableRecords[
+        recordId
+    ]!.fields[neighborId] = neighborValue;
+    return { page, returned, neighborId, neighborValue, neighborEditedValue };
+};
+
+const assertAmbiguousTargetAbsent = (
+    fixture: Awaited<ReturnType<typeof mount>>
+) => {
+    const node: HTMLElement = fixture.view.node;
+    assert.equal(node.textContent?.includes(permittedValue), false);
+    assert.equal(node.outerHTML.includes(permittedValue), false);
+    assert.equal(node.querySelector(`[data-field-id="${fieldId}"]`), null);
+    for (const control of node.querySelectorAll<
+        HTMLInputElement | HTMLTextAreaElement
+    >('input, textarea'))
+        assert.equal(control.value.includes(permittedValue), false);
+    assert.equal(
+        fixture.saves.some((save) => save.recordFieldId === fieldId),
+        false
+    );
+};
+const saveNeighborAndRefuseTarget = async (
+    test: TestContext,
+    input: ReturnType<typeof hiddenDuplicateFixture>
+) => {
+    const { page, returned, neighborId, neighborValue, neighborEditedValue } =
+        input;
+    const untouched = structuredClone(returned);
+    const untouchedPage = structuredClone(page);
+    const fixture = await mount(test, returned, page);
+    assertAmbiguousTargetAbsent(fixture);
+    assert.equal(fixture.view.node.textContent?.includes(neighborValue), true);
+    assert.equal(fixture.buttons('Edit cell').length, 1);
+    assert.equal(fixture.saves.length, 0);
+    await fixture.click('Edit cell');
+    assertAmbiguousTargetAbsent(fixture);
+    const control = fixture.view.node.querySelector(
+        `input[data-field-id="${neighborId}"]`
+    );
+    assert.ok(control instanceof fixture.window.HTMLInputElement);
+    assert.equal(control.value, neighborValue);
+    control.value = neighborEditedValue;
+    control.dispatchEvent(new fixture.window.Event('input', { bubbles: true }));
+    const form = control.closest('form');
+    assert.ok(form);
+    form.dispatchEvent(
+        new fixture.window.Event('submit', { bubbles: true, cancelable: true })
+    );
+    await fixture.settle();
+    assert.deepEqual(fixture.failures, []);
+    assert.equal(fixture.saves.length, 1);
+    const save = fixture.saves[0]!;
+    assert.equal(
+        save.portalExtensionAccessToken,
+        page.payload.extensionAccessToken
+    );
+    assert.equal(save.portalFieldId, 'fld_children');
+    assert.equal(save.recordId, recordId);
+    assert.equal(save.recordFieldId, neighborId);
+    assert.equal(save.selectedCustomViewId, 'view_example');
+    assert.equal(save.value, neighborEditedValue);
+    assertAmbiguousTargetAbsent(fixture);
+    assert.equal(
+        fixture.view.node.textContent?.includes(neighborEditedValue),
+        true
+    );
+    assert.deepEqual(fixture.routes, [
+        'fetchRecordsForLinkedTableOnPortal',
+        '/api/trpc/airtable.updatePortalRecord',
+        '/api/trpc/airtable.getUserRecord',
+    ]);
+    assert.deepEqual(returned, untouched);
+    assert.deepEqual(page, untouchedPage);
+};
+
+describe('raw hidden duplicate Portal detail identities', () => {
+    for (const fixtureCase of hiddenDuplicateCases) {
+        it(`rejects ${fixtureCase.name} while a unique neighbor saves`, async (test) => {
+            await saveNeighborAndRefuseTarget(
+                test,
+                hiddenDuplicateFixture(fixtureCase)
+            );
+        });
+    }
+
+    it('uses only the selected custom list despite duplicate legacy and other-key details', async (test) => {
+        const input = hiddenDuplicateFixture(hiddenDuplicateCases[0]!);
+        const neighbor = details(input.returned).find(
+            (field) => field.fieldId === input.neighborId
+        );
+        assert.ok(neighbor);
+        input.page.payload.linkedRecordFieldIdToDetailFields.fld_children = [
+            detailField(),
+            structuredClone(neighbor),
+            { ...structuredClone(neighbor), isHidden: true },
+        ];
+        input.returned.customViewDetailFields = {
+            fld_children: [neighbor],
+            fld_other_portal: [
+                structuredClone(neighbor),
+                { ...structuredClone(neighbor), isHidden: true },
+            ],
+        };
+        await saveNeighborAndRefuseTarget(test, input);
+    });
+
+    for (const ownEntry of ['empty', 'missing'] as const) {
+        it(`keeps an ${ownEntry} selected entry empty without legacy fallback`, async (test) => {
+            const input = hiddenDuplicateFixture(hiddenDuplicateCases[2]!);
+            const legacy =
+                input.page.payload.linkedRecordFieldIdToDetailFields
+                    .fld_children!;
+            input.returned.customViewDetailFields = {
+                ...(ownEntry === 'empty' ? { fld_children: [] } : {}),
+                fld_other_portal: structuredClone(legacy),
+            };
+            const untouched = structuredClone(input.returned);
+            const untouchedPage = structuredClone(input.page);
+            const fixture = await mount(test, input.returned, input.page);
+            assertAmbiguousTargetAbsent(fixture);
+            assert.equal(fixture.buttons('Edit cell').length, 0);
+            assert.equal(
+                fixture.view.node.textContent?.includes(input.neighborValue),
+                false
+            );
+            assert.equal(
+                fixture.view.node.outerHTML.includes(input.neighborValue),
+                false
+            );
+            assert.equal(
+                fixture.view.node.querySelector(
+                    `[data-field-id="${input.neighborId}"]`
+                ),
+                null
+            );
+            assert.deepEqual(fixture.saves, []);
+            assert.deepEqual(fixture.failures, []);
+            assert.deepEqual(fixture.routes, [
+                'fetchRecordsForLinkedTableOnPortal',
+            ]);
+            assert.deepEqual(input.returned, untouched);
+            assert.deepEqual(input.page, untouchedPage);
         });
     }
 });

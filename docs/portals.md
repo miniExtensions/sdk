@@ -580,8 +580,10 @@ settings, including settings it omits. These are UI hints; the backend
 authorizes every action.
 
 The browser starter admits a detail column only when its field ID identifies
-one returned detail and one physical field across the returned tables. A
-supplied child Form field must use that exact ID and physical type; malformed
+one detail in the selected raw list and one physical field across the returned
+tables. Raw detail identity counts include hidden descriptors, before applying
+the accepted visible projection. Only a null returned map uses the legacy list;
+a missing or empty selected entry stays empty. A supplied child Form field must use that exact ID and physical type; malformed
 or ambiguous identities expose neither the native value nor an inline editor.
 Null child metadata keeps the returned detail configuration as the supported
 write-policy fallback. `fieldIsInEditingChildForm` is informational and is not

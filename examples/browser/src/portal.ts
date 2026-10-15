@@ -183,10 +183,21 @@ const configuredChildId = (
 };
 const detailFields = (
     value: RuntimeLinkedRecordDetailField[] | undefined,
+    rawDetails: RuntimeLinkedRecordDetailField[] | undefined,
     tableId: string,
     tables: PortalCollectionSnapshot['tableIdsToLinkedTableStates']
 ): DetailField[] => {
-    if (!Array.isArray(value)) return [];
+    if (!Array.isArray(value) || !Array.isArray(rawDetails)) return [];
+    // Count the selected raw projection before considering visible descriptors.
+    // Hidden siblings still make a field identity ambiguous.
+    const detailCounts = new Map<string, number>();
+    for (const field of rawDetails) {
+        if (isObject(field) && typeof field.fieldId === 'string')
+            detailCounts.set(
+                field.fieldId,
+                (detailCounts.get(field.fieldId) ?? 0) + 1
+            );
+    }
     const tableFields = tables[tableId]?.airtableFields;
     if (!Array.isArray(tableFields)) return [];
     const returnedFields = Object.values(tables).flatMap((table) =>
@@ -203,9 +214,7 @@ const detailFields = (
             (entry) => isObject(entry) && entry.id === field.fieldId
         );
         if (
-            value.filter(
-                (entry) => isObject(entry) && entry.fieldId === field.fieldId
-            ).length !== 1 ||
+            detailCounts.get(field.fieldId) !== 1 ||
             matches.length !== 1 ||
             returnedFields.filter(
                 (entry) => isObject(entry) && entry.id === field.fieldId
@@ -1190,8 +1199,18 @@ export const createPortalView = (options: {
             results.append(element('p', 'No table data was returned.', 'hint'));
             return;
         }
+        // Non-null returned maps replace the legacy map, even when their
+        // selected key is missing or empty. Keep the SDK's visible projection.
+        const rawDetailMap =
+            data.customViewDetailFields === null
+                ? page.payload.linkedRecordFieldIdToDetailFields
+                : data.customViewDetailFields;
+        const rawDetails = Object.hasOwn(rawDetailMap, fieldSelect.value)
+            ? rawDetailMap[fieldSelect.value]
+            : [];
         const columns = detailFields(
             data.detailFields,
+            rawDetails,
             linkedTableId,
             data.tableIdsToLinkedTableStates
         );

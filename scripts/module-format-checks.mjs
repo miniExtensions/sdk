@@ -180,6 +180,7 @@ export function assertModuleFormats(root) {
                 './react/duration.css',
                 './react/currency.css',
                 './react/multiple-select.css',
+                './react/linked-records.css',
             ].includes(subpath)
         ) {
             assert.equal(mapping, `./dist/esm/${subpath.slice(2)}`);

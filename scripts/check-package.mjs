@@ -1,3 +1,7 @@
+import {
+    checkLinkedRecordsRendererConsumer,
+    linkedRecordsReactTypedConsumer,
+} from './linked-records-renderer-consumer-checks.mjs';
 import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
 import {
     checkMultipleSelectConsumer,
@@ -349,6 +353,8 @@ try {
         'dist/cjs/react/currency.css',
         'dist/esm/react/multiple-select.css',
         'dist/cjs/react/multiple-select.css',
+        'dist/esm/react/linked-records.css',
+        'dist/cjs/react/linked-records.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -1245,6 +1251,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('multiple-select-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'linked-records-react-consumer.tsx'),
+        linkedRecordsReactTypedConsumer
+    );
+    reactSources.push('linked-records-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'button-react-consumer.tsx'),
         buttonReactTypedConsumer
     );
@@ -1451,6 +1462,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'multiple-select',
+        'linked-records',
         'text',
         'last-modified-time',
         'last-modified-by',
@@ -1957,6 +1969,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(checkboxProof.checks, 6);
     console.log(
         `Installed Checkbox renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const linkedRecordsRendererProof = await checkLinkedRecordsRendererConsumer(
+        {
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }
+    );
+    assert.equal(linkedRecordsRendererProof.checks, 6);
+    console.log(
+        `Installed bounded Linked Records renderer, Form/Grid/List declarations, CSS and example: ${linkedRecordsRendererProof.checks} ESM/CJS groups passed.`
     );
     const multipleSelectProof = await checkMultipleSelectConsumer({
         consumerDirectory: temporaryDirectory,

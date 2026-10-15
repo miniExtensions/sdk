@@ -539,12 +539,19 @@ describe(
                               ) === true
                             : nextAttempt === 'login-api-error'
                               ? status?.textContent?.includes(
-                                    'Account B login denied.'
+                                    'The request failed.'
                                 ) === true
                               : status?.textContent?.includes(
                                     'No matching login record'
                                 ) === true)
                 );
+                if (nextAttempt === 'login-api-error')
+                    assert.equal(
+                        status?.textContent?.includes(
+                            'Account B login denied.'
+                        ),
+                        false
+                    );
                 oldControl.form.dispatchEvent(
                     new window.Event('submit', {
                         bubbles: true,
@@ -646,9 +653,12 @@ describe(
             assert.equal(currentControl.code.value, '');
             await waitFor(
                 () =>
-                    status?.textContent?.includes(
-                        'Wrong verification code.'
-                    ) === true && browserIdle(window)
+                    status?.textContent?.includes('The request failed.') ===
+                        true && browserIdle(window)
+            );
+            assert.equal(
+                status?.textContent?.includes('Wrong verification code.'),
+                false
             );
             assert.equal(currentControl.form.isConnected, true);
             assert.equal(loadedSessions.length, 1);
@@ -764,6 +774,231 @@ describe(
         });
     }
 );
+
+describe('starter safe error presentation', { concurrency: false }, () => {
+    const credential = 'SYNTHETIC_PRIVATE_CREDENTIAL_Ω';
+    const privateCode = 'SYNTHETIC_PRIVATE_ERROR_CODE_🔒';
+    const privateMessage = `The rejected credential was ${credential}.`;
+    const assertRedacted = (window: Window) => {
+        const status = window.document.getElementById('status');
+        assert.ok(status);
+        // An input intentionally retains its value. This oracle covers visible
+        // text and error presentation, without claiming the DOM holds no secret.
+        for (const value of [credential, privateCode]) {
+            assert.equal(
+                window.document.body.textContent!.includes(value),
+                false,
+                'Private error details must not enter visible starter text.'
+            );
+            assert.equal(
+                status.outerHTML.includes(value),
+                false,
+                'Private error details must not enter status markup.'
+            );
+        }
+        assert.equal(status.classList.contains('error'), true);
+        assert.ok(status.textContent!.trim().length > 0);
+        assert.equal(window.sessionStorage.length, 0);
+        assert.equal(window.localStorage.length, 0);
+    };
+
+    for (const statusCode of [200, 401, 403, 429, 500]) {
+        it(`redacts login error message/code at HTTP ${statusCode} and permits an explicit retry`, async (test) => {
+            const page = browserLoginPage();
+            page.payload.fieldNamesToSchemas.Email.miniExtConfig = {
+                maskPasswordOnLoginScreen: true,
+            };
+            const routes: string[] = [];
+            let loginAttempts = 0;
+            const window = await environment(test, async (url, init) => {
+                const target = new URL(String(url));
+                assert.equal(target.origin, 'https://sdk.example.test');
+                const route = target.searchParams.get('route')!;
+                routes.push(route);
+                if (route === 'fetchExtensionForEndUser')
+                    return jsonResponse(page);
+                assert.equal(
+                    route,
+                    'loginIntoExtensionUsingLoginPageExtension'
+                );
+                const body = JSON.parse(String(init?.body));
+                loginAttempts++;
+                assert.equal(
+                    body.loginCredentials.Email ===
+                        (loginAttempts === 1 ? credential : 'corrected-value'),
+                    true,
+                    'The real SDK must receive the intended native credential.'
+                );
+                if (loginAttempts > 1)
+                    return jsonResponse({ type: 'no-record' });
+                return new Response(
+                    JSON.stringify({
+                        ...(statusCode === 200 ? { error: true } : {}),
+                        message: privateMessage,
+                        code: privateCode,
+                    }),
+                    {
+                        status: statusCode,
+                        headers: { 'Content-Type': 'application/json' },
+                    }
+                );
+            });
+            await connectBrowser(window, page);
+            enterEmail(window, credential);
+            submitForm(window, 'Log in and use session');
+            await waitFor(() => browserIdle(window));
+
+            assertRedacted(window);
+            if (statusCode >= 400)
+                assert.equal(
+                    window.document
+                        .getElementById('status')!
+                        .textContent!.includes(`HTTP ${statusCode}`),
+                    true,
+                    'A bounded HTTP status remains useful without server copy.'
+                );
+            const login = findButton(window, 'Log in and use session');
+            assert.ok(login);
+            assert.equal(login.disabled, false);
+            assert.equal(loginAttempts, 1, 'A failure must not replay login.');
+            enterEmail(window, 'corrected-value');
+            submitForm(window, 'Log in and use session');
+            await waitFor(() => browserIdle(window));
+            assert.equal(
+                window.document
+                    .getElementById('status')!
+                    .textContent!.includes('No matching login record'),
+                true
+            );
+            assert.deepEqual(routes, [
+                'fetchExtensionForEndUser',
+                'loginIntoExtensionUsingLoginPageExtension',
+                'loginIntoExtensionUsingLoginPageExtension',
+            ]);
+        });
+    }
+
+    for (const failure of ['SDK HTTP error', 'external abort error'] as const) {
+        it(`redacts ${failure} on Reload while retaining read-only retry`, async (test) => {
+            const page = browserLoginPage();
+            let reads = 0;
+            let failedSignal: AbortSignal | null | undefined;
+            const window = await environment(test, async (url, init) => {
+                const target = new URL(String(url));
+                assert.equal(target.origin, 'https://sdk.example.test');
+                assert.equal(
+                    target.searchParams.get('route'),
+                    'fetchExtensionForEndUser'
+                );
+                reads++;
+                if (reads !== 2) return jsonResponse(page);
+                failedSignal = init?.signal;
+                if (failure === 'external abort error') {
+                    // The runtime deliberately preserves an external AbortError.
+                    // Its app-owned signal is still current, so run() must not
+                    // publish that arbitrary Error.message as customer copy.
+                    const error = new Error(privateMessage);
+                    error.name = 'AbortError';
+                    throw error;
+                }
+                return new Response(
+                    JSON.stringify({
+                        message: privateMessage,
+                        code: privateCode,
+                    }),
+                    { status: 503 }
+                );
+            });
+            await connectBrowser(window, page);
+            const reload = window.document.getElementById('reload');
+            assert.ok(reload instanceof window.HTMLButtonElement);
+            reload.click();
+            await waitFor(() => browserIdle(window));
+
+            assertRedacted(window);
+            assert.equal(failedSignal?.aborted, false);
+            assert.equal(reload.disabled, false);
+            assert.equal(reads, 2, 'A failed read must not retry itself.');
+            reload.click();
+            await waitFor(() => reads === 3 && browserIdle(window));
+            assert.ok(findButton(window, 'Log in and use session'));
+            assert.equal(
+                window.document
+                    .getElementById('status')!
+                    .textContent!.includes('Loaded login page'),
+                true
+            );
+        });
+    }
+
+    it('retains controlled wrong-password feedback and a deliberate corrected retry', async (test) => {
+        const page = passwordPage();
+        let reads = 0;
+        let verifications = 0;
+        const window = await environment(test, async (url, init) => {
+            const target = new URL(String(url));
+            assert.equal(target.origin, 'https://sdk.example.test');
+            const route = target.searchParams.get('route');
+            if (route === 'fetchExtensionForEndUser') {
+                reads++;
+                return jsonResponse(page);
+            }
+            assert.equal(route, 'verifyExtensionPassword');
+            const body = JSON.parse(String(init?.body));
+            verifications++;
+            assert.equal(
+                body.extensionPassword ===
+                    (verifications === 1 ? credential : 'corrected-password'),
+                true
+            );
+            return jsonResponse(
+                verifications === 1
+                    ? { type: 'wrong' }
+                    : {
+                          type: 'correct',
+                          encryptedExtensionPassword:
+                              'synthetic-password-token',
+                      }
+            );
+        });
+        browserInput(window, 'api-origin').value = 'https://sdk.example.test';
+        browserInput(window, 'share-id').value = 'share_example';
+        submitForm(window, 'Connect and load');
+        await waitFor(
+            () =>
+                findButton(window, 'Verify and use password') !== undefined &&
+                browserIdle(window)
+        );
+        const verify = findButton(window, 'Verify and use password')!;
+        const password = verify.closest('form')!.querySelector('input');
+        assert.ok(password instanceof window.HTMLInputElement);
+        password.value = credential;
+        submitForm(window, 'Verify and use password');
+        await waitFor(() => browserIdle(window));
+        assert.equal(
+            window.document.getElementById('status')!.textContent,
+            'Incorrect password.'
+        );
+        assert.equal(verify.disabled, false);
+        assert.equal(verifications, 1);
+        password.value = 'corrected-password';
+        submitForm(window, 'Verify and use password');
+        await waitFor(() => browserIdle(window));
+        assert.equal(verifications, 2);
+        assert.equal(
+            reads,
+            1,
+            'This change does not add auth continuation reads.'
+        );
+        assert.equal(
+            window.document
+                .getElementById('session-summary')!
+                .textContent!.includes('Authenticated session'),
+            true
+        );
+        assert.equal(window.sessionStorage.length, 0);
+    });
+});
 
 const restartBrowser = async (window: Window) => {
     const markup = await readFile(

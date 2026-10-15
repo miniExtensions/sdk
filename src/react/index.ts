@@ -44,6 +44,14 @@ export {
     type CreatedByFieldOptions,
 } from './CreatedByField.js';
 import {
+    lastModifiedTimeInput,
+    type LastModifiedTimeFieldOptions,
+} from './LastModifiedTimeField.js';
+export {
+    renderLastModifiedTimeField,
+    type LastModifiedTimeFieldOptions,
+} from './LastModifiedTimeField.js';
+import {
     createdTimeInput,
     type CreatedTimeFieldOptions,
 } from './CreatedTimeField.js';
@@ -355,6 +363,49 @@ const status = (snapshot: FormFieldSnapshot) =>
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
+export type LastModifiedTimeFieldProps = FieldProps &
+    LastModifiedTimeFieldOptions;
+/** Valid supplied modification timestamps stay readonly without recomputation. */
+export function LastModifiedTimeField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: LastModifiedTimeFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'lastModifiedTime' ||
+        schema.airtableField.config.type !== 'lastModifiedTime'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Last Modified Time fields.'
+        );
+    return createElement(DateTimeControl, {
+        ...dateTimeConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input: lastModifiedTimeInput(
+            snapshot.value,
+            schema.airtableField.config
+        ),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+        clear: () => {},
+    });
+}
 export type CreatedTimeFieldProps = FieldProps & CreatedTimeFieldOptions;
 /** The supplied creation timestamp stays readonly regardless of result metadata. */
 export function CreatedTimeField({

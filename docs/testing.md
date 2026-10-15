@@ -142,6 +142,38 @@ Chromium proof. Native form submission and stopped event bubbling are distinct;
 simulated composition does not certify a real input method. These checks do not
 establish a navigation policy or contact a live backend.
 
+## Last Modified Time presentation checks
+
+`test/reactLastModifiedTime.test.ts` covers the readonly binding and named helper.
+`pnpm check:package` runs installed ESM/CommonJS consumers with synthetic owners,
+including public props/options, readonly negative types, physical-kind slot
+rejection, Form/Grid/List composition and both guide recipes.
+
+Coverage includes the exact-true validity gate, raw timestamps and offsets,
+null/missing/nonstring values, and CR/LF display sanitization without changing
+native bytes. Validity and nested result-metadata transitions preserve the owner's
+answer. Referenced-field metadata does not cause record reads or timestamp
+calculation. Direct helper fallbacks remain distinct from malformed host admission.
+Forged capabilities cannot grant edits or supply a date model.
+
+Disabled input/Clear, masks, associated feedback, title fallback, repeated IDs,
+custom rendering, wrong-kind bindings and retirement remain covered. Physical
+Last Modified Time is readonly with `isComputed: false`. Real synthetic Form
+composition and Portal Grid/List detail hosts preserve native values without
+computed inline editing bindings. Rendering adds no reads, writes or Save;
+editable DateTime and Text neighbors retain their existing behavior.
+
+The `examples/react-last-modified-time` fixture uses shared optional `datetime.css`.
+Its source files stay tracked and unignored, and generated preview outputs stay
+ignored. After building, run `node examples/react-last-modified-time/dev.mjs` for
+the local example at `http://127.0.0.1:4195`. Run the separate native Chromium proof with
+`SDK_LAST_MODIFIED_TIME_CHROMIUM=/path/to/chromium node scripts/check-last-modified-time-browser.mjs`.
+It uses synthetic owners and checks disabled interaction, native-value retention,
+event containment, layout and forced colors without a live backend. Synthetic
+composition does not certify every platform's input method or screen reader.
+
+Task IDs: 3815.
+
 ## Created Time presentation checks
 
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.

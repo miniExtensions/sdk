@@ -5,6 +5,10 @@ import {
 } from './created-time-consumer-checks.mjs';
 import { checkTextConsumer } from './text-consumer-checks.mjs';
 import {
+    checkLastModifiedTimeConsumer,
+    lastModifiedTimeReactTypedConsumer,
+} from './last-modified-time-consumer-checks.mjs';
+import {
     checkLastModifiedByConsumer,
     lastModifiedByReactTypedConsumer,
 } from './last-modified-by-consumer-checks.mjs';
@@ -1240,6 +1244,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'last-modified-time-react-consumer.tsx'),
+        lastModifiedTimeReactTypedConsumer
+    );
+    reactSources.push('last-modified-time-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'created-time-react-consumer.tsx'),
         createdTimeReactTypedConsumer
     );
@@ -1431,6 +1440,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'button',
         'checkbox',
         'text',
+        'last-modified-time',
         'last-modified-by',
         'created-by',
         'created-time',
@@ -1449,26 +1459,24 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'email',
         'currency',
     ]) {
-        const stylesheet = [
-            'autonumber',
-            'percent',
-            'rating',
-            'count',
-        ].includes(name)
-            ? 'number'
-            : [
-                    'email',
-                    'url',
-                    'phone-number',
-                    'multiline-text',
-                    'last-modified-by',
-                    'created-by',
-                    'external-sync-source',
-                ].includes(name)
-              ? 'text'
-              : name === 'created-time'
+        const stylesheet =
+            name === 'last-modified-time'
                 ? 'datetime'
-                : name;
+                : ['autonumber', 'percent', 'rating', 'count'].includes(name)
+                  ? 'number'
+                  : [
+                          'email',
+                          'url',
+                          'phone-number',
+                          'multiline-text',
+                          'last-modified-by',
+                          'created-by',
+                          'external-sync-source',
+                      ].includes(name)
+                    ? 'text'
+                    : name === 'created-time'
+                      ? 'datetime'
+                      : name;
         if (name === 'autonumber') {
             const sources = [
                 '.gitignore',
@@ -1604,6 +1612,59 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     error.status === 1 &&
                     String(error.stdout ?? '').trim() === '',
                 'Count example sources must remain unignored'
+            );
+        }
+        if (name === 'last-modified-time') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-last-modified-time/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Last Modified Time example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Last Modified Time example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-last-modified-time/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Last Modified Time preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Last Modified Time example sources must remain unignored'
             );
         }
         if (name === 'created-time') {
@@ -1884,6 +1945,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(checkboxProof.checks, 6);
     console.log(
         `Installed Checkbox renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const lastModifiedTimeProof = await checkLastModifiedTimeConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(lastModifiedTimeProof.checks, 20);
+    console.log(
+        `Installed Last Modified Time renderer, validity-gated native timestamps, shared DateTime CSS and local example: ${lastModifiedTimeProof.checks} ESM/CJS groups passed; synthetic owners only.`
     );
     const createdTimeProof = await checkCreatedTimeConsumer({
         consumerDirectory: temporaryDirectory,

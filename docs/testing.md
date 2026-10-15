@@ -142,6 +142,31 @@ Chromium proof. Native form submission and stopped event bubbling are distinct;
 simulated composition does not certify a real input method. These checks do not
 establish a navigation policy or contact a live backend.
 
+## Last Modified By presentation checks
+
+`pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.
+They cover the supplied native collaborator name, empty/null/missing values,
+malformed direct helper values, privacy of email/ID/avatar data, metadata choice
+changes without identity resolution, and retained native objects. Forged editable
+capabilities and binding model access traps cannot grant edits. Disabled input and
+Clear, masking from either configuration, associated plain-text feedback, repeated
+IDs, stale controls, custom rendering and hidden or retired owners are covered.
+The adjacent Text field still accepts explicit edits.
+
+Actual Form composition and Portal Grid/List detail hosts retain readonly
+capabilities. Physical Last Modified By remains readonly even with `isComputed: false`.
+Each Portal fixture uses one explicit synthetic load; rendering adds no requests,
+writes or Save. No computed inline editing binding is created. Public props and
+options, canonical collaborator values, readonly negative types, wrong-kind slots,
+Form/Grid/List composition and both guide recipes are typechecked. The example
+compiles and bundles with shared optional `text.css`; its source files remain
+tracked and unignored while generated preview outputs stay ignored.
+
+After building, `node scripts/check-last-modified-by-browser.mjs` runs the separate local
+Chromium proof. The `examples/react-last-modified-by` synthetic fixture serves on
+`http://127.0.0.1:4193`. These checks perform no identity lookup and load no avatar
+resources.
+
 ## Created By presentation checks
 
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.

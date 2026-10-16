@@ -17,17 +17,30 @@ on every visitor, connection, session, token or context transition, including
 anonymous visitors and A → B → A. Credential equality alone cannot identify
 those transitions.
 
-The browser starter offers only custom views whose `customViewConditions` and
-owning Portal field conditions evaluate true against the complete accepted
-Portal-user record and `usersTableFields`. It reuses the supported strict Form
-condition evaluator without Form empty-hiding rules. Unconditional views do not
-require driver metadata. Unsupported or malformed rules and ambiguous raw view
-IDs produce generic unavailable feedback, without exposing the refused view's
-name. If every configured view is hidden or unavailable, there is no legacy
-default fallback or read action. A genuinely absent or empty custom-view list
-retains its legacy default when the Portal field itself is eligible.
-Defined non-array lists, including `null`, are malformed under the canonical
-view-list contract and remain unavailable.
+Before creating a collection, call `evaluatePortalViewAvailability` with the
+complete accepted `PortalLoadedResult` and its outer published `portalFieldId`.
+It returns a detached snapshot with three readonly fields: `views` contains
+eligible `{ id, config }` descriptors in configured order, `legacy` permits a
+genuine absent/empty-list default, and `unavailable` reports unsupported or
+malformed definitions generically. Eligible neighbors can remain usable when
+`unavailable` is true. Readonly types do not recursively freeze returned objects.
+Eligible configs are opaque application metadata, **not
+log-safe or redacted display payloads**; they may contain field references and
+condition literals. Do not log or render the complete result.
+
+The helper and browser starter evaluate both `customViewConditions` and owning
+field conditions against complete accepted `formRecord.data` and required
+`usersTableFields`, using the existing supported strict Form evaluator without
+Form empty-hiding rules. Unconditional choices accept `usersTableFields: []`;
+missing required Portal metadata is not a fallback. Unsupported/computed condition
+drivers and malformed native values remain unavailable. Raw duplicate view IDs
+are refused before visibility filtering, including hidden duplicates.
+
+Never infer a legacy default from `views.length === 0`. Hidden fields, nonempty
+all-hidden/refused lists and malformed lists (including `null`) do not permit it.
+Only `legacy: true` permits the explicit `selectedCustomViewId: ''` branch;
+hosts requiring named views may reject that branch too. Otherwise choose an exact
+ID from `views`, or expose generic unavailable feedback without a read action.
 
 Accepted parent refreshes rebuild the choices and retire a selection that is no
 longer eligible. Eligibility is cached only within that accepted parent snapshot
@@ -37,6 +50,11 @@ selection; changing views never loads records automatically. This presentation
 uses accepted client data, not a new backend grant or a promise that a server
 condition cannot change. The canonical server still re-evaluates published
 field/view conditions and authorizes every read and mutation.
+
+The helper performs no I/O, detects no freshness and revokes no owner or captured
+callback. Re-evaluate after accepting new parent data/schema and retire/rebind
+old list, child and action owners through existing scope/configuration revisions,
+including A → B → A. Equal returned values cannot revive an earlier owner.
 
 Collections accept direct linked-record fields and valid lookup fields whose
 returned `options.isValid` is `true` and whose `options.result.type` is
@@ -83,6 +101,7 @@ import {
 import type { AirtableValue } from '@miniextensions/sdk';
 import {
     createPortalCollection,
+    evaluatePortalViewAvailability,
     type PortalCollection,
     type PortalCollectionCriteria,
     type PortalCollectionSnapshot,
@@ -172,6 +191,18 @@ export function createPortalScreenOwner(options: {
     ) => {
         if (!owned(expected, session)) throw new Error('Stale Portal');
         const captured = structuredClone(portal);
+        const available = evaluatePortalViewAvailability({
+            portal: captured,
+            portalFieldId: selection.portalFieldId,
+        });
+        const viewId = selection.criteria.selectedCustomViewId;
+        if (viewId === '') {
+            // This recipe explicitly permits a genuine legacy default.
+            if (!available.legacy)
+                throw new Error('An available Portal view is required.');
+        } else if (!available.views.some((view) => view.id === viewId)) {
+            throw new Error('An available Portal view is required.');
+        }
         const e: Entry = {
             portal: captured,
             selection: structuredClone(selection),

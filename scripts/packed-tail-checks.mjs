@@ -228,10 +228,8 @@ export async function runPackedTailChecks({
                         });
                         record.capturing = true;
                         record.handshakeWork = (async () => {
-                            const deadline = Math.min(
-                                record.workerDeadline,
-                                performance.now() + terminationGraceMs
-                            );
+                            const captureStarted = performance.now();
+                            const deadline = record.workerDeadline;
                             let state;
                             do {
                                 if (record.settled || record.stopping) break;
@@ -252,11 +250,36 @@ export async function runPackedTailChecks({
                                 child.signalCode === null &&
                                 performance.now() <= deadline &&
                                 state?.state === 'live';
-                            if (!accepted)
+                            if (!accepted) {
+                                const refusal = {
+                                    phase,
+                                    elapsedMs:
+                                        performance.now() - captureStarted,
+                                    captureBudgetMs: deadline - captureStarted,
+                                    observation: state?.state ?? null,
+                                    reason: state?.reason ?? null,
+                                    refusal: record.settled
+                                        ? 'settled'
+                                        : record.stopping
+                                          ? 'stopping'
+                                          : record.closed ||
+                                              child.exitCode !== null ||
+                                              child.signalCode !== null
+                                            ? 'child-exited'
+                                            : !child.connected
+                                              ? 'ipc-disconnected'
+                                              : performance.now() > deadline
+                                                ? 'capture-budget-expired'
+                                                : 'observation-unresolved',
+                                };
                                 problem(
                                     record,
-                                    `Cannot capture ${phase} worker cohort: ${state?.reason ?? 'worker stopped'}`
+                                    `Cannot capture ${phase} worker cohort: ${JSON.stringify(refusal)}`
                                 );
+                                console.error(
+                                    `[${suite}] worker cohort refused: ${JSON.stringify(refusal)}`
+                                );
+                            }
                             if (accepted) record.handshakeStage++;
                             if (!record.settled && child.connected)
                                 await new Promise((resolve, reject) =>

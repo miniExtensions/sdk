@@ -1001,7 +1001,10 @@ if (config.mode === 'survivor') {
     child.unref();
     await wait(suite + '.grandchild.ready');
 }
-if (!config.skipFinish) await observe('finish');
+if (!config.skipFinish) {
+    await observe('finish');
+    writeFileSync(file('finish-accepted'), 'accepted');
+}
 if (config.duplicateFinish) await observe('finish');
 for (const message of config.reports ?? [report]) await send(message);
 writeFileSync(file('reported'), 'reported');
@@ -1083,11 +1086,17 @@ test('packed tail maps both real workers and waits for close after valid IPC', a
     void running.then(() => {
         settled = true;
     });
-    await Promise.all(
-        ['attachment', 'review'].map((suite) =>
-            waitForTailFile(fixture.root, `${suite}.reported`)
-        )
-    );
+    await Promise.race([
+        Promise.all(
+            ['attachment', 'review'].map((suite) =>
+                waitForTailFile(fixture.root, `${suite}.reported`)
+            )
+        ),
+        running.then((outcome) => {
+            if (outcome.error) throw outcome.error;
+            assert.fail('Workers completed before their explicit releases');
+        }),
+    ]);
     assert.equal(settled, false, 'valid IPC cannot stand in for child close');
     await write(fixture.root, 'attachment.release', 'release');
     assert.equal(settled, false, 'both owned children must close');
@@ -1124,7 +1133,27 @@ test('packed tail rejects missing, malformed, mismatched and duplicate IPC', asy
             });
             await assert.rejects(
                 runPackedTailChecks(fixture.options),
-                (error) => assertTailFailure(error, 'attachment')
+                (error) => {
+                    assertTailFailure(error, 'attachment');
+                    assert.match(
+                        error.errors.map((item) => item.message).join('\n'),
+                        name === 'missing'
+                            ? /Missing single valid result/
+                            : /Invalid worker result/
+                    );
+                    return true;
+                }
+            );
+            assert.equal(
+                await waitForTailFile(fixture.root, 'attachment.ready'),
+                'ready'
+            );
+            assert.equal(
+                await waitForTailFile(
+                    fixture.root,
+                    'attachment.finish-accepted'
+                ),
+                'accepted'
             );
             await fixture.assertGroupsGone();
         });
@@ -1154,6 +1183,23 @@ test('packed tail rejects real assertion and nonzero exits after valid IPC and d
             await write(fixture.root, 'review.release-term', 'release');
             const outcome = await running;
             assertTailFailure(outcome.error, 'attachment');
+            assert.match(
+                outcome.error.errors.map((item) => item.message).join('\n'),
+                new RegExp(
+                    `Worker exit code ${mode === 'throw' ? 1 : 17}, signal null`
+                )
+            );
+            assert.equal(
+                await waitForTailFile(
+                    fixture.root,
+                    'attachment.finish-accepted'
+                ),
+                'accepted'
+            );
+            assert.equal(
+                await waitForTailFile(fixture.root, 'attachment.reported'),
+                'reported'
+            );
             assert.equal(
                 await readFile(join(fixture.root, 'review.exited'), 'utf8'),
                 'cooperative SIGTERM'
@@ -1183,12 +1229,16 @@ test('packed tail times out and reaps children after SIGTERM or forced SIGKILL',
                             error.errors
                                 .map((failure) => failure.message)
                                 .join('\n'),
-                            /timed out|timeout/i
+                            /Worker timed out/
                         );
                         return true;
                     }
                 );
                 for (const suite of ['attachment', 'review']) {
+                    assert.equal(
+                        await waitForTailFile(fixture.root, `${suite}.ready`),
+                        'ready'
+                    );
                     assert.equal(
                         await readFile(
                             join(fixture.root, `${suite}.term`),
@@ -1221,8 +1271,17 @@ test('packed tail rejects a zero-exit worker with an owned live grandchild and p
     const fixture = await packedTailFixture(t, {
         attachment: { mode: 'survivor' },
     });
-    await assert.rejects(runPackedTailChecks(fixture.options), (error) =>
-        assertTailFailure(error, 'attachment')
+    await assert.rejects(runPackedTailChecks(fixture.options), (error) => {
+        assertTailFailure(error, 'attachment');
+        assert.match(
+            error.errors.map((item) => item.message).join('\n'),
+            /Process group survived worker close/
+        );
+        return true;
+    });
+    assert.equal(
+        await waitForTailFile(fixture.root, 'attachment.finish-accepted'),
+        'accepted'
     );
     assert.equal(
         await readFile(
@@ -1248,11 +1307,25 @@ test('packed tail rejects missing or repeated finish acknowledgement before acce
                     assertTailFailure(error, 'attachment');
                     assert.match(
                         error.errors.map((item) => item.message).join('\n'),
-                        /handshake|cohort|result/i
+                        plan.skipFinish
+                            ? /Invalid worker result/
+                            : /Invalid worker cohort handshake/
                     );
                     return true;
                 }
             );
+            assert.equal(
+                await waitForTailFile(fixture.root, 'attachment.ready'),
+                'ready'
+            );
+            if (plan.duplicateFinish)
+                assert.equal(
+                    await waitForTailFile(
+                        fixture.root,
+                        'attachment.finish-accepted'
+                    ),
+                    'accepted'
+                );
             await fixture.assertGroupsGone();
         });
     }
@@ -1395,4 +1468,104 @@ writeFileSync(join(options.consumerDirectory, 'supervisor.outcome.json'), JSON.s
             assertTailGroupGone(supervisor.pid);
         });
     }
+});
+
+test('packed tail allows healthy cohort capture beyond termination grace within the worker deadline', async (t) => {
+    const fixture = await packedTailFixture(t, {
+        attachment: { hold: true },
+        review: { hold: true },
+    });
+    assert.equal(fixture.options.terminationGraceMs, 100);
+    assert.equal(fixture.options.timeoutMs, 10000);
+    const captures = [];
+    let completed = false;
+    const running = runPackedTailChecks({
+        ...fixture.options,
+        createObserver(options) {
+            const observer = fixture.options.createObserver(options);
+            return {
+                ...observer,
+                async capture() {
+                    const started = performance.now();
+                    await new Promise((resolve) => setTimeout(resolve, 150));
+                    const observation = await observer.capture();
+                    captures.push({
+                        pid: options.pid,
+                        elapsedMs: performance.now() - started,
+                        state: observation.state,
+                    });
+                    return observation;
+                },
+            };
+        },
+    }).then(
+        (result) => {
+            completed = true;
+            return { result };
+        },
+        (error) => {
+            completed = true;
+            return { error };
+        }
+    );
+    const reported = (async () => {
+        while (!completed) {
+            try {
+                await Promise.all(
+                    ['attachment', 'review'].map((suite) =>
+                        readFile(
+                            join(fixture.root, `${suite}.reported`),
+                            'utf8'
+                        )
+                    )
+                );
+                return { reported: true };
+            } catch (error) {
+                if (error.code !== 'ENOENT') throw error;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        return null;
+    })();
+    const first = await Promise.race([running, reported]);
+    if (first === null || !Object.hasOwn(first, 'reported')) {
+        const outcome = first ?? (await running);
+        if (outcome.error) throw outcome.error;
+        assert.fail('Healthy held workers completed before both reports.');
+    }
+    assert.equal(
+        completed,
+        false,
+        'Valid IPC must not bypass held worker close.'
+    );
+    const workerPids = [];
+    for (const suite of ['attachment', 'review']) {
+        const pid = Number(
+            await readFile(join(fixture.root, `${suite}.pid`), 'utf8')
+        );
+        process.kill(pid, 0);
+        workerPids.push(pid);
+    }
+    const acceptedCaptures = captures.filter(
+        (capture) => capture.state === 'live'
+    );
+    assert.equal(acceptedCaptures.length, 4);
+    for (const pid of workerPids) {
+        const owned = acceptedCaptures.filter((capture) => capture.pid === pid);
+        assert.equal(
+            owned.length,
+            2,
+            'Both start and finish must be captured.'
+        );
+        assert.ok(owned.every((capture) => capture.elapsedMs > 100));
+    }
+    await Promise.all(
+        ['attachment', 'review'].map((suite) =>
+            write(fixture.root, `${suite}.release`, 'explicit close release')
+        )
+    );
+    const outcome = await running;
+    if (outcome.error) throw outcome.error;
+    assert.deepEqual(outcome.result, packedTailResults);
+    await fixture.assertGroupsGone();
 });

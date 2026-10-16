@@ -493,10 +493,7 @@ function browserMain(data) {
             'Portal native records changed'
         );
         check(
-            !Object.hasOwn(
-                fields.controller.getState().draft.data,
-                'missing'
-            ),
+            !Object.hasOwn(fields.controller.getState().draft.data, 'missing'),
             'Missing value became a present key'
         );
         check(

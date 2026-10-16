@@ -17,6 +17,7 @@ import { join, resolve, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
+import { checkAttachmentPresentationBrowser } from './attachment-presentation-browser-checks.mjs';
 import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
@@ -1029,6 +1030,7 @@ try {
         fixtureSources: [
             'scripts/build-privacy-browser-proof.mjs',
             'scripts/attachment-review-recipe-checks.mjs',
+            'scripts/attachment-presentation-browser-checks.mjs',
             'scripts/portal-recipe-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
@@ -1258,7 +1260,9 @@ try {
             server.listen(0, '127.0.0.1', resolve);
         });
         const origin = `http://127.0.0.1:${server.address().port}`;
-        const executablePath = realpathSync('/opt/google/chrome/chrome');
+        const executablePath = realpathSync(
+            process.env.SDK_NATIVE_CHROMIUM ?? '/opt/google/chrome/chrome'
+        );
         report.browserExecutable = {
             path: executablePath,
             version: execFileSync(executablePath, ['--version'], {
@@ -1266,11 +1270,18 @@ try {
             }).trim(),
         };
         browser = await chromium.launch({
-            channel: 'chrome',
+            executablePath,
             headless: true,
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
+        report.attachmentPresentation =
+            await checkAttachmentPresentationBrowser({
+                browser,
+                consumer: temporary,
+                fixture: form,
+                output,
+            });
         const run = async (name, exercise) => {
             const context = await browser.newContext({
                 serviceWorkers: 'block',

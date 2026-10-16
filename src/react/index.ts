@@ -5,6 +5,8 @@ import {
     useState,
     useRef,
     useEffect,
+    useLayoutEffect,
+    useId,
     useSyncExternalStore,
     type ReactNode,
     type ChangeEvent,
@@ -213,6 +215,16 @@ export function AttachmentField({
 }: AttachmentFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     const input = useRef<HTMLInputElement>(null);
+    const section = useRef<HTMLElement>(null);
+    const choose = useRef<HTMLButtonElement>(null);
+    const upload = useRef<HTMLButtonElement>(null);
+    const cancel = useRef<HTMLButtonElement>(null);
+    const statusId = useId();
+    // Focus belongs to this rendered owner, never to an asynchronous upload.
+    const focus = useMemo<{ element: HTMLButtonElement | null }>(
+        () => ({ element: null }),
+        [binding, controller]
+    );
     const store = useMemo(() => {
         let value = controller.getSnapshot();
         return {
@@ -229,17 +241,97 @@ export function AttachmentField({
         store.getSnapshot,
         store.getSnapshot
     );
+    useLayoutEffect(() => {
+        const node = section.current;
+        const previous = focus.element;
+        if (node == null || previous == null) return;
+        const active = node.ownerDocument.activeElement;
+        if (
+            active !== previous &&
+            !(active === node.ownerDocument.body && !previous.isConnected)
+        )
+            return;
+        if (previous.isConnected && !previous.disabled && !previous.hidden)
+            return;
+        const removals = Array.from(
+            node.querySelectorAll<HTMLButtonElement>(
+                'button[data-attachment-remove]:not(:disabled)'
+            )
+        );
+        const index = previous.dataset.attachmentRemove;
+        const nextRow =
+            index == null
+                ? null
+                : (removals.find(
+                      (button) =>
+                          Number(button.dataset.attachmentRemove) >=
+                          Number(index)
+                  ) ?? removals.at(-1));
+        const next =
+            nextRow ??
+            [
+                attachment.busy ? cancel.current : upload.current,
+                choose.current,
+            ].find((button) => button && !button.disabled && !button.hidden);
+        (next ?? node).focus();
+    });
     if (render) return render({ snapshot, attachment, binding, controller });
     if (snapshot.retired || attachment.retired) return null;
     const visible = snapshot.visibility.type === 'visible';
     if (!visible && attachment.files.length === 0 && !attachment.busy)
         return null;
+    const pending = `${attachment.files.length} pending ${
+        attachment.files.length === 1 ? 'file' : 'files'
+    }.`;
+    const message =
+        attachment.phase === 'uncertain'
+            ? 'Upload outcome uncertain. Inspect the upload before continuing; it was not added or retried automatically.'
+            : attachment.phase === 'uploading'
+              ? 'Uploading one attachment. Wait for confirmation before uploading the next file.'
+              : attachment.phase === 'accepted'
+                ? 'Attachment accepted into the draft. Save to submit your changes.'
+                : attachment.files.length > 0
+                  ? 'Files selected. Upload each file explicitly, then Save.'
+                  : 'No pending files. Choose files to begin.';
+    const actions = {
+        display: 'flex',
+        flexWrap: 'wrap' as const,
+        gap: '0.5rem',
+        alignItems: 'center',
+    };
     return createElement(
         'section',
         {
+            ref: section,
+            tabIndex: -1,
             'aria-label': visible
                 ? (snapshot.field?.title ?? 'Attachments')
                 : 'Pending attachment activity',
+            'aria-describedby': statusId,
+            style: {
+                display: 'grid',
+                gap: '0.75rem',
+                padding: '1rem',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.5rem',
+                minWidth: 0,
+                overflowWrap: 'anywhere',
+            },
+            onFocusCapture: (
+                event: import('react').FocusEvent<HTMLElement>
+            ) => {
+                focus.element =
+                    event.target.tagName === 'BUTTON'
+                        ? (event.target as HTMLButtonElement)
+                        : null;
+            },
+            onBlurCapture: (event: import('react').FocusEvent<HTMLElement>) => {
+                if (
+                    event.relatedTarget &&
+                    !event.currentTarget.contains(event.relatedTarget)
+                )
+                    focus.element = null;
+            },
             onDragOver: (event: import('react').DragEvent<HTMLElement>) =>
                 event.preventDefault(),
             onDrop: (event: import('react').DragEvent<HTMLElement>) => {
@@ -249,25 +341,53 @@ export function AttachmentField({
         },
         visible
             ? createElement(
-                  'ul',
+                  'strong',
                   null,
+                  snapshot.field?.title ?? 'Attachments'
+              )
+            : null,
+        visible && attachment.rows.length > 0
+            ? createElement(
+                  'ul',
+                  {
+                      'aria-label': 'Existing attachments',
+                      style: { margin: 0, paddingInlineStart: '1.5rem' },
+                  },
                   ...attachment.rows.map((row) =>
                       createElement(
                           'li',
-                          { key: row.nativeIndex },
-                          createElement('span', null, row.label),
+                          {
+                              key: row.nativeIndex,
+                              style: { paddingBlock: '0.25rem' },
+                          },
                           createElement(
-                              'button',
+                              'div',
                               {
-                                  type: 'button',
-                                  disabled: !row.removeAllowed,
-                                  onClick: () =>
-                                      controller.remove(
-                                          attachment.valuesRevision,
-                                          row.nativeIndex
-                                      ),
+                                  style: {
+                                      ...actions,
+                                      justifyContent: 'space-between',
+                                  },
                               },
-                              'Remove attachment'
+                              createElement(
+                                  'span',
+                                  { style: { minWidth: 0 } },
+                                  row.label
+                              ),
+                              createElement(
+                                  'button',
+                                  {
+                                      type: 'button',
+                                      'data-attachment-remove': row.nativeIndex,
+                                      'aria-label': `Remove attachment ${row.nativeIndex + 1}`,
+                                      disabled: !row.removeAllowed,
+                                      onClick: () =>
+                                          controller.remove(
+                                              attachment.valuesRevision,
+                                              row.nativeIndex
+                                          ),
+                                  },
+                                  'Remove attachment'
+                              )
                           )
                       )
                   )
@@ -288,55 +408,89 @@ export function AttachmentField({
             },
         }),
         createElement(
-            'button',
-            {
-                type: 'button',
-                hidden: !visible,
-                disabled: !snapshot.canEdit && !attachment.busy,
-                onClick: () => input.current?.click(),
-            },
-            'Choose files'
+            'div',
+            { id: statusId, role: 'status', 'aria-atomic': true },
+            createElement(
+                'p',
+                { style: { margin: 0, fontWeight: 600 } },
+                pending
+            ),
+            createElement('p', { style: { margin: '0.25rem 0 0' } }, message),
+            attachment.error && attachment.phase !== 'uncertain'
+                ? createElement(
+                      'p',
+                      { style: { margin: '0.25rem 0 0' } },
+                      attachment.error
+                  )
+                : null
+        ),
+        attachment.busy
+            ? createElement('progress', {
+                  'aria-label':
+                      attachment.phase === 'uncertain'
+                          ? 'Awaiting upload outcome'
+                          : 'Uploading attachment',
+                  style: { width: '100%' },
+              })
+            : null,
+        createElement(
+            'div',
+            { style: actions },
+            createElement(
+                'button',
+                {
+                    ref: choose,
+                    type: 'button',
+                    hidden: !visible,
+                    'aria-describedby': statusId,
+                    disabled:
+                        (!snapshot.canEdit && !attachment.busy) ||
+                        (attachment.phase === 'uncertain' && !attachment.busy),
+                    onClick: () => input.current?.click(),
+                },
+                'Choose files'
+            ),
+            createElement(
+                'button',
+                {
+                    ref: upload,
+                    type: 'button',
+                    hidden: !visible,
+                    'aria-describedby': statusId,
+                    disabled:
+                        attachment.busy ||
+                        attachment.phase === 'uncertain' ||
+                        attachment.files.length === 0 ||
+                        !snapshot.canEdit,
+                    onClick: () => void controller.upload(),
+                },
+                'Upload next file'
+            )
         ),
         createElement(
-            'p',
-            { role: 'status', 'aria-busy': attachment.busy },
-            attachment.error ??
-                (attachment.busy
-                    ? 'Uploading attachment'
-                    : attachment.files.length > 0
-                      ? 'Files selected'
-                      : 'No pending files')
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                hidden: !visible,
-                disabled:
-                    attachment.busy ||
-                    attachment.files.length === 0 ||
-                    !snapshot.canEdit,
-                onClick: () => void controller.upload(),
-            },
-            'Upload'
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                disabled: attachment.files.length === 0,
-                onClick: () => controller.clear(),
-            },
-            'Clear pending files'
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                disabled: !attachment.busy,
-                onClick: () => controller.cancel(),
-            },
-            'Cancel upload'
+            'div',
+            { style: actions },
+            createElement(
+                'button',
+                {
+                    type: 'button',
+                    'aria-describedby': statusId,
+                    disabled: attachment.files.length === 0,
+                    onClick: () => controller.clear(),
+                },
+                'Clear pending files'
+            ),
+            createElement(
+                'button',
+                {
+                    ref: cancel,
+                    type: 'button',
+                    'aria-describedby': statusId,
+                    disabled: !attachment.busy,
+                    onClick: () => controller.cancel(),
+                },
+                'Cancel upload'
+            )
         )
     );
 }

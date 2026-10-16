@@ -30,6 +30,19 @@ tests; happy-dom does not establish real Chromium layout, browser event or
 live backend behavior. The separate packed native Chromium scenarios remain
 required in CI.
 
+Attachment presentation regressions in `test/reactFieldComponents.test.ts` cover
+phase messages and counts, explicit first-file upload, duplicate queue order,
+indeterminate activity, disabled-control focus, uncertainty after Clear/remount,
+owner replacement and completion after unmount. `pnpm check:browser` also runs
+`scripts/attachment-presentation-browser-checks.mjs` against its installed archive
+with sandboxed Chromium: native keyboard/chooser completion, removal focus,
+selected/uploading/accepted/uncertain status, replacement during a flight, canceled
+and lost responses, retired-owner late completion, unmount and a narrow viewport.
+The receipt retains accessibility snapshots and screenshots. This is synthetic
+local evidence; it does not certify OS-dialog cancellation, a screen reader or
+live upload/Save persistence. A saved environment may select its supported Chrome
+executable with `SDK_NATIVE_CHROMIUM`; Chromium's sandbox stays enabled.
+
 ## Measurement and denominator
 
 The runner performs a clean isolated TypeScript compile with source maps and

@@ -216,12 +216,9 @@ import { checkBrowserSelectExample } from './browser-select-example-checks.mjs';
 import { checkSectionProjectionRecipe } from './section-projection-recipe-checks.mjs';
 import { checkFormPageReviewRecipe } from './form-page-review-recipe-checks.mjs';
 import { checkFormReviewRecipe } from './form-review-recipe-checks.mjs';
-import { checkAttachmentReviewRecipe } from './attachment-review-recipe-checks.mjs';
+import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import { checkLinkedReviewRecipe } from './linked-review-recipe-checks.mjs';
-import {
-    checkBrowserReviewExample,
-    checkBrowserCombinedEmptyReviewExample,
-} from './browser-review-example-checks.mjs';
+import { checkBrowserCombinedEmptyReviewExample } from './browser-review-example-checks.mjs';
 import { checkBrowserLinkedFilterExample } from './browser-linked-filter-example-checks.mjs';
 import { createHash } from 'node:crypto';
 import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
@@ -242,6 +239,7 @@ const uiDirectory = realpathSync(
     mkdtempSync(join(tmpdir(), 'miniextensions-ui-'))
 );
 const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
+let packageConsumerCleanupSafe = true;
 let browserPortalChecks = 0;
 let browserPortalSortChecks = 0;
 let browserPortalFilterChecks = 0;
@@ -2701,16 +2699,21 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             linkedReviewRecipeChecks = (
                 await checkLinkedReviewRecipe({ consumerDirectory: directory })
             ).checks;
-            const attachmentReview = await checkAttachmentReviewRecipe({
-                consumerDirectory: directory,
-                happyDomModulePath: require.resolve('happy-dom'),
-            });
+            let tail;
+            try {
+                tail = await runPackedTailChecks({
+                    consumerDirectory: directory,
+                    happyDomModulePath: require.resolve('happy-dom'),
+                });
+            } catch (error) {
+                if (error.cleanupSafe === false)
+                    packageConsumerCleanupSafe = false;
+                throw error;
+            }
+            const attachmentReview = tail.attachment;
             attachmentReviewChecks = attachmentReview.checks;
             browserAttachmentReviewChecks = attachmentReview.browserChecks;
-            const reviewExample = await checkBrowserReviewExample({
-                consumerDirectory: directory,
-                happyDomModulePath: require.resolve('happy-dom'),
-            });
+            const reviewExample = tail.review;
             browserReviewChecks = reviewExample.checks;
             const combinedReview = await checkBrowserCombinedEmptyReviewExample(
                 {
@@ -2820,7 +2823,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS and optional React renderer consumers, declarations, installed React StrictMode/remount and synthetic picker-cancel group, doc links/recipes (7 UI, 4 Form, ${attachmentRecipe.checks} attachment, ${linkedFilterRecipe.checks} cascade, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserPortalSortChecks} actual installed Portal-sort recipe/starter cases, ${browserPortalFilterChecks} installed scalar-filter groups, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${browserChildQueryChecks} actual packed Portal-child query cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${editHideEmptyRecipe.checks} installed edit empty-hiding checkpoints, ${browserEditHideEmptyChecks} actual packed browser edit empty-hiding cases, ${addressAutocompleteRecipe.checks} actual installed address recipe checkpoints, ${browserAddressChecks} actual packed browser address checkpoints, ${addressCompositionRecipe.checks} actual installed address DOM-composition checkpoints and ${browserAddressCompositionChecks} actual packed browser address DOM-composition checkpoints (no OS IME proof), ${sectionProjectionChecks} canonical/installed section-projection checks, ${attachmentReviewChecks} installed attachment-review checkpoints and ${browserAttachmentReviewChecks} copied-starter attachment-review cases, ${linkedReviewRecipeChecks} installed linked-review checkpoints, ${formPageReviewRecipeChecks} installed multipage Review row/dialog cases, ${formReviewRecipeChecks} actual installed prepared-review recipe checkpoints, ${browserReviewChecks} actual packed browser prepared-review cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
-    rmSync(temporaryDirectory, { recursive: true, force: true });
-    rmSync(browserKitDirectory, { recursive: true, force: true });
-    rmSync(uiDirectory, { recursive: true, force: true });
+    if (packageConsumerCleanupSafe) {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+        rmSync(browserKitDirectory, { recursive: true, force: true });
+        rmSync(uiDirectory, { recursive: true, force: true });
+    } else {
+        console.error(
+            'Packed-tail process cleanup is unconfirmed; temporary package consumers were retained:',
+            { temporaryDirectory, browserKitDirectory, uiDirectory }
+        );
+    }
 }

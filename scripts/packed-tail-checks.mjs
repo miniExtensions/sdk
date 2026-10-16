@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { createProcessGroupObserver } from './process-group-observer.mjs';
 
 const expected = {
     attachment: { checks: 104, browserChecks: 90 },
@@ -20,6 +21,7 @@ export async function runPackedTailChecks({
     terminationGraceMs = 2000,
     drainTimeoutMs = 3000,
     execPath = process.execPath,
+    createObserver = createProcessGroupObserver,
 }) {
     assert.notEqual(
         process.platform,
@@ -40,36 +42,34 @@ export async function runPackedTailChecks({
                 new Error(`[${record.suite}] ${message}`, { cause })
             );
     };
-    const alive = (record) => {
-        if (!record.pid) return false;
-        try {
-            process.kill(-record.pid, 0);
-            return true;
-        } catch (error) {
-            if (error.code === 'ESRCH') return false;
-            throw error;
-        }
-    };
+    const drained = (state) =>
+        state.state === 'gone' || state.state === 'exited';
     const signal = (record, name) => {
-        if (!record.pid) return;
-        try {
-            process.kill(-record.pid, name);
-        } catch (error) {
-            if (error.code !== 'ESRCH')
-                problem(record, `Cannot send ${name}`, error);
-        }
+        record.signalWork = record.signalWork
+            .then(async () => {
+                if (record.settled || !record.observer) return;
+                const state = await record.observer.signal(name);
+                if (state.state === 'unresolved')
+                    problem(
+                        record,
+                        `Cannot safely send ${name}: ${state.reason}`
+                    );
+            })
+            .catch((error) => problem(record, `Cannot send ${name}`, error));
+        return record.signalWork;
     };
     const stopAll = (reason) => {
         for (const record of records) {
             if (record.groupGone || !record.pid) continue;
+            record.stopping = true;
             problem(record, reason);
-            signal(record, 'SIGTERM');
-            record.killTimer ??= setTimeout(
-                () => signal(record, 'SIGKILL'),
-                terminationGraceMs
-            );
+            void signal(record, 'SIGTERM');
+            record.killTimer ??= setTimeout(() => {
+                void signal(record, 'SIGKILL');
+            }, terminationGraceMs);
             record.drainTimer ??= setTimeout(() => {
                 problem(record, 'Worker close/drain timed out');
+                record.observer?.dispose();
                 if (record.child?.connected) record.child.disconnect();
                 record.child?.stdout?.destroy();
                 record.child?.stderr?.destroy();
@@ -80,18 +80,31 @@ export async function runPackedTailChecks({
     };
     const waitGone = async (record, milliseconds) => {
         const deadline = performance.now() + milliseconds;
-        while (alive(record) && performance.now() < deadline)
+        do {
+            if (record.settled) return false;
+            const state = record.observer
+                ? await record.observer.inspect()
+                : record.pid
+                  ? {
+                        state: 'unresolved',
+                        reason: 'Owned PID has no process-group observer',
+                    }
+                  : { state: 'gone' };
+            record.observation = state;
+            if (drained(state)) return true;
+            if (performance.now() >= deadline) return false;
             await delay(
                 Math.min(25, Math.max(1, deadline - performance.now()))
             );
-        return !alive(record);
+        } while (performance.now() <= deadline);
+        return false;
     };
     const drain = async (record) => {
         if (await waitGone(record, terminationGraceMs)) return;
         problem(record, 'Process group survived worker close');
-        signal(record, 'SIGTERM');
+        await signal(record, 'SIGTERM');
         if (await waitGone(record, terminationGraceMs)) return;
-        signal(record, 'SIGKILL');
+        await signal(record, 'SIGKILL');
         assert(
             await waitGone(record, drainTimeoutMs),
             'Process group did not drain'
@@ -106,12 +119,21 @@ export async function runPackedTailChecks({
             problems: [],
             messages: 0,
             report: null,
+            signalWork: Promise.resolve(),
+            handshakeWork: Promise.resolve(),
+            handshakeStage: 0,
+            capturing: false,
+            settled: false,
+            stopping: false,
         };
         let complete;
         record.completion = new Promise((resolve) => {
             complete = resolve;
         });
         record.settle = () => {
+            if (record.settled) return;
+            record.settled = true;
+            record.observer?.dispose();
             clearTimeout(record.deadline);
             clearTimeout(record.killTimer);
             clearTimeout(record.drainTimer);
@@ -128,10 +150,32 @@ export async function runPackedTailChecks({
                 );
             if (record.messages !== 1 || !record.report)
                 problem(record, 'Missing single valid result');
+            if (record.handshakeStage !== 2)
+                problem(record, 'Missing accepted worker cohort handshake');
             if (record.problems.length) stopAll(`${suite} worker failed`);
             try {
+                await record.handshakeWork;
                 await drain(record);
+                await record.signalWork;
+                if (record.settled) return;
+                record.observation = record.observer
+                    ? await record.observer.inspect()
+                    : record.pid
+                      ? {
+                            state: 'unresolved',
+                            reason: 'Owned PID has no process-group observer',
+                        }
+                      : { state: 'gone' };
+                if (record.settled) return;
+                assert(
+                    drained(record.observation),
+                    'Final process-group observation is unresolved'
+                );
                 record.groupGone = true;
+                if (record.observation?.state === 'exited')
+                    console.log(
+                        `[${suite}] operational zombie group drained (not reaped): ${JSON.stringify(record.observation)}`
+                    );
             } catch (error) {
                 problem(record, 'Cannot confirm process-group cleanup', error);
                 stopAll(`${suite} cleanup failed`);
@@ -152,6 +196,8 @@ export async function runPackedTailChecks({
             );
             record.child = child;
             record.pid = child.pid ?? null;
+            if (record.pid)
+                record.observer = createObserver({ pid: record.pid });
             child.stdout.pipe(process.stdout, { end: false });
             child.stderr.pipe(process.stderr, { end: false });
             for (const stream of [child.stdout, child.stderr])
@@ -160,8 +206,105 @@ export async function runPackedTailChecks({
                     stopAll(`${suite} output failed`);
                 });
             child.on('message', (message) => {
+                if (
+                    message &&
+                    typeof message === 'object' &&
+                    Object.hasOwn(message, 'phase')
+                ) {
+                    try {
+                        assert.equal(
+                            record.capturing,
+                            false,
+                            'Overlapping cohort handshake'
+                        );
+                        const phase = ['start', 'finish'][
+                            record.handshakeStage
+                        ];
+                        assert.ok(phase, 'Unexpected cohort handshake');
+                        assert.deepEqual(message, {
+                            schemaVersion: 1,
+                            suite,
+                            phase,
+                        });
+                        record.capturing = true;
+                        record.handshakeWork = (async () => {
+                            const deadline = Math.min(
+                                record.workerDeadline,
+                                performance.now() + terminationGraceMs
+                            );
+                            let state;
+                            do {
+                                if (record.settled || record.stopping) break;
+                                state = await record.observer.capture();
+                                if (
+                                    state.state === 'live' ||
+                                    state.state === 'gone'
+                                )
+                                    break;
+                                await delay(25);
+                            } while (performance.now() < deadline);
+                            const accepted =
+                                !record.settled &&
+                                !record.stopping &&
+                                !record.closed &&
+                                child.connected &&
+                                child.exitCode === null &&
+                                child.signalCode === null &&
+                                performance.now() <= deadline &&
+                                state?.state === 'live';
+                            if (!accepted)
+                                problem(
+                                    record,
+                                    `Cannot capture ${phase} worker cohort: ${state?.reason ?? 'worker stopped'}`
+                                );
+                            if (accepted) record.handshakeStage++;
+                            if (!record.settled && child.connected)
+                                await new Promise((resolve, reject) =>
+                                    child.send(
+                                        {
+                                            schemaVersion: 1,
+                                            suite,
+                                            phase,
+                                            accepted,
+                                        },
+                                        (error) =>
+                                            error ? reject(error) : resolve()
+                                    )
+                                );
+                            record.capturing = false;
+                            if (!accepted)
+                                stopAll(`${suite} cohort capture failed`);
+                        })().catch((error) => {
+                            record.capturing = false;
+                            problem(
+                                record,
+                                'Worker cohort handshake failed',
+                                error
+                            );
+                            stopAll(`${suite} cohort handshake failed`);
+                        });
+                    } catch (error) {
+                        problem(
+                            record,
+                            'Invalid worker cohort handshake',
+                            error
+                        );
+                        stopAll(`${suite} protocol failed`);
+                    }
+                    return;
+                }
                 record.messages++;
                 try {
+                    assert.equal(
+                        record.handshakeStage,
+                        2,
+                        'Result before accepted cohort handshake'
+                    );
+                    assert.equal(
+                        record.capturing,
+                        false,
+                        'Result overlaps cohort handshake'
+                    );
                     assert.equal(record.messages, 1, 'Duplicate worker result');
                     assert.deepEqual(message, {
                         schemaVersion: 1,
@@ -191,6 +334,7 @@ export async function runPackedTailChecks({
             child.once('close', (code, exitSignal) => {
                 void closed(code, exitSignal);
             });
+            record.workerDeadline = performance.now() + timeoutMs;
             record.deadline = setTimeout(() => {
                 problem(record, 'Worker timed out');
                 stopAll(`${suite} timed out`);

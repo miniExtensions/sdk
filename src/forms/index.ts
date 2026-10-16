@@ -134,3 +134,16 @@ export {
     type FormPageErrorReason,
 } from './pages.js';
 export type { FormPageProblem } from './pageValidation.js';
+
+export {
+    createFormProgressStorage,
+    makeFormProgressKey,
+    parseStoredFormProgressValue,
+    type FormProgressStorage,
+    type FormProgressStorageOptions,
+    type FormProgressStorageAdapter,
+    type FormProgressLockManager,
+    type StoredFormProgressSnapshot,
+    type FormProgressWriteResult,
+    type FormProgressRemovalResult,
+} from './progressStorage.js';

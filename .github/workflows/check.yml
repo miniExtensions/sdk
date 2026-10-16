@@ -1,4 +1,4 @@
-name: Package checks
+name: SDK CI evidence recovery
 
 on:
     pull_request:
@@ -7,57 +7,43 @@ permissions:
     contents: read
 
 jobs:
-    check:
-        name: check (24)
-        if: github.event.pull_request.head.repo.full_name == github.repository
+    recover:
+        name: Recover existing CI153 evidence
+        if: github.repository == 'miniExtensions/sdk' && github.event.pull_request.number == 155 && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'ci/pr153-controlled-comparison'
         runs-on: ubuntu-latest
-        timeout-minutes: 90
+        timeout-minutes: 10
+        permissions:
+            contents: read
+            actions: read
         steps:
-            - name: Checkout diagnostic harness
+            - name: Checkout recovery source only
               uses: actions/checkout@v4
               with:
                   ref: ${{ github.event.pull_request.head.sha }}
-                  path: sdk-comparison/control
                   persist-credentials: false
-            - name: Checkout A1 exact EA9
-              uses: actions/checkout@v4
-              with:
-                  ref: ea9f16e4e08d62a1f66a93d9a77f8ef5e93148f9
-                  path: sdk-comparison/samples/A1
-                  persist-credentials: false
-            - name: Checkout B1 exact PR153
-              uses: actions/checkout@v4
-              with:
-                  ref: faac6a701dae92bb92a69e3fcd1e43b917d181b0
-                  path: sdk-comparison/samples/B1
-                  persist-credentials: false
-            - name: Checkout B2 exact PR153
-              uses: actions/checkout@v4
-              with:
-                  ref: faac6a701dae92bb92a69e3fcd1e43b917d181b0
-                  path: sdk-comparison/samples/B2
-                  persist-credentials: false
-            - name: Checkout A2 exact EA9
-              uses: actions/checkout@v4
-              with:
-                  ref: ea9f16e4e08d62a1f66a93d9a77f8ef5e93148f9
-                  path: sdk-comparison/samples/A2
-                  persist-credentials: false
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 24
-            - run: npm install --global pnpm@10.28.2
-            - name: Controlled A1 B1 B2 A2 full validation
-              run: node "$GITHUB_WORKSPACE/sdk-comparison/control/.github/scripts/ci153-comparison.mjs" "$GITHUB_WORKSPACE/sdk-comparison/samples" "$RUNNER_TEMP/sdk-ci153-comparison"
-            - name: Retain controlled comparison and failure evidence
+            - name: Verify original artifact and export compact analysis
+              env:
+                  SDK_RECOVERY_GITHUB_TOKEN: ${{ github.token }}
+                  SDK_RECOVERY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+              run: python3 -I .github/scripts/ci153-recover.py "$RUNNER_TEMP/sdk-ci153-recovery-export"
+            - name: Check bounded export readiness
+              id: export
               if: always()
+              run: |
+                  if test -f "$RUNNER_TEMP/sdk-ci153-recovery-export-upload-ready.json"; then
+                      echo "ready=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "ready=false" >> "$GITHUB_OUTPUT"
+                  fi
+            - name: Retain compact recovery evidence
+              if: always() && steps.export.outputs.ready == 'true'
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
-                  name: sdk-ci153-controlled-attempt-${{ github.run_attempt }}
-                  path: ${{ runner.temp }}/sdk-ci153-comparison/
-                  if-no-files-found: warn
+                  name: sdk-ci153-recovery-attempt-${{ github.run_attempt }}
+                  path: ${{ runner.temp }}/sdk-ci153-recovery-export/
+                  if-no-files-found: error
                   retention-days: 7
-                  compression-level: 0
+                  compression-level: 6
                   archive: true
                   overwrite: false
                   include-hidden-files: false

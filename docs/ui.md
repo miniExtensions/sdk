@@ -2706,3 +2706,49 @@ owners without backend requests. After building, run
 `node scripts/check-currency-browser.mjs` checks native interaction, unfinished
 drafts, remounting, clearing, permissions, layout and forced colors. Synthetic
 interaction does not certify every platform's input method or screen reader.
+
+## Bounded React Linked Records renderer
+
+Register `renderMultipleRecordLinksField` from `@miniextensions/sdk/react` in
+`AirtableForm`, `AirtableGrid` or `AirtableList` renderer slots. It also accepts a
+current `FieldRendererProps<'multipleRecordLinks'>` directly; optional
+`LinkedRecordsFieldOptions` currently provides `className`. Import
+`@miniextensions/sdk/react/linked-records.css` for scoped default styling. See the
+[local example](https://github.com/miniExtensions/sdk/tree/main/examples/react-linked-records).
+
+The slot borrows existing selection and `readSelected` actions. **Load selected**,
+**Search** and **Load more** are explicit reads. Typing only updates the owner's
+search input; rendering and mounting perform no hydration. Selecting, removing or
+clearing updates the draft; the application still owns explicit Save. Readonly,
+computed, pending and disabled capabilities cannot edit, and absent selection
+capability has no `setValue` fallback. A readonly Form can still explicitly load
+its selected presentation when the existing read capability permits it.
+
+Native order and duplicate occurrences are preserved for display. Form labels
+use the owner's privacy-filtered selected records, supported selected policy and
+an unhidden, unmasked primary in a present detail projection. Missing, null or
+empty projections, filtered records, ambiguous metadata and blank labels show
+**Linked record unavailable**. Portal labels use the host's detached pill
+occurrences. Candidate and cached option labels never recover a selected label;
+selected candidates are omitted from search results. ID fallback option labels
+are generic. Masking from either display or write configuration covers selected
+labels, candidates and search inputs. Feedback is generic because owner errors
+can contain IDs or filtered labels. This renderer expands no nested fields and
+exposes no child create/edit action.
+
+Edits propose changes from the complete incoming native array, preserving filtered
+identities. The existing `SelectionModel.choose` normalizes IDs with `Set` (first
+occurrence order); removing one displayed identity removes all its occurrences.
+`setValue` also routes through this existing model. Retaining duplicates through
+mutations would require an owner/model contract change and is outside this slot.
+
+Local in-flight feedback is scoped to the existing internal `FieldRendererSource`
+identity and mount lifetime. Hosted snapshots from the same host retain it;
+replacement hosts and A→B→A transitions retire it. Direct calls conservatively
+use the incoming renderer-props object identity: a new props object retires local
+feedback even when its field ID matches. Only one local generation is retained;
+returning to an old object does not revive its feedback. Query text, option pages
+and selected labels remain owner state, with the owner's existing retention and
+scope fences. Unmounting never cancels or disposes borrowed owners. The renderer
+adds no cache, selection model or write authority. The older `LinkedField`
+binding component remains separate from this bounded slot.

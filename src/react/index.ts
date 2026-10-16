@@ -11,6 +11,10 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
+export {
+    renderMultipleRecordLinksField,
+    type LinkedRecordsFieldOptions,
+} from './LinkedRecordsField.js';
 import {
     renderMultipleSelectsField,
     type MultipleSelectFieldOptions,

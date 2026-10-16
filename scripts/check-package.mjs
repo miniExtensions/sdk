@@ -537,6 +537,7 @@ try {
         join(installedPackage, 'docs/portals.md'),
         'utf8'
     );
+    const portalsReactGuideSources = [];
     const portalsGuideSources = [
         ...portalsGuide.matchAll(/```ts\n([\s\S]*?)\n```/g),
     ].map(([, code], index) => {
@@ -546,6 +547,12 @@ try {
             ? 'portal-owner.ts'
             : `portals-guide-${index}.ts`;
         writeFileSync(join(temporaryDirectory, filename), code);
+        if (
+            /\b(?:from\s*|(?:import|require)\s*(?:\(\s*)?)['"](?:react(?:-dom)?(?:\/[^'"]*)?|@miniextensions\/sdk\/react(?:\/[^'"]*)?)['"]/.test(
+                code
+            )
+        )
+            portalsReactGuideSources.push(filename);
         return filename;
     });
     assert(portalsGuideSources.length > 0, 'Missing complete Portal recipes');
@@ -559,8 +566,12 @@ try {
         'ESNext',
         '--moduleResolution',
         'Bundler',
-        ...portalsGuideSources,
+        ...portalsGuideSources.filter(
+            (filename) => !portalsReactGuideSources.includes(filename)
+        ),
     ]);
+    // Keep the complete exact-doc provenance input, including deferred React
+    // blocks; this headless recipe runner executes only its named owner block.
     const portalRecipe = await checkPortalRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: portalsGuideSources,
@@ -1237,6 +1248,9 @@ new Parser([]).parse({maxDepth:'48'});
         writeFileSync(join(temporaryDirectory, filename), code);
         return filename;
     });
+    // These exact Portal doc blocks retain strict compilation, after the normal
+    // optional React peers/types have been installed in this consumer.
+    reactSources.push(...portalsReactGuideSources);
     writeFileSync(
         join(temporaryDirectory, 'field-bindings-react.tsx'),
         `

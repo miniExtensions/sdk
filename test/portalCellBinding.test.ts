@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { createPortalCellBinding } from '../src/portals/cell.js';
+import {
+    createPortalCellBinding,
+    type PortalCellBindingOptions,
+} from '../src/portals/index.js';
 import { RecoveryJournal } from '../src/forms/recovery.js';
-import { createMiniExtensionsClient } from '../src/runtime/client.js';
+import { createMiniExtensionsClient } from '../src/runtime/index.js';
 import type {
     UpdateGridCellInput,
     UpdateGridCellResult,
@@ -208,4 +211,457 @@ describe('Portal cell shared binding and journal', () => {
             createPortalCellBinding({ ...f.options, schema: invalid })
         );
     });
+});
+
+const cellResult = (
+    fields: UpdateGridCellResult['record']['fields'] = {},
+    recordId = 'rec_one'
+): UpdateGridCellResult => ({
+    record: { id: recordId, fields },
+    auditTrail: null,
+    auditTrails: [],
+});
+
+const deferred = <Value>() => {
+    let resolve!: (value: Value) => void;
+    const promise = new Promise<Value>((done) => {
+        resolve = done;
+    });
+    return { promise, resolve };
+};
+
+/** Real public client and tRPC adapter; only the synthetic HTTP boundary is injected. */
+const wireFixture = (
+    respond: (input: UpdateGridCellInput) => unknown | Promise<unknown>
+) => {
+    const calls: UpdateGridCellInput[] = [];
+    const attempts: Array<ReturnType<RecoveryJournal['begin']>> = [];
+    const started = deferred<void>();
+    const journal = new RecoveryJournal();
+    const recoveryScope = {
+        owner: 'A',
+        parentFieldId: 'fld_children',
+        tableId: 'tbl_children',
+        childExtensionId: '',
+        context: 'modal' as const,
+    };
+    let owner = { ownerId: 'A', revision: 0 };
+    let lease = true;
+    const client = createMiniExtensionsClient({
+        apiOrigin: 'https://sdk.example.test',
+        session: { visitor: 'A' },
+        fetch: async (url, init) => {
+            assert.equal(
+                new URL(String(url)).pathname,
+                '/api/trpc/airtable.updatePortalRecord'
+            );
+            assert.equal(init?.method, 'POST');
+            assert.deepEqual(
+                JSON.parse(new Headers(init?.headers).get('miniext-context')!),
+                { miniExtStorageV4: { visitor: 'A' } }
+            );
+            const input = JSON.parse(String(init?.body)) as UpdateGridCellInput;
+            calls.push(structuredClone(input));
+            const attempt = journal.blocking(recoveryScope, 'rec_one');
+            assert.ok(attempt);
+            assert.equal(attempt.outcome, 'unknown');
+            assert.equal(attempt.flight, true);
+            attempts.push(attempt);
+            started.resolve(undefined);
+            const output = await respond(input);
+            return new Response(JSON.stringify({ result: { data: output } }), {
+                headers: { 'Content-Type': 'application/json' },
+            });
+        },
+    });
+    const options: PortalCellBindingOptions = {
+        client,
+        input: {
+            portalExtensionAccessToken: 'token',
+            portalFieldId: 'fld_children',
+            recordFieldId: 'fld_title',
+            recordId: 'rec_one',
+            selectedCustomViewId: 'view_one',
+        },
+        schema: loadedForm().payload.fieldIdsToSchemas.fld_title,
+        value: 'Initial',
+        getScope: () => owner,
+        isCurrent: () => lease,
+        recovery: { journal, scope: recoveryScope, loadVersion: 1 },
+    };
+    return {
+        client,
+        options,
+        calls,
+        attempts,
+        journal,
+        started: started.promise,
+        replace: () => {
+            owner = { ownerId: 'B', revision: 1 };
+        },
+        revise: () => {
+            owner = { ...owner, revision: owner.revision + 1 };
+        },
+        retire: () => {
+            lease = false;
+        },
+    };
+};
+
+describe('Portal cell response identity through the public client', () => {
+    const invalid: Array<{ name: string; result: unknown }> = [
+        {
+            name: 'foreign record ID',
+            result: cellResult({ fld_title: 'Foreign' }, 'rec_other'),
+        },
+        {
+            name: 'missing record',
+            result: { auditTrail: null, auditTrails: [] },
+        },
+        { name: 'null record', result: { ...cellResult(), record: null } },
+        { name: 'array record', result: { ...cellResult(), record: [] } },
+        {
+            name: 'missing record ID',
+            result: { ...cellResult(), record: { fields: {} } },
+        },
+        { name: 'blank record ID', result: cellResult({}, ' \t ') },
+        {
+            name: 'nonstring record ID',
+            result: { ...cellResult(), record: { id: 1, fields: {} } },
+        },
+        {
+            name: 'missing fields',
+            result: { ...cellResult(), record: { id: 'rec_one' } },
+        },
+        {
+            name: 'null fields',
+            result: {
+                ...cellResult(),
+                record: { id: 'rec_one', fields: null },
+            },
+        },
+        {
+            name: 'array fields',
+            result: { ...cellResult(), record: { id: 'rec_one', fields: [] } },
+        },
+        {
+            name: 'primitive fields',
+            result: {
+                ...cellResult(),
+                record: { id: 'rec_one', fields: 'Foreign' },
+            },
+        },
+        { name: 'null result', result: null },
+        { name: 'array result', result: [] },
+        { name: 'primitive result', result: 'not a cell receipt' },
+    ];
+    for (const example of invalid) {
+        it(`refuses ${example.name} without acknowledging, pruning or replaying the native draft`, async () => {
+            const f = wireFixture(() => example.result);
+            const cell = createPortalCellBinding(f.options);
+            let replacement:
+                | ReturnType<typeof createPortalCellBinding>
+                | undefined;
+            try {
+                assert.equal(cell.binding.setValue('Edited').accepted, true);
+                const before = cell.binding.getSnapshot();
+                await assert.rejects(cell.save());
+                assert.deepEqual(f.calls, [
+                    { ...f.options.input, value: 'Edited' },
+                ]);
+                const after = cell.binding.getSnapshot();
+                assert.equal(after.value, before.value);
+                assert.equal(after.revision, before.revision);
+                assert.equal(after.dirty, true);
+                assert.equal(after.pending, false);
+                assert.equal(after.canEdit, false);
+                assert.match(after.error ?? '', /unknown/i);
+                assert.equal(f.attempts.length, 1);
+                const attempt = f.attempts[0]!;
+                assert.equal(attempt.recordId, 'rec_one');
+                assert.equal(attempt.fieldId, 'fld_title');
+                assert.equal(attempt.outcome, 'unknown');
+                assert.equal(attempt.flight, false);
+                assert.equal(attempt.acknowledgment, 'none');
+                assert.equal(attempt.associatedRecordId, null);
+                assert.deepEqual(f.journal.unknown('A'), [attempt]);
+                await assert.rejects(cell.save());
+                replacement = createPortalCellBinding(f.options);
+                assert.equal(replacement.binding.getSnapshot().canEdit, false);
+                assert.equal(
+                    replacement.binding.setValue('Replay').accepted,
+                    false
+                );
+                await assert.rejects(replacement.save());
+                assert.equal(f.calls.length, 1);
+                assert.equal(f.attempts.length, 1);
+                assert.equal(cell.binding.getSnapshot().value, 'Edited');
+                assert.equal(cell.binding.getSnapshot().dirty, true);
+            } finally {
+                replacement?.destroy();
+                cell.destroy();
+            }
+        });
+    }
+
+    const valid: Array<{
+        name: string;
+        value: string | null;
+        fields: UpdateGridCellResult['record']['fields'];
+    }> = [
+        {
+            name: 'matching ordinary record',
+            value: 'Edited',
+            fields: { fld_title: 'Edited' },
+        },
+        { name: 'sparse cleared cell', value: null, fields: {} },
+        {
+            name: 'server-normalized cell and additional computed fields',
+            value: 'Edited',
+            fields: { fld_title: 'Server normalized', fld_total: 42 },
+        },
+    ];
+    for (const example of valid) {
+        it(`accepts a ${example.name} without requiring a submitted-value echo`, async () => {
+            const f = wireFixture(() => cellResult(example.fields));
+            const cell = createPortalCellBinding(f.options);
+            try {
+                assert.equal(
+                    cell.binding.setValue(example.value).accepted,
+                    true
+                );
+                const result = await cell.save();
+                assert.deepEqual(result, cellResult(example.fields));
+                assert.deepEqual(f.calls, [
+                    { ...f.options.input, value: example.value },
+                ]);
+                assert.equal(cell.binding.getSnapshot().value, example.value);
+                assert.equal(cell.binding.getSnapshot().dirty, false);
+                assert.equal(f.attempts.length, 1);
+                assert.equal(f.attempts[0]!.outcome, 'saved');
+                assert.equal(f.attempts[0]!.flight, false);
+                assert.equal(f.attempts[0]!.acknowledgment, 'none');
+                assert.equal(f.journal.unknown('A').length, 0);
+                await assert.rejects(cell.save());
+                assert.equal(f.calls.length, 1);
+            } finally {
+                cell.destroy();
+            }
+        });
+    }
+
+    it('keeps real-client late owner, revision, session and lifecycle responses unknown', async () => {
+        for (const kind of [
+            'owner',
+            'revision',
+            'session',
+            'lease',
+            'cancel',
+            'external-abort',
+            'destroy',
+        ] as const) {
+            const reply = deferred<unknown>();
+            const f = wireFixture(() => reply.promise);
+            const cell = createPortalCellBinding(f.options);
+            const abort = new AbortController();
+            try {
+                assert.equal(cell.binding.setValue('Edited').accepted, true);
+                const revision = cell.binding.getSnapshot().revision;
+                const saving = cell.save({ signal: abort.signal });
+                const rejection = assert.rejects(saving);
+                await f.started;
+                assert.equal(cell.binding.setValue('Overtake').accepted, false);
+                assert.equal(cell.binding.getSnapshot().revision, revision);
+                if (kind === 'owner') f.replace();
+                else if (kind === 'revision') f.revise();
+                else if (kind === 'session')
+                    f.client.setSession({ visitor: 'B' });
+                else if (kind === 'lease') f.retire();
+                else if (kind === 'cancel') cell.cancel();
+                else if (kind === 'external-abort') abort.abort(null);
+                else cell.destroy();
+                reply.resolve(cellResult({ fld_title: 'Late' }));
+                await rejection;
+                assert.equal(f.calls.length, 1, kind);
+                assert.equal(f.attempts.length, 1, kind);
+                assert.equal(f.attempts[0]!.outcome, 'unknown', kind);
+                assert.equal(f.attempts[0]!.flight, false, kind);
+                assert.equal(f.attempts[0]!.acknowledgment, 'none', kind);
+                assert.equal(f.journal.unknown('A').length, 1, kind);
+                await assert.rejects(cell.save());
+                assert.equal(f.calls.length, 1, kind);
+                if (kind === 'cancel' || kind === 'external-abort') {
+                    assert.equal(cell.binding.getSnapshot().value, 'Edited');
+                    assert.equal(cell.binding.getSnapshot().dirty, true);
+                } else assert.equal(cell.binding.getSnapshot().retired, true);
+            } finally {
+                reply.resolve(cellResult());
+                cell.destroy();
+            }
+        }
+    });
+
+    it('a pre-aborted Save preserves the draft without a transport or unknown attempt', async () => {
+        const f = wireFixture(() => cellResult());
+        const cell = createPortalCellBinding(f.options);
+        const abort = new AbortController();
+        abort.abort(null);
+        try {
+            assert.equal(cell.binding.setValue('Edited').accepted, true);
+            const before = cell.binding.getSnapshot();
+            await assert.rejects(cell.save({ signal: abort.signal }));
+            assert.equal(f.calls.length, 0);
+            assert.equal(f.attempts.length, 0);
+            assert.equal(f.journal.unknown('A').length, 0);
+            assert.equal(cell.binding.getSnapshot().value, before.value);
+            assert.equal(cell.binding.getSnapshot().revision, before.revision);
+            assert.equal(cell.binding.getSnapshot().dirty, true);
+            assert.equal(cell.binding.getSnapshot().canEdit, true);
+        } finally {
+            cell.destroy();
+        }
+    });
+
+    it('compares the response with the target copied at construction, not later caller mutations', async () => {
+        const f = wireFixture(() => cellResult({ fld_title: 'Edited' }));
+        const expected = structuredClone(f.options.input);
+        const cell = createPortalCellBinding(f.options);
+        try {
+            f.options.input.recordId = 'rec_other';
+            f.options.input.recordFieldId = 'fld_other';
+            f.options.schema.airtableField.id = 'fld_other';
+            assert.equal(cell.binding.setValue('Edited').accepted, true);
+            assert.equal((await cell.save()).record.id, 'rec_one');
+            assert.deepEqual(f.calls, [{ ...expected, value: 'Edited' }]);
+            assert.equal(cell.binding.getSnapshot().dirty, false);
+            assert.equal(f.attempts[0]!.outcome, 'saved');
+        } finally {
+            cell.destroy();
+        }
+    });
+});
+
+describe('Portal cell custom-response snapshot boundary', () => {
+    // JSON transport responses cannot retain accessors or aliases. These cases
+    // exercise only an application-supplied client adapter at that boundary.
+    it('returns the same detached result that was validated, without nested aliases to the adapter', async () => {
+        const raw = cellResult({ fld_title: 'Server', fld_total: 42 });
+        const f = fixture(async () => raw);
+        const cell = createPortalCellBinding(f.options);
+        try {
+            assert.equal(cell.binding.setValue('Edited').accepted, true);
+            const result = await cell.save();
+            assert.deepEqual(result, raw);
+            assert.notStrictEqual(result, raw);
+            assert.notStrictEqual(result.record, raw.record);
+            assert.notStrictEqual(result.record.fields, raw.record.fields);
+            assert.notStrictEqual(result.auditTrails, raw.auditTrails);
+            raw.record.id = 'rec_other';
+            raw.record.fields.fld_title = 'Changed after acceptance';
+            raw.auditTrails.push({
+                linkedRecordsFieldToAudit: 'fld_audit',
+                recordId: 'rec_audit',
+            });
+            assert.deepEqual(
+                result,
+                cellResult({ fld_title: 'Server', fld_total: 42 })
+            );
+            result.record.fields.fld_total = 99;
+            assert.equal(raw.record.fields.fld_total, 42);
+            assert.equal(cell.binding.getSnapshot().value, 'Edited');
+            assert.equal(cell.binding.getSnapshot().dirty, false);
+            assert.equal(f.calls.length, 1);
+        } finally {
+            cell.destroy();
+        }
+    });
+
+    for (const kind of [
+        'owner',
+        'revision',
+        'session',
+        'lease',
+        'cancel',
+    ] as const) {
+        it(`rechecks ${kind} after reading a response accessor and refuses the retired acknowledgment`, async () => {
+            const raw = cellResult({ fld_title: 'Backend' });
+            const record = raw.record;
+            const f = fixture(async () => raw);
+            const cell = createPortalCellBinding(f.options);
+            let reads = 0;
+            Object.defineProperty(raw, 'record', {
+                enumerable: true,
+                get() {
+                    reads++;
+                    if (kind === 'owner') f.replace();
+                    else if (kind === 'revision') {
+                        const scope = f.options.getScope();
+                        scope.revision++;
+                    } else if (kind === 'session')
+                        f.client.setSession({ visitor: 'B' });
+                    else if (kind === 'lease') f.retire();
+                    else cell.cancel();
+                    return record;
+                },
+            });
+            try {
+                assert.equal(cell.binding.setValue('Edited').accepted, true);
+                await assert.rejects(cell.save());
+                assert.equal(reads, 1);
+                assert.equal(f.calls.length, 1);
+                const [attempt] = f.journal.unknown('A');
+                assert.ok(attempt);
+                assert.equal(attempt.outcome, 'unknown');
+                assert.equal(attempt.flight, false);
+                assert.equal(attempt.acknowledgment, 'none');
+                if (kind === 'cancel') {
+                    assert.equal(cell.binding.getSnapshot().value, 'Edited');
+                    assert.equal(cell.binding.getSnapshot().dirty, true);
+                } else assert.equal(cell.binding.getSnapshot().retired, true);
+                await assert.rejects(cell.save());
+                assert.equal(f.calls.length, 1);
+            } finally {
+                cell.destroy();
+            }
+        });
+    }
+
+    for (const kind of ['throwing-accessor', 'uncloneable-payload'] as const) {
+        it(`keeps a ${kind} unknown and preserves the native draft`, async () => {
+            const raw = cellResult({ fld_title: 'Backend' });
+            let reads = 0;
+            if (kind === 'throwing-accessor')
+                Object.defineProperty(raw.record, 'fields', {
+                    enumerable: true,
+                    get() {
+                        reads++;
+                        throw new Error('Synthetic response accessor failed');
+                    },
+                });
+            else Object.assign(raw, { extra: () => 'not cloneable' });
+            const f = fixture(async () => raw);
+            const cell = createPortalCellBinding(f.options);
+            try {
+                assert.equal(cell.binding.setValue('Edited').accepted, true);
+                const before = cell.binding.getSnapshot();
+                await assert.rejects(cell.save());
+                assert.equal(reads, kind === 'throwing-accessor' ? 1 : 0);
+                assert.equal(cell.binding.getSnapshot().value, 'Edited');
+                assert.equal(
+                    cell.binding.getSnapshot().revision,
+                    before.revision
+                );
+                assert.equal(cell.binding.getSnapshot().dirty, true);
+                assert.equal(cell.binding.getSnapshot().pending, false);
+                const [attempt] = f.journal.unknown('A');
+                assert.ok(attempt);
+                assert.equal(attempt.flight, false);
+                assert.equal(attempt.acknowledgment, 'none');
+                await assert.rejects(cell.save());
+                assert.equal(f.calls.length, 1);
+            } finally {
+                cell.destroy();
+            }
+        });
+    }
 });

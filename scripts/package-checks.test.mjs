@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     mkdtemp,
@@ -20,6 +20,7 @@ import {
 } from './package-checks.mjs';
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
+import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import {
     assertPrivacyProofInventory,
     privacyScenarioInventory,
@@ -818,4 +819,444 @@ test('browser input containment checks real paths rather than symlink names', as
         ),
         /escapes the clean consumer/
     );
+});
+
+const packedTailResults = {
+    attachment: { checks: 104, browserChecks: 90 },
+    review: { checks: 51 },
+};
+
+async function waitForTailFile(root, name) {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+        try {
+            return await readFile(join(root, name), 'utf8');
+        } catch (error) {
+            if (error.code !== 'ENOENT') throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.fail(`Packed tail fixture did not create ${name}`);
+}
+
+function assertTailGroupGone(pid) {
+    assert.throws(() => process.kill(-Number(pid), 0), { code: 'ESRCH' });
+}
+
+async function packedTailFixture(t, plan = {}) {
+    const root = await mkdtemp(join(tmpdir(), 'sdk-package-tail-guard-'));
+    // One owner handles termination, confirmed drain and eventual removal.
+    // Preserve the PID evidence and root if any cleanup cannot be confirmed.
+    t.after(async () => {
+        const groups = [];
+        const pids = [];
+        for (const name of await readdir(root)) {
+            if (
+                !/^(?:(attachment|review)(\.grandchild)?|supervisor)\.pid$/.test(
+                    name
+                )
+            )
+                continue;
+            const pid = Number(await readFile(join(root, name), 'utf8'));
+            assert.ok(
+                Number.isSafeInteger(pid) && pid > 1,
+                `Invalid owned PID; retained fixture ${root}`
+            );
+            pids.push(pid);
+            if (!name.includes('.grandchild.')) groups.push(pid);
+        }
+        for (const pid of groups) {
+            try {
+                process.kill(-pid, 'SIGKILL');
+            } catch (error) {
+                if (error.code !== 'ESRCH') throw error;
+            }
+        }
+        const targets = [...groups.map((pid) => -pid), ...pids];
+        const deadline = performance.now() + 3000;
+        while (true) {
+            const remaining = [];
+            for (const target of targets) {
+                try {
+                    process.kill(target, 0);
+                    remaining.push(target);
+                } catch (error) {
+                    if (error.code !== 'ESRCH') throw error;
+                }
+            }
+            if (remaining.length === 0) {
+                await rm(root, { recursive: true, force: true });
+                return;
+            }
+            assert.ok(
+                performance.now() < deadline,
+                `Cleanup unconfirmed for ${remaining.join(', ')}; retained fixture ${root}`
+            );
+            await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+    });
+    await write(root, 'plan.json', JSON.stringify(plan));
+    await write(root, 'happy-dom-fixture.mjs', 'export {};\n');
+    await write(
+        root,
+        'worker.mjs',
+        `import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+const [suite, directory, happyDomModulePath, ...extra] = process.argv.slice(2);
+assert.deepEqual(extra, []);
+assert.ok(suite === 'attachment' || suite === 'review');
+assert.equal(happyDomModulePath, join(directory, 'happy-dom-fixture.mjs'));
+const plan = JSON.parse(readFileSync(join(directory, 'plan.json'), 'utf8'));
+const config = plan[suite] ?? {};
+const file = (name) => join(directory, suite + '.' + name);
+const wait = async (name) => {
+    while (!existsSync(join(directory, name))) await delay(10);
+};
+const result = suite === 'attachment'
+    ? { checks: 104, browserChecks: 90 } : { checks: 51 };
+const report = { schemaVersion: 1, suite, result };
+const send = (message) => new Promise((resolve, reject) => {
+    process.send(message, (error) => error ? reject(error) : resolve());
+});
+if (config.mode === 'hang') {
+    process.on('SIGTERM', async () => {
+        writeFileSync(file('term'), 'SIGTERM');
+        if (config.ignoreTerm) return;
+        if (config.holdTerm) await wait(suite + '.release-term');
+        writeFileSync(file('exited'), 'cooperative SIGTERM');
+        process.exit(0);
+    });
+}
+writeFileSync(file('pid'), String(process.pid));
+writeFileSync(file('ready'), 'ready');
+await wait((suite === 'attachment' ? 'review' : 'attachment') + '.ready');
+if (config.mode === 'hang') await new Promise(() => setInterval(() => {}, 1000));
+if (config.mode === 'survivor') {
+    const code = [
+        "const fs = require('node:fs');",
+        "fs.writeFileSync(process.argv[1] + '.pid', String(process.pid));",
+        "process.on('SIGTERM', () => {",
+        "fs.writeFileSync(process.argv[1] + '.term', 'SIGTERM');",
+        "process.exit(0); });",
+        "fs.writeFileSync(process.argv[1] + '.ready', 'ready');",
+        "setInterval(() => {}, 1000);",
+    ].join('');
+    const child = spawn(process.execPath, ['-e', code, file('grandchild')], {
+        stdio: 'ignore',
+    });
+    child.unref();
+    await wait(suite + '.grandchild.ready');
+}
+for (const message of config.reports ?? [report]) await send(message);
+writeFileSync(file('reported'), 'reported');
+if (config.hold) await wait(suite + '.release');
+if (config.mode === 'throw') assert.fail('real packed tail fixture assertion');
+if (config.mode === 'exit') process.exit(17);
+process.disconnect();
+`
+    );
+    const options = {
+        consumerDirectory: root,
+        happyDomModulePath: join(root, 'happy-dom-fixture.mjs'),
+        workerFile: join(root, 'worker.mjs'),
+        timeoutMs: 10000,
+        terminationGraceMs: 100,
+        drainTimeoutMs: 2000,
+    };
+    return {
+        root,
+        options,
+        async assertGroupsGone() {
+            for (const suite of ['attachment', 'review']) {
+                assertTailGroupGone(
+                    await waitForTailFile(root, `${suite}.pid`)
+                );
+            }
+        },
+    };
+}
+
+function assertTailFailure(error, suite, cleanupSafe = true) {
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.cleanupSafe, cleanupSafe);
+    assert.match(
+        error.errors.map((failure) => failure.message).join('\n'),
+        new RegExp(suite)
+    );
+    return true;
+}
+
+test('packed tail maps both real workers and waits for close after valid IPC', async (t) => {
+    const fixture = await packedTailFixture(t, {
+        attachment: { hold: true },
+        review: { hold: true },
+    });
+    let settled = false;
+    const running = runPackedTailChecks(fixture.options).then(
+        (result) => ({ result }),
+        (error) => ({ error })
+    );
+    void running.then(() => {
+        settled = true;
+    });
+    await Promise.all(
+        ['attachment', 'review'].map((suite) =>
+            waitForTailFile(fixture.root, `${suite}.reported`)
+        )
+    );
+    assert.equal(settled, false, 'valid IPC cannot stand in for child close');
+    await write(fixture.root, 'attachment.release', 'release');
+    assert.equal(settled, false, 'both owned children must close');
+    await write(fixture.root, 'review.release', 'release');
+    const outcome = await running;
+    assert.equal(outcome.error, undefined);
+    assert.deepEqual(outcome.result, packedTailResults);
+    await fixture.assertGroupsGone();
+});
+
+test('packed tail rejects missing, malformed, mismatched and duplicate IPC', async (t) => {
+    const report = {
+        schemaVersion: 1,
+        suite: 'attachment',
+        result: packedTailResults.attachment,
+    };
+    const cases = [
+        ['missing', []],
+        ['malformed', ['not a report']],
+        ['schema', [{ ...report, schemaVersion: 2 }]],
+        ['suite', [{ ...report, suite: 'review' }]],
+        ['result', [{ ...report, result: { checks: 104, browserChecks: 89 } }]],
+        ['extra report field', [{ ...report, extra: true }]],
+        [
+            'extra result field',
+            [{ ...report, result: { ...report.result, extra: true } }],
+        ],
+        ['duplicate', [report, report]],
+    ];
+    for (const [name, reports] of cases) {
+        await t.test(name, async (t) => {
+            const fixture = await packedTailFixture(t, {
+                attachment: { reports },
+            });
+            await assert.rejects(
+                runPackedTailChecks(fixture.options),
+                (error) => assertTailFailure(error, 'attachment')
+            );
+            await fixture.assertGroupsGone();
+        });
+    }
+});
+
+test('packed tail rejects real assertion and nonzero exits after valid IPC and drains its peer', async (t) => {
+    for (const mode of ['throw', 'exit']) {
+        await t.test(mode, async (t) => {
+            const fixture = await packedTailFixture(t, {
+                attachment: { mode },
+                review: { mode: 'hang', holdTerm: true },
+            });
+            let settled = false;
+            const running = runPackedTailChecks({
+                ...fixture.options,
+                terminationGraceMs: 2000,
+            }).then(
+                () => ({ succeeded: true }),
+                (error) => ({ error })
+            );
+            void running.then(() => {
+                settled = true;
+            });
+            await waitForTailFile(fixture.root, 'review.term');
+            assert.equal(settled, false, 'failure must drain the active peer');
+            await write(fixture.root, 'review.release-term', 'release');
+            const outcome = await running;
+            assertTailFailure(outcome.error, 'attachment');
+            assert.equal(
+                await readFile(join(fixture.root, 'review.exited'), 'utf8'),
+                'cooperative SIGTERM'
+            );
+            await fixture.assertGroupsGone();
+        });
+    }
+});
+
+test('packed tail times out and reaps children after SIGTERM or forced SIGKILL', async (t) => {
+    for (const ignoreTerm of [false, true]) {
+        await t.test(
+            ignoreTerm ? 'SIGKILL escalation' : 'SIGTERM',
+            async (t) => {
+                const fixture = await packedTailFixture(t, {
+                    attachment: { mode: 'hang', ignoreTerm },
+                    review: { mode: 'hang', ignoreTerm },
+                });
+                await assert.rejects(
+                    runPackedTailChecks({
+                        ...fixture.options,
+                        timeoutMs: 1000,
+                    }),
+                    (error) => {
+                        assertTailFailure(error, 'attachment|review');
+                        assert.match(
+                            error.errors
+                                .map((failure) => failure.message)
+                                .join('\n'),
+                            /timed out|timeout/i
+                        );
+                        return true;
+                    }
+                );
+                for (const suite of ['attachment', 'review']) {
+                    assert.equal(
+                        await readFile(
+                            join(fixture.root, `${suite}.term`),
+                            'utf8'
+                        ),
+                        'SIGTERM'
+                    );
+                    if (ignoreTerm) {
+                        await assert.rejects(
+                            readFile(join(fixture.root, `${suite}.exited`)),
+                            { code: 'ENOENT' }
+                        );
+                    } else {
+                        assert.equal(
+                            await readFile(
+                                join(fixture.root, `${suite}.exited`),
+                                'utf8'
+                            ),
+                            'cooperative SIGTERM'
+                        );
+                    }
+                }
+                await fixture.assertGroupsGone();
+            }
+        );
+    }
+});
+
+test('packed tail rejects a zero-exit worker with an owned surviving grandchild and reaps the group', async (t) => {
+    const fixture = await packedTailFixture(t, {
+        attachment: { mode: 'survivor' },
+    });
+    await assert.rejects(runPackedTailChecks(fixture.options), (error) =>
+        assertTailFailure(error, 'attachment')
+    );
+    assert.equal(
+        await readFile(
+            join(fixture.root, 'attachment.grandchild.term'),
+            'utf8'
+        ),
+        'SIGTERM'
+    );
+    const grandchildPid = Number(
+        await readFile(join(fixture.root, 'attachment.grandchild.pid'), 'utf8')
+    );
+    assert.throws(() => process.kill(grandchildPid, 0), { code: 'ESRCH' });
+    await fixture.assertGroupsGone();
+});
+
+test('packed tail reports spawn errors with suite identity and safely drains both attempts', async (t) => {
+    const fixture = await packedTailFixture(t);
+    await assert.rejects(
+        runPackedTailChecks({
+            ...fixture.options,
+            execPath: join(fixture.root, 'missing-node-executable'),
+        }),
+        (error) => {
+            assertTailFailure(error, 'attachment');
+            assert.match(
+                error.errors.map((failure) => failure.message).join('\n'),
+                /review/
+            );
+            return true;
+        }
+    );
+});
+
+test('packed tail drains real workers before a signalled child supervisor rejects', async (t) => {
+    for (const signal of ['SIGINT', 'SIGTERM']) {
+        await t.test(signal, { timeout: 15000 }, async (t) => {
+            const fixture = await packedTailFixture(t, {
+                attachment: { mode: 'hang' },
+                review: { mode: 'hang' },
+            });
+            const helperUrl = new URL(
+                './packed-tail-checks.mjs',
+                import.meta.url
+            );
+            await write(
+                fixture.root,
+                'supervisor.mjs',
+                `import { runPackedTailChecks } from ${JSON.stringify(helperUrl.href)};
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+const options = ${JSON.stringify(fixture.options)};
+const gone = (target) => {
+    try { process.kill(target, 0); return false; }
+    catch (error) { if (error.code === 'ESRCH') return true; throw error; }
+};
+let outcome;
+try {
+    await runPackedTailChecks(options);
+    outcome = { succeeded: true };
+} catch (error) {
+    outcome = {
+        name: error.name,
+        cleanupSafe: error.cleanupSafe,
+        messages: error.errors.map((failure) => failure.message),
+        workers: Object.fromEntries(['attachment', 'review'].map((suite) => {
+            const pid = Number(readFileSync(join(options.consumerDirectory, suite + '.pid'), 'utf8'));
+            return [suite, { pidGone: gone(pid), groupGone: gone(-pid) }];
+        })),
+    };
+    process.exitCode = 23;
+}
+writeFileSync(join(options.consumerDirectory, 'supervisor.outcome.json'), JSON.stringify(outcome));
+`
+            );
+            const supervisor = spawn(
+                process.execPath,
+                [join(fixture.root, 'supervisor.mjs')],
+                { detached: true, stdio: 'ignore' }
+            );
+            const completion = new Promise((resolve) => {
+                supervisor.once('error', (error) => resolve({ error }));
+                supervisor.once('close', (code, exitSignal) =>
+                    resolve({ code, exitSignal })
+                );
+            });
+            assert.ok(supervisor.pid);
+            await write(fixture.root, 'supervisor.pid', String(supervisor.pid));
+            await Promise.all(
+                ['attachment', 'review'].map((suite) =>
+                    waitForTailFile(fixture.root, `${suite}.ready`)
+                )
+            );
+            process.kill(supervisor.pid, signal);
+            const exit = await completion;
+            assert.equal(exit.error, undefined);
+            assert.equal(exit.code, 23);
+            assert.equal(exit.exitSignal, null);
+            const outcome = JSON.parse(
+                await readFile(
+                    join(fixture.root, 'supervisor.outcome.json'),
+                    'utf8'
+                )
+            );
+            assert.equal(outcome.name, 'AggregateError');
+            assert.equal(outcome.cleanupSafe, true);
+            assert.match(
+                outcome.messages.join('\n'),
+                new RegExp(`Parent received ${signal}`)
+            );
+            assert.deepEqual(outcome.workers, {
+                attachment: { pidGone: true, groupGone: true },
+                review: { pidGone: true, groupGone: true },
+            });
+            await fixture.assertGroupsGone();
+            assertTailGroupGone(supervisor.pid);
+        });
+    }
 });

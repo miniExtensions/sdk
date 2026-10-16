@@ -1,4 +1,8 @@
 import {
+    checkBarcodeConsumer,
+    barcodeReactTypedConsumer,
+} from './barcode-consumer-checks.mjs';
+import {
     checkLookupConsumer,
     lookupReactTypedConsumer,
 } from './lookup-consumer-checks.mjs';
@@ -1383,6 +1387,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('lookup-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'barcode-react-consumer.tsx'),
+        barcodeReactTypedConsumer
+    );
+    reactSources.push('barcode-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2248,6 +2257,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(lookupProof.checks, 44);
     console.log(
         `Installed Lookup presentation: ${lookupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const barcodeProof = await checkBarcodeConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(barcodeProof.checks, 60);
+    console.log(
+        `Installed Barcode presentation: ${barcodeProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,

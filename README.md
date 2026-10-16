@@ -264,6 +264,12 @@ linked records. No CSS import is required. Lookup keeps its separate contract.
 `renderMultipleLookupValuesField` slot. It formats supplied flat native arrays as
 inert text without flattening, hydration or editing. No CSS import is required.
 
+[Barcode presentation](docs/ui.md#react-barcode-presentation) exports `BarcodeField`,
+`BarcodeFieldProps`, `BarcodeFieldOptions` and `renderBarcodeField` for the existing
+physical slot. It displays supplied text while preserving the native object and
+type, with masking applied before reading the value. This is read-only display
+coverage; scanning, generated images, links and editing are not included.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,

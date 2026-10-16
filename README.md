@@ -160,18 +160,23 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
-| Import                         | Included behavior                                                                                                                                         | Guide                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                           | [Runtime](docs/runtime.md)                                                   |
-| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                            | [Form helpers](docs/forms.md)                                                |
-| `@miniextensions/sdk/portals`  | `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests      | [Portal helpers](docs/portals.md)                                            |
-| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                          | [Authentication](docs/auth.md)                                               |
-| `@miniextensions/sdk/ui`       | Typed field hosts/slots, `createFormRenderScope`, `createPortalRenderScope`, selection/scalar/date models, authorized linked loaders and address controls | [Renderer startup](docs/field-bindings.md#custom-form-grid-and-list-startup) |
-| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                 | [Formulas](docs/formulas.md)                                                 |
-| `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
+| Import                         | Included behavior                                                                                                                                                                      | Guide                                                                        |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                                        | [Runtime](docs/runtime.md)                                                   |
+| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                                                         | [Form helpers](docs/forms.md)                                                |
+| `@miniextensions/sdk/portals`  | `evaluatePortalViewAvailability`, `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests | [Portal helpers](docs/portals.md)                                            |
+| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                                                       | [Authentication](docs/auth.md)                                               |
+| `@miniextensions/sdk/ui`       | Typed field hosts/slots, `createFormRenderScope`, `createPortalRenderScope`, selection/scalar/date models, authorized linked loaders and address controls                              | [Renderer startup](docs/field-bindings.md#custom-form-grid-and-list-startup) |
+| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                                              | [Formulas](docs/formulas.md)                                                 |
+| `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering                              | [Field bindings](docs/field-bindings.md)                                     |
 
-Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CreatedByField`, `LastModifiedByField`, `CheckboxField`,
+Helpers are optional. Core, Form and Portal models are framework-neutral.
+Before creating a Portal collection, use
+[`evaluatePortalViewAvailability`](docs/portals.md) with the complete accepted
+Portal user/schema to choose an eligible view or explicitly supported legacy
+default. The result makes no request and grants no access or freshness.
+
+The `/ui` subpath also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CreatedByField`, `LastModifiedByField`, `CheckboxField`,
 `SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `CreatedTimeField`, `LastModifiedTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that

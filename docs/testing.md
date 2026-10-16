@@ -117,6 +117,25 @@ The Node 24 check name is unchanged. If repository protection still requires
 `check (22)`, a repository administrator must remove that retired requirement;
 the workflow does not change repository protection settings.
 
+## Portal view availability checks
+
+`evaluatePortalViewAvailability` is a headless snapshot decision. Pure tests
+cover owning-field and view conditions, native parent data/schema, true legacy
+versus all-hidden/refused lists, raw duplicate identities, valid direct links and
+computed lookup relationships, invalid metadata and detached eligible configs.
+Computed condition drivers remain unsupported; an outer computed lookup is a
+different contract. Eligible configs retain canonical properties and are not
+log-safe. The helper must perform no fetch, DOM or storage operation.
+
+Installed ESM/CommonJS and declaration checks verify the public `/portals`
+surface. Actual starter cases exercise the shared decision, exact selected IDs,
+eligible neighbors and accepted-parent replacement. Keep owner/revision and
+captured-action retirement assertions: pure helper results cannot prove those
+lifetimes. A missing-export baseline failure proves only surface absence; a
+behavioral regression must reach its choice/read oracle. These synthetic checks
+grant no access and do not establish live authorization, freshness or backend
+condition parity. Use the existing `pnpm check` gates; no live fixture is needed.
+
 ## Multiline Text presentation checks
 
 `pnpm check:package` runs 20 installed ESM/CommonJS groups with synthetic owners.

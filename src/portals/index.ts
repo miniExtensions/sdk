@@ -1,5 +1,10 @@
 export { createPortalCollection, PortalCollectionError } from './collection.js';
 export { getPortalLinkedRecordFieldConfig } from './helpers.js';
+export { evaluatePortalViewAvailability } from './viewAvailability.js';
+export type {
+    PortalAvailableCustomView,
+    PortalViewAvailability,
+} from './viewAvailability.js';
 export type {
     PortalOwnerScope,
     PortalCollectionCriteria,

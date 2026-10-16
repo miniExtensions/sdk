@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it, type TestContext } from 'node:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -15,6 +15,7 @@ import {
     type RuntimeLinkedRecordDetailField,
     type UpdateGridCellInput,
 } from '../src/runtime/index.js';
+import type { PortalCollectionSnapshot } from '../src/portals/index.js';
 import { portalListPage, portalPage } from './portalFixtures.js';
 
 const root = resolve(process.cwd());
@@ -27,16 +28,50 @@ const editedValue = 'Synthetic edited value';
 let directory: string;
 let revision = 0;
 
+type SnapshotObservationContext = {
+    scope: { ownerId: string; revision: number };
+    client: ReturnType<typeof createMiniExtensionsClient>;
+    view: { node: HTMLElement };
+    window: Window;
+};
+type SnapshotObserver = (
+    snapshot: PortalCollectionSnapshot,
+    context: SnapshotObservationContext
+) => void;
+
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-portal-detail-identity-'));
-    // Run the actual starter and SDK source, with only its HTTP boundary replaced.
+    const portalsEntry = join(root, 'src/portals/index.ts');
+    const observedPortals = join(directory, 'observed-portals.ts');
+    // Keep the actual SDK collection and its gates. Observe only its accepted
+    // read result, after snapshot cloning, so a getter measures presentation.
+    await writeFile(
+        observedPortals,
+        `import * as actual from ${JSON.stringify(portalsEntry)};
+export * from ${JSON.stringify(portalsEntry)};
+export function createPortalCollection(...args) {
+    const collection = actual.createPortalCollection(...args);
+    return Object.freeze({
+        ...collection,
+        async readFirst(...inputs) {
+            const outcome = await collection.readFirst(...inputs);
+            if (outcome.type === 'loaded')
+                globalThis.__portalSummarySnapshotObserver?.(outcome.snapshot);
+            return outcome;
+        },
+    });
+}
+`
+    );
+    // Run the actual starter/SDK with a synthetic HTTP boundary and this
+    // test-only observation seam; all other collection methods stay actual.
     await build({
         entryPoints: [join(root, 'examples/browser/src/portal.ts')],
         alias: {
             '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),
             '@miniextensions/sdk/ui': join(root, 'src/ui/index.ts'),
             '@miniextensions/sdk/forms': join(root, 'src/forms/index.ts'),
-            '@miniextensions/sdk/portals': join(root, 'src/portals/index.ts'),
+            '@miniextensions/sdk/portals': observedPortals,
             '@miniextensions/sdk/formulas': join(root, 'src/formulas/index.ts'),
             '@miniextensions/sdk': join(root, 'src/runtime/index.ts'),
         },
@@ -107,7 +142,9 @@ const suppliedChild = (): NonNullable<
 const mount = async (
     test: TestContext,
     returned: ListPortalLinkedRecordsResult,
-    page = portalPage({ disableInlineEdit: false })
+    page = portalPage({ disableInlineEdit: false }),
+    observeSnapshot?: SnapshotObserver,
+    expectedRows = 1
 ) => {
     const window = new Window({
         url: 'https://app.example.test',
@@ -122,6 +159,7 @@ const mount = async (
         option.value = value;
         return option;
     }
+    let observationContext: SnapshotObservationContext | undefined;
     const globals = {
         document: window.document,
         location: window.location,
@@ -130,6 +168,12 @@ const mount = async (
         HTMLSelectElement: window.HTMLSelectElement,
         HTMLButtonElement: window.HTMLButtonElement,
         Option,
+        __portalSummarySnapshotObserver: (
+            snapshot: PortalCollectionSnapshot
+        ) => {
+            if (observationContext !== undefined)
+                observeSnapshot?.(snapshot, observationContext);
+        },
     };
     const previous = Object.keys(globals).map(
         (key) =>
@@ -240,6 +284,7 @@ const mount = async (
             throw new Error('Unexpected synthetic child open.');
         },
     });
+    observationContext = { scope, client, view, window };
     window.document.body.append(view.node);
     destroyView = () => view.destroy();
     // The example is dynamically bundled; recover its public DOM node type so
@@ -257,7 +302,7 @@ const mount = async (
     };
     await click('Load records');
     assert.deepEqual(failures, []);
-    assert.equal(view.node.querySelectorAll('tbody tr').length, 1);
+    assert.equal(view.node.querySelectorAll('tbody tr').length, expectedRows);
     return {
         window,
         view,
@@ -619,6 +664,237 @@ describe('Portal row summaries use returned display policy', () => {
             'fetchRecordsForLinkedTableOnPortal',
         ]);
         assert.deepEqual(returned, untouched);
+    });
+});
+
+describe('Portal row summaries guard native reads and formatting lifetime', () => {
+    const neighborId = 'fld_summary_neighbor';
+    const neighborName = 'Visible summary neighbor';
+    const neighborValue = 'Ordinary neighboring value';
+    const changedSearch = 'synthetic replacement criteria';
+    const exerciseGetter = async (
+        test: TestContext,
+        config: unknown,
+        expected: string,
+        expectedReads: number,
+        options: {
+            onRead?: SnapshotObserver;
+            retired?: boolean;
+            criteriaRetired?: boolean;
+        } = {}
+    ) => {
+        const returned = listPage();
+        details(returned)[0]!.miniExtConfig =
+            config as RuntimeLinkedRecordDetailField['miniExtConfig'];
+        details(returned).push({
+            ...detailField(),
+            fieldId: neighborId,
+            fieldName: neighborName,
+            miniExtConfig: {},
+            childFormField: {
+                idOrName: { type: 'id', id: neighborId },
+                config: {
+                    type: AirtableFieldType.SINGLE_LINE_TEXT,
+                    config: { readOnly: false },
+                },
+            },
+        });
+        const state = returned.tableIdsToLinkedTableStates[tableId]!;
+        state.airtableFields.push({
+            ...physicalField(),
+            id: neighborId,
+            name: neighborName,
+        });
+        state.recordIdsToAirtableRecords[recordId]!.fields[neighborId] =
+            neighborValue;
+        const untouched = structuredClone(returned);
+        let observations = 0;
+        let reads = 0;
+        const fixture = await mount(
+            test,
+            returned,
+            portalPage({ disableInlineEdit: false }),
+            (snapshot, context) => {
+                observations++;
+                const acceptedRecord =
+                    snapshot.tableIdsToLinkedTableStates[tableId]!
+                        .recordIdsToAirtableRecords[recordId]!;
+                // Initial summary rows are detached. Later sort/filter editor
+                // snapshots may clone these fields after the table is attached;
+                // count and retire only during the actual summary construction.
+                Object.defineProperty(acceptedRecord.fields, fieldId, {
+                    configurable: true,
+                    enumerable: true,
+                    get: () => {
+                        if (context.view.node.querySelector('tbody') === null) {
+                            reads++;
+                            options.onRead?.(snapshot, context);
+                        }
+                        return permittedValue;
+                    },
+                });
+            },
+            options.criteriaRetired ? 0 : 1
+        );
+        assert.equal(
+            observations,
+            1,
+            'Observe exactly one actual accepted read.'
+        );
+        assert.equal(
+            reads,
+            expectedReads,
+            'Count only row-summary native reads.'
+        );
+        if (options.criteriaRetired) {
+            const search = fixture.window.document.querySelector(
+                'input[placeholder="Search this table"]'
+            );
+            assert.ok(search instanceof fixture.window.HTMLInputElement);
+            assert.equal(search.value, changedSearch);
+            assert.ok(
+                fixture.view.node.textContent.includes(
+                    'Choose Load records to fetch this view.'
+                ),
+                'The actual search reset must leave its positive reload hint.'
+            );
+            assert.equal(fixture.view.node.querySelectorAll('table').length, 0);
+        } else {
+            assert.deepEqual(
+                Array.from(
+                    (fixture.view.node as HTMLElement).querySelectorAll(
+                        'thead th'
+                    ),
+                    (header) => header.textContent
+                ),
+                ['Synthetic title', neighborName, 'Actions'],
+                'Require the real rendered table, not an empty-screen pass.'
+            );
+            const cells = fixture.view.node.querySelectorAll('tbody td');
+            assert.equal(cells.length, 3);
+            assert.equal(cells[0]?.textContent, `${expected}Edit cell`);
+            assert.equal(cells[0]?.title, '');
+            if (!options.retired)
+                assert.equal(
+                    cells[1]?.textContent,
+                    `${neighborValue}Edit cell`
+                );
+        }
+        if (expected !== permittedValue) {
+            assert.equal(
+                fixture.view.node.textContent.includes(permittedValue),
+                false
+            );
+            assert.equal(
+                fixture.view.node.outerHTML.includes(permittedValue),
+                false
+            );
+        }
+        assert.deepEqual(fixture.saves, []);
+        assert.deepEqual(fixture.routes, [
+            'fetchRecordsForLinkedTableOnPortal',
+        ]);
+        assert.deepEqual(fixture.failures, []);
+        assert.deepEqual(returned, untouched);
+    };
+
+    for (const example of [
+        {
+            name: 'obscurePassword true',
+            config: { obscurePassword: true },
+            expected: '••••••••',
+        },
+        {
+            name: 'maskPasswordOnLoginScreen true',
+            config: { maskPasswordOnLoginScreen: true },
+            expected: '••••••••',
+        },
+        {
+            name: 'malformed obscurePassword',
+            config: { obscurePassword: 'false' },
+            expected: 'Value unavailable',
+        },
+        {
+            name: 'malformed maskPasswordOnLoginScreen',
+            config: { maskPasswordOnLoginScreen: null },
+            expected: 'Value unavailable',
+        },
+        {
+            name: 'true mask with a malformed other flag',
+            config: { obscurePassword: true, maskPasswordOnLoginScreen: [] },
+            expected: 'Value unavailable',
+        },
+    ]) {
+        it(`never reads the native value during summary construction under ${example.name}`, async (test) => {
+            await exerciseGetter(test, example.config, example.expected, 0);
+        });
+    }
+
+    it('reads an ordinary native getter once during summary construction as an armed control', async (test) => {
+        await exerciseGetter(test, {}, permittedValue, 1);
+    });
+
+    it('rejects the formatted value when its returned display policy is replaced', async (test) => {
+        let capturedPolicy: unknown;
+        let replacementPolicy: unknown;
+        await exerciseGetter(test, {}, 'Value unavailable', 1, {
+            onRead: (snapshot) => {
+                const detail = snapshot.detailFields[0]!;
+                capturedPolicy = detail.miniExtConfig;
+                detail.miniExtConfig = {};
+                replacementPolicy = detail.miniExtConfig;
+            },
+        });
+        assert.deepEqual(capturedPolicy, {});
+        assert.deepEqual(replacementPolicy, capturedPolicy);
+        assert.notEqual(replacementPolicy, capturedPolicy);
+    });
+
+    it('rejects the formatted value after the actual owner scope retires', async (test) => {
+        const retiredScopes: SnapshotObservationContext['scope'][] = [];
+        await exerciseGetter(test, {}, 'Value unavailable', 1, {
+            retired: true,
+            onRead: (_snapshot, { scope }) => {
+                scope.revision++;
+                retiredScopes.push(scope);
+            },
+        });
+        assert.equal(retiredScopes.length, 1);
+        assert.equal(retiredScopes[0]?.revision, 1);
+    });
+
+    it('rejects the formatted value after the actual client session changes', async (test) => {
+        const changedClients: SnapshotObservationContext['client'][] = [];
+        await exerciseGetter(test, {}, 'Value unavailable', 1, {
+            retired: true,
+            onRead: (_snapshot, { client }) => {
+                client.setSession({
+                    visitor: 'synthetic-replacement-detail-owner',
+                });
+                changedClients.push(client);
+            },
+        });
+        assert.equal(changedClients.length, 1);
+        assert.equal(
+            changedClients[0]?.getSession().visitor,
+            'synthetic-replacement-detail-owner'
+        );
+    });
+
+    it('keeps the actual criteria reset visible when search changes during formatting', async (test) => {
+        await exerciseGetter(test, {}, 'Value unavailable', 1, {
+            criteriaRetired: true,
+            onRead: (_snapshot, { window }) => {
+                const search = window.document.querySelector(
+                    'input[placeholder="Search this table"]'
+                );
+                assert.ok(search instanceof window.HTMLInputElement);
+                search.value = changedSearch;
+                search.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+            },
+        });
     });
 });
 

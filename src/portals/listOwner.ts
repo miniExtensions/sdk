@@ -6,6 +6,7 @@ import type {
     RuntimeAirtableField,
     RuntimeLinkedRecordDetailField,
 } from '../runtime/types.js';
+import { SDKError } from '../runtime/client.js';
 import { createPortalCollection, PortalCollectionError } from './collection.js';
 import { AirtableFieldType } from '../formulas/types.js';
 import {
@@ -31,6 +32,11 @@ export type PortalListPhase =
     | 'cleanup'
     | 'error'
     | 'retired';
+/** Bounded read facts only; never an authorization or retry instruction. */
+export type PortalListReadFailure = Readonly<{
+    kind: 'network' | 'http' | 'api' | 'protocol' | 'cancelled' | 'unknown';
+    status: number | null;
+}>;
 export type PortalListSnapshot = {
     /** Bind retained controls, cleanup confirmations and cell guards to this revision. */
     revision: number;
@@ -41,6 +47,8 @@ export type PortalListSnapshot = {
     cleanup: ListPortalLinkedRecordsResult | null;
     pending: boolean;
     error: string | null;
+    /** SDK owners always supply this; optional for existing host adapters. */
+    failure?: PortalListReadFailure | null;
     hasNext: boolean;
     readRequired: boolean;
 };
@@ -85,6 +93,39 @@ export type PortalListOwner = {
     destroy(): void;
 };
 
+const summarizeReadFailure = (cause: unknown): PortalListReadFailure => {
+    try {
+        if (cause instanceof SDKError) {
+            // SDKError owns data properties. Do not invoke error accessors or
+            // inspect messages, server codes, causes or response bodies.
+            const kind: unknown = Object.getOwnPropertyDescriptor(
+                cause,
+                'kind'
+            )?.value;
+            if (kind === 'network') return { kind, status: null };
+            if (kind === 'http' || kind === 'api' || kind === 'protocol') {
+                const status: unknown = Object.getOwnPropertyDescriptor(
+                    cause,
+                    'status'
+                )?.value;
+                return {
+                    kind,
+                    status:
+                        typeof status === 'number' &&
+                        Number.isInteger(status) &&
+                        status >= 100 &&
+                        status <= 599
+                            ? status
+                            : null,
+                };
+            }
+        }
+    } catch {
+        // Unreadable or malformed errors provide no additional public facts.
+    }
+    return { kind: 'unknown', status: null };
+};
+
 // Internal host-adapter provenance. Credentials stay out of renderer snapshots
 // and this reader is deliberately not exported by the public /portals entry.
 const ownerContexts = new WeakMap<
@@ -125,6 +166,7 @@ export function createPortalListOwner(
     let retired = false;
     let phase: PortalListPhase = 'idle';
     let error: string | null = null;
+    let failure: PortalListReadFailure | null = null;
     let page: PortalCollectionSnapshot | null = null;
     let cleanup: ListPortalLinkedRecordsResult | null = null;
     let active: {
@@ -142,6 +184,7 @@ export function createPortalListOwner(
         cleanup: retired || cleanup == null ? null : structuredClone(cleanup),
         pending: active !== null,
         error: retired ? null : error,
+        failure: retired || failure === null ? null : { ...failure },
         hasNext:
             !retired &&
             (phase === 'ready' || phase === 'empty') &&
@@ -177,6 +220,7 @@ export function createPortalListOwner(
         page = null;
         cleanup = null;
         error = null;
+        failure = null;
         // Retire old actions before abort callbacks can reenter a newer owner.
         collection.destroy();
         previous?.abort.abort();
@@ -244,6 +288,8 @@ export function createPortalListOwner(
             nextPhase === 'error'
                 ? 'The Portal read was cancelled. Use an explicit fresh Load.'
                 : null;
+        failure =
+            nextPhase === 'error' ? { kind: 'cancelled', status: null } : null;
         old.destroy();
         previous?.abort.abort();
         if (generation === accepted && current()) emit();
@@ -269,6 +315,7 @@ export function createPortalListOwner(
         revision++;
         phase = 'loading';
         error = null;
+        failure = null;
         // Old accepted rows cannot authorize actions while this read is pending.
         page = null;
         cleanup = null;
@@ -317,17 +364,19 @@ export function createPortalListOwner(
             revision++;
             emit();
             return current() && generation === entry.generation;
-        } catch {
-            if (
-                current() &&
-                active === entry &&
-                generation === entry.generation
-            ) {
-                phase = 'error';
-                page = null;
-                cleanup = null;
-                error =
-                    'The Portal read did not complete. Use an explicit fresh Load.';
+        } catch (cause) {
+            if (lease()) {
+                const nextFailure = summarizeReadFailure(cause);
+                // Descriptor traps on malformed errors can reenter the host.
+                // Publish only if this same attempt still owns the list.
+                if (lease()) {
+                    phase = 'error';
+                    page = null;
+                    cleanup = null;
+                    error =
+                        'The Portal read did not complete. Use an explicit fresh Load.';
+                    failure = nextFailure;
+                }
             }
             return false;
         } finally {
@@ -339,6 +388,7 @@ export function createPortalListOwner(
                     phase = 'error';
                     error =
                         'The Portal read was cancelled. Use an explicit fresh Load.';
+                    failure = { kind: 'cancelled', status: null };
                 }
                 emit();
             }

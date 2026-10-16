@@ -363,7 +363,7 @@ const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
     visitor.uncertainFormDraftScopes.clear();
 };
 
-const load = (): void => {
+const load = (sessionNotice?: string): void => {
     cancelConfirmation();
     void run(
         'Loading the published extension…',
@@ -449,21 +449,49 @@ const load = (): void => {
                 };
             }
             render();
-            status(
+            const loadedMessage =
                 result.extensionScreen == null
                     ? 'The extension requested a redirect.'
-                    : `Loaded ${result.extensionScreen.replaceAll('_', ' ')}.`
+                    : `Loaded ${result.extensionScreen.replaceAll('_', ' ')}.`;
+            status(
+                sessionNotice == null
+                    ? loadedMessage
+                    : `${sessionNotice} ${loadedMessage}`
             );
         }
     );
+};
+
+/** A successful user submission may continue with one read after its busy lease ends. */
+const continueAfterSessionApplied = (
+    visitor: Visitor,
+    notice: string,
+    signal: AbortSignal
+): (() => void) => {
+    const identity = activeVisitor;
+    const client = visitor.client;
+    const revision = visitor.revision;
+    return () => {
+        if (
+            connection != null &&
+            !signal.aborted &&
+            request == null &&
+            activeVisitor === identity &&
+            visitors[identity] === visitor &&
+            visitor.client === client &&
+            visitor.revision === revision
+        )
+            load(notice);
+    };
 };
 
 const applyLogin = (
     visitor: Visitor,
     page: LoginPageResult,
     token: string,
+    signal: AbortSignal,
     grant?: AuthCredentialGrant
-): void => {
+): (() => void) | undefined => {
     if (visitor.client == null) return;
     if (grant && visitor.authentication)
         visitor.authentication.applySession(grant);
@@ -483,10 +511,9 @@ const applyLogin = (
     );
     visitor.screen = null;
     render();
-    status(
-        rememberedMessage ??
-            'Login applied to this visitor. Choose Reload to load the authenticated screen.'
-    );
+    const notice = rememberedMessage ?? 'Login applied to this visitor.';
+    status(notice);
+    return continueAfterSessionApplied(visitor, notice, signal);
 };
 
 const renderPassword = (
@@ -504,6 +531,7 @@ const renderPassword = (
     card.append(submit);
     card.addEventListener('submit', (event) => {
         event.preventDefault();
+        let continueLoading: (() => void) | undefined;
         void run(
             'Verifying the password…',
             async ({ visitor, client, signal, current }) => {
@@ -550,12 +578,16 @@ const renderPassword = (
                 );
                 visitor.screen = null;
                 render();
-                status(
-                    rememberedMessage ??
-                        'Password applied to this visitor. Choose Reload to continue.'
+                const notice =
+                    rememberedMessage ?? 'Password applied to this visitor.';
+                status(notice);
+                continueLoading = continueAfterSessionApplied(
+                    visitor,
+                    notice,
+                    signal
                 );
             }
-        );
+        ).then(() => continueLoading?.());
     });
     screenNode.append(card);
 };
@@ -634,6 +666,7 @@ const renderLogin = (page: LoginPageResult): void => {
     card.append(actions);
     card.addEventListener('submit', (event) => {
         event.preventDefault();
+        let continueLoading: (() => void) | undefined;
         void run(
             'Checking visitor login…',
             async ({ visitor: owner, client, signal, current }) => {
@@ -658,12 +691,13 @@ const renderLogin = (page: LoginPageResult): void => {
                           );
                 if (!current()) return;
                 if (result.type === 'found-record')
-                    applyLogin(
+                    continueLoading = applyLogin(
                         owner,
                         page,
                         'encryptedLoginToken' in result
                             ? result.encryptedLoginToken
                             : '',
+                        signal,
                         'grant' in result ? result.grant : undefined
                     );
                 else if (result.type === 'no-record')
@@ -685,7 +719,7 @@ const renderLogin = (page: LoginPageResult): void => {
                     );
                 }
             }
-        );
+        ).then(() => continueLoading?.());
     });
     screenNode.append(card);
     const verification = visitor.verification;
@@ -701,6 +735,7 @@ const renderLogin = (page: LoginPageResult): void => {
         codeForm.append(confirm);
         codeForm.addEventListener('submit', (event) => {
             event.preventDefault();
+            let continueLoading: (() => void) | undefined;
             void run(
                 'Confirming verification code…',
                 async ({ visitor: owner, client, signal, current }) => {
@@ -739,14 +774,15 @@ const renderLogin = (page: LoginPageResult): void => {
                         owner.screen === page &&
                         owner.verification === verification
                     )
-                        applyLogin(
+                        continueLoading = applyLogin(
                             owner,
                             verification.loginPage,
                             result?.encryptedLoginToken ?? '',
+                            signal,
                             grant ?? undefined
                         );
                 }
-            );
+            ).then(() => continueLoading?.());
         });
         screenNode.append(codeForm);
     }
@@ -2583,7 +2619,7 @@ visitorSelect.addEventListener('change', () => {
         `Switched to Visitor ${activeVisitor}. No pending response can change this visitor's session.`
     );
 });
-nodeById('reload').addEventListener('click', load);
+nodeById('reload').addEventListener('click', () => load());
 nodeById('logout').addEventListener('click', () => {
     recovery.scrubRetainedInput();
     const visitor = visitors[activeVisitor];

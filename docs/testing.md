@@ -1,5 +1,22 @@
 # Source test coverage
 
+## Form Save response identity
+
+`test/formSaveIdentity.test.ts` exercises the actual client and Form controller
+with synthetic fetch responses. Saved edit record/table mismatches and malformed
+identities must be rejected before lifecycle acceptance or dirty-field clearing.
+The draft and dispatched uncertainty remain, and a second Save requires a fresh
+load instead of replaying. Create responses may assign a new record ID, while
+their table still matches the loaded Form configuration. Matching edit/create,
+Compute and child contexts, structural-only normalization without a loaded
+context, detached results and stale-owner replacement remain covered.
+
+The normal package check also runs installed ESM/CommonJS consumers against the
+packed SDK. These checks use local synthetic responses; they do not establish
+live backend persistence or replace authenticated browser acceptance.
+
+## Existing source coverage
+
 Multiple Select presentation is covered by `test/reactMultipleSelect.test.ts`:
 native array order, limits and unavailable selections, aliases, blocked/read-only/
 pending controls, stale callbacks, optional Form creation, no implicit Save and

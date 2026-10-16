@@ -313,41 +313,66 @@ export const normalizeFormSaveResult = (
     if (!isObject(result)) {
         throw new TypeError('The Form save result is malformed.');
     }
+    // Capture authority before any response accessor can replace caller-owned context.
+    const captured = loaded === undefined ? undefined : structuredClone(loaded);
     if (result.type === 'saved') {
+        // Validate and return the same detached response, including accessor-backed inputs.
+        const saved = structuredClone(result);
         const validRecord = (record: unknown) =>
             isObject(record) &&
             typeof record.id === 'string' &&
             record.id.trim() !== '' &&
             isObject(record.fields);
         if (
-            !validRecord(result.record) ||
-            (result.loggedInUserRecord !== null &&
-                !validRecord(result.loggedInUserRecord)) ||
-            typeof result.tableId !== 'string' ||
-            result.tableId.trim() === '' ||
-            !isObject(result.context) ||
+            saved.type !== 'saved' ||
+            !validRecord(saved.record) ||
+            (saved.loggedInUserRecord !== null &&
+                !validRecord(saved.loggedInUserRecord)) ||
+            typeof saved.tableId !== 'string' ||
+            saved.tableId.trim() === '' ||
+            !isObject(saved.context) ||
             !['direct-url', 'modal', 'side-panel', 'form-layout'].includes(
-                result.context.type
+                saved.context.type
             ) ||
-            (result.context.type !== 'direct-url' &&
-                !isObject(result.context.newTableIdsToLinkedTableStates)) ||
-            (result.postSubmissionWarnings !== undefined &&
-                !Array.isArray(result.postSubmissionWarnings)) ||
-            (result.postSubmissionNotifications !== undefined &&
-                !Array.isArray(result.postSubmissionNotifications))
+            (saved.context.type !== 'direct-url' &&
+                !isObject(saved.context.newTableIdsToLinkedTableStates)) ||
+            (saved.postSubmissionWarnings !== undefined &&
+                !Array.isArray(saved.postSubmissionWarnings)) ||
+            (saved.postSubmissionNotifications !== undefined &&
+                !Array.isArray(saved.postSubmissionNotifications))
         ) {
             throw new TypeError('The Form save result is malformed.');
         }
+        if (captured !== undefined) {
+            requireLoadedForm(captured);
+            const record = captured.payload.formRecord;
+            const fields = captured.payload.publicFields;
+            if (
+                !isObject(fields) ||
+                fields.type !== 'form' ||
+                !isObject(fields.state) ||
+                typeof fields.state.tableId !== 'string' ||
+                fields.state.tableId.trim() === '' ||
+                saved.tableId !== fields.state.tableId ||
+                (record.type === 'edit' &&
+                    (record.tableId !== fields.state.tableId ||
+                        saved.record.id !== record.recordId))
+            ) {
+                throw new TypeError(
+                    'The Form save response identity does not match the loaded Form.'
+                );
+            }
+        }
         return {
             type: 'saved',
-            raw: structuredClone(result),
+            raw: saved,
             validationErrors: [],
             concurrentEditErrorMessage: null,
             postSubmissionWarnings: structuredClone(
-                result.postSubmissionWarnings ?? []
+                saved.postSubmissionWarnings ?? []
             ),
             postSubmissionNotifications: structuredClone(
-                result.postSubmissionNotifications ?? []
+                saved.postSubmissionNotifications ?? []
             ),
         };
     }

@@ -148,6 +148,7 @@ import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
+import { checkFormSaveIdentityConsumer } from './form-save-identity-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import {
     checkPortalViewAvailabilityConsumer,
@@ -2473,6 +2474,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     consumerDirectory: temporaryDirectory,
                 }),
                 19
+            );
+            const formSaveIdentityProof = await checkFormSaveIdentityConsumer({
+                consumerDirectory: temporaryDirectory,
+            });
+            assert.equal(formSaveIdentityProof, 34);
+            console.log(
+                `Installed Form Save response identity: ${formSaveIdentityProof} ESM/CJS checkpoints passed; synthetic transport only.`
             );
             // A customer copies only the shipped starter and documentation,
             // then installs the supplied TGZ. No checkout source/dist is copied.

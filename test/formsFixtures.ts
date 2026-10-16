@@ -9,6 +9,7 @@ import { formResult } from './runtimeFixtures.js';
 /** Synthetic, local-only examples: no API credentials or staging fixtures. */
 export const loadedForm = (): FormLoadedResult => {
     const loaded = structuredClone(formResult);
+    loaded.payload.publicFields.state.tableId = 'table_projects';
     loaded.payload.formRecord = {
         type: 'create',
         data: {

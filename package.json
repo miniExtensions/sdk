@@ -95,7 +95,8 @@
         "./react/duration.css": "./dist/esm/react/duration.css",
         "./react/currency.css": "./dist/esm/react/currency.css",
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
-        "./react/linked-records.css": "./dist/esm/react/linked-records.css"
+        "./react/linked-records.css": "./dist/esm/react/linked-records.css",
+        "./react/single-select.css": "./dist/esm/react/single-select.css"
     },
     "files": [
         "dist/esm",

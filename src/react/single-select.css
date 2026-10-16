@@ -1,0 +1,102 @@
+/* Optional scoped defaults; native selection and owner behavior need no CSS. */
+.mx-sdk-single-select-field {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    width: 100%;
+    max-width: 100%;
+    color: inherit;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+.mx-sdk-single-select-label {
+    overflow-wrap: anywhere;
+}
+.mx-sdk-single-select-control,
+.mx-sdk-single-select-choice-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+}
+.mx-sdk-single-select,
+.mx-sdk-single-select-new-choice {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
+    padding: 0.5rem 0.625rem;
+    border: 1px solid #8795a5;
+    border-radius: 0.375rem;
+    background: #fff;
+    color: #172b3a;
+    font: inherit;
+}
+.mx-sdk-single-select:disabled,
+.mx-sdk-single-select-new-choice:disabled {
+    background: #f3f5f7;
+    color: #59697a;
+}
+.mx-sdk-single-select[aria-invalid='true'] {
+    border-color: #b91c1c;
+}
+.mx-sdk-single-select-clear {
+    flex: none;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0.25rem;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 1.25rem;
+    cursor: pointer;
+}
+.mx-sdk-single-select-choice {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+}
+.mx-sdk-single-select-choice-actions {
+    flex-wrap: wrap;
+}
+.mx-sdk-single-select-choice-actions button {
+    border: 1px solid #8795a5;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.625rem;
+    background: #fff;
+    color: #172b3a;
+    font: inherit;
+    cursor: pointer;
+}
+.mx-sdk-single-select-field button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+.mx-sdk-single-select-field button:hover:not(:disabled) {
+    background: #edf1f5;
+}
+.mx-sdk-single-select:focus-visible,
+.mx-sdk-single-select-new-choice:focus-visible,
+.mx-sdk-single-select-field button:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+.mx-sdk-single-select-feedback,
+.mx-sdk-single-select-choice [role='status'] {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-single-select-feedback:empty {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+}
+@media (forced-colors: active) {
+    .mx-sdk-single-select-clear {
+        border-color: ButtonText;
+    }
+}

@@ -112,6 +112,53 @@ still return legacy `null` or `undefined`; `runWithOutcome()` rejects them as
 `runtime-error`, as does consuming them in another expression. Replacing the
 context does not retain an earlier outcome or error state.
 
+## Migrating an existing host evaluator
+
+The optional third constructor argument, `FormulaInterpreterOptions`, lets an
+existing host reuse the evaluator without changing its older `run()` behavior:
+
+```ts
+import { FormulaRunner } from '@miniextensions/sdk/formulas';
+
+const hostValues = new Map<string | number, string>([['Title', 'Hello']]);
+const formula = new FormulaRunner('{Title}', false, {
+    legacyRuntime: true,
+    resolveFieldReference: (identifier) => {
+        const nativeValue = hostValues.get(identifier);
+        return { nativeValue, toPrimitive: () => nativeValue ?? '' };
+    },
+});
+formula.run(); // 'Hello'
+```
+
+`legacyRuntime: true` preserves permissive consumption of non-finite numbers,
+missing results and invalid dates; `REGEX_MATCH` returns its marker as data,
+and `ISERROR` classifies the first returned argument. Arguments remain eager,
+and ordinary exceptions still escape. Without a resolver, legacy references
+also retain inherited name-key precedence and readable native error text.
+The option is explicit compatibility for migrating a host, rather than the
+default for new integrations.
+
+`resolveFieldReference` owns field lookup and returns a
+`FormulaFieldReferenceResolution`: `{ nativeValue, toPrimitive }`. Capture the
+native cell once and close the conversion callback over that captured value.
+Both methods use the same snapshot, including with no SDK context or an
+identifier absent from SDK metadata; the host owns missing-field policy. Strict
+evaluation checks native errors and numeric/special non-finite values in `nativeValue`
+before invoking `toPrimitive()`. The SDK does not look up the cell again.
+Provide the actual native value when fault provenance matters: returning
+error-marker text as `nativeValue` supplies ordinary text data, so the
+evaluator cannot recover an omitted native fault.
+
+Pass `dateRuntime` when migrating a host that already owns a Moment runtime.
+Date functions then retain that runtime's locale and timezone defaults in both
+methods. Omit it for the SDK's existing date runtime.
+
+`runWithOutcome()` keeps strict consumption rules even when legacy `run()` is
+selected. It uses the same resolver and context without mutating the runner's
+mode or input data. `Interpreter` accepts the same third argument, including
+for integrations that use the exported AST visitor API.
+
 ## Field references and context
 
 ```ts

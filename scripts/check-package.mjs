@@ -1,4 +1,8 @@
 import {
+    checkRollupConsumer,
+    rollupReactTypedConsumer,
+} from './rollup-consumer-checks.mjs';
+import {
     checkFormulaConsumer,
     formulaReactTypedConsumer,
 } from './formula-consumer-checks.mjs';
@@ -1329,6 +1333,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('formula-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'rollup-react-consumer.tsx'),
+        rollupReactTypedConsumer
+    );
+    reactSources.push('rollup-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2116,6 +2125,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(formulaProof.checks, 26);
     console.log(
         `Installed Formula presentation: ${formulaProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const rollupProof = await checkRollupConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(rollupProof.checks, 26);
+    console.log(
+        `Installed Rollup presentation: ${rollupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,

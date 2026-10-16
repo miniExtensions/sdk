@@ -13,6 +13,8 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
+import { RollupControl, type RollupFieldOptions } from './RollupField.js';
+export { renderRollupField, type RollupFieldOptions } from './RollupField.js';
 import { FormulaControl, type FormulaFieldOptions } from './FormulaField.js';
 export {
     renderFormulaField,
@@ -756,6 +758,37 @@ export function FormulaField({
             'This control supports Formula fields.'
         );
     return createElement(FormulaControl, {
+        field: schema.airtableField,
+        title: snapshot.field?.title ?? '',
+        value: snapshot.value,
+        displayConfig: schema.miniExtConfig,
+        pending: snapshot.pending,
+        error: snapshot.error,
+        validation: snapshot.validation,
+        className,
+    });
+}
+export type RollupFieldProps = FieldProps & RollupFieldOptions;
+/** Present the accepted computed answer without borrowing any binding actions. */
+export function RollupField({
+    binding,
+    render,
+    className,
+}: RollupFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'rollup' ||
+        schema.airtableField.config.type !== 'rollup'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Rollup fields.'
+        );
+    return createElement(RollupControl, {
         field: schema.airtableField,
         title: snapshot.field?.title ?? '',
         value: snapshot.value,

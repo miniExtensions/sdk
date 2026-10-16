@@ -471,3 +471,26 @@ Chromium, checks inert outputs, masking, private-ID suppression, native state,
 zero requests/writes and retirement, and captures desktop, mobile and forced-color
 screenshots. It uses synthetic data only. It supplements `pnpm check:browser`;
 it does not certify live backend behavior or every screen reader.
+
+## Rollup presentation checks
+
+`test/reactRollup.test.ts` covers native result formats, scalar and top-level
+array results, duplicates/null members, invalid metadata/values, native errors,
+special numbers, masking from both configuration surfaces, inert markup, labels,
+feedback, readonly authority, binding replacement/retirement and an editable
+Number neighbor. Synthetic accepted Form and Portal Grid/List hosts add no reads,
+writes or Save. Provenance IDs do not trigger hydration. Installed ESM/CommonJS
+runtime scenarios and positive/negative public types run in `pnpm check:package`.
+
+For the separate author-run packed-browser proof, build/validate the package and
+run:
+
+```sh
+SDK_ROLLUP_CHROMIUM=/path/to/chrome node scripts/check-rollup-browser.mjs /path/to/sdk.tgz /path/to/evidence
+```
+
+This sandboxed Chromium check uses synthetic accepted Form values and the exact
+retained tarball, checks native state, inert text, masking, private-ID suppression,
+zero requests/writes and retirement, and captures desktop, mobile and forced-color
+screenshots. It supplements `pnpm check:browser` and is not a separate hosted CI
+workflow stage. It does not certify live backend behavior or screen readers.

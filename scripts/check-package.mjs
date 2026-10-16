@@ -153,6 +153,11 @@ import {
     checkPortalViewAvailabilityConsumer,
     portalViewAvailabilityTypedConsumer,
 } from './portal-view-availability-consumer-checks.mjs';
+import {
+    checkPortalReadFailureConsumer,
+    checkPortalReadFailureRecipeConsumer,
+    portalReadFailureTypedConsumer,
+} from './portal-read-failure-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
 import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
@@ -536,6 +541,7 @@ try {
         join(installedPackage, 'docs/portals.md'),
         'utf8'
     );
+    const portalsReactGuideSources = [];
     const portalsGuideSources = [
         ...portalsGuide.matchAll(/```ts\n([\s\S]*?)\n```/g),
     ].map(([, code], index) => {
@@ -545,6 +551,12 @@ try {
             ? 'portal-owner.ts'
             : `portals-guide-${index}.ts`;
         writeFileSync(join(temporaryDirectory, filename), code);
+        if (
+            /\b(?:from\s*|(?:import|require)\s*(?:\(\s*)?)['"](?:react(?:-dom)?(?:\/[^'"]*)?|@miniextensions\/sdk\/react(?:\/[^'"]*)?)['"]/.test(
+                code
+            )
+        )
+            portalsReactGuideSources.push(filename);
         return filename;
     });
     assert(portalsGuideSources.length > 0, 'Missing complete Portal recipes');
@@ -558,8 +570,12 @@ try {
         'ESNext',
         '--moduleResolution',
         'Bundler',
-        ...portalsGuideSources,
+        ...portalsGuideSources.filter(
+            (filename) => !portalsReactGuideSources.includes(filename)
+        ),
     ]);
+    // Keep the complete exact-doc provenance input, including deferred React
+    // blocks; this headless recipe runner executes only its named owner block.
     const portalRecipe = await checkPortalRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: portalsGuideSources,
@@ -917,6 +933,7 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         portalButtonCompositionTypedConsumer +
         durationTypedConsumer +
         portalViewAvailabilityTypedConsumer +
+        portalReadFailureTypedConsumer +
         `
 import type { DurationFormat } from '@miniextensions/sdk/formulas';
 const publicDurationFormat: DurationFormat = 'h:mm:ss.SSS';
@@ -1236,6 +1253,9 @@ new Parser([]).parse({maxDepth:'48'});
         writeFileSync(join(temporaryDirectory, filename), code);
         return filename;
     });
+    // These exact Portal doc blocks retain strict compilation, after the normal
+    // optional React peers/types have been installed in this consumer.
+    reactSources.push(...portalsReactGuideSources);
     writeFileSync(
         join(temporaryDirectory, 'field-bindings-react.tsx'),
         `
@@ -2329,6 +2349,23 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(portalViewAvailabilityChecks, 16);
     console.log(
         `Installed Portal view availability: ${portalViewAvailabilityChecks} ESM/CommonJS behavior groups passed; strict NodeNext/Bundler declarations checked.`
+    );
+    const portalReadFailureChecks = checkPortalReadFailureConsumer({
+        consumerDirectory: temporaryDirectory,
+        run,
+    });
+    assert.equal(portalReadFailureChecks, 16);
+    console.log(
+        `Installed Portal read failures: ${portalReadFailureChecks} ESM/CommonJS groups passed; strict NodeNext/Bundler declarations checked; synthetic transport only.`
+    );
+    const portalReadFailureRecipeChecks =
+        await checkPortalReadFailureRecipeConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        });
+    assert.equal(portalReadFailureRecipeChecks, 3);
+    console.log(
+        `Installed Portal read failure host recipe: ${portalReadFailureRecipeChecks} actual PortalList/custom-render groups passed; synthetic DOM/transport only.`
     );
 
     const authGuide = readFileSync(

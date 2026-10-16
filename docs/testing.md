@@ -30,6 +30,22 @@ tests; happy-dom does not establish real Chromium layout, browser event or
 live backend behavior. The separate packed native Chromium scenarios remain
 required in CI.
 
+## Portal read failure guidance checks
+
+`test/browserExamplePortalReadFailure.test.ts` mounts the shipped `PortalList`
+with the exact `PortalReadFailureList` recipe from `docs/portals.md`. It checks
+fixed network/5xx, denied and generic messages, raw-error suppression, explicit
+fresh reads and stale-owner refusal. The separate vanilla-starter cases retain
+its direct-collection generic feedback and manual Load contract; they do not
+claim that the starter adopted `PortalListSnapshot.failure`.
+
+`scripts/portal-read-failure-consumer-checks.mjs`, run by `pnpm check:package`,
+checks installed ESM/CommonJS behavior and strict public declarations, including
+detached kind/status-only snapshots, cancellation, reset and retired responses.
+The custom shell uses normal public imports. These synthetic checks establish
+no automatic retry or session change; they do not establish hosted authentication,
+backend permissions or live persistence.
+
 Attachment presentation regressions in `test/reactFieldComponents.test.ts` cover
 phase messages and counts, explicit first-file upload, duplicate queue order,
 indeterminate activity, disabled-control focus, uncertainty after Clear/remount,

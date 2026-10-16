@@ -28,6 +28,7 @@ export type {
     PortalListOwnerOptions,
     PortalListSnapshot,
     PortalListPhase,
+    PortalListReadFailure,
     PortalRecordPresentation,
 } from './listOwner.js';
 

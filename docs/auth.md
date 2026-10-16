@@ -11,9 +11,11 @@ installing its built TGZ.
 
 The application owns loading, rendering, visitor identity and credential
 persistence. A successful helper returns an opaque grant, not a public session
-token. Apply that grant explicitly, advance your application scope, clear old
-drafts/authentication UI, then let the visitor explicitly Reload. Applying a
-session does not automatically load a Form or Portal.
+token. Apply that grant explicitly, advance your application scope and clear old
+drafts/authentication UI. Your app can then load the Form or Portal in the same
+successful user-submit flow; a second Reload click is not required. Applying a
+session itself performs no read. If the following load fails, retry that read
+without repeating login, verification or sign-up.
 
 ## React client panel
 
@@ -21,10 +23,12 @@ This recipe uses your application's React 19 installation. The SDK's `/react`
 components have an optional React peer; core and `/auth` imports do not require
 React. Pass the `ownerScope` captured with this particular loaded `page`,
 plus the owner's live `getScope` function. `onSessionApplied` must synchronously
-advance the revision and clear the old page/drafts. `onReload` is an app-owned
-manual action; also keep a Reload control outside this panel because applying
-a session removes the old authentication page. The next recipe supplies those
-owner and load boundaries.
+advance the revision and clear the old page/drafts. This panel demonstrates
+separate manual authentication and application actions; your successful-submit
+handler may continue with an app-owned load after applying the session.
+`onReload` retries only loading. Keep that control outside the panel because
+applying the session removes the old authentication page. The next recipe
+supplies those owner and load boundaries.
 
 Use `shouldMaskLoginFieldInput` for the hosted input mask rules and
 `getLoginVerificationDestination` for verification notices. Explicitly masked
@@ -464,7 +468,8 @@ A successful `{ok}` sign-up response is not authentication.
 ## App-owned load and revision
 
 Keep this owner outside React, or in an application ref. Call `load(input)` once
-at your app's explicit startup and again only for a deliberate Reload. Supply
+at your app's explicit startup, after a successful user-submit session
+application, or for a deliberate read retry. Supply
 `isCurrent` from your app's active owner identity. Each callback receives its
 captured scope and freshness guard: check that guard immediately before changing
 the screen or clearing drafts, including after callback reentry. Retired cleanup
@@ -483,7 +488,9 @@ Handle a rejected initial load separately as an app error, never as proof of log
 `onLoaded` receives the accepted page, scope, optional authentication adapter and
 guard. For an auth page, pass that `authentication` to `AuthPanel`; it uses the
 adapter's own flow and apply method. Guard `onSessionApplied` before calling
-`owner.sessionApplied()`, and guard Reload before calling `owner.load(input)`.
+`owner.sessionApplied()`. Your app may then call `owner.load(input)` as the
+continuation of that successful user action; a later Reload also calls only
+`owner.load(input)`.
 Accepted Form/Portal restoration hands off logout ownership before publication.
 Bind Logout to `owner.logout(capturedScope)`; an old scope cannot clear a newer
 lease. Ordinary React unmount unsubscribes from the UI without destroying that
@@ -814,8 +821,10 @@ engine, storage policy or automatic mutation recovery.
 
 Cancellation does not roll back verification delivery or sign-up. After an
 uncertain result, inspect the account/delivery outcome and explicitly Reload
-before deciding on another manual action. Neither helper nor recipe retries,
-resends, signs up, applies credentials or reloads automatically. The backend
+before deciding on another manual action. Neither helper nor this manual panel
+retries authentication or performs automatic mutation recovery. The packaged
+browser starter continues successful explicit authentication with an app-owned
+load; a failed load requires a read retry, never an authentication replay. The backend
 remains authoritative for published passwords, login/sign-up rules, verification
 policy, visitor permissions and all subsequent Form/Portal actions. Local
 recipe tests do not establish staging compatibility.

@@ -291,6 +291,7 @@ const browserStarterFiles = [
     'build.mjs',
     'dev.mjs',
     'src/main.ts',
+    'src/progress.ts',
     'src/fields.ts',
     'src/customFieldRenderer.ts',
     'src/portal.ts',

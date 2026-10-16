@@ -32,6 +32,7 @@ const starterFiles = [
     'index.html',
     'styles.css',
     'src/main.ts',
+    'src/progress.ts',
     'src/fields.ts',
     'src/portal.ts',
     'src/dom.ts',

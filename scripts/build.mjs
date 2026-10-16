@@ -145,6 +145,7 @@ for (const format of ['esm', 'cjs']) {
         'currency',
         'multiple-select',
         'linked-records',
+        'single-select',
     ]) {
         copyFileSync(
             `src/react/${name}.css`,

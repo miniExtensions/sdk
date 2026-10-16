@@ -494,3 +494,30 @@ retained tarball, checks native state, inert text, masking, private-ID suppressi
 zero requests/writes and retirement, and captures desktop, mobile and forced-color
 screenshots. It supplements `pnpm check:browser` and is not a separate hosted CI
 workflow stage. It does not certify live backend behavior or screen readers.
+
+## Lookup presentation checks
+
+`test/reactLookup.test.ts` exercises the native flat-array/result-metadata
+contract, duplicates/null occurrences and distinct empty owner data, native
+errors, canonical formats, unsupported/malformed values and metadata, masking
+before conversion, labels/feedback, physical readonly authority, owner visibility
+and retirement, accepted Form/Portal hosts and an editable neighbor. Visible Form
+fixtures explicitly use `hideFieldIfEmpty: false`; the existing unsupported
+Lookup empty-hiding refusal is asserted separately.
+
+`pnpm check:package` serially awaits installed ESM/CommonJS Lookup cases and
+strict positive/negative declarations, including separate physical slots,
+array-only values, readonly capability and the public React-only export boundary.
+Existing package groups and worker/cleanup assertions remain enabled.
+
+For the separate local packed-browser proof, validate the package and run:
+
+```sh
+SDK_LOOKUP_CHROMIUM=/path/to/chrome node scripts/check-lookup-browser.mjs /path/to/sdk.tgz /path/to/evidence
+```
+
+This sandboxed Chromium proof checks installed-package bundle provenance, inert
+native outputs, masking, unresolved-ID suppression, malformed-value refusals,
+unchanged native data, zero I/O/actions, retirement and desktop/mobile/forced-color
+screenshots. It supplements the unchanged ordinary `pnpm check:browser`; it is
+not a separate hosted CI stage or live backend, OS picker or screen-reader proof.

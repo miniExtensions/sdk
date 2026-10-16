@@ -251,6 +251,11 @@ No CSS import is required. Lookup remains a separate presentation.
 using existing native formatting, without evaluating the aggregation or reading
 linked records. No CSS import is required. Lookup keeps its separate contract.
 
+[Lookup presentation](docs/ui.md#react-lookup-presentation) exports `LookupField`,
+`LookupFieldProps`, `LookupFieldOptions` and `renderLookupField` for the existing
+`renderMultipleLookupValuesField` slot. It formats supplied flat native arrays as
+inert text without flattening, hydration or editing. No CSS import is required.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,

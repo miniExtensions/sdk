@@ -2882,3 +2882,60 @@ preventing text selection. Supplied capabilities are never borrowed.
 `className` decorates `mx-sdk-rollup-field`; no CSS import or package subpath is
 required. Default markup preserves line breaks and wraps long text. Core and
 `/ui` remain React-free.
+
+## React Lookup presentation
+
+The optional `/react` entry exports `LookupField`, `LookupFieldProps`,
+`LookupFieldOptions` and `renderLookupField`. The physical field kind remains
+`multipleLookupValues`; it retains the existing `renderMultipleLookupValuesField`
+slot and its correlated array-or-native-error value type. Formula and Rollup are
+separate physical slots. Lookup is readonly even with `isComputed: false`.
+
+```tsx
+import type { ReactNode } from 'react';
+import { LookupField, renderLookupField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+
+export const lookupRenderers: FieldRendererSlots<ReactNode> = {
+    renderMultipleLookupValuesField: (props) =>
+        renderLookupField(props, { className: 'lookup-answer' }),
+};
+// With an accepted Lookup Form binding:
+// <LookupField binding={lookupBinding} className="lookup-answer" />
+```
+
+Pass these renderers to existing `AirtableForm`, `AirtableGrid` or `AirtableList`
+hosts. Default bound output follows owner visibility and retirement. Existing
+Form visibility requires explicit `hideFieldIfEmpty: false` for Lookup; other
+settings remain `blocked/unsupported-hide-empty`, including an empty array. The
+component does not override this refusal. The optional `render` prop retains the
+existing application-owned custom-render contract.
+
+Formatting uses the existing native Lookup converter and admitted result
+metadata. Scalar result metadata formats each occurrence; array-valued result
+metadata consumes the whole already-flat native array. Order and duplicates are
+preserved. The canonical display removes null occurrences; it never changes the
+underlying array. Null, missing and `[]` display blank while remaining distinct
+owner-held data. Native top-level errors remain plain text, including with an
+admitted `isValid: false, result: null` configuration. Other values with that
+invalid-result metadata display blank. Malformed/unsupported metadata or values
+display `Unavailable`, including scalar Lookup values, sparse/nested arrays and
+`{ linkedRecordId, value }` wrappers. `manualSort` result admission and nested
+computed combinations follow existing contracts; no new flattening is added.
+
+Linked record IDs matching the existing native formatter's ID contract become
+`Unavailable` when unresolved; other accepted strings retain their supplied
+labels. Source link IDs, foreign field IDs, target table IDs and Portal field IDs
+are not interchangeable and confer no hydration, collection-read, child-create,
+cell-write or row-navigation authority. A Lookup-backed Portal collection remains
+owned by its existing collection API, independently of this text renderer.
+
+Markup, attachment and Button URLs remain escaped selectable text: no anchors,
+images, navigation or resource loading. Masking from either display or write
+configuration replaces the native value, including native errors and supplied
+URLs, before admission or formatting. Owner error/validation feedback remains a
+separate plain-text status using the existing error-before-validation policy.
+Labels, hidden titles, pending/invalid state and contained row interaction follow
+the existing controls. `className` decorates `mx-sdk-lookup-field`; no CSS import,
+package subpath, editor, Clear, Save or lookup action is added. Core and `/ui`
+remain React-free.

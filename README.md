@@ -234,6 +234,12 @@ exports `ExternalSyncSourceField`, `ExternalSyncSourceFieldProps`,
 It displays the supplied SDK string with the disabled Text control and optional
 `@miniextensions/sdk/react/text.css`, without resolving choice IDs or changing values.
 
+[Formula presentation](docs/ui.md#react-formula-presentation) exports
+`FormulaField`, `FormulaFieldProps`, `FormulaFieldOptions` and the typed
+`renderFormulaField` slot. It formats supplied computed results as inert text,
+with native values and readonly authority retained by the existing controller.
+No CSS import is required. Rollup and Lookup remain separate presentations.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,

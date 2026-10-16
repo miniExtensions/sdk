@@ -2752,3 +2752,69 @@ and selected labels remain owner state, with the owner's existing retention and
 scope fences. Unmounting never cancels or disposes borrowed owners. The renderer
 adds no cache, selection model or write authority. The older `LinkedField`
 binding component remains separate from this bounded slot.
+
+## React Formula presentation
+
+The optional `/react` entry exports `FormulaField`, `FormulaFieldProps`,
+`FormulaFieldOptions` and `renderFormulaField`. They display the owner's supplied
+computed answer as inert, selectable text. No editor, Clear control, calculation,
+write, Save, resource loading or navigation is added. Physical Formula remains
+readonly even if runtime hints say `isComputed: false`; capabilities are never
+borrowed. Rollup and Lookup retain their separate slots.
+
+```tsx
+import { FormulaField, renderFormulaField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import type { ReactNode } from 'react';
+
+export const formulaRenderers: FieldRendererSlots<ReactNode> = {
+    renderFormulaField: (props) =>
+        renderFormulaField(props, { className: 'computed-answer' }),
+};
+// With an accepted Formula Form binding:
+// <FormulaField binding={formulaBinding} className="computed-answer" />
+```
+
+Pass `formulaRenderers` to `AirtableForm`, `AirtableGrid`, `AirtableList` or
+`FieldRenderer`. Grid/List use accepted Portal detail hosts without a computed
+inline editing binding. The binding component retains `{ binding, render }`;
+custom rendering replaces the default markup. Hidden/retired bindings and blocked
+hosts omit the output. Another physical kind renders a status message.
+
+Native numeric, percent, currency, duration, boolean, date/dateTime, text,
+select, collaborator, timestamp, barcode, Button, attachment, linked-record,
+AI text and nested computed result configurations use the existing readable-value
+formatters. Scalar-result arrays keep order and existing null-member omission;
+array-valued result configurations delegate their whole native array to the
+existing result-type formatter. Number precision, currency signs, percent scaling,
+duration rounding, date/time metadata and readable rich-text conversion affect
+presentation only. Native values, offsets, arrays, objects and dirty state remain
+with the owner. No field-reference or expression evaluation occurs.
+
+Null/missing values and unavailable result metadata display blank. Native
+`{ error: string }` cells and scalar-array error members retain their readable
+error text; special-number envelopes retain existing formatting. Malformed direct
+values, incompatible result shapes or formatting failures display `Unavailable`
+with `aria-invalid`, without raw exception details. Hosts may refuse malformed
+metadata/values before the slot runs.
+
+Contract boundaries: renderer props have no linked-table hydration context, so
+unresolved native record IDs become `Unavailable` and no records are fetched.
+Generated result metadata includes `manualSort`, but the existing renderer
+admission contract rejects it. Nested array-valued computed combinations that the
+existing formatter cannot consume display `Unavailable`; this component does not
+repair shared conversion or admission contracts. Those gaps also affect future
+Rollup/Lookup work and require separate coordination.
+
+HTML, attachment and Button display flags stay inert text; markup and URLs are
+never interpreted as HTML, links, images or downloads. Existing masking flags
+from either configuration surface replace the value with a fixed mask before
+formatting, so the formatted answer does not enter DOM text or attributes. Native
+collaborator formatting displays the supplied name without resolving an identity
+or loading an avatar. Title visibility, field-name fallback, unique associated
+labels, pending state and plain-text validation feedback are preserved. An
+explicitly empty error keeps precedence over validation text.
+
+`className` decorates `mx-sdk-formula-field`. No stylesheet or package subpath is
+added; wrapping and line breaks work without CSS. Applications may style the
+wrapper, label and `output`. Existing core and `/ui` exports remain React-free.

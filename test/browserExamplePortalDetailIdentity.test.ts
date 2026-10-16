@@ -9,6 +9,7 @@ import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
     createMiniExtensionsClient,
+    type AirtableValue,
     type ListPortalLinkedRecordsResult,
     type RuntimeAirtableField,
     type RuntimeLinkedRecordDetailField,
@@ -438,6 +439,187 @@ describe('actual starter exact seven peer Portal detail diagnostics', () => {
             else await refuseDetail(test, returned);
         });
     }
+});
+
+describe('Portal row summaries use returned display policy', () => {
+    const cases: {
+        name: string;
+        config: unknown;
+        numeric?: boolean;
+        value: AirtableValue;
+        expected: string;
+    }[] = [
+        {
+            name: 'text obscurePassword',
+            config: { obscurePassword: true },
+            value: permittedValue,
+            expected: '••••••••',
+        },
+        {
+            name: 'text login mask',
+            config: { maskPasswordOnLoginScreen: true },
+            value: permittedValue,
+            expected: '••••••••',
+        },
+        {
+            name: 'Number obscurePassword and zero',
+            config: { obscurePassword: true },
+            numeric: true,
+            value: 0,
+            expected: '••••••••',
+        },
+        {
+            name: 'Number login mask',
+            config: { maskPasswordOnLoginScreen: true },
+            numeric: true,
+            value: 1234,
+            expected: '••••••••',
+        },
+        {
+            name: 'masked empty text',
+            config: { obscurePassword: true },
+            value: '',
+            expected: '••••••••',
+        },
+        {
+            name: 'masked null Number',
+            config: { maskPasswordOnLoginScreen: true },
+            numeric: true,
+            value: null,
+            expected: '••••••••',
+        },
+        {
+            name: 'malformed obscurePassword',
+            config: { obscurePassword: 'false' },
+            value: permittedValue,
+            expected: 'Value unavailable',
+        },
+        {
+            name: 'malformed login mask',
+            config: { maskPasswordOnLoginScreen: null },
+            numeric: true,
+            value: 1234,
+            expected: 'Value unavailable',
+        },
+        {
+            name: 'malformed flag alongside a true mask',
+            config: { obscurePassword: true, maskPasswordOnLoginScreen: [] },
+            value: permittedValue,
+            expected: 'Value unavailable',
+        },
+        {
+            name: 'explicit false flags',
+            config: {
+                obscurePassword: false,
+                maskPasswordOnLoginScreen: false,
+            },
+            numeric: true,
+            value: 42,
+            expected: '42',
+        },
+        {
+            name: 'absent display configuration',
+            config: undefined,
+            value: permittedValue,
+            expected: permittedValue,
+        },
+        {
+            name: 'null display configuration',
+            config: null,
+            numeric: true,
+            value: 0,
+            expected: '0',
+        },
+    ];
+    for (const example of cases) {
+        it(`keeps ${example.name} presentation separate from native data and child writes`, async (test) => {
+            const returned = listPage();
+            const detail = details(returned)[0]!;
+            detail.miniExtConfig =
+                example.config as RuntimeLinkedRecordDetailField['miniExtConfig'];
+            if (example.numeric) {
+                returned.tableIdsToLinkedTableStates[
+                    tableId
+                ]!.airtableFields[0] = {
+                    ...physicalField(),
+                    config: {
+                        type: AirtableFieldType.NUMBER,
+                        options: { precision: 0 },
+                    },
+                };
+                detail.childFormField = {
+                    idOrName: { type: 'id', id: fieldId },
+                    config: {
+                        type: AirtableFieldType.NUMBER,
+                        config: { readOnly: false },
+                    },
+                };
+            }
+            returned.tableIdsToLinkedTableStates[
+                tableId
+            ]!.recordIdsToAirtableRecords[recordId]!.fields[fieldId] =
+                example.value;
+            const untouched = structuredClone(returned);
+            const fixture = await mount(test, returned);
+            const cell = fixture.view.node.querySelector('tbody td');
+            assert.ok(cell);
+            assert.equal(cell.textContent, `${example.expected}Edit cell`);
+            assert.equal(cell.title, '');
+            if (
+                example.value === permittedValue &&
+                example.expected !== permittedValue
+            ) {
+                assert.equal(
+                    fixture.view.node.textContent.includes(permittedValue),
+                    false
+                );
+                assert.equal(
+                    fixture.view.node.outerHTML.includes(permittedValue),
+                    false
+                );
+            }
+            assert.deepEqual(fixture.saves, []);
+            assert.deepEqual(fixture.routes, [
+                'fetchRecordsForLinkedTableOnPortal',
+            ]);
+            assert.deepEqual(
+                returned,
+                untouched,
+                'Presentation must not alter native values or child write policy.'
+            );
+        });
+    }
+
+    it('keeps an ordinary returned row visible while its child editor stays masked without dispatching a write', async (test) => {
+        const returned = listPage();
+        const detail = details(returned)[0]!;
+        detail.miniExtConfig = {};
+        detail.childFormField = {
+            idOrName: { type: 'id', id: fieldId },
+            config: {
+                type: AirtableFieldType.SINGLE_LINE_TEXT,
+                config: { obscurePassword: true },
+            },
+        };
+        const untouched = structuredClone(returned);
+        const fixture = await mount(test, returned);
+        assert.equal(
+            fixture.view.node.querySelector('tbody td')?.textContent,
+            `${permittedValue}Edit cell`
+        );
+        await fixture.click('Edit cell');
+        const input = fixture.view.node.querySelector(
+            `input[data-field-id="${fieldId}"]`
+        );
+        assert.ok(input instanceof fixture.window.HTMLInputElement);
+        assert.equal(input.type, 'password');
+        assert.equal(input.value, permittedValue);
+        assert.deepEqual(fixture.saves, []);
+        assert.deepEqual(fixture.routes, [
+            'fetchRecordsForLinkedTableOnPortal',
+        ]);
+        assert.deepEqual(returned, untouched);
+    });
 });
 
 describe('additional Portal identity controls beyond the seven peer diagnostics', () => {

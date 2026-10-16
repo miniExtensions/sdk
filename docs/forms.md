@@ -966,6 +966,18 @@ server outcome and obtain a fresh load before deciding whether to submit
 again. Do not call it blindly a second time. Use the controller below for
 these presentation guards.
 
+Pass the captured loaded Form to `normalizeFormSaveResult(result, loaded)`
+to check a saved response against its target identity. The returned table must
+match `loaded.payload.publicFields.state.tableId`. For an edit, the returned
+record must also match the loaded edit record, and its table must agree with
+that configuration. A create accepts the server-assigned record ID; it does
+not have a record ID before submission. Compute saves use the same identity
+checks. Without the loaded argument, normalization checks response structure
+only. The controller supplies its captured loaded Form automatically, before
+accepting success or clearing dirty fields. An inconsistent response after
+dispatch leaves the draft unsaved and requires reconciliation; it does not
+prove that the server failed to commit, and must not trigger an automatic retry.
+
 The store scopes a draft by actual extension ID, create/edit record ID and
 optional parent Portal/record/relationship IDs. Reopening the same live scope
 retains its draft. `discard(handle)` invalidates that handle; `clear()`

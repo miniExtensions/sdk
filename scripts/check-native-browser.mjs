@@ -17,7 +17,10 @@ import { join, resolve, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
-import { checkAttachmentPresentationBrowser } from './attachment-presentation-browser-checks.mjs';
+import {
+    checkAttachmentPresentationBrowser,
+    cleanupAttachmentPresentation,
+} from './attachment-presentation-browser-checks.mjs';
 import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
@@ -27,15 +30,19 @@ import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 const createFileChooserOwner = async (
     page,
     evidence,
-    timers = { setTimeout, clearTimeout }
+    timers = { setTimeout, clearTimeout },
+    inputSelector = 'dialog[open] input[type=file]'
 ) => {
     assert.equal(page.listenerCount('filechooser'), 0);
+    assert.equal(typeof inputSelector, 'string');
+    assert(inputSelector.trim(), 'Current file input selector required');
     let session;
     let retired = false;
     let active;
     let failure;
     let disposal;
     let sequence = 0;
+    evidence.inputSelector = inputSelector;
     evidence.events = [];
     evidence.cleanup = {};
     // Setup and each cleanup command have a separate 5s budget. Expiry does
@@ -99,21 +106,28 @@ const createFileChooserOwner = async (
         const { nodeId } = await wait(
             session.send('DOM.querySelector', {
                 nodeId: root.nodeId,
-                selector: 'dialog[open] input[type=file]',
+                selector: inputSelector,
             })
         );
-        assert(nodeId, 'Current dialog file input required');
+        assert(nodeId, 'Current file input required');
         const { node } = await wait(
             session.send('DOM.describeNode', { nodeId })
         );
         const { frameTree } = await wait(session.send('Page.getFrameTree'));
         const actual = await wait(
-            input.evaluate((element) => ({
-                multiple: element.multiple,
-                current:
-                    element ===
-                    document.querySelector('dialog[open] input[type=file]'),
-            }))
+            input.evaluate((element, selector) => {
+                const matches =
+                    element.ownerDocument.querySelectorAll(selector);
+                return {
+                    multiple: element.multiple,
+                    current:
+                        element.isConnected &&
+                        element.tagName === 'INPUT' &&
+                        element.type === 'file' &&
+                        matches.length === 1 &&
+                        matches[0] === element,
+                };
+            }, inputSelector)
         );
         assert(actual.current, 'File input identity changed');
         return {
@@ -219,7 +233,7 @@ const createFileChooserOwner = async (
                 current(ticket);
                 return result;
             };
-            let error;
+            let primaryFailure;
             try {
                 ticket.expected = await identity(input, wait);
                 current(ticket);
@@ -243,7 +257,7 @@ const createFileChooserOwner = async (
                 await wait(input.setInputFiles(files));
                 current(ticket);
             } catch (caught) {
-                error = caught;
+                primaryFailure = { error: caught };
             } finally {
                 timers.clearTimeout(ticket.timer);
                 ticket.phase = 'draining';
@@ -264,19 +278,25 @@ const createFileChooserOwner = async (
                         fail(cleanupError);
                         retired = true;
                         evidence.activationCleanup = {
-                            error: cleanupError.message,
+                            error:
+                                cleanupError instanceof Error
+                                    ? cleanupError.message
+                                    : 'Chooser activation cleanup failed',
                         };
-                        error = error
-                            ? new AggregateError(
-                                  [error, cleanupError],
-                                  'Chooser activation cleanup failed'
-                              )
-                            : cleanupError;
+                        primaryFailure = {
+                            error:
+                                primaryFailure === undefined
+                                    ? cleanupError
+                                    : new AggregateError(
+                                          [primaryFailure.error, cleanupError],
+                                          'Chooser activation cleanup failed'
+                                      ),
+                        };
                     }
                 }
                 if (active === ticket) active = undefined;
             }
-            if (error) throw error;
+            if (primaryFailure !== undefined) throw primaryFailure.error;
             if (failure) throw failure;
         },
     };
@@ -959,6 +979,416 @@ const checkFileChooserOwner = async () => {
         f.cleaned();
         groups.push('synchronous cleanup reentry returns memoized disposal');
     }
+    // Execute the actual page-evaluation callback against a tiny owned document;
+    // a stub that always reports current would miss selector-adapter mistakes.
+    const standalone = (onSend) => {
+        const f = make(onSend);
+        const selector = 'input[type=file]';
+        const target = {
+            nodeId: 2,
+            tagName: 'INPUT',
+            type: 'file',
+            multiple: true,
+            isConnected: true,
+        };
+        const decoy = { ...target, nodeId: 3 };
+        let matches = [target];
+        const queried = [];
+        const document = {
+            querySelectorAll(value) {
+                queried.push(value);
+                return value === selector ? matches : [decoy];
+            },
+        };
+        target.ownerDocument = decoy.ownerDocument = document;
+        f.input.evaluate = async (evaluate, value) => evaluate(target, value);
+        const send = f.session.send;
+        f.session.send = async (method, params = {}) => {
+            const result = await send(method, params);
+            if (method === 'DOM.querySelector')
+                return {
+                    nodeId:
+                        document.querySelectorAll(params.selector)[0]?.nodeId ??
+                        0,
+                };
+            if (method === 'DOM.describeNode')
+                return { node: { backendNodeId: params.nodeId } };
+            return result;
+        };
+        return {
+            ...f,
+            selector,
+            target,
+            decoy,
+            queried,
+            replace(nextMatches) {
+                matches = nextMatches;
+            },
+        };
+    };
+    {
+        const enabled = deferred(),
+            release = deferred();
+        let activations = 0;
+        const f = standalone(async (method, params) => {
+            if (
+                method === 'Page.setInterceptFileChooserDialog' &&
+                params.enabled
+            ) {
+                enabled.resolve();
+                await release.promise;
+            }
+        });
+        const owner = await createFileChooserOwner(
+            f.page,
+            {},
+            undefined,
+            f.selector
+        );
+        try {
+            const pending = owner.choose(
+                f.input,
+                async () => {
+                    activations++;
+                    f.emit();
+                },
+                ['standalone']
+            );
+            await enabled.promise;
+            assert.equal(activations, 0);
+            assert.deepEqual(f.completed, []);
+            release.resolve();
+            await pending;
+            assert.equal(activations, 1);
+            assert.deepEqual(f.completed, [['standalone']]);
+            assert(f.queried.length >= 2);
+            assert(f.queried.every((value) => value === f.selector));
+        } finally {
+            release.resolve();
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push(
+            'standalone selector executes current-input checks and awaits acknowledgment'
+        );
+    }
+    for (const scenario of [
+        'missing',
+        'decoy',
+        'duplicate',
+        'wrong-type',
+        'disconnected',
+    ]) {
+        const f = standalone();
+        if (scenario === 'missing') f.replace([]);
+        if (scenario === 'decoy') f.replace([f.decoy]);
+        if (scenario === 'duplicate') f.replace([f.target, f.decoy]);
+        if (scenario === 'wrong-type') f.target.type = 'text';
+        if (scenario === 'disconnected') f.target.isConnected = false;
+        let activations = 0;
+        const owner = await createFileChooserOwner(
+            f.page,
+            {},
+            undefined,
+            f.selector
+        );
+        try {
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        activations++;
+                        f.emit();
+                    },
+                    ['refused']
+                )
+            );
+            assert.equal(activations, 0);
+            assert.deepEqual(f.completed, []);
+            assert.equal(
+                f.sent.some(
+                    ({ method, enabled }) =>
+                        method === 'Page.setInterceptFileChooserDialog' &&
+                        enabled
+                ),
+                false
+            );
+        } finally {
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push(
+            `standalone selector refuses ${scenario} input before activation`
+        );
+    }
+    for (const scenario of ['replacement', 'ambiguity']) {
+        const f = standalone();
+        let activations = 0;
+        const owner = await createFileChooserOwner(
+            f.page,
+            {},
+            undefined,
+            f.selector
+        );
+        try {
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        activations++;
+                        f.emit();
+                        if (scenario === 'replacement') {
+                            f.target.isConnected = false;
+                            f.replace([f.decoy]);
+                        } else f.replace([f.target, f.decoy]);
+                    },
+                    ['refused']
+                )
+            );
+            assert.equal(activations, 1);
+            assert.deepEqual(f.completed, []);
+        } finally {
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push(
+            `standalone selector refuses post-event ${scenario} before completion`
+        );
+    }
+    {
+        const primaryError = new Error('controlled primary failure');
+        const primaryFailure = { error: primaryError };
+        const ownerError = new AggregateError([
+            new Error('controlled owner cleanup'),
+        ]);
+        const traceError = new Error('controlled trace cleanup');
+        const contextError = new Error('controlled context cleanup');
+        const calls = [],
+            boundedCalls = [],
+            evidence = { cleanup: {} };
+        const result = await cleanupAttachmentPresentation({
+            evidence,
+            primaryFailure,
+            bounded: async (label, operation) => {
+                boundedCalls.push(label);
+                return operation();
+            },
+            steps: [
+                [
+                    'chooserOwner',
+                    true,
+                    async () => {
+                        calls.push('owner');
+                        throw ownerError;
+                    },
+                    true,
+                ],
+                [
+                    'activationTrace',
+                    true,
+                    async () => {
+                        calls.push('trace');
+                        throw traceError;
+                    },
+                    false,
+                ],
+                [
+                    'context',
+                    true,
+                    async () => {
+                        calls.push('context');
+                        throw contextError;
+                    },
+                    false,
+                ],
+                [
+                    'server',
+                    true,
+                    async () => {
+                        calls.push('server');
+                    },
+                    false,
+                ],
+                [
+                    'unacquired',
+                    false,
+                    async () => {
+                        assert.fail('Unacquired resource cleaned');
+                    },
+                    false,
+                ],
+            ],
+        });
+        assert(result.error instanceof AggregateError);
+        assert.deepEqual(result.error.errors, [
+            primaryError,
+            ownerError,
+            traceError,
+            contextError,
+        ]);
+        assert.equal(result.error.errors[0], primaryError);
+        assert.equal(result.error.errors[1], ownerError);
+        assert.equal(result.error.errors[2], traceError);
+        assert.equal(result.error.errors[3], contextError);
+        assert.deepEqual(calls, ['owner', 'trace', 'context', 'server']);
+        assert.deepEqual(boundedCalls, [
+            'Attachment cleanup activationTrace',
+            'Attachment cleanup context',
+            'Attachment cleanup server',
+        ]);
+        assert.deepEqual(evidence, {
+            status: 'failed',
+            cleanup: {
+                chooserOwner: { status: 'failed' },
+                activationTrace: { status: 'failed' },
+                context: { status: 'failed' },
+                server: 'completed',
+                unacquired: 'not-acquired',
+            },
+        });
+        assert.equal(
+            await cleanupAttachmentPresentation({
+                evidence: { cleanup: {} },
+                primaryFailure,
+                bounded: async (_label, operation) => operation(),
+                steps: [['server', true, async () => {}, false]],
+            }),
+            primaryFailure
+        );
+        assert.equal(
+            await cleanupAttachmentPresentation({
+                evidence: { cleanup: {} },
+                bounded: async (_label, operation) => operation(),
+                steps: [['server', true, async () => {}, false]],
+            }),
+            undefined
+        );
+        const cleanupOnly = await cleanupAttachmentPresentation({
+            evidence: { cleanup: {} },
+            bounded: async (_label, operation) => operation(),
+            steps: [
+                [
+                    'server',
+                    true,
+                    async () => {
+                        throw contextError;
+                    },
+                    false,
+                ],
+            ],
+        });
+        assert(cleanupOnly.error instanceof AggregateError);
+        assert.equal(cleanupOnly.error.errors.length, 1);
+        assert.equal(cleanupOnly.error.errors[0], contextError);
+        groups.push(
+            'presentation cleanup attempts every resource and preserves primary/cleanup causes'
+        );
+    }
+    for (const [name, error] of [
+        ['zero', 0],
+        ['null', null],
+        ['undefined', undefined],
+        ['false', false],
+        ['empty string', ''],
+    ]) {
+        const primaryFailure = { error };
+        const cleanupError = new Error('controlled cleanup failure');
+        const bounded = async (_label, operation) => operation();
+        const preserved = await cleanupAttachmentPresentation({
+            evidence: { cleanup: {} },
+            primaryFailure,
+            bounded,
+            steps: [['server', true, async () => {}, false]],
+        });
+        assert.equal(preserved, primaryFailure);
+        assert.equal(preserved.error, error);
+        const aggregated = await cleanupAttachmentPresentation({
+            evidence: { cleanup: {} },
+            primaryFailure,
+            bounded,
+            steps: [
+                [
+                    'server',
+                    true,
+                    async () => {
+                        throw cleanupError;
+                    },
+                    false,
+                ],
+            ],
+        });
+        assert(aggregated.error instanceof AggregateError);
+        assert.equal(aggregated.error.errors.length, 2);
+        assert.equal(aggregated.error.errors[0], error);
+        assert.equal(aggregated.error.errors[1], cleanupError);
+        groups.push(`presentation cleanup preserves ${name} primary rejection`);
+    }
+    for (const [name, primaryError] of [
+        ['zero', 0],
+        ['null', null],
+        ['undefined', undefined],
+        ['false', false],
+        ['empty string', ''],
+    ]) {
+        for (const cleanupFails of [false, true]) {
+            const cleanupError = new Error('controlled activation cleanup');
+            const evidence = {};
+            let disableCalls = 0,
+                activations = 0;
+            const f = make(async (method, params) => {
+                if (
+                    method === 'Page.setInterceptFileChooserDialog' &&
+                    !params.enabled &&
+                    ++disableCalls === 1 &&
+                    cleanupFails
+                )
+                    throw cleanupError;
+            });
+            const owner = await createFileChooserOwner(f.page, evidence);
+            try {
+                const result = await owner
+                    .choose(
+                        f.input,
+                        async () => {
+                            activations++;
+                            f.emit();
+                            throw primaryError;
+                        },
+                        ['never-assigned']
+                    )
+                    .then(
+                        () => ({ rejected: false }),
+                        (error) => ({ rejected: true, error })
+                    );
+                assert.equal(result.rejected, true);
+                if (cleanupFails) {
+                    assert(result.error instanceof AggregateError);
+                    assert.equal(result.error.errors.length, 2);
+                    assert.equal(result.error.errors[0], primaryError);
+                    assert.equal(result.error.errors[1], cleanupError);
+                } else assert.equal(result.error, primaryError);
+                assert.equal(activations, 1);
+                assert.equal(evidence.events.length, 1);
+                assert.equal(evidence.events[0].phase, 'activated');
+                assert.equal(
+                    evidence.events[0].backendNodeId,
+                    expected.backendNodeId
+                );
+                assert.deepEqual(f.completed, []);
+            } finally {
+                await owner.dispose();
+            }
+            f.cleaned();
+            assert.deepEqual(evidence.cleanup, {
+                listener: 'completed',
+                interception: 'completed',
+                session: 'completed',
+            });
+        }
+        groups.push(
+            `chooser owner preserves ${name} activation rejection and cleanup causes`
+        );
+    }
     return {
         checks: groups.length,
         groups,
@@ -1275,13 +1705,21 @@ try {
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
-        report.attachmentPresentation =
-            await checkAttachmentPresentationBrowser({
-                browser,
-                consumer: temporary,
-                fixture: form,
-                output,
-            });
+        report.attachmentPresentation = {};
+        await checkAttachmentPresentationBrowser({
+            browser,
+            consumer: temporary,
+            fixture: form,
+            output,
+            evidence: report.attachmentPresentation,
+            createChooserOwner: (page, evidence) =>
+                createFileChooserOwner(
+                    page,
+                    evidence,
+                    undefined,
+                    'input[type=file]'
+                ),
+        });
         const run = async (name, exercise) => {
             const context = await browser.newContext({
                 serviceWorkers: 'block',

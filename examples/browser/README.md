@@ -455,7 +455,11 @@ menu. Those interfaces can call the same typed runtime APIs.
 Password verification and login return credentials without changing the SDK's
 session. This example's **Verify and use password**, **Log in and use session**,
 and **Confirm and use session** actions explicitly apply successful credentials
-to the active visitor. Choose **Reload** to load the authenticated screen.
+to the active visitor, then load the authenticated screen without another click.
+The SDK's session application remains read-free; this continuation belongs to
+the app's successful user-submit handler. If the load fails, **Reload** retries
+only that read using the applied session. It never repeats login, password
+verification, code confirmation or sign-up.
 
 Visitor A and Visitor B have separate clients and session maps. Switching
 visitors cancels pending UI work; a response from a different visitor or older

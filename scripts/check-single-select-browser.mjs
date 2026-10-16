@@ -16,8 +16,11 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+const repository = fileURLToPath(new URL('../', import.meta.url));
+const exampleDirectory = join(repository, 'examples/react-single-select');
 assert(process.argv[2], 'Pass the tested SDK tarball');
 const tarball = resolve(process.argv[2]);
 const output = resolve(process.argv[3] ?? 'dist/single-select-browser');
@@ -54,19 +57,16 @@ try {
         (name) => ({
             path: `examples/react-single-select/${name}`,
             sha256: createHash('sha256')
-                .update(readFileSync(`examples/react-single-select/${name}`))
+                .update(readFileSync(join(exampleDirectory, name)))
                 .digest('hex'),
         })
     );
     for (const name of ['main.ts', 'styles.css'])
-        copyFileSync(
-            `examples/react-single-select/${name}`,
-            join(temporary, name)
-        );
+        copyFileSync(join(exampleDirectory, name), join(temporary, name));
     const sourceParts = execFileSync(
         'git',
         ['rev-parse', 'HEAD', 'HEAD^{tree}'],
-        { encoding: 'utf8' }
+        { cwd: repository, encoding: 'utf8' }
     )
         .trim()
         .split('\n');
@@ -74,6 +74,7 @@ try {
     assert(sourceParts.every((part) => /^[a-f0-9]{40}$/.test(part)));
     const source = { commit: sourceParts[0], tree: sourceParts[1] };
     const bundle = await build({
+        absWorkingDir: temporary,
         entryPoints: [join(temporary, 'main.ts')],
         bundle: true,
         platform: 'browser',
@@ -85,9 +86,9 @@ try {
     });
     await assertBrowserInputs(bundle.metafile, temporary);
     const bundleInputs = Object.keys(bundle.metafile.inputs).map((path) => ({
-        path: relative(temporary, resolve(path)),
+        path: relative(temporary, resolve(temporary, path)),
         sha256: createHash('sha256')
-            .update(readFileSync(resolve(path)))
+            .update(readFileSync(resolve(temporary, path)))
             .digest('hex'),
     }));
     const assets = new Map(
@@ -100,9 +101,7 @@ try {
         const path = new URL(request.url, 'http://localhost').pathname;
         if (path === '/') {
             response.setHeader('content-type', 'text/html');
-            response.end(
-                readFileSync('examples/react-single-select/index.html')
-            );
+            response.end(readFileSync(join(exampleDirectory, 'index.html')));
         } else if (assets.has(path)) {
             response.setHeader(
                 'content-type',

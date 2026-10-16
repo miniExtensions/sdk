@@ -377,6 +377,10 @@ export const fieldControl = (
         input.value = initialValue == null ? '' : String(initialValue);
         control = input;
         read = () => {
+            // Native incomplete drafts can have an empty value and badInput.
+            // Changing number to password would erase that state before validation.
+            if (input.validity.badInput)
+                throw new Error(`${title} must be a valid number.`);
             if (physicalNumber) {
                 const type = numericInputType(config, 'number');
                 // Refuse an invalid password draft before a type transition

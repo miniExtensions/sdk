@@ -1,8 +1,6 @@
 name: Package checks
 
 on:
-    push:
-        branches: [main]
     pull_request:
 
 permissions:
@@ -11,91 +9,55 @@ permissions:
 jobs:
     check:
         name: check (24)
+        if: github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
+        timeout-minutes: 90
         steps:
-            - uses: actions/checkout@v4
+            - name: Checkout diagnostic harness
+              uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.event.pull_request.head.sha }}
+                  path: sdk-comparison/control
+                  persist-credentials: false
+            - name: Checkout A1 exact EA9
+              uses: actions/checkout@v4
+              with:
+                  ref: ea9f16e4e08d62a1f66a93d9a77f8ef5e93148f9
+                  path: sdk-comparison/samples/A1
+                  persist-credentials: false
+            - name: Checkout B1 exact PR153
+              uses: actions/checkout@v4
+              with:
+                  ref: faac6a701dae92bb92a69e3fcd1e43b917d181b0
+                  path: sdk-comparison/samples/B1
+                  persist-credentials: false
+            - name: Checkout B2 exact PR153
+              uses: actions/checkout@v4
+              with:
+                  ref: faac6a701dae92bb92a69e3fcd1e43b917d181b0
+                  path: sdk-comparison/samples/B2
+                  persist-credentials: false
+            - name: Checkout A2 exact EA9
+              uses: actions/checkout@v4
+              with:
+                  ref: ea9f16e4e08d62a1f66a93d9a77f8ef5e93148f9
+                  path: sdk-comparison/samples/A2
+                  persist-credentials: false
             - uses: actions/setup-node@v4
               with:
                   node-version: 24
             - run: npm install --global pnpm@10.28.2
-            - run: pnpm install --frozen-lockfile
-            - run: pnpm check
-              env:
-                  SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
-                  SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
-                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-            - name: Verify runner-provided Chrome
-              run: google-chrome --version
-            - name: Retain unit, component, and combined source coverage
+            - name: Controlled A1 B1 B2 A2 full validation
+              run: node "$GITHUB_WORKSPACE/sdk-comparison/control/.github/scripts/ci153-comparison.mjs" "$GITHUB_WORKSPACE/sdk-comparison/samples" "$RUNNER_TEMP/sdk-ci153-comparison"
+            - name: Retain controlled comparison and failure evidence
               if: always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
               with:
-                  name: sdk-source-coverage-node-24-attempt-${{ github.run_attempt }}
-                  path: |
-                      coverage/source-metrics.json
-                      coverage/*/coverage-summary.json
-                      coverage/*/coverage-final.json
-                      coverage/*/lcov.info
-                      coverage/*/lcov-report/
-                  if-no-files-found: error
-                  retention-days: 7
-            - name: Execute packed native Chromium proof
-              timeout-minutes: 10
-              run: pnpm check:browser
-              env:
-                  SDK_NATIVE_PACKAGE_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
-                  SDK_NATIVE_PROOF_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
-                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
-            - name: Execute packed Linked Records Chromium proof
-              timeout-minutes: 3
-              run: node scripts/check-linked-records-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-records"
-              env:
-                  SDK_LINKED_RECORDS_CHROMIUM: /usr/bin/google-chrome
-            - name: Retain native Chromium receipt and failure evidence
-              if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-              with:
-                  name: sdk-native-browser-results-attempt-${{ github.run_attempt }}
-                  path: ${{ runner.temp }}/sdk-native-browser-results/
+                  name: sdk-ci153-controlled-attempt-${{ github.run_attempt }}
+                  path: ${{ runner.temp }}/sdk-ci153-comparison/
                   if-no-files-found: warn
                   retention-days: 7
                   compression-level: 0
                   archive: true
                   overwrite: false
                   include-hidden-files: false
-            - name: Retain tested customer package
-              if: success() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-              with:
-                  name: sdk-tested-customer-kit-node-24-attempt-${{ github.run_attempt }}
-                  path: |
-                      ${{ runner.temp }}/sdk-tested-customer-kit/*.tgz
-                      ${{ runner.temp }}/sdk-tested-customer-kit/SHA256SUMS
-                      ${{ runner.temp }}/sdk-tested-customer-kit/artifact-receipt.json
-                      ${{ runner.temp }}/sdk-tested-customer-kit/miniExtensions-SDK-INSTALL.md
-                  if-no-files-found: error
-                  retention-days: 7
-                  compression-level: 0
-                  archive: true
-                  overwrite: false
-                  include-hidden-files: false
-            - name: Retain synthetic manual browser fixture
-              if: success() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
-              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-              with:
-                  name: sdk-synthetic-browser-proof-node-24-attempt-${{ github.run_attempt }}
-                  path: ${{ runner.temp }}/sdk-synthetic-browser-proof/
-                  if-no-files-found: error
-                  retention-days: 7
-                  compression-level: 0
-                  archive: true
-                  overwrite: false
-                  include-hidden-files: false
-            - name: Remove local customer delivery files
-              if: always()
-              env:
-                  SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
-                  SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
-                  SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
-              run: |
-                  node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR', 'SDK_NATIVE_RESULT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"

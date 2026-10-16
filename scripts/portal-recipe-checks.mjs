@@ -247,7 +247,10 @@ const makeForm = (input) => {
                           data,
                       },
             formErrors: {},
-            publicFields: {},
+            publicFields: {
+                type: 'form',
+                state: { tableId: 'tbl_children' },
+            },
             fieldIdsInForm: ['fld_title', 'fld_quantity'],
             fieldNamesToSchemas: Object.fromEntries(
                 schemas.map((schema) => [schema.airtableField.name, schema])

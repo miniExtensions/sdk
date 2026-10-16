@@ -152,7 +152,11 @@ export async function checkBrowserChildQueryExample({
             if (scenario === 'toggle-false')
                 staticText = `${country}=North%2C%20East&${region}=Duplicate%20label&${city}=City%20%3D%20%22One%22`;
             child.payload.publicFields = {
-                state: { prefillURLParamsForAddingRecords: staticText },
+                type: 'form',
+                state: {
+                    tableId: 'tbl_children',
+                    prefillURLParamsForAddingRecords: staticText,
+                },
             };
             return child;
         };

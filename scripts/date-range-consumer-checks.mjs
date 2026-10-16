@@ -170,6 +170,7 @@ export async function checkDateRangeConsumer({
                     publicFields: {
                         type: 'form',
                         state: {
+                            tableId: 'tbl_saved_range',
                             multiPageFormMode: onePage
                                 ? 'one-page'
                                 : 'multi-page',

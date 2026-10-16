@@ -177,7 +177,7 @@ Portal user/schema to choose an eligible view or explicitly supported legacy
 default. The result makes no request and grants no access or freshness.
 
 The `/ui` subpath also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CreatedByField`, `LastModifiedByField`, `CheckboxField`,
-`SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
+`SelectField`, `SingleSelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
 `DateTimeField`, `CreatedTimeField`, `LastModifiedTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
@@ -190,6 +190,14 @@ renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
+
+[Single Select presentation](docs/ui.md#react-single-select-presentation) exports
+`SingleSelectField`, `SingleSelectFieldProps`, `SingleSelectFieldOptions` and the
+`renderSingleSelectField` slot. It uses a native dropdown with optional
+`@miniextensions/sdk/react/single-select.css`, existing owner options and native
+choice-name drafts. Configured choice creation remains an explicit Form-owner
+action; saving the record remains separate. List/radio layouts and choice-color
+presentation require a custom renderer.
 
 [Multiline Text presentation](docs/ui.md#react-multiline-text-presentation) exports
 `MultilineTextField`, `MultilineTextFieldProps`, `MultilineTextFieldOptions` and the
@@ -255,6 +263,12 @@ linked records. No CSS import is required. Lookup keeps its separate contract.
 `LookupFieldProps`, `LookupFieldOptions` and `renderLookupField` for the existing
 `renderMultipleLookupValuesField` slot. It formats supplied flat native arrays as
 inert text without flattening, hydration or editing. No CSS import is required.
+
+[Barcode presentation](docs/ui.md#react-barcode-presentation) exports `BarcodeField`,
+`BarcodeFieldProps`, `BarcodeFieldOptions` and `renderBarcodeField` for the existing
+physical slot. It displays supplied text while preserving the native object and
+type, with masking applied before reading the value. This is read-only display
+coverage; scanning, generated images, links and editing are not included.
 
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.

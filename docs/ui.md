@@ -1168,6 +1168,124 @@ owners, with no backend requests. After building, run
 `node scripts/check-checkbox-browser.mjs` verifies the native interactions,
 remounting, permissions, forced colors and narrow layout and captures screenshots.
 
+## React Single Select presentation
+
+The optional `/react` entry exports `SingleSelectField`, `SingleSelectFieldProps`,
+`SingleSelectFieldOptions` and `renderSingleSelectField`. The binding component
+accepts `{ binding, render }` plus `className`, `clearLabel` and `emptyLabel`.
+Supplying `render` replaces its stock markup. `emptyLabel` defaults to `None`;
+`clearLabel` changes the Clear button's accessible name, which defaults to
+`Clear <field title>`. Existing `SelectField` delegates canonical single-select
+bindings to this control; its multi-select path remains unchanged.
+
+```tsx
+import { SingleSelectField } from '@miniextensions/sdk/react';
+import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import '@miniextensions/sdk/react/single-select.css';
+
+export function StatusField({ binding }: { binding: FormFieldBinding }) {
+    return (
+        <SingleSelectField
+            binding={binding}
+            className="record-status"
+            emptyLabel="No status"
+            clearLabel="Clear status"
+        />
+    );
+}
+```
+
+The named helper accepts `FieldRendererProps<'singleSelect'>` in `FieldRenderer`,
+`AirtableForm`, `AirtableGrid` and `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import {
+    renderSingleSelectField,
+    type SingleSelectFieldOptions,
+} from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import '@miniextensions/sdk/react/single-select.css';
+
+const statusOptions: SingleSelectFieldOptions = { emptyLabel: 'No status' };
+export const singleSelectRenderers: FieldRendererSlots<ReactNode> = {
+    renderSingleSelectField: (props) =>
+        renderSingleSelectField(props, statusOptions),
+};
+```
+
+The control uses a native single-choice `<select>`. It displays labels supplied by
+the existing owner and writes canonical choice names, never choice IDs or renamed
+labels. Existing retained unavailable selections stay visible and removable under
+the owner's policy. Choosing the empty option or using Clear delegates to the
+existing selection action; an accepted clear writes native `null`. Mounting and
+remounting do not normalize missing, null, empty or retained native answers.
+Configured choice limits and whole-selection validation remain owned by the model.
+
+This presentation stays a dropdown even when configuration requests `type: 'list'`.
+List/radio layouts and choice colors are not modeled here; use a custom renderer
+for those appearances. The renderer adds no selection model, option loader or
+condition evaluator. Existing owner selection state and options enforce choice
+availability; the renderer displays the Form bridge's status. An absent status is
+unknown and does not make the renderer construct options or authority. Blocked
+availability retains the selected value and any owner-permitted Clear action,
+while the owner withholds unavailable new options. This differs from a ready
+selector with no options or no search matches.
+
+Editing requires an accepted single-select selection capability. A generic setter,
+a multiple-selection bridge or a readonly capability does not grant it. Pending,
+configured read-only and owner-disabled controls cannot change the native value.
+Form hosts use accepted Form bindings. Grid editing uses an existing accepted
+static Portal cell editor; conditional inline configurations remain refused by the
+owner. Grid and List detail hosts remain readonly, using configured display labels
+and retaining an unknown native name without fetching choices. Static choice
+restrictions or display overrides cannot create write authority. Save is always
+an explicit Form or cell-owner action.
+
+Configured Add Choice uses the Form owner's attached choice controller and its
+current permission, availability and recovery guards. Entering a name changes only
+local presentation state. Create and Cancel call the existing owner actions;
+mounting never creates a choice. Accepted creation can select a native name in the
+local draft, but does not save the record. Uncertain or cancelled responses retain
+the owner's recovery policy, with no automatic retry, acknowledgment or rollback.
+Portal inline editors do not acquire Add Choice. See [configured choice creation](field-bindings.md#selects-linked-reads-and-reload)
+for attaching the controller and handling recovery.
+
+`SingleSelectField` uses its binding as the identity for local create-name text.
+Named helpers rendered through `FieldRenderer` and the Form/Grid/List composition
+components receive stable host identity automatically. An explicit
+`SingleSelectFieldOptions.source` takes precedence over that host context. Pass a
+stable owner or host object, for example
+`renderSingleSelectField(props, { source: host })`, to preserve local input across
+renderer-props snapshots. This object identifies local presentation only; it
+grants no capability and must change when ownership changes.
+
+Without an explicit source or host context, a standalone helper uses the original
+incoming `FieldRendererProps` object as its identity. Reusing that exact object
+preserves local input; replacing it retires the previous input and its completion
+callbacks, even when choice or selection capabilities are reused. The helper's
+internally constructed React props do not define this boundary. Every observed
+identity change starts a fresh generation, including A→B→A, so a late creation
+response cannot clear a successor's input. Remounting also resets local text;
+accepted native choices and pending operations remain with their owners.
+
+Title visibility and fallback titles, unique label IDs, an accessible hidden title,
+required indication, pending state and associated plain-text status apply. Masking
+from either display or write configuration omits native values, options and choice
+actions from stock markup. Custom rendering must apply its own privacy rules.
+Clear and choice-action buttons use `type="button"`; control events stay contained
+within Portal rows. Applications still own the surrounding form's submission
+policy. Hidden or blocked binding visibility and retired bindings/hosts omit the
+stock control; blocked choice availability alone does not. Wrong physical bindings
+cannot become a single-select editor. Custom binding rendering takes precedence.
+
+Styles use optional `@miniextensions/sdk/react/single-select.css` and the
+`mx-sdk-single-select*` classes. Import it, override it or supply your own styles;
+JavaScript does not import CSS. The synthetic `examples/react-single-select`
+example uses public exports. See [Single Select
+presentation checks](testing.md#single-select-presentation-checks) for source,
+installed-package and native browser verification.
+
 ## React Text presentation
 
 The optional `/react` entry exports `TextField`, `TextFieldProps`,
@@ -2939,3 +3057,62 @@ Labels, hidden titles, pending/invalid state and contained row interaction follo
 the existing controls. `className` decorates `mx-sdk-lookup-field`; no CSS import,
 package subpath, editor, Clear, Save or lookup action is added. Core and `/ui`
 remain React-free.
+
+## React Barcode presentation
+
+The optional `/react` entry exports `BarcodeField`, `BarcodeFieldProps`,
+`BarcodeFieldOptions` and `renderBarcodeField`. Install the renderer in the existing
+physical `renderBarcodeField` slot for `AirtableForm`, `AirtableGrid` or `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { BarcodeField, renderBarcodeField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+
+export const barcodeRenderers: FieldRendererSlots<ReactNode> = {
+    renderBarcodeField: (props) =>
+        renderBarcodeField(props, { className: 'barcode-answer' }),
+};
+// With an accepted Barcode Form binding:
+// <BarcodeField binding={barcodeBinding} className="barcode-answer" />
+```
+
+The native value remains `{ text?: string; type?: string }`, null or missing in
+the owner. Only the supplied `text` is shown, preserving whitespace, leading zeros,
+Unicode and line breaks. The `type` is neither displayed nor inferred. Visible
+null, missing, empty objects and type-only objects display blank. Malformed values
+display `Unavailable` with invalid status. The component does not normalize,
+replace or write native answers, even when the Form supplies an editable capability.
+
+Default bound output follows owner visibility and retirement before reading the
+answer. The existing edit-Form `hideFieldIfEmpty` policy remains authoritative:
+when enabled, null/missing and blank text are hidden, while objects without a text
+property are blocked. Create Forms remain visible under this policy. Use explicit
+`hideFieldIfEmpty: false` when those optional-text objects should remain visible in
+edit Forms. The application-owned `render` override keeps the existing
+custom-render precedence and is responsible for its own presentation policy.
+
+Either `obscurePassword` or `maskPasswordOnLoginScreen` in display or write
+configuration replaces the native answer with a fixed mask before reading its
+value, text or type. Owner error and validation feedback remains separate escaped
+text, with error taking precedence (including an empty error). Labels, hidden-title
+accessible names, pending/invalid state and feedback associations follow the
+existing controls. Click, auxiliary click, double click, pointer-down and keyboard
+events are contained without preventing native text selection or copy.
+
+This slice provides read-only display coverage, not editable Barcode parity.
+URLs and markup are plain text; there is no scanner/camera, generated barcode image,
+link, navigation, normalization, editing, Clear or Save action. `className` decorates
+`mx-sdk-barcode-field`; no CSS import or package subpath is added. Core and `/ui`
+remain React-free.
+
+`test/reactBarcode.test.ts` covers the source component, and `check:package` runs
+the installed ESM/CommonJS and public-type checks. To prepare a synthetic browser
+fixture from the tested archive, run
+`node scripts/build-barcode-browser-proof.mjs /path/to/tested.tgz /path/to/output`.
+It installs offline using an already seeded npm cache (`SDK_BARCODE_NPM_CACHE`
+can select that cache), verifies installed bundle inputs, and records archive and
+source hashes. Serve the output on loopback and use the browser to inspect the
+Form/Grid/List displays and run the page's interaction, remount and retirement
+checks. Fixture generation records browser verification as pending; injected DOM
+checks do not replace native pointer, keyboard, text-selection or layout inspection.

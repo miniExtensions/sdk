@@ -13,6 +13,22 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
+export {
+    BarcodeField,
+    renderBarcodeField,
+    type BarcodeFieldProps,
+    type BarcodeFieldOptions,
+} from './BarcodeField.js';
+import {
+    SingleSelectControl,
+    singleSelectConfiguration,
+    singleSelectDisplayOptions,
+    type SingleSelectFieldOptions,
+} from './SingleSelectField.js';
+export {
+    renderSingleSelectField,
+    type SingleSelectFieldOptions,
+} from './SingleSelectField.js';
 import { LookupControl, type LookupFieldOptions } from './LookupField.js';
 export { renderLookupField, type LookupFieldOptions } from './LookupField.js';
 import { RollupControl, type RollupFieldOptions } from './RollupField.js';
@@ -1311,12 +1327,112 @@ export function MultipleSelectField({
     );
 }
 
+export type SingleSelectFieldProps = FieldProps &
+    Omit<SingleSelectFieldOptions, 'source'>;
+
+function singleSelectBinding(
+    binding: FormFieldBinding,
+    snapshot: FormFieldSnapshot,
+    options: Omit<SingleSelectFieldOptions, 'source'> = {}
+): ReactNode {
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'singleSelect' ||
+        schema.airtableField.config.type !== 'singleSelect'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Single Select fields.'
+        );
+    const config = singleSelectConfiguration(schema.miniExtConfig);
+    const model = binding.selection;
+    const state = snapshot.selection;
+    const selection =
+        model && state?.multiple === false
+            ? {
+                  state,
+                  choose: model.choose,
+                  toggle: model.toggle,
+                  clear: model.clear,
+                  setSearchInput: model.setSearchInput,
+                  reload: model.reload,
+                  loadMore: model.loadMore,
+                  cancel: model.cancel,
+              }
+            : undefined;
+    const creator = binding.choiceCreation;
+    const computed =
+        snapshot.field?.isComputed === true ||
+        schema.airtableField.isComputed === true;
+    return createElement(SingleSelectControl, {
+        ...config,
+        ...options,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        displayOptions: config.password
+            ? []
+            : singleSelectDisplayOptions(
+                  schema.airtableField,
+                  schema.miniExtConfig
+              ),
+        selection,
+        choice:
+            selection &&
+            creator &&
+            snapshot.choiceCreation &&
+            !computed &&
+            !snapshot.readOnly &&
+            !config.configuredReadOnly &&
+            !config.password
+                ? {
+                      state: snapshot.choiceCreation,
+                      create: creator.create,
+                      cancel: creator.cancel,
+                  }
+                : undefined,
+        availability: snapshot.selectAvailability,
+        disabled:
+            config.password ||
+            config.configuredReadOnly ||
+            computed ||
+            !snapshot.canEdit ||
+            snapshot.pending ||
+            !selection ||
+            selection.state.disabled ||
+            selection.state.readOnly,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            selection?.state.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+    });
+}
+
+/** Borrows the accepted binding; local choice text is scoped to its identity. */
+export function SingleSelectField({
+    binding,
+    render,
+    ...options
+}: SingleSelectFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    return singleSelectBinding(binding, snapshot, options);
+}
+
 export function SelectField({ binding, render }: FieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     // Renderer-local text is not native data; replacement owners get a fresh input.
     const [intent, setIntent] = useState({ binding, name: '' });
     const name = intent.binding === binding ? intent.name : '';
     if (render) return render({ snapshot, binding });
+    if (snapshot.field?.schema.fieldType === 'singleSelect')
+        return singleSelectBinding(binding, snapshot);
     if (
         snapshot.retired ||
         snapshot.visibility.type !== 'visible' ||

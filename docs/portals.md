@@ -640,9 +640,16 @@ or ambiguous identities expose neither the native value nor an inline editor.
 Null child metadata keeps the returned detail configuration as the supported
 write-policy fallback. `fieldIsInEditingChildForm` is informational and is not
 an additional admission gate. A valid child configuration remains write policy;
-the returned detail configuration is retained separately for attachment
-presentation. Display names do not resolve physical identity, so distinct field
-IDs may share a label.
+the returned detail configuration governs row summaries separately from that
+write policy. Either `obscurePassword: true` or
+`maskPasswordOnLoginScreen: true` produces a fixed mask for every native field
+type, including Number and empty values. A defined non-boolean mask flag produces
+`Value unavailable`; absent or null configuration keeps ordinary presentation,
+including the existing attachment-summary rules. The starter checks this policy
+before reading the value and rechecks accepted ownership and display policy
+after formatting. This changes display only: native values and inline-edit
+admission stay intact. Display names do not resolve physical identity, so
+distinct field IDs may share a label.
 
 When a read returns `criteria-cleanup-required`, show the actual returned
 `raw.endUserSortCleanup`/`raw.endUserFilterCleanup` to the application. After

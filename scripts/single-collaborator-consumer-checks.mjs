@@ -554,6 +554,7 @@ export async function checkSingleCollaboratorConsumer({
                     root.render(
                         isolate(
                             h(react.SingleCollaboratorField, {
+                                key: 'guarded-actions',
                                 binding: guardedBinding,
                             })
                         )
@@ -583,9 +584,14 @@ export async function checkSingleCollaboratorConsumer({
                     const maskedBinding = Object.create(guardedBinding);
                     maskedBinding.getSnapshot = () => snapshot;
                     maskedBinding.subscribe = () => () => {};
+                    // These accessors test the component boundary. React 19's
+                    // development prop diff can itself read previous actions
+                    // when comparing this synthetic binding with another one.
+                    // A distinct mount keeps framework introspection separate.
                     await act(async () =>
                         root.render(
                             h(react.SingleCollaboratorField, {
+                                key: `masked-${flag}`,
                                 binding: maskedBinding,
                             })
                         )

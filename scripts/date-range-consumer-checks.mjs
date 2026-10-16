@@ -170,7 +170,10 @@ export async function checkDateRangeConsumer({
                     publicFields: {
                         type: 'form',
                         state: {
-                            tableId: 'tbl_saved_range',
+                            tableId:
+                                owner === 'edit'
+                                    ? 'tbl_range'
+                                    : 'tbl_saved_range',
                             multiPageFormMode: onePage
                                 ? 'one-page'
                                 : 'multi-page',
@@ -299,7 +302,8 @@ export async function checkDateRangeConsumer({
                     childExtensionId: loaded.extensionId,
                     context: owner === 'child' ? 'modal' : 'direct-url',
                 };
-                let attempts = 0;
+                let attempts = 0,
+                    acceptances = 0;
                 const lifecycle = {
                     dispatch() {
                         attempts++;
@@ -311,6 +315,7 @@ export async function checkDateRangeConsumer({
                         );
                         return {
                             accepted(result) {
+                                acceptances++;
                                 journal.accepted(
                                     attempt,
                                     result.type === 'saved'
@@ -341,6 +346,9 @@ export async function checkDateRangeConsumer({
                     recoveryScope,
                     get attempts() {
                         return attempts;
+                    },
+                    get acceptances() {
+                        return acceptances;
                     },
                     setPredicate(fn) {
                         predicate = fn;
@@ -398,11 +406,33 @@ export async function checkDateRangeConsumer({
                         f.pages.next(f.pages.getSnapshot().revision).accepted
                     );
                 const native = structuredClone(f.fields.controller.getState());
-                await f.pages.submit(f.pages.getSnapshot().revision, {
-                    lifecycle: f.lifecycle,
+                const result = await f.pages.submit(
+                    f.pages.getSnapshot().revision,
+                    {
+                        lifecycle: f.lifecycle,
+                    }
+                );
+                assert.equal(result.type, 'error');
+                assert.deepEqual(result.raw, {
+                    type: 'error',
+                    formValidationErrors: [],
+                    formErrors: {},
                 });
+                assert.equal(
+                    f.fields.controller.getState().status,
+                    'validation-error'
+                );
+                assert.deepEqual(
+                    f.fields.controller.getState().draft,
+                    native.draft
+                );
                 assert.equal(f.calls.length, 1);
                 assert.equal(f.attempts, 1);
+                assert.equal(f.acceptances, 1);
+                assert.equal(
+                    f.journal.blocking(f.recoveryScope, null),
+                    undefined
+                );
                 assert.deepEqual(f.calls[0], {
                     ...f.expectedEnvelope,
                     formRecord: {
@@ -469,6 +499,86 @@ export async function checkDateRangeConsumer({
                     checks++;
                     dispose(f);
                 }
+                // A valid edit must also accept a real saved-result shape, not
+                // merely admit dispatch and receive a validation response.
+                const successfulEdit = make(goodOwner, {
+                    owner: 'edit',
+                    onePage: true,
+                });
+                assert(
+                    successfulEdit.fields
+                        .field('answer')
+                        .date.setInput(goodOwner.value)
+                );
+                assert.deepEqual(problems(successfulEdit), []);
+                const submittedDraft = structuredClone(
+                    successfulEdit.fields.controller.getState().draft
+                );
+                assert.equal(submittedDraft.data.answer, goodOwner.value);
+                assert(submittedDraft.dirtyFieldIds.includes('answer'));
+                let savedResponse;
+                successfulEdit.setTransportResponse((input) => {
+                    savedResponse = {
+                        type: 'saved',
+                        record: {
+                            id: 'rec_range',
+                            fields: structuredClone(input.formRecord.data),
+                        },
+                        loggedInUserRecord: null,
+                        tableId: 'tbl_range',
+                        context: { type: 'direct-url' },
+                    };
+                    return savedResponse;
+                });
+                const savedEdit = await successfulEdit.pages.submit(
+                    successfulEdit.pages.getSnapshot().revision,
+                    { lifecycle: successfulEdit.lifecycle }
+                );
+                assert.deepEqual(savedEdit, {
+                    type: 'saved',
+                    raw: savedResponse,
+                    validationErrors: [],
+                    concurrentEditErrorMessage: null,
+                    postSubmissionWarnings: [],
+                    postSubmissionNotifications: [],
+                });
+                assert.equal(savedEdit.raw.record.id, 'rec_range');
+                assert.equal(savedEdit.raw.tableId, 'tbl_range');
+                assert.deepEqual(
+                    savedEdit.raw.record.fields,
+                    submittedDraft.data
+                );
+                assert.deepEqual(successfulEdit.calls, [
+                    {
+                        ...successfulEdit.expectedEnvelope,
+                        formRecord: {
+                            ...successfulEdit.expectedEnvelope.formRecord,
+                            data: submittedDraft.data,
+                        },
+                        formFieldIdsWithUnsavedChanges:
+                            submittedDraft.dirtyFieldIds,
+                    },
+                ]);
+                const savedState = successfulEdit.fields.controller.getState();
+                assert.equal(savedState.status, 'saved');
+                assert.equal(savedState.canSave, false);
+                assert.equal(savedState.hasNewerEdits, false);
+                assert.deepEqual(savedState.result, savedEdit);
+                assert.deepEqual(savedState.draft, {
+                    data: submittedDraft.data,
+                    dirtyFieldIds: [],
+                });
+                assert.equal(successfulEdit.attempts, 1);
+                assert.equal(successfulEdit.acceptances, 1);
+                assert.equal(
+                    successfulEdit.journal.blocking(
+                        successfulEdit.recoveryScope,
+                        null
+                    ),
+                    undefined
+                );
+                checks++;
+                dispose(successfulEdit);
                 const exact = cases.find(
                     (c) =>
                         !c.canonical &&

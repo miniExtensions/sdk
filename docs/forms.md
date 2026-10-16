@@ -986,6 +986,161 @@ cannot write into a new draft with the same scope string. `addChoice` retains
 local choice metadata only; it does not call `forms.addSelectOption` or save a
 record. Never share a store across visitors or connections.
 
+## Reconcile accepted compute values in an edit Form
+
+`reconcileFormComputeResult` is an opt-in, client-only transformation for a host
+that already owns a compute workflow. Compute **can write on the backend**; it
+is not local formula evaluation. A top-level `saved` response is not a per-field
+commit receipt. These are application draft acknowledgment rules, not proof of
+backend persistence. Do not retry automatically after errors or uncertain
+outcomes; reconcile the outcome and obtain a fresh load before another request.
+Do not reuse a completed create context. The recipe below accepts only an edit
+Form and provides no create-identity handoff.
+
+Supply `submittedData` from the actual eligible frontend values that the host's
+accepted request policy can acknowledge. It must contain only own enumerable,
+defined native values. Exclude computed/read-only fields, conditionally omitted
+fields and fields whose acknowledgment is uncertain. **Do not use the complete
+request-start draft or `formRecord.data` as this map**: those records can contain
+baseline, computed and omitted values even when they cannot be acknowledged.
+Inherited, nonenumerable and `undefined` submitted keys never acknowledge.
+
+`latestData` is the complete current own-enumerable draft, including current
+append inputs and explicit blank strings. Supply accurate `latestDirtyFieldIds`;
+the helper does not invent dirty IDs from value differences. Supply
+`retainDirtyFieldIds` for current dirty fields whose per-field edit generation
+changed after capture, including A → B → A, or whose acknowledgment is uncertain.
+The host owns this tracking; value equality alone cannot identify newer intent.
+The helper never acknowledges those retained fields. The required
+`areValuesEquivalent` callback supplies the host's rich/native comparison policy.
+
+The result starts with accepted `serverData`, keeps retained dirty values and
+restores only acknowledged submitted frontend bytes. Existing computed values
+therefore accept their server result when absent from the eligible submitted
+map. Acknowledged add-only text clears to `''`; every other append input retains
+its latest local value, even when blank and not dirty, instead of displaying
+server history. Missing retained/append keys are omitted; explicit own
+`undefined` stays an own `undefined` value. Dirty order and duplicates survive.
+Top-level records, ID arrays and sets are snapshotted before comparisons; native
+value references are preserved, and the helper does not mutate its inputs.
+
+For example, an edit request submits quantity `1` and append text `Sent note`.
+Before its response arrives, quantity becomes `2`, a hidden draft stays local,
+and another append input contains `Next note`. The server returns total `20`
+while the previous local total was `10`. Reconciliation keeps quantity `2` and
+the hidden/new append drafts dirty, accepts total `20`, clears only the
+acknowledged `Sent note` input, and keeps an unsubmitted blank append input blank.
+If an append changed A → B → A, its newer generation retains A and its dirty ID.
+
+The following host methods and types are application-owned. `current` must
+check the captured visitor/session, client, Form token/table/record/parent
+context, configuration and request sequence. Every native edit, including
+equal-value intent, must advance its field generation and the native revision.
+`applyIfCurrent` must recheck those identities and the expected revision inside
+one atomic application-state update; it must never dispatch another write.
+
+```ts
+import type {
+    AirtableValue,
+    FormLoadedResult,
+    MiniExtensionsClient,
+} from '@miniextensions/sdk';
+import {
+    createFormSaveInput,
+    normalizeFormSaveResult,
+    reconcileFormComputeResult,
+    type FormComputeReconciliationResult,
+    type FormDraftSnapshot,
+    type FormSaveOptions,
+} from '@miniextensions/sdk/forms';
+
+type ComputeRequest = {
+    loaded: FormLoadedResult;
+    draft: FormDraftSnapshot<AirtableValue>;
+    options: FormSaveOptions;
+    submittedData: Readonly<Record<string, AirtableValue>>;
+    fieldGenerations: Readonly<Record<string, number>>;
+    addOnlyTextFieldIds: ReadonlySet<string>;
+};
+type ComputeHost = {
+    current(request: ComputeRequest): boolean;
+    nativeRevision(): number;
+    snapshot(): {
+        revision: number;
+        data: Readonly<Record<string, AirtableValue | undefined>>;
+        dirtyFieldIds: readonly string[];
+        fieldGenerations: Readonly<Record<string, number>>;
+    };
+    uncertainFieldIds(request: ComputeRequest): ReadonlySet<string>;
+    equivalent(
+        latest: AirtableValue | undefined,
+        submitted: AirtableValue | undefined
+    ): boolean;
+    applyIfCurrent(
+        request: ComputeRequest,
+        revision: number,
+        next: FormComputeReconciliationResult
+    ): boolean;
+};
+
+async function computeEdit(
+    client: MiniExtensionsClient,
+    request: ComputeRequest,
+    host: ComputeHost
+) {
+    if (
+        request.loaded.payload.formRecord.type !== 'edit' ||
+        !host.current(request)
+    )
+        return false;
+    const session = client.getSession();
+    const input = createFormSaveInput({
+        loaded: request.loaded,
+        draft: request.draft,
+        options: { ...request.options, isComputeMode: true },
+    });
+    if (!host.current(request)) return false;
+    const response = await client.forms.save(input, { session });
+    if (!host.current(request)) return false;
+    const accepted = normalizeFormSaveResult(response, request.loaded);
+    if (accepted.type !== 'saved' || !host.current(request)) return false;
+    const latest = host.snapshot();
+    const uncertain = host.uncertainFieldIds(request);
+    const retained = new Set(
+        latest.dirtyFieldIds.filter(
+            (id) =>
+                uncertain.has(id) ||
+                !Object.hasOwn(request.fieldGenerations, id) ||
+                !Object.hasOwn(latest.fieldGenerations, id) ||
+                request.fieldGenerations[id] !== latest.fieldGenerations[id]
+        )
+    );
+    if (!host.current(request) || host.nativeRevision() !== latest.revision)
+        return false;
+    const next = reconcileFormComputeResult({
+        submittedData: request.submittedData,
+        latestData: latest.data,
+        latestDirtyFieldIds: latest.dirtyFieldIds,
+        retainDirtyFieldIds: retained,
+        serverData: accepted.raw.record.fields,
+        addOnlyTextFieldIds: request.addOnlyTextFieldIds,
+        areValuesEquivalent: (current, submitted) =>
+            host.equivalent(current, submitted),
+    });
+    if (!host.current(request) || host.nativeRevision() !== latest.revision)
+        return false;
+    return host.applyIfCurrent(request, latest.revision, next);
+}
+```
+
+Response normalization uses the existing SDK table/edit-record identity checks.
+Owner/request/native-revision checks must surround the helper because getters
+and comparison callbacks can have effects. Callback errors propagate: do not
+apply a partial result or automatically repeat the compute write. This helper
+does not dispatch requests, authenticate, evaluate formulas, update
+`FormDraftStore` or clear final-save state. It does not enable automatic compute
+in the controller, browser starter, Review, pages or linked-child flows.
+
 ## Headless controller with explicit Save
 
 `createFormController` binds one loaded Form, complete save options and the

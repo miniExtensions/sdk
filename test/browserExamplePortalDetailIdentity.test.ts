@@ -144,7 +144,7 @@ const mount = async (
     returned: ListPortalLinkedRecordsResult,
     page = portalPage({ disableInlineEdit: false }),
     observeSnapshot?: SnapshotObserver,
-    expectedRows = 1
+    expectedRows: number | null = 1
 ) => {
     const window = new Window({
         url: 'https://app.example.test',
@@ -196,6 +196,7 @@ const mount = async (
     const saves: UpdateGridCellInput[] = [];
     const routes: string[] = [];
     const failures: unknown[] = [];
+    const statusMessages: string[] = [];
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
         session: { visitor: 'synthetic-detail-owner' },
@@ -278,7 +279,9 @@ const mount = async (
             actions.push(pending);
             return pending;
         },
-        status: () => {},
+        status: (message: string) => {
+            statusMessages.push(message);
+        },
         confirm: async () => false,
         openChild: () => {
             throw new Error('Unexpected synthetic child open.');
@@ -302,7 +305,11 @@ const mount = async (
     };
     await click('Load records');
     assert.deepEqual(failures, []);
-    assert.equal(view.node.querySelectorAll('tbody tr').length, expectedRows);
+    if (expectedRows !== null)
+        assert.equal(
+            view.node.querySelectorAll('tbody tr').length,
+            expectedRows
+        );
     return {
         window,
         view,
@@ -310,6 +317,7 @@ const mount = async (
         saves,
         routes,
         failures,
+        statusMessages,
         buttons,
         click,
         settle: () => Promise.all(actions),
@@ -734,7 +742,7 @@ describe('Portal row summaries guard native reads and formatting lifetime', () =
                     },
                 });
             },
-            options.criteriaRetired ? 0 : 1
+            options.criteriaRetired || options.retired ? 0 : 1
         );
         assert.equal(
             observations,
@@ -759,6 +767,10 @@ describe('Portal row summaries guard native reads and formatting lifetime', () =
                 'The actual search reset must leave its positive reload hint.'
             );
             assert.equal(fixture.view.node.querySelectorAll('table').length, 0);
+        } else if (options.retired) {
+            assert.equal(fixture.view.node.isConnected, true);
+            assert.equal(fixture.buttons('Load records').length, 1);
+            assert.equal(fixture.view.node.querySelectorAll('table').length, 0);
         } else {
             assert.deepEqual(
                 Array.from(
@@ -774,11 +786,7 @@ describe('Portal row summaries guard native reads and formatting lifetime', () =
             assert.equal(cells.length, 3);
             assert.equal(cells[0]?.textContent, `${expected}Edit cell`);
             assert.equal(cells[0]?.title, '');
-            if (!options.retired)
-                assert.equal(
-                    cells[1]?.textContent,
-                    `${neighborValue}Edit cell`
-                );
+            assert.equal(cells[1]?.textContent, `${neighborValue}Edit cell`);
         }
         if (expected !== permittedValue) {
             assert.equal(
@@ -895,6 +903,202 @@ describe('Portal row summaries guard native reads and formatting lifetime', () =
                 );
             },
         });
+    });
+});
+
+describe('Portal row-summary publication stays owned through later columns', () => {
+    const laterFieldId = 'fld_later_publication_trigger';
+    const laterFieldName = 'Later publication trigger';
+    const laterValue = 'Synthetic later column value';
+    const changedSearch = 'synthetic later-column criteria';
+    const changedVisitor = 'synthetic-later-column-owner';
+    const exerciseLaterColumn = async (
+        test: TestContext,
+        retirement: 'owner' | 'session' | 'criteria' | null
+    ) => {
+        const returned = listPage();
+        details(returned)[0]!.miniExtConfig = {};
+        details(returned).push({
+            ...detailField(),
+            fieldId: laterFieldId,
+            fieldName: laterFieldName,
+            miniExtConfig: {},
+            childFormField: {
+                idOrName: { type: 'id', id: laterFieldId },
+                config: {
+                    type: AirtableFieldType.SINGLE_LINE_TEXT,
+                    config: { readOnly: false },
+                },
+            },
+        });
+        const state = returned.tableIdsToLinkedTableStates[tableId]!;
+        state.airtableFields.push({
+            ...physicalField(),
+            id: laterFieldId,
+            name: laterFieldName,
+        });
+        state.recordIdsToAirtableRecords[recordId]!.fields[laterFieldId] =
+            laterValue;
+        const untouched = structuredClone(returned);
+        const observations: SnapshotObservationContext[] = [];
+        const readOrder: string[] = [];
+        let firstReads = 0;
+        let laterReads = 0;
+        const fixture = await mount(
+            test,
+            returned,
+            portalPage({ disableInlineEdit: false }),
+            (snapshot, context) => {
+                observations.push(context);
+                const fields =
+                    snapshot.tableIdsToLinkedTableStates[tableId]!
+                        .recordIdsToAirtableRecords[recordId]!.fields;
+                // One-shot accessors observe actual detached summary creation.
+                // Later SDK editor clones see ordinary native properties and
+                // cannot repeat the trigger or inflate these counters.
+                Object.defineProperty(fields, fieldId, {
+                    configurable: true,
+                    enumerable: true,
+                    get: () => {
+                        Object.defineProperty(fields, fieldId, {
+                            configurable: true,
+                            enumerable: true,
+                            writable: true,
+                            value: permittedValue,
+                        });
+                        firstReads++;
+                        readOrder.push('first');
+                        return permittedValue;
+                    },
+                });
+                Object.defineProperty(fields, laterFieldId, {
+                    configurable: true,
+                    enumerable: true,
+                    get: () => {
+                        Object.defineProperty(fields, laterFieldId, {
+                            configurable: true,
+                            enumerable: true,
+                            writable: true,
+                            value: laterValue,
+                        });
+                        laterReads++;
+                        readOrder.push('second');
+                        if (retirement === 'owner') context.scope.revision++;
+                        if (retirement === 'session')
+                            context.client.setSession({
+                                visitor: changedVisitor,
+                            });
+                        if (retirement === 'criteria') {
+                            const search =
+                                context.window.document.querySelector(
+                                    'input[placeholder="Search this table"]'
+                                );
+                            assert.ok(
+                                search instanceof
+                                    context.window.HTMLInputElement
+                            );
+                            search.value = changedSearch;
+                            search.dispatchEvent(
+                                new context.window.Event('input', {
+                                    bubbles: true,
+                                })
+                            );
+                        }
+                        return laterValue;
+                    },
+                });
+            },
+            null
+        );
+        assert.equal(observations.length, 1);
+        assert.equal(firstReads, 1);
+        assert.equal(laterReads, 1);
+        assert.deepEqual(readOrder, ['first', 'second']);
+        assert.deepEqual(fixture.routes, [
+            'fetchRecordsForLinkedTableOnPortal',
+        ]);
+        assert.deepEqual(fixture.saves, []);
+        assert.deepEqual(fixture.failures, []);
+        assert.deepEqual(returned, untouched);
+        assert.equal(fixture.view.node.isConnected, true);
+        assert.equal(fixture.buttons('Load records').length, 1);
+        if (retirement === 'owner')
+            assert.equal(observations[0]!.scope.revision, 1);
+        if (retirement === 'session')
+            assert.equal(
+                observations[0]!.client.getSession().visitor,
+                changedVisitor
+            );
+        if (retirement === 'criteria') {
+            const search = fixture.window.document.querySelector(
+                'input[placeholder="Search this table"]'
+            );
+            assert.ok(search instanceof fixture.window.HTMLInputElement);
+            assert.equal(search.value, changedSearch);
+            assert.ok(
+                fixture.view.node.textContent.includes(
+                    'Choose Load records to fetch this view.'
+                )
+            );
+        }
+        if (retirement === null) {
+            assert.equal(
+                fixture.statusMessages.filter((message) =>
+                    /^Loaded \d+ records\./.test(message)
+                ).length,
+                1
+            );
+            assert.deepEqual(
+                Array.from(
+                    (fixture.view.node as HTMLElement).querySelectorAll(
+                        'thead th'
+                    ),
+                    (header) => header.textContent
+                ),
+                ['Synthetic title', laterFieldName, 'Actions']
+            );
+            assert.equal(
+                fixture.view.node.querySelectorAll('tbody tr').length,
+                1
+            );
+            const cells = fixture.view.node.querySelectorAll('tbody td');
+            assert.equal(cells[0]?.textContent, `${permittedValue}Edit cell`);
+            assert.equal(cells[1]?.textContent, `${laterValue}Edit cell`);
+        } else {
+            assert.equal(
+                fixture.statusMessages.filter((message) =>
+                    /^Loaded \d+ records\./.test(message)
+                ).length,
+                0,
+                'A retired read must not report that its old records loaded.'
+            );
+            assert.equal(
+                fixture.view.node.textContent.includes(permittedValue),
+                false
+            );
+            assert.equal(
+                fixture.view.node.outerHTML.includes(permittedValue),
+                false
+            );
+            assert.equal(
+                fixture.view.node.querySelectorAll('table').length,
+                0,
+                'Retirement in a later column must refuse the whole detached table.'
+            );
+        }
+    };
+
+    it('does not publish an earlier plain cell after a later column retires the owner', async (test) => {
+        await exerciseLaterColumn(test, 'owner');
+    });
+    it('does not publish an earlier plain cell after a later column changes the session', async (test) => {
+        await exerciseLaterColumn(test, 'session');
+    });
+    it('preserves the actual criteria reset when a later column changes search', async (test) => {
+        await exerciseLaterColumn(test, 'criteria');
+    });
+    it('publishes both actual plain columns when the armed later getter keeps ownership', async (test) => {
+        await exerciseLaterColumn(test, null);
     });
 });
 

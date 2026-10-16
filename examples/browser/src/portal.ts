@@ -1679,6 +1679,9 @@ export const createPortalView = (options: {
             tbody.append(row);
         }
         table.append(tbody);
+        // A later cell can retire the lease after earlier cells were formatted.
+        // Publish the detached table only while the whole render is still owned.
+        if (!summaryIsCurrent()) return;
         results.append(
             element(
                 'p',
@@ -1772,6 +1775,7 @@ export const createPortalView = (options: {
                         !selectionAvailable() || creatingChildId() == null;
                     closeEditor();
                     renderRecords();
+                    if (!accepted()) return;
                     mountCriteriaEditors();
                     status(
                         result == null

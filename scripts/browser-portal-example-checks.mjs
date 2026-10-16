@@ -987,7 +987,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'resolved child password config masks cells before and after native Grid saves',
+            'plain returned Detail remains visible while child password config masks only the editor before and after native Grid saves',
             async () => {
                 const portal = editablePortal();
                 const detail =
@@ -1016,9 +1016,9 @@ export async function checkBrowserPortalExample({
                 });
                 await h.click('Load records');
                 const cell = () => h.view.node.querySelector('tbody td');
-                assert.equal(cell().textContent, '••••••••Edit cell');
+                assert.equal(cell().textContent, `${original}Edit cell`);
                 assert.equal(cell().title, '');
-                assert.equal(h.view.node.textContent.includes(original), false);
+                assert.equal(h.view.node.textContent.includes(original), true);
                 await h.click('Edit cell');
                 let input = h.view.node.querySelector(
                     'input[data-field-id="fld_title"]'
@@ -1029,8 +1029,8 @@ export async function checkBrowserPortalExample({
                 change(h.window, input, 'input');
                 submit(h.window, input.closest('form'));
                 await h.settle();
-                assert.equal(cell().textContent, '••••••••Edit cell');
-                assert.equal(h.view.node.textContent.includes(saved), false);
+                assert.equal(cell().textContent, `${saved}Edit cell`);
+                assert.equal(h.view.node.textContent.includes(saved), true);
                 assert.deepEqual(
                     h.calls
                         .filter(({ operation }) => operation === 'grid')
@@ -1049,7 +1049,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'published detail password config masks nonempty cells while empty values stay empty',
+            'published Detail password config masks every row value including empty and null values',
             async () => {
                 const portal = editablePortal();
                 portal.payload.linkedRecordFieldIdToDetailFields.fld_children[0].miniExtConfig =
@@ -1070,7 +1070,11 @@ export async function checkBrowserPortalExample({
                     [...h.view.node.querySelectorAll('tbody tr')].map(
                         (row) => row.querySelector('td').textContent
                     ),
-                    ['••••••••Edit cell', 'Edit cell', 'Edit cell']
+                    [
+                        '••••••••Edit cell',
+                        '••••••••Edit cell',
+                        '••••••••Edit cell',
+                    ]
                 );
                 assert.equal(
                     h.view.node.textContent.includes('Private content'),
@@ -1086,7 +1090,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'ordinary cells and authoritative nonmasked child config preserve their display values',
+            'masked returned Detail cannot be weakened by an ordinary child write config',
             async () => {
                 const portal = editablePortal();
                 const detail =
@@ -1112,14 +1116,143 @@ export async function checkBrowserPortalExample({
                     [...h.view.node.querySelectorAll('tbody td')]
                         .slice(0, 2)
                         .map((cell) => cell.textContent),
-                    ['Ordinary titleEdit cell', '42Edit cell']
+                    ['••••••••Edit cell', '42Edit cell']
                 );
+                assert.equal(
+                    h.view.node.textContent.includes('Ordinary title'),
+                    false
+                );
+                await h.click('Edit cell');
+                const input = h.view.node.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                assert.equal(
+                    input.type,
+                    'text',
+                    'The unmasked child still owns editor policy.'
+                );
+                assert.equal(input.value, 'Ordinary title');
                 assert.equal(
                     h.calls.filter(({ operation }) => operation === 'grid')
                         .length,
                     0
                 );
                 await h.dispose();
+            }
+        );
+
+        await check(
+            'installed starter row summaries use both mask flags across native types and refuse malformed display flags without writes',
+            async () => {
+                const cases = [
+                    {
+                        config: { obscurePassword: true },
+                        value: 'Private text',
+                        numeric: false,
+                        expected: '••••••••',
+                    },
+                    {
+                        config: { maskPasswordOnLoginScreen: true },
+                        value: 'Private text',
+                        numeric: false,
+                        expected: '••••••••',
+                    },
+                    {
+                        config: { obscurePassword: true },
+                        value: 0,
+                        numeric: true,
+                        expected: '••••••••',
+                    },
+                    {
+                        config: { maskPasswordOnLoginScreen: true },
+                        value: 1234,
+                        numeric: true,
+                        expected: '••••••••',
+                    },
+                    {
+                        config: { obscurePassword: 'false' },
+                        value: 'Private text',
+                        numeric: false,
+                        expected: 'Value unavailable',
+                    },
+                    {
+                        config: { maskPasswordOnLoginScreen: null },
+                        value: 1234,
+                        numeric: true,
+                        expected: 'Value unavailable',
+                    },
+                    {
+                        config: {
+                            obscurePassword: true,
+                            maskPasswordOnLoginScreen: [],
+                        },
+                        value: 'Private text',
+                        numeric: false,
+                        expected: 'Value unavailable',
+                    },
+                    {
+                        config: undefined,
+                        value: 'Ordinary text',
+                        numeric: false,
+                        expected: 'Ordinary text',
+                    },
+                    { config: null, value: 0, numeric: true, expected: '0' },
+                    {
+                        config: {
+                            obscurePassword: false,
+                            maskPasswordOnLoginScreen: false,
+                        },
+                        value: 42,
+                        numeric: true,
+                        expected: '42',
+                    },
+                ];
+                for (const example of cases) {
+                    const portal = editablePortal();
+                    const detail =
+                        portal.payload.linkedRecordFieldIdToDetailFields
+                            .fld_children[0];
+                    detail.miniExtConfig = example.config;
+                    detail.childFormField = {
+                        idOrName: { type: 'id', id: 'fld_title' },
+                        config: {
+                            type: example.numeric ? 'number' : 'singleLineText',
+                            config: {},
+                        },
+                    };
+                    const loaded = page([record('rec_one', example.value, 0)]);
+                    if (example.numeric)
+                        loaded.tableIdsToLinkedTableStates.tbl_children.airtableFields[0].config =
+                            { type: 'number', options: { precision: 0 } };
+                    const untouched = structuredClone({ portal, loaded });
+                    const h = await mount({
+                        portal,
+                        handlers: { list: () => loaded },
+                    });
+                    await h.click('Load records');
+                    const cell = h.view.node.querySelector('tbody td');
+                    assert.equal(
+                        cell.textContent,
+                        `${example.expected}Edit cell`
+                    );
+                    assert.equal(cell.title, '');
+                    if (example.value === 'Private text')
+                        assert.equal(
+                            h.view.node.outerHTML.includes(example.value),
+                            false
+                        );
+                    assert.deepEqual(
+                        h.calls.map(({ operation }) => operation),
+                        ['list']
+                    );
+                    assert.deepEqual(
+                        { portal, loaded },
+                        untouched,
+                        'Display must preserve native values and child configuration.'
+                    );
+                    assert.deepEqual(h.failures, []);
+                    await h.dispose();
+                }
             }
         );
 

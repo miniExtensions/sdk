@@ -297,6 +297,28 @@ export const recordTitle = (
         : displayValue(values[primary.id]) || fallback;
 };
 
+const numericInputType = (
+    config: RuntimeFieldSchema['miniExtConfig'],
+    unmasked: 'number' | 'text'
+): 'password' | 'number' | 'text' =>
+    config != null &&
+    // Unknown defined mask flags must not silently expose a Number value.
+    // Only false and an absent/undefined flag explicitly leave it unmasked.
+    (('obscurePassword' in config &&
+        config.obscurePassword !== undefined &&
+        config.obscurePassword !== false) ||
+        ('maskPasswordOnLoginScreen' in config &&
+            config.maskPasswordOnLoginScreen !== undefined &&
+            config.maskPasswordOnLoginScreen !== false))
+        ? 'password'
+        : unmasked;
+
+// Match native number-input syntax. Number() alone also accepts whitespace,
+// hexadecimal and Infinity, and valueAsNumber is unavailable for passwords.
+const nativeNumericInput = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+const passwordNumber = (draft: string): number =>
+    nativeNumericInput.test(draft) ? Number(draft) : NaN;
+
 export const fieldControl = (
     field: RuntimeAirtableField,
     config: RuntimeFieldSchema['miniExtConfig'],
@@ -346,20 +368,45 @@ export const fieldControl = (
         };
     } else if (numericTypes.has(field.config.type)) {
         const input = element('input');
-        input.type = 'number';
+        const physicalNumber = field.config.type === AirtableFieldType.NUMBER;
+        input.type = physicalNumber
+            ? numericInputType(config, 'number')
+            : 'number';
+        if (physicalNumber) input.inputMode = 'decimal';
         input.step = 'any';
         input.value = initialValue == null ? '' : String(initialValue);
         control = input;
         read = () => {
+            // Native incomplete drafts can have an empty value and badInput.
+            // Changing number to password would erase that state before validation.
+            if (input.validity.badInput)
+                throw new Error(`${title} must be a valid number.`);
+            if (physicalNumber) {
+                const type = numericInputType(config, 'number');
+                // Refuse an invalid password draft before a type transition
+                // could sanitize it to empty and silently read it as null.
+                if (
+                    type === 'number' &&
+                    input.type === 'password' &&
+                    input.value !== '' &&
+                    !Number.isFinite(passwordNumber(input.value))
+                )
+                    throw new Error(`${title} must be a number.`);
+                input.type = type;
+            }
             if (input.validity.badInput || !input.checkValidity())
                 throw new Error(`${title} must be a valid number.`);
             if (input.value === '') return null;
-            const numeric = input.valueAsNumber;
+            const numeric =
+                physicalNumber && input.type === 'password'
+                    ? passwordNumber(input.value)
+                    : input.valueAsNumber;
             if (!Number.isFinite(numeric))
                 throw new Error(`${title} must be a number.`);
             return numeric;
         };
         write = (next) => {
+            if (physicalNumber) input.type = numericInputType(config, 'number');
             input.value = next == null ? '' : String(next);
         };
     } else if (textTypes.has(field.config.type)) {
@@ -501,6 +548,15 @@ export function mountBoundFormField(
         input.addEventListener('change', change);
         const render = () => {
             const state = binding.getSnapshot();
+            if (state.scalar?.kind === 'number') {
+                const currentSchema = state.field?.schema;
+                input.type =
+                    currentSchema?.fieldType === AirtableFieldType.NUMBER &&
+                    currentSchema.airtableField.config.type ===
+                        AirtableFieldType.NUMBER
+                        ? numericInputType(currentSchema.miniExtConfig, 'text')
+                        : 'text';
+            }
             node.hidden = state.visibility.type !== 'visible';
             node.inert = !state.canEdit;
             input.disabled = !state.canEdit || state.date?.canEdit === false;

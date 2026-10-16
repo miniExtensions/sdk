@@ -13,6 +13,12 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
+export {
+    BarcodeField,
+    renderBarcodeField,
+    type BarcodeFieldProps,
+    type BarcodeFieldOptions,
+} from './BarcodeField.js';
 import {
     SingleSelectControl,
     singleSelectConfiguration,

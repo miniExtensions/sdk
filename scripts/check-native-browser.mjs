@@ -24,6 +24,7 @@ import {
 import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
+import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1462,6 +1463,7 @@ try {
             'scripts/attachment-review-recipe-checks.mjs',
             'scripts/attachment-presentation-browser-checks.mjs',
             'scripts/portal-recipe-checks.mjs',
+            'scripts/browser-number-input-mask-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -1705,6 +1707,12 @@ try {
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
+        report.numberInputMask = {};
+        await checkNumberInputMaskBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.numberInputMask,
+        });
         report.attachmentPresentation = {};
         await checkAttachmentPresentationBrowser({
             browser,

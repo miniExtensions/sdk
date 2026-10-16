@@ -238,7 +238,13 @@ It displays the supplied SDK string with the disabled Text control and optional
 `FormulaField`, `FormulaFieldProps`, `FormulaFieldOptions` and the typed
 `renderFormulaField` slot. It formats supplied computed results as inert text,
 with native values and readonly authority retained by the existing controller.
-No CSS import is required. Rollup and Lookup remain separate presentations.
+No CSS import is required. Lookup remains a separate presentation.
+
+[Rollup presentation](docs/ui.md#react-rollup-presentation) exports
+`RollupField`, `RollupFieldProps`, `RollupFieldOptions` and the typed
+`renderRollupField` slot. It displays supplied aggregate results as inert text
+using existing native formatting, without evaluating the aggregation or reading
+linked records. No CSS import is required. Lookup keeps its separate contract.
 
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.

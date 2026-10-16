@@ -2818,3 +2818,67 @@ explicitly empty error keeps precedence over validation text.
 `className` decorates `mx-sdk-formula-field`. No stylesheet or package subpath is
 added; wrapping and line breaks work without CSS. Applications may style the
 wrapper, label and `output`. Existing core and `/ui` exports remain React-free.
+
+## React Rollup presentation
+
+The optional `/react` entry exports `RollupField`, `RollupFieldProps`,
+`RollupFieldOptions` and `renderRollupField`. They display the supplied aggregate
+answer as inert, selectable text. No aggregation, expression evaluation, linked
+record read, editor, Clear control, Save, resource loading or navigation is added.
+Physical Rollup remains readonly even when runtime hints say `isComputed: false`.
+Formula and Lookup retain separate slots; Lookup's array/provenance contract is
+not changed by this presentation.
+
+```tsx
+import { RollupField, renderRollupField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+import type { ReactNode } from 'react';
+
+export const rollupRenderers: FieldRendererSlots<ReactNode> = {
+    renderRollupField: (props) =>
+        renderRollupField(props, { className: 'aggregate-answer' }),
+};
+// With an accepted Rollup Form binding:
+// <RollupField binding={rollupBinding} className="aggregate-answer" />
+```
+
+Pass the slots to `AirtableForm`, `AirtableGrid`, `AirtableList` or
+`FieldRenderer`. Grid/List use accepted Portal detail hosts without a computed
+inline editing binding. The binding component retains `{ binding, render }`;
+custom rendering replaces the default markup. Hidden/retired bindings and blocked
+hosts omit output. Another physical kind renders a status message.
+
+Supplied numeric, percent, currency, duration, date/dateTime, text, select,
+collaborator, attachment and other admitted native results use the existing
+readable-value formatters. Scalar-result arrays preserve order, duplicates and
+existing null-member omission; top-level array-valued result configurations use
+their native whole-array formatter. Number precision, date/time metadata and
+readable rich-text conversion affect presentation only. Native values, arrays,
+objects and dirty state remain with the owner. Rollup provenance metadata grants
+no hydration or write authority.
+
+Null/missing values and unavailable result metadata display blank. Native
+`{ error: string }` cells retain their readable error text, including when result
+metadata is unavailable; special-number envelopes use existing formatting.
+Malformed direct values, incompatible result shapes and formatting failures
+show `Unavailable` with `aria-invalid`, without raw exception details. Hosts may
+refuse malformed metadata/values before the slot runs.
+
+Existing contract limits are preserved: renderer props provide no linked-table
+hydration context, so unresolved native record IDs show `Unavailable` and no
+records are fetched. Generated metadata includes `manualSort`, while shared
+renderer admission rejects it. Nested array-valued computed combinations that
+the existing formatter cannot consume show `Unavailable`. This component does
+not flatten unsupported nested arrays or change shared conversion/admission.
+
+Markup, URLs, attachment and Button results stay literal text, including any
+forged special display flags. Masking flags from either configuration surface
+replace the value with a fixed mask before formatting. Titles, field-name
+fallback, unique associated labels, pending state and plain-text validation
+feedback follow existing presentation behavior. An explicitly empty error keeps
+precedence over validation text. Row interaction events are contained without
+preventing text selection. Supplied capabilities are never borrowed.
+
+`className` decorates `mx-sdk-rollup-field`; no CSS import or package subpath is
+required. Default markup preserves line breaks and wraps long text. Core and
+`/ui` remain React-free.

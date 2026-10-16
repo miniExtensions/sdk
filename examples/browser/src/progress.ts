@@ -619,6 +619,7 @@ export const createBrowserCreateProgress = (
                     lastValues = serialized;
                     failed = false;
                     notice('Selected answers remembered in this tab.');
+                    renderChoices();
                 } else if (result.status !== 'retired') {
                     failed = true;
                     lastValues = null;

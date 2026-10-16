@@ -8,7 +8,8 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import type { FormLoadedResult, SaveFormInput } from '../src/runtime/index.js';
-import { loadedForm } from './formsFixtures.js';
+import type { RecoveryAttempt } from '../src/forms/index.js';
+import { invalidForm, loadedForm } from './formsFixtures.js';
 
 const root = resolve(process.cwd());
 const progressPrefix = 'miniExtensions-sdk:create-progress:v1:';
@@ -21,7 +22,9 @@ let moduleRevision = 0;
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-create-progress-browser-'));
     await build({
-        entryPoints: [join(root, 'examples/browser/src/main.ts')],
+        entryPoints: [
+            join(root, 'test/fixtures/browserCreateProgressEntry.mjs'),
+        ],
         alias: {
             '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),
             '@miniextensions/sdk/ui': join(root, 'src/ui/index.ts'),
@@ -50,8 +53,9 @@ const waitFor = async (predicate: () => boolean) => {
     );
 };
 
-// Cooperative exclusive locks are the only simulated browser capability. The
-// actual starter and SDK still own admission, revisions, storage and transport.
+// Cooperative exclusive locks model browser storage scheduling. The test entry
+// observes the actual journal and permits one controlled pre-transport Cancel;
+// the actual starter and SDK still own admission, revisions and outcomes.
 const exclusiveLocks = () => {
     const tails = new Map<string, Promise<void>>();
     let gate: Promise<void> | undefined;
@@ -198,11 +202,39 @@ const storedValues = (window: Window) =>
     progressEntries(window).map(
         ({ bytes }) => JSON.parse(bytes).values as Record<string, unknown>
     );
+const storedToken = (window: Window) => {
+    const entries = progressEntries(window);
+    assert.equal(entries.length, 1);
+    const { draftId, writeId } = JSON.parse(entries[0]!.bytes) as {
+        draftId: string;
+        writeId: string;
+    };
+    assert.equal(typeof draftId, 'string');
+    assert.ok(draftId);
+    assert.equal(typeof writeId, 'string');
+    assert.ok(writeId);
+    return { draftId, writeId };
+};
+const submitForm = (window: Window) => {
+    const form = button(window, 'Save').closest('form');
+    assert.ok(form);
+    form.dispatchEvent(
+        new window.Event('submit', { bubbles: true, cancelable: true })
+    );
+};
 const idle = (window: Window) =>
     window.document.getElementById('screen')?.getAttribute('aria-busy') ===
     'false';
 
-const fixture = async (test: TestContext, form = progressForm()) => {
+type FixtureControls = {
+    saveOutcome?: 'validation' | 'unknown';
+    afterJournalBegin?(attempt: RecoveryAttempt): void;
+};
+const fixture = async (
+    test: TestContext,
+    form = progressForm(),
+    controls: FixtureControls = {}
+) => {
     const window = new Window({
         url: 'https://app.example.test',
         settings: {
@@ -222,8 +254,23 @@ const fixture = async (test: TestContext, form = progressForm()) => {
     const reads: Record<string, unknown>[] = [];
     const saves: SaveFormInput[] = [];
     const progressAtSave: ReturnType<typeof progressEntries>[] = [];
+    const saveOutcomeReached = { saved: 0, validation: 0, unknown: 0 };
+    const journalBegins: RecoveryAttempt[] = [];
+    const notDispatched: Array<{
+        attempt: RecoveryAttempt;
+        settled: boolean;
+    }> = [];
     const unexpected: string[] = [];
     const globals = {
+        __sdkCreateProgressProofHooks: {
+            afterBegin(attempt: RecoveryAttempt) {
+                journalBegins.push(attempt);
+                controls.afterJournalBegin?.(attempt);
+            },
+            afterNotDispatched(attempt: RecoveryAttempt, settled: boolean) {
+                notDispatched.push({ attempt, settled });
+            },
+        },
         window,
         document: window.document,
         navigator: window.navigator,
@@ -260,6 +307,26 @@ const fixture = async (test: TestContext, form = progressForm()) => {
             if (route === 'saveForm') {
                 progressAtSave.push(progressEntries(window));
                 saves.push(structuredClone(input) as unknown as SaveFormInput);
+                if (controls.saveOutcome !== undefined) {
+                    assert.equal(init?.method, 'POST');
+                    assert.equal(input.isComputeMode, false);
+                    const record =
+                        input.formRecord as SaveFormInput['formRecord'];
+                    assert.equal(record.type, 'create');
+                    assert.equal(record.data.fld_title, rememberedTitle);
+                    assert.deepEqual(progressAtSave.at(-1), []);
+                }
+                if (controls.saveOutcome === 'validation') {
+                    saveOutcomeReached.validation++;
+                    return new Response(JSON.stringify(invalidForm()));
+                }
+                if (controls.saveOutcome === 'unknown') {
+                    saveOutcomeReached.unknown++;
+                    throw new TypeError(
+                        'Synthetic dispatched Save response unavailable.'
+                    );
+                }
+                saveOutcomeReached.saved++;
                 return new Response(
                     JSON.stringify({
                         type: 'saved',
@@ -340,6 +407,9 @@ const fixture = async (test: TestContext, form = progressForm()) => {
         reads,
         saves,
         progressAtSave,
+        saveOutcomeReached,
+        journalBegins,
+        notDispatched,
         connect,
         chooseTitle,
         rememberTitle,
@@ -521,6 +591,203 @@ describe(
             assert.equal(h.saves.length, 1);
         });
 
+        it('resumes selected-answer storage after an accepted validation error without replaying Save', async (test) => {
+            const h = await fixture(test, progressForm(), {
+                saveOutcome: 'validation',
+            });
+            await h.rememberTitle();
+            edit(h.window, 'fld_unselected', omittedAnswer);
+            await h.locks.settle();
+            const previous = storedToken(h.window);
+
+            submitForm(h.window);
+            await waitFor(
+                () => h.saveOutcomeReached.validation === 1 && idle(h.window)
+            );
+            await h.locks.settle();
+            assert.deepEqual(h.saveOutcomeReached, {
+                saved: 0,
+                validation: 1,
+                unknown: 0,
+            });
+            assert.equal(h.saves.length, 1);
+            assert.deepEqual(h.progressAtSave, [[]]);
+            assert.equal(h.journalBegins.length, 1);
+            assert.equal(h.journalBegins[0]!.outcome, 'validation-error');
+            assert.equal(h.journalBegins[0]!.flight, false);
+            assert.deepEqual(h.notDispatched, []);
+            assert.equal(fieldInput(h.window).value, rememberedTitle);
+            assert.equal(
+                fieldInput(h.window, 'fld_unselected').value,
+                omittedAnswer
+            );
+            assert.match(
+                h.window.document.getElementById('status')!.textContent!,
+                /not saved.*validation errors/i
+            );
+            assert.match(
+                h.window.document.body.textContent!,
+                /A title is required\./
+            );
+            assert.equal(button(h.window, 'Save').disabled, false);
+            assert.equal(
+                button(h.window, 'Discard remembered answers').disabled,
+                false
+            );
+            assert.deepEqual(storedValues(h.window), [
+                { fld_title: rememberedTitle },
+            ]);
+            const resumed = storedToken(h.window);
+            assert.notEqual(resumed.draftId, previous.draftId);
+            assert.notEqual(resumed.writeId, previous.writeId);
+
+            const corrected = 'Synthetic corrected answer after validation';
+            edit(h.window, 'fld_title', corrected);
+            await h.locks.settle();
+            assert.deepEqual(storedValues(h.window), [
+                { fld_title: corrected },
+            ]);
+            assert.equal(storedToken(h.window).draftId, resumed.draftId);
+            assert.notEqual(storedToken(h.window).writeId, resumed.writeId);
+            assert.equal(h.saves.length, 1);
+            assert.equal(h.saveOutcomeReached.validation, 1);
+        });
+
+        it('keeps create progress suspended after a counted dispatched Save transport failure', async (test) => {
+            const h = await fixture(test, progressForm(), {
+                saveOutcome: 'unknown',
+            });
+            await h.rememberTitle();
+            const writesAfterRemember: string[] = [];
+            const setItem = h.window.sessionStorage.setItem.bind(
+                h.window.sessionStorage
+            );
+            Object.defineProperty(h.window.sessionStorage, 'setItem', {
+                configurable: true,
+                value: (key: string, bytes: string) => {
+                    if (key.startsWith(progressPrefix))
+                        writesAfterRemember.push(bytes);
+                    setItem(key, bytes);
+                },
+            });
+            submitForm(h.window);
+            await waitFor(
+                () => h.saveOutcomeReached.unknown === 1 && idle(h.window)
+            );
+            await h.locks.settle();
+            assert.deepEqual(h.saveOutcomeReached, {
+                saved: 0,
+                validation: 0,
+                unknown: 1,
+            });
+            assert.equal(h.saves.length, 1);
+            assert.deepEqual(h.progressAtSave, [[]]);
+            assert.equal(h.journalBegins.length, 1);
+            assert.equal(h.journalBegins[0]!.outcome, 'unknown');
+            assert.equal(h.journalBegins[0]!.flight, false);
+            assert.deepEqual(h.notDispatched, []);
+            assert.deepEqual(progressEntries(h.window), []);
+            assert.equal(fieldInput(h.window).value, rememberedTitle);
+            assert.equal(button(h.window, 'Save').disabled, true);
+            assert.equal(
+                button(h.window, 'Restore remembered answers').disabled,
+                true
+            );
+            assert.equal(
+                button(h.window, 'Discard remembered answers').disabled,
+                true
+            );
+            assert.match(
+                h.window.document.body.textContent!,
+                /could not confirm the earlier attempt.*may have completed/i
+            );
+            assert.match(
+                h.window.document.getElementById('status')!.textContent!,
+                /request failed.*inspect/i
+            );
+            // Even a retained submit listener must respect the real journal's
+            // unknown blocker; no second transport or storage resumption follows.
+            submitForm(h.window);
+            await nextTurn();
+            await h.locks.settle();
+            assert.equal(h.saves.length, 1);
+            assert.equal(h.saveOutcomeReached.unknown, 1);
+            assert.equal(h.journalBegins.length, 1);
+            assert.deepEqual(writesAfterRemember, []);
+            assert.deepEqual(progressEntries(h.window), []);
+        });
+
+        it('resumes progress only after the actual journal settles a controlled pre-transport Cancel as not dispatched', async (test) => {
+            const controls: FixtureControls = {};
+            const h = await fixture(test, progressForm(), controls);
+            await h.rememberTitle();
+            const previous = storedToken(h.window);
+            let cancelReached = 0;
+            const progressAtBegin: ReturnType<typeof progressEntries>[] = [];
+            controls.afterJournalBegin = (attempt) => {
+                if (cancelReached !== 0) return;
+                assert.equal(attempt.operation, 'save');
+                assert.equal(attempt.outcome, 'unknown');
+                assert.equal(attempt.flight, true);
+                assert.equal(h.saves.length, 0);
+                progressAtBegin.push(progressEntries(h.window));
+                const cancel = button(h.window, 'Cancel request');
+                assert.equal(cancel.disabled, false);
+                cancelReached++;
+                cancel.click();
+            };
+
+            submitForm(h.window);
+            await waitFor(() => h.notDispatched.length === 1 && idle(h.window));
+            await h.locks.settle();
+            assert.equal(cancelReached, 1);
+            assert.deepEqual(progressAtBegin, [[]]);
+            assert.equal(h.journalBegins.length, 1);
+            assert.equal(h.notDispatched[0]!.settled, true);
+            assert.equal(h.notDispatched[0]!.attempt, h.journalBegins[0]);
+            assert.equal(h.journalBegins[0]!.outcome, 'not-dispatched');
+            assert.equal(h.journalBegins[0]!.flight, false);
+            assert.deepEqual(h.journalBegins[0]!.retainedInput, []);
+            assert.equal(h.saves.length, 0);
+            assert.deepEqual(h.saveOutcomeReached, {
+                saved: 0,
+                validation: 0,
+                unknown: 0,
+            });
+            assert.deepEqual(h.progressAtSave, []);
+            assert.equal(fieldInput(h.window).value, rememberedTitle);
+            assert.equal(button(h.window, 'Save').disabled, false);
+            assert.equal(
+                button(h.window, 'Discard remembered answers').disabled,
+                false
+            );
+            assert.doesNotMatch(
+                h.window.document.body.textContent!,
+                /Earlier outcome not confirmed/
+            );
+            assert.deepEqual(storedValues(h.window), [
+                { fld_title: rememberedTitle },
+            ]);
+            const resumed = storedToken(h.window);
+            assert.notEqual(resumed.draftId, previous.draftId);
+            assert.notEqual(resumed.writeId, previous.writeId);
+
+            // A separate explicit Save remains usable after the one-shot Cancel.
+            controls.afterJournalBegin = undefined;
+            submitForm(h.window);
+            await waitFor(
+                () => h.saveOutcomeReached.saved === 1 && idle(h.window)
+            );
+            await h.locks.settle();
+            assert.equal(h.saves.length, 1);
+            assert.equal(h.journalBegins.length, 2);
+            assert.equal(h.journalBegins[0]!.outcome, 'not-dispatched');
+            assert.equal(h.journalBegins[1]!.outcome, 'saved');
+            assert.equal(h.notDispatched.length, 1);
+            assert.deepEqual(h.progressAtSave, [[]]);
+            assert.deepEqual(progressEntries(h.window), []);
+        });
+
         it('Save proceeds after consent withdrawal when Web Locks are unavailable and storage confirms no progress', async (test) => {
             const h = await fixture(test);
             Object.defineProperty(h.window.navigator, 'locks', {
@@ -677,27 +944,49 @@ describe(
         it('Logout retires a queued write and rotates the visitor namespace before later reconnect', async (test) => {
             const h = await fixture(test);
             await h.rememberTitle();
+            h.window.sessionStorage.setItem(
+                'unrelated-progress-test',
+                'retained'
+            );
             const ownerKey =
                 ownerPrefix + JSON.stringify(['https://app.example.test', 'A']);
             const owner = h.window.sessionStorage.getItem(ownerKey);
             assert.ok(owner);
+            const queuedAnswer = 'Synthetic queued answer from retired owner';
+            const physicalWrites: string[] = [];
+            const setItem = h.window.sessionStorage.setItem.bind(
+                h.window.sessionStorage
+            );
+            Object.defineProperty(h.window.sessionStorage, 'setItem', {
+                configurable: true,
+                value: (key: string, bytes: string) => {
+                    if (
+                        key.startsWith(progressPrefix) &&
+                        bytes.includes(queuedAnswer)
+                    )
+                        physicalWrites.push(bytes);
+                    setItem(key, bytes);
+                },
+            });
+            assert.equal(h.locks.waiting, 0);
             const release = h.locks.hold();
             test.after(release);
-            edit(
-                h.window,
-                'fld_title',
-                'Synthetic queued answer from retired owner'
-            );
+            edit(h.window, 'fld_title', queuedAnswer);
             await waitFor(() => h.locks.waiting > 0);
             button(h.window, "Clear this visitor's session").click();
             release();
             await h.locks.settle();
+            assert.deepEqual(physicalWrites, []);
             assert.notEqual(h.window.sessionStorage.getItem(ownerKey), owner);
             assert.equal(
                 progressEntries(h.window).some(({ bytes }) =>
-                    bytes.includes('Synthetic queued answer from retired owner')
+                    bytes.includes(queuedAnswer)
                 ),
                 false
+            );
+            assert.equal(
+                h.window.sessionStorage.getItem('unrelated-progress-test'),
+                'retained'
             );
             await h.connect();
             assert.equal(fieldInput(h.window).value, 'Initial title');
@@ -718,6 +1007,7 @@ describe(
                 ),
                 false
             );
+            assert.deepEqual(physicalWrites, []);
         });
 
         it('Visitor B does not receive Visitor A remembered answers in the same tab', async (test) => {

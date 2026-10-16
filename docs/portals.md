@@ -17,6 +17,27 @@ on every visitor, connection, session, token or context transition, including
 anonymous visitors and A → B → A. Credential equality alone cannot identify
 those transitions.
 
+The browser starter offers only custom views whose `customViewConditions` and
+owning Portal field conditions evaluate true against the complete accepted
+Portal-user record and `usersTableFields`. It reuses the supported strict Form
+condition evaluator without Form empty-hiding rules. Unconditional views do not
+require driver metadata. Unsupported or malformed rules and ambiguous raw view
+IDs produce generic unavailable feedback, without exposing the refused view's
+name. If every configured view is hidden or unavailable, there is no legacy
+default fallback or read action. A genuinely absent or empty custom-view list
+retains its legacy default when the Portal field itself is eligible.
+Defined non-array lists, including `null`, are malformed under the canonical
+view-list contract and remain unavailable.
+
+Accepted parent refreshes rebuild the choices and retire a selection that is no
+longer eligible. Eligibility is cached only within that accepted parent snapshot
+and Portal field; accepting new parent values clears the cache. Retained read,
+row and child actions recheck the current
+selection; changing views never loads records automatically. This presentation
+uses accepted client data, not a new backend grant or a promise that a server
+condition cannot change. The canonical server still re-evaluates published
+field/view conditions and authorizes every read and mutation.
+
 Collections accept direct linked-record fields and valid lookup fields whose
 returned `options.isValid` is `true` and whose `options.result.type` is
 `multipleRecordLinks`. `getPortalLinkedRecordFieldConfig` resolves that direct

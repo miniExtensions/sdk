@@ -13,6 +13,8 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
+import { LookupControl, type LookupFieldOptions } from './LookupField.js';
+export { renderLookupField, type LookupFieldOptions } from './LookupField.js';
 import { RollupControl, type RollupFieldOptions } from './RollupField.js';
 export { renderRollupField, type RollupFieldOptions } from './RollupField.js';
 import { FormulaControl, type FormulaFieldOptions } from './FormulaField.js';
@@ -758,6 +760,37 @@ export function FormulaField({
             'This control supports Formula fields.'
         );
     return createElement(FormulaControl, {
+        field: schema.airtableField,
+        title: snapshot.field?.title ?? '',
+        value: snapshot.value,
+        displayConfig: schema.miniExtConfig,
+        pending: snapshot.pending,
+        error: snapshot.error,
+        validation: snapshot.validation,
+        className,
+    });
+}
+export type LookupFieldProps = FieldProps & LookupFieldOptions;
+/** Present the accepted Lookup array without borrowing binding or linked actions. */
+export function LookupField({
+    binding,
+    render,
+    className,
+}: LookupFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'multipleLookupValues' ||
+        schema.airtableField.config.type !== 'multipleLookupValues'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Lookup fields.'
+        );
+    return createElement(LookupControl, {
         field: schema.airtableField,
         title: snapshot.field?.title ?? '',
         value: snapshot.value,

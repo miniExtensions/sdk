@@ -1,4 +1,8 @@
 import {
+    checkLookupConsumer,
+    lookupReactTypedConsumer,
+} from './lookup-consumer-checks.mjs';
+import {
     checkRollupConsumer,
     rollupReactTypedConsumer,
 } from './rollup-consumer-checks.mjs';
@@ -1338,6 +1342,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('rollup-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'lookup-react-consumer.tsx'),
+        lookupReactTypedConsumer
+    );
+    reactSources.push('lookup-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2133,6 +2142,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(rollupProof.checks, 26);
     console.log(
         `Installed Rollup presentation: ${rollupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const lookupProof = await checkLookupConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(lookupProof.checks, 44);
+    console.log(
+        `Installed Lookup presentation: ${lookupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,

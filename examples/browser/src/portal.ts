@@ -91,6 +91,64 @@ type DetailField = {
 const isObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value != null && !Array.isArray(value);
 
+// Row display uses returned Detail policy; child settings only govern editing.
+// Keep native value access lazy so a concealed value is never formatted first.
+const portalCellSummary = (
+    displayConfig: unknown,
+    format: () => string,
+    isCurrent: () => boolean
+): string => {
+    const unavailable = 'Value unavailable';
+    const mask = '••••••••';
+    try {
+        const policy = () => {
+            if (!isCurrent()) return null;
+            if (displayConfig == null)
+                return {
+                    type: 'plain',
+                    flags: [undefined, undefined, undefined],
+                };
+            if (!isObject(displayConfig)) return null;
+            const flags = [
+                displayConfig.obscurePassword,
+                displayConfig.maskPasswordOnLoginScreen,
+                displayConfig.hideAttachmentName,
+            ];
+            if (
+                flags
+                    .slice(0, 2)
+                    .some(
+                        (flag) =>
+                            flag !== undefined && typeof flag !== 'boolean'
+                    ) ||
+                !isCurrent()
+            )
+                return null;
+            return {
+                type:
+                    flags[0] === true || flags[1] === true ? 'masked' : 'plain',
+                flags,
+            };
+        };
+        const before = policy();
+        if (before === null) return unavailable;
+        if (before.type === 'masked') return mask;
+        const text = format();
+        const after = policy();
+        if (after === null) return unavailable;
+        if (after.type === 'masked') return mask;
+        if (
+            !before.flags.every((flag, index) =>
+                Object.is(flag, after.flags[index])
+            )
+        )
+            return unavailable;
+        return text;
+    } catch {
+        return unavailable;
+    }
+};
+
 // A deliberately plain Portal presentation, not a Form policy or an uploader.
 // Returned native metadata stays untouched and is never serialized into the DOM.
 const attachmentSummary = (value: unknown, displayConfig: unknown): string => {
@@ -1310,6 +1368,33 @@ export const createPortalView = (options: {
         const renderedOwner = dataScope == null ? null : { ...dataScope };
         const renderedFieldId = fieldSelect.value;
         const renderedViewId = viewSelect.value;
+        const renderedCollection = collection;
+        const renderedCriteriaEpoch = criteriaEpoch;
+        const renderedMountEpoch = mountEpoch;
+        const renderedSession = JSON.stringify(options.client.getSession());
+        // Initial rows are detached while formatting, so their display lease
+        // checks the accepted owner rather than row.isConnected.
+        const summaryIsCurrent = (): boolean => {
+            const owner = options.getScope();
+            return (
+                !destroyed &&
+                card.isConnected &&
+                data === renderedData &&
+                renderedOwner != null &&
+                owner.ownerId === renderedOwner.ownerId &&
+                owner.revision === renderedOwner.revision &&
+                collection === renderedCollection &&
+                (renderedCollection === null ||
+                    renderedCollection.isCurrent()) &&
+                criteriaEpoch === renderedCriteriaEpoch &&
+                mountEpoch === renderedMountEpoch &&
+                JSON.stringify(options.client.getSession()) ===
+                    renderedSession &&
+                fieldSelect.value === renderedFieldId &&
+                viewSelect.value === renderedViewId &&
+                selectionAvailable()
+            );
+        };
         for (const recordId of data.recordIds) {
             const record = state.recordIdsToAirtableRecords[recordId];
             if (record == null) continue;
@@ -1337,23 +1422,29 @@ export const createPortalView = (options: {
             };
             for (const column of columns) {
                 const recordField = column.airtableField;
-                const value = record.fields[column.fieldId];
-                const obscured =
-                    recordField.config.type ===
-                        AirtableFieldType.SINGLE_LINE_TEXT &&
-                    column.miniExtConfig != null &&
-                    'obscurePassword' in column.miniExtConfig &&
-                    column.miniExtConfig.obscurePassword === true &&
-                    typeof value === 'string' &&
-                    value.length > 0;
                 const cell = element(
                     'td',
-                    recordField.config.type ===
-                        AirtableFieldType.MULTIPLE_ATTACHMENTS
-                        ? attachmentSummary(value, column.displayConfig)
-                        : obscured
-                          ? '••••••••'
-                          : displayValue(value)
+                    portalCellSummary(
+                        column.displayConfig,
+                        () => {
+                            const value = record.fields[column.fieldId];
+                            return recordField.config.type ===
+                                AirtableFieldType.MULTIPLE_ATTACHMENTS
+                                ? attachmentSummary(value, column.displayConfig)
+                                : displayValue(value);
+                        },
+                        () => {
+                            const current = renderedData.detailFields.filter(
+                                (detail) => detail.fieldId === column.fieldId
+                            );
+                            return (
+                                summaryIsCurrent() &&
+                                current.length === 1 &&
+                                current[0]?.miniExtConfig ===
+                                    column.displayConfig
+                            );
+                        }
+                    )
                 );
                 const gridMode = (layoutSetting('layout') ?? 'grid') === 'grid';
                 if (

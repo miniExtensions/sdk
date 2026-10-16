@@ -2939,3 +2939,62 @@ Labels, hidden titles, pending/invalid state and contained row interaction follo
 the existing controls. `className` decorates `mx-sdk-lookup-field`; no CSS import,
 package subpath, editor, Clear, Save or lookup action is added. Core and `/ui`
 remain React-free.
+
+## React Barcode presentation
+
+The optional `/react` entry exports `BarcodeField`, `BarcodeFieldProps`,
+`BarcodeFieldOptions` and `renderBarcodeField`. Install the renderer in the existing
+physical `renderBarcodeField` slot for `AirtableForm`, `AirtableGrid` or `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { BarcodeField, renderBarcodeField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+
+export const barcodeRenderers: FieldRendererSlots<ReactNode> = {
+    renderBarcodeField: (props) =>
+        renderBarcodeField(props, { className: 'barcode-answer' }),
+};
+// With an accepted Barcode Form binding:
+// <BarcodeField binding={barcodeBinding} className="barcode-answer" />
+```
+
+The native value remains `{ text?: string; type?: string }`, null or missing in
+the owner. Only the supplied `text` is shown, preserving whitespace, leading zeros,
+Unicode and line breaks. The `type` is neither displayed nor inferred. Visible
+null, missing, empty objects and type-only objects display blank. Malformed values
+display `Unavailable` with invalid status. The component does not normalize,
+replace or write native answers, even when the Form supplies an editable capability.
+
+Default bound output follows owner visibility and retirement before reading the
+answer. The existing edit-Form `hideFieldIfEmpty` policy remains authoritative:
+when enabled, null/missing and blank text are hidden, while objects without a text
+property are blocked. Create Forms remain visible under this policy. Use explicit
+`hideFieldIfEmpty: false` when those optional-text objects should remain visible in
+edit Forms. The application-owned `render` override keeps the existing
+custom-render precedence and is responsible for its own presentation policy.
+
+Either `obscurePassword` or `maskPasswordOnLoginScreen` in display or write
+configuration replaces the native answer with a fixed mask before reading its
+value, text or type. Owner error and validation feedback remains separate escaped
+text, with error taking precedence (including an empty error). Labels, hidden-title
+accessible names, pending/invalid state and feedback associations follow the
+existing controls. Click, auxiliary click, double click, pointer-down and keyboard
+events are contained without preventing native text selection or copy.
+
+This slice provides read-only display coverage, not editable Barcode parity.
+URLs and markup are plain text; there is no scanner/camera, generated barcode image,
+link, navigation, normalization, editing, Clear or Save action. `className` decorates
+`mx-sdk-barcode-field`; no CSS import or package subpath is added. Core and `/ui`
+remain React-free.
+
+`test/reactBarcode.test.ts` covers the source component, and `check:package` runs
+the installed ESM/CommonJS and public-type checks. To prepare a synthetic browser
+fixture from the tested archive, run
+`node scripts/build-barcode-browser-proof.mjs /path/to/tested.tgz /path/to/output`.
+It installs offline using an already seeded npm cache (`SDK_BARCODE_NPM_CACHE`
+can select that cache), verifies installed bundle inputs, and records archive and
+source hashes. Serve the output on loopback and use the browser to inspect the
+Form/Grid/List displays and run the page's interaction, remount and retirement
+checks. Fixture generation records browser verification as pending; injected DOM
+checks do not replace native pointer, keyboard, text-selection or layout inspection.

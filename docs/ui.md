@@ -3116,3 +3116,71 @@ source hashes. Serve the output on loopback and use the browser to inspect the
 Form/Grid/List displays and run the page's interaction, remount and retirement
 checks. Fixture generation records browser verification as pending; injected DOM
 checks do not replace native pointer, keyboard, text-selection or layout inspection.
+
+## React Single Collaborator presentation
+
+The optional `/react` entry exports `SingleCollaboratorField`,
+`SingleCollaboratorFieldProps`, `SingleCollaboratorFieldOptions` and
+`renderSingleCollaboratorField`. Install the renderer in the existing physical
+`renderSingleCollaboratorField` slot for `AirtableForm`, `AirtableGrid` or
+`AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import {
+    SingleCollaboratorField,
+    renderSingleCollaboratorField,
+} from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+
+export const collaboratorRenderers: FieldRendererSlots<ReactNode> = {
+    renderSingleCollaboratorField: (props) =>
+        renderSingleCollaboratorField(props, {
+            className: 'collaborator-answer',
+        }),
+};
+// With an accepted Single Collaborator Form binding:
+// <SingleCollaboratorField binding={collaboratorBinding} />
+```
+
+The owner retains its native `{ id: string; email: string; name: string;
+profilePicUrl?: string }` value, null or missing. Only the supplied `name` appears,
+preserving whitespace, Unicode and line breaks. An empty name, null or missing
+value displays blank. Malformed values display `Unavailable` with invalid status.
+There is no fallback to email, ID, field choices or another source. The existing
+native validator accepts additional object properties; this presentation preserves
+them without displaying them or adding a stricter native model.
+
+Default bound output follows hidden, blocked and retired owner state before
+reading schema or answer. The existing edit-Form `hideFieldIfEmpty` policy still
+refuses Single Collaborator fields, including null answers. Set it explicitly to
+`false` when displaying a collaborator in an edit Form. Create Forms remain visible
+under that policy. The application-owned `render` override keeps existing custom
+render precedence and is responsible for its own presentation policy.
+
+Either `obscurePassword` or `maskPasswordOnLoginScreen` in display or write
+configuration replaces the answer with a fixed mask before the renderer reads the
+value reference or any native property. This guarantee starts at the renderer or
+bound snapshot boundary; existing owners still validate and clone accepted native
+values. Error and validation feedback remains separate escaped text, with error
+taking precedence, including an empty error. Labels, hidden-title accessible names,
+pending/invalid state and feedback associations follow the existing controls.
+Click, auxiliary click, double click, pointer-down and keyboard events are contained
+without preventing native text selection or copy.
+
+This is read-only display coverage. It does not request avatars, resolve identities,
+create links, normalize answers, provide a picker, edit values or use write actions,
+even if the Form supplies an editable capability. Multiple Collaborators remains a
+separate slot. `className` decorates `mx-sdk-single-collaborator-field`; no CSS import
+or package subpath is added. Core and `/ui` remain React-free.
+
+`test/reactSingleCollaborator.test.ts` covers the source component, and
+`check:package` runs installed ESM/CommonJS runtime and public-type checks. A
+synthetic browser fixture can be built from the tested archive with
+`node scripts/build-single-collaborator-browser-proof.mjs /path/to/tested.tgz /path/to/output`.
+It installs offline using an already seeded npm cache
+(`SDK_SINGLE_COLLABORATOR_NPM_CACHE` can select that cache), records archive and
+source hashes, and verifies installed bundle inputs. Serve the output on loopback
+to inspect the Form/Grid/List displays and run its interaction, remount and
+retirement checks. Fixture generation leaves browser verification pending; native
+browser interaction and layout inspection are separate from its injected DOM checks.

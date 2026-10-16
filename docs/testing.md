@@ -397,3 +397,25 @@ After building, `node scripts/check-phone-number-browser.mjs` runs the separate
 local Chromium proof. Native form submission and stopped event bubbling are
 distinct; simulated composition does not certify a real input method. These checks
 use synthetic drafts and do not establish a dialing policy or contact a live backend.
+
+## Formula presentation checks
+
+`test/reactFormula.test.ts` covers native result configurations, scalar and
+array-valued results, null/missing/error/special-number values, malformed data,
+metadata failures, masking before formatting, labels and feedback, binding
+replacement/retirement, readonly authority and an editable Number neighbor.
+Synthetic accepted Form and Portal Grid/List compositions add no reads, writes
+or Save. `pnpm check:package` checks installed ESM/CommonJS runtime and public
+positive/negative types using the packed package.
+
+For the separate packed-browser proof, build/validate the package and run:
+
+```sh
+SDK_FORMULA_CHROMIUM=/path/to/chrome node scripts/check-formula-browser.mjs /path/to/sdk.tgz /path/to/evidence
+```
+
+The script installs the tarball into a temporary consumer, launches sandboxed
+Chromium, checks inert outputs, masking, private-ID suppression, native state,
+zero requests/writes and retirement, and captures desktop, mobile and forced-color
+screenshots. It uses synthetic data only. It supplements `pnpm check:browser`;
+it does not certify live backend behavior or every screen reader.

@@ -13,6 +13,11 @@ import {
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
 import { FieldRendererSource } from './fieldRendererSource.js';
+import { FormulaControl, type FormulaFieldOptions } from './FormulaField.js';
+export {
+    renderFormulaField,
+    type FormulaFieldOptions,
+} from './FormulaField.js';
 export {
     renderMultipleRecordLinksField,
     type LinkedRecordsFieldOptions,
@@ -728,6 +733,37 @@ export function ExternalSyncSourceField({
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n'),
         setValue: () => false,
+    });
+}
+export type FormulaFieldProps = FieldProps & FormulaFieldOptions;
+/** Present the accepted computed answer without borrowing any binding actions. */
+export function FormulaField({
+    binding,
+    render,
+    className,
+}: FormulaFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'formula' ||
+        schema.airtableField.config.type !== 'formula'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Formula fields.'
+        );
+    return createElement(FormulaControl, {
+        field: schema.airtableField,
+        title: snapshot.field?.title ?? '',
+        value: snapshot.value,
+        displayConfig: schema.miniExtConfig,
+        pending: snapshot.pending,
+        error: snapshot.error,
+        validation: snapshot.validation,
+        className,
     });
 }
 export type CountFieldProps = FieldProps & CountFieldOptions;

@@ -1,4 +1,8 @@
 import {
+    checkFormulaConsumer,
+    formulaReactTypedConsumer,
+} from './formula-consumer-checks.mjs';
+import {
     checkLinkedRecordsRendererConsumer,
     linkedRecordsReactTypedConsumer,
 } from './linked-records-renderer-consumer-checks.mjs';
@@ -1296,6 +1300,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('count-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'formula-react-consumer.tsx'),
+        formulaReactTypedConsumer
+    );
+    reactSources.push('formula-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2075,6 +2084,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(numberProof.checks, 8);
     console.log(
         `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const formulaProof = await checkFormulaConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(formulaProof.checks, 26);
+    console.log(
+        `Installed Formula presentation: ${formulaProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,

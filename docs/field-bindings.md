@@ -504,6 +504,14 @@ It does not delete remote bytes, clear pending Files, cancel an upload, or repla
 an uncertain operation. Remounts keep the owner-held native answer and pending
 queue. Unobserved in-place configuration A→B→A is not detected by this contract.
 
+An upload cancelled or refused by ownership checks before the controller invokes
+`client.attachments.uploadFile` finishes as `not-dispatched`. The current pending
+File queue and native values are preserved; another explicit action may retry.
+Retiring the owner still clears its private queue. Once the uploader is invoked,
+even a synchronous throw, cancellation before PUT or a lost response remains
+unknown and blocks replay/Save. Cancellation does not undo remote bytes, and no
+upload is retried automatically.
+
 Missing add-only baseline or malformed presentation yields generic unavailable
 state and no removal. Canonical empty values remain untouched. Filenames require
 explicit `hideAttachmentName: false`; otherwise rows say `Attachment`. Explicit

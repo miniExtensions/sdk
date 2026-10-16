@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import { File } from 'node:buffer';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
+import type { FormAttachmentControllerOptions } from '../src/forms/attachmentController.js';
 import { RecoveryJournal } from '../src/forms/recovery.js';
 import type {
     FormLoadedResult,
@@ -11,19 +12,22 @@ import { createMiniExtensionsClient } from '../src/runtime/index.js';
 import { loadedForm, formSaveOptions } from './formsFixtures.js';
 const fixture = (
     configure?: (loaded: FormLoadedResult) => void,
-    adapter?: {
-        getLoaded?(): FormLoadedResult;
-        configurationRevision?(): string | number;
-    }
+    adapter?: Pick<
+        FormAttachmentControllerOptions,
+        'getLoaded' | 'configurationRevision' | 'isCurrent' | 'onAttempt'
+    >,
+    transport?: typeof globalThis.fetch
 ) => {
     const loaded = loadedForm();
     configure?.(loaded);
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
         session: { visitor: 'A' },
-        fetch: async () => {
-            throw Error('No implicit I/O');
-        },
+        fetch:
+            transport ??
+            (async () => {
+                throw Error('No implicit I/O');
+            }),
     });
     const owner = createFormFieldBindings({
         client,
@@ -460,3 +464,346 @@ it('nested rejected admission cannot erase the newer error in a later renderer',
     stopRenderer();
     f.owner.destroy();
 });
+
+const deferred = <T>() => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((accept) => {
+        resolve = accept;
+    });
+    return { promise, resolve };
+};
+const uploadTransport = (hold?: 'signing' | 'put') => {
+    const signing = deferred<Response>();
+    const put = deferred<Response>();
+    const signingStarted = deferred<void>();
+    const putStarted = deferred<void>();
+    const counts = { signing: 0, put: 0 };
+    const signedResponse = () =>
+        new Response(
+            JSON.stringify({
+                result: {
+                    data: {
+                        signedUrl:
+                            'https://uploads.example.test/synthetic-signed-put',
+                        publicUrl:
+                            'https://files.example.test/synthetic-uploaded',
+                    },
+                },
+            })
+        );
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+        const url = new URL(String(input));
+        if (
+            url.pathname === '/api/trpc/publicExtensions.createPublicUploadLink'
+        ) {
+            assert.equal(init?.method, 'POST');
+            counts.signing++;
+            signingStarted.resolve(undefined);
+            return hold === 'signing' ? signing.promise : signedResponse();
+        }
+        assert.equal(
+            url.href,
+            'https://uploads.example.test/synthetic-signed-put'
+        );
+        assert.equal(init?.method, 'PUT');
+        assert.equal(init?.credentials, 'omit');
+        counts.put++;
+        putStarted.resolve(undefined);
+        return hold === 'put'
+            ? put.promise
+            : new Response(null, { status: 200 });
+    };
+    return {
+        fetch,
+        counts,
+        signingStarted: signingStarted.promise,
+        putStarted: putStarted.promise,
+        releaseSigning: () => signing.resolve(signedResponse()),
+        releasePut: () => put.resolve(new Response(null, { status: 200 })),
+    };
+};
+const assertKnownUnsent = (f: ReturnType<typeof fixture>) => {
+    assert.equal(f.journal.unknown('A').length, 0);
+    assert.equal(f.journal.blocking(f.scope, null), undefined);
+    assert.equal(f.attachment.blocksForm(), false);
+};
+
+it('an onAttempt exception before uploader invocation leaves the same File available for explicit retry', async (test) => {
+    const transport = uploadTransport();
+    let rejectAttempt = true;
+    const f = fixture(
+        undefined,
+        {
+            onAttempt: () => {
+                if (rejectAttempt)
+                    throw new Error('Synthetic adapter exception');
+            },
+        },
+        transport.fetch
+    );
+    test.after(() => f.owner.destroy());
+    const baseline = structuredClone(
+        f.owner.field('fld_files').getSnapshot().value
+    );
+    const selected = file('selected.txt');
+    assert.equal(f.attachment.select([selected]), true);
+    assert.equal(await f.attachment.upload(), false);
+    assert.deepEqual(transport.counts, { signing: 0, put: 0 });
+    assertKnownUnsent(f);
+    assert.equal(f.attachment.getSnapshot().phase, 'selected');
+    assert.equal(f.attachment.getSnapshot().files[0], selected);
+    assert.deepEqual(f.owner.field('fld_files').getSnapshot().value, baseline);
+    rejectAttempt = false;
+    assert.deepEqual(transport.counts, { signing: 0, put: 0 });
+    assert.equal(await f.attachment.upload(), true);
+    assert.deepEqual(transport.counts, { signing: 1, put: 1 });
+    assert.equal(f.attachment.getSnapshot().files.length, 0);
+});
+
+it('subscriber cancellation before uploader invocation does not manufacture uncertainty or replay', async (test) => {
+    const transport = uploadTransport();
+    const f = fixture(undefined, undefined, transport.fetch);
+    test.after(() => f.owner.destroy());
+    const selected = file('selected.txt');
+    const baseline = structuredClone(
+        f.owner.field('fld_files').getSnapshot().value
+    );
+    assert.equal(f.attachment.select([selected]), true);
+    let cancelled = false;
+    const stop = f.attachment.subscribe((snapshot) => {
+        if (!cancelled && snapshot.phase === 'uploading') {
+            cancelled = true;
+            f.attachment.cancel();
+        }
+    });
+    test.after(stop);
+    assert.equal(await f.attachment.upload(), false);
+    assert.equal(cancelled, true);
+    assert.deepEqual(transport.counts, { signing: 0, put: 0 });
+    assertKnownUnsent(f);
+    assert.equal(f.attachment.getSnapshot().phase, 'selected');
+    assert.equal(f.attachment.getSnapshot().files[0], selected);
+    assert.deepEqual(f.owner.field('fld_files').getSnapshot().value, baseline);
+    assert.equal(await f.attachment.upload(), true);
+    assert.deepEqual(transport.counts, { signing: 1, put: 1 });
+});
+
+it('subscriber disposal before uploader invocation retires the UI without an unknown journal entry', async (test) => {
+    const transport = uploadTransport();
+    const f = fixture(undefined, undefined, transport.fetch);
+    test.after(() => f.owner.destroy());
+    assert.equal(f.attachment.select([file('selected.txt')]), true);
+    const baseline = structuredClone(
+        f.owner.field('fld_files').getSnapshot().value
+    );
+    const stop = f.attachment.subscribe((snapshot) => {
+        if (snapshot.phase === 'uploading') f.attachment.dispose();
+    });
+    test.after(stop);
+    assert.equal(await f.attachment.upload(), false);
+    assert.deepEqual(transport.counts, { signing: 0, put: 0 });
+    assertKnownUnsent(f);
+    assert.equal(f.attachment.getSnapshot().retired, true);
+    assert.deepEqual(f.attachment.getSnapshot().files, []);
+    assert.deepEqual(f.owner.field('fld_files').getSnapshot().value, baseline);
+    assert.equal(await f.attachment.upload(), false);
+});
+
+it('a pre-invocation configuration change preserves the queue and requires a new explicit upload', async (test) => {
+    const transport = uploadTransport();
+    let configuration = 0;
+    let change = true;
+    const f = fixture(
+        undefined,
+        {
+            configurationRevision: () => configuration,
+            onAttempt: () => {
+                if (change) configuration++;
+            },
+        },
+        transport.fetch
+    );
+    test.after(() => f.owner.destroy());
+    const selected = file('selected.txt');
+    const baseline = structuredClone(
+        f.owner.field('fld_files').getSnapshot().value
+    );
+    assert.equal(f.attachment.select([selected]), true);
+    assert.equal(await f.attachment.upload(), false);
+    assert.deepEqual(transport.counts, { signing: 0, put: 0 });
+    assertKnownUnsent(f);
+    assert.equal(f.attachment.getSnapshot().phase, 'selected');
+    assert.equal(f.attachment.getSnapshot().files[0], selected);
+    assert.deepEqual(f.owner.field('fld_files').getSnapshot().value, baseline);
+    change = false;
+    assert.equal(await f.attachment.upload(), true);
+    assert.deepEqual(transport.counts, { signing: 1, put: 1 });
+});
+
+it('a native draft revision changed by a subscriber before invocation keeps the newer edit without upload uncertainty', async (test) => {
+    const transport = uploadTransport();
+    const f = fixture(undefined, undefined, transport.fetch);
+    test.after(() => f.owner.destroy());
+    const selected = file('selected.txt');
+    const baseline = structuredClone(
+        f.owner.field('fld_files').getSnapshot().value
+    );
+    assert.equal(f.attachment.select([selected]), true);
+    let changed = false;
+    let writeAccepted = false;
+    const stop = f.attachment.subscribe((snapshot) => {
+        if (!changed && snapshot.phase === 'uploading') {
+            changed = true;
+            writeAccepted = f.owner.controller.write(
+                'fld_title',
+                'Newer native title'
+            );
+        }
+    });
+    test.after(stop);
+    assert.equal(await f.attachment.upload(), false);
+    assert.equal(changed, true);
+    assert.equal(writeAccepted, true);
+    assert.deepEqual(transport.counts, { signing: 0, put: 0 });
+    assertKnownUnsent(f);
+    assert.equal(
+        f.owner.field('fld_title').getSnapshot().value,
+        'Newer native title'
+    );
+    assert.deepEqual(f.owner.field('fld_files').getSnapshot().value, baseline);
+    assert.equal(f.attachment.getSnapshot().files[0], selected);
+    assert.equal(await f.attachment.upload(), true);
+    assert.deepEqual(transport.counts, { signing: 1, put: 1 });
+});
+
+it('a session change before uploader invocation creates no unknown operation and cannot revive the old owner', async (test) => {
+    const transport = uploadTransport();
+    let f!: ReturnType<typeof fixture>;
+    f = fixture(
+        undefined,
+        { onAttempt: () => f.client.setSession({ visitor: 'B' }) },
+        transport.fetch
+    );
+    test.after(() => f.owner.destroy());
+    assert.equal(f.attachment.select([file('selected.txt')]), true);
+    assert.equal(await f.attachment.upload(), false);
+    assert.deepEqual(transport.counts, { signing: 0, put: 0 });
+    assertKnownUnsent(f);
+    assert.equal(f.attachment.getSnapshot().retired, true);
+    assert.deepEqual(f.attachment.getSnapshot().files, []);
+    assert.equal(await f.attachment.upload(), false);
+});
+
+for (const replace of [false, true]) {
+    it(`pre-invocation cancellation preserves a ${replace ? 'replacement' : 'cleared'} queue`, async (test) => {
+        const transport = uploadTransport();
+        const f = fixture(undefined, undefined, transport.fetch);
+        test.after(() => f.owner.destroy());
+        const selected = file('selected.txt');
+        const replacement = file('replacement.txt');
+        assert.equal(f.attachment.select([selected]), true);
+        let cancelled = false;
+        const stop = f.attachment.subscribe((snapshot) => {
+            if (!cancelled && snapshot.phase === 'uploading') {
+                cancelled = true;
+                if (replace)
+                    assert.equal(f.attachment.select([replacement]), true);
+                else f.attachment.clear();
+                f.attachment.cancel();
+            }
+        });
+        test.after(stop);
+        assert.equal(await f.attachment.upload(), false);
+        assert.deepEqual(transport.counts, { signing: 0, put: 0 });
+        assertKnownUnsent(f);
+        const snapshot = f.attachment.getSnapshot();
+        assert.deepEqual(snapshot.files, replace ? [replacement] : []);
+        assert.equal(snapshot.phase, replace ? 'selected' : 'idle');
+    });
+}
+
+for (const synchronous of [false, true]) {
+    it(`an invoked uploader's ${synchronous ? 'synchronous throw' : 'rejected AbortError'} remains unknown without replay`, async (test) => {
+        const f = fixture();
+        test.after(() => f.owner.destroy());
+        let calls = 0;
+        f.client.attachments.uploadFile = () => {
+            calls++;
+            const cause = new DOMException(
+                'Synthetic upload interruption',
+                'AbortError'
+            );
+            if (synchronous) throw cause;
+            return Promise.reject(cause);
+        };
+        const selected = file('selected.txt');
+        const baseline = structuredClone(
+            f.owner.field('fld_files').getSnapshot().value
+        );
+        assert.equal(f.attachment.select([selected]), true);
+        assert.equal(await f.attachment.upload(), false);
+        assert.equal(f.journal.unknown('A').length, 1);
+        assert.equal(f.attachment.getSnapshot().phase, 'uncertain');
+        assert.equal(f.attachment.blocksForm(), true);
+        assert.equal(f.attachment.getSnapshot().files[0], selected);
+        assert.deepEqual(
+            f.owner.field('fld_files').getSnapshot().value,
+            baseline
+        );
+        assert.equal(await f.attachment.upload(), false);
+        assert.equal(calls, 1);
+    });
+}
+
+it('cancellation after signing starts remains unknown even if PUT never begins', async (test) => {
+    const transport = uploadTransport('signing');
+    const f = fixture(undefined, undefined, transport.fetch);
+    test.after(() => f.owner.destroy());
+    const selected = file('selected.txt');
+    const baseline = structuredClone(
+        f.owner.field('fld_files').getSnapshot().value
+    );
+    assert.equal(f.attachment.select([selected]), true);
+    const pending = f.attachment.upload();
+    await transport.signingStarted;
+    f.attachment.cancel();
+    transport.releaseSigning();
+    assert.equal(await pending, false);
+    assert.deepEqual(transport.counts, { signing: 1, put: 0 });
+    assert.equal(f.journal.unknown('A').length, 1);
+    assert.equal(f.attachment.getSnapshot().phase, 'uncertain');
+    assert.equal(f.attachment.blocksForm(), true);
+    assert.equal(await f.attachment.upload(), false);
+    assert.deepEqual(transport.counts, { signing: 1, put: 0 });
+    assert.deepEqual(f.owner.field('fld_files').getSnapshot().value, baseline);
+});
+
+for (const retireSession of [false, true]) {
+    it(`a started PUT remains unknown after ${retireSession ? 'session retirement' : 'cancellation'} and a late success`, async (test) => {
+        const transport = uploadTransport('put');
+        const f = fixture(undefined, undefined, transport.fetch);
+        test.after(() => f.owner.destroy());
+        const selected = file('selected.txt');
+        assert.equal(f.attachment.select([selected]), true);
+        const pending = f.attachment.upload();
+        await transport.putStarted;
+        if (retireSession) {
+            f.client.setSession({ visitor: 'B' });
+            assert.equal(f.attachment.getSnapshot().retired, true);
+        } else f.attachment.cancel();
+        transport.releasePut();
+        assert.equal(await pending, false);
+        assert.deepEqual(transport.counts, { signing: 1, put: 1 });
+        assert.equal(f.journal.unknown('A').length, 1);
+        assert.equal(await f.attachment.upload(), false);
+        assert.deepEqual(transport.counts, { signing: 1, put: 1 });
+        if (!retireSession) {
+            assert.equal(f.attachment.getSnapshot().phase, 'uncertain');
+            assert.equal(f.attachment.getSnapshot().files[0], selected);
+            assert.deepEqual(
+                f.owner.field('fld_files').getSnapshot().value,
+                f.loaded.payload.formRecord.data.fld_files
+            );
+        }
+    });
+}

@@ -292,7 +292,13 @@ customization and the manual-entry scope.
 
 `AttachmentField` additionally takes the owner's attachment controller. Selection
 and drop run admission without upload; `upload()` is explicit and uploads the first
-queued File only. Status reports phases, not byte progress. Empty chooser completion
+queued File only. The stock control shows the pending count and labels this action
+“Upload next file.” Its live status distinguishes selected, uploading, accepted into
+the draft (still requiring Save) and uncertain outcomes. Activity is indeterminate;
+there is no byte-progress contract. Disabled or removed controls hand focus to an
+available action within the same rendered owner, or to the field region when no
+upload action is available. Completion never takes focus from another control,
+and owner replacement discards the previous view's focus tracking. Empty chooser completion
 preserves pending Files; Clear removes them explicitly. Cancellation preserves
 uncertainty and never automatically replays Upload. `AttachmentDialog` dismisses
 only when a cancel event originates on the dialog itself. A bubbling file-input

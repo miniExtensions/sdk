@@ -109,6 +109,16 @@ response with matching extension/table/version/schema/configuration. It never
 overlays stored answers on the returned native draft. A stored value is not a
 permission or a Save receipt.
 
+**Discard draft** checks the matching current-Form slot left by a previous
+page even while remembering is unchecked. **Clear this visitor's session**
+captures matching SDK-owned progress slot identities on the current application
+origin for that visitor; **Disconnect** captures them for both visitors, before
+namespace rotation or asynchronous cleanup. Removal requires the captured draft and
+write IDs, so late cleanup preserves a successor and unrelated visitor/storage
+entries. Failed reads, malformed matching owned slots or removal failures show
+fixed incomplete-cleanup feedback; logout does not imply that every stored
+answer was removed.
+
 The storage owner requires working Web Locks for writes/removal and compares
 both `draftId` and `writeId`; conflicts do not delete newer progress. The
 starter suspends and drains progress before create Save, then clears the exact

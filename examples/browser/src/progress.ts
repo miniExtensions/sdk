@@ -42,6 +42,38 @@ export type BrowserCreateProgress = {
 const mounts = new Map<string, Set<BrowserCreateProgress>>();
 const remembered = new Map<string, Map<string, FormProgressToken>>();
 const blocked = new Set<string>();
+const progressPrefix = 'miniExtensions-sdk:create-progress:v1:';
+const ownedScope = (key: string, visitor: string): string | null => {
+    if (!key.startsWith(progressPrefix)) return null;
+    const scope = key.slice(progressPrefix.length);
+    try {
+        const parts: unknown = JSON.parse(scope);
+        if (
+            !Array.isArray(parts) ||
+            parts.length !== 10 ||
+            parts[0] !== 'browser-create-progress' ||
+            parts[1] !== 1 ||
+            parts[2] !== location.origin ||
+            parts[5] !== visitor ||
+            JSON.stringify(parts) !== scope ||
+            parts.some(
+                (part, index) =>
+                    index !== 1 &&
+                    (typeof part !== 'string' || part.trim() === '')
+            )
+        )
+            return null;
+        const api = new URL(parts[3]);
+        if (
+            (api.protocol !== 'https:' && api.protocol !== 'http:') ||
+            api.origin !== parts[3]
+        )
+            return null;
+        return scope;
+    } catch {
+        return null;
+    }
+};
 const scalarTypes = new Set<string>([
     AirtableFieldType.SINGLE_LINE_TEXT,
     AirtableFieldType.MULTILINE_TEXT,
@@ -115,8 +147,48 @@ export const forgetBrowserCreateProgress = async (
 ): Promise<boolean> => {
     retireBrowserCreateProgress(visitor);
     let complete = true;
+    const entries = remembered.get(visitor);
+    const captured: Array<[string, FormProgressToken]> = [];
+    const seen = new Set<string>();
+    const capture = (scope: string, token: FormProgressToken) => {
+        const key = JSON.stringify([scope, token.draftId, token.writeId]);
+        if (seen.has(key)) return;
+        seen.add(key);
+        captured.push([scope, { ...token }]);
+    };
+    for (const [scope, token] of [...(entries ?? [])]) {
+        if (ownedScope(progressPrefix + scope, visitor)) capture(scope, token);
+    }
+    let adapter: Storage | undefined;
+    // Freeze the key list and decode matching slots before rotation or any await.
+    // A prior document has no receipt in remembered; storage is still authoritative
+    // for an exact cleanup token, never for restoration or mutation permission.
     try {
-        const adapter = storage();
+        adapter = storage();
+        const keys = Array.from({ length: adapter.length }, (_, index) =>
+            adapter!.key(index)
+        );
+        for (const key of keys) {
+            if (key === null) continue;
+            const scope = ownedScope(key, visitor);
+            if (scope === null) continue;
+            const reader = createFormProgressStorage({
+                scope,
+                getStorage: () => adapter,
+                getLocks: locks,
+                createId: id,
+                isCurrent: () => true,
+            });
+            const result = reader.read();
+            reader.destroy();
+            if (result.status !== 'read') complete = false;
+            else if (result.snapshot) capture(scope, result.snapshot.token);
+        }
+    } catch {
+        complete = false;
+    }
+    try {
+        adapter ??= storage();
         if (adapter.getItem(ownerKey(visitor)))
             adapter.setItem(ownerKey(visitor), id());
         blocked.delete(visitor);
@@ -124,13 +196,11 @@ export const forgetBrowserCreateProgress = async (
         blocked.add(visitor);
         complete = false;
     }
-    const entries = remembered.get(visitor);
-    const captured = [...(entries ?? [])];
     for (const [scope, token] of captured) {
         // A detached cleanup lease can remove only the captured exact incarnation.
         const cleanup = createFormProgressStorage({
             scope,
-            getStorage: storage,
+            getStorage: () => adapter,
             getLocks: locks,
             createId: id,
             isCurrent: () => true,
@@ -138,7 +208,12 @@ export const forgetBrowserCreateProgress = async (
         const result = await cleanup.remove(token);
         cleanup.destroy();
         if (result.status === 'removed' || result.status === 'absent') {
-            if (entries?.get(scope) === token) entries.delete(scope);
+            const known = entries?.get(scope);
+            if (
+                known?.draftId === token.draftId &&
+                known.writeId === token.writeId
+            )
+                entries!.delete(scope);
         } else complete = false;
     }
     return complete;
@@ -361,6 +436,25 @@ export const createBrowserCreateProgress = (
         failed = false;
         return true;
     };
+    const inspectExisting = (failureMessage: string): boolean => {
+        if (token) return current();
+        try {
+            if (!backend) {
+                const namespace = storage().getItem(ownerKey(visitor));
+                if (namespace) openBackend(makeScope(namespace));
+            }
+            if (backend) {
+                const read = backend.read();
+                if (read.status !== 'read') throw new Error();
+                if (read.snapshot) rememberToken(read.snapshot.token);
+                else failed = false;
+            } else failed = false;
+            return current();
+        } catch {
+            notice(failureMessage, true);
+            return false;
+        }
+    };
     const restoreButton = button('Restore remembered answers', () => {
         if (!current() || !enabled || suspended || !candidate) return;
         if (options.getRevision() !== 0 || options.getInputRevision() !== 0) {
@@ -554,26 +648,12 @@ export const createBrowserCreateProgress = (
             }
             // Explicit Save must also clear a prior document's progress when the
             // current opt-in is unchecked. Reading never restores its values.
-            if (!token) {
-                try {
-                    if (!backend) {
-                        const namespace = storage().getItem(ownerKey(visitor));
-                        if (namespace) openBackend(makeScope(namespace));
-                    }
-                    if (backend) {
-                        const read = backend.read();
-                        if (read.status !== 'read') throw new Error();
-                        if (read.snapshot) rememberToken(read.snapshot.token);
-                        else failed = false;
-                    }
-                } catch {
-                    notice(
-                        'Remembered answers could not be checked. Save was not sent.',
-                        true
-                    );
-                    return refuse();
-                }
-            }
+            if (
+                !inspectExisting(
+                    'Remembered answers could not be checked. Save was not sent.'
+                )
+            )
+                return refuse();
             if (!(await remove()) || !current()) return refuse();
             // A same-document remount may have retired the opt-in UI while its
             // accepted progress remains. Clear only its recorded exact tokens.
@@ -617,7 +697,12 @@ export const createBrowserCreateProgress = (
             suspended = true;
             renderChoices();
             await queue;
-            const cleared = current() && (await remove());
+            const cleared =
+                current() &&
+                inspectExisting(
+                    'Remembered answers could not be checked. The current draft was retained.'
+                ) &&
+                (await remove());
             if (!cleared && current()) {
                 suspended = false;
                 renderChoices();

@@ -2276,6 +2276,18 @@ server response only for the same current configuration. Its returned native
 values and rules are authoritative; stored answers are never merged over that
 response locally. This introduces no backend endpoint or new permission.
 
+The Form's **Discard draft** also inspects its matching progress slot from a
+previous page, even when remembering is currently unchecked. It removes only
+the captured exact token before discarding the in-memory draft. **Clear this
+visitor's session** captures matching SDK-owned progress slot identities for
+that visitor on the current application origin; **Disconnect** does so for
+both visitor slots. Capture precedes namespace rotation and asynchronous lock waits.
+Cleanup compares both `draftId` and `writeId`, preserving a successor written
+after capture and unrelated visitor/storage entries. An unreadable or malformed
+matching owned slot is not treated as absent. Read, enumeration or removal
+failure produces fixed incomplete-cleanup feedback rather than claiming that
+all remembered answers were cleared.
+
 Before any admitted create Save dispatch, the starter suspends progress,
 drains queued work and removes the matching stored token. It also inspects a
 previous slot when remembering is currently unchecked, including after a page

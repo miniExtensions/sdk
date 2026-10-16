@@ -295,7 +295,10 @@ Frontend visibility results never replace the choice projection.
   references survive Visitor A/B switching and returning from a child Form to
   its Portal. Drafts belong to the visitor, Form, record, and parent Portal
   field. **Discard draft** resets only that Form to its loaded values without
-  saving. It does not undo a completed upload or a created Airtable choice.
+  saving. For eligible create progress, it first clears the matching stored
+  token, including a previous page's slot while remembering is unchecked; a
+  cleanup refusal keeps the current draft. It does not undo a completed upload
+  or a created Airtable choice.
 - Linked fields offer an authorized search and paginated selection. Selecting
   choices only edits the local draft; **Save** writes the relationship.
 - Configured conditional linked filters expose **Load conditional filters**.
@@ -490,6 +493,16 @@ fallback. Concurrent progress is compared with both its draft and write IDs,
 so an older owner cannot remove a newer stored incarnation. Missing/denied
 storage or locks and conflicts show fixed feedback rather than claiming that
 answers were remembered or discarded.
+
+The Form's **Discard draft** inspects the matching slot left by a previous page
+even while remembering is unchecked. **Clear this visitor's session** captures
+matching SDK-owned progress slot identities for that visitor on the current
+application origin; **Disconnect** does so for both visitors. This snapshot is
+taken before namespace rotation or asynchronous lock waits. Exact draft/write-token
+removal preserves a successor created after capture and unrelated visitor or
+storage entries. Failed reads, malformed matching owned slots and cleanup
+failures show fixed incomplete-cleanup feedback. They do not produce an
+all-answers-cleared promise.
 
 Before an admitted create **Save** is sent, progress is suspended, queued work
 settles and the exact stored copy is removed. An existing slot is inspected

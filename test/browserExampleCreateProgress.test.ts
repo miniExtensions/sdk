@@ -755,3 +755,325 @@ describe(
         });
     }
 );
+
+type PriorDocumentProgressOptions = {
+    visitor?: string;
+    namespace?: string;
+    appOrigin?: string;
+    setOwner?: boolean;
+    draftId?: string;
+    title?: string;
+};
+const seedPriorDocumentProgress = (
+    window: Window,
+    options: PriorDocumentProgressOptions = {}
+) => {
+    const visitor = options.visitor ?? 'A';
+    const namespace = options.namespace ?? 'synthetic-prior-document-owner';
+    const appOrigin = options.appOrigin ?? 'https://app.example.test';
+    const ownerKey = ownerPrefix + JSON.stringify([appOrigin, visitor]);
+    const key =
+        progressPrefix +
+        JSON.stringify([
+            'browser-create-progress',
+            1,
+            appOrigin,
+            'https://sdk.example.test',
+            'share_progress_synthetic',
+            visitor,
+            namespace,
+            loadedForm().extensionId,
+            'table_progress_synthetic',
+            'version_progress_synthetic',
+        ]);
+    const draftId = options.draftId ?? randomUUID();
+    const bytes = JSON.stringify({
+        kind: 'miniExtensions-sdk-create-progress',
+        version: 1,
+        draftId,
+        writeId: randomUUID(),
+        values: { fld_title: options.title ?? rememberedTitle },
+    });
+    if (options.setOwner !== false)
+        window.sessionStorage.setItem(ownerKey, namespace);
+    window.sessionStorage.setItem(key, bytes);
+    return { key, bytes, ownerKey, namespace, draftId };
+};
+const cleanupFailure = async (window: Window) => {
+    const status = window.document.getElementById('status')!;
+    await waitFor(() => status.classList.contains('error'));
+    assert.match(status.textContent!, /remember|progress|storage/i);
+    assert.doesNotMatch(status.textContent!, /This Form draft was discarded/);
+};
+
+describe(
+    'actual starter prior-document create progress cleanup',
+    { concurrency: false },
+    () => {
+        it('unchecked Discard draft discovers and removes prior-document progress before later opt-in', async (test) => {
+            const h = await fixture(test);
+            const prior = seedPriorDocumentProgress(h.window);
+            assert.equal(
+                checkbox(h.window, 'Remember selected answers in this tab')
+                    .checked,
+                false
+            );
+            edit(
+                h.window,
+                'fld_title',
+                'Synthetic current draft before Discard'
+            );
+            const reads = h.reads.length;
+            button(h.window, 'Discard draft').click();
+            await h.locks.settle();
+            await waitFor(
+                () =>
+                    h.window.document.getElementById('status')!.textContent ===
+                    'This Form draft was discarded. No record was saved.'
+            );
+            assert.equal(h.window.sessionStorage.getItem(prior.key), null);
+            assert.equal(fieldInput(h.window).value, 'Initial title');
+            await h.chooseTitle();
+            assert.equal(
+                button(h.window, 'Restore remembered answers').disabled,
+                true
+            );
+            assert.equal(
+                progressEntries(h.window).some(({ bytes }) =>
+                    bytes.includes(rememberedTitle)
+                ),
+                false
+            );
+            assert.equal(h.reads.length, reads);
+            assert.equal(h.saves.length, 0);
+        });
+
+        for (const action of ['logout', 'disconnect'] as const)
+            it(`${action} discovers prior-document owned slots across namespaces and preserves unrelated storage`, async (test) => {
+                const h = await fixture(test);
+                const active = seedPriorDocumentProgress(h.window);
+                const older = seedPriorDocumentProgress(h.window, {
+                    namespace: 'synthetic-older-document-owner',
+                    setOwner: false,
+                });
+                const otherVisitor = seedPriorDocumentProgress(h.window, {
+                    visitor: 'B',
+                    namespace: 'synthetic-visitor-B-owner',
+                });
+                const unrelatedVisitor = seedPriorDocumentProgress(h.window, {
+                    visitor: 'C',
+                    namespace: 'synthetic-unrelated-visitor-owner',
+                });
+                const otherOrigin = seedPriorDocumentProgress(h.window, {
+                    appOrigin: 'https://other-app.example.test',
+                    setOwner: false,
+                });
+                const foreignKey =
+                    progressPrefix +
+                    JSON.stringify(['synthetic-foreign-producer', 1, 'A']);
+                h.window.sessionStorage.setItem(
+                    foreignKey,
+                    'Synthetic foreign producer bytes'
+                );
+                h.window.sessionStorage.setItem(
+                    'synthetic-unrelated-storage',
+                    'Retained unrelated bytes'
+                );
+                const reads = h.reads.length;
+                button(
+                    h.window,
+                    action === 'logout'
+                        ? "Clear this visitor's session"
+                        : 'Disconnect'
+                ).click();
+                await h.locks.settle();
+                assert.equal(h.window.sessionStorage.getItem(active.key), null);
+                assert.equal(h.window.sessionStorage.getItem(older.key), null);
+                assert.equal(
+                    h.window.sessionStorage.getItem(otherVisitor.key),
+                    action === 'disconnect' ? null : otherVisitor.bytes
+                );
+                assert.equal(
+                    h.window.sessionStorage.getItem(unrelatedVisitor.key),
+                    unrelatedVisitor.bytes
+                );
+                assert.equal(
+                    h.window.sessionStorage.getItem(unrelatedVisitor.ownerKey),
+                    unrelatedVisitor.namespace
+                );
+                assert.equal(
+                    h.window.sessionStorage.getItem(otherOrigin.key),
+                    otherOrigin.bytes
+                );
+                assert.equal(
+                    h.window.sessionStorage.getItem(foreignKey),
+                    'Synthetic foreign producer bytes'
+                );
+                assert.equal(
+                    h.window.sessionStorage.getItem(
+                        'synthetic-unrelated-storage'
+                    ),
+                    'Retained unrelated bytes'
+                );
+                assert.notEqual(
+                    h.window.sessionStorage.getItem(active.ownerKey),
+                    active.namespace
+                );
+                assert.equal(
+                    h.window.document
+                        .getElementById('status')!
+                        .classList.contains('error'),
+                    false
+                );
+                assert.equal(h.reads.length, reads);
+                assert.equal(h.saves.length, 0);
+            });
+
+        for (const action of ['Discard draft', 'logout'] as const)
+            it(`${action} preserves newer same-slot bytes and a new namespace after cleanup captured an older token`, async (test) => {
+                const h = await fixture(test);
+                const prior = seedPriorDocumentProgress(h.window);
+                edit(
+                    h.window,
+                    'fld_title',
+                    'Synthetic live answer during cleanup conflict'
+                );
+                const removed: string[] = [];
+                const removeItem = h.window.sessionStorage.removeItem.bind(
+                    h.window.sessionStorage
+                );
+                Object.defineProperty(h.window.sessionStorage, 'removeItem', {
+                    configurable: true,
+                    value: (key: string) => {
+                        removed.push(key);
+                        removeItem(key);
+                    },
+                });
+                const reads = h.reads.length;
+                const release = h.locks.hold();
+                test.after(release);
+                if (action === 'logout')
+                    button(h.window, "Clear this visitor's session").click();
+                else button(h.window, action).click();
+                await waitFor(() => h.locks.waiting > 0);
+                const successor = seedPriorDocumentProgress(h.window, {
+                    namespace: prior.namespace,
+                    setOwner: false,
+                    draftId: prior.draftId,
+                    title: 'Synthetic newer same-slot answer',
+                });
+                const namespace =
+                    action === 'logout'
+                        ? h.window.sessionStorage.getItem(prior.ownerKey)!
+                        : 'synthetic-new-document-successor-owner';
+                assert.notEqual(namespace, prior.namespace);
+                const newScope = seedPriorDocumentProgress(h.window, {
+                    namespace,
+                    title: 'Synthetic new namespace answer',
+                });
+                release();
+                await h.locks.settle();
+                await cleanupFailure(h.window);
+                assert.equal(
+                    h.window.sessionStorage.getItem(successor.key),
+                    successor.bytes
+                );
+                assert.equal(
+                    h.window.sessionStorage.getItem(newScope.key),
+                    newScope.bytes
+                );
+                assert.equal(removed.includes(successor.key), false);
+                assert.equal(removed.includes(newScope.key), false);
+                if (action === 'Discard draft')
+                    assert.equal(
+                        fieldInput(h.window).value,
+                        'Synthetic live answer during cleanup conflict'
+                    );
+                assert.equal(h.reads.length, reads);
+                assert.equal(h.saves.length, 0);
+            });
+
+        for (const failure of ['denied removal', 'malformed envelope'] as const)
+            it(`unchecked Discard draft reports ${failure} and retains the current draft and stored bytes`, async (test) => {
+                const h = await fixture(test);
+                const prior = seedPriorDocumentProgress(h.window);
+                if (failure === 'malformed envelope')
+                    h.window.sessionStorage.setItem(
+                        prior.key,
+                        '{Synthetic malformed progress'
+                    );
+                else {
+                    const removeItem = h.window.sessionStorage.removeItem.bind(
+                        h.window.sessionStorage
+                    );
+                    Object.defineProperty(
+                        h.window.sessionStorage,
+                        'removeItem',
+                        {
+                            configurable: true,
+                            value: (key: string) => {
+                                if (key === prior.key)
+                                    throw new Error(
+                                        'Synthetic denied prior-document cleanup'
+                                    );
+                                removeItem(key);
+                            },
+                        }
+                    );
+                }
+                const bytes = h.window.sessionStorage.getItem(prior.key);
+                edit(
+                    h.window,
+                    'fld_title',
+                    'Synthetic current answer retained on cleanup failure'
+                );
+                const reads = h.reads.length;
+                button(h.window, 'Discard draft').click();
+                await h.locks.settle();
+                await cleanupFailure(h.window);
+                assert.equal(h.window.sessionStorage.getItem(prior.key), bytes);
+                assert.equal(
+                    fieldInput(h.window).value,
+                    'Synthetic current answer retained on cleanup failure'
+                );
+                assert.equal(h.reads.length, reads);
+                assert.equal(h.saves.length, 0);
+            });
+
+        it('Logout reports denied prior-document cleanup while rotating the owner and retaining inaccessible bytes', async (test) => {
+            const h = await fixture(test);
+            const prior = seedPriorDocumentProgress(h.window);
+            const removeItem = h.window.sessionStorage.removeItem.bind(
+                h.window.sessionStorage
+            );
+            Object.defineProperty(h.window.sessionStorage, 'removeItem', {
+                configurable: true,
+                value: (key: string) => {
+                    if (key === prior.key)
+                        throw new Error(
+                            'Synthetic denied prior-document Logout cleanup'
+                        );
+                    removeItem(key);
+                },
+            });
+            const reads = h.reads.length;
+            button(h.window, "Clear this visitor's session").click();
+            await h.locks.settle();
+            await cleanupFailure(h.window);
+            assert.equal(
+                h.window.sessionStorage.getItem(prior.key),
+                prior.bytes
+            );
+            assert.notEqual(
+                h.window.sessionStorage.getItem(prior.ownerKey),
+                prior.namespace
+            );
+            assert.match(
+                h.window.document.getElementById('status')!.textContent!,
+                /could not be fully cleared/i
+            );
+            assert.equal(h.reads.length, reads);
+            assert.equal(h.saves.length, 0);
+        });
+    }
+);

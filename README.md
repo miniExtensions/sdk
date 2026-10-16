@@ -352,7 +352,10 @@ archive and intended deployment separately.
   unlink and Kanban category changes. Valid lookup results targeting linked
   records support paging and configured existing-child edits while preserving
   the outer Portal field ID. Lookup collections expose no create or parent
-  unlink actions. See [Portal controls](examples/browser/README.md#portal-workflow).
+  unlink actions. Subscribed list owners expose sanitized read-failure kind/status
+  for [host-owned manual recovery](docs/portals.md#manual-read-failure-guidance),
+  without automatic retry or session changes. See
+  [Portal controls](examples/browser/README.md#portal-workflow).
 - **Authentication:** password, configured login and verification controls,
   deliberate session application, basic configured signup using the login
   inputs, and memory-only visitor sessions by default. The starter offers explicit

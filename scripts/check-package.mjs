@@ -149,6 +149,11 @@ import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
+import {
+    checkPortalReadFailureConsumer,
+    checkPortalReadFailureRecipeConsumer,
+    portalReadFailureTypedConsumer,
+} from './portal-read-failure-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
 import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
@@ -912,6 +917,7 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         buttonTypedConsumer +
         portalButtonCompositionTypedConsumer +
         durationTypedConsumer +
+        portalReadFailureTypedConsumer +
         `
 import type { DurationFormat } from '@miniextensions/sdk/formulas';
 const publicDurationFormat: DurationFormat = 'h:mm:ss.SSS';
@@ -2317,6 +2323,23 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(portalOwnerProof.checks, 19);
     console.log('Installed Portal owner checkpoints: 19');
+    const portalReadFailureChecks = checkPortalReadFailureConsumer({
+        consumerDirectory: temporaryDirectory,
+        run,
+    });
+    assert.equal(portalReadFailureChecks, 16);
+    console.log(
+        `Installed Portal read failures: ${portalReadFailureChecks} ESM/CommonJS groups passed; strict NodeNext/Bundler declarations checked; synthetic transport only.`
+    );
+    const portalReadFailureRecipeChecks =
+        await checkPortalReadFailureRecipeConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        });
+    assert.equal(portalReadFailureRecipeChecks, 3);
+    console.log(
+        `Installed Portal read failure host recipe: ${portalReadFailureRecipeChecks} actual PortalList/custom-render groups passed; synthetic DOM/transport only.`
+    );
 
     const authGuide = readFileSync(
         join(installedPackage, 'docs/auth.md'),

@@ -280,6 +280,167 @@ describe('canonical ordinary page validation', () => {
             assert(['result', 'throws'].includes(c.canonical.type));
         });
 });
+describe('linked-open validation without review debt', () => {
+    const linkedFixture = (
+        value: unknown,
+        mini: Record<string, unknown> = {}
+    ) =>
+        fixture((loaded) => {
+            loaded.payload.fieldIdsToSchemas.a = {
+                fieldType: 'multipleRecordLinks',
+                airtableField: {
+                    id: 'a',
+                    name: 'a',
+                    description: null,
+                    isComputed: false,
+                    isPrimaryField: false,
+                    config: {
+                        type: 'multipleRecordLinks',
+                        options: {
+                            linkedTableId: 'tbl_children',
+                            isReversed: false,
+                            prefersSingleRecordLink: false,
+                        },
+                    },
+                },
+                miniExtConfig: {
+                    requireOpenLinkedRecords: true,
+                    ...mini,
+                } as never,
+            };
+            loaded.payload.formRecord.data.a = value as never;
+        });
+    for (const value of [undefined, null, []]) {
+        it(`admits canonical empty ${JSON.stringify(value)} without changing native data`, async () => {
+            const f = linkedFixture(value);
+            const before = f.fields.controller.getState().draft;
+            lastPage(f);
+            await f.pages.submit(f.pages.getSnapshot().revision);
+            assert.equal(f.calls.length, 1);
+            assert.deepEqual(f.calls[0]!.formRecord.data, before!.data);
+            assert.deepEqual(
+                f.calls[0]!.formFieldIdsWithUnsavedChanges,
+                before!.dirtyFieldIds
+            );
+            f.pages.dispose();
+            f.fields.destroy();
+        });
+    }
+    for (const [mini, code] of [
+        [{ required: true }, 'required'],
+        [{ customMinimumRecordsToSelect: 1 }, 'linked-minimum'],
+        [{ customMinimumRecordsToSelect: '1' }, 'invalid-metadata'],
+    ] as const) {
+        it(`preserves ${code} for empty linked selections`, () => {
+            const f = linkedFixture([], mini);
+            assert.deepEqual(f.pages.getSnapshot().problems, [
+                { fieldId: 'a', code },
+            ]);
+            assert.equal(f.pages.next(f.pages.getSnapshot().revision).accepted, false);
+            assert.equal(f.calls.length, 0);
+            f.pages.dispose();
+            f.fields.destroy();
+        });
+    }
+    for (const value of ['', ' ', 'rec_child', {}, [null], [''], Array(1)]) {
+        it(`does not treat malformed ${JSON.stringify(value)} as no review debt`, () => {
+            const f = linkedFixture([]);
+            const field = describeLoadedFormFields(f.loaded)[0]!;
+            for (const hidden of [false, true])
+                assert.deepEqual(
+                    validatePageField(field, value as never, undefined, hidden),
+                    { fieldId: 'a', code: 'unsupported-validation' }
+                );
+            f.pages.dispose();
+            f.fields.destroy();
+        });
+    }
+    it('hidden selected records do not create review debt; ordinary maximum still applies', () => {
+        const f = linkedFixture(['rec_one', 'rec_two']);
+        const field = describeLoadedFormFields(f.loaded)[0]!;
+        assert.equal(validatePageField(field, ['rec_one'], undefined, true), null);
+        field.schema.miniExtConfig = {
+            requireOpenLinkedRecords: true,
+            customMaxRecordsToSelect: 1,
+        } as never;
+        assert.deepEqual(
+            validatePageField(field, ['rec_one', 'rec_two'], undefined, true),
+            { fieldId: 'a', code: 'linked-maximum' }
+        );
+        f.pages.dispose();
+        f.fields.destroy();
+    });
+    it('rechecks visibility and earlier pages without granting review credit', async () => {
+        const f = linkedFixture(['rec_child'], {
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [{
+                    id: 'show-linked',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'is',
+                        fieldType: 'singleLineText',
+                        idOrName: { type: 'id', id: 'b' },
+                        value: 'show',
+                    },
+                }],
+            },
+        });
+        assert.equal(f.fields.field('a').getSnapshot().visibility.type, 'hidden');
+        lastPage(f);
+        const oldRevision = f.pages.getSnapshot().revision;
+        assert(f.fields.field('b').setValue('show').accepted);
+        assert.equal(f.pages.getSnapshot().canSubmit, false);
+        assert(f.pages.getSnapshot().problems.some((p) => p.code === 'unsupported-validation'));
+        await assert.rejects(f.pages.submit(oldRevision));
+        await assert.rejects(f.pages.submit(f.pages.getSnapshot().revision));
+        assert.equal(f.calls.length, 0);
+        assert(f.fields.field('b').setValue('B').accepted);
+        assert.equal(f.pages.getSnapshot().canSubmit, true);
+        assert(f.pages.back(f.pages.getSnapshot().revision).accepted);
+        lastPage(f);
+        await f.pages.submit(f.pages.getSnapshot().revision);
+        assert.equal(f.calls.length, 1);
+        assert.deepEqual(f.calls[0]!.formRecord.data.a, ['rec_child']);
+        f.pages.dispose();
+        f.fields.destroy();
+    });
+    it('does not waive physical-kind mismatch or computed linked presentation', () => {
+        const f = linkedFixture([]);
+        const field = describeLoadedFormFields(f.loaded)[0]!;
+        for (const altered of [
+            { ...field, isComputed: true },
+            {
+                ...field,
+                schema: {
+                    ...field.schema,
+                    airtableField: {
+                        ...field.schema.airtableField,
+                        config: { type: 'singleLineText', options: null },
+                    },
+                },
+            },
+        ]) {
+            for (const hidden of [false, true])
+                assert.deepEqual(
+                    validatePageField(altered as typeof field, [], undefined, hidden),
+                    { fieldId: 'a', code: 'unsupported-validation' }
+                );
+        }
+        f.pages.dispose();
+        f.fields.destroy();
+    });
+    it('owner retirement still refuses an otherwise eligible empty selection', async () => {
+        const f = linkedFixture([]);
+        lastPage(f);
+        f.setLease(false);
+        await assert.rejects(f.pages.submit(f.pages.getSnapshot().revision));
+        assert.equal(f.calls.length, 0);
+        f.pages.dispose();
+        f.fields.destroy();
+    });
+});
+
 describe('email page validation regressions', () => {
     const emailFixture = (value: string, readOnly = false) =>
         fixture((loaded) => {

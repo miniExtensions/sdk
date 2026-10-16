@@ -21,6 +21,8 @@ import {
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
+import { createProcessGroupObserver } from './process-group-observer.mjs';
+import './process-group-observer.test.mjs';
 import {
     assertPrivacyProofInventory,
     privacyScenarioInventory,
@@ -845,6 +847,41 @@ function assertTailGroupGone(pid) {
 
 async function packedTailFixture(t, plan = {}) {
     const root = await mkdtemp(join(tmpdir(), 'sdk-package-tail-guard-'));
+    const observers = new Map();
+    const createObserver = ({ pid }) => {
+        const observer = createProcessGroupObserver({ pid });
+        observers.set(pid, observer);
+        return observer;
+    };
+    const groupState = async (pid) => {
+        try {
+            process.kill(-pid, 0);
+        } catch (error) {
+            if (error.code === 'ESRCH')
+                return { state: 'gone', pid, members: [] };
+            return {
+                state: 'unresolved',
+                pid,
+                members: [],
+                reason: `Process-group probe ${error.code ?? 'unknown'}`,
+            };
+        }
+        const observer = observers.get(pid);
+        if (!observer) return { state: 'unresolved', pid, members: [] };
+        return observer.inspect();
+    };
+    const pidDrained = async (pid) => {
+        try {
+            process.kill(pid, 0);
+        } catch (error) {
+            return error.code === 'ESRCH';
+        }
+        for (const observer of observers.values()) {
+            const state = await observer.inspectMember(pid);
+            if (state.state === 'gone' || state.state === 'exited') return true;
+        }
+        return false;
+    };
     // One owner handles termination, confirmed drain and eventual removal.
     // Preserve the PID evidence and root if any cleanup cannot be confirmed.
     t.after(async () => {
@@ -865,32 +902,30 @@ async function packedTailFixture(t, plan = {}) {
             pids.push(pid);
             if (!name.includes('.grandchild.')) groups.push(pid);
         }
+        for (const pid of observers.keys())
+            if (!groups.includes(pid)) groups.push(pid);
         for (const pid of groups) {
-            try {
-                process.kill(-pid, 'SIGKILL');
-            } catch (error) {
-                if (error.code !== 'ESRCH') throw error;
-            }
+            const state = await groupState(pid);
+            if (state.state === 'gone' || state.state === 'exited') continue;
+            const observer = observers.get(pid);
+            if (observer) await observer.signal('SIGKILL');
         }
-        const targets = [...groups.map((pid) => -pid), ...pids];
         const deadline = performance.now() + 3000;
         while (true) {
             const remaining = [];
-            for (const target of targets) {
-                try {
-                    process.kill(target, 0);
-                    remaining.push(target);
-                } catch (error) {
-                    if (error.code !== 'ESRCH') throw error;
-                }
-            }
+            const states = await Promise.all(groups.map(groupState));
+            for (const state of states)
+                if (state.state !== 'gone' && state.state !== 'exited')
+                    remaining.push(-state.pid);
+            for (const pid of pids)
+                if (!(await pidDrained(pid))) remaining.push(pid);
             if (remaining.length === 0) {
                 await rm(root, { recursive: true, force: true });
                 return;
             }
             assert.ok(
                 performance.now() < deadline,
-                `Cleanup unconfirmed for ${remaining.join(', ')}; retained fixture ${root}`
+                `Cleanup unconfirmed for ${remaining.join(', ')} (${JSON.stringify(states)}); retained fixture ${root}`
             );
             await new Promise((resolve) => setTimeout(resolve, 25));
         }
@@ -921,6 +956,23 @@ const report = { schemaVersion: 1, suite, result };
 const send = (message) => new Promise((resolve, reject) => {
     process.send(message, (error) => error ? reject(error) : resolve());
 });
+const observe = (phase) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => finish(new Error('fixture handshake timeout')), 10000);
+    const finish = (error) => {
+        clearTimeout(timer);
+        process.off('message', acknowledged);
+        if (error) reject(error); else resolve();
+    };
+    const acknowledged = (message) => {
+        try { assert.deepEqual(message, { schemaVersion: 1, suite, phase, accepted: true }); finish(); }
+        catch (error) { finish(error); }
+    };
+    process.on('message', acknowledged);
+    void send({ schemaVersion: 1, suite, phase }).catch(finish);
+});
+if (config.exitSoon) setTimeout(() => process.exit(0), config.exitSoon);
+writeFileSync(file('pid'), String(process.pid));
+await observe('start');
 if (config.mode === 'hang') {
     process.on('SIGTERM', async () => {
         writeFileSync(file('term'), 'SIGTERM');
@@ -930,7 +982,6 @@ if (config.mode === 'hang') {
         process.exit(0);
     });
 }
-writeFileSync(file('pid'), String(process.pid));
 writeFileSync(file('ready'), 'ready');
 await wait((suite === 'attachment' ? 'review' : 'attachment') + '.ready');
 if (config.mode === 'hang') await new Promise(() => setInterval(() => {}, 1000));
@@ -950,6 +1001,11 @@ if (config.mode === 'survivor') {
     child.unref();
     await wait(suite + '.grandchild.ready');
 }
+if (!config.skipFinish) {
+    await observe('finish');
+    writeFileSync(file('finish-accepted'), 'accepted');
+}
+if (config.duplicateFinish) await observe('finish');
 for (const message of config.reports ?? [report]) await send(message);
 writeFileSync(file('reported'), 'reported');
 if (config.hold) await wait(suite + '.release');
@@ -965,16 +1021,44 @@ process.disconnect();
         timeoutMs: 10000,
         terminationGraceMs: 100,
         drainTimeoutMs: 2000,
+        createObserver,
     };
     return {
         root,
         options,
         async assertGroupsGone() {
+            const states = [];
             for (const suite of ['attachment', 'review']) {
-                assertTailGroupGone(
-                    await waitForTailFile(root, `${suite}.pid`)
+                const state = await groupState(
+                    Number(await waitForTailFile(root, `${suite}.pid`))
                 );
+                assert.ok(
+                    state.state === 'gone' || state.state === 'exited',
+                    JSON.stringify(state)
+                );
+                states.push(state);
             }
+            await write(
+                root,
+                'drain-observations.json',
+                JSON.stringify(states)
+            );
+            return states;
+        },
+        async assertPidDrained(pid) {
+            const states = await this.assertGroupsGone();
+            assert.equal(await pidDrained(pid), true);
+        },
+        async registerSupervisor(pid) {
+            const observer = createObserver({ pid });
+            const deadline = performance.now() + 3000;
+            let state;
+            do {
+                state = await observer.capture();
+                if (state.state === 'live') return;
+                await new Promise((resolve) => setTimeout(resolve, 25));
+            } while (performance.now() < deadline);
+            assert.equal(state.state, 'live', JSON.stringify(state));
         },
     };
 }
@@ -1002,11 +1086,17 @@ test('packed tail maps both real workers and waits for close after valid IPC', a
     void running.then(() => {
         settled = true;
     });
-    await Promise.all(
-        ['attachment', 'review'].map((suite) =>
-            waitForTailFile(fixture.root, `${suite}.reported`)
-        )
-    );
+    await Promise.race([
+        Promise.all(
+            ['attachment', 'review'].map((suite) =>
+                waitForTailFile(fixture.root, `${suite}.reported`)
+            )
+        ),
+        running.then((outcome) => {
+            if (outcome.error) throw outcome.error;
+            assert.fail('Workers completed before their explicit releases');
+        }),
+    ]);
     assert.equal(settled, false, 'valid IPC cannot stand in for child close');
     await write(fixture.root, 'attachment.release', 'release');
     assert.equal(settled, false, 'both owned children must close');
@@ -1043,7 +1133,27 @@ test('packed tail rejects missing, malformed, mismatched and duplicate IPC', asy
             });
             await assert.rejects(
                 runPackedTailChecks(fixture.options),
-                (error) => assertTailFailure(error, 'attachment')
+                (error) => {
+                    assertTailFailure(error, 'attachment');
+                    assert.match(
+                        error.errors.map((item) => item.message).join('\n'),
+                        name === 'missing'
+                            ? /Missing single valid result/
+                            : /Invalid worker result/
+                    );
+                    return true;
+                }
+            );
+            assert.equal(
+                await waitForTailFile(fixture.root, 'attachment.ready'),
+                'ready'
+            );
+            assert.equal(
+                await waitForTailFile(
+                    fixture.root,
+                    'attachment.finish-accepted'
+                ),
+                'accepted'
             );
             await fixture.assertGroupsGone();
         });
@@ -1073,6 +1183,23 @@ test('packed tail rejects real assertion and nonzero exits after valid IPC and d
             await write(fixture.root, 'review.release-term', 'release');
             const outcome = await running;
             assertTailFailure(outcome.error, 'attachment');
+            assert.match(
+                outcome.error.errors.map((item) => item.message).join('\n'),
+                new RegExp(
+                    `Worker exit code ${mode === 'throw' ? 1 : 17}, signal null`
+                )
+            );
+            assert.equal(
+                await waitForTailFile(
+                    fixture.root,
+                    'attachment.finish-accepted'
+                ),
+                'accepted'
+            );
+            assert.equal(
+                await waitForTailFile(fixture.root, 'attachment.reported'),
+                'reported'
+            );
             assert.equal(
                 await readFile(join(fixture.root, 'review.exited'), 'utf8'),
                 'cooperative SIGTERM'
@@ -1102,12 +1229,16 @@ test('packed tail times out and reaps children after SIGTERM or forced SIGKILL',
                             error.errors
                                 .map((failure) => failure.message)
                                 .join('\n'),
-                            /timed out|timeout/i
+                            /Worker timed out/
                         );
                         return true;
                     }
                 );
                 for (const suite of ['attachment', 'review']) {
+                    assert.equal(
+                        await waitForTailFile(fixture.root, `${suite}.ready`),
+                        'ready'
+                    );
                     assert.equal(
                         await readFile(
                             join(fixture.root, `${suite}.term`),
@@ -1136,12 +1267,21 @@ test('packed tail times out and reaps children after SIGTERM or forced SIGKILL',
     }
 });
 
-test('packed tail rejects a zero-exit worker with an owned surviving grandchild and reaps the group', async (t) => {
+test('packed tail rejects a zero-exit worker with an owned live grandchild and proves operational group drain', async (t) => {
     const fixture = await packedTailFixture(t, {
         attachment: { mode: 'survivor' },
     });
-    await assert.rejects(runPackedTailChecks(fixture.options), (error) =>
-        assertTailFailure(error, 'attachment')
+    await assert.rejects(runPackedTailChecks(fixture.options), (error) => {
+        assertTailFailure(error, 'attachment');
+        assert.match(
+            error.errors.map((item) => item.message).join('\n'),
+            /Process group survived worker close/
+        );
+        return true;
+    });
+    assert.equal(
+        await waitForTailFile(fixture.root, 'attachment.finish-accepted'),
+        'accepted'
     );
     assert.equal(
         await readFile(
@@ -1153,8 +1293,76 @@ test('packed tail rejects a zero-exit worker with an owned surviving grandchild 
     const grandchildPid = Number(
         await readFile(join(fixture.root, 'attachment.grandchild.pid'), 'utf8')
     );
-    assert.throws(() => process.kill(grandchildPid, 0), { code: 'ESRCH' });
+    await fixture.assertPidDrained(grandchildPid);
     await fixture.assertGroupsGone();
+});
+
+test('packed tail rejects missing or repeated finish acknowledgement before accepting a result', async (t) => {
+    for (const plan of [{ skipFinish: true }, { duplicateFinish: true }]) {
+        await t.test(JSON.stringify(plan), async (t) => {
+            const fixture = await packedTailFixture(t, { attachment: plan });
+            await assert.rejects(
+                runPackedTailChecks(fixture.options),
+                (error) => {
+                    assertTailFailure(error, 'attachment');
+                    assert.match(
+                        error.errors.map((item) => item.message).join('\n'),
+                        plan.skipFinish
+                            ? /Invalid worker result/
+                            : /Invalid worker cohort handshake/
+                    );
+                    return true;
+                }
+            );
+            assert.equal(
+                await waitForTailFile(fixture.root, 'attachment.ready'),
+                'ready'
+            );
+            if (plan.duplicateFinish)
+                assert.equal(
+                    await waitForTailFile(
+                        fixture.root,
+                        'attachment.finish-accepted'
+                    ),
+                    'accepted'
+                );
+            await fixture.assertGroupsGone();
+        });
+    }
+});
+
+test('an observer constructor failure after fork retains unsafe cleanup without signalling an unobserved child', async (t) => {
+    const fixture = await packedTailFixture(t, {
+        attachment: { exitSoon: 1000 },
+        review: { exitSoon: 1000 },
+    });
+    const pids = [];
+    await assert.rejects(
+        runPackedTailChecks({
+            ...fixture.options,
+            terminationGraceMs: 20,
+            drainTimeoutMs: 50,
+            createObserver(options) {
+                fixture.options.createObserver(options);
+                pids.push(options.pid);
+                throw new Error(
+                    'Expected observer constructor failure after fork'
+                );
+            },
+        }),
+        (error) => {
+            assertTailFailure(error, 'attachment', false);
+            assert.match(
+                error.errors.map((item) => item.message).join('\n'),
+                /launch failed/
+            );
+            return true;
+        }
+    );
+    assert.equal(pids.length, 2);
+    for (const pid of pids) process.kill(pid, 0);
+    // The owned fixture children self-exit; teardown observes ESRCH before rm.
+    assert.ok((await readdir(fixture.root)).includes('plan.json'));
 });
 
 test('packed tail reports spawn errors with suite identity and safely drains both attempts', async (t) => {
@@ -1229,6 +1437,7 @@ writeFileSync(join(options.consumerDirectory, 'supervisor.outcome.json'), JSON.s
             });
             assert.ok(supervisor.pid);
             await write(fixture.root, 'supervisor.pid', String(supervisor.pid));
+            await fixture.registerSupervisor(supervisor.pid);
             await Promise.all(
                 ['attachment', 'review'].map((suite) =>
                     waitForTailFile(fixture.root, `${suite}.ready`)
@@ -1259,4 +1468,104 @@ writeFileSync(join(options.consumerDirectory, 'supervisor.outcome.json'), JSON.s
             assertTailGroupGone(supervisor.pid);
         });
     }
+});
+
+test('packed tail allows healthy cohort capture beyond termination grace within the worker deadline', async (t) => {
+    const fixture = await packedTailFixture(t, {
+        attachment: { hold: true },
+        review: { hold: true },
+    });
+    assert.equal(fixture.options.terminationGraceMs, 100);
+    assert.equal(fixture.options.timeoutMs, 10000);
+    const captures = [];
+    let completed = false;
+    const running = runPackedTailChecks({
+        ...fixture.options,
+        createObserver(options) {
+            const observer = fixture.options.createObserver(options);
+            return {
+                ...observer,
+                async capture() {
+                    const started = performance.now();
+                    await new Promise((resolve) => setTimeout(resolve, 150));
+                    const observation = await observer.capture();
+                    captures.push({
+                        pid: options.pid,
+                        elapsedMs: performance.now() - started,
+                        state: observation.state,
+                    });
+                    return observation;
+                },
+            };
+        },
+    }).then(
+        (result) => {
+            completed = true;
+            return { result };
+        },
+        (error) => {
+            completed = true;
+            return { error };
+        }
+    );
+    const reported = (async () => {
+        while (!completed) {
+            try {
+                await Promise.all(
+                    ['attachment', 'review'].map((suite) =>
+                        readFile(
+                            join(fixture.root, `${suite}.reported`),
+                            'utf8'
+                        )
+                    )
+                );
+                return { reported: true };
+            } catch (error) {
+                if (error.code !== 'ENOENT') throw error;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        return null;
+    })();
+    const first = await Promise.race([running, reported]);
+    if (first === null || !Object.hasOwn(first, 'reported')) {
+        const outcome = first ?? (await running);
+        if (outcome.error) throw outcome.error;
+        assert.fail('Healthy held workers completed before both reports.');
+    }
+    assert.equal(
+        completed,
+        false,
+        'Valid IPC must not bypass held worker close.'
+    );
+    const workerPids = [];
+    for (const suite of ['attachment', 'review']) {
+        const pid = Number(
+            await readFile(join(fixture.root, `${suite}.pid`), 'utf8')
+        );
+        process.kill(pid, 0);
+        workerPids.push(pid);
+    }
+    const acceptedCaptures = captures.filter(
+        (capture) => capture.state === 'live'
+    );
+    assert.equal(acceptedCaptures.length, 4);
+    for (const pid of workerPids) {
+        const owned = acceptedCaptures.filter((capture) => capture.pid === pid);
+        assert.equal(
+            owned.length,
+            2,
+            'Both start and finish must be captured.'
+        );
+        assert.ok(owned.every((capture) => capture.elapsedMs > 100));
+    }
+    await Promise.all(
+        ['attachment', 'review'].map((suite) =>
+            write(fixture.root, `${suite}.release`, 'explicit close release')
+        )
+    );
+    const outcome = await running;
+    if (outcome.error) throw outcome.error;
+    assert.deepEqual(outcome.result, packedTailResults);
+    await fixture.assertGroupsGone();
 });

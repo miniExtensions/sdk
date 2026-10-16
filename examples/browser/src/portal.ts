@@ -16,7 +16,6 @@ import {
     type RuntimeAirtableField,
     type RuntimeLinkedRecordDetailField,
     type RuntimeFieldSchema,
-    type RuntimeConditionsDefinition,
     type SaveFormInput,
 } from '@miniextensions/sdk';
 import {
@@ -24,12 +23,12 @@ import {
     createPortalCellBinding,
     type PortalCellBinding,
     getPortalLinkedRecordFieldConfig,
+    evaluatePortalViewAvailability,
     type PortalCollection,
     type PortalCollectionSnapshot,
     type PortalCollectionCriteria,
     type PortalOwnerScope,
 } from '@miniextensions/sdk/portals';
-import { evaluateFormFieldVisibility } from '@miniextensions/sdk/forms';
 import { button, element, labeled } from './dom.js';
 import {
     displayValue,
@@ -149,88 +148,14 @@ const customViews = (
     page: PortalLoadedResult,
     fieldId: string
 ): { views: CustomView[]; legacy: boolean; unavailable: boolean } => {
-    const refused = (unavailable: boolean) => ({
-        views: [],
-        legacy: false,
-        unavailable,
+    const result = evaluatePortalViewAvailability({
+        portal: page,
+        portalFieldId: fieldId,
     });
-    const schema = page.payload.fieldIdsToSchemas[fieldId];
-    if (schema == null || schema.airtableField.id !== fieldId)
-        return refused(true);
-    const config: PortalFieldConfig | undefined = schema.miniExtConfig;
-    if (config != null && !isObject(config)) return refused(true);
-    const visibility = (conditions: RuntimeConditionsDefinition | null) =>
-        evaluateFormFieldVisibility({
-            // Reuse the supported conditional evaluator and its native-value
-            // checks. Portal eligibility has no Form empty-hiding policy.
-            field: {
-                ...schema,
-                miniExtConfig: {
-                    ...(conditions === null
-                        ? {}
-                        : { conditionalFields: conditions }),
-                    hideFieldIfEmpty: false,
-                },
-            },
-            airtableFields: page.payload.usersTableFields,
-            data: page.payload.formRecord.data,
-            formRecordType: 'edit',
-            evaluationMode: 'runtime',
-            invalidConditionMode: 'strict',
-        });
-    try {
-        const fieldVisibility = visibility(config?.conditionalFields ?? null);
-        const missingFieldDriver = fieldVisibility.diagnostics.some(
-            (diagnostic) => diagnostic.code === 'missing-field'
-        );
-        if (fieldVisibility.type !== 'visible' || missingFieldDriver)
-            return refused(
-                fieldVisibility.type === 'blocked' || missingFieldDriver
-            );
-        const configured = config?.customViews;
-        if (
-            configured === undefined ||
-            (Array.isArray(configured) && configured.length === 0)
-        )
-            return { views: [], legacy: true, unavailable: false };
-        if (!Array.isArray(configured)) return refused(true);
-        // Count raw identities before visibility; a hidden duplicate cannot
-        // make its visible twin a unique selectable view.
-        const counts = new Map<string, number>();
-        for (const view of configured)
-            if (isObject(view) && typeof view.id === 'string')
-                counts.set(view.id, (counts.get(view.id) ?? 0) + 1);
-        const result: ReturnType<typeof customViews> = {
-            views: [],
-            legacy: false,
-            unavailable: false,
-        };
-        for (const view of configured) {
-            if (
-                !isObject(view) ||
-                typeof view.id !== 'string' ||
-                view.id.trim() === '' ||
-                counts.get(view.id) !== 1 ||
-                (view.config != null && !isObject(view.config))
-            ) {
-                result.unavailable = true;
-                continue;
-            }
-            const current = visibility(
-                view.config?.customViewConditions ?? null
-            );
-            const missingViewDriver = current.diagnostics.some(
-                (diagnostic) => diagnostic.code === 'missing-field'
-            );
-            if (current.type === 'blocked' || missingViewDriver)
-                result.unavailable = true;
-            else if (current.type === 'visible')
-                result.views.push({ id: view.id, config: view.config ?? null });
-        }
-        return result;
-    } catch {
-        return refused(true);
-    }
+    return {
+        ...result,
+        views: result.views.map(({ id, config }) => ({ id, config })),
+    };
 };
 const configuredChildId = (
     config: PortalFieldConfig | undefined,

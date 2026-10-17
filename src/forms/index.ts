@@ -18,6 +18,11 @@ export {
     type NormalizedFormSaveResult,
 } from './helpers.js';
 export {
+    reconcileFormComputeResult,
+    type ReconcileFormComputeResultInput,
+    type FormComputeReconciliationResult,
+} from './computeReconciliation.js';
+export {
     createFormController,
     FormControllerError,
     type FormController,

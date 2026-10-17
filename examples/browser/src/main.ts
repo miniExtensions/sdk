@@ -845,6 +845,14 @@ const renderForm = (page: FormLoadedResult): void => {
     if (visitor.root != null)
         card.append(
             button('Back to Portal', () => {
+                if (
+                    formRetired ||
+                    !card.isConnected ||
+                    visitors[activeVisitor] !== visitor ||
+                    visitor.screen !== page ||
+                    visitor.formLoadVersion !== loadVersion
+                )
+                    return;
                 visitor.screen = visitor.root;
                 visitor.formContext = { type: 'direct-url' };
                 visitor.formParentScope = null;
@@ -2054,10 +2062,21 @@ const renderForm = (page: FormLoadedResult): void => {
                             { signal }
                         );
                         if (!current() || !ownsForm()) return;
-                        visitor.drafts.discard(draft);
+                        // A completed Delete invalidates the cached parent
+                        // membership and cursor. Retained Back controls must
+                        // not reconstruct that Portal before an explicit Reload.
+                        const retiredPortal = visitor.portal;
+                        visitor.portal = null;
+                        visitor.root = null;
+                        visitor.screen = null;
+                        visitor.formContext = { type: 'direct-url' };
                         visitor.formParentScope = null;
                         visitor.formQueries = null;
-                        visitor.screen = visitor.root;
+                        visitor.formAuthority = null;
+                        visitor.recoveryCandidate = null;
+                        visitor.preparedAttempt = null;
+                        visitor.drafts.discard(draft);
+                        retiredPortal?.destroy();
                         render();
                         status(
                             'Record deleted. Reload to refresh the current records.'

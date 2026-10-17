@@ -163,6 +163,7 @@ export function checkLeadingPageVisibilityConsumer({ consumerDirectory }) {
         for (const disabled of [false, true]) {
             const f = make('', (loaded) => {
                 loaded.payload.fieldIdsInForm = ['b', 'a', 'c'];
+                loaded.payload.fieldIdsToSchemas.b.miniExtConfig.applyFieldConditionsToSection = true;
                 loaded.payload.fieldIdsToSchemas.b.miniExtConfig.enableSectionHeader =
                     !disabled;
             });

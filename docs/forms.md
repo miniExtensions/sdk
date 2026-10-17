@@ -816,15 +816,18 @@ numbers block rather than being coerced or treated as empty.
 
 Empty hiding precedes the preview condition bypass. A populated supported
 field still evaluates its condition in runtime mode. The ordinary flag is
-inactive in create mode and when absent or false. The bounded empty-hiding
-adapter does not cover sections, linked, lookup, computed or other richer
-targets. The frontend compositor supports direct scalar fields before the first
-raw nonblank section title. Active edit empty hiding at or after that boundary
-remains blocked, including when the section's display header is disabled.
-Lookup fields hide empty values by default in both modes and therefore block
-unless that flag is explicitly false. Conditional-only frontend sections
-retain the behavior described above. Multi-page layout remains application-owned;
-use [`createFormPageOwner`](#bounded-multipage-ownership) for bounded navigation.
+inactive in create mode and when absent or false. The single-field and
+legacy-flat adapters remain conservative for section context. Ordered frontend
+composition also supports the same direct scalar fields inside ordinary sections
+that do not apply field conditions to their members. Raw nonblank titles establish
+the filtering boundary even when their display header is disabled; blank titles
+do not reset it. Edit empty hiding inside an applied-condition raw section remains
+blocked. Disabled display headers do not reset enclosing hidden-header propagation.
+Linked, lookup, computed and other richer targets retain their existing refusal
+rules; lookup fields hide empty by default unless explicitly false. Hiding changes
+presentation only and never prunes native Save data or dirty IDs. Multi-page layout
+remains application-owned; use
+[`createFormPageOwner`](#bounded-multipage-ownership) for bounded navigation.
 Richer native filtered-value adapters remain application-owned.
 
 The shipped browser starter applies these results to field presentation after

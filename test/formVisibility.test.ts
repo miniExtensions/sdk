@@ -733,10 +733,14 @@ describe('bounded one-page conditional visibility', () => {
                 }
             );
         for (const section of [
-            text('section', { headerSectionTitle: 'Details' }),
+            text('section', {
+                headerSectionTitle: 'Details',
+                applyFieldConditionsToSection: true,
+            }),
             text('section', {
                 enableSectionHeader: false,
                 headerSectionTitle: 'Retained canonical section',
+                applyFieldConditionsToSection: true,
             }),
             text('section', { applyFieldConditionsToSection: true }),
         ]) {
@@ -751,7 +755,7 @@ describe('bounded one-page conditional visibility', () => {
             });
             assert.equal(composed.section.type, 'visible');
             // Raw titles, including disabled display headers, still bound the
-            // unsupported section-prefilter region. A flag without a title
+            // inherited section-prefilter region. A flag without a title
             // creates no section and cannot affect another field's emptiness.
             const reversed = composeFormFieldVisibility({
                 ...input(),

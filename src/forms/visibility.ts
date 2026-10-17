@@ -162,6 +162,16 @@ export function evaluateFormFieldVisibilityWithPolicy(
     input: EvaluateFormFieldVisibilityInput,
     policy: 'form' | 'legacy-flat'
 ): FormFieldVisibility {
+    return evaluateVisibility(input, policy, false);
+}
+
+// Only ordered composition can establish a non-inheriting raw section.
+// Public single-field and legacy-flat callers retain their conservative guard.
+function evaluateVisibility(
+    input: EvaluateFormFieldVisibilityInput,
+    policy: 'form' | 'legacy-flat',
+    ordinarySection: boolean
+): FormFieldVisibility {
     const config = input.field.miniExtConfig;
     const hideEmpty =
         config != null && 'hideFieldIfEmpty' in config
@@ -185,7 +195,7 @@ export function evaluateFormFieldVisibilityWithPolicy(
             field.isComputed === true ||
             input.field.fieldType !== field.config.type ||
             !emptyHidingScalarTypes.has(field.config.type) ||
-            hasSectionContext(input.field)
+            (hasSectionContext(input.field) && !ordinarySection)
         )
             return {
                 type: 'blocked',
@@ -342,11 +352,12 @@ export function composeFormFieldVisibility(
     input: ComposeFormFieldVisibilityInput
 ): Readonly<Record<string, FormFieldVisibility>> {
     const result: Record<string, FormFieldVisibility> = {};
-    // A later section cannot affect leading unsectioned scalar fields.
-    // The canonical prefilter recognizes raw nonblank titles even when their
-    // display header is disabled. Keep empty-hiding after that boundary refused
-    // until section-filtered values have their own parity contract.
+    // Prefilter boundaries use raw titles, including disabled display headers.
+    // Ordinary sections cannot remove a scalar through inherited conditions;
+    // its own false predicate already hides it without rewriting native data.
+    // Applied-condition sections still need the filtered/unfiltered contract.
     let reachedRawSection = false;
+    let rawSectionMayFilter = false;
     let enclosing: FormFieldVisibility | null = null;
     for (const fieldId of input.fieldIds) {
         const field = input.fieldIdsToSchemas[fieldId];
@@ -356,14 +367,20 @@ export function composeFormFieldVisibility(
             'headerSectionTitle' in config &&
             typeof config.headerSectionTitle === 'string' &&
             config.headerSectionTitle.trim() !== '';
-        if (hasRawSectionTitle) reachedRawSection = true;
+        if (hasRawSectionTitle) {
+            reachedRawSection = true;
+            rawSectionMayFilter =
+                'applyFieldConditionsToSection' in config &&
+                config.applyFieldConditionsToSection !== false &&
+                config.applyFieldConditionsToSection != null;
+        }
         const startsSection =
             hasRawSectionTitle &&
             (!('enableSectionHeader' in config) ||
                 config.enableSectionHeader !== false);
         if (startsSection) enclosing = null;
         const visibility: FormFieldVisibility =
-            reachedRawSection &&
+            rawSectionMayFilter &&
             input.formRecordType === 'edit' &&
             config != null &&
             'hideFieldIfEmpty' in config &&
@@ -381,7 +398,17 @@ export function composeFormFieldVisibility(
                           code: 'missing-schema',
                           diagnostics: [],
                       }
-                    : evaluateFormFieldVisibility({ ...input, field });
+                    : evaluateVisibility(
+                          { ...input, field },
+                          'form',
+                          reachedRawSection &&
+                              !rawSectionMayFilter &&
+                              !(
+                                  config != null &&
+                                  'applyFieldConditionsToSection' in config &&
+                                  config.applyFieldConditionsToSection === true
+                              )
+                      );
         result[fieldId] = visibility;
         if (
             startsSection &&

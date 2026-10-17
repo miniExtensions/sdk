@@ -732,6 +732,7 @@ export async function checkEditHideEmptyRecipe({ consumerDirectory }) {
         [
             {
                 headerSectionTitle: 'Retained section',
+                applyFieldConditionsToSection: true,
                 enableSectionHeader: false,
             },
             {

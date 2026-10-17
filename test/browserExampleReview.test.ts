@@ -1311,7 +1311,77 @@ describe('actual browser starter prepared review', () => {
         });
     }
 
-    it('blocks section plus active edit empty hiding without exposing values', async (test) => {
+    it('reviews an ordinary section with its header disabled and saves the complete native edit draft', async (test) => {
+        const form = reviewForm();
+        const readonly = form.payload.fieldIdsToSchemas.fld_readonly;
+        const title = form.payload.fieldIdsToSchemas.fld_title;
+        assert.ok(readonly && title);
+        readonly.miniExtConfig = {
+            readOnly: true,
+            enableSectionHeader: false,
+            headerSectionTitle: 'Retained section',
+            hideFieldIfEmpty: true,
+        };
+        const inside = scalarReviewSchema('fld_inside', 'Inside answer', {
+            type: 'singleLineText',
+            options: null,
+        });
+        inside.miniExtConfig = { readOnly: true, hideFieldIfEmpty: true };
+        form.payload.fieldIdsToSchemas.fld_inside = inside;
+        form.payload.fieldIdsInForm.push('fld_inside');
+        const native = {
+            ...form.payload.formRecord.data,
+            fld_readonly: '   ',
+            fld_inside: 'Inside retained answer',
+            fld_unrendered_number: 0,
+        };
+        form.payload.formRecord = {
+            type: 'edit',
+            tableId: 'tbl_inside_review',
+            recordId: 'rec_inside_review',
+            data: native,
+        };
+        form.payload.formFieldIdsWithUnsavedChanges = [
+            'fld_hidden_native',
+            'fld_readonly',
+        ];
+        const fixture = await mount(test, form);
+        assert.equal(fixture.saves.length, 0);
+        fixture.edit('fld_title', 'Edited ordinary section');
+        const dialog = await fixture.openReview();
+        assert.ok(
+            fixture.window.document.querySelector('dialog[open]') !== null,
+            'Expected Review for the ordinary section with its header disabled.'
+        );
+        assert.equal(fixture.saves.length, 0);
+        assert.deepEqual(
+            Array.from(dialog.querySelectorAll('dt'), (row) => row.textContent),
+            ['Request title', 'Inside answer']
+        );
+        assert.deepEqual(
+            Array.from(dialog.querySelectorAll('dd'), (row) => row.textContent),
+            ['Edited ordinary section', 'Inside retained answer']
+        );
+        fixture.button('Confirm', dialog).click();
+        await waitFor(() => fixture.saves.length === 1);
+        assert.deepEqual(fixture.saves[0]?.formRecord, {
+            type: 'edit',
+            tableId: 'tbl_inside_review',
+            recordId: 'rec_inside_review',
+            data: { ...native, fld_title: 'Edited ordinary section' },
+        });
+        assert.deepEqual(fixture.saves[0]?.formFieldIdsWithUnsavedChanges, [
+            'fld_hidden_native',
+            'fld_readonly',
+            'fld_title',
+        ]);
+        assert.equal(fixture.saves[0]?.isComputeMode, false);
+        assert.equal(fixture.saves[0]?.context.type, 'direct-url');
+        await settled();
+        assert.equal(fixture.saves.length, 1);
+    });
+
+    it('blocks applied-condition section plus active edit empty hiding without exposing values', async (test) => {
         const form = reviewForm();
         form.payload.formRecord = {
             type: 'edit',
@@ -1326,12 +1396,16 @@ describe('actual browser starter prepared review', () => {
             enableSectionHeader: false,
             headerSectionTitle: 'Retained section',
             hideFieldIfEmpty: true,
+            applyFieldConditionsToSection: true,
         };
         const fixture = await mount(test, form);
         fixture.submit();
         await settled();
         assert.equal(fixture.saves.length, 0);
-        assert.equal(fixture.window.document.querySelector('dialog'), null);
+        assert.ok(
+            fixture.window.document.querySelector('dialog') === null,
+            'Applied-section refusal must keep Review closed.'
+        );
         assert.match(
             fixture.window.document.getElementById('status')?.textContent ?? '',
             /unavailable|blocked/i

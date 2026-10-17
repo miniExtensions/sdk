@@ -702,7 +702,11 @@ export function createPortalFilterEditor(
             ).every((id) => choicesFor(resolved).some((c) => c.id === id));
         const simple =
             existing == null ||
-            (resolved != null && !unresolvedChoice && valid(existing));
+            (resolved != null &&
+                setting != null &&
+                allowedOperators(resolved).includes(String(setting.type)) &&
+                !unresolvedChoice &&
+                valid(existing));
         let fieldId = resolved?.id ?? candidates[0].id;
         let operator =
             resolved && setting

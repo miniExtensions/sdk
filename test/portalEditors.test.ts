@@ -171,6 +171,139 @@ it('filter choice IDs and scalar bytes prepare one exact leaf while preserving s
     });
     assert.deepEqual(f.options.portal.payload.formRecord, parent);
 });
+for (const action of ['clear', 'apply'] as const) {
+    it(`requires explicit replacement before ${action} discards a choice-ID-looking regex filter`, () => {
+        const f = editorFixture();
+        f.options.criteria.filtersByEndUser = {
+            logicalOperator: 'and',
+            conditions: [
+                {
+                    id: 'saved_regex',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'matchesRegex',
+                        fieldType: 'singleSelect',
+                        idOrName: { type: 'id', id: 'fld_choice' },
+                        value: 'choice_a',
+                    },
+                },
+            ],
+        };
+        const original = structuredClone(f.options.criteria);
+        const parent = structuredClone(f.options.portal.payload.formRecord);
+        const collection = structuredClone(f.options.snapshot);
+        const result = createPortalFilterEditor(f.options);
+        if (result.type !== 'ready') throw Error(result.diagnostic);
+        const model = result.model;
+        try {
+            const initial = model.getSnapshot();
+            if (action === 'apply') {
+                assert.equal(model.setOperator('is'), true);
+                assert.equal(model.setOperand(['choice_b']), true);
+            }
+            const beforeDenied = model.getSnapshot();
+            assert.equal(model[action](), false);
+            assert.equal(initial.unresolved, true);
+            assert.equal(initial.replacementPrepared, false);
+            assert.equal(initial.operator, 'matchesRegex');
+            assert.equal(initial.operators.includes('matchesRegex'), false);
+            assert.deepEqual(initial.originalCriteria, original);
+            assert.deepEqual(model.getSnapshot(), beforeDenied);
+            assert.equal(model.getSnapshot().replacementPrepared, false);
+            assert.equal(model.getSnapshot().retired, false);
+            assert.equal(model.apply(), false);
+            assert.equal(model.clear(), false);
+            assert.equal(f.applied.length, 0);
+            assert.deepEqual(f.options.criteria, original);
+            assert.deepEqual(f.options.portal.payload.formRecord, parent);
+            assert.deepEqual(f.options.snapshot, collection);
+
+            assert.equal(model.prepareReplacement(), true);
+            assert.equal(f.applied.length, 0);
+            assert.deepEqual(model.getSnapshot().originalCriteria, original);
+            assert.equal(model[action](), true);
+            assert.deepEqual(f.applied, [
+                {
+                    ...original,
+                    filtersByEndUser:
+                        action === 'clear'
+                            ? null
+                            : {
+                                  logicalOperator: 'and',
+                                  conditions: [
+                                      {
+                                          id: 'saved_regex',
+                                          type: 'singleCondition',
+                                          setting: {
+                                              type: 'is',
+                                              fieldType: 'singleSelect',
+                                              idOrName: {
+                                                  type: 'id',
+                                                  id: 'fld_choice',
+                                              },
+                                              value: 'choice_b',
+                                          },
+                                      },
+                                  ],
+                              },
+                },
+            ]);
+            assert.equal(model.getSnapshot().retired, true);
+            assert.equal(model.apply(), false);
+            assert.equal(model.clear(), false);
+            assert.equal(model.prepareReplacement(), false);
+            assert.equal(f.applied.length, 1);
+            assert.deepEqual(f.options.criteria, original);
+            assert.deepEqual(f.options.portal.payload.formRecord, parent);
+            assert.deepEqual(f.options.snapshot, collection);
+        } finally {
+            model.destroy();
+        }
+    });
+}
+
+it('keeps saved choice membership, choice emptiness and text regex directly editable', () => {
+    for (const setting of [
+        {
+            type: 'is',
+            fieldType: 'singleSelect',
+            idOrName: { type: 'id', id: 'fld_choice' },
+            value: 'choice_a',
+        },
+        {
+            type: 'isEmpty',
+            fieldType: 'singleSelect',
+            idOrName: { type: 'id', id: 'fld_choice' },
+        },
+        {
+            type: 'matchesRegex',
+            fieldType: 'singleLineText',
+            idOrName: { type: 'id', id: 'fld_text' },
+            value: 'choice_a',
+        },
+    ] as const) {
+        const f = editorFixture();
+        f.options.criteria.filtersByEndUser = {
+            logicalOperator: 'and',
+            conditions: [
+                { id: 'saved_control', type: 'singleCondition', setting },
+            ],
+        };
+        const original = structuredClone(f.options.criteria);
+        const result = createPortalFilterEditor(f.options);
+        if (result.type !== 'ready') throw Error(result.diagnostic);
+        try {
+            assert.equal(result.model.getSnapshot().unresolved, false);
+            assert.equal(result.model.getSnapshot().replacementPrepared, true);
+            assert.equal(f.applied.length, 0);
+            assert.equal(result.model.apply(), true);
+            assert.deepEqual(f.applied, [original]);
+        } finally {
+            result.model.destroy();
+        }
+    }
+});
+
 it('partial operands and unknown saved operands preserve the complete original AST until explicit replacement', () => {
     const f = editorFixture();
     f.options.criteria.filtersByEndUser = {

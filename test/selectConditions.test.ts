@@ -106,7 +106,7 @@ describe('additive twelve canonical select pairs', () => {
                 );
         }
         assert.equal(
-            compile('singleSelect', 'matchesRegex', '.*').type,
+            compile('multipleSelects', 'matchesRegex', '.*').type,
             'unsupported'
         );
     });
@@ -248,4 +248,90 @@ it('never omits malformed equality arrays beside a valid AND/OR sibling', () => 
                 );
                 assert(!Object.hasOwn(result, 'formula'));
             }
+});
+
+// Source parity: hosted MatchesRegex accepts SINGLE_SELECT and passes its
+// pattern directly to REGEX_MATCH; it does not resolve a choice ID operand.
+describe('single-select regex patterns', () => {
+    it('uses regex text, including empty patterns and choice-ID-looking text', () => {
+        for (const pattern of ['^Alpha$', '^a$', '', 'Unknown']) {
+            const result = compile('singleSelect', 'matchesRegex', pattern);
+            assert.equal(result.type, 'compiled');
+            if (result.type === 'compiled')
+                assert.equal(
+                    result.formula,
+                    `REGEX_MATCH({choice}, '${pattern}')`
+                );
+        }
+    });
+    it('preserves malformed, incomplete, type-drift and missing-field behavior', () => {
+        for (const mode of ['strict', 'compatibility']) {
+            for (const value of ['[', 1, [], {}])
+                assert.equal(
+                    compile(
+                        'singleSelect',
+                        'matchesRegex',
+                        value,
+                        undefined,
+                        mode
+                    ).type,
+                    'invalid'
+                );
+            const incomplete = compile(
+                'singleSelect',
+                'matchesRegex',
+                null,
+                undefined,
+                mode
+            );
+            assert.equal(incomplete.type, 'invalid');
+        }
+        for (const type of ['singleLineText', 'multipleSelects'])
+            assert.equal(
+                compile('singleSelect', 'matchesRegex', '.*', [field(type)])
+                    .type,
+                'unsupported'
+            );
+        const missing = compile('singleSelect', 'matchesRegex', '.*', []);
+        assert.equal(missing.type, 'compiled');
+        if (missing.type === 'compiled')
+            assert.equal(missing.formula, 'FALSE()');
+    });
+});
+
+it('omits only incomplete regex siblings in compatibility mode', () => {
+    for (const mode of ['strict', 'compatibility'] as const) {
+        const result = compileRuntimeConditions({
+            conditions: {
+                logicalOperator: 'and',
+                conditions: [
+                    definition('singleSelect', 'matchesRegex', null)
+                        .conditions[0]!,
+                    definition('singleSelect', 'is', 'a').conditions[0]!,
+                ],
+            },
+            airtableFields: [field('singleSelect')],
+            invalidConditionMode: mode,
+        } as CompileRuntimeConditionsInput);
+        assert.equal(result.type, mode === 'strict' ? 'invalid' : 'compiled');
+        if (result.type === 'compiled')
+            assert.equal(result.formula, "{choice} = 'Alpha'");
+    }
+});
+
+it('refuses regex text that cannot round-trip through a formula literal', () => {
+    const pattern = String.fromCharCode(92) + 'n';
+    assert.doesNotThrow(() => new RegExp(pattern));
+    for (const mode of ['strict', 'compatibility']) {
+        const result = compile(
+            'singleSelect',
+            'matchesRegex',
+            pattern,
+            undefined,
+            mode
+        );
+        assert.equal(result.type, 'invalid');
+        assert(result.diagnostics.some((d) => d.code === 'literal-roundtrip'));
+        assert(!Object.hasOwn(result, 'formula'));
+    }
 });

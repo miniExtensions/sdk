@@ -140,6 +140,178 @@ export async function checkPortalEditorConsumer({
         assert.equal(m.model.apply(), false);
         assert.equal(old.applied.length, 0);
         checks++;
+        {
+            const singleChoiceFixture = () => {
+                const x = fixture();
+                const choice =
+                    x.options.snapshot.tableIdsToLinkedTableStates.tbl_children.airtableFields.find(
+                        (field) => field.id === 'fld_choice'
+                    );
+                assert(choice);
+                choice.config = {
+                    type: 'singleSelect',
+                    options: {
+                        choices: [
+                            { id: 'choice_a', name: 'Alpha' },
+                            { id: 'choice_b', name: 'Beta' },
+                        ],
+                    },
+                };
+                return x;
+            };
+            for (const action of ['clear', 'apply']) {
+                const x = singleChoiceFixture();
+                x.options.criteria.filtersByEndUser = {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'saved_regex',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'matchesRegex',
+                                fieldType: 'singleSelect',
+                                idOrName: { type: 'id', id: 'fld_choice' },
+                                value: 'choice_a',
+                            },
+                        },
+                    ],
+                };
+                const original = structuredClone(x.options.criteria);
+                const parent = structuredClone(
+                    x.options.portal.payload.formRecord
+                );
+                const collection = structuredClone(x.options.snapshot);
+                const result = entry.createPortalFilterEditor(x.options);
+                assert.equal(result.type, 'ready');
+                const model = result.model;
+                try {
+                    const initial = model.getSnapshot();
+                    if (action === 'apply') {
+                        assert.equal(model.setOperator('is'), true);
+                        assert.equal(model.setOperand(['choice_b']), true);
+                    }
+                    const beforeDenied = model.getSnapshot();
+                    assert.equal(model[action](), false);
+                    assert.equal(initial.unresolved, true);
+                    assert.equal(initial.replacementPrepared, false);
+                    assert.equal(initial.operator, 'matchesRegex');
+                    assert.equal(
+                        initial.operators.includes('matchesRegex'),
+                        false
+                    );
+                    assert.deepEqual(initial.originalCriteria, original);
+                    assert.deepEqual(model.getSnapshot(), beforeDenied);
+                    assert.equal(
+                        model.getSnapshot().replacementPrepared,
+                        false
+                    );
+                    assert.equal(model.getSnapshot().retired, false);
+                    assert.equal(model.apply(), false);
+                    assert.equal(model.clear(), false);
+                    assert.equal(x.applied.length, 0);
+                    assert.deepEqual(x.options.criteria, original);
+                    assert.deepEqual(
+                        x.options.portal.payload.formRecord,
+                        parent
+                    );
+                    assert.deepEqual(x.options.snapshot, collection);
+                    assert.equal(model.prepareReplacement(), true);
+                    assert.equal(x.applied.length, 0);
+                    assert.deepEqual(
+                        model.getSnapshot().originalCriteria,
+                        original
+                    );
+                    assert.equal(model[action](), true);
+                    assert.deepEqual(x.applied, [
+                        {
+                            ...original,
+                            filtersByEndUser:
+                                action === 'clear'
+                                    ? null
+                                    : {
+                                          logicalOperator: 'and',
+                                          conditions: [
+                                              {
+                                                  id: 'saved_regex',
+                                                  type: 'singleCondition',
+                                                  setting: {
+                                                      type: 'is',
+                                                      fieldType: 'singleSelect',
+                                                      idOrName: {
+                                                          type: 'id',
+                                                          id: 'fld_choice',
+                                                      },
+                                                      value: 'choice_b',
+                                                  },
+                                              },
+                                          ],
+                                      },
+                        },
+                    ]);
+                    assert.equal(model.getSnapshot().retired, true);
+                    assert.equal(model.apply(), false);
+                    assert.equal(model.clear(), false);
+                    assert.equal(model.prepareReplacement(), false);
+                    assert.equal(x.applied.length, 1);
+                    assert.deepEqual(x.options.criteria, original);
+                    assert.deepEqual(
+                        x.options.portal.payload.formRecord,
+                        parent
+                    );
+                    assert.deepEqual(x.options.snapshot, collection);
+                } finally {
+                    model.destroy();
+                }
+                checks++;
+            }
+            for (const setting of [
+                {
+                    type: 'is',
+                    fieldType: 'singleSelect',
+                    idOrName: { type: 'id', id: 'fld_choice' },
+                    value: 'choice_a',
+                },
+                {
+                    type: 'isEmpty',
+                    fieldType: 'singleSelect',
+                    idOrName: { type: 'id', id: 'fld_choice' },
+                },
+                {
+                    type: 'matchesRegex',
+                    fieldType: 'singleLineText',
+                    idOrName: { type: 'id', id: 'fld_title' },
+                    value: 'choice_a',
+                },
+            ]) {
+                const x = singleChoiceFixture();
+                x.options.criteria.filtersByEndUser = {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'saved_control',
+                            type: 'singleCondition',
+                            setting,
+                        },
+                    ],
+                };
+                const original = structuredClone(x.options.criteria);
+                const result = entry.createPortalFilterEditor(x.options);
+                assert.equal(result.type, 'ready');
+                try {
+                    assert.equal(result.model.getSnapshot().unresolved, false);
+                    assert.equal(
+                        result.model.getSnapshot().replacementPrepared,
+                        true
+                    );
+                    assert.equal(x.applied.length, 0);
+                    assert.equal(result.model.apply(), true);
+                    assert.deepEqual(x.applied, [original]);
+                } finally {
+                    result.model.destroy();
+                }
+            }
+            checks++;
+        }
     }
     for (const value of [
         [42],
@@ -348,7 +520,7 @@ export async function checkPortalEditorConsumer({
         });
         await window.happyDOM.close();
     }
-    assert.equal(checks, 17);
+    assert.equal(checks, 23);
     console.log(
         `Installed Portal editors: ${checks} checkpoints; renderer/criteria preparation only, no network.`
     );

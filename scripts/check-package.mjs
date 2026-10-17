@@ -1613,7 +1613,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
             happyDomModulePath: require.resolve('happy-dom'),
         }),
-        17
+        23
     );
     // Resolve CSS and React through the installed archive, not checkout aliases.
     for (const name of [

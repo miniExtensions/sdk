@@ -106,7 +106,46 @@ for(const names of [['Alpha','Beta','Alphabet'],['comma, value','double "quote"'
   }
  }
 }
-const drift=compile(def('singleSelect','matchesRegex','.*'),[base]);assert.equal(drift.type,'unsupported');checks++;
+// Regex is pattern text over native names, not a choice-ID membership operand.
+const regexField={...base,isComputed:false,config:{type:'singleSelect',options:{choices:[{id:'alpha',name:'Alpha'},{id:'beta',name:'Beta'}]}}};
+for(const [pattern,value,expected] of [['^Alpha$','Alpha',true],['^Alpha$','Beta',false],['^alpha$','Alpha',false],['^Unknown$','Unknown',true],['','Alpha',true],['^Alpha$',null,false],['^Alpha$','',false],['^$',null,true],['^$','',true]]) {
+ const conditions=def('singleSelect','matchesRegex',pattern);
+ const compiled=compile(conditions,[regexField]);assert.equal(compiled.type,'compiled');
+ const target={fieldType:'singleLineText',airtableField:{...base,id:'target',name:'Target',config:{type:'singleLineText',options:null}},miniExtConfig:{conditionalFields:conditions}};
+ const data={[base.id]:value,target:'preserved'};
+ const input={field:target,airtableFields:[regexField,target.airtableField],data,formRecordType:'create',evaluationMode:'runtime',invalidConditionMode:'strict'};
+ assert.equal(evaluateFormFieldVisibility(input).type,expected?'visible':'hidden');
+ for(const project of [createFlatScalarFormRecordProjection,createScalarFormRecordProjection]) assert.equal(project({fieldIds:['target'],fieldIdsToSchemas:{target},airtableFields:input.airtableFields,data,recordId:'rec',invalidConditionMode:'strict'}).type,'blocked');
+ const optionField={fieldType:'singleSelect',airtableField:{...regexField,id:'option',name:'Option'},miniExtConfig:{enableConditionalOptions:true,conditionsForOptions:[{config:{optionForConditions:'alpha',conditionsForOption:conditions}}]}};
+ const before=JSON.stringify(data);
+ const availability=resolveSelectFieldAvailability({field:optionField,airtableFields:input.airtableFields,recordForConditionEvaluation:{id:'rec',fields:data},mode:'runtime',invalidConditionMode:'strict'});
+ assert.equal(availability.status,'ready');assert.equal(availability.options.some(option=>option.id==='alpha'),expected);assert.equal(JSON.stringify(data),before);
+ checks++;
+}
+for(const variant of ['computed','name-ref','array','alias','duplicate','type-drift']) {
+ const conditions=def('singleSelect','matchesRegex','.*');
+ let fields=[regexField];let data={[base.id]:'Alpha'};
+ if(variant==='computed')fields=[{...regexField,isComputed:true}];
+ if(variant==='name-ref')conditions.conditions[0].setting.idOrName={type:'name',name:base.name};
+ if(variant==='array')data[base.id]=['Alpha'];
+ if(variant==='alias')data[base.name]='Alpha';
+ if(variant==='duplicate')fields=[regexField,{...regexField}];
+ if(variant==='type-drift')fields=[{...regexField,config:{type:'singleLineText',options:null}}];
+ const target={fieldType:'singleLineText',airtableField:{...base,id:'target',name:'Target',config:{type:'singleLineText',options:null}},miniExtConfig:{conditionalFields:conditions}};
+ assert.equal(evaluateFormFieldVisibility({field:target,airtableFields:fields,data,formRecordType:'create',evaluationMode:'runtime',invalidConditionMode:'strict'}).type,'blocked',variant);
+ const optionField={fieldType:'singleSelect',airtableField:{...regexField,id:'option',name:'Option'},miniExtConfig:{enableConditionalOptions:true,conditionsForOptions:[{config:{optionForConditions:'alpha',conditionsForOption:conditions}}]}};
+ assert.equal(resolveSelectFieldAvailability({field:optionField,airtableFields:fields,recordForConditionEvaluation:{id:'rec',fields:data},mode:'runtime',invalidConditionMode:'strict'}).status,'blocked',variant);
+ checks++;
+}
+for(const mode of ['strict','compatibility']) for(const value of ['[',1,[],{},null]) {
+ assert.equal(compile(def('singleSelect','matchesRegex',value),[regexField],mode).type,'invalid');checks++;
+}
+for(const mode of ['strict','compatibility']) {
+ const pattern=String.fromCharCode(92)+'n';assert.doesNotThrow(()=>new RegExp(pattern));
+ const result=compile(def('singleSelect','matchesRegex',pattern),[regexField],mode);
+ assert.equal(result.type,'invalid');assert(result.diagnostics.some(d=>d.code==='literal-roundtrip'));assert(!Object.hasOwn(result,'formula'));checks++;
+}
+const drift=compile(def('multipleSelects','matchesRegex','.*'),[base]);assert.equal(drift.type,'unsupported');checks++;
 console.log(JSON.stringify({checks}));
 `;
 export function checkSelectConditions({ consumerDirectory, run }) {

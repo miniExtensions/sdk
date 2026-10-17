@@ -548,7 +548,7 @@ optional editor condition ID. They do not copy operands, record values,
 formulas or exception text. If unsupported and invalid rules coexist, the
 result is `unsupported` and retains the collected diagnostics.
 
-The supported boundary is **99 operator/type pairs**, **20 operators** and
+The supported boundary is **100 operator/type pairs**, **20 operators** and
 **14 direct physical field types**. Let T7 mean `singleLineText`, `email`,
 `url`, `multilineText`, `phoneNumber`, `barcode`, `richText`; T6 excludes
 `richText`; N4 means `number`, `percent`, `currency`, `rating`.
@@ -570,11 +570,15 @@ computed formula/lookup/rollup fields and other richer variants block the whole
 definition, including in compatibility mode. The helper does not unwrap a
 computed result type or partially compile richer rules.
 
-Direct select compilation adds exactly twelve pairs: single-select `is`, `isNot`,
-`isAnyOf`, `isNoneOf`, `isEmpty`, `isNotEmpty`; multi-select `hasAnyOf`,
+Direct select compilation adds exactly thirteen pairs: single-select `is`, `isNot`,
+`isAnyOf`, `isNoneOf`, `matchesRegex`, `isEmpty`, `isNotEmpty`; multi-select `hasAnyOf`,
 `hasAllOf`, `hasNoneOf`, `isExactly`, `isEmpty`, `isNotEmpty`.
-Single-select `matchesRegex` remains unsupported. Select operands are exact
-canonical **choice IDs**, not native answer names or display labels. Any saved
+Select membership operands are exact canonical **choice IDs**, not native answer
+names or display labels. Single-select `matchesRegex` instead takes regex pattern
+text and matches the native answer name without resolving a choice ID. Null and
+empty native answers evaluate as empty text; an empty pattern is valid. Invalid
+patterns and unsafe formula-literal round trips return `invalid`. Multi-select
+`matchesRegex` remains unsupported. Any saved
 or current select type requires exact physical-type equality; selects cannot
 be silently reinterpreted as text or as the other select family.
 
@@ -590,7 +594,7 @@ use the dedicated emptiness operators. Native multi-select serialization, escape
 and exact serialized length are preserved. Unsafe literal/regex round trips
 fail closed rather than approximating set membership or splitting commas.
 
-Form binding visibility and page advanced validation additionally admit the six
+Form binding visibility and page advanced validation additionally admit the seven
 single-select and six multi-select predicates above for exact-ID direct noncomputed drivers. They
 inspect the original AST and loaded metadata, even when compilation reduces a
 predicate to constant `FALSE()`. Configured option eligibility also supports these
@@ -1972,8 +1976,8 @@ do not add ordinary frontend validation. Existing visibility refusals still appl
 lookup presentation requires an explicit `hideFieldIfEmpty: false`. Other
 unimplemented validation types remain explicit refusals.
 Configured `fieldValidationConditionalFields` supports the existing strict
-direct-scalar condition subset and the six exact-ID direct noncomputed
-single-select/multi-select driver predicates above through the same predicate evaluator used for
+direct-scalar condition subset and the seven single-select and six multi-select
+predicates above for exact-ID direct noncomputed drivers, through the same predicate evaluator used for
 field visibility. Ordinary errors retain priority. Advanced validation applies
 only to a visible writable, noncomputed target; hiding, read-only configuration
 and canonical computed physical kinds skip that extra rule without waiving any

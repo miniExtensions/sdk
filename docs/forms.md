@@ -2374,3 +2374,92 @@ unknown outcome. Keep the recovery journal, inspect the outcome, and explicitly
 reload or resolve it before proceeding. There is no automatic mutation retry.
 The installed checks use synthetic load, validation and known-saved responses;
 they demonstrate the recipe and native reconciliation, not live persistence.
+
+## Optional create-Form progress
+
+`createFormProgressStorage` from `@miniextensions/sdk/forms` is an opt-in
+primitive storage owner for application-owned create progress. Construction
+performs no I/O. It does not choose fields, grant restore or Save authority,
+persist a recovery journal, or establish whether an earlier write committed.
+Ordinary Form drafts remain in memory unless an application explicitly adopts
+this separate flow.
+
+Supply an opaque, nonsecret `scope`, lazy `getStorage()` and `getLocks()`
+adapters, a globally unique `createId()` function and a live `isCurrent()`
+owner check. The browser recipe partitions scope by application/API origin,
+share, visitor's anonymous namespace, extension, table and published version;
+the storage protocol also has its own version. Never use credentials,
+extension access tokens, field values or recovery input as scope identifiers.
+The helper accepts only own-enumerable field entries containing strings,
+finite numbers, booleans or `null`. It has no schema or privacy policy, so the
+caller must select and validate fields before reading their values.
+
+`read()` returns a detached snapshot or a failure status; reading neither
+consumes it nor authorizes restoration. `write({ expected, values })` compares
+the current token, and returns a new snapshot on success. `expected: null`
+requires an absent slot and starts a new `draftId`; subsequent accepted writes
+retain that draft ID and issue a fresh `writeId`. Both IDs must match when
+replacing or removing progress. `remove(token)` removes only that exact stored
+incarnation, or reports absence, conflict or failure. A conflict is not permission
+to overwrite or delete a successor. `destroy()` retires the owner and queued
+work without deleting stored bytes.
+
+Mutations require a working cooperating exclusive Web Locks adapter. There is
+no unlocked fallback: missing or denied locks/storage, malformed data and
+retired ownership produce explicit statuses. Handle those outcomes before
+continuing. Storage, locks and an opaque scope are not a security boundary
+against other scripts on the same origin. The starter uses per-tab
+`sessionStorage`, which those scripts can read and a browser may copy when a
+tab is duplicated; it does not encrypt answers.
+
+The [browser starter](../examples/browser/README.md#optional-create-progress-in-this-tab)
+exposes this only for an anonymous root direct-URL create Form with published
+`saveFormProgress: true`, a concrete table/published version and no parent,
+record-edit or uncertain-operation context. **Remember selected answers in this
+tab** and every field checkbox start unchecked. Selection admits only current
+visible, unmasked, noncomputed, writable supported scalar fields: single-line
+or multiline text, ordinary numeric families and checkboxes. An answer is read
+for storage only after those gates and explicit field selection. Files, links,
+selects, computed/read-only values, hidden fields and masked or unsupported
+fields are excluded. Never select credentials or other sensitive text; an
+ordinary text field does not identify sensitive content for the application.
+
+After a refresh, reconnect to the same anonymous context and opt in again.
+Choose fields, then explicitly **Restore remembered answers** or **Discard
+remembered answers**. Restore requires the pristine accepted in-memory draft;
+if current answers were edited, it retains them and requires an explicit Reload
+before restoration. Its draft revision stays fenced through the read and cleanup.
+Restore rechecks current ownership, schema, visibility
+and masking, passes only admitted selected values through the existing
+`loadExtension` direct-URL `context.localStorageRecord`, and accepts a fresh
+server response only for the same current configuration. Its returned native
+values and rules are authoritative; stored answers are never merged over that
+response locally. This introduces no backend endpoint or new permission.
+
+The Form's **Discard draft** also inspects its matching progress slot from a
+previous page, even when remembering is currently unchecked. It removes only
+the captured exact token before discarding the in-memory draft. **Clear this
+visitor's session** captures matching SDK-owned progress slot identities for
+that visitor on the current application origin; **Disconnect** does so for
+both visitor slots. Capture precedes namespace rotation and asynchronous lock waits.
+Cleanup compares both `draftId` and `writeId`, preserving a successor written
+after capture and unrelated visitor/storage entries. An unreadable or malformed
+matching owned slot is not treated as absent. Read, enumeration or removal
+failure produces fixed incomplete-cleanup feedback rather than claiming that
+all remembered answers were cleared.
+
+Before any admitted create Save dispatch, the starter suspends progress,
+drains queued work and removes the matching stored token. It also inspects a
+previous slot when remembering is currently unchecked, including after a page
+refresh. If it cannot establish absence or clear the exact token, Save is not
+sent. This deliberately prevents an unknown create from leaving a restorable
+copy for a later refresh. Only a confirmed validation response or known
+`notDispatched` result may resume progress; an unknown dispatched outcome
+requires server inspection, not storage restoration or automatic replay.
+Successful local forgetting does not resolve a recovery-journal entry.
+
+This recipe is not edit-Form persistence, authenticated draft restoration,
+cross-tab synchronization, file persistence or an exactly-once create receipt.
+Verification of this feature must distinguish storage/CAS checks, synthetic
+starter behavior and a separately authorized live backend outcome; the presence
+of the helper or UI alone proves none of those outcomes.

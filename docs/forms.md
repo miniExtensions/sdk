@@ -1994,11 +1994,16 @@ slice. Invalid or unsupported select drivers remain refused even when
 their predicates compile to a constant formula. No linked reads or
 metadata recovery are performed.
 
-Unsupported conditional rules and `requireOpenLinkedRecords` without review
-tracking remain blocked when their page is relevant. Rules on a future page do
-not block Next on an earlier page; reaching that page exposes their feedback or
-refusal. Final submission checks all pages again, including earlier answers and
-cross-field dependencies changed after navigation. Pass each rendered revision
+Unsupported conditional rules remain blocked when their page is relevant. For
+ordinary linked fields, `requireOpenLinkedRecords` without review tracking blocks
+visible, nonempty linked selections. Canonical empty selections and valid hidden
+linked selections have no review obligation; required and minimum-selection checks
+still follow their existing visibility rules. This exemption does not grant review
+credit or admit malformed values, physical-kind mismatches or computed presentation.
+Rules on a future page do not block Next on an earlier page; reaching that page
+exposes their feedback or refusal. Final submission checks all pages again,
+including earlier answers and cross-field dependencies changed after navigation.
+Pass each rendered revision
 to Next or Submit; a retained callback cannot approve newer answers. Existing
 native/input/navigation/configuration/owner tickets, pending-file gates and
 uncertainty remain authoritative. Existing blocked visibility results remain

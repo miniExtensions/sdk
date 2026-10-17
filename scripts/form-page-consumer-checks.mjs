@@ -282,6 +282,124 @@ export async function checkFormPageConsumer({ consumerDirectory }) {
             return f;
         };
         try {
+            // Exercise both installed ESM and CommonJS without a review receipt.
+            for (const value of [undefined, null, [], ['rec_child']]) {
+                for (const hidden of [false, true]) {
+                    const f = fixture((p) => {
+                        const field = p.payload.fieldIdsToSchemas.a;
+                        field.fieldType = 'multipleRecordLinks';
+                        field.airtableField.config = {
+                            type: 'multipleRecordLinks',
+                            options: {
+                                linkedTableId: 'tbl_children',
+                                isReversed: false,
+                                prefersSingleRecordLink: false,
+                            },
+                        };
+                        field.miniExtConfig = {
+                            requireOpenLinkedRecords: true,
+                            ...(hidden
+                                ? {
+                                      conditionalFields: {
+                                          logicalOperator: 'and',
+                                          conditions: [
+                                              {
+                                                  id: 'hide-linked',
+                                                  type: 'singleCondition',
+                                                  setting: {
+                                                      type: 'is',
+                                                      fieldType:
+                                                          'singleLineText',
+                                                      idOrName: {
+                                                          type: 'id',
+                                                          id: 'b',
+                                                      },
+                                                      value: 'never',
+                                                  },
+                                              },
+                                          ],
+                                      },
+                                  }
+                                : {}),
+                        };
+                        p.payload.formRecord.data.a = value;
+                    });
+                    if (!hidden && Array.isArray(value) && value.length > 0) {
+                        assert.equal(f.pages.getSnapshot().status, 'blocked');
+                        assert.equal(
+                            f.pages.next(f.pages.getSnapshot().revision)
+                                .accepted,
+                            false
+                        );
+                        await assert.rejects(
+                            f.pages.submit(f.pages.getSnapshot().revision)
+                        );
+                        assert.equal(f.calls.length, 0);
+                    } else {
+                        const before = structuredClone(
+                            f.fields.controller.getState().draft
+                        );
+                        while (f.pages.getSnapshot().canNext)
+                            assert(
+                                f.pages.next(f.pages.getSnapshot().revision)
+                                    .accepted
+                            );
+                        assert.equal(f.pages.getSnapshot().canSubmit, true);
+                        await f.pages.submit(f.pages.getSnapshot().revision);
+                        assert.equal(f.calls.length, 1);
+                        assert.deepEqual(
+                            f.calls[0].formRecord.data,
+                            before.data
+                        );
+                        assert.deepEqual(
+                            f.calls[0].formFieldIdsWithUnsavedChanges,
+                            before.dirtyFieldIds
+                        );
+                    }
+                    checks++;
+                }
+            }
+            for (const [value, mini, code] of [
+                [[], { required: true }, 'required'],
+                [[], { customMinimumRecordsToSelect: 1 }, 'linked-minimum'],
+                [[], { customMinimumRecordsToSelect: '1' }, 'invalid-metadata'],
+                ['', {}, 'unsupported-validation'],
+                [[null], {}, 'unsupported-validation'],
+            ]) {
+                const f = fixture((p) => {
+                    const field = p.payload.fieldIdsToSchemas.a;
+                    field.fieldType = 'multipleRecordLinks';
+                    field.airtableField.config = {
+                        type: 'multipleRecordLinks',
+                        options: {
+                            linkedTableId: 'tbl_children',
+                            isReversed: false,
+                            prefersSingleRecordLink: false,
+                        },
+                    };
+                    field.miniExtConfig = {
+                        requireOpenLinkedRecords: true,
+                        ...mini,
+                    };
+                    p.payload.formRecord.data.a = value;
+                });
+                assert(
+                    f.pages
+                        .getSnapshot()
+                        .problems.some(
+                            (p) => p.fieldId === 'a' && p.code === code
+                        )
+                );
+                assert.equal(
+                    f.pages.next(f.pages.getSnapshot().revision).accepted,
+                    false
+                );
+                await assert.rejects(
+                    f.pages.submit(f.pages.getSnapshot().revision)
+                );
+                assert.equal(f.calls.length, 0);
+                checks++;
+            }
             {
                 const f = fixture();
                 const first = f.pages.getSnapshot();

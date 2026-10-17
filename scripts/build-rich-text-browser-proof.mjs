@@ -12,17 +12,28 @@ import {
     readFileSync,
     realpathSync,
     rmSync,
+    statSync,
     writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import {
+    basename,
+    dirname,
+    isAbsolute,
+    join,
+    relative,
+    resolve,
+    sep,
+} from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 import { richTextLoadedFixture } from './rich-text-consumer-checks.mjs';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const root = realpathSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), '..')
+);
 const sha256 = (value) => createHash('sha256').update(value).digest('hex');
 const git = (...args) =>
     execFileSync('git', args, { cwd: root, encoding: 'utf8' });
@@ -30,6 +41,145 @@ const inside = (parent, child) => {
     const path = relative(parent, child);
     return !isAbsolute(path) && path !== '..' && !path.startsWith(`..${sep}`);
 };
+const identity = (stat) => `${stat.dev}:${stat.ino}`;
+function existingEntry(path) {
+    try {
+        return lstatSync(path);
+    } catch (error) {
+        if (error.code === 'ENOENT') return null;
+        throw error;
+    }
+}
+
+// Resolve the existing ancestor, not just the lexical path: a missing output
+// below an external symlink can otherwise point back into this checkout.
+export function prepareProofOutput(checkoutRoot, requestedPath) {
+    const checkout = realpathSync(checkoutRoot);
+    const requested = resolve(requestedPath);
+    assert(
+        !existingEntry(requested),
+        'Output directory already exists; use a fresh proof directory.'
+    );
+    let ancestor = requested;
+    const missing = [];
+    while (!existingEntry(ancestor)) {
+        missing.unshift(basename(ancestor));
+        ancestor = dirname(ancestor);
+    }
+    // realpath deliberately rejects dangling symlinks and symlink loops.
+    const canonicalAncestor = realpathSync(ancestor);
+    const ancestorStat = statSync(ancestor);
+    assert(ancestorStat.isDirectory(), 'Output ancestor must be a directory.');
+    const output = join(canonicalAncestor, ...missing);
+    assert(
+        !inside(checkout, output),
+        'Keep generated proof assets outside the checkout.'
+    );
+    return {
+        checkout,
+        requested,
+        ancestor,
+        canonicalAncestor,
+        ancestorEntryIdentity: identity(lstatSync(ancestor)),
+        ancestorIdentity: identity(ancestorStat),
+        output,
+    };
+}
+
+function assertOutputAncestor(plan) {
+    assert.equal(
+        realpathSync(plan.ancestor),
+        plan.canonicalAncestor,
+        'Output ancestor changed after validation.'
+    );
+    assert.equal(
+        identity(lstatSync(plan.ancestor)),
+        plan.ancestorEntryIdentity,
+        'Output ancestor entry changed after validation.'
+    );
+    assert.equal(
+        identity(statSync(plan.ancestor)),
+        plan.ancestorIdentity,
+        'Output ancestor identity changed after validation.'
+    );
+    assert(
+        !inside(plan.checkout, plan.output),
+        'Keep generated proof assets outside the checkout.'
+    );
+}
+
+function assertProofOutput(state) {
+    assertOutputAncestor(state.plan);
+    const entry = lstatSync(state.output);
+    assert(
+        entry.isDirectory() && !entry.isSymbolicLink(),
+        'Proof output must remain the created directory.'
+    );
+    assert.equal(
+        identity(entry),
+        state.identity,
+        'Proof output identity changed after creation.'
+    );
+    assert.equal(
+        realpathSync(state.output),
+        state.output,
+        'Proof output path changed after creation.'
+    );
+}
+
+export function createProofOutput(plan) {
+    assertOutputAncestor(plan);
+    const current = prepareProofOutput(plan.checkout, plan.requested);
+    assert.equal(
+        current.output,
+        plan.output,
+        'Output parent changed after validation.'
+    );
+    const parent = dirname(plan.output);
+    mkdirSync(parent, { recursive: true });
+    assertOutputAncestor(plan);
+    assert.equal(
+        realpathSync(parent),
+        parent,
+        'Output parent changed after validation.'
+    );
+    // Non-recursive creation keeps the final leaf fresh, including against
+    // preexisting/dangling links. Each asset is also created exclusively.
+    mkdirSync(plan.output);
+    const state = {
+        plan,
+        output: plan.output,
+        identity: identity(lstatSync(plan.output)),
+    };
+    try {
+        assertProofOutput(state);
+        return state;
+    } catch (error) {
+        cleanupProofOutput(state);
+        throw error;
+    }
+}
+
+export function writeProofAsset(state, name, contents) {
+    assert(
+        name && name === basename(name) && name !== '.' && name !== '..',
+        'Proof asset must have a simple file name.'
+    );
+    assertProofOutput(state);
+    writeFileSync(join(state.output, name), contents, { flag: 'wx' });
+}
+
+export function cleanupProofOutput(state) {
+    try {
+        assertProofOutput(state);
+    } catch {
+        // Never remove a path whose ownership or canonical identity changed.
+        return false;
+    }
+    rmSync(state.output, { recursive: true });
+    return true;
+}
+
 function sourceReceipt() {
     const paths = new Set([
         ...git('diff', '--name-only', '-z', 'HEAD').split('\0'),
@@ -53,7 +203,7 @@ function sourceReceipt() {
 
 // Only synthetic data is serialized. The browser entry imports SDK code solely
 // from the exact archive installed under its independent consumer directory.
-function browserMain(data) {
+export function browserMain(data) {
     const { loaded, expected, portal } = data;
     const sourceText = expected.find(([id]) => id === 'source')[1];
     const h = React.createElement;
@@ -297,6 +447,10 @@ function browserMain(data) {
     let lifecycleText = sourceText;
     let lifecycleNative = JSON.stringify(lifecycleBinding.getSnapshot().value);
     let remount = 0;
+    const evidence = {
+        lifecycle: { remount: null, replacement: null, retirement: null },
+        interactions: [],
+    };
     let root;
     let portalBefore;
     const result = document.getElementById('proof-result');
@@ -306,6 +460,11 @@ function browserMain(data) {
         )
             .map(([key, value]) => `${key}: ${value}`)
             .join(' · ');
+        document.getElementById('proof-evidence').textContent = JSON.stringify(
+            evidence,
+            null,
+            2
+        );
     }
     function App() {
         return h(
@@ -587,7 +746,7 @@ function browserMain(data) {
                 'Invalid native value displayed as text'
             );
         checks.push(
-            'Invalid native values rejected; accepted binding replacement/remount/retirement preserves owner values'
+            'Invalid native values rejected; current accepted binding state matches its owner'
         );
         checks.push(
             'Fixed mask precedes native value access in Form/cell/detail contexts; hidden, blocked and retired bindings omit before field/value access'
@@ -676,42 +835,159 @@ function browserMain(data) {
         updateCounters();
         return checks;
     }
-    function runProof(interactions = false) {
+    function injectInteractions() {
+        const types = [
+            'click',
+            'auxclick',
+            'dblclick',
+            'pointerdown',
+            'keydown',
+            'keyup',
+        ];
+        const counts = () => Object.fromEntries(types.map((type) => [type, 0]));
+        const record = {
+            state: retired ? 'retired' : 'active',
+            status: 'pending',
+            expectedTargets: retired
+                ? { output: 30, label: 23, status: 30 }
+                : { output: 31, label: 24, status: 31 },
+            targets: { output: 0, label: 0, status: 0 },
+            dispatched: counts(),
+            received: counts(),
+            defaultPrevented: counts(),
+            rowsBefore: counters.rows,
+        };
+        evidence.interactions.push(record);
         try {
-            if (interactions) {
-                for (const output of document.querySelectorAll(
+            const targets = [
+                ...document.querySelectorAll(
                     '.proof-surface .mx-sdk-rich-text-field > *'
-                )) {
-                    for (const type of ['click', 'auxclick', 'dblclick'])
-                        output.dispatchEvent(
-                            new MouseEvent(type, {
-                                bubbles: true,
-                                cancelable: true,
-                            })
-                        );
-                    output.dispatchEvent(
-                        new PointerEvent('pointerdown', {
-                            bubbles: true,
-                            cancelable: true,
-                        })
+                ),
+            ];
+            check(
+                new Set(targets).size === targets.length,
+                'Duplicate event target'
+            );
+            for (const target of targets) {
+                check(target.isConnected, 'Detached event target');
+                const kind =
+                    target.tagName === 'OUTPUT'
+                        ? 'output'
+                        : target.tagName === 'LABEL'
+                          ? 'label'
+                          : target.tagName === 'SPAN' &&
+                              target.getAttribute('role') === 'status'
+                            ? 'status'
+                            : null;
+                check(kind !== null, 'Unexpected event target kind');
+                record.targets[kind]++;
+            }
+            for (const kind of Object.keys(record.expectedTargets))
+                check(
+                    record.targets[kind] === record.expectedTargets[kind],
+                    `Event target count mismatch: ${kind}`
+                );
+            record.targetCount = targets.length;
+            for (const target of targets) {
+                for (const type of types) {
+                    const EventClass = type.startsWith('key')
+                        ? KeyboardEvent
+                        : type === 'pointerdown'
+                          ? PointerEvent
+                          : MouseEvent;
+                    const event = new EventClass(type, {
+                        bubbles: true,
+                        cancelable: true,
+                        ...(type.startsWith('key') ? { key: 'Enter' } : {}),
+                    });
+                    let receipts = 0;
+                    const received = (actual) => {
+                        if (
+                            actual === event &&
+                            actual.target === target &&
+                            actual.currentTarget === target
+                        ) {
+                            receipts++;
+                            record.received[type]++;
+                        }
+                    };
+                    target.addEventListener(type, received);
+                    record.dispatched[type]++;
+                    try {
+                        const allowed = target.dispatchEvent(event);
+                        if (!allowed || event.defaultPrevented)
+                            record.defaultPrevented[type]++;
+                    } finally {
+                        target.removeEventListener(type, received);
+                    }
+                    check(
+                        receipts === 1,
+                        `Event dispatch/receipt mismatch: ${type}`
                     );
-                    for (const type of ['keydown', 'keyup'])
-                        output.dispatchEvent(
-                            new KeyboardEvent(type, {
-                                key: 'Enter',
-                                bubbles: true,
-                                cancelable: true,
-                            })
-                        );
                 }
             }
-            const checks = verify();
-            if (interactions)
-                checks.push(
-                    'Injected click/auxclick/double-click/pointerdown/keydown/keyup isolated at every output, label and feedback node'
+            for (const type of types) {
+                check(
+                    record.dispatched[type] === targets.length &&
+                        record.received[type] === targets.length,
+                    `Event dispatch/receipt mismatch: ${type}`
                 );
+                check(
+                    record.defaultPrevented[type] === 0,
+                    `Event default was prevented: ${type}`
+                );
+            }
+            check(
+                record.rowsBefore === 0 && counters.rows === 0,
+                'Injected event escaped to a row'
+            );
+            verify();
+            record.status = 'passed';
+            return record;
+        } catch (error) {
+            record.status = 'failed';
+            record.error = error.message;
+            throw error;
+        } finally {
+            record.totalDispatched = Object.values(record.dispatched).reduce(
+                (sum, n) => sum + n,
+                0
+            );
+            record.totalReceived = Object.values(record.received).reduce(
+                (sum, n) => sum + n,
+                0
+            );
+            record.rowsAfter = counters.rows;
+        }
+    }
+    function fail(error) {
+        result.dataset.state = 'fail';
+        result.textContent = `FAIL · ${error.message}`;
+        document.getElementById('checks').replaceChildren();
+        updateCounters();
+    }
+    function runProof(interactions = false, verifiedAction) {
+        try {
+            const checks = verify();
+            if (interactions) {
+                const record = injectInteractions();
+                checks.push(
+                    `Injected events: ${record.targetCount} targets; ${record.totalDispatched} dispatched / ${record.totalReceived} received; zero row events or canceled defaults`
+                );
+            }
+            // Action-specific observations are recorded only after all current
+            // display/native-state checks pass. Rendering alone is not evidence.
+            verifiedAction?.();
+            const completed = Object.keys(evidence.lifecycle).filter(
+                (name) => evidence.lifecycle[name]
+            );
+            const pending = Object.keys(evidence.lifecycle).filter(
+                (name) => !evidence.lifecycle[name]
+            );
+            for (const name of completed)
+                checks.push(`Verified lifecycle action: ${name}`);
             result.dataset.state = 'pass';
-            result.textContent = `PASS · ${checks.length} checks${retired ? ' · binding retired' : ''}${interactions ? ' · injected events' : ''}`;
+            result.textContent = `PASS · ${checks.length} checks${pending.length ? ` · lifecycle pending: ${pending.join(', ')}` : ' · lifecycle complete'}${interactions ? ' · injected events verified' : ''}`;
             document.getElementById('checks').replaceChildren(
                 ...checks.map((text) => {
                     const li = document.createElement('li');
@@ -719,10 +995,11 @@ function browserMain(data) {
                     return li;
                 })
             );
-        } catch (error) {
-            result.dataset.state = 'fail';
-            result.textContent = `FAIL · ${error.message}`;
             updateCounters();
+            return true;
+        } catch (error) {
+            fail(error);
+            return false;
         }
     }
     read.then((accepted) => {
@@ -732,12 +1009,47 @@ function browserMain(data) {
         render();
         document.getElementById('run').onclick = () => runProof(true);
         document.getElementById('remount').onclick = () => {
-            remount++;
-            render();
-            runProof();
+            try {
+                const before = document.querySelector('#binding-proof output');
+                check(before, 'Missing output before remount');
+                remount++;
+                render();
+                runProof(false, () => {
+                    const after = document.querySelector(
+                        '#binding-proof output'
+                    );
+                    check(
+                        after &&
+                            after !== before &&
+                            !before.isConnected &&
+                            after.id !== before.id,
+                        'Remount did not replace the output node and ID'
+                    );
+                    evidence.lifecycle.remount = {
+                        beforeId: before.id,
+                        afterId: after.id,
+                    };
+                });
+            } catch (error) {
+                fail(error);
+            }
         };
         document.getElementById('replace').onclick = async () => {
             try {
+                check(
+                    !retired &&
+                        !replaced &&
+                        !document.getElementById('replace').disabled,
+                    'Replacement is unavailable'
+                );
+                document.getElementById('replace').disabled = true;
+                const previous = lifecycleBinding;
+                const readsBefore = counters.ownerReads;
+                const before = document.querySelector(
+                    '#lifecycle-proof output'
+                );
+                check(before, 'Missing output before replacement');
+                const beforeText = before.textContent;
                 const successor = structuredClone(loaded);
                 const next =
                     '  **Replacement Ω**\r\n[still literal](https://replacement.invalid)\n  final  ';
@@ -750,7 +1062,7 @@ function browserMain(data) {
                     },
                 });
                 check(accepted, 'Replacement owner load was not accepted');
-                predecessorBinding = lifecycleBinding;
+                predecessorBinding = previous;
                 check(
                     predecessorBinding.getSnapshot().retired,
                     'Replacement did not retire the prior accepted binding'
@@ -761,27 +1073,61 @@ function browserMain(data) {
                 lifecycleText = next;
                 lifecycleNative = JSON.stringify(next);
                 render();
-                runProof();
-                document.getElementById('replace').disabled = true;
+                runProof(false, () => {
+                    const after = document.querySelector(
+                        '#lifecycle-proof output'
+                    );
+                    check(
+                        lifecycleBinding !== previous &&
+                            counters.ownerReads === readsBefore + 1 &&
+                            after?.textContent === next &&
+                            previous.getSnapshot().retired &&
+                            !document.querySelector(
+                                '#predecessor-proof output'
+                            ),
+                        'Accepted replacement transition was not verified'
+                    );
+                    evidence.lifecycle.replacement = {
+                        previousRetired: true,
+                        ownerReads: counters.ownerReads - readsBefore,
+                        beforeText,
+                        afterText: after.textContent,
+                    };
+                });
             } catch (error) {
-                result.dataset.state = 'fail';
-                result.textContent = `FAIL · ${error.message}`;
-                updateCounters();
+                fail(error);
             }
         };
         document.getElementById('retire').onclick = () => {
-            retired = true;
-            flushSync(() => lifecycleFields.destroy());
-            render();
-            runProof();
-            document.getElementById('retire').disabled = true;
-            document.getElementById('replace').disabled = true;
+            try {
+                check(!retired, 'Binding already retired');
+                const before = document.querySelector(
+                    '#lifecycle-proof output'
+                );
+                check(before, 'Missing output before retirement');
+                retired = true;
+                flushSync(() => lifecycleFields.destroy());
+                render();
+                runProof(false, () => {
+                    check(
+                        lifecycleBinding.getSnapshot().retired &&
+                            !before.isConnected &&
+                            !document.querySelector('#lifecycle-proof output'),
+                        'Retirement did not remove the accepted binding output'
+                    );
+                    evidence.lifecycle.retirement = {
+                        beforeId: before.id,
+                        outputRemoved: true,
+                    };
+                });
+                document.getElementById('retire').disabled = true;
+                document.getElementById('replace').disabled = true;
+            } catch (error) {
+                fail(error);
+            }
         };
         runProof();
-    }).catch((error) => {
-        result.dataset.state = 'fail';
-        result.textContent = `FAIL · ${error.message}`;
-    });
+    }).catch(fail);
     window.addEventListener(
         'pagehide',
         () => {
@@ -834,18 +1180,11 @@ async function main() {
             ? 'installed-public-export'
             : 'installed-direct-module';
     const archive = realpathSync(resolve(process.argv[2]));
-    const output = resolve(process.argv[3]);
+    const outputPlan = prepareProofOutput(root, process.argv[3]);
+    const output = outputPlan.output;
     assert(
         lstatSync(archive).isFile(),
         'The package archive must be a regular file.'
-    );
-    assert(
-        !existsSync(output),
-        'Output directory already exists; use a fresh proof directory.'
-    );
-    assert(
-        !inside(root, output),
-        'Keep generated proof assets outside the checkout.'
     );
     const packageSha256 = sha256(readFileSync(archive));
     const packageIntegrity = `sha512-${createHash('sha512').update(readFileSync(archive)).digest('base64')}`;
@@ -853,6 +1192,7 @@ async function main() {
     const consumer = realpathSync(
         mkdtempSync(join(tmpdir(), 'sdk-rich-text-browser-'))
     );
+    let outputState;
     try {
         writeFileSync(
             join(consumer, 'package.json'),
@@ -1029,24 +1369,25 @@ async function main() {
             checks: 'Visible page self-checks cover actual SDK renderers and synthetic injected DOM events; native user/browser checks remain separate.',
             output: {},
         };
-        mkdirSync(output, { recursive: true });
+        outputState = createProofOutput(outputPlan);
         const assets = {
             'entry.js': entry,
             'main.js': bundle.outputFiles[0].contents,
             'styles.css': css,
-            'index.html': `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Rich Text display proof</title><link rel="stylesheet" href="./styles.css"></head><body><main><p class="eyebrow">miniExtensions SDK · ${proofMode} proof</p><h1>Rich Text literal display</h1><p class="lead">These Form, Grid and List displays preserve supplied Markdown, HTML, URLs, whitespace and line breaks as inert text. Native strings remain unchanged with their owner. This is plain-text display, not formatted Rich Text parity. All data is synthetic. ${directModule === null ? 'The renderer uses the public /react export.' : 'The renderer imports its installed module directly; public /react export qualification is deferred.'}</p><div class="toolbar"><button id="run" type="button">Run interaction checks</button><button id="remount" type="button">Remount displays</button><button id="replace" type="button">Replace accepted owner</button><button id="retire" type="button">Retire binding</button></div><section class="card" aria-label="Proof result"><p id="proof-result" role="status" data-state="pending">Loading installed SDK…</p><p id="counters"></p><ul id="checks"></ul><p class="note">Interaction checks inject DOM events. Use the browser separately for native pointer, keyboard, accessibility and responsive inspection.</p></section><div id="app"></div><p class="receipt">Archive SHA-256: ${packageSha256}<br>Source HEAD at build: ${sourceStart.head}<br>Exact inputs and dirty-source hashes: receipt.json</p></main><script type="module" src="./main.js"></script></body></html>`,
+            'index.html': `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Rich Text display proof</title><link rel="stylesheet" href="./styles.css"></head><body><main><p class="eyebrow">miniExtensions SDK · ${proofMode} proof</p><h1>Rich Text literal display</h1><p class="lead">These Form, Grid and List displays preserve supplied Markdown, HTML, URLs, whitespace and line breaks as inert text. Native strings remain unchanged with their owner. This is plain-text display, not formatted Rich Text parity. All data is synthetic. ${directModule === null ? 'The renderer uses the public /react export.' : 'The renderer imports its installed module directly; public /react export qualification is deferred.'}</p><div class="toolbar"><button id="run" type="button">Run interaction checks</button><button id="remount" type="button">Remount displays</button><button id="replace" type="button">Replace accepted owner</button><button id="retire" type="button">Retire binding</button></div><section class="card" aria-label="Proof result"><p id="proof-result" role="status" data-state="pending">Loading installed SDK…</p><p id="counters"></p><ul id="checks"></ul><details><summary>Recorded proof evidence</summary><pre id="proof-evidence"></pre></details><p class="note">Interaction checks inject DOM events. Use the browser separately for native pointer, keyboard, accessibility and responsive inspection.</p></section><div id="app"></div><p class="receipt">Archive SHA-256: ${packageSha256}<br>Source HEAD at build: ${sourceStart.head}<br>Exact inputs and dirty-source hashes: receipt.json</p></main><script type="module" src="./main.js"></script></body></html>`,
             'bundle-inputs.json':
                 JSON.stringify(bundle.metafile, null, 2) + '\n',
         };
         for (const [name, contents] of Object.entries(assets)) {
-            writeFileSync(join(output, name), contents);
+            writeProofAsset(outputState, name, contents);
             receipt.output[name] = {
                 sha256: sha256(contents),
                 bytes: Buffer.byteLength(contents),
             };
         }
-        writeFileSync(
-            join(output, 'receipt.json'),
+        writeProofAsset(
+            outputState,
+            'receipt.json',
             JSON.stringify(receipt, null, 2) + '\n'
         );
         console.log(
@@ -1062,9 +1403,16 @@ async function main() {
                 2
             )
         );
+    } catch (error) {
+        if (outputState) cleanupProofOutput(outputState);
+        throw error;
     } finally {
         rmSync(consumer, { recursive: true, force: true });
     }
 }
 
-await main();
+if (
+    process.argv[1] &&
+    resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+    await main();

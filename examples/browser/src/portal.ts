@@ -1306,7 +1306,16 @@ export const createPortalView = (options: {
                         { signal }
                     );
                     if (!current()) return;
-                    if (user != null) acceptParentData(user.fields);
+                    if (user == null) {
+                        closeEditor();
+                        renderRecords();
+                        status(
+                            'Cell saved, but the Portal user was not refreshed. Choose Reload before taking another action.',
+                            true
+                        );
+                        return;
+                    }
+                    acceptParentData(user.fields);
                     needsRefresh = false;
                     closeEditor();
                     renderRecords();

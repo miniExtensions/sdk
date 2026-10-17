@@ -21,6 +21,7 @@ import {
 } from '../src/runtime/index.js';
 import { portalListPage, portalPage } from './portalFixtures.js';
 import { formResult } from './runtimeFixtures.js';
+import { RecoveryJournal, type RecoveryAttempt } from '../src/forms/index.js';
 
 const root = resolve(process.cwd());
 const driver: RuntimeAirtableField = {
@@ -108,6 +109,7 @@ const mount = async (
         list?: ListPortalLinkedRecordsResult;
         child?: FormLoadedResult;
         kanban?: SetKanbanCategoryResult;
+        refresh?: () => Promise<Response>;
     } = {}
 ) => {
     const window = new Window({
@@ -157,6 +159,9 @@ const mount = async (
     const children: { page: FormLoadedResult; isCurrent(): boolean }[] = [];
     const failures: unknown[] = [];
     const statuses: string[] = [];
+    const journal = new RecoveryJournal();
+    const attempts: RecoveryAttempt[] = [];
+    let refreshes = 0;
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
         session: { visitor: 'synthetic-view-owner' },
@@ -187,6 +192,9 @@ const mount = async (
                     String(init?.body)
                 ) as UpdateGridCellInput;
                 writes.push(update);
+                const attempt = journal.unknown('synthetic-view-owner')[0];
+                assert.ok(attempt);
+                attempts.push(attempt);
                 return new Response(
                     JSON.stringify({
                         result: {
@@ -204,7 +212,9 @@ const mount = async (
                     })
                 );
             }
-            if (route === '/api/trpc/airtable.getUserRecord')
+            if (route === '/api/trpc/airtable.getUserRecord') {
+                refreshes++;
+                if (responses.refresh) return responses.refresh();
                 return new Response(
                     JSON.stringify({
                         result: {
@@ -215,6 +225,7 @@ const mount = async (
                         },
                     })
                 );
+            }
             throw new Error(`Unexpected synthetic route: ${route}`);
         },
     });
@@ -223,6 +234,7 @@ const mount = async (
     const view = createPortalView({
         page,
         client,
+        recovery: { journal, owner: scope.ownerId },
         getScope: () => scope,
         run: (
             _description: string,
@@ -297,6 +309,12 @@ const mount = async (
         children,
         scope,
         statuses,
+        client,
+        journal,
+        attempts,
+        failures,
+        refreshes: () => refreshes,
+        drain: () => Promise.all(actions),
         offered,
         invokeRead,
         settle,
@@ -489,6 +507,268 @@ const buttonNamed = (node: HTMLElement, title: string) => {
     assert.equal(matches.length, 1, `Expected one actual ${title} control`);
     return matches[0]!;
 };
+
+const submitCell = (app: Awaited<ReturnType<typeof mount>>) => {
+    dispatch(buttonNamed(app.node, 'Edit cell'), 'click');
+    const input = app.node.querySelector<HTMLInputElement>(
+        'input[data-field-id="fld_title"]'
+    );
+    assert.ok(input);
+    input.value = 'Edited synthetic title';
+    dispatch(input, 'input');
+    const form = input.closest('form');
+    assert.ok(form);
+    dispatch(form, 'submit');
+    return form;
+};
+const savedAttempt = (app: Awaited<ReturnType<typeof mount>>) => {
+    assert.equal(app.attempts.length, 1);
+    const attempt = app.attempts[0]!;
+    assert.deepEqual(
+        {
+            recordId: attempt.recordId,
+            fieldId: attempt.fieldId,
+            scope: attempt.scope,
+            operation: attempt.operation,
+            loadVersion: attempt.loadVersion,
+            outcome: attempt.outcome,
+            flight: attempt.flight,
+            acknowledgment: attempt.acknowledgment,
+        },
+        {
+            recordId: 'rec_synthetic_request',
+            fieldId: 'fld_title',
+            scope: {
+                owner: 'synthetic-view-owner',
+                parentFieldId: 'fld_children',
+                tableId: 'table_children',
+                childExtensionId: '',
+                context: 'modal',
+            },
+            operation: 'save',
+            loadVersion: 0,
+            outcome: 'saved',
+            flight: false,
+            acknowledgment: 'none',
+        }
+    );
+    assert.deepEqual(app.journal.unknown('synthetic-view-owner'), []);
+    return attempt;
+};
+
+describe('Portal cell Save parent refresh recovery', () => {
+    it('keeps a completed cell Save behind Reload when the parent refresh returns null', async (test) => {
+        const fixture = actionFixture();
+        fixture.list.airtableOffset = 'synthetic-next-page';
+        const parent = structuredClone(fixture.page.payload.formRecord.data);
+        const app = await mount(test, fixture.page, {
+            ...fixture,
+            refresh: async () =>
+                new Response(JSON.stringify({ result: { data: null } })),
+        });
+        await app.invokeRead();
+        assert.equal(buttonNamed(app.node, 'Create record').disabled, false);
+        assert.equal(buttonNamed(app.node, 'Next page').disabled, false);
+        const originalForm = submitCell(app);
+        await app.settle();
+        const attempt = savedAttempt(app);
+        assert.equal(app.writes.length, 1);
+        assert.deepEqual(app.writes[0], {
+            portalExtensionAccessToken:
+                fixture.page.payload.extensionAccessToken,
+            portalFieldId: 'fld_children',
+            recordFieldId: fixture.fieldId,
+            recordId: fixture.recordId,
+            selectedCustomViewId: 'view_conditional',
+            value: 'Edited synthetic title',
+        });
+        assert.equal(app.refreshes(), 1);
+        assert.deepEqual(fixture.page.payload.formRecord.data, parent);
+        assert.match(
+            app.statuses.at(-1) ?? '',
+            /Cell saved, but.*not refreshed.*Reload/
+        );
+        assert.equal(
+            app.statuses.some((message) =>
+                message.includes('and Portal user refreshed')
+            ),
+            false
+        );
+        assert.equal(
+            app.node.querySelector('input[data-field-id="fld_title"]'),
+            null
+        );
+        assert.match(app.node.textContent ?? '', /Edited synthetic title/);
+        dispatch(originalForm, 'submit');
+        for (const title of ['Load records', 'Create record', 'Next page'])
+            dispatch(buttonNamed(app.node, title), 'click');
+        await app.settle();
+        assert.equal(app.reads.length, 1);
+        assert.equal(app.childLoads.length, 0);
+        submitCell(app);
+        await app.drain();
+        assert.equal(app.failures.length, 1);
+        assert.match(
+            String(app.failures[0]),
+            /Reload the Portal before saving another cell/
+        );
+        assert.equal(app.writes.length, 1);
+        assert.equal(app.refreshes(), 1);
+        assert.equal(savedAttempt(app), attempt);
+        // The host accepts fresh parent data only after an explicit Portal Reload.
+        fixture.page.payload.formRecord.data = {
+            ...parent,
+            fld_prefill: 'prefill_Title=Reloaded',
+        };
+        app.view.refreshRequired();
+        dispatch(app.first, 'click');
+        await app.drain();
+        assert.equal(app.reads.length, 2);
+        assert.equal(
+            app.failures.length,
+            1,
+            'The explicit fresh Load must succeed.'
+        );
+        assert.equal(buttonNamed(app.node, 'Create record').disabled, false);
+        assert.equal(buttonNamed(app.node, 'Next page').disabled, false);
+        assert.equal(
+            app.writes.length,
+            1,
+            'Reload must never replay the completed Save.'
+        );
+        assert.equal(savedAttempt(app), attempt);
+    });
+
+    it('adopts a matching parent and permits explicit Load before Create or Next', async (test) => {
+        const fixture = actionFixture();
+        fixture.list.airtableOffset = 'synthetic-next-page';
+        const fields = {
+            ...fixture.page.payload.formRecord.data,
+            fld_prefill: 'prefill_Title=Refreshed',
+        };
+        const app = await mount(test, fixture.page, {
+            ...fixture,
+            refresh: async () =>
+                new Response(
+                    JSON.stringify({
+                        result: { data: { id: 'record_parent', fields } },
+                    })
+                ),
+        });
+        await app.invokeRead();
+        submitCell(app);
+        await app.settle();
+        const attempt = savedAttempt(app);
+        assert.deepEqual(fixture.page.payload.formRecord.data, fields);
+        assert.match(
+            app.statuses.at(-1) ?? '',
+            /Cell saved and Portal user refreshed/
+        );
+        assert.equal(buttonNamed(app.node, 'Create record').disabled, true);
+        assert.equal(buttonNamed(app.node, 'Next page').disabled, true);
+        dispatch(buttonNamed(app.node, 'Create record'), 'click');
+        dispatch(buttonNamed(app.node, 'Next page'), 'click');
+        await app.settle();
+        assert.equal(app.childLoads.length, 0);
+        assert.equal(app.reads.length, 1);
+        await app.invokeRead();
+        assert.equal(app.reads[1]?.refreshLoggedInPortalRecord, true);
+        assert.equal(buttonNamed(app.node, 'Create record').disabled, false);
+        assert.equal(buttonNamed(app.node, 'Next page').disabled, false);
+        assert.equal(app.writes.length, 1);
+        assert.equal(app.refreshes(), 1);
+        assert.equal(savedAttempt(app), attempt);
+    });
+
+    it('preserves the accepted Save and Reload gate when only the parent refresh fails', async (test) => {
+        const fixture = actionFixture();
+        const parent = structuredClone(fixture.page.payload.formRecord.data);
+        const app = await mount(test, fixture.page, {
+            ...fixture,
+            refresh: async () => {
+                throw new Error('Synthetic refresh transport failure');
+            },
+        });
+        await app.invokeRead();
+        const originalForm = submitCell(app);
+        await app.drain();
+        const attempt = savedAttempt(app);
+        assert.equal(app.failures.length, 1);
+        assert.deepEqual(fixture.page.payload.formRecord.data, parent);
+        for (const title of ['Load records', 'Create record', 'Next page'])
+            dispatch(buttonNamed(app.node, title), 'click');
+        dispatch(originalForm, 'submit');
+        await app.drain();
+        assert.equal(app.writes.length, 1);
+        assert.equal(app.reads.length, 1);
+        assert.equal(app.refreshes(), 1);
+        assert.equal(app.childLoads.length, 0);
+        assert.equal(savedAttempt(app), attempt);
+    });
+
+    for (const retirement of ['owner', 'session'])
+        it(`ignores a late parent refresh after ${retirement} retirement`, async (test) => {
+            const fixture = actionFixture();
+            const parent = structuredClone(
+                fixture.page.payload.formRecord.data
+            );
+            let release!: (response: Response) => void;
+            const held = new Promise<Response>((resolve) => {
+                release = resolve;
+            });
+            let started!: () => void;
+            const refreshing = new Promise<void>((resolve) => {
+                started = resolve;
+            });
+            const app = await mount(test, fixture.page, {
+                ...fixture,
+                refresh: async () => {
+                    started();
+                    return held;
+                },
+            });
+            await app.invokeRead();
+            submitCell(app);
+            await refreshing;
+            const attempt = savedAttempt(app);
+            const messages = [...app.statuses];
+            if (retirement === 'owner')
+                app.scope.ownerId = 'synthetic-successor';
+            else {
+                app.scope.revision++;
+                app.client.setSession({ visitor: 'synthetic-successor' });
+            }
+            app.view.retireCollection();
+            const retainedDOM = app.node.outerHTML;
+            const successor = app.node.ownerDocument.createElement('section');
+            successor.textContent = 'Current successor Portal';
+            app.node.ownerDocument.body.append(successor);
+            release(
+                new Response(
+                    JSON.stringify({
+                        result: {
+                            data: {
+                                id: 'record_parent',
+                                fields: {
+                                    ...parent,
+                                    fld_prefill: 'LATE_REFRESH_MUST_NOT_ADOPT',
+                                },
+                            },
+                        },
+                    })
+                )
+            );
+            await app.settle();
+            assert.deepEqual(fixture.page.payload.formRecord.data, parent);
+            assert.deepEqual(app.statuses, messages);
+            assert.equal(app.node.outerHTML, retainedDOM);
+            assert.equal(successor.textContent, 'Current successor Portal');
+            assert.equal(app.writes.length, 1);
+            assert.equal(app.refreshes(), 1);
+            assert.equal(app.reads.length, 1);
+            assert.equal(savedAttempt(app), attempt);
+        });
+});
 
 describe('Portal eligibility compatibility and retained actions', () => {
     it('preserves the absent-list legacy positive control', async (test) => {

@@ -408,6 +408,15 @@ are omitted; this does not convert a computed lookup into a writable link.
 - **Open Form** loads the configured edit child for a returned record.
   **Create record** loads the configured create child and preserves the inverse
   link to the Portal user. Loading either Form makes no write.
+- An acknowledged child **Delete** retires the cached Portal rows, paging cursor
+  and child actions. Choose **Reload**, then **Load records**, to obtain the
+  current parent and permitted records. The starter makes no automatic read or
+  repeated Delete. Cancelling the confirmation preserves the current Form and
+  Portal. A retained Back control from an older Form cannot navigate away from
+  a replacement Form opened after Reload. The current Back control remains usable
+  when the child has lost write authority. A lost or cancelled Delete response can
+  still leave its outcome unknown;
+  this acknowledged-success cleanup does not establish Delete replay protection.
 
 Child filter-prefill snapshots belong to the dispatched plan and accepted Form
 load. Create cascades use configured dynamic prefills plus static child overrides;

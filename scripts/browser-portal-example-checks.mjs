@@ -278,6 +278,7 @@ export async function checkBrowserPortalExample({
     const recoveryMain = async ({
         attachments = false,
         delayedEdit = null,
+        delayedDelete = null,
         deletable = false,
         failedUpload = false,
         obscurePassword = false,
@@ -390,6 +391,10 @@ export async function checkBrowserPortalExample({
                 throw new Error(
                     'Synthetic connection lost after dispatch; outcome is unknown.'
                 );
+            if (route === '/api/trpc/airtable.deleteRecord' && deletable) {
+                if (delayedDelete != null) await delayedDelete.promise;
+                return new Response(JSON.stringify({ result: { data: null } }));
+            }
             throw new Error(`Unexpected packed recovery route: ${route}`);
         };
         const { window, close } = await environment(fetch);
@@ -3488,6 +3493,242 @@ export async function checkBrowserPortalExample({
             }
         );
         await check(
+            'actual main acknowledged child Delete retires cached rows and callbacks until explicit Reload',
+            async () => {
+                const h = await recoveryMain({ deletable: true });
+                const { document, window } = h;
+                h.latest(
+                    page(
+                        [
+                            record('rec_one', 'Delete me'),
+                            record('rec_two', 'Keep me'),
+                        ],
+                        'old_cursor'
+                    )
+                );
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).length === 2 &&
+                        document.getElementById('screen').inert === false
+                );
+                const retained = [
+                    'Load records',
+                    'Next page',
+                    'Create record',
+                    'Open Form',
+                ].map((title) => button(document, title));
+                const oldPortal = retained[0].closest('section');
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Delete this record').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const back = button(document, 'Back to Portal');
+                const oldDelete = button(document, 'Delete this record');
+                oldDelete.click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Delete record'
+                ).click();
+                await waitFor(
+                    () =>
+                        h.count('/api/trpc/airtable.deleteRecord') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.match(
+                    document.getElementById('screen').textContent,
+                    /Choose Reload when ready/
+                );
+                assert.equal(oldPortal.isConnected, false);
+                assert.deepEqual(rowIds(document), []);
+                const callsAfterDelete = h.calls.length;
+                for (const action of [...retained, back, oldDelete])
+                    action.dispatchEvent(new window.Event('click'));
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    h.calls.length,
+                    callsAfterDelete,
+                    'Retained callbacks cannot read or mutate the deleted context.'
+                );
+                assert.match(
+                    document.getElementById('screen').textContent,
+                    /Choose Reload when ready/
+                );
+                assert.deepEqual(
+                    h.calls.find(
+                        (call) =>
+                            call.route === '/api/trpc/airtable.deleteRecord'
+                    ).body,
+                    { extensionAccessToken: 'child_access_example' }
+                );
+                assert.equal(h.count('fetchRecordsForLinkedTableOnPortal'), 1);
+                assert.equal(h.count('fetchExtensionForEndUser'), 2);
+                h.latest(page([record('rec_two', 'Keep me')]));
+                document.getElementById('reload').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Load records').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).includes('rec_two') &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.deepEqual(rowIds(document), ['rec_two']);
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Back to Portal').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.equal(
+                    h.calls.findLast((call) => call.body?.childExtensionInfo)
+                        ?.body.childExtensionInfo.accessType
+                        .childExtensionRecordId,
+                    'rec_two'
+                );
+                const replacementField = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                const replacementForm = replacementField.closest('form');
+                const replacementBack = button(document, 'Back to Portal');
+                replacementField.value = 'Unsaved replacement child answer';
+                change(window, replacementField, 'input');
+                const callsBeforeOldBack = h.calls.length;
+                assert.equal(back.isConnected, false);
+                assert.notEqual(replacementBack, back);
+                back.dispatchEvent(new window.Event('click'));
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    replacementForm.isConnected,
+                    true,
+                    'A detached Back callback must not navigate away from the replacement child.'
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]'),
+                    replacementField
+                );
+                assert.equal(
+                    replacementField.value,
+                    'Unsaved replacement child answer'
+                );
+                assert.equal(
+                    button(document, 'Back to Portal'),
+                    replacementBack
+                );
+                assert.equal(replacementBack.isConnected, true);
+                assert.equal(h.calls.length, callsBeforeOldBack);
+                assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 1);
+                assert.equal(h.count('saveForm'), 0);
+                replacementBack.click();
+                assert.equal(replacementForm.isConnected, false);
+                assert.deepEqual(rowIds(document), ['rec_two']);
+                assert.equal(h.calls.length, callsBeforeOldBack);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main cancelled child Delete confirmation preserves the draft and cached Portal without a request',
+            async () => {
+                const h = await recoveryMain({ deletable: true });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const oldPortal = button(document, 'Load records').closest(
+                    'section'
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Delete this record').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const title = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                title.value = 'Keep this unsaved answer';
+                change(window, title, 'input');
+                const before = h.calls.length;
+                button(document, 'Delete this record').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(document.querySelector('dialog'), 'Cancel').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(title.value, 'Keep this unsaved answer');
+                assert.equal(h.calls.length, before);
+                button(document, 'Back to Portal').click();
+                assert.equal(oldPortal.isConnected, true);
+                assert.deepEqual(rowIds(document), ['rec_same_title']);
+                assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 0);
+                assert.equal(h.count('saveForm'), 0);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main late child Delete acknowledgment cannot retire a replacement visitor presentation',
+            async () => {
+                const delayedDelete = deferred();
+                const h = await recoveryMain({
+                    deletable: true,
+                    delayedDelete,
+                });
+                const { document } = h;
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Delete this record').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Delete this record').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Delete record'
+                ).click();
+                await waitFor(
+                    () => h.count('/api/trpc/airtable.deleteRecord') === 1
+                );
+                button(document, 'Cancel request').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                h.aba();
+                assert.equal(button(document, 'Save').disabled, true);
+                const successor =
+                    document.getElementById('screen').firstElementChild;
+                const status = document.getElementById('status').textContent;
+                delayedDelete.resolve();
+                await new Promise((resolve) => setImmediate(resolve));
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    document.getElementById('screen').firstElementChild,
+                    successor
+                );
+                assert.equal(
+                    document.getElementById('status').textContent,
+                    status
+                );
+                assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 1);
+                assert.equal(h.count('saveForm'), 0);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
             'actual main expired edit blocks Delete, comments and retained controls without dispatch',
             async () => {
                 const h = await recoveryMain({ deletable: true });
@@ -3557,6 +3798,19 @@ export async function checkBrowserPortalExample({
                     h.count('/api/trpc/airtable.addAirtableCommentForRecord'),
                     0
                 );
+                const expiredForm = expiredDelete.closest('form');
+                const callsBeforeBack = h.calls.length;
+                button(document, 'Back to Portal').click();
+                assert.equal(
+                    expiredForm.isConnected,
+                    false,
+                    'The current Back control must allow navigation from an expired child.'
+                );
+                assert.equal(
+                    button(document, 'Load records').isConnected,
+                    true
+                );
+                assert.equal(h.calls.length, callsBeforeBack);
                 button(document, 'Disconnect').click();
                 await h.close();
             }

@@ -359,7 +359,345 @@ const mount = async (
     };
 };
 
+const deletableChild = (): FormLoadedResult => {
+    const child = reviewForm();
+    child.extensionId = 'extension_child';
+    child.payload.hasParentExtension = true;
+    child.payload.publicFields.state.tableId = 'table_children';
+    child.payload.formRecord = {
+        type: 'edit',
+        tableId: 'table_children',
+        recordId: 'record_deleted',
+        data: child.payload.formRecord.data,
+    };
+    child.payload.publicFields.state.allowDeletingRecords = true;
+    return child;
+};
+const deletionRecords = (child: FormLoadedResult, deleted = false) => {
+    const ids = deleted
+        ? ['record_remaining']
+        : ['record_deleted', 'record_remaining'];
+    return portalListPage({
+        airtableOffset: deleted ? null : 'cursor_before_delete',
+        recordIds: ids,
+        tableIdsToLinkedTableStates: {
+            table_children: {
+                airtableFields: [
+                    child.payload.fieldIdsToSchemas.fld_title!.airtableField,
+                ],
+                recordIdsToAirtableRecords: Object.fromEntries(
+                    ids.map((id) => [id, { id, fields: { fld_title: id } }])
+                ),
+            },
+        },
+    });
+};
+
 describe('actual browser starter prepared review', () => {
+    it('retires the cached Portal after an acknowledged child Delete and recovers only through explicit Reload', async (test) => {
+        const child = deletableChild();
+        const childLoads: LoadExtensionInput[] = [];
+        let deletes = 0;
+        let reads = 0;
+        const fixture = await mount(test, child, {
+            initialPortal: portalPage(),
+            childLoads,
+            read: async (url, init) => {
+                if (url.pathname === '/api/trpc/airtable.deleteRecord') {
+                    deletes++;
+                    assert.deepEqual(JSON.parse(String(init?.body)), {
+                        extensionAccessToken:
+                            child.payload.extensionAccessToken,
+                    });
+                    if (child.payload.formRecord.type === 'edit')
+                        child.payload.formRecord.recordId = 'record_remaining';
+                    return new Response(
+                        JSON.stringify({ result: { data: null } })
+                    );
+                }
+                assert.equal(
+                    url.searchParams.get('route'),
+                    'fetchRecordsForLinkedTableOnPortal'
+                );
+                reads++;
+                return new Response(
+                    JSON.stringify(deletionRecords(child, deletes !== 0))
+                );
+            },
+        });
+        const { document } = fixture.window;
+        const idle = () =>
+            document.getElementById('screen')?.getAttribute('aria-busy') ===
+            'false';
+        fixture.button('Load records').click();
+        await waitFor(() => reads === 1 && idle());
+        const retained = [
+            'Load records',
+            'Next page',
+            'Create record',
+            'Open Form',
+        ].map((title) => fixture.button(title));
+        const oldPortal = retained[0]!.closest('section');
+        fixture.button('Open Form').click();
+        await waitFor(() => childLoads.length === 1 && idle());
+        const oldBack = fixture.button('Back to Portal');
+        fixture.button('Delete this record').click();
+        await waitFor(() => document.querySelector('dialog[open]') !== null);
+        fixture
+            .button('Delete record', document.querySelector('dialog[open]')!)
+            .click();
+        await waitFor(() => deletes === 1 && idle());
+        assert.match(
+            document.getElementById('screen')!.textContent!,
+            /Choose Reload when ready/
+        );
+        assert.equal(document.querySelector('tbody tr'), null);
+        assert.equal(oldPortal?.isConnected, false);
+        assert.equal(
+            reads,
+            1,
+            'Acknowledgment must not start a hidden list read.'
+        );
+        assert.equal(
+            fixture.loads(),
+            2,
+            'Acknowledgment must not start a hidden root or child load.'
+        );
+        for (const action of [...retained, oldBack])
+            action.dispatchEvent(new fixture.window.Event('click'));
+        await settled();
+        assert.equal(reads, 1);
+        assert.equal(
+            fixture.loads(),
+            2,
+            'Retained Portal and Back actions must not revive the deleted context.'
+        );
+        assert.match(
+            document.getElementById('screen')!.textContent!,
+            /Choose Reload when ready/
+        );
+        const reload = document.getElementById('reload');
+        assert.ok(reload instanceof fixture.window.HTMLButtonElement);
+        reload.click();
+        await waitFor(() => fixture.loads() === 3 && idle());
+        fixture.button('Load records').click();
+        await waitFor(() => reads === 2 && idle());
+        assert.deepEqual(
+            Array.from(document.querySelectorAll('tbody tr'), (row) =>
+                row.getAttribute('data-record-id')
+            ),
+            ['record_remaining']
+        );
+        fixture.button('Open Form').click();
+        await waitFor(() => childLoads.length === 2 && idle());
+        const reopened = childLoads.at(-1);
+        assert.ok(reopened && 'childExtensionInfo' in reopened);
+        assert.deepEqual(reopened.childExtensionInfo.accessType, {
+            type: 'edit',
+            childExtensionRecordId: 'record_remaining',
+            childExtensionFieldId: null,
+        });
+        assert.equal(fixture.field('fld_title').isConnected, true);
+        const replacementBack = fixture.button('Back to Portal');
+        const replacementField = fixture.field('fld_title');
+        const replacementForm = replacementField.closest('form');
+        assert.ok(replacementForm);
+        fixture.edit('fld_title', 'Unsaved replacement child answer');
+        assert.equal(oldBack.isConnected, false);
+        assert.notEqual(replacementBack, oldBack);
+        oldBack.dispatchEvent(new fixture.window.Event('click'));
+        await settled();
+        assert.equal(
+            replacementForm.isConnected,
+            true,
+            'A detached Back callback must not navigate away from the replacement child.'
+        );
+        assert.equal(fixture.field('fld_title'), replacementField);
+        assert.equal(fixture.button('Back to Portal'), replacementBack);
+        assert.equal(replacementBack.isConnected, true);
+        assert.equal(
+            replacementField.value,
+            'Unsaved replacement child answer'
+        );
+        assert.equal(reads, 2);
+        assert.equal(fixture.loads(), 4);
+        assert.equal(childLoads.length, 2);
+        assert.equal(deletes, 1);
+        assert.equal(fixture.saves.length, 0);
+        replacementBack.click();
+        assert.equal(replacementForm.isConnected, false);
+        assert.deepEqual(
+            Array.from(document.querySelectorAll('tbody tr'), (row) =>
+                row.getAttribute('data-record-id')
+            ),
+            ['record_remaining'],
+            'The current Back control must still return to the refreshed Portal.'
+        );
+    });
+
+    it('keeps the child Form and cached Portal when Delete confirmation is cancelled', async (test) => {
+        const child = deletableChild();
+        let reads = 0;
+        let deletes = 0;
+        const childLoads: LoadExtensionInput[] = [];
+        const fixture = await mount(test, child, {
+            initialPortal: portalPage(),
+            childLoads,
+            read: async (url) => {
+                if (url.pathname === '/api/trpc/airtable.deleteRecord')
+                    deletes++;
+                assert.equal(
+                    url.searchParams.get('route'),
+                    'fetchRecordsForLinkedTableOnPortal',
+                    'A cancelled confirmation must not dispatch Delete.'
+                );
+                reads++;
+                return new Response(JSON.stringify(deletionRecords(child)));
+            },
+        });
+        const { document } = fixture.window;
+        const idle = () =>
+            document.getElementById('screen')?.getAttribute('aria-busy') ===
+            'false';
+        fixture.button('Load records').click();
+        await waitFor(() => reads === 1 && idle());
+        const portal = fixture.button('Load records').closest('section');
+        fixture.button('Open Form').click();
+        await waitFor(() => childLoads.length === 1 && idle());
+        fixture.edit('fld_title', 'Unsaved child answer');
+        fixture.button('Delete this record').click();
+        await waitFor(() => document.querySelector('dialog[open]') !== null);
+        fixture
+            .button('Cancel', document.querySelector('dialog[open]')!)
+            .click();
+        await settled();
+        assert.equal(fixture.field('fld_title').value, 'Unsaved child answer');
+        fixture.button('Back to Portal').click();
+        assert.equal(portal?.isConnected, true);
+        assert.deepEqual(
+            Array.from(document.querySelectorAll('tbody tr'), (row) =>
+                row.getAttribute('data-record-id')
+            ),
+            ['record_deleted', 'record_remaining']
+        );
+        assert.equal(reads, 1);
+        assert.equal(deletes, 0);
+        assert.equal(fixture.loads(), 2);
+        assert.equal(fixture.saves.length, 0);
+    });
+
+    for (const replacement of [
+        'visitor round trip',
+        'new connection',
+    ] as const) {
+        it(`ignores a late child Delete acknowledgment after ${replacement}`, async (test) => {
+            const child = deletableChild();
+            let deletes = 0;
+            let reads = 0;
+            let acknowledge: (() => void) | undefined;
+            const held = new Promise<void>((resolve) => {
+                acknowledge = resolve;
+            });
+            const childLoads: LoadExtensionInput[] = [];
+            const fixture = await mount(test, child, {
+                initialPortal: portalPage(),
+                childLoads,
+                read: async (url) => {
+                    if (url.pathname === '/api/trpc/airtable.deleteRecord') {
+                        deletes++;
+                        await held;
+                        return new Response(
+                            JSON.stringify({ result: { data: null } })
+                        );
+                    }
+                    assert.equal(
+                        url.searchParams.get('route'),
+                        'fetchRecordsForLinkedTableOnPortal'
+                    );
+                    reads++;
+                    return new Response(JSON.stringify(deletionRecords(child)));
+                },
+            });
+            const { document } = fixture.window;
+            const idle = () =>
+                document.getElementById('screen')?.getAttribute('aria-busy') ===
+                'false';
+            fixture.button('Load records').click();
+            await waitFor(() => reads === 1 && idle());
+            fixture.button('Open Form').click();
+            await waitFor(() => childLoads.length === 1 && idle());
+            fixture.button('Delete this record').click();
+            await waitFor(
+                () => document.querySelector('dialog[open]') !== null
+            );
+            fixture
+                .button(
+                    'Delete record',
+                    document.querySelector('dialog[open]')!
+                )
+                .click();
+            await waitFor(() => deletes === 1);
+            fixture.button('Cancel request').click();
+            await settled();
+            if (replacement === 'visitor round trip') {
+                const visitor = document.getElementById('visitor');
+                assert.ok(visitor instanceof fixture.window.HTMLSelectElement);
+                for (const identity of ['B', 'A']) {
+                    visitor.value = identity;
+                    visitor.dispatchEvent(new fixture.window.Event('change'));
+                }
+                assert.equal(fixture.button('Save').disabled, true);
+            } else {
+                fixture.button('Disconnect').click();
+                document.getElementById('connection-form')!.dispatchEvent(
+                    new fixture.window.Event('submit', {
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+                await waitFor(() => fixture.loads() === 3 && idle());
+                assert.ok(fixture.button('Load records').isConnected);
+            }
+            const successor =
+                document.getElementById('screen')!.firstElementChild;
+            const status = document.getElementById('status')!.textContent;
+            assert.ok(acknowledge);
+            acknowledge();
+            await settled();
+            assert.equal(
+                document.getElementById('screen')!.firstElementChild,
+                successor
+            );
+            assert.equal(
+                document.getElementById('status')!.textContent,
+                status
+            );
+            assert.equal(deletes, 1);
+            assert.equal(reads, 1);
+            assert.equal(fixture.saves.length, 0);
+            if (replacement === 'visitor round trip') {
+                const expiredForm = fixture.field('fld_title').closest('form');
+                assert.ok(expiredForm);
+                assert.equal(
+                    fixture.button('Delete this record').disabled,
+                    true
+                );
+                const loadsBeforeBack = fixture.loads();
+                fixture.button('Back to Portal').click();
+                assert.equal(
+                    expiredForm.isConnected,
+                    false,
+                    'The current Back control must allow navigation from an expired child.'
+                );
+                assert.equal(fixture.button('Load records').isConnected, true);
+                assert.equal(fixture.loads(), loadsBeforeBack);
+                assert.equal(reads, 1);
+                assert.equal(deletes, 1);
+                assert.equal(fixture.saves.length, 0);
+            }
+        });
+    }
+
     it('reviews ordered plain values and fixed password masks, then saves the complete native draft once', async (test) => {
         const form = reviewForm();
         const title = form.payload.fieldIdsToSchemas.fld_title;

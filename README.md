@@ -285,6 +285,14 @@ order, duplicates, blank names, whitespace and native arrays and objects. Maskin
 precedes value access; no identity lookup, email/ID fallback, avatar, picker or
 editing is added.
 
+[Rich Text presentation](docs/ui.md#react-rich-text-presentation) exports
+`RichTextField`, `RichTextFieldProps`, `RichTextFieldOptions` and
+`renderRichTextField` for the existing physical slot. It displays supplied Markdown
+literally as escaped text, preserving whitespace, line breaks and the native
+string. Masking precedes value access. This is a safe plain-text display stage;
+formatted Rich Text parity, parsing, links, resource loading and editing are not
+included.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,

@@ -814,8 +814,9 @@ Empty hiding precedes the preview condition bypass. A populated supported
 field still evaluates its condition in runtime mode. The ordinary flag is
 inactive in create mode and when absent or false. The bounded empty-hiding
 adapter does not cover sections, linked, lookup, computed or other richer
-targets; the frontend compositor blocks active edit empty hiding in any
-section context, including a retained nonblank disabled section title.
+targets. The frontend compositor supports direct scalar fields before the first
+raw nonblank section title. Active edit empty hiding at or after that boundary
+remains blocked, including when the section's display header is disabled.
 Lookup fields hide empty values by default in both modes and therefore block
 unless that flag is explicitly false. Conditional-only frontend sections
 retain the behavior described above. Multi-page layout remains application-owned;

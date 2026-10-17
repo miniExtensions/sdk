@@ -1382,7 +1382,7 @@ export function createEditHideEmptyFixture(scenario) {
                 ...(field.id === 'fld_empty_title' && !create && !unavailable
                     ? { required: true }
                     : {}),
-                ...(field.id === 'fld_empty_tail' && blocked
+                ...(field.id === 'fld_empty_title' && blocked
                     ? {
                           headerSectionTitle: 'Retained disabled section',
                           enableSectionHeader: false,

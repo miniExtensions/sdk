@@ -264,7 +264,14 @@ export async function checkRendererConsumer({
         )
     );
     const cjs = consumer('@miniextensions/sdk/ui');
-    let checks = await checkReadonlyAttachmentConsumer({ consumerDirectory });
+    assert.equal(
+        await checkReadonlyAttachmentConsumer({ consumerDirectory }),
+        10
+    );
+    console.log(
+        'Installed label-only attachment presentation: 10 ESM/CJS groups passed; synthetic owners, no I/O.'
+    );
+    let checks = 0;
     for (const api of [ui, cjs]) {
         assert.deepEqual(
             Object.keys(api.FIELD_RENDERER_SLOTS).sort(),

@@ -537,22 +537,33 @@ export function createFormFieldRendererHost(
                 (input) => ({
                     ...input,
                     ...(linked ? { linkedRecords: linked.getProps() } : {}),
-                    ...(input.physicalKind === 'multipleAttachments' &&
-                    input.capability.type === 'readonly'
+                    ...(input.physicalKind === 'multipleAttachments'
                         ? {
                               attachmentPresentation:
                                   projectAttachmentPresentation({
                                       visible: true,
-                                      current,
+                                      current: () => {
+                                          if (!current()) return false;
+                                          const now = binding.getSnapshot();
+                                          return (
+                                              !now.retired &&
+                                              now.visibility.type === 'visible'
+                                          );
+                                      },
                                       configs: [input.displayConfig],
                                       readRows: () => {
+                                          const now = binding.getSnapshot();
+                                          if (
+                                              now.retired ||
+                                              now.visibility.type !== 'visible'
+                                          )
+                                              return null;
                                           // Preserve original descriptor readOnly/add-only semantics.
                                           const policy =
                                               getFormAttachmentPolicy({
                                                   loaded: options.fields.getLoaded(),
                                                   fieldId: options.fieldId,
-                                                  value: binding.getSnapshot()
-                                                      .value,
+                                                  value: now.value,
                                               });
                                           return policy.status === 'ready'
                                               ? policy.rows

@@ -358,7 +358,7 @@ it('preserves native lookup errors when returned result metadata is invalid', ()
     );
 });
 
-it('attachment facet is additive, detached, label-only and restricted to read-only Form/Portal detail', () => {
+it('attachment facet is additive, detached, label-only and restricted to accepted Form/Portal detail', () => {
     const source: RendererPropsInput = {
         ...input(),
         physicalKind: 'multipleAttachments',
@@ -390,16 +390,16 @@ it('attachment facet is additive, detached, label-only and restricted to read-on
     }
     for (const context of ['linked-detail', 'portal-cell'] as const)
         assert.equal(createRendererProps({ ...source, context }), null);
-    assert.equal(
-        createRendererProps({
-            ...source,
-            capability: {
-                type: 'editable',
-                setValue: () => ({ accepted: true }),
-            },
-        }),
-        null
+    const editable = createRendererProps({
+        ...source,
+        capability: { type: 'editable', setValue: () => ({ accepted: true }) },
+    });
+    assert.ok(editable?.physicalKind === 'multipleAttachments');
+    assert.deepEqual(
+        editable.attachmentPresentation,
+        source.attachmentPresentation
     );
+    assert.equal(editable.capability.type, 'editable');
     assert.equal(
         createRendererProps({
             ...input(),

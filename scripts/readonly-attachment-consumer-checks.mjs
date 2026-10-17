@@ -28,6 +28,7 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
         );
         for (const config of [
             { readOnly: true, hideAttachmentName: false },
+            { readOnly: false, hideAttachmentName: false },
             { readOnly: true, hideAttachmentName: true },
             { readOnly: true, obscurePassword: true },
             { readOnly: true, maskPasswordOnLoginScreen: true },
@@ -91,6 +92,10 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
             const snapshot = host.getSnapshot();
             assert.equal(snapshot.status, 'ready');
             const props = snapshot.fields[0];
+            assert.equal(
+                props.capability.type,
+                config.readOnly ? 'readonly' : 'editable'
+            );
             const expected =
                 config.obscurePassword || config.maskPasswordOnLoginScreen
                     ? { status: 'masked' }

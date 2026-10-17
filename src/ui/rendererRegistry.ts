@@ -632,7 +632,6 @@ export function createRendererProps(
     if (input.attachmentPresentation !== undefined) {
         if (
             kind !== 'multipleAttachments' ||
-            input.capability.type !== 'readonly' ||
             !['form', 'portal-detail'].includes(input.context)
         )
             return null;

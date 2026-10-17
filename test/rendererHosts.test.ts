@@ -1084,7 +1084,9 @@ it('Form masks either flag and leaves editable attachment behavior unchanged', (
         isCurrent: () => true,
         configurationRevision: () => 0,
     });
-    assert.equal(attachmentFacet(host).attachmentPresentation, undefined);
+    assert.deepEqual(attachmentFacet(host).attachmentPresentation, {
+        status: 'unavailable',
+    });
     assert.equal(attachmentFacet(host).capability.type, 'editable');
     host.dispose();
     f.host.dispose();
@@ -1211,4 +1213,109 @@ it('Portal hidden detail produces no facet and configuration replacement permane
     host.dispose();
     p.cell.destroy();
     p.owner.destroy();
+});
+
+it('Form attachment projection rechecks visibility after reentrant ownership callbacks', () => {
+    const loaded = loadedForm();
+    const schema = loaded.payload.fieldIdsToSchemas.fld_files;
+    assert.ok(schema.fieldType === 'multipleAttachments');
+    schema.miniExtConfig = {
+        readOnly: true,
+        hideAttachmentName: false,
+        conditionalFields: {
+            logicalOperator: 'and',
+            conditions: [
+                {
+                    id: 'visible-title',
+                    type: 'singleCondition',
+                    setting: {
+                        type: 'is',
+                        fieldType: 'singleLineText',
+                        idOrName: { type: 'id', id: 'fld_title' },
+                        value: 'Initial title',
+                    },
+                },
+            ],
+        },
+    };
+    const client = createMiniExtensionsClient({
+        apiOrigin: 'https://sdk.example.test',
+        fetch: async () => {
+            throw new Error('No I/O');
+        },
+    });
+    const fields = createFormFieldBindings({
+        client,
+        loaded,
+        saveOptions: formSaveOptions(),
+        getScope: () => ({ ownerId: 'A', revision: 0 }),
+    });
+    let checks = 0;
+    const host = createFormFieldRendererHost({
+        fields,
+        fieldId: 'fld_files',
+        configurationRevision: () => 0,
+        isCurrent: () => {
+            if (++checks === 2) fields.field('fld_title').setValue('Hidden');
+            return true;
+        },
+    });
+    const snapshot = host.getSnapshot();
+    assert.equal(snapshot.status, 'ready');
+    if (snapshot.status === 'ready') {
+        assert.deepEqual(snapshot.fields[0].attachmentPresentation, {
+            status: 'unavailable',
+        });
+    }
+    assert.equal(host.getSnapshot().status, 'hidden');
+    host.dispose();
+    fields.destroy();
+});
+
+it('Form label facet coexists with editable capability and retains the original add-only baseline', () => {
+    const loaded = loadedForm();
+    const schema = loaded.payload.fieldIdsToSchemas.fld_files;
+    assert.ok(schema.fieldType === 'multipleAttachments');
+    schema.miniExtConfig = { addOnlyMode: true, hideAttachmentName: false };
+    const stored = {
+        url: 'https://files.example.test/stored',
+        filename: 'stored',
+    };
+    const added = { url: 'https://files.example.test/new', filename: 'new' };
+    loaded.payload.formRecord.data.fld_files = [stored, added, added];
+    loaded.payload.persistedAddOnlyAttachmentValuesByFieldId = {
+        fld_files: [stored],
+    };
+    const client = createMiniExtensionsClient({
+        apiOrigin: 'https://sdk.example.test',
+        fetch: async () => {
+            throw new Error('No I/O');
+        },
+    });
+    const fields = createFormFieldBindings({
+        client,
+        loaded,
+        saveOptions: formSaveOptions(),
+        getScope: () => ({ ownerId: 'A', revision: 0 }),
+    });
+    fields.attachment = () => {
+        throw new Error('No presentation controller');
+    };
+    const before = fields.controller.getState();
+    const host = createFormFieldRendererHost({
+        fields,
+        fieldId: 'fld_files',
+        configurationRevision: () => 0,
+        isCurrent: () => true,
+    });
+    const props = attachmentFacet(host);
+    assert.deepEqual(props.attachmentPresentation, {
+        status: 'ready',
+        rows: [{ label: 'new' }, { label: 'new' }],
+    });
+    assert.equal(props.capability.type, 'editable');
+    assert.deepEqual(props.value, [stored, added, added]);
+    assert.deepEqual(fields.controller.getState(), before);
+    host.dispose();
+    fields.destroy();
 });

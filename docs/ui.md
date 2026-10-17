@@ -3347,7 +3347,7 @@ clipboard behavior.
 
 ### Read-only attachment labels
 
-Accepted read-only Form fields and Portal detail fields can expose the optional
+Accepted Form fields and Portal detail fields can expose the optional
 `attachmentPresentation` on `FieldRendererProps<'multipleAttachments'>`:
 
 ```ts
@@ -3367,7 +3367,8 @@ rows fail closed. Either `obscurePassword` or `maskPasswordOnLoginScreen`
 conceals the whole facet before its new lazy policy read. Filenames require
 `hideAttachmentName === false`; otherwise visible rows use `Attachment`.
 
-Form uses the original loaded descriptor and existing persisted add-only
+The facet itself is read-only and can coexist with unchanged editable Form
+capabilities. Form uses the original loaded descriptor and existing persisted add-only
 baseline semantics. It does not manufacture a read-only descriptor for policy
 evaluation. Portal uses returned detail policy; an accepted child configuration
 can further restrict names or mask presentation, but cannot loosen returned

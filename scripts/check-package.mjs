@@ -3,6 +3,12 @@ import {
     barcodeReactTypedConsumer,
 } from './barcode-consumer-checks.mjs';
 import {
+    checkSingleCollaboratorConsumer,
+    singleCollaboratorReactTypedConsumer,
+    singleCollaboratorNodeTypedConsumer,
+    singleCollaboratorConsumerCheckCount,
+} from './single-collaborator-consumer-checks.mjs';
+import {
     checkLookupConsumer,
     lookupReactTypedConsumer,
 } from './lookup-consumer-checks.mjs';
@@ -1392,6 +1398,30 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('barcode-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'single-collaborator-react-consumer.tsx'),
+        singleCollaboratorReactTypedConsumer
+    );
+    reactSources.push('single-collaborator-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `single-collaborator-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            singleCollaboratorNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2265,6 +2295,17 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(barcodeProof.checks, 60);
     console.log(
         `Installed Barcode presentation: ${barcodeProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const singleCollaboratorProof = await checkSingleCollaboratorConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(
+        singleCollaboratorProof.checks,
+        singleCollaboratorConsumerCheckCount
+    );
+    console.log(
+        `Installed Single Collaborator presentation: ${singleCollaboratorProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,

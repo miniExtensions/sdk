@@ -270,6 +270,13 @@ physical slot. It displays supplied text while preserving the native object and
 type, with masking applied before reading the value. This is read-only display
 coverage; scanning, generated images, links and editing are not included.
 
+[Single Collaborator presentation](docs/ui.md#react-single-collaborator-presentation)
+exports `SingleCollaboratorField`, `SingleCollaboratorFieldProps`,
+`SingleCollaboratorFieldOptions` and `renderSingleCollaboratorField` for the
+existing physical slot. It displays only the supplied name as inert text while
+preserving the native object, with masking before value access. No identity lookup,
+email/ID fallback, avatar request or editing is added.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,

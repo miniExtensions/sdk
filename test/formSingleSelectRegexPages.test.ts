@@ -129,3 +129,25 @@ describe('single-select regex conditional pages', () => {
         assert.equal(f.calls.length, 0);
     });
 });
+
+
+it('treats null and empty native select answers as empty text for regex visibility', (t) => {
+    for (const value of [null, '']) {
+        const hidden = fixture((loaded) => { loaded.payload.formRecord.data.a = value; });
+        t.after(hidden.dispose);
+        assert.equal(hidden.fields.field('b').getSnapshot().visibility.type, 'hidden');
+        assert(hidden.pages.next(hidden.pages.getSnapshot().revision).accepted);
+        assert.equal(hidden.pages.getSnapshot().activePageIndex, 2);
+        const visible = fixture((loaded) => {
+            loaded.payload.formRecord.data.a = value;
+            loaded.payload.fieldIdsToSchemas.b!.miniExtConfig = {
+                headerSectionTitle: 'Second', conditionalFields: condition('a', '^$'),
+            } as never;
+        });
+        t.after(visible.dispose);
+        assert.equal(visible.fields.field('b').getSnapshot().visibility.type, 'visible');
+        assert(visible.pages.next(visible.pages.getSnapshot().revision).accepted);
+        assert.equal(visible.pages.getSnapshot().activePageIndex, 1);
+        assert.equal(visible.fields.controller.getState().draft!.data.a, value);
+    }
+});

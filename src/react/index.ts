@@ -37,6 +37,12 @@ export {
     type RichTextFieldProps,
     type RichTextFieldOptions,
 } from './RichTextField.js';
+export {
+    MultipleAttachmentsField,
+    renderMultipleAttachmentsField,
+    type MultipleAttachmentsFieldProps,
+    type MultipleAttachmentsFieldOptions,
+} from './MultipleAttachmentsField.js';
 import {
     SingleSelectControl,
     singleSelectConfiguration,

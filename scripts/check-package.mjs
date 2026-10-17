@@ -21,6 +21,12 @@ import {
     richTextConsumerCheckCount,
 } from './rich-text-consumer-checks.mjs';
 import {
+    checkMultipleAttachmentsConsumer,
+    multipleAttachmentsReactTypedConsumer,
+    multipleAttachmentsNodeTypedConsumer,
+    multipleAttachmentsConsumerCheckCount,
+} from './multiple-attachments-consumer-checks.mjs';
+import {
     checkLookupConsumer,
     lookupReactTypedConsumer,
 } from './lookup-consumer-checks.mjs';
@@ -1485,6 +1491,30 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         ]);
     }
     writeFileSync(
+        join(temporaryDirectory, 'multiple-attachments-react-consumer.tsx'),
+        multipleAttachmentsReactTypedConsumer
+    );
+    reactSources.push('multiple-attachments-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `multiple-attachments-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            multipleAttachmentsNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2392,6 +2422,19 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(richTextProof.publicExportVerified, true);
     console.log(
         `Installed Rich Text literal presentation: ${richTextProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const multipleAttachmentsProof = await checkMultipleAttachmentsConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+        mode: 'public-export',
+    });
+    assert.equal(
+        multipleAttachmentsProof.checks,
+        multipleAttachmentsConsumerCheckCount
+    );
+    assert.equal(multipleAttachmentsProof.publicExportVerified, true);
+    console.log(
+        `Installed Multiple Attachments adapter: ${multipleAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
     );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,

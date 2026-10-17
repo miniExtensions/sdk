@@ -3263,3 +3263,84 @@ remount and retirement checks. Fixture generation leaves browser verification
 pending; native browser interaction and layout inspection are separate from its
 injected DOM checks. This synthetic fixture does not establish live-backend,
 screen-reader or clipboard behavior.
+
+## React Rich Text presentation
+
+The optional `/react` entry exports `RichTextField`, `RichTextFieldProps`,
+`RichTextFieldOptions` and `renderRichTextField`. Install the renderer in the
+existing physical `renderRichTextField` slot for `AirtableForm`, `AirtableGrid` or
+`AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { RichTextField, renderRichTextField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+
+export const richTextRenderers: FieldRendererSlots<ReactNode> = {
+    renderRichTextField: (props) =>
+        renderRichTextField(props, { className: 'rich-text-answer' }),
+};
+// With an accepted Rich Text Form binding:
+// <RichTextField binding={richTextBinding} className="rich-text-answer" />
+```
+
+The owner retains the native `string | null | undefined` value. Supplied Markdown,
+HTML and URLs appear literally as escaped text: `**Hello**` displays `**Hello**`,
+and `[label](https://example.invalid)` remains that string. Whitespace, Unicode,
+line breaks and original line endings, including CRLF, remain unchanged. The
+output wraps long lines without rewriting the value. Visible null, missing and
+empty strings display blank; whitespace-only strings retain their whitespace.
+Malformed direct values display `Unavailable` with invalid status, without
+coercion. Existing owner validation remains in place before dispatch.
+
+Default bound output follows hidden, blocked and retired owner state before
+reading schema or answer. Rich Text retains the existing ordinary-scalar
+edit-Form `hideFieldIfEmpty` policy: null, missing, empty and whitespace-only
+strings are hidden when the owner applies that policy. Nonblank Markdown such as
+`** **` remains populated; the renderer does not strip formatting to redefine
+emptiness. Create Forms remain visible under that policy. Section and conditional
+visibility remain owned by the existing Form implementation. The application-owned
+`render` override keeps existing custom-render precedence and is responsible for
+its own presentation policy.
+
+Either `obscurePassword` or `maskPasswordOnLoginScreen` in display or write
+configuration replaces the answer with a fixed mask before the renderer reads the
+native value reference, including malformed values. This guarantee starts at the
+renderer or bound snapshot boundary; existing owners still validate accepted
+native values. Error and validation feedback remains separate escaped text, with
+error taking precedence, including an empty error. Each output has a unique
+associated label or hidden-title accessible name, pending/invalid state and a
+feedback association when feedback is present. Feedback uses a polite status
+region. Click, auxiliary click, double click, pointer-down, key-down and key-up
+events are contained without cancelling native defaults for text selection or
+copy.
+
+This is a safe plain-text display stage, not completed formatted Rich Text parity.
+There is no Markdown parser, formatting removal, HTML interpretation, resource
+loading, link creation, navigation, normalization or editing. The renderer does not
+use write or save actions even when the existing headless slot supplies an
+editable capability. Plain Multiline Text retains its separate slot and editor.
+`RichTextFieldOptions` contains only optional `className`, which decorates
+`mx-sdk-rich-text-field`; no CSS import or package subpath is added. Core and `/ui`
+remain React-free.
+
+`test/reactRichText.test.ts` covers the source component, and `check:package` runs
+the installed ESM/CommonJS public-export runtime and declaration checks, including
+JSX. Build a synthetic browser fixture from the tested archive with:
+
+```sh
+node scripts/build-rich-text-browser-proof.mjs /path/to/tested.tgz /path/to/output --public-export
+```
+
+The explicit `--public-export` mode consumes the renderer through
+`@miniextensions/sdk/react`. The alternative
+`--direct-module=/absolute/path/to/dist/esm/react/RichTextField.js` mode verifies
+the matching installed archive module directly and does not qualify the public
+export. Both modes install offline using an already seeded npm cache
+(`SDK_RICH_TEXT_NPM_CACHE` can select that cache), record archive and source hashes,
+and verify installed bundle inputs. Serve the output on loopback to inspect the
+Form/Grid/List displays and run its interaction, owner replacement, remount and
+retirement checks. Fixture generation leaves browser verification pending; native
+browser interaction and layout inspection are separate from its injected DOM
+checks. This synthetic fixture does not establish live-backend, screen-reader or
+clipboard behavior.

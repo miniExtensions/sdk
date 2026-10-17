@@ -31,6 +31,12 @@ export {
     type MultipleCollaboratorsFieldProps,
     type MultipleCollaboratorsFieldOptions,
 } from './MultipleCollaboratorsField.js';
+export {
+    RichTextField,
+    renderRichTextField,
+    type RichTextFieldProps,
+    type RichTextFieldOptions,
+} from './RichTextField.js';
 import {
     SingleSelectControl,
     singleSelectConfiguration,

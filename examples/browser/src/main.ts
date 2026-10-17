@@ -893,9 +893,11 @@ const renderForm = (page: FormLoadedResult): void => {
         );
     let updateComments = (): void => {};
     let reviewPending = false;
+    let reviewIntentRevision = 0;
     let formRetired = false;
     let formProgress: BrowserCreateProgress | null = null;
     let progressInputRevision = 0;
+    let progressSaveCleanups = 0;
     let activeUpload: RecoveryAttempt | null = null;
     const controls = new Map<string, FieldControl>();
     let updateSelectAvailability = (): void => {};
@@ -1984,8 +1986,35 @@ const renderForm = (page: FormLoadedResult): void => {
             status(uncertainSaveMessage, true);
             return;
         }
+        const discardRequest = request;
+        const discardReviewRevision = reviewIntentRevision;
+        const discardDraftRevision = visitor.drafts.revision(draft);
+        const discardInputRevision =
+            progressInputRevision + pendingFiles.revision();
+        const discardConfiguration = observeReviewConfiguration();
         if (formProgress && !(await formProgress.discard())) return;
-        if (!ownsForm()) return;
+        if (!ownsLinkedRender() || formRetired || !mayUseForm()) return;
+        if (
+            (request != null && request !== discardRequest) ||
+            reviewIntentRevision !== discardReviewRevision ||
+            progressSaveCleanups > 0
+        ) {
+            if (progressSaveCleanups === 0) formProgress?.resume();
+            return;
+        }
+        if (
+            visitor.drafts.revision(draft) !== discardDraftRevision ||
+            progressInputRevision + pendingFiles.revision() !==
+                discardInputRevision ||
+            observeReviewConfiguration() !== discardConfiguration
+        ) {
+            formProgress?.resume();
+            status(
+                'The Form changed while remembered answers were cleared. Review it before discarding the current draft.',
+                true
+            );
+            return;
+        }
         visitor.drafts.discard(draft);
         render();
         status('This Form draft was discarded. No record was saved.');
@@ -2270,7 +2299,24 @@ const renderForm = (page: FormLoadedResult): void => {
             const progressInputEpoch =
                 progressInputRevision + pendingFiles.revision();
             const progressConfiguration = observeReviewConfiguration();
-            if (formProgress && !(await formProgress.beforeSave())) return;
+            if (formProgress) {
+                progressSaveCleanups++;
+                let cleared = false;
+                try {
+                    cleared = await formProgress.beforeSave();
+                } finally {
+                    progressSaveCleanups--;
+                    if (
+                        progressSaveCleanups === 0 &&
+                        !current() &&
+                        ownsLinkedRender() &&
+                        !formRetired &&
+                        mayUseForm()
+                    )
+                        formProgress?.resume();
+                }
+                if (!cleared) return;
+            }
             if (!current() || !ownsForm()) return;
             if (
                 visitor.drafts.revision(draft) !== progressDraftRevision ||
@@ -2450,6 +2496,7 @@ const renderForm = (page: FormLoadedResult): void => {
         // Native modal focus prevents ordinary edits. The inert field owner
         // also retires prediction/detail intents before the accepted capture.
         reviewPending = true;
+        reviewIntentRevision++;
         fields.inert = true;
         updateFormActivity();
         try {
@@ -2528,6 +2575,7 @@ const renderForm = (page: FormLoadedResult): void => {
             // Restore only this card. A superseded review cannot reactivate a
             // newer visitor's controls or repeat an old address query.
             reviewPending = false;
+            reviewIntentRevision++;
             if (ownsForm()) updateRecovery();
         }
     });

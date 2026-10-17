@@ -1138,6 +1138,483 @@ describe(
             assert.equal(h.saves.length, 0);
         });
 
+        it('pending Discard cleanup retains a newer edit and resumes the same live progress owner', async (test) => {
+            const h = await fixture(test);
+            const prior = seedPriorDocumentProgress(h.window);
+            assert.equal(
+                checkbox(h.window, 'Remember selected answers in this tab')
+                    .checked,
+                false
+            );
+            edit(
+                h.window,
+                'fld_title',
+                'Synthetic current draft before pending Discard'
+            );
+            const input = fieldInput(h.window);
+            const reads = h.reads.length;
+            const release = h.locks.hold();
+            test.after(release);
+            button(h.window, 'Discard draft').click();
+            await waitFor(() => h.locks.waiting > 0);
+
+            // The cleanup has captured the earlier remembered token, but this
+            // same Form and its native draft are still accepting actual input.
+            assert.equal(input.isConnected, true);
+            assert.equal(input.disabled, false);
+            const newer = 'Synthetic newer answer while Discard cleanup waits';
+            edit(h.window, 'fld_title', newer);
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Expected the surviving input for pending Discard.'
+            );
+            assert.equal(input.value, newer);
+            assert.equal(h.saves.length, 0);
+            release();
+            await h.locks.settle();
+
+            // Removing remembered bytes is permitted. It is not permission to
+            // discard the newer in-memory draft or publish the old success.
+            assert.equal(h.window.sessionStorage.getItem(prior.key), null);
+            assert.deepEqual(progressEntries(h.window), []);
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Expected the surviving input for pending Discard.'
+            );
+            assert.equal(input.isConnected, true);
+            assert.equal(input.value, newer);
+            assert.doesNotMatch(
+                h.window.document.getElementById('status')!.textContent!,
+                /This Form draft was discarded/
+            );
+            assert.equal(h.reads.length, reads);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+            assert.equal(h.notDispatched.length, 0);
+
+            // DOM text alone could hide an expired draft handle. Exercise the
+            // public remembering flow again to prove the current native owner
+            // survived and its cleanup suspension was released explicitly.
+            await h.chooseTitle();
+            const afterCleanup =
+                'Synthetic answer explicitly remembered after stale Discard';
+            edit(h.window, 'fld_title', afterCleanup);
+            await h.locks.settle();
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Expected the surviving input for pending Discard.'
+            );
+            assert.equal(input.value, afterCleanup);
+            assert.deepEqual(storedValues(h.window), [
+                { fld_title: afterCleanup },
+            ]);
+            assert.doesNotMatch(
+                h.window.document.getElementById('status')!.textContent!,
+                /This Form draft was discarded/
+            );
+            assert.equal(h.reads.length, reads);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+            assert.equal(h.notDispatched.length, 0);
+        });
+
+        it('Discard cleanup handed to an active Review resumes remembering after Edit without discarding newer answers', async (test) => {
+            const form = progressForm();
+            form.payload.fieldIdsInForm = ['fld_title', 'fld_readonly'];
+            form.payload.publicFields.state.promptUserBeforeSubmission = true;
+            const h = await fixture(test, form);
+            const prior = seedPriorDocumentProgress(h.window);
+            h.window.sessionStorage.setItem(
+                'synthetic-pending-review-discard-unrelated',
+                'Synthetic retained unrelated bytes'
+            );
+            const reads = h.reads.length;
+            edit(
+                h.window,
+                'fld_title',
+                'Synthetic original answer before Review handoff'
+            );
+            const input = fieldInput(h.window);
+            const release = h.locks.hold();
+            test.after(release);
+            button(h.window, 'Discard draft').click();
+            await waitFor(() => h.locks.waiting > 0);
+
+            // The ordinary input is still editable before opening the modal.
+            // Do not manufacture input events through Review's inert field owner.
+            const newer = 'Synthetic newer answer captured by active Review';
+            edit(h.window, 'fld_title', newer);
+            submitForm(h.window);
+            await waitFor(
+                () =>
+                    h.window.document.querySelector(
+                        'dialog[data-form-review][open]'
+                    ) !== null
+            );
+            const dialog = h.window.document.querySelector(
+                'dialog[data-form-review][open]'
+            );
+            assert.ok(dialog instanceof h.window.HTMLDialogElement);
+            assert.ok(dialog.textContent!.includes(newer));
+            const fields = input.closest('.fields');
+            assert.ok(fields instanceof h.window.HTMLElement);
+            assert.equal(fields.inert, true);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+
+            release();
+            await h.locks.settle();
+            assert.equal(h.window.sessionStorage.getItem(prior.key), null);
+            assert.deepEqual(progressEntries(h.window), []);
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Pending cleanup must retain the original live input during Review.'
+            );
+            assert.equal(input.value, newer);
+            assert.equal(dialog.isConnected && dialog.open, true);
+            assert.equal(fields.inert, true);
+            assert.doesNotMatch(
+                h.window.document.getElementById('status')!.textContent!,
+                /This Form draft was discarded/
+            );
+            assert.equal(h.reads.length, reads);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+
+            button(h.window, 'Edit').click();
+            await waitFor(
+                () =>
+                    h.window.document.querySelector(
+                        'dialog[data-form-review][open]'
+                    ) === null
+            );
+            await h.locks.settle();
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Review Edit must retain the same newer native input.'
+            );
+            assert.equal(input.value, newer);
+            assert.equal(fields.inert, false);
+
+            // Successful remembered-byte cleanup suspended the old operation.
+            // Edit returning ownership must now release that suspension without
+            // confirming Review, replaying Save or replacing the native handle.
+            await h.chooseTitle();
+            const afterEdit =
+                'Synthetic answer remembered after Review cancelled pending Discard';
+            edit(h.window, 'fld_title', afterEdit);
+            await h.locks.settle();
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Remembering after Review Edit must use the surviving input.'
+            );
+            assert.equal(input.value, afterEdit);
+            assert.deepEqual(storedValues(h.window), [
+                { fld_title: afterEdit },
+            ]);
+            assert.equal(
+                h.window.sessionStorage.getItem(
+                    'synthetic-pending-review-discard-unrelated'
+                ),
+                'Synthetic retained unrelated bytes'
+            );
+            assert.doesNotMatch(
+                h.window.document.getElementById('status')!.textContent!,
+                /This Form draft was discarded/
+            );
+            assert.equal(h.reads.length, reads);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+            assert.equal(h.notDispatched.length, 0);
+        });
+
+        it('Discard cleanup handed to a concurrent unknown Save cannot resume progress or replay the mutation', async (test) => {
+            const h = await fixture(test, progressForm(), {
+                saveOutcome: 'unknown',
+            });
+            await h.rememberTitle();
+            const input = fieldInput(h.window);
+            const reads = h.reads.length;
+            const writesAfterRemember: string[] = [];
+            const setItem = h.window.sessionStorage.setItem.bind(
+                h.window.sessionStorage
+            );
+            Object.defineProperty(h.window.sessionStorage, 'setItem', {
+                configurable: true,
+                value: (key: string, bytes: string) => {
+                    if (key.startsWith(progressPrefix))
+                        writesAfterRemember.push(bytes);
+                    setItem(key, bytes);
+                },
+            });
+            const release = h.locks.hold();
+            test.after(release);
+            button(h.window, 'Discard draft').click();
+            await waitFor(() => h.locks.waiting > 0);
+
+            // The pending Discard and the newer explicit Save both clear the
+            // captured remembered token through real queued Web Locks. The
+            // Save owns the request before either cleanup can finish.
+            submitForm(h.window);
+            await waitFor(() => !idle(h.window) && h.locks.waiting >= 2);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+            release();
+            await waitFor(
+                () => h.saveOutcomeReached.unknown === 1 && idle(h.window)
+            );
+            await h.locks.settle();
+
+            assert.deepEqual(h.saveOutcomeReached, {
+                saved: 0,
+                validation: 0,
+                unknown: 1,
+            });
+            assert.equal(h.saves.length, 1);
+            assert.deepEqual(h.progressAtSave, [[]]);
+            assert.equal(
+                h.saves[0]!.formRecord.data.fld_title,
+                rememberedTitle
+            );
+            assert.equal(h.journalBegins.length, 1);
+            const attempt = h.journalBegins[0]!;
+            assert.equal(attempt.operation, 'save');
+            assert.equal(attempt.outcome, 'unknown');
+            assert.equal(attempt.flight, false);
+            assert.equal(attempt.acknowledgment, 'none');
+            assert.deepEqual(h.notDispatched, []);
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Unknown Save must retain the current input instead of applying stale Discard.'
+            );
+            assert.equal(input.value, rememberedTitle);
+            const fields = input.closest('.fields');
+            assert.ok(fields instanceof h.window.HTMLElement);
+            assert.equal(fields.inert, true);
+            assert.equal(button(h.window, 'Save').disabled, true);
+            assert.equal(button(h.window, 'Discard draft').disabled, true);
+            assert.equal(
+                button(h.window, 'Restore remembered answers').disabled,
+                true
+            );
+            assert.equal(
+                button(h.window, 'Discard remembered answers').disabled,
+                true
+            );
+            assert.deepEqual(writesAfterRemember, []);
+            assert.deepEqual(progressEntries(h.window), []);
+            assert.match(
+                h.window.document.body.textContent!,
+                /could not confirm the earlier attempt.*may have completed/i
+            );
+            assert.doesNotMatch(
+                h.window.document.getElementById('status')!.textContent!,
+                /This Form draft was discarded/
+            );
+
+            // A retained submit handler must still obey the actual unknown
+            // journal blocker. Clearing the pending-resume handoff is not an
+            // acknowledgment, a new intent, or permission for another Save.
+            submitForm(h.window);
+            await nextTurn();
+            await h.locks.settle();
+            assert.equal(h.saves.length, 1);
+            assert.equal(h.saveOutcomeReached.unknown, 1);
+            assert.equal(h.journalBegins.length, 1);
+            assert.equal(attempt.outcome, 'unknown');
+            assert.equal(attempt.acknowledgment, 'none');
+            assert.deepEqual(writesAfterRemember, []);
+            assert.deepEqual(progressEntries(h.window), []);
+            assert.equal(h.reads.length, reads);
+            assert.equal(input.value, rememberedTitle);
+        });
+
+        it('Cancel during concurrent Discard and Save cleanup resumes only the surviving newer draft after cleanup settles', async (test) => {
+            const h = await fixture(test);
+            await h.rememberTitle();
+            const previous = storedToken(h.window);
+            const input = fieldInput(h.window);
+            const reads = h.reads.length;
+            const writesAfterRemember: string[] = [];
+            const setItem = h.window.sessionStorage.setItem.bind(
+                h.window.sessionStorage
+            );
+            Object.defineProperty(h.window.sessionStorage, 'setItem', {
+                configurable: true,
+                value: (key: string, bytes: string) => {
+                    if (key.startsWith(progressPrefix))
+                        writesAfterRemember.push(bytes);
+                    setItem(key, bytes);
+                },
+            });
+            const release = h.locks.hold();
+            test.after(release);
+            button(h.window, 'Discard draft').click();
+            await waitFor(() => h.locks.waiting > 0);
+            submitForm(h.window);
+            await waitFor(() => !idle(h.window) && h.locks.waiting >= 2);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+
+            // Cancel releases the UI request lease, but the actual beforeSave
+            // cleanup promise and both Web Lock operations are still pending.
+            button(h.window, 'Cancel request').click();
+            await waitFor(() => idle(h.window));
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Pre-transport Cancel must retain the live input.'
+            );
+            assert.equal(input.disabled, false);
+            const fields = input.closest('.fields');
+            assert.ok(fields instanceof h.window.HTMLElement);
+            assert.equal(fields.inert, false);
+            assert.equal(
+                checkbox(h.window, 'Remember selected answers in this tab')
+                    .checked,
+                true
+            );
+            assert.equal(checkbox(h.window, 'Remember Title').checked, true);
+            assert.equal(checkbox(h.window, 'Remember Title').disabled, true);
+            const newer =
+                'Synthetic newer answer after Cancel while cleanup is held';
+            edit(h.window, 'fld_title', newer);
+            await nextTurn();
+            assert.equal(input.value, newer);
+            assert.ok(h.locks.waiting >= 2);
+            assert.deepEqual(writesAfterRemember, []);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+
+            release();
+            await h.locks.settle();
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Settled cleanup must preserve the newer same-owner input.'
+            );
+            assert.equal(input.value, newer);
+            assert.equal(fields.inert, false);
+            assert.doesNotMatch(
+                h.window.document.getElementById('status')!.textContent!,
+                /This Form draft was discarded/
+            );
+            assert.equal(h.saves.length, 0);
+            assert.deepEqual(h.saveOutcomeReached, {
+                saved: 0,
+                validation: 0,
+                unknown: 0,
+            });
+            assert.equal(h.journalBegins.length, 0);
+            assert.deepEqual(h.notDispatched, []);
+
+            // Consent and field selection were already explicit. The cancelled
+            // request must resume that surviving progress bridge only after the
+            // actual cleanup has settled; no new opt-in or Form remount masks it.
+            assert.equal(checkbox(h.window, 'Remember Title').disabled, false);
+            assert.deepEqual(storedValues(h.window), [{ fld_title: newer }]);
+            assert.ok(writesAfterRemember.length > 0);
+            assert.ok(
+                writesAfterRemember.every(
+                    (bytes) => JSON.parse(bytes).values.fld_title === newer
+                ),
+                'Only the newer answer may be written after cleanup.'
+            );
+            const resumed = storedToken(h.window);
+            assert.notEqual(resumed.draftId, previous.draftId);
+            assert.notEqual(resumed.writeId, previous.writeId);
+            assert.equal(h.reads.length, reads);
+        });
+
+        it('a newer Review open and Edit-close obsoletes pending Discard even when the native answer never changes', async (test) => {
+            const form = progressForm();
+            form.payload.fieldIdsInForm = ['fld_title', 'fld_readonly'];
+            form.payload.publicFields.state.promptUserBeforeSubmission = true;
+            const h = await fixture(test, form);
+            const prior = seedPriorDocumentProgress(h.window);
+            const unsaved =
+                'Synthetic unsaved answer established before Discard';
+            edit(h.window, 'fld_title', unsaved);
+            const input = fieldInput(h.window);
+            let inputChangesDuringCleanup = 0;
+            input.addEventListener('input', () => {
+                inputChangesDuringCleanup++;
+            });
+            input.addEventListener('change', () => {
+                inputChangesDuringCleanup++;
+            });
+            const reads = h.reads.length;
+            const release = h.locks.hold();
+            test.after(release);
+            button(h.window, 'Discard draft').click();
+            await waitFor(() => h.locks.waiting > 0);
+
+            // This bound scalar's Review read only reads its native snapshot.
+            // No input/change event or native-value edit occurs during cleanup;
+            // only the newer Review intent goes false -> true -> false.
+            submitForm(h.window);
+            await waitFor(
+                () =>
+                    h.window.document.querySelector(
+                        'dialog[data-form-review][open]'
+                    ) !== null
+            );
+            const dialog = h.window.document.querySelector(
+                'dialog[data-form-review][open]'
+            );
+            assert.ok(dialog instanceof h.window.HTMLDialogElement);
+            assert.ok(dialog.textContent!.includes(unsaved));
+            const fields = input.closest('.fields');
+            assert.ok(fields instanceof h.window.HTMLElement);
+            assert.equal(fields.inert, true);
+            button(h.window, 'Edit').click();
+            await waitFor(
+                () =>
+                    h.window.document.querySelector(
+                        'dialog[data-form-review][open]'
+                    ) === null && fields.inert === false
+            );
+            await nextTurn();
+            assert.equal(idle(h.window), true);
+            assert.ok(h.locks.waiting > 0);
+            assert.equal(inputChangesDuringCleanup, 0);
+            assert.equal(input.value, unsaved);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+
+            release();
+            await h.locks.settle();
+            assert.equal(h.window.sessionStorage.getItem(prior.key), null);
+            assert.deepEqual(progressEntries(h.window), []);
+            assert.ok(
+                fieldInput(h.window) === input,
+                'A completed newer Review intent must preserve the same unsaved input.'
+            );
+            assert.equal(input.value, unsaved);
+            assert.equal(inputChangesDuringCleanup, 0);
+            assert.equal(fields.inert, false);
+            assert.doesNotMatch(
+                h.window.document.getElementById('status')!.textContent!,
+                /This Form draft was discarded/
+            );
+            assert.equal(h.reads.length, reads);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+            assert.deepEqual(h.notDispatched, []);
+
+            // Prove both the native handle and remembering are live without
+            // another native-value edit that could conceal the ABA failure.
+            await h.chooseTitle();
+            assert.deepEqual(storedValues(h.window), [{ fld_title: unsaved }]);
+            assert.ok(
+                fieldInput(h.window) === input,
+                'Remembering after Review ABA must retain the original native owner.'
+            );
+            assert.equal(input.value, unsaved);
+            assert.equal(inputChangesDuringCleanup, 0);
+            assert.equal(h.reads.length, reads);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.journalBegins.length, 0);
+        });
+
         for (const action of ['logout', 'disconnect'] as const)
             it(`${action} discovers prior-document owned slots across namespaces and preserves unrelated storage`, async (test) => {
                 const h = await fixture(test);

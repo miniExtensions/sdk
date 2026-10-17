@@ -39,7 +39,10 @@ const editChild = (recordId = existingId) => {
     };
     return loaded;
 };
-const editSaved = (recordId = existingId, inverse = ['rec_parent']) => {
+const editSaved = (
+    recordId = existingId,
+    inverse: string[] | null = ['rec_parent']
+) => {
     const result = childSaved('edit');
     result.record.id = recordId;
     result.record.fields.fld_parent_a = inverse;
@@ -71,6 +74,7 @@ const fixture = (
     const saves: SaveFormInput[] = [];
     const reads: LoadSelectedRecordsInput[] = [];
     const journal = new ObservedJournal();
+    let scope = { ownerId: 'synthetic-parent', revision: 0 };
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
         session: { visitor: 'synthetic-A' },
@@ -113,7 +117,7 @@ const fixture = (
         loaded,
         client,
         saveOptions: formSaveOptions(),
-        getScope: () => ({ ownerId: 'synthetic-parent', revision: 0 }),
+        getScope: () => scope,
         canWriteField: options.canWriteField,
     });
     const owner = fields.linkedChild(fieldId, { journal, loadVersion: 1 });
@@ -126,6 +130,9 @@ const fixture = (
         loads,
         saves,
         reads,
+        replaceOwner: () => {
+            scope = { ownerId: 'synthetic-successor', revision: 1 };
+        },
         hydrate: () => fields.linkedRecords(fieldId).readSelected(),
         open: (id = existingId) =>
             owner.openEdit(id, owner.getSnapshot().revision),
@@ -353,7 +360,32 @@ describe('owner-held selected linked child EDIT', () => {
         }
     });
 
-    for (const inverse of [['rec_parent'], []]) {
+    it('own-null unlink touches only the current linked parent field and cannot replay a known Save', async () => {
+        const f = fixture({ save: async () => editSaved(existingId, null) });
+        try {
+            await f.hydrate();
+            assert.equal(await f.open(), true);
+            const before = structuredClone(
+                f.fields.controller.getState().draft!
+            );
+            assert.equal(before.dirtyFieldIds.includes(fieldId), false);
+            assert.equal((await f.save()).type, 'saved');
+            assert.deepEqual(f.fields.controller.getState().draft, {
+                data: { ...before.data, [fieldId]: ['rec_sibling'] },
+                dirtyFieldIds: [...before.dirtyFieldIds, fieldId],
+            });
+            assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+            assert.equal(f.journal.observed[0].outcome, 'saved');
+            assert.equal(f.journal.observed[0].flight, false);
+            assert.equal(f.journal.observed[0].acknowledgment, 'none');
+            await assert.rejects(f.save());
+            assert.equal(f.saves.length, 1);
+        } finally {
+            f.close();
+        }
+    });
+
+    for (const inverse of [['rec_parent'], [], null]) {
         it(`reconciles current native order and every duplicate with inverse=${JSON.stringify(inverse)}`, async () => {
             const pending = deferred<SaveFormResult>();
             const f = fixture({ save: () => pending.promise });
@@ -380,7 +412,7 @@ describe('owner-held selected linked child EDIT', () => {
                 assert.equal((await flight).type, 'saved');
                 assert.deepEqual(f.fields.controller.getState().draft!.data, {
                     ...before,
-                    [fieldId]: inverse.length
+                    [fieldId]: inverse?.length
                         ? latest
                         : ['rec_new_sibling', 'rec_middle'],
                 });
@@ -391,6 +423,44 @@ describe('owner-held selected linked child EDIT', () => {
             }
         });
     }
+
+    it('closed parent field lease preserves the known null receipt without reconciling a no-op', async () => {
+        const pending = deferred<SaveFormResult>();
+        let writable = true;
+        const f = fixture({
+            save: () => pending.promise,
+            canWriteField: (id) => id !== fieldId || writable,
+        });
+        try {
+            await f.hydrate();
+            assert.equal(await f.open(), true);
+            const flight = f.save();
+            await Promise.resolve();
+            assert.equal(f.saves.length, 1);
+            assert.equal(
+                f.fields.controller.write(fieldId, ['rec_sibling']),
+                true
+            );
+            const before = structuredClone(
+                f.fields.controller.getState().draft
+            );
+            writable = false;
+            pending.resolve(editSaved(existingId, null));
+            assert.equal((await flight).type, 'saved');
+            assert.deepEqual(f.fields.controller.getState().draft, before);
+            // The app write lease also closes the field visibility/observation lease.
+            assert.equal(
+                f.owner.getSnapshot().completion,
+                'saved-not-reconciled'
+            );
+            assert.equal(f.journal.observed[0].outcome, 'saved');
+            await assert.rejects(f.save());
+            assert.equal(f.saves.length, 1);
+        } finally {
+            pending.resolve(editSaved(existingId, null));
+            f.close();
+        }
+    });
 
     for (const capacityFull of [false, true]) {
         it(`readds a locally removed edited record only when spare capacity remains (${capacityFull})`, async () => {
@@ -451,6 +521,31 @@ describe('owner-held selected linked child EDIT', () => {
             }
         });
     }
+
+    it('configured parent read-only refuses a changed own-null reconciliation without losing the known receipt', async () => {
+        const f = fixture({
+            parent: configured({ readOnly: true }),
+            save: async () => editSaved(existingId, null),
+        });
+        try {
+            await f.hydrate();
+            assert.equal(await f.open(), true);
+            const before = structuredClone(
+                f.fields.controller.getState().draft
+            );
+            assert.equal((await f.save()).type, 'saved');
+            assert.deepEqual(f.fields.controller.getState().draft, before);
+            assert.equal(
+                f.owner.getSnapshot().completion,
+                'saved-not-reconciled'
+            );
+            assert.equal(f.journal.observed[0].outcome, 'saved');
+            await assert.rejects(f.save());
+            assert.equal(f.saves.length, 1);
+        } finally {
+            f.close();
+        }
+    });
 
     for (const mismatch of [
         'id',
@@ -544,6 +639,57 @@ describe('owner-held selected linked child EDIT', () => {
             f.close();
         }
     });
+
+    for (const loss of ['owner', 'session', 'cancel'] as const) {
+        it(`late own-null receipt after ${loss} loss cannot unlink or replay`, async () => {
+            const pending = deferred<SaveFormResult>();
+            const f = fixture({ save: () => pending.promise });
+            const abort = new AbortController();
+            try {
+                await f.hydrate();
+                assert.equal(await f.open(), true);
+                const before = structuredClone(
+                    f.fields.controller.getState().draft
+                );
+                const flight = f.owner.save(f.owner.getSnapshot().revision, {
+                    signal: abort.signal,
+                });
+                const rejection = assert.rejects(flight);
+                await Promise.resolve();
+                assert.equal(f.saves.length, 1);
+                let lateWrites = 0;
+                const originalWrite = f.fields.controller.write;
+                f.fields.controller.write = (...args) => {
+                    lateWrites++;
+                    return originalWrite(...args);
+                };
+                if (loss === 'owner') f.replaceOwner();
+                else if (loss === 'session')
+                    f.client.setSession({ visitor: 'synthetic-B' });
+                else abort.abort();
+                f.owner.getSnapshot();
+                pending.resolve(editSaved(existingId, null));
+                await rejection;
+                assert.equal(lateWrites, 0);
+                if (loss === 'cancel')
+                    assert.deepEqual(
+                        f.fields.controller.getState().draft,
+                        before
+                    );
+                else assert.equal(f.fields.controller.getState().draft, null);
+                assert.equal(f.journal.observed.length, 1);
+                assert.equal(f.journal.observed[0].outcome, 'unknown');
+                assert.equal(f.journal.observed[0].flight, false);
+                assert.equal(f.journal.observed[0].acknowledgment, 'none');
+                await assert.rejects(f.save());
+                assert.equal(f.loads.length, 1);
+                assert.equal(f.saves.length, 1);
+            } finally {
+                pending.resolve(editSaved(existingId, null));
+                f.close();
+            }
+        });
+    }
 
     it('cancels a pending edit load and refuses its late draft without saving', async () => {
         const pending = deferred<FormLoadedResult>();

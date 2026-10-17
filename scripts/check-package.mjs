@@ -2432,7 +2432,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     const linkedChildEditProof = await checkLinkedChildEditConsumer({
         consumerDirectory: temporaryDirectory,
     });
-    assert.equal(linkedChildEditProof, 34);
+    assert.equal(linkedChildEditProof, 38);
     console.log(
         `Installed configured linked-child edit: ${linkedChildEditProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
     );

@@ -24,7 +24,7 @@ owner.complete({ recordId: 'arbitrary' });
 void editableIds;
 `;
 
-export const linkedChildEditConsumerCheckCount = 34;
+export const linkedChildEditConsumerCheckCount = 38;
 
 const editChild = (fixtures, recordId) => {
     const child = fixtures.childForm('edit');
@@ -266,6 +266,158 @@ async function checkBoundedEditCases(forms, fixtures, ui) {
         );
     };
     const submit = (f) => f.owner.save(f.owner.getSnapshot().revision);
+
+    {
+        const pending = deferred();
+        const parent = fixtures.parentForm('edit');
+        parent.payload.linkedRecordFieldIdToDetailFields.fld_children_a = [
+            {
+                fieldId: 'fld_title',
+                fieldName: 'Title',
+                titleOverride: null,
+                miniExtConfig: {},
+                isHidden: false,
+                fieldIsInEditingChildForm: false,
+                childFormField: null,
+            },
+        ];
+        const f = setup(forms, fixtures, false, {
+            parent,
+            config: {
+                customMaxRecordsToSelect: 4,
+                filterLinkedRecordsConditionFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'exclude-edited-title',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'isNot',
+                                fieldType: 'singleLineText',
+                                value: 'Edited existing',
+                                idOrName: { type: 'id', id: 'fld_title' },
+                            },
+                        },
+                    ],
+                },
+            },
+            save: () => pending.promise,
+        });
+        try {
+            await open(f);
+            const flight = submit(f);
+            await Promise.resolve();
+            assert.equal(f.calls.saves.length, 1);
+            assert.equal(
+                f.fields.controller.write('fld_children_a', [
+                    'rec_sibling',
+                    'rec_existing',
+                    'rec_sibling',
+                    'rec_existing',
+                ]),
+                true
+            );
+            assert.equal(
+                f.fields.controller.write('fld_title', 'Latest parent title'),
+                true
+            );
+            const latest = structuredClone(
+                f.fields.controller.getState().draft.data
+            );
+            const response = saved('rec_existing', null);
+            assert(Object.hasOwn(response.record.fields, 'fld_parent_a'));
+            assert.equal(response.record.fields.fld_parent_a, null);
+            pending.resolve(response);
+            const receipt = await flight;
+            assert.equal(receipt.type, 'saved');
+            assert.equal(receipt.raw.record.id, 'rec_existing');
+            assert.deepEqual(f.fields.controller.getState().draft.data, {
+                ...latest,
+                fld_children_a: ['rec_sibling', 'rec_sibling'],
+            });
+            assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+            assert.equal(f.journal.observed[0].outcome, 'saved');
+            assert.equal(f.calls.saves[0].formRecord.type, 'edit');
+            assert.equal(f.calls.saves[0].formRecord.recordId, 'rec_existing');
+
+            // An edited receipt must not gain the selected-condition exemption
+            // reserved for proven Create receipts, even after explicit reselect.
+            assert.equal(
+                f.fields.controller.write('fld_children_a', [
+                    'rec_sibling',
+                    'rec_existing',
+                ]),
+                true
+            );
+            const linked = f.fields
+                .linkedRecords('fld_children_a')
+                .getSnapshot();
+            assert.equal(linked.selectedPolicy.state, 'applied');
+            assert.deepEqual(linked.unresolvedSelectedIds, []);
+            assert.deepEqual(
+                linked.selectedRecords.map((record) => record.id),
+                ['rec_sibling']
+            );
+            await assert.rejects(submit(f));
+            assert.equal(f.calls.reads.length, 1);
+            assert.equal(f.calls.loads.length, 1);
+            assert.equal(f.calls.saves.length, 1);
+            checks++;
+        } finally {
+            f.fields.destroy();
+        }
+    }
+
+    {
+        const response = saved();
+        delete response.record.fields.fld_parent_a;
+        const f = setup(forms, fixtures, false, {
+            save: async () => response,
+        });
+        try {
+            await open(f);
+            const before = structuredClone(
+                f.fields.controller.getState().draft
+            );
+            const revision = f.fields.controller.getState().draftRevision;
+            let parentWrites = 0;
+            const write = f.fields.controller.write;
+            f.fields.controller.write = (...args) => {
+                parentWrites++;
+                return write(...args);
+            };
+            const receipt = await submit(f);
+            assert.equal(receipt.type, 'saved');
+            assert.equal(receipt.raw.record.id, 'rec_existing');
+            assert.equal(
+                Object.hasOwn(receipt.raw.record.fields, 'fld_parent_a'),
+                false
+            );
+            assert.equal(
+                f.owner.getSnapshot().completion,
+                'saved-not-reconciled'
+            );
+            assert.deepEqual(f.fields.controller.getState().draft, before);
+            assert.equal(
+                f.fields.controller.getState().draftRevision,
+                revision
+            );
+            assert.equal(parentWrites, 0);
+            assert.equal(f.journal.observed.length, 1);
+            assert.equal(f.journal.observed[0].outcome, 'saved');
+            assert.equal(f.journal.observed[0].flight, false);
+            await assert.rejects(submit(f));
+            f.owner.close();
+            await assert.rejects(submit(f));
+            assert.equal(parentWrites, 0);
+            assert.equal(f.calls.reads.length, 1);
+            assert.equal(f.calls.loads.length, 1);
+            assert.equal(f.calls.saves.length, 1);
+            checks++;
+        } finally {
+            f.fields.destroy();
+        }
+    }
 
     {
         const f = setup(forms, fixtures, false, {

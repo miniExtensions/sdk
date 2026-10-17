@@ -77,6 +77,39 @@ async function proofInventoryFixture(t) {
     return { root, menu, readme };
 }
 
+test('onboarding documents stored Share ID discovery without invented setup UI', async () => {
+    const root = new URL('../', import.meta.url);
+    const manifest = JSON.parse(
+        await readFile(new URL('package.json', root), 'utf8')
+    );
+    for (const path of manifest.files.filter((path) => path.endsWith('.md'))) {
+        const doc = await readFile(new URL(path, root), 'utf8');
+        assert.doesNotMatch(
+            doc,
+            /SDK[\s*-]+setup[\s*]+card|getSdkSetup|workspace[\s*]+SDK[\s*]+setup/i,
+            `${path} must not direct customers to nonexistent setup UI or endpoints`
+        );
+    }
+    const readme = await readFile(new URL('README.md', root), 'utf8');
+    const configuration = readme
+        .split('## Obtain the actual runtime configuration\n')[1]
+        ?.split('\n## ')[0];
+    assert.ok(
+        configuration,
+        'Runtime configuration prerequisites must be present'
+    );
+    assert.match(configuration, /extension\.shareId/);
+    assert.match(configuration, /default-domain/);
+    assert.match(configuration, /custom-domain slug is not the Share ID/);
+    assert.match(configuration, /no public SDK discovery endpoint/);
+    assert.match(configuration, /workspace administrator or deployment owner/);
+    const starter = await readFile(
+        new URL('examples/browser/README.md', root),
+        'utf8'
+    );
+    assert.match(starter, /README\.md#obtain-the-actual-runtime-configuration/);
+});
+
 test('privacy proof inventory accepts complete declarations without dispatching fixture transport', async (t) => {
     const fixture = await proofInventoryFixture(t);
     assert.deepEqual(await assertPrivacyProofInventory(fixture.root), {

@@ -32,6 +32,7 @@ const starterFiles = [
     'index.html',
     'styles.css',
     'src/main.ts',
+    'src/progress.ts',
     'src/fields.ts',
     'src/portal.ts',
     'src/dom.ts',
@@ -1381,7 +1382,7 @@ export function createEditHideEmptyFixture(scenario) {
                 ...(field.id === 'fld_empty_title' && !create && !unavailable
                     ? { required: true }
                     : {}),
-                ...(field.id === 'fld_empty_tail' && blocked
+                ...(field.id === 'fld_empty_title' && blocked
                     ? {
                           headerSectionTitle: 'Retained disabled section',
                           enableSectionHeader: false,

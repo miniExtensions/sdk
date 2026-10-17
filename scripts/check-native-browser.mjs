@@ -2092,6 +2092,22 @@ try {
             assert.equal(state.calls.length, 2);
             assert.equal(state.state.phase, 'retired');
         });
+        // Preserve checkpoints across reloads; each document's diagnostic ring resets.
+        const sessionCheckpoint = async (page, label) => {
+            const state = await page.evaluate(() =>
+                window.__nativeProbe.snapshot()
+            );
+            report.sessionCheckpoints ??= [];
+            report.sessionCheckpoints.push({
+                label,
+                phase: state.phase,
+                sessionEntries: state.sessionEntries,
+                storageEntries: state.storageEntries,
+                calls: state.calls.length,
+                events: state.events,
+            });
+            return state;
+        };
         for (const mode of ['session-off', 'session-on'])
             await run(mode, async (page, origin) => {
                 await nativeSetup(page, origin, mode);
@@ -2102,8 +2118,9 @@ try {
                     .getByRole('status')
                     .getByText('Fake session applied', { exact: true })
                     .waitFor();
-                let state = await page.evaluate(() =>
-                    window.__nativeProbe.snapshot()
+                let state = await sessionCheckpoint(
+                    page,
+                    mode + ':after-login'
                 );
                 assert.equal(state.sessionEntries, 1);
                 assert.equal(state.calls.length, 0);
@@ -2120,11 +2137,14 @@ try {
                 await page
                     .getByRole('button', { name: 'Restore fake visitor' })
                     .waitFor();
-                state = await page.evaluate(() =>
-                    window.__nativeProbe.snapshot()
-                );
+                state = await sessionCheckpoint(page, mode + ':after-reload');
                 assert.equal(state.sessionEntries, 0);
                 assert.equal(state.calls.length, 0);
+                assert.equal(
+                    state.phase,
+                    mode === 'session-on' ? 'idle' : 'memory-only',
+                    'A fresh document must own an idle restoration adapter.'
+                );
                 await page
                     .getByRole('button', { name: 'Restore fake visitor' })
                     .click();
@@ -2137,9 +2157,7 @@ try {
                         { exact: true }
                     )
                     .waitFor();
-                state = await page.evaluate(() =>
-                    window.__nativeProbe.snapshot()
-                );
+                state = await sessionCheckpoint(page, mode + ':after-restore');
                 assert.equal(state.calls.length, mode === 'session-on' ? 1 : 0);
                 if (mode === 'session-on') {
                     assert.equal(state.calls[0].credentialMatched, true);
@@ -2171,7 +2189,102 @@ try {
                     0
                 );
             });
-        assert.equal(results.length, 7);
+        // Deliberately untrusted notifications test adapter routing, not native
+        // cross-document event delivery or the unexplained original CI failure.
+        const storageEventCases = [
+            {
+                name: 'session-event-session-clear',
+                area: 'session',
+                clear: true,
+            },
+            {
+                name: 'session-event-session-key',
+                area: 'session',
+                clear: false,
+            },
+            { name: 'session-event-local-clear', area: 'local', clear: true },
+            { name: 'session-event-local-key', area: 'local', clear: false },
+        ];
+        for (const testCase of storageEventCases)
+            await run(testCase.name, async (page, origin) => {
+                await nativeSetup(page, origin, 'session-on');
+                await page
+                    .getByRole('button', { name: 'Login fake visitor' })
+                    .click();
+                await page
+                    .getByRole('status')
+                    .getByText('Fake session applied', { exact: true })
+                    .waitFor();
+                await page.reload();
+                await page
+                    .getByRole('button', { name: 'Restore fake visitor' })
+                    .waitFor();
+                let state = await sessionCheckpoint(
+                    page,
+                    testCase.name + ':before-event'
+                );
+                assert.equal(state.phase, 'idle');
+                assert.equal(state.sessionEntries, 0);
+                assert.equal(state.storageEntries, 1);
+                assert.equal(state.calls.length, 0);
+                await page.evaluate(({ area, clear }) => {
+                    const key = localStorage.key(0);
+                    if (key === null)
+                        throw Error('Missing synthetic remembered entry');
+                    window.dispatchEvent(
+                        new StorageEvent('storage', {
+                            key: clear ? null : key,
+                            storageArea:
+                                area === 'local'
+                                    ? localStorage
+                                    : sessionStorage,
+                        })
+                    );
+                }, testCase);
+                const retires = testCase.area === 'local';
+                state = await sessionCheckpoint(
+                    page,
+                    testCase.name + ':after-event'
+                );
+                assert.equal(state.phase, retires ? 'retired' : 'idle');
+                assert.equal(state.sessionEntries, 0);
+                assert.equal(state.storageEntries, 1);
+                assert.equal(state.calls.length, 0);
+                const notifications = state.events.filter(
+                    (event) => event.type === 'storage-event'
+                );
+                assert.equal(notifications.length, 1);
+                assert.equal(notifications[0].area, testCase.area);
+                assert.equal(notifications[0].clear, testCase.clear);
+                assert.equal(
+                    notifications[0].matchesStoredKey,
+                    !testCase.clear
+                );
+                assert.equal(notifications[0].trusted, false);
+                await page
+                    .getByRole('button', { name: 'Restore fake visitor' })
+                    .click();
+                await page
+                    .getByRole('status')
+                    .getByText(
+                        retires
+                            ? 'No remembered session'
+                            : 'Fresh fake load accepted',
+                        { exact: true }
+                    )
+                    .waitFor();
+                state = await sessionCheckpoint(
+                    page,
+                    testCase.name + ':after-restore'
+                );
+                assert.equal(state.calls.length, retires ? 0 : 1);
+                assert.equal(state.sessionEntries, retires ? 0 : 1);
+                assert.equal(state.storageEntries, 1);
+                assert.equal(state.phase, retires ? 'retired' : 'restored');
+                if (!retires)
+                    assert.equal(state.calls[0].credentialMatched, true);
+            });
+        assert.equal(results.length, 7 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

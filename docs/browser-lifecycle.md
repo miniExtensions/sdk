@@ -63,7 +63,9 @@ another visitor's session do not authenticate
 this client. Sessions are memory-only by default. The starter’s optional
 **Remember each visitor’s login in this tab** control wires the existing
 restoration adapter; see [refresh, retry and logout](../examples/browser/README.md#authentication-and-visitor-isolation).
-Connection settings, drafts, files and uncertain operations are not restored.
+Connection settings, files and uncertain operations are not restored. Ordinary
+drafts remain memory-only; the separate explicit create-progress option below
+can retain selected nonsensitive scalar answers.
 
 Starter request failures use fixed recovery text and optionally an integer HTTP
 status from 100 through 599. Server messages, error codes and exception messages
@@ -83,6 +85,50 @@ visitor, table, view or search criteria retires the old collection and its
 child plans. Draft/session teardown and the unknown-operation journal have
 different lifetimes: clearing a draft or logging out cannot establish that an
 unknown create did not commit.
+
+## Optional create progress
+
+The starter offers **Remember selected answers in this tab** only for an
+anonymous root direct-URL create Form whose published `saveFormProgress` flag
+is true. It requires a concrete table and published version, no parent/edit
+record, an empty visitor session and no prepared or uncertain recovery context.
+The option and every field selection start unchecked. Current visible,
+unmasked, noncomputed, writable supported text/numeric/checkbox answers can be
+selected individually; files and other native objects cannot. Select only
+nonsensitive answers. Storage is per-tab `sessionStorage`, readable by
+same-origin scripts and potentially copied by tab duplication.
+
+After refreshing, reconnect to the same context and opt in again. Choose the
+fields to restore, then **Restore remembered answers** explicitly, or choose
+**Discard remembered answers**. Restore uses the existing direct-URL
+load only while the accepted in-memory draft is pristine. Current edits are
+retained by a refusal; an explicit Reload replaces them before a later Restore.
+The restore path uses
+`context.localStorageRecord` load input and accepts only a fresh current server
+response with matching extension/table/version/schema/configuration. It never
+overlays stored answers on the returned native draft. A stored value is not a
+permission or a Save receipt.
+
+**Discard draft** checks the matching current-Form slot left by a previous
+page even while remembering is unchecked. **Clear this visitor's session**
+captures matching SDK-owned progress slot identities on the current application
+origin for that visitor; **Disconnect** captures them for both visitors, before
+namespace rotation or asynchronous cleanup. Removal requires the captured draft and
+write IDs, so late cleanup preserves a successor and unrelated visitor/storage
+entries. Failed reads, malformed matching owned slots or removal failures show
+fixed incomplete-cleanup feedback; logout does not imply that every stored
+answer was removed.
+
+The storage owner requires working Web Locks for writes/removal and compares
+both `draftId` and `writeId`; conflicts do not delete newer progress. The
+starter suspends and drains progress before create Save, then clears the exact
+stored token. It checks an existing slot even when remembering is unchecked;
+unreadable storage or failed clearing can therefore block an admitted Save.
+Only confirmed validation or a known pre-dispatch refusal may resume progress.
+Unknown dispatched creates stay nonrestorable and require inspection; the
+document-local recovery journal is never persisted or resolved by this option.
+See the [storage contract](forms.md#optional-create-form-progress) for ownership
+and failure statuses. This adds no backend API or automatic Save.
 
 ## Native values and deliberate saves
 

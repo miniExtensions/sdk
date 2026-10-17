@@ -3,6 +3,18 @@ import {
     barcodeReactTypedConsumer,
 } from './barcode-consumer-checks.mjs';
 import {
+    checkSingleCollaboratorConsumer,
+    singleCollaboratorReactTypedConsumer,
+    singleCollaboratorNodeTypedConsumer,
+    singleCollaboratorConsumerCheckCount,
+} from './single-collaborator-consumer-checks.mjs';
+import {
+    checkMultipleCollaboratorsConsumer,
+    multipleCollaboratorsReactTypedConsumer,
+    multipleCollaboratorsNodeTypedConsumer,
+    multipleCollaboratorsConsumerCheckCount,
+} from './multiple-collaborators-consumer-checks.mjs';
+import {
     checkLookupConsumer,
     lookupReactTypedConsumer,
 } from './lookup-consumer-checks.mjs';
@@ -123,6 +135,7 @@ import {
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
+import { checkLeadingPageVisibilityConsumer } from './leading-page-visibility-consumer-checks.mjs';
 import {
     checkCrossPageChoiceConsumer,
     crossPageChoiceTypedConsumer,
@@ -291,6 +304,7 @@ const browserStarterFiles = [
     'build.mjs',
     'dev.mjs',
     'src/main.ts',
+    'src/progress.ts',
     'src/fields.ts',
     'src/customFieldRenderer.ts',
     'src/portal.ts',
@@ -1392,6 +1406,54 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('barcode-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'single-collaborator-react-consumer.tsx'),
+        singleCollaboratorReactTypedConsumer
+    );
+    reactSources.push('single-collaborator-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `single-collaborator-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            singleCollaboratorNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
+        join(temporaryDirectory, 'multiple-collaborators-react-consumer.tsx'),
+        multipleCollaboratorsReactTypedConsumer
+    );
+    reactSources.push('multiple-collaborators-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `multiple-collaborators-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            multipleCollaboratorsNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2266,6 +2328,30 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     console.log(
         `Installed Barcode presentation: ${barcodeProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
     );
+    const singleCollaboratorProof = await checkSingleCollaboratorConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(
+        singleCollaboratorProof.checks,
+        singleCollaboratorConsumerCheckCount
+    );
+    console.log(
+        `Installed Single Collaborator presentation: ${singleCollaboratorProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const multipleCollaboratorsProof = await checkMultipleCollaboratorsConsumer(
+        {
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }
+    );
+    assert.equal(
+        multipleCollaboratorsProof.checks,
+        multipleCollaboratorsConsumerCheckCount
+    );
+    console.log(
+        `Installed Multiple Collaborators presentation: ${multipleCollaboratorsProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
@@ -2347,7 +2433,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     const linkedChildEditProof = await checkLinkedChildEditConsumer({
         consumerDirectory: temporaryDirectory,
     });
-    assert.equal(linkedChildEditProof, 34);
+    assert.equal(linkedChildEditProof, 38);
     console.log(
         `Installed configured linked-child edit: ${linkedChildEditProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
     );
@@ -2410,6 +2496,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(conditionalValidationChecks, 126);
     console.log(
         `Installed configured conditional validation: ${conditionalValidationChecks} ESM/CJS, canonical and shipped React recipe checkpoints passed; synthetic dispatch only.`
+    );
+    const leadingPageVisibilityChecks =
+        await checkLeadingPageVisibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(leadingPageVisibilityChecks, 12);
+    console.log(
+        `Installed leading-page visibility: ${leadingPageVisibilityChecks} ESM/CJS checkpoints passed; synthetic Save dispatch only.`
     );
     const crossPageChoiceChecks = await checkCrossPageChoiceConsumer({
         consumerDirectory: temporaryDirectory,
@@ -2616,7 +2710,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 await checkFormPageConsumer({
                     consumerDirectory: temporaryDirectory,
                 }),
-                1092
+                1118
             );
             assert.equal(
                 await checkFormDispositionConsumer({

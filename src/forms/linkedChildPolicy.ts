@@ -517,8 +517,8 @@ export function resolveLinkedChildEditPolicy(input: {
     }
 }
 
-/** Exact EDIT receipt only. Explicit inverse arrays are a conservative SDK subset;
- * canonical reconciliation also accepts missing inverse metadata. */
+/** Exact EDIT receipt only. Explicit inverse arrays or own null are a conservative
+ * SDK subset; canonical reconciliation also accepts missing inverse metadata. */
 export function reconcileLinkedChildEdit(input: {
     parent: FormLoadedResult;
     fieldId: string;
@@ -585,9 +585,13 @@ export function reconcileLinkedChildEdit(input: {
                 !Object.hasOwn(input.savedRecord.fields, inverseId)
             )
                 return unavailable('unavailable-inverse');
-            const linked = recordIds(input.savedRecord.fields[inverseId]);
-            // A returned explicit array is required; null/missing is not unlink evidence.
-            if (!Array.isArray(input.savedRecord.fields[inverseId]) || !linked)
+            const inverseValue = input.savedRecord.fields[inverseId];
+            const linked = recordIds(inverseValue);
+            // A present null is a native clear. Missing inverse evidence was refused above.
+            if (
+                (inverseValue !== null && !Array.isArray(inverseValue)) ||
+                !linked
+            )
                 return unavailable('unavailable-inverse');
             add = linked.includes(parent.recordId);
         }

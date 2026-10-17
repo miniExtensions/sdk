@@ -83,6 +83,12 @@ import {
 } from './confirmation.js';
 
 import { createRememberedSession } from './rememberedSession.js';
+import {
+    createBrowserCreateProgress,
+    forgetBrowserCreateProgress,
+    retireBrowserCreateProgress,
+    type BrowserCreateProgress,
+} from './progress.js';
 
 type Visitor = {
     client: MiniExtensionsClient | null;
@@ -323,6 +329,8 @@ const confirmCurrent = async (
     );
 };
 const invalidate = (visitor: Visitor): void => {
+    for (const [identity, owned] of Object.entries(visitors))
+        if (owned === visitor) retireBrowserCreateProgress(identity);
     cancelConfirmation();
     visitor.portal?.destroy();
     visitor.remembered?.destroy();
@@ -346,6 +354,22 @@ const invalidate = (visitor: Visitor): void => {
     setBusy(false);
 };
 const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
+    const replacementRevision = visitor.revision + 1;
+    const replacementClient = visitor.client;
+    for (const [identity, owned] of Object.entries(visitors))
+        if (owned === visitor)
+            void forgetBrowserCreateProgress(identity).then((complete) => {
+                if (
+                    !complete &&
+                    visitors[activeVisitor] === visitor &&
+                    visitor.revision === replacementRevision &&
+                    visitor.client === replacementClient
+                )
+                    status(
+                        'Remembered answers could not be fully cleared. Clear this tab’s session storage before sharing it.',
+                        true
+                    );
+            });
     cancelConfirmation();
     visitor.portal?.destroy();
     visitor.client?.setSession(next);
@@ -363,6 +387,36 @@ const replaceSession = (visitor: Visitor, next: RuntimeSession): void => {
     visitor.uncertainFormDraftScopes.clear();
 };
 
+const acceptRootLoad = (
+    visitor: Visitor,
+    result: LoadExtensionResult,
+    query: RuntimeQuery
+): void => {
+    // A fresh accepted read replaces this visitor's memory draft, never an old response.
+    visitor.drafts.clear();
+    visitor.uncertainFormDraftScopes.clear();
+    visitor.portal?.destroy();
+    visitor.screen = result;
+    visitor.formLoadVersion = ++formLoadSequence;
+    visitor.recoveryCandidate = null;
+    visitor.preparedAttempt = null;
+    visitor.formAuthority = null;
+    visitor.root = result.extensionScreen === 'portal_loaded' ? result : null;
+    visitor.portal = null;
+    visitor.formContext = { type: 'direct-url' };
+    visitor.formParentScope = null;
+    visitor.formQueries = null;
+    visitor.verification = null;
+    if (result.extensionScreen === 'form_loaded') {
+        visitor.formQueries = {
+            page: result,
+            loadVersion: visitor.formLoadVersion,
+            cascade: query,
+            save: structuredClone(query),
+            diagnostic: null,
+        };
+    }
+};
 const load = (sessionNotice?: string): void => {
     cancelConfirmation();
     void run(
@@ -423,31 +477,7 @@ const load = (sessionNotice?: string): void => {
             visitor.remembered?.accept(result, current);
             if (!current()) return;
             visitor.restorationError = null;
-            // Reload replaces this visitor's drafts only after a fresh read.
-            visitor.drafts.clear();
-            visitor.uncertainFormDraftScopes.clear();
-            visitor.portal?.destroy();
-            visitor.screen = result;
-            visitor.formLoadVersion = ++formLoadSequence;
-            visitor.recoveryCandidate = null;
-            visitor.preparedAttempt = null;
-            visitor.formAuthority = null;
-            visitor.root =
-                result.extensionScreen === 'portal_loaded' ? result : null;
-            visitor.portal = null;
-            visitor.formContext = { type: 'direct-url' };
-            visitor.formParentScope = null;
-            visitor.formQueries = null;
-            visitor.verification = null;
-            if (result.extensionScreen === 'form_loaded') {
-                visitor.formQueries = {
-                    page: result,
-                    loadVersion: visitor.formLoadVersion,
-                    cascade: query,
-                    save: structuredClone(query),
-                    diagnostic: null,
-                };
-            }
+            acceptRootLoad(visitor, result, query);
             render();
             const loadedMessage =
                 result.extensionScreen == null
@@ -863,7 +893,11 @@ const renderForm = (page: FormLoadedResult): void => {
         );
     let updateComments = (): void => {};
     let reviewPending = false;
+    let reviewIntentRevision = 0;
     let formRetired = false;
+    let formProgress: BrowserCreateProgress | null = null;
+    let progressInputRevision = 0;
+    let progressSaveCleanups = 0;
     let activeUpload: RecoveryAttempt | null = null;
     const controls = new Map<string, FieldControl>();
     let updateSelectAvailability = (): void => {};
@@ -1066,6 +1100,7 @@ const renderForm = (page: FormLoadedResult): void => {
     const formControlDisposers: Array<() => void> = [];
     disposeFormControls = () => {
         formRetired = true;
+        formProgress?.retire();
         for (const stop of formControlDisposers) stop();
         bindingOwner?.destroy();
         linkedPresentation.retire();
@@ -1080,6 +1115,12 @@ const renderForm = (page: FormLoadedResult): void => {
         controls.clear();
     };
     const fields = element('div', undefined, 'fields');
+    const observeProgressInput = () => {
+        progressInputRevision++;
+        formProgress?.changed();
+    };
+    fields.addEventListener('input', observeProgressInput, true);
+    fields.addEventListener('change', observeProgressInput, true);
     const visibilityMessage = element(
         'p',
         'Some fields cannot be displayed with this published configuration. Review the Form configuration before saving.',
@@ -1783,6 +1824,146 @@ const renderForm = (page: FormLoadedResult): void => {
     };
     updateFieldVisibility();
     card.append(visibilityMessage, fields);
+    const progressConnection = connection;
+    if (
+        bindingOwner != null &&
+        progressConnection != null &&
+        progressConnection.input.recordId === null &&
+        visitor.root === null &&
+        visitor.formParentScope === null &&
+        context.type === 'direct-url' &&
+        page.payload.hasParentExtension === false &&
+        Object.keys(formClient?.getSession() ?? {}).length === 0 &&
+        candidate == null &&
+        visitor.preparedAttempt == null &&
+        mayUseForm()
+    ) {
+        formProgress = createBrowserCreateProgress({
+            page,
+            visitor: activeVisitor,
+            apiOrigin: progressConnection.apiOrigin,
+            shareId: progressConnection.input.shareId,
+            report: status,
+            isCurrent: () =>
+                ownsLinkedRender() &&
+                !formRetired &&
+                connection === progressConnection &&
+                visitor.root === null &&
+                visitor.formParentScope === null &&
+                visitor.formContext === context &&
+                formClient != null &&
+                Object.keys(formClient.getSession()).length === 0 &&
+                mayUseForm(),
+            getDraft: () => bindingOwner.controller.getState().draft,
+            getRevision: () => visitor.drafts.revision(draft),
+            getInputRevision: () =>
+                progressInputRevision + pendingFiles.revision(),
+            restore: async (values, accepts, consume) => {
+                if (request != null || !ownsLinkedFilters()) return;
+                const restoreRevision = visitor.drafts.revision(draft);
+                const restoreInputRevision =
+                    progressInputRevision + pendingFiles.revision();
+                if (
+                    restoreRevision !== 0 ||
+                    restoreInputRevision !== 0 ||
+                    pendingFiles.pending()
+                )
+                    return;
+                await run(
+                    'Checking remembered answers against the current Form…',
+                    async ({ client, signal, current }) => {
+                        const query = structuredClone(
+                            progressConnection.input.query ?? {}
+                        );
+                        const result = await client.loadExtension(
+                            {
+                                ...progressConnection.input,
+                                query,
+                                context: {
+                                    type: 'direct-url',
+                                    localStorageRecord: values,
+                                },
+                            },
+                            { signal, session: {} }
+                        );
+                        if (!current() || !ownsLinkedFilters()) return;
+                        if (
+                            visitor.drafts.revision(draft) !==
+                                restoreRevision ||
+                            progressInputRevision + pendingFiles.revision() !==
+                                restoreInputRevision ||
+                            pendingFiles.pending()
+                        ) {
+                            status(
+                                'Current answers were retained. Reload replaces current inputs before Restore can be used.',
+                                true
+                            );
+                            return;
+                        }
+                        if (
+                            result.extensionScreen !== 'form_loaded' ||
+                            !accepts(result)
+                        ) {
+                            status(
+                                'Remembered answers were not restored because the Form or its access configuration changed.',
+                                true
+                            );
+                            return;
+                        }
+                        if (
+                            !(await consume(
+                                () =>
+                                    current() &&
+                                    ownsLinkedFilters() &&
+                                    visitor.drafts.revision(draft) ===
+                                        restoreRevision &&
+                                    progressInputRevision +
+                                        pendingFiles.revision() ===
+                                        restoreInputRevision &&
+                                    !pendingFiles.pending()
+                            )) ||
+                            !current() ||
+                            !ownsLinkedFilters() ||
+                            !accepts(result) ||
+                            visitor.drafts.revision(draft) !==
+                                restoreRevision ||
+                            progressInputRevision + pendingFiles.revision() !==
+                                restoreInputRevision ||
+                            pendingFiles.pending()
+                        ) {
+                            status(
+                                'Remembered answers could not be safely accepted. The current Form was retained.',
+                                true
+                            );
+                            return;
+                        }
+                        acceptRootLoad(visitor, result, query);
+                        render();
+                        status(
+                            'Remembered answers restored after a fresh read. No record was saved.'
+                        );
+                    },
+                    ownsLinkedRender,
+                    () =>
+                        visitors[activeVisitor] === visitor &&
+                        visitor.client === formClient &&
+                        visitor.revision === formRevision &&
+                        connection === progressConnection
+                );
+            },
+        });
+        if (formProgress) {
+            card.append(formProgress.node);
+            let progressRevision = visitor.drafts.revision(draft);
+            formControlDisposers.push(
+                bindingOwner.controller.subscribe((state) => {
+                    if (state.draftRevision === progressRevision) return;
+                    progressRevision = state.draftRevision;
+                    formProgress?.changed();
+                })
+            );
+        }
+    }
     const errors = element('ul', undefined, 'error-list');
     errors.setAttribute('role', 'alert');
     const uncertainSaveMessage =
@@ -1795,7 +1976,7 @@ const renderForm = (page: FormLoadedResult): void => {
     submit.type = 'submit';
     submit.disabled = visitor.uncertainFormDraftScopes.has(draft.scope);
     actions.append(submit);
-    const discard = button('Discard draft', () => {
+    const discard = button('Discard draft', async () => {
         if (
             !ownsForm() ||
             recovery.blocking(scope, recordId) != null ||
@@ -1803,6 +1984,35 @@ const renderForm = (page: FormLoadedResult): void => {
                 candidate.acknowledgment === 'none')
         ) {
             status(uncertainSaveMessage, true);
+            return;
+        }
+        const discardRequest = request;
+        const discardReviewRevision = reviewIntentRevision;
+        const discardDraftRevision = visitor.drafts.revision(draft);
+        const discardInputRevision =
+            progressInputRevision + pendingFiles.revision();
+        const discardConfiguration = observeReviewConfiguration();
+        if (formProgress && !(await formProgress.discard())) return;
+        if (!ownsLinkedRender() || formRetired || !mayUseForm()) return;
+        if (
+            (request != null && request !== discardRequest) ||
+            reviewIntentRevision !== discardReviewRevision ||
+            progressSaveCleanups > 0
+        ) {
+            if (progressSaveCleanups === 0) formProgress?.resume();
+            return;
+        }
+        if (
+            visitor.drafts.revision(draft) !== discardDraftRevision ||
+            progressInputRevision + pendingFiles.revision() !==
+                discardInputRevision ||
+            observeReviewConfiguration() !== discardConfiguration
+        ) {
+            formProgress?.resume();
+            status(
+                'The Form changed while remembered answers were cleared. Review it before discarding the current draft.',
+                true
+            );
             return;
         }
         visitor.drafts.discard(draft);
@@ -2085,6 +2295,43 @@ const renderForm = (page: FormLoadedResult): void => {
             )
                 return;
             if (bindingOwner == null) return;
+            const progressDraftRevision = visitor.drafts.revision(draft);
+            const progressInputEpoch =
+                progressInputRevision + pendingFiles.revision();
+            const progressConfiguration = observeReviewConfiguration();
+            if (formProgress) {
+                progressSaveCleanups++;
+                let cleared = false;
+                try {
+                    cleared = await formProgress.beforeSave();
+                } finally {
+                    progressSaveCleanups--;
+                    if (
+                        progressSaveCleanups === 0 &&
+                        !current() &&
+                        ownsLinkedRender() &&
+                        !formRetired &&
+                        mayUseForm()
+                    )
+                        formProgress?.resume();
+                }
+                if (!cleared) return;
+            }
+            if (!current() || !ownsForm()) return;
+            if (
+                visitor.drafts.revision(draft) !== progressDraftRevision ||
+                progressInputRevision + pendingFiles.revision() !==
+                    progressInputEpoch ||
+                observeReviewConfiguration() !== progressConfiguration ||
+                (prepared != null && !prepared.current())
+            ) {
+                formProgress?.resume();
+                status(
+                    'The Form changed while remembered answers were cleared. Review it before a new Save.',
+                    true
+                );
+                return;
+            }
             submit.disabled = true;
             discard.disabled = true;
             let normalized: ReturnType<typeof normalizeFormSaveResult>;
@@ -2158,6 +2405,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 });
                 if (!current() || !ownsForm()) return;
             } catch (error) {
+                if (knownNotDispatched) formProgress?.resume();
                 if (current() && ownsForm())
                     errors.replaceChildren(
                         element(
@@ -2174,6 +2422,7 @@ const renderForm = (page: FormLoadedResult): void => {
             discard.disabled = false;
             errors.replaceChildren();
             if (normalized.type === 'error') {
+                formProgress?.resume();
                 for (const error of normalized.validationErrors)
                     errors.append(
                         element(
@@ -2192,6 +2441,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 return;
             }
             const result = normalized.raw;
+            formProgress?.retire();
             visitor.drafts.discard(draft);
             visitor.formParentScope = null;
             visitor.formQueries = null;
@@ -2246,6 +2496,7 @@ const renderForm = (page: FormLoadedResult): void => {
         // Native modal focus prevents ordinary edits. The inert field owner
         // also retires prediction/detail intents before the accepted capture.
         reviewPending = true;
+        reviewIntentRevision++;
         fields.inert = true;
         updateFormActivity();
         try {
@@ -2324,6 +2575,7 @@ const renderForm = (page: FormLoadedResult): void => {
             // Restore only this card. A superseded review cannot reactivate a
             // newer visitor's controls or repeat an old address query.
             reviewPending = false;
+            reviewIntentRevision++;
             if (ownsForm()) updateRecovery();
         }
     });
@@ -2607,6 +2859,7 @@ visitorSelect.addEventListener('change', () => {
     cancelConfirmation();
     // Advance both owners even for A→B→A with no intervening helper call.
     for (const identity of [activeVisitor, visitorSelect.value] as const) {
+        retireBrowserCreateProgress(identity);
         visitors[identity].revision += 1;
         visitors[identity].portal?.retireCollection();
     }
@@ -2623,6 +2876,7 @@ nodeById('reload').addEventListener('click', () => load());
 nodeById('logout').addEventListener('click', () => {
     recovery.scrubRetainedInput();
     const visitor = visitors[activeVisitor];
+    const progressCleanup = forgetBrowserCreateProgress(activeVisitor);
     const forgotten = forgetRememberedSessions(visitor);
     visitor.client?.setSession({});
     invalidate(visitor);
@@ -2634,6 +2888,18 @@ nodeById('logout').addEventListener('click', () => {
             : 'This visitor is anonymous, but browser storage could not be cleared. Clear this site’s session storage before using a shared tab.',
         !forgotten
     );
+    const retiredRevision = visitor.revision;
+    void progressCleanup.then((complete) => {
+        if (
+            !complete &&
+            visitors[activeVisitor] === visitor &&
+            visitor.revision === retiredRevision
+        )
+            status(
+                'This visitor is anonymous, but remembered answers could not be fully cleared. Clear this tab’s session storage before sharing it.',
+                true
+            );
+    });
 });
 nodeById('cancel').addEventListener('click', () => {
     request?.abort();
@@ -2653,6 +2919,9 @@ nodeById('cancel').addEventListener('click', () => {
 nodeById('disconnect').addEventListener('click', () => {
     recovery.scrubRetainedInput();
     let forgotten = true;
+    const progressCleanup = Promise.all(
+        Object.keys(visitors).map(forgetBrowserCreateProgress)
+    );
     for (const visitor of Object.values(visitors)) {
         forgotten = forgetRememberedSessions(visitor) && forgotten;
         invalidate(visitor);
@@ -2668,6 +2937,13 @@ nodeById('disconnect').addEventListener('click', () => {
         !forgotten
     );
     setBusy(false);
+    void progressCleanup.then((results) => {
+        if (connection === null && results.some((complete) => !complete))
+            status(
+                'Disconnected. Remembered answers could not be fully cleared. Clear this tab’s session storage before sharing it.',
+                true
+            );
+    });
 });
 setBusy(false);
 render();

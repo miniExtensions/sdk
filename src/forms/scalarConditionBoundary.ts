@@ -85,6 +85,7 @@ export function inspectFormSelectConditions(
                           'isNot',
                           'isAnyOf',
                           'isNoneOf',
+                          'matchesRegex',
                           'isEmpty',
                           'isNotEmpty',
                       ]

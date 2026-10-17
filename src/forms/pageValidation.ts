@@ -103,10 +103,30 @@ const validateOrdinaryPageField = (
         fieldId: field.fieldId,
         code,
     });
-    // Open-tracking is a separate unsupported requirement, even for readonly
-    // or computed presentation; ordinary computed-field exemptions do not waive it.
-    if (config.requireOpenLinkedRecords === true)
-        return problem('unsupported-validation');
+    // Open-tracking remains unsupported when selected visible records need it.
+    // Hidden linked fields and canonical empty selections have no review debt.
+    // This exemption supplies no receipt and must not admit malformed values,
+    // mismatched physical kinds or computed presentation as review authority.
+    if (config.requireOpenLinkedRecords === true) {
+        const validLinkedValue =
+            value == null ||
+            (Array.isArray(value) &&
+                Array.from(value).every(
+                    (id, index) =>
+                        Object.hasOwn(value, index) &&
+                        typeof id === 'string' &&
+                        id.trim() !== ''
+                ));
+        const noReviewDebt =
+            type === 'multipleRecordLinks' &&
+            field.schema.airtableField.config.type === 'multipleRecordLinks' &&
+            !field.isComputed &&
+            validLinkedValue &&
+            (hidden ||
+                value == null ||
+                (Array.isArray(value) && value.length === 0));
+        if (!noReviewDebt) return problem('unsupported-validation');
+    }
     if (field.isComputed) return null;
     for (const key of [
         'required',

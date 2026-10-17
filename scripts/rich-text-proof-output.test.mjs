@@ -39,8 +39,8 @@ function runNode(arguments_, input) {
     return result;
 }
 
-function assertMainExecuted(entry) {
-    const result = runNode([entry]);
+function assertMainExecuted(entry, nodeArguments = []) {
+    const result = runNode([...nodeArguments, entry]);
     assert.equal(result.status, 1);
     assert.equal(result.stdout, '');
     assert.match(
@@ -49,10 +49,12 @@ function assertMainExecuted(entry) {
     );
 }
 
-function assertImportOnly(arguments_, input) {
+function assertImportOnly(arguments_, input, stdout = 'import-only\n') {
     const result = runNode(arguments_, input);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout, 'import-only\n');
+    if (Array.isArray(stdout))
+        assert(stdout.includes(result.stdout), result.stdout);
+    else assert.equal(result.stdout, stdout);
     assert.equal(result.stderr, '');
 }
 
@@ -110,6 +112,109 @@ test('importing the proof builder from eval does not execute main', () => {
 
 test('importing the proof builder from stdin does not execute main', () => {
     assertImportOnly(['--input-type=module', '-'], importSource(builder));
+});
+
+test('eval import with the builder path argument does not execute main', () => {
+    assertImportOnly([
+        '--input-type=module',
+        '--eval',
+        "await import(process.argv[1]); console.log('import-only');",
+        builder,
+    ]);
+});
+
+test('eval spellings and surrounding Node options preserve import-only execution', () => {
+    const source =
+        "await import(process.argv[1]);\nconsole.log('import-only');";
+    for (const arguments_ of [
+        ['--input-type=module', '-e', source, builder],
+        ['--input-type=module', `--eval=${source}`, builder],
+        ['--no-warnings', '--input-type=module', '--eval', source, builder],
+        ['--input-type=module', '--eval', source, '--no-warnings', builder],
+        [
+            '--input-type=commonjs',
+            '--eval',
+            "void import(process.argv[1]).then(() => console.log('import-only'));",
+            builder,
+        ],
+    ]) {
+        assertImportOnly(arguments_);
+    }
+});
+
+test('eval import arguments may use canonical relative and symlink builder paths', (t) => {
+    const directory = entryFixture(t);
+    const alias = join(directory, 'builder.mjs');
+    const parentAlias = join(directory, 'checkout');
+    symlinkSync(builder, alias, 'file');
+    symlinkSync(repository, parentAlias, 'dir');
+    for (const entry of [
+        realpathSync(builder),
+        './scripts/build-rich-text-browser-proof.mjs',
+        alias,
+        join(parentAlias, 'scripts/build-rich-text-browser-proof.mjs'),
+    ]) {
+        assertImportOnly([
+            '--input-type=module',
+            '-e',
+            "await import(process.argv[1]); console.log('import-only');",
+            entry,
+        ]);
+    }
+});
+
+test('print and negative print inline imports do not execute the builder main', () => {
+    const source =
+        "void import(process.argv[1]).then(() => console.log('import-only'));";
+    for (const flag of ['-p', '-pe', '--print', '--print=false']) {
+        assertImportOnly(
+            ['--input-type=commonjs', flag, source, builder],
+            undefined,
+            ['undefined\nimport-only\n', 'import-only\nundefined\n']
+        );
+    }
+    for (const flag of ['--no-print', '--no_print', '--no-print=false']) {
+        assertImportOnly(['--input-type=commonjs', flag, source, builder]);
+    }
+    assertImportOnly([
+        '--input-type=commonjs',
+        '--print',
+        source,
+        '--no-print',
+        '--',
+        builder,
+    ]);
+});
+
+test('print flags without inline source preserve direct builder execution', () => {
+    for (const arguments_ of [
+        ['-p', '--'],
+        ['--print', '--'],
+        ['--print=false', '--'],
+        ['--print', '--no-print', '--'],
+        ['--no-print', '--'],
+    ]) {
+        assertMainExecuted(builder, arguments_);
+    }
+});
+
+test('Node option values resembling eval flags preserve direct builder execution', () => {
+    for (const arguments_ of [
+        ['--title=--eval'],
+        ['--title=-e'],
+        ['--title=--print'],
+        ['--title', '\\--eval'],
+    ]) {
+        assertMainExecuted(builder, arguments_);
+    }
+});
+
+test('wrapper and stdin imports remain inert with a builder path argument', (t) => {
+    const wrapper = join(entryFixture(t), 'import-argument.mjs');
+    const source = "await import(process.argv[2]); console.log('import-only');";
+    writeFileSync(wrapper, source);
+    assertImportOnly([wrapper, builder]);
+    assertImportOnly(['--input-type=module', '-', builder], source);
 });
 
 function fixture(t) {

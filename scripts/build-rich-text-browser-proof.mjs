@@ -1411,7 +1411,26 @@ async function main() {
     }
 }
 
+// Eval can put an imported builder path in argv[1]. Print aliases evaluate
+// their next non-option argument, but a print flag before `-- file` does not.
+const evaluatesSource = process.execArgv.some((argument, index, arguments_) => {
+    if (
+        argument === '-e' ||
+        argument === '-pe' ||
+        argument === '--eval' ||
+        argument.startsWith('--eval=')
+    )
+        return true;
+    const next = arguments_[index + 1];
+    return (
+        (argument === '-p' || /^--(?:no[-_])?print(?:=|$)/.test(argument)) &&
+        Boolean(next) &&
+        !next.startsWith('-')
+    );
+});
+
 if (
+    !evaluatesSource &&
     process.argv[1] &&
     existsSync(process.argv[1]) &&
     realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)

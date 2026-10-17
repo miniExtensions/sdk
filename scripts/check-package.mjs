@@ -124,6 +124,7 @@ import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-che
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
 import { checkLeadingPageVisibilityConsumer } from './leading-page-visibility-consumer-checks.mjs';
+import { checkSectionEmptyVisibilityConsumer } from './section-empty-visibility-consumer-checks.mjs';
 import {
     checkCrossPageChoiceConsumer,
     crossPageChoiceTypedConsumer,
@@ -2419,6 +2420,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(leadingPageVisibilityChecks, 12);
     console.log(
         `Installed leading-page visibility: ${leadingPageVisibilityChecks} ESM/CJS checkpoints passed; synthetic Save dispatch only.`
+    );
+    const sectionEmptyVisibilityChecks =
+        await checkSectionEmptyVisibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(sectionEmptyVisibilityChecks, 18);
+    console.log(
+        `Installed ordinary-section empty visibility: ${sectionEmptyVisibilityChecks} ESM/CJS checkpoints passed; synthetic Save dispatch only.`
     );
     const crossPageChoiceChecks = await checkCrossPageChoiceConsumer({
         consumerDirectory: temporaryDirectory,

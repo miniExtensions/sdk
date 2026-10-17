@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import {
     existsSync,
     mkdirSync,
@@ -11,14 +12,105 @@ import {
     writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
     cleanupProofOutput,
     createProofOutput,
     prepareProofOutput,
     writeProofAsset,
 } from './build-rich-text-browser-proof.mjs';
+
+const builder = fileURLToPath(
+    new URL('./build-rich-text-browser-proof.mjs', import.meta.url)
+);
+const repository = dirname(dirname(builder));
+
+function runNode(arguments_, input) {
+    const result = spawnSync(process.execPath, arguments_, {
+        cwd: repository,
+        encoding: 'utf8',
+        input,
+        timeout: 10_000,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.signal, null);
+    return result;
+}
+
+function assertMainExecuted(entry) {
+    const result = runNode([entry]);
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, '');
+    assert.match(
+        result.stderr,
+        /Pass the tested tarball and a fresh output directory\./
+    );
+}
+
+function assertImportOnly(arguments_, input) {
+    const result = runNode(arguments_, input);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, 'import-only\n');
+    assert.equal(result.stderr, '');
+}
+
+const importSource = (entry) =>
+    `await import(${JSON.stringify(pathToFileURL(entry).href)}); console.log('import-only');`;
+
+function entryFixture(t) {
+    // Keep the lexical /tmp spelling on macOS to cover its /private/tmp alias.
+    const directory = mkdtempSync(
+        join(
+            process.platform === 'darwin' ? '/tmp' : tmpdir(),
+            'rich-text-cli-'
+        )
+    );
+    t.after(() => rmSync(directory, { recursive: true, force: true }));
+    return directory;
+}
+
+test('canonical proof builder invocation executes argument validation', () => {
+    assertMainExecuted(realpathSync(builder));
+});
+
+test('relative proof builder invocation executes argument validation', () => {
+    assertMainExecuted('scripts/build-rich-text-browser-proof.mjs');
+});
+
+test('proof builder invocation through a parent alias executes argument validation', (t) => {
+    const alias = join(entryFixture(t), 'checkout');
+    symlinkSync(repository, alias, 'dir');
+    assertMainExecuted(
+        join(alias, 'scripts/build-rich-text-browser-proof.mjs')
+    );
+});
+
+test('proof builder invocation through a script symlink executes argument validation', (t) => {
+    const alias = join(entryFixture(t), 'builder.mjs');
+    symlinkSync(builder, alias, 'file');
+    assertMainExecuted(alias);
+});
+
+test('importing the proof builder from another entry does not execute main', (t) => {
+    const directory = entryFixture(t);
+    const alias = join(directory, 'builder.mjs');
+    const wrapper = join(directory, 'import-only.mjs');
+    symlinkSync(builder, alias, 'file');
+    for (const entry of [builder, alias]) {
+        writeFileSync(wrapper, importSource(entry));
+        assertImportOnly([wrapper]);
+    }
+});
+
+test('importing the proof builder from eval does not execute main', () => {
+    assertImportOnly(['--input-type=module', '--eval', importSource(builder)]);
+});
+
+test('importing the proof builder from stdin does not execute main', () => {
+    assertImportOnly(['--input-type=module', '-'], importSource(builder));
+});
 
 function fixture(t) {
     const directory = realpathSync(

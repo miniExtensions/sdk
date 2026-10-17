@@ -19,6 +19,12 @@ export {
     type BarcodeFieldProps,
     type BarcodeFieldOptions,
 } from './BarcodeField.js';
+export {
+    SingleCollaboratorField,
+    renderSingleCollaboratorField,
+    type SingleCollaboratorFieldProps,
+    type SingleCollaboratorFieldOptions,
+} from './SingleCollaboratorField.js';
 import {
     SingleSelectControl,
     singleSelectConfiguration,

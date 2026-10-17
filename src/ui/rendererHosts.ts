@@ -1,3 +1,5 @@
+import { projectAttachmentPresentation } from './attachmentPresentation.js';
+import { getFormAttachmentPolicy } from '../forms/attachments.js';
 import {
     normalizeFormLeaseLoaded,
     normalizeFormLeaseField,
@@ -38,6 +40,7 @@ import {
 import type { ButtonFieldModel, ButtonFieldRecovery } from './buttonModel.js';
 import {
     createRendererProps,
+    isFieldReadValue,
     type FieldRendererHost,
     type FieldRendererHostSnapshot,
     type RendererPropsInput,
@@ -531,12 +534,34 @@ export function createFormFieldRendererHost(
                 current,
                 attachment,
                 button,
-                linked
-                    ? (input) => ({
-                          ...input,
-                          linkedRecords: linked.getProps(),
-                      })
-                    : undefined
+                (input) => ({
+                    ...input,
+                    ...(linked ? { linkedRecords: linked.getProps() } : {}),
+                    ...(input.physicalKind === 'multipleAttachments' &&
+                    input.capability.type === 'readonly'
+                        ? {
+                              attachmentPresentation:
+                                  projectAttachmentPresentation({
+                                      visible: true,
+                                      current,
+                                      configs: [input.displayConfig],
+                                      readRows: () => {
+                                          // Preserve original descriptor readOnly/add-only semantics.
+                                          const policy =
+                                              getFormAttachmentPolicy({
+                                                  loaded: options.fields.getLoaded(),
+                                                  fieldId: options.fieldId,
+                                                  value: binding.getSnapshot()
+                                                      .value,
+                                              });
+                                          return policy.status === 'ready'
+                                              ? policy.rows
+                                              : null;
+                                      },
+                                  }),
+                          }
+                        : {}),
+                })
             ),
         (listener, current) =>
             subscribeTo(listener, [
@@ -740,6 +765,56 @@ export function createPortalDetailRendererHost(
                               },
                           }
                         : { type: 'readonly' },
+                    ...(data.field.config.type === 'multipleAttachments' &&
+                    (options.context ?? 'portal-detail') === 'portal-detail'
+                        ? {
+                              attachmentPresentation:
+                                  projectAttachmentPresentation({
+                                      visible: !detail.isHidden,
+                                      current,
+                                      configs: [
+                                          detail.miniExtConfig,
+                                          ...(detail.childFormField
+                                              ? [data.writeConfig]
+                                              : []),
+                                      ],
+                                      readRows: () => {
+                                          // Portal detail has no persisted add-only baseline.
+                                          // Neither returned nor child policy may be weakened.
+                                          for (const config of [
+                                              detail.miniExtConfig,
+                                              data.writeConfig,
+                                          ]) {
+                                              if (
+                                                  config &&
+                                                  'addOnlyMode' in config &&
+                                                  config.addOnlyMode !==
+                                                      undefined &&
+                                                  config.addOnlyMode !== false
+                                              )
+                                                  return null;
+                                          }
+                                          const value =
+                                              context.row.fields[
+                                                  detail.fieldId
+                                              ];
+                                          if (
+                                              !isFieldReadValue(
+                                                  'multipleAttachments',
+                                                  value
+                                              )
+                                          )
+                                              return null;
+                                          return Array.isArray(value)
+                                              ? value.map((attachment) => ({
+                                                    visible: true,
+                                                    attachment,
+                                                }))
+                                              : [];
+                                      },
+                                  }),
+                          }
+                        : {}),
                     ...(data.field.config.type === 'multipleRecordLinks'
                         ? {
                               linkedRecords: portalLinkedPills({

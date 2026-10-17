@@ -357,3 +357,66 @@ it('preserves native lookup errors when returned result metadata is invalid', ()
         true
     );
 });
+
+it('attachment facet is additive, detached, label-only and restricted to read-only Form/Portal detail', () => {
+    const source: RendererPropsInput = {
+        ...input(),
+        physicalKind: 'multipleAttachments',
+        value: [],
+        field: {
+            ...(input().field as object),
+            config: {
+                type: 'multipleAttachments',
+                options: { isReversed: false },
+            },
+        },
+        attachmentPresentation: {
+            status: 'ready',
+            rows: [{ label: '<b>literal</b>' }],
+        },
+    };
+    for (const context of ['form', 'portal-detail'] as const) {
+        const props = createRendererProps({ ...source, context });
+        assert.ok(props?.physicalKind === 'multipleAttachments');
+        assert.deepEqual(
+            props.attachmentPresentation,
+            source.attachmentPresentation
+        );
+        assert.notEqual(
+            props.attachmentPresentation,
+            source.attachmentPresentation
+        );
+        assert.deepEqual(props.value, []);
+    }
+    for (const context of ['linked-detail', 'portal-cell'] as const)
+        assert.equal(createRendererProps({ ...source, context }), null);
+    assert.equal(
+        createRendererProps({
+            ...source,
+            capability: {
+                type: 'editable',
+                setValue: () => ({ accepted: true }),
+            },
+        }),
+        null
+    );
+    assert.equal(
+        createRendererProps({
+            ...input(),
+            attachmentPresentation: { status: 'masked' },
+        }),
+        null
+    );
+    for (const facet of [
+        { status: 'ready', rows: [{ label: 'name', url: 'private' }] },
+        { status: 'masked', hiddenCount: 1 },
+        { status: 'ready', rows: [null] },
+    ])
+        assert.equal(
+            createRendererProps({
+                ...source,
+                attachmentPresentation: facet as never,
+            }),
+            null
+        );
+});

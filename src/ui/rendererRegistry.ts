@@ -1,3 +1,7 @@
+import {
+    copyAttachmentPresentation,
+    type AttachmentPresentation,
+} from './attachmentPresentation.js';
 import type {
     AirtableAttachment,
     AirtableBarcodeValue,
@@ -204,9 +208,12 @@ export type FieldRendererProps<K extends FieldKind> = {
     validation: readonly FormValidationMessage[];
     error: string | null;
     capability: FieldRendererCapability<K>;
-} & (K extends 'multipleRecordLinks'
-    ? { linkedRecords?: LinkedRecordsRendererProps }
-    : { linkedRecords?: never }) &
+} & (K extends 'multipleAttachments'
+    ? { attachmentPresentation?: AttachmentPresentation }
+    : { attachmentPresentation?: never }) &
+    (K extends 'multipleRecordLinks'
+        ? { linkedRecords?: LinkedRecordsRendererProps }
+        : { linkedRecords?: never }) &
     (K extends 'singleSelect' | 'multipleSelects'
         ? { selectAvailability?: SelectAvailabilitySnapshot }
         : { selectAvailability?: never });
@@ -291,12 +298,14 @@ export type RendererPropsInput = Omit<
     | 'capability'
     | 'linkedRecords'
     | 'selectAvailability'
+    | 'attachmentPresentation'
 > & {
     physicalKind: string;
     field: unknown;
     displayConfig: unknown;
     writeConfig?: unknown;
     value: unknown;
+    attachmentPresentation?: AttachmentPresentation;
     linkedRecords?: LinkedRecordsRendererProps;
     selectAvailability?: SelectAvailabilitySnapshot;
     capability:
@@ -619,6 +628,18 @@ export function createRendererProps(
     if (input.capability.type === 'editable' && (computed || kind === 'button'))
         return null;
     if (input.capability.type === 'button' && kind !== 'button') return null;
+    let attachmentPresentation: AttachmentPresentation | undefined;
+    if (input.attachmentPresentation !== undefined) {
+        if (
+            kind !== 'multipleAttachments' ||
+            input.capability.type !== 'readonly' ||
+            !['form', 'portal-detail'].includes(input.context)
+        )
+            return null;
+        const copied = copyAttachmentPresentation(input.attachmentPresentation);
+        if (!copied) return null;
+        attachmentPresentation = copied;
+    }
     let selectAvailability: SelectAvailabilitySnapshot | undefined;
     if (input.selectAvailability !== undefined) {
         const availability = input.selectAvailability;
@@ -725,6 +746,7 @@ export function createRendererProps(
             capability,
             linkedRecords,
             selectAvailability: _availability,
+            attachmentPresentation: _attachmentPresentation,
             ...data
         } = input;
         const config = input.field.config;
@@ -744,6 +766,7 @@ export function createRendererProps(
             : { type: 'physical', config };
         return {
             ...structuredClone({ ...data, computed, presentation }),
+            ...(attachmentPresentation ? { attachmentPresentation } : {}),
             ...(selectAvailability ? { selectAvailability } : {}),
             ...(linkedRecords
                 ? {

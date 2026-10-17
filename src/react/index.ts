@@ -25,6 +25,12 @@ export {
     type SingleCollaboratorFieldProps,
     type SingleCollaboratorFieldOptions,
 } from './SingleCollaboratorField.js';
+export {
+    MultipleCollaboratorsField,
+    renderMultipleCollaboratorsField,
+    type MultipleCollaboratorsFieldProps,
+    type MultipleCollaboratorsFieldOptions,
+} from './MultipleCollaboratorsField.js';
 import {
     SingleSelectControl,
     singleSelectConfiguration,

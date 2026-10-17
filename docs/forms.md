@@ -2338,9 +2338,11 @@ record to remain locally selected or spare Create capacity. Native relationship
 reconciliation is separate: it uses the saved inverse relationship and the
 latest parent draft, preserves duplicate occurrences, and never grants a new
 Create exemption. A prior proven Create exemption remains separate from edited
-presentation data. Explicit inverse arrays are required for edit-parent
-reconciliation; missing/null inverse evidence remains unsupported. This is a
-conservative subset of canonical reconciliation.
+presentation data. Edit-parent reconciliation accepts explicit inverse arrays
+and an own returned null as a native clear. Missing, inherited or undefined
+inverse evidence remains unsupported; field identity, physical linked type and
+matching parent table are still required. This remains a conservative subset of
+canonical reconciliation.
 
 An unchanged native array may reconcile on a read-only field without writing.
 Changed membership keeps writable-field admission; re-adding a removed record

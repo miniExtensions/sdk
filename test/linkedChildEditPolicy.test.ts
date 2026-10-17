@@ -216,12 +216,69 @@ describe('internal linked child EDIT policy', () => {
         child.payload.formRecord = { type: 'create', data: {} };
         assert.equal(reconcile([recordId], ['rec_parent']).type, 'unavailable');
     });
-    it('fails closed on wrong record and missing or null inverse evidence', () => {
+    it('own-null inverse removes all target occurrences, preserves siblings and needs no spare capacity', () => {
         const parent = parentForm('edit');
+        const child = editChild();
+        for (const nativeIds of [
+            [recordId, 'rec_sibling', recordId, 'rec_sibling', 'rec_last'],
+            ['rec_sibling', 'rec_sibling'],
+        ]) {
+            const data = {
+                ...parent.payload.formRecord.data,
+                [fieldId]: nativeIds,
+            };
+            const savedRecord: AirtableRecord = {
+                id: recordId,
+                fields: { fld_parent_a: null },
+            };
+            const before = structuredClone({
+                parent,
+                child,
+                data,
+                savedRecord,
+            });
+            assert.deepEqual(
+                reconcileLinkedChildEdit({
+                    parent,
+                    child,
+                    fieldId,
+                    data,
+                    savedRecord,
+                    recordId,
+                    maximum: 0,
+                    selectedCount: nativeIds.length,
+                }),
+                {
+                    type: 'available',
+                    nativeIds: nativeIds.filter((id) => id !== recordId),
+                    changed: nativeIds.includes(recordId),
+                    exemptCreatedRecord: false,
+                }
+            );
+            assert.deepEqual({ parent, child, data, savedRecord }, before);
+        }
+    });
+    it('fails closed on wrong record and absent, inherited, undefined or malformed inverse evidence', () => {
+        const parent = parentForm('edit');
+        const sparse: string[] = [];
+        sparse.length = 1;
         const cases: AirtableRecord[] = [
             { id: 'rec_wrong', fields: { fld_parent_a: ['rec_parent'] } },
             { id: recordId, fields: {} },
-            { id: recordId, fields: { fld_parent_a: null } },
+            {
+                id: recordId,
+                fields: Object.create({
+                    fld_parent_a: null,
+                }) as AirtableRecord['fields'],
+            },
+            {
+                id: recordId,
+                fields: {
+                    fld_parent_a: undefined,
+                } as unknown as AirtableRecord['fields'],
+            },
+            { id: recordId, fields: { fld_parent_a: sparse } },
+            { id: recordId, fields: { fld_parent_a: '' } },
         ];
         for (const savedRecord of cases) {
             assert.equal(

@@ -14,7 +14,7 @@ import {
     type RuntimeFieldSchema,
     type SaveFormInput,
 } from '../src/runtime/index.js';
-import { invalidForm, loadedForm } from './formsFixtures.js';
+import { invalidForm, loadedForm, savedForm } from './formsFixtures.js';
 import { portalField, portalListPage, portalPage } from './portalFixtures.js';
 
 const root = resolve(process.cwd());
@@ -358,6 +358,480 @@ const mount = async (
         loads: () => loads,
     };
 };
+
+const navigationForm = (): FormLoadedResult => {
+    const form = reviewForm();
+    const template = form.payload.fieldIdsToSchemas.fld_title;
+    assert.ok(template?.fieldType === 'singleLineText');
+    const ids = ['fld_title', 'fld_details', 'fld_final'];
+    form.payload.fieldIdsInForm = ids;
+    form.payload.fieldIdsToSchemas = Object.fromEntries(
+        ids.map((id, index) => [
+            id,
+            {
+                ...structuredClone(template),
+                airtableField: {
+                    ...structuredClone(template.airtableField),
+                    id,
+                    name: id,
+                },
+                miniExtConfig: {
+                    required: true,
+                    ...(index === 0
+                        ? {}
+                        : {
+                              headerSectionTitle:
+                                  index === 1 ? 'Details' : 'Final answers',
+                          }),
+                },
+            },
+        ])
+    );
+    form.payload.publicFields.state.multiPageFormMode = 'multi-page';
+    form.payload.publicFields.state.promptUserBeforeSubmission = false;
+    form.payload.publicFields.state.enableFormComputeMode = false;
+    form.payload.publicFields.state.autoSubmitAfterPrefill = false;
+    form.payload.formRecord.data = {
+        fld_title: 'First answer',
+        fld_details: 'Second answer',
+        fld_final: 'Final answer',
+        fld_hidden_native: ['record_retained'],
+    };
+    return form;
+};
+
+describe('actual starter manual multipage navigation', () => {
+    it('keeps mounted drafts through zero-I/O Back/Next and submits once on the final page', async (test) => {
+        const fixture = await mount(test, navigationForm(), {
+            save: async () => new Response(JSON.stringify(savedForm())),
+        });
+        const pageField = (id: string) => {
+            const node = fixture.field(id).closest('[data-form-page-field-id]');
+            assert.ok(node instanceof fixture.window.HTMLElement);
+            return node;
+        };
+        const originalTitle = fixture.field('fld_title');
+        assert.equal(pageField('fld_title').hidden, false);
+        assert.equal(pageField('fld_details').hidden, true);
+        fixture.edit('fld_title', 'Retained first edit');
+        fixture.submit(); // Enter advances; it must not dispatch Save.
+        await settled();
+        assert.equal(pageField('fld_details').hidden, false);
+        fixture.edit('fld_details', 'Retained second edit');
+        fixture.button('Back').click();
+        await settled();
+        assert.equal(fixture.field('fld_title'), originalTitle);
+        assert.equal(originalTitle.value, 'Retained first edit');
+        fixture.button('Next').click();
+        fixture.button('Next').click();
+        await settled();
+        assert.equal(pageField('fld_final').hidden, false);
+        assert.equal(fixture.saves.length, 0);
+        assert.equal(fixture.loads(), 1);
+        fixture.submit();
+        await waitFor(() => fixture.saves.length === 1);
+        assert.deepEqual(fixture.saves[0]?.formRecord.data, {
+            fld_title: 'Retained first edit',
+            fld_details: 'Retained second edit',
+            fld_final: 'Final answer',
+            fld_hidden_native: ['record_retained'],
+        });
+        assert.equal(fixture.window.document.querySelector('dialog'), null);
+        await waitFor(
+            () =>
+                fixture.window.document
+                    .getElementById('status')
+                    ?.textContent?.includes('Saved record record_saved.') ===
+                true
+        );
+        assert.equal(
+            fixture.window.document.querySelector(
+                '[data-field-id="fld_title"]'
+            ),
+            null
+        );
+    });
+
+    it('keeps rich section descriptions outside the bounded title-only navigation', async (test) => {
+        const form = navigationForm();
+        const details = form.payload.fieldIdsToSchemas.fld_details;
+        assert.ok(details?.fieldType === 'singleLineText');
+        details.miniExtConfig = {
+            ...details.miniExtConfig,
+            headerSectionDescription:
+                '<p>Rich instructions</p><img src="https://files.example.test/instructions.png">',
+        };
+        const fixture = await mount(test, form);
+        fixture.button('Next').click();
+        const navigation = fixture.window.document.querySelector(
+            '[aria-label="Form pages"]'
+        );
+        assert.ok(navigation);
+        assert.equal(navigation.querySelector('h3')?.textContent, 'Details');
+        assert.equal(navigation.querySelector('img'), null);
+        assert.doesNotMatch(
+            navigation.textContent,
+            /<p>|Rich instructions|instructions.png/
+        );
+        assert.equal(fixture.saves.length, 0);
+    });
+
+    it('blocks invalid current-page answers and inactive retained-control events without a request', async (test) => {
+        const fixture = await mount(test, navigationForm());
+        fixture.edit('fld_title', '');
+        fixture.button('Next').click();
+        fixture.submit();
+        await settled();
+        assert.equal(
+            fixture
+                .field('fld_details')
+                .closest('[data-form-page-field-id]')
+                ?.hasAttribute('hidden'),
+            true
+        );
+        assert.equal(fixture.saves.length, 0);
+        fixture.edit('fld_title', 'Accepted first answer');
+        fixture.button('Next').click();
+        fixture.edit('fld_title', 'Inactive injected edit');
+        fixture.button('Next').click();
+        fixture.submit();
+        await waitFor(() => fixture.saves.length === 1);
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_title,
+            'Accepted first answer'
+        );
+        assert.equal(fixture.loads(), 1);
+    });
+
+    it('skips a conditionally hidden page while preserving its native answer in final Save', async (test) => {
+        const form = navigationForm();
+        const details = form.payload.fieldIdsToSchemas.fld_details;
+        assert.ok(details?.fieldType === 'singleLineText');
+        details.miniExtConfig = {
+            ...details.miniExtConfig,
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'show-details',
+                        type: 'singleCondition',
+                        setting: {
+                            type: 'is',
+                            fieldType: 'singleLineText',
+                            idOrName: { type: 'id', id: 'fld_title' },
+                            value: 'show',
+                        },
+                    },
+                ],
+            },
+        };
+        const fixture = await mount(test, form);
+        fixture.button('Next').click();
+        await settled();
+        assert.equal(
+            fixture
+                .field('fld_final')
+                .closest('[data-form-page-field-id]')
+                ?.hasAttribute('hidden'),
+            false
+        );
+        fixture.submit();
+        await waitFor(() => fixture.saves.length === 1);
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_details,
+            'Second answer'
+        );
+        assert.equal(fixture.loads(), 1);
+    });
+
+    it('revalidates earlier pages after a later answer reveals a required field', async (test) => {
+        const form = navigationForm();
+        const template = form.payload.fieldIdsToSchemas.fld_title;
+        assert.ok(template?.fieldType === 'singleLineText');
+        form.payload.fieldIdsToSchemas.fld_required = {
+            ...structuredClone(template),
+            airtableField: {
+                ...structuredClone(template.airtableField),
+                id: 'fld_required',
+                name: 'Earlier required answer',
+            },
+            miniExtConfig: {
+                required: true,
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'later-driver',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'is',
+                                fieldType: 'singleLineText',
+                                idOrName: { type: 'id', id: 'fld_final' },
+                                value: 'show',
+                            },
+                        },
+                    ],
+                },
+            },
+        };
+        form.payload.fieldIdsInForm.splice(1, 0, 'fld_required');
+        form.payload.formRecord.data.fld_required = null;
+        const fixture = await mount(test, form);
+        fixture.button('Next').click();
+        fixture.button('Next').click();
+        fixture.edit('fld_final', 'show');
+        fixture.submit();
+        await settled();
+        assert.equal(fixture.saves.length, 0);
+        assert.match(
+            fixture.window.document.getElementById('status')?.textContent ?? '',
+            /No Save was sent/
+        );
+        assert.doesNotMatch(
+            fixture.window.document.body.textContent,
+            /Earlier outcome not confirmed/
+        );
+        fixture.button('Back').click();
+        fixture.button('Back').click();
+        fixture.edit('fld_required', 'Completed after review');
+        fixture.button('Next').click();
+        fixture.button('Next').click();
+        fixture.submit();
+        await waitFor(() => fixture.saves.length === 1);
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_required,
+            'Completed after review'
+        );
+    });
+
+    it('blocks navigation for an unuploaded native file and permits explicit clearing', async (test) => {
+        const form = navigationForm();
+        const attachment = loadedForm().payload.fieldIdsToSchemas.fld_files;
+        assert.ok(attachment?.fieldType === 'multipleAttachments');
+        form.payload.fieldIdsToSchemas.fld_files = attachment;
+        form.payload.fieldIdsInForm.splice(1, 0, 'fld_files');
+        form.payload.formRecord.data.fld_files = [];
+        const fixture = await mount(test, form);
+        const file =
+            fixture.window.document.querySelector('input[type="file"]');
+        assert.ok(file instanceof fixture.window.HTMLInputElement);
+        let selected = [
+            new fixture.window.File(['pending'], 'pending.txt', {
+                type: 'text/plain',
+            }),
+        ];
+        Object.defineProperty(file, 'files', {
+            configurable: true,
+            get: () => selected,
+        });
+        Object.defineProperty(file, 'value', {
+            configurable: true,
+            get: () => (selected.length ? 'pending.txt' : ''),
+            set: () => {
+                selected = [];
+            },
+        });
+        file.dispatchEvent(
+            new fixture.window.Event('change', { bubbles: true })
+        );
+        fixture.button('Next').click();
+        await settled();
+        assert.match(
+            fixture.window.document.getElementById('status')?.textContent ?? '',
+            /Upload or clear/
+        );
+        assert.equal(
+            fixture
+                .field('fld_details')
+                .closest('[data-form-page-field-id]')
+                ?.hasAttribute('hidden'),
+            true
+        );
+        assert.equal(fixture.saves.length, 0);
+        assert.equal(fixture.loads(), 1);
+        fixture.button('Clear pending files').click();
+        fixture.button('Next').click();
+        await settled();
+        assert.equal(
+            fixture
+                .field('fld_details')
+                .closest('[data-form-page-field-id]')
+                ?.hasAttribute('hidden'),
+            false
+        );
+    });
+
+    it('does not retire navigation when an acknowledged Add Choice updates accepted metadata', async (test) => {
+        const form = navigationForm();
+        form.payload.fieldIdsToSchemas.fld_choice = {
+            fieldType: 'singleSelect',
+            airtableField: {
+                id: 'fld_choice',
+                name: 'Choice',
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: {
+                    type: 'singleSelect',
+                    options: {
+                        choices: [{ id: 'sel_existing', name: 'Existing' }],
+                    },
+                },
+            },
+            miniExtConfig: { allowAddingNewOptions: true },
+        };
+        form.payload.fieldIdsInForm.splice(1, 0, 'fld_choice');
+        form.payload.formRecord.data.fld_choice = 'Existing';
+        let choices = 0;
+        const fixture = await mount(test, form, {
+            read: async (url) => {
+                assert.equal(
+                    url.pathname,
+                    '/api/trpc/airtable.addNewAirtableOptionForFormField'
+                );
+                choices++;
+                return new Response(
+                    JSON.stringify({
+                        result: {
+                            data: {
+                                newChoice: {
+                                    id: 'sel_created',
+                                    name: 'Created',
+                                },
+                            },
+                        },
+                    })
+                );
+            },
+        });
+        const choice = fixture.window.document.querySelector(
+            'input[placeholder="New choice name"]'
+        );
+        assert.ok(choice instanceof fixture.window.HTMLInputElement);
+        choice.value = 'Created';
+        fixture.button('Create choice').click();
+        await waitFor(
+            () =>
+                choices === 1 &&
+                choice.value === '' &&
+                fixture.window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+        assert.equal(fixture.saves.length, 0);
+        fixture.button('Next').click();
+        fixture.button('Next').click();
+        fixture.submit();
+        await waitFor(() => fixture.saves.length === 1);
+        assert.equal(fixture.saves[0]?.formRecord.data.fld_choice, 'Created');
+        assert.equal(choices, 1);
+    });
+
+    it('retires retained navigation actions across a visitor round trip', async (test) => {
+        const fixture = await mount(test, navigationForm());
+        const oldNext = fixture.button('Next');
+        const visitor = fixture.window.document.getElementById('visitor');
+        assert.ok(visitor instanceof fixture.window.HTMLSelectElement);
+        for (const identity of ['B', 'A']) {
+            visitor.value = identity;
+            visitor.dispatchEvent(new fixture.window.Event('change'));
+        }
+        oldNext.click();
+        await settled();
+        assert.equal(
+            fixture
+                .field('fld_title')
+                .closest('[data-form-page-field-id]')
+                ?.hasAttribute('hidden'),
+            false
+        );
+        assert.equal(
+            fixture
+                .field('fld_details')
+                .closest('[data-form-page-field-id]')
+                ?.hasAttribute('hidden'),
+            true
+        );
+        assert.equal(fixture.saves.length, 0);
+        fixture.button('Next').click();
+        await settled();
+        assert.equal(
+            fixture
+                .field('fld_details')
+                .closest('[data-form-page-field-id]')
+                ?.hasAttribute('hidden'),
+            false
+        );
+    });
+
+    for (const outcome of ['unknown', 'cancelled'] as const) {
+        it(`preserves the existing no-replay recovery gate for ${outcome === 'unknown' ? 'an unknown' : 'a cancelled'} final Save`, async (test) => {
+            const held: { resolve?: (response: Response) => void } = {};
+            const fixture = await mount(test, navigationForm(), {
+                save: async () => {
+                    if (outcome === 'unknown')
+                        throw new Error('Synthetic lost Save response.');
+                    return new Promise<Response>((resolve) => {
+                        held.resolve = resolve;
+                    });
+                },
+            });
+            fixture.button('Next').click();
+            fixture.button('Next').click();
+            fixture.submit();
+            await waitFor(() => fixture.saves.length === 1);
+            if (outcome === 'cancelled')
+                fixture.button('Cancel request').click();
+            if (outcome === 'unknown')
+                await waitFor(
+                    () =>
+                        fixture.window.document
+                            .querySelector('.error-list')
+                            ?.textContent?.includes('may have completed') ===
+                        true
+                );
+            else await settled();
+            fixture.submit();
+            fixture.button('Back').click();
+            await settled();
+            assert.equal(fixture.saves.length, 1);
+            assert.equal(fixture.button('Save').disabled, true);
+            assert.equal(
+                (
+                    fixture
+                        .field('fld_final')
+                        .closest('.fields') as unknown as {
+                        inert: boolean;
+                    } | null
+                )?.inert,
+                true
+            );
+            if (outcome === 'cancelled') {
+                assert.ok(held.resolve);
+                held.resolve(new Response(JSON.stringify(invalidForm())));
+                await settled();
+                fixture.submit();
+                await settled();
+                assert.equal(fixture.saves.length, 1);
+                assert.equal(fixture.button('Save').disabled, true);
+            }
+        });
+    }
+
+    it('keeps an explicitly one-page Form with section headers on the existing Save path', async (test) => {
+        const form = navigationForm();
+        form.payload.publicFields.state.multiPageFormMode = 'one-page';
+        const fixture = await mount(test, form);
+        assert.equal(
+            Array.from(fixture.window.document.querySelectorAll('button')).some(
+                (node) => node.textContent === 'Next'
+            ),
+            false
+        );
+        fixture.submit();
+        await waitFor(() => fixture.saves.length === 1);
+    });
+});
 
 const deletableChild = (): FormLoadedResult => {
     const child = reviewForm();

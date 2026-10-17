@@ -81,6 +81,22 @@ this example's origin; the client uses the existing v1 and tRPC endpoints.
 
 ## Form workflow
 
+Published manual Forms with `multiPageFormMode: 'multi-page'` and final Review
+disabled use the SDK's existing page owner. Enabled frontend section headers
+start pages; leading fields form the first page. Back keeps the same mounted
+controls and native draft. Page titles are plain text; rich section descriptions
+remain application-owned. Next validates the current page and skips pages
+whose fields are all conditionally hidden. Enter advances before the final
+page. Neither navigation action reads or saves a record.
+
+Only the final available page shows Save. It validates every page against the
+current native draft, including earlier required answers revealed by later
+edits, then uses the existing Save/recovery path once. Hidden answers remain in
+the native payload. A pending file must be uploaded or explicitly cleared
+before navigation. An uncertain Save continues to require explicit inspection.
+Configured Review retains its existing presentation; this navigation slice does
+not add a multipage Review adapter, Compute or automatic submission.
+
 The page renders field-ID controls from the published payload. It supports
 text, email, URL, phone, multiline/rich text, numbers, currency, percentages,
 dates, checkbox, and select inputs. DateTime inputs retain an explicit ISO
@@ -319,7 +335,7 @@ Frontend visibility results never replace the choice projection.
 
 The custom renderer deliberately leaves advanced presentation to your app:
 conditional field or choice presentation beyond the bounded contracts above,
-multi-page navigation, signatures, calendar pickers, custom validation presentation, and
+multi-page navigation beyond the manual workflow above, signatures, calendar pickers, custom validation presentation, and
 CAPTCHA widgets. The server still enforces those extension rules. To use a
 CAPTCHA-enabled Form, integrate the configured widget and supply its token in
 `captchaVal`; this example supplies `null`. It does not disable the Form's

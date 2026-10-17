@@ -464,6 +464,13 @@ does not recreate the hosted Portal's Gallery, Calendar, Map, or Chart
 presenters, conditional view presentation, advanced filter builder, or custom
 menu. Those interfaces can call the same typed runtime APIs.
 
+After a child Form Save, a refreshed parent record must match the loaded
+Portal's parent ID before its fields are adopted. A mismatch preserves the
+known child Save success, retires the cached Portal and requires explicit
+**Reload**. Retained controls cannot revive that Portal or replay the Save;
+there is no automatic refresh request. Matching parent fields remain an
+authoritative replacement, including an empty object.
+
 ## Optional create progress in this tab
 
 Drafts are memory-only by default. An anonymous root direct-URL create Form can

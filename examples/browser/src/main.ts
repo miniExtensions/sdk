@@ -2464,6 +2464,18 @@ const renderForm = (page: FormLoadedResult): void => {
             visitor.drafts.discard(draft);
             visitor.formParentScope = null;
             visitor.formQueries = null;
+            const parentRefreshMismatch =
+                visitor.root != null &&
+                result.loggedInUserRecord != null &&
+                result.loggedInUserRecord.id !==
+                    visitor.root.payload.formRecord.recordId;
+            if (parentRefreshMismatch) {
+                // The child Save is acknowledged. Refuse the foreign parent
+                // without reviving cached Portal actions or replaying Save.
+                visitor.portal?.destroy();
+                visitor.portal = null;
+                visitor.root = null;
+            }
             if (visitor.root != null && result.loggedInUserRecord != null) {
                 visitor.root.payload.formRecord.data = {
                     ...result.loggedInUserRecord.fields,
@@ -2475,6 +2487,14 @@ const renderForm = (page: FormLoadedResult): void => {
                 visitor.screen = null;
                 render();
             }
+            if (parentRefreshMismatch)
+                screenNode.append(
+                    element(
+                        'p',
+                        'The parent Portal refresh did not match. Choose Reload to load the Portal before continuing.',
+                        'hint'
+                    )
+                );
             const warnings = result.postSubmissionWarnings
                 ?.map((warning) => warning.type)
                 .join(', ');

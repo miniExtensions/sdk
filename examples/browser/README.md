@@ -426,7 +426,9 @@ show a diagnostic without pruning native data or denying otherwise-allowed edits
 - Editable Grid views expose **Edit cell** and an explicit **Save cell**. Linked
   cells use the Portal's authorized selector. After saving, the current Portal
   user's record is refreshed. Choose **Load records** before paging or opening
-  a child again. If that refresh fails, choose **Reload**.
+  a child again. If that refresh fails or returns no user record, the cell Save
+  remains complete; choose **Reload** before taking another action. Reload never
+  repeats that Save.
 - Inline select cells use the same static policy control as Forms: configured
   choice IDs limit new selections, saved values remain native choice names,
   and numeric maxima permit removal from an existing over-limit value.

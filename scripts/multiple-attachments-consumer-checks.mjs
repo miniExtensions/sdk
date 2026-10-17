@@ -186,7 +186,7 @@ export async function checkMultipleAttachmentsConsumer({
             writable: true,
             value: key === 'IS_REACT_ACT_ENVIRONMENT' ? true : window[key],
         });
-    const { createElement: h, act, StrictMode } = require('react');
+    const { createElement: h, act, StrictMode, Fragment } = require('react');
     const { createRoot } = require('react-dom/client');
     const temporary = mkdtempSync(
         join(consumerDirectory, '.multiple-attachments-consumer-')
@@ -300,9 +300,20 @@ export const importPackage = name => import(name);
                 assert.equal(container.querySelector('input,button'), null);
                 noResources();
             };
+            // React 19's development profiler traverses previous/next props.
+            // Mount adversarial direct snapshots independently so its diagnostics
+            // cannot invoke poisoned getters. Real owner lifecycle cases below
+            // continue to update the same renderer through f.tree().
+            let snapshotKey = 0;
             const render = async (props) =>
                 act(async () =>
-                    root.render(renderer.renderMultipleAttachmentsField(props))
+                    root.render(
+                        h(
+                            Fragment,
+                            { key: ++snapshotKey },
+                            renderer.renderMultipleAttachmentsField(props)
+                        )
+                    )
                 );
             const isolate = (node) =>
                 h(

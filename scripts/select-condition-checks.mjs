@@ -108,7 +108,7 @@ for(const names of [['Alpha','Beta','Alphabet'],['comma, value','double "quote"'
 }
 // Regex is pattern text over native names, not a choice-ID membership operand.
 const regexField={...base,isComputed:false,config:{type:'singleSelect',options:{choices:[{id:'alpha',name:'Alpha'},{id:'beta',name:'Beta'}]}}};
-for(const [pattern,value,expected] of [['^Alpha$','Alpha',true],['^Alpha$','Beta',false],['^alpha$','Alpha',false],['^Unknown$','Unknown',true],['','Alpha',true]]) {
+for(const [pattern,value,expected] of [['^Alpha$','Alpha',true],['^Alpha$','Beta',false],['^alpha$','Alpha',false],['^Unknown$','Unknown',true],['','Alpha',true],['^Alpha$',null,false],['^Alpha$','',false],['^$',null,true],['^$','',true]]) {
  const conditions=def('singleSelect','matchesRegex',pattern);
  const compiled=compile(conditions,[regexField]);assert.equal(compiled.type,'compiled');
  const target={fieldType:'singleLineText',airtableField:{...base,id:'target',name:'Target',config:{type:'singleLineText',options:null}},miniExtConfig:{conditionalFields:conditions}};
@@ -139,6 +139,10 @@ for(const variant of ['computed','name-ref','array','alias','duplicate','type-dr
 }
 for(const mode of ['strict','compatibility']) for(const value of ['[',1,[],{},null]) {
  assert.equal(compile(def('singleSelect','matchesRegex',value),[regexField],mode).type,'invalid');checks++;
+}
+for(const mode of ['strict','compatibility']) {
+ const result=compile(def('singleSelect','matchesRegex','tail'+String.fromCharCode(92)),[regexField],mode);
+ assert.equal(result.type,'invalid');assert(result.diagnostics.some(d=>d.code==='literal-roundtrip'));assert(!Object.hasOwn(result,'formula'));checks++;
 }
 const drift=compile(def('multipleSelects','matchesRegex','.*'),[base]);assert.equal(drift.type,'unsupported');checks++;
 console.log(JSON.stringify({checks}));

@@ -8,11 +8,9 @@ import {
     AirtableList,
     FieldRenderer,
     NumberField,
-} from '../src/react/index.js';
-import {
     MultipleCollaboratorsField,
     renderMultipleCollaboratorsField,
-} from '../src/react/MultipleCollaboratorsField.js';
+} from '../src/react/index.js';
 import {
     createFormFieldBindings,
     type FormFieldBinding,

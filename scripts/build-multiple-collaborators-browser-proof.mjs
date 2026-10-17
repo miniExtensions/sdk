@@ -1,21 +1,23 @@
-// Build only; use the supported browser tool separately. No browser/server is launched.
-// Run the SDK build first, then:
-// node scripts/build-multiple-collaborators-browser-proof.mjs fresh-output-directory
-// This is a SOURCE / DIRECT COMPILED MODULE proof. Public export/package-check
-// integration is deliberately pending and is not certified by this fixture.
+// Build only. Drive the retained page with the supported browser tool separately.
+// Usage: SDK_MULTIPLE_COLLABORATORS_NPM_CACHE=/path/to/seeded/cache node scripts/build-multiple-collaborators-browser-proof.mjs tested.tgz output-directory
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     existsSync,
+    lstatSync,
     mkdirSync,
+    mkdtempSync,
     readFileSync,
     realpathSync,
+    rmSync,
     writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
+import { assertBrowserInputs } from './package-checks.mjs';
 import { multipleCollaboratorsLoadedFixture } from './multiple-collaborators-consumer-checks.mjs';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 
@@ -48,8 +50,8 @@ function sourceReceipt() {
     };
 }
 
-// Synthetic values only. Imports below resolve this checkout's compiled ESM,
-// including the dedicated module that is intentionally not publicly exported.
+// Only synthetic data is serialized. The browser entry imports SDK code solely
+// from the exact archive installed under its independent consumer directory.
 function browserMain(data) {
     const { loaded, expected, portal } = data;
     const sourceText = expected.find(([id]) => id === 'source')[1];
@@ -778,152 +780,217 @@ const css = `
 `;
 
 async function main() {
-    assert(process.argv[2], 'Pass a fresh output directory.');
-    const output = resolve(process.argv[2]);
+    assert(
+        process.argv[2] && process.argv[3],
+        'Pass the tested tarball and a fresh output directory.'
+    );
+    const archive = realpathSync(resolve(process.argv[2]));
+    const output = resolve(process.argv[3]);
+    assert(
+        lstatSync(archive).isFile(),
+        'The package archive must be a regular file.'
+    );
     assert(
         !existsSync(output),
-        'Output already exists; use a fresh directory.'
+        'Output directory already exists; use a fresh proof directory.'
     );
     assert(
         !inside(root, output),
         'Keep generated proof assets outside the checkout.'
     );
-    const compiledEntry = 'dist/esm/react/MultipleCollaboratorsField.js';
-    assert(
-        existsSync(join(root, compiledEntry)),
-        'Build the dedicated SDK module first.'
-    );
+    const packageSha256 = sha256(readFileSync(archive));
+    const packageIntegrity = `sha512-${createHash('sha512').update(readFileSync(archive)).digest('base64')}`;
     const sourceStart = sourceReceipt();
-    const fixture = multipleCollaboratorsLoadedFixture();
-    const imports = [
-        "import React from 'react';",
-        "import {createRoot} from 'react-dom/client';",
-        "import {flushSync} from 'react-dom';",
-        `import {createMiniExtensionsClient} from ${JSON.stringify(join(root, 'dist/esm/runtime/index.js'))};`,
-        `import {createFormFieldBindings} from ${JSON.stringify(join(root, 'dist/esm/forms/index.js'))};`,
-        `import {createPortalListOwner} from ${JSON.stringify(join(root, 'dist/esm/portals/index.js'))};`,
-        `import {createFormRenderScope,createPortalRenderScope} from ${JSON.stringify(join(root, 'dist/esm/ui/index.js'))};`,
-        `import {AirtableForm,AirtableGrid,AirtableList} from ${JSON.stringify(join(root, 'dist/esm/react/index.js'))};`,
-        `import {MultipleCollaboratorsField,renderMultipleCollaboratorsField} from ${JSON.stringify(join(root, compiledEntry))};`,
-    ];
-    const entry = `${imports.join('\n')}\n(${browserMain.toString()})(${JSON.stringify({ ...fixture, portal: portalRecipeFixtures.makePortal() })});\n`;
-    mkdirSync(output, { recursive: true });
-    const entryPath = join(output, 'entry.js');
-    writeFileSync(entryPath, entry);
-    const bundle = await build({
-        absWorkingDir: root,
-        entryPoints: [entryPath],
-        outfile: join(output, 'main.js'),
-        nodePaths: [join(root, 'node_modules')],
-        bundle: true,
-        platform: 'browser',
-        format: 'esm',
-        target: 'es2022',
-        metafile: true,
-        write: false,
-        define: { 'process.env.NODE_ENV': '"development"' },
-    });
-    const compiledRoot = realpathSync(join(root, 'dist/esm'));
-    const dependencies = realpathSync(join(root, 'node_modules'));
-    const inputs = Object.keys(bundle.metafile.inputs)
-        .sort()
-        .map((path) => {
-            const actual = realpathSync(resolve(root, path));
-            assert(
-                actual === realpathSync(entryPath) ||
-                    inside(compiledRoot, actual) ||
-                    inside(dependencies, actual),
-                `Unexpected browser input outside direct compiled ESM/dependencies: ${path}`
-            );
-            const name = relative(root, actual).split(sep).join('/');
-            const compiled = inside(compiledRoot, actual);
-            const sourcePath = compiled
-                ? name.replace(/^dist\/esm\//, 'src/').replace(/\.js$/, '.ts')
-                : null;
-            return {
-                path: name,
-                sha256: sha256(readFileSync(actual)),
-                ...(sourcePath && existsSync(join(root, sourcePath))
-                    ? {
-                          source: {
-                              path: sourcePath,
-                              sha256: sha256(
-                                  readFileSync(join(root, sourcePath))
-                              ),
-                          },
-                      }
-                    : {}),
-            };
-        });
-    assert(
-        inputs.some(({ path }) => path === compiledEntry),
-        'Dedicated compiled renderer was not bundled.'
+    const consumer = realpathSync(
+        mkdtempSync(join(tmpdir(), 'sdk-multiple-collaborators-browser-'))
     );
-    const sourceEnd = sourceReceipt();
-    const receipt = {
-        createdAt: new Date().toISOString(),
-        proofMode: 'source/direct-compiled-module',
-        browserExecution: 'pending-supported-browser-verification',
-        installedPublicExportProof: 'pending-shared-export-integration',
-        aggregateIntegrationProof:
-            'pending-shared-package-check-registration-and-serialized-integration',
-        source: {
-            start: sourceStart,
-            end: sourceEnd,
-            unchangedDuringBuild:
-                JSON.stringify(sourceStart) === JSON.stringify(sourceEnd),
-            relationship:
-                'Recorded checkout sources and existing compiled ESM. Caller must run and retain the SDK build before this fixture builder; this is not a package archive proof.',
-        },
-        build: {
-            entry: 'entry.js',
-            entrySha256: sha256(entry),
-            sdkEntry: compiledEntry,
-            sdkFormat: 'checkout compiled ESM direct module',
-            reactVersion: JSON.parse(
-                readFileSync(
-                    join(root, 'node_modules/react/package.json'),
-                    'utf8'
-                )
-            ).version,
-            inputsVerified: true,
-            inputs,
-        },
-        checks: 'Synthetic self-checks cover actual SDK renderers and injected events. Native pointer selection, keyboard operation, and visual inspection require the supported browser separately.',
-        output: {},
-    };
-    const assets = {
-        'entry.js': entry,
-        'main.js': bundle.outputFiles[0].contents,
-        'styles.css': css,
-        'bundle-inputs.json': JSON.stringify(bundle.metafile, null, 2) + '\n',
-        'index.html': `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Multiple Collaborators direct-module proof</title><link rel="stylesheet" href="./styles.css"></head><body><main><p class="eyebrow">miniExtensions SDK · direct-module proof</p><h1>Multiple Collaborators supplied names</h1><p class="lead">Form, Grid and List preserve supplied names, ordering, duplicate IDs, blank names, whitespace and native objects. All values are synthetic.</p><p class="note"><strong>Public-export and aggregate package-check integration remain pending.</strong> This fixture imports the dedicated compiled module directly.</p><div class="toolbar"><button id="run" type="button">Run interaction checks</button><button id="remount" type="button">Remount displays</button><button id="replace" type="button">Replace accepted owner</button><button id="retire" type="button">Retire binding</button></div><section class="card" aria-label="Proof result"><p id="proof-result" role="status" data-state="pending">Loading direct SDK modules…</p><p id="counters"></p><ul id="checks"></ul><p class="note">Interaction checks inject six DOM events. Use the browser separately to select supplied text with a pointer and operate these buttons by keyboard.</p></section><div id="app"></div><p class="receipt">Direct compiled entry: ${compiledEntry}<br>Source HEAD at build: ${sourceStart.head}<br>Exact inputs and source hashes: receipt.json</p></main><script type="module" src="./main.js"></script></body></html>`,
-    };
-    for (const [name, contents] of Object.entries(assets)) {
-        writeFileSync(join(output, name), contents);
-        receipt.output[name] = {
-            sha256: sha256(contents),
-            bytes: Buffer.byteLength(contents),
-        };
-    }
-    writeFileSync(
-        join(output, 'receipt.json'),
-        JSON.stringify(receipt, null, 2) + '\n'
-    );
-    console.log(
-        JSON.stringify(
+    try {
+        writeFileSync(
+            join(consumer, 'package.json'),
+            JSON.stringify({ private: true, type: 'module' })
+        );
+        execFileSync(
+            'npm',
+            [
+                'install',
+                '--offline',
+                '--ignore-scripts',
+                '--no-audit',
+                '--no-fund',
+                archive,
+                'react@18.3.1',
+                'react-dom@18.3.1',
+            ],
             {
-                output,
-                proofMode: receipt.proofMode,
-                inputs: inputs.length,
-                browserExecution: receipt.browserExecution,
-                installedPublicExportProof: receipt.installedPublicExportProof,
-                aggregateIntegrationProof: receipt.aggregateIntegrationProof,
+                cwd: consumer,
+                stdio: 'pipe',
+                timeout: 120000,
+                env: {
+                    ...process.env,
+                    ...(process.env.SDK_MULTIPLE_COLLABORATORS_NPM_CACHE
+                        ? {
+                              npm_config_cache: resolve(
+                                  process.env
+                                      .SDK_MULTIPLE_COLLABORATORS_NPM_CACHE
+                              ),
+                          }
+                        : {}),
+                },
+            }
+        );
+        const installed = join(consumer, 'node_modules/@miniextensions/sdk');
+        assert.equal(
+            realpathSync(installed),
+            installed,
+            'Installed SDK must not be a symlink.'
+        );
+        const lock = JSON.parse(
+            readFileSync(join(consumer, 'package-lock.json'), 'utf8')
+        );
+        const locked = lock.packages['node_modules/@miniextensions/sdk'];
+        assert(!locked.link, 'Archive must be installed, not linked.');
+        assert.equal(
+            locked.integrity,
+            packageIntegrity,
+            'Installed SDK integrity differs from the tested archive.'
+        );
+        assert(
+            locked.resolved.startsWith('file:'),
+            'Installed SDK must resolve a local archive.'
+        );
+        const resolvedArchive = locked.resolved.startsWith('file://')
+            ? fileURLToPath(locked.resolved)
+            : resolve(consumer, locked.resolved.slice(5));
+        assert.equal(
+            realpathSync(resolvedArchive),
+            archive,
+            'Installed SDK resolves a different archive.'
+        );
+        const packageMetadata = JSON.parse(
+            readFileSync(join(installed, 'package.json'), 'utf8')
+        );
+        assert.equal(packageMetadata.name, '@miniextensions/sdk');
+        const entry = `import React from 'react';\nimport {createRoot} from 'react-dom/client';\nimport {flushSync} from 'react-dom';\nimport {createMiniExtensionsClient} from '@miniextensions/sdk';\nimport {createFormFieldBindings} from '@miniextensions/sdk/forms';\nimport {createPortalListOwner} from '@miniextensions/sdk/portals';\nimport {createFormRenderScope,createPortalRenderScope} from '@miniextensions/sdk/ui';\nimport {AirtableForm,AirtableGrid,AirtableList,MultipleCollaboratorsField,renderMultipleCollaboratorsField} from '@miniextensions/sdk/react';\n(${browserMain.toString()})(${JSON.stringify({ ...multipleCollaboratorsLoadedFixture(), portal: portalRecipeFixtures.makePortal() })});\n`;
+        writeFileSync(join(consumer, 'entry.js'), entry);
+        const bundle = await build({
+            absWorkingDir: consumer,
+            entryPoints: ['entry.js'],
+            outfile: 'main.js',
+            bundle: true,
+            platform: 'browser',
+            format: 'esm',
+            target: 'es2022',
+            metafile: true,
+            write: false,
+            define: { 'process.env.NODE_ENV': '"development"' },
+        });
+        await assertBrowserInputs(bundle.metafile, consumer);
+        const inputs = Object.keys(bundle.metafile.inputs)
+            .sort()
+            .map((path) => {
+                const actual = realpathSync(resolve(consumer, path));
+                const name = relative(consumer, actual).split(sep).join('/');
+                assert(
+                    !isAbsolute(name) &&
+                        name !== '..' &&
+                        !name.startsWith('../')
+                );
+                if (name.startsWith('node_modules/@miniextensions/sdk/'))
+                    assert(
+                        name.startsWith(
+                            'node_modules/@miniextensions/sdk/dist/esm/'
+                        ),
+                        'Browser must consume installed ESM.'
+                    );
+                return { path: name, sha256: sha256(readFileSync(actual)) };
+            });
+        assert(
+            inputs.some(
+                ({ path }) =>
+                    path ===
+                    'node_modules/@miniextensions/sdk/dist/esm/react/MultipleCollaboratorsField.js'
+            ),
+            'Installed public renderer was not bundled.'
+        );
+        assert.equal(
+            sha256(readFileSync(archive)),
+            packageSha256,
+            'Archive changed during build.'
+        );
+        const sourceEnd = sourceReceipt();
+        const receipt = {
+            createdAt: new Date().toISOString(),
+            proofMode: 'installed-public-package',
+            browserExecution: 'pending-supported-browser-verification',
+            package: {
+                archive,
+                name: packageMetadata.name,
+                version: packageMetadata.version,
+                sha256: packageSha256,
+                integrity: packageIntegrity,
             },
-            null,
-            2
-        )
-    );
+            source: {
+                start: sourceStart,
+                end: sourceEnd,
+                unchangedDuringBuild:
+                    JSON.stringify(sourceStart) === JSON.stringify(sourceEnd),
+                relationToArchive:
+                    'Source snapshot at fixture build time; caller supplies the separately tested archive.',
+            },
+            consumer: {
+                installMode: 'npm offline, ignore-scripts',
+                lockSha256: sha256(
+                    readFileSync(join(consumer, 'package-lock.json'))
+                ),
+                inputsVerified: true,
+                sdkFormat: 'installed ESM',
+                reactVersion: JSON.parse(
+                    readFileSync(
+                        join(consumer, 'node_modules/react/package.json'),
+                        'utf8'
+                    )
+                ).version,
+                inputs,
+            },
+            checks: 'Visible page self-checks cover actual SDK renderers and synthetic injected DOM events; native user/browser checks remain separate.',
+            output: {},
+        };
+        mkdirSync(output, { recursive: true });
+        const assets = {
+            'entry.js': entry,
+            'main.js': bundle.outputFiles[0].contents,
+            'styles.css': css,
+            'index.html': `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'none'; img-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"><title>Multiple Collaborators display proof</title><link rel="stylesheet" href="./styles.css"></head><body><main><p class="eyebrow">miniExtensions SDK · installed package proof</p><h1>Multiple Collaborators supplied names</h1><p class="lead">Native collaborator arrays and objects remain with the owner. These Form, Grid and List displays preserve supplied names, ordering, duplicate IDs, blank names and whitespace; identity metadata stays internal. All data is synthetic.</p><div class="toolbar"><button id="run" type="button">Run interaction checks</button><button id="remount" type="button">Remount displays</button><button id="replace" type="button">Replace accepted owner</button><button id="retire" type="button">Retire binding</button></div><section class="card" aria-label="Proof result"><p id="proof-result" role="status" data-state="pending">Loading installed SDK…</p><p id="counters"></p><ul id="checks"></ul><p class="note">Interaction checks inject DOM events. Use the browser separately for native pointer, keyboard, accessibility and responsive inspection.</p></section><div id="app"></div><p class="receipt">Archive SHA-256: ${packageSha256}<br>Source HEAD at build: ${sourceStart.head}<br>Exact inputs and dirty-source hashes: receipt.json</p></main><script type="module" src="./main.js"></script></body></html>`,
+            'bundle-inputs.json':
+                JSON.stringify(bundle.metafile, null, 2) + '\n',
+        };
+        for (const [name, contents] of Object.entries(assets)) {
+            writeFileSync(join(output, name), contents);
+            receipt.output[name] = {
+                sha256: sha256(contents),
+                bytes: Buffer.byteLength(contents),
+            };
+        }
+        writeFileSync(
+            join(output, 'receipt.json'),
+            JSON.stringify(receipt, null, 2) + '\n'
+        );
+        console.log(
+            JSON.stringify(
+                {
+                    output,
+                    packageSha256,
+                    proofMode: receipt.proofMode,
+                    inputs: inputs.length,
+                    browserExecution: receipt.browserExecution,
+                },
+                null,
+                2
+            )
+        );
+    } finally {
+        rmSync(consumer, { recursive: true, force: true });
+    }
 }
 
 await main();

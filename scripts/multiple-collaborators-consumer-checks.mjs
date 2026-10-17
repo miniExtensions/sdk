@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 
-const repository = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+export const multipleCollaboratorsConsumerCheckCount = 86;
 const mask = '••••••••';
 
 /** Synthetic accepted native values shared with the dedicated browser proof. */
@@ -79,135 +78,101 @@ export function multipleCollaboratorsLoadedFixture() {
     return { loaded, expected: data.map(([id, , text]) => [id, text]) };
 }
 
-// This future public-export fixture is intentionally not registered in check-package.
-export const multipleCollaboratorsReactTypedConsumer = `
-import { createElement, type ReactNode } from 'react';
-import { MultipleCollaboratorsField, renderMultipleCollaboratorsField, type MultipleCollaboratorsFieldProps, type MultipleCollaboratorsFieldOptions } from '@miniextensions/sdk/react';
-import type { FieldRendererProps, FieldRendererSlots } from '@miniextensions/sdk/ui';
-const options: MultipleCollaboratorsFieldOptions = {className:'collaborators'};
-export const renderers: FieldRendererSlots<ReactNode> = {renderMultipleCollaboratorsField: props => renderMultipleCollaboratorsField(props, options)};
-export const Bound = (props:MultipleCollaboratorsFieldProps) => createElement(MultipleCollaboratorsField, props);
-export const Override = (props:MultipleCollaboratorsFieldProps) => createElement(MultipleCollaboratorsField, {...props, render: ({snapshot}) => String(snapshot.retired)});
-export function Native(props:FieldRendererProps<'multipleCollaborators'>, single:FieldRendererProps<'singleCollaborator'>) {
- const native: readonly {id:string;email:string;name:string;profilePicUrl?:string}[]|null|undefined=props.value;
- const supplied: FieldRendererProps<'multipleCollaborators'>['value']=[{id:'same',email:'',name:''},{id:'same',email:'',name:'  Ω\\n '}];
- const readonlyValues: readonly {id:string;email:string;name:string}[]=[];
- const readonlyNative: FieldRendererProps<'multipleCollaborators'>['value']=readonlyValues;
- const capability: FieldRendererProps<'multipleCollaborators'>['capability']={type:'editable',setValue:()=>({accepted:true})};
+/** Public declarations without JSX, for strict NodeNext .mts/.cts checks. */
+export const multipleCollaboratorsNodeTypedConsumer = `
+import {createElement,type ReactNode} from 'react';
+import {MultipleCollaboratorsField,renderMultipleCollaboratorsField,type MultipleCollaboratorsFieldProps,type MultipleCollaboratorsFieldOptions} from '@miniextensions/sdk/react';
+import type {FieldRendererProps,FieldRendererSlots} from '@miniextensions/sdk/ui';
+const options:MultipleCollaboratorsFieldOptions={className:'collaborators'};
+// @ts-expect-error Display options grant no setter.
+const write:MultipleCollaboratorsFieldOptions={setValue:()=>{}};
+// @ts-expect-error No picker or clear action is introduced.
+const clear:MultipleCollaboratorsFieldOptions={clearLabel:'Clear'};
+// @ts-expect-error No identity lookup is introduced.
+const lookup:MultipleCollaboratorsFieldOptions={lookupUser:()=>{}};
+// @ts-expect-error No avatar loading is introduced.
+const avatar:MultipleCollaboratorsFieldOptions={showAvatar:true};
+// @ts-expect-error Empty supplied names have no email fallback.
+const fallback:MultipleCollaboratorsFieldOptions={emailFallback:true};
+// @ts-expect-error No normalization is introduced.
+const normalize:MultipleCollaboratorsFieldOptions={normalize:(name:string)=>name};
+// @ts-expect-error Supplied names are not links.
+const link:MultipleCollaboratorsFieldOptions={href:'https://example.invalid'};
+// @ts-expect-error The component is not a core export.
+import {MultipleCollaboratorsField as coreField} from '@miniextensions/sdk';
+// @ts-expect-error The renderer is not a headless UI export.
+import {renderMultipleCollaboratorsField as headlessRenderer} from '@miniextensions/sdk/ui';
+// @ts-expect-error The internal control is not a public React export.
+import {MultipleCollaboratorsControl} from '@miniextensions/sdk/react';
+// @ts-expect-error Internal files are not package export paths.
+import {MultipleCollaboratorsField as privateField} from '@miniextensions/sdk/react/MultipleCollaboratorsField';
+export const renderers:FieldRendererSlots<ReactNode>={renderMultipleCollaboratorsField:props=>renderMultipleCollaboratorsField(props,options)};
+export function Bound(props:MultipleCollaboratorsFieldProps):ReactNode {
+ return createElement(MultipleCollaboratorsField,{...props,...options});
+}
+export function Override(props:MultipleCollaboratorsFieldProps):ReactNode {
+ return createElement(MultipleCollaboratorsField,{...props,render:({snapshot})=>String(snapshot.retired)});
+}
+export function Native(props:FieldRendererProps<'multipleCollaborators'>,single:FieldRendererProps<'singleCollaborator'>,text:FieldRendererProps<'singleLineText'>,select:FieldRendererProps<'multipleSelects'>) {
+ const node:ReactNode=renderMultipleCollaboratorsField(props,options);
+ const native:readonly {id:string;email:string;name:string;profilePicUrl?:string}[]|null|undefined=props.value;
+ const supplied:FieldRendererProps<'multipleCollaborators'>['value']=[{id:'same',email:'',name:''},{id:'same',email:'',name:'  Ω\\n '}];
+ const readonlyValues:readonly {id:string;email:string;name:string}[]=[];
+ const readonlyNative:FieldRendererProps<'multipleCollaborators'>['value']=readonlyValues;
+ const extraNative=[{id:'same',email:'',name:'Name',extra:{accepted:true}}];
+ const withExtra:FieldRendererProps<'multipleCollaborators'>['value']=extraNative;
+ // Display coverage must not narrow the existing editable native-array contract.
+ const capability:FieldRendererProps<'multipleCollaborators'>['capability']={type:'editable',setValue:value=>({accepted:true})};
  // @ts-expect-error A single object is not the plural physical slot.
  renderMultipleCollaboratorsField(single);
+ // @ts-expect-error A text field is not the plural physical slot.
+ renderMultipleCollaboratorsField(text);
+ // @ts-expect-error A different native-array field does not share this physical slot.
+ renderMultipleCollaboratorsField(select);
+ // @ts-expect-error Native values remain readonly at the renderer boundary.
+ props.value?.push({id:'id',email:'',name:'Name'});
  // @ts-expect-error Name is a required native string, including when blank.
- const missingName: FieldRendererProps<'multipleCollaborators'>['value']=[{id:'id',email:'mail'}];
+ const missingName:FieldRendererProps<'multipleCollaborators'>['value']=[{id:'id',email:'mail'}];
+ // @ts-expect-error Native email remains required even when blank.
+ const missingEmail:FieldRendererProps<'multipleCollaborators'>['value']=[{id:'id',name:'Name'}];
+ // @ts-expect-error Native id remains required.
+ const missingId:FieldRendererProps<'multipleCollaborators'>['value']=[{email:'mail',name:'Name'}];
+ // @ts-expect-error Native names remain strings.
+ const numericName:FieldRendererProps<'multipleCollaborators'>['value']=[{id:'id',email:'mail',name:1}];
  // @ts-expect-error A null member is not an empty native array.
- const nullMember: FieldRendererProps<'multipleCollaborators'>['value']=[null];
+ const nullMember:FieldRendererProps<'multipleCollaborators'>['value']=[null];
  // @ts-expect-error Native values are objects, not display-name strings.
- const names: FieldRendererProps<'multipleCollaborators'>['value']=['Ada'];
+ const names:FieldRendererProps<'multipleCollaborators'>['value']=['Ada'];
  // @ts-expect-error Optional avatar metadata must remain a string.
- const malformedAvatar: FieldRendererProps<'multipleCollaborators'>['value']=[{id:'id',email:'mail',name:'Ada',profilePicUrl:null}];
- return {native,supplied,readonlyNative,capability};
+ const malformedAvatar:FieldRendererProps<'multipleCollaborators'>['value']=[{id:'id',email:'mail',name:'Ada',profilePicUrl:null}];
+ return {node,native,supplied,readonlyNative,withExtra,capability};
 }
-// @ts-expect-error Display options grant no setter.
-const write: MultipleCollaboratorsFieldOptions={setValue:()=>{}};
-// @ts-expect-error No picker or clear action is introduced.
-const clear: MultipleCollaboratorsFieldOptions={clearLabel:'Clear'};
-// @ts-expect-error No identity lookup is introduced.
-const lookup: MultipleCollaboratorsFieldOptions={lookupUser:()=>{}};
-// @ts-expect-error No avatar or email fallback options are introduced.
-const fallback: MultipleCollaboratorsFieldOptions={showAvatar:true,emailFallback:true};
-// @ts-expect-error No normalization is introduced.
-const normalize: MultipleCollaboratorsFieldOptions={normalize:(name:string)=>name};
 `;
 
-/** Strict NodeNext declarations, using direct files until exports are serialized. */
-export function checkMultipleCollaboratorsDirectTypes({
-    directory = repository,
-} = {}) {
-    const require = createRequire(join(directory, 'package.json'));
-    const temporary = mkdtempSync(
-        join(directory, 'node_modules', '.multiple-collaborators-types-')
-    );
-    try {
-        const directSource = (format) =>
-            multipleCollaboratorsReactTypedConsumer
-                .replaceAll(
-                    "'@miniextensions/sdk/react'",
-                    JSON.stringify(
-                        relative(
-                            temporary,
-                            join(
-                                directory,
-                                'dist',
-                                format,
-                                'react/MultipleCollaboratorsField.js'
-                            )
-                        ).replaceAll('\\', '/')
-                    )
-                )
-                .replaceAll(
-                    "'@miniextensions/sdk/ui'",
-                    JSON.stringify(
-                        relative(
-                            temporary,
-                            join(directory, 'dist', format, 'ui/index.js')
-                        ).replaceAll('\\', '/')
-                    )
-                );
-        writeFileSync(join(temporary, 'package.json'), '{"type":"module"}\n');
-        writeFileSync(join(temporary, 'consumer.mts'), directSource('esm'));
-        writeFileSync(join(temporary, 'consumer.cts'), directSource('cjs'));
-        writeFileSync(
-            join(temporary, 'consumer.tsx'),
-            directSource('esm') +
-                `
-export function JSX(props:MultipleCollaboratorsFieldProps) { return <MultipleCollaboratorsField {...props} className="native-names"/>; }
+/** JSX composition uses the same public native-array and display-only boundaries. */
+export const multipleCollaboratorsReactTypedConsumer =
+    multipleCollaboratorsNodeTypedConsumer +
+    `
+import {AirtableForm,AirtableGrid,AirtableList} from '@miniextensions/sdk/react';
+import type {FormRenderScope,PortalRenderScope} from '@miniextensions/sdk/ui';
+export function JSX(props:MultipleCollaboratorsFieldProps) {return <MultipleCollaboratorsField {...props} className="native-names"/>;}
+export function CustomJSX(props:MultipleCollaboratorsFieldProps) {return <MultipleCollaboratorsField {...props} render={({snapshot})=><span>{String(snapshot.retired)}</span>}/>;}
 // @ts-expect-error JSX accepts no picker callback.
-export function InvalidJSX(props:MultipleCollaboratorsFieldProps) { return <MultipleCollaboratorsField {...props} onSelect={()=>{}}/>; }
-`
-        );
-        writeFileSync(
-            join(temporary, 'tsconfig.json'),
-            JSON.stringify({
-                compilerOptions: {
-                    target: 'ES2022',
-                    module: 'NodeNext',
-                    moduleResolution: 'NodeNext',
-                    strict: true,
-                    noEmit: true,
-                    skipLibCheck: false,
-                    jsx: 'react-jsx',
-                    types: ['react', 'react-dom'],
-                },
-                include: ['consumer.mts', 'consumer.cts', 'consumer.tsx'],
-            })
-        );
-        const result = spawnSync(
-            process.execPath,
-            [
-                require.resolve('typescript/bin/tsc'),
-                '--project',
-                join(temporary, 'tsconfig.json'),
-            ],
-            { cwd: directory, encoding: 'utf8' }
-        );
-        if (result.error) throw result.error;
-        assert.equal(result.status, 0, result.stdout + result.stderr);
-        return {
-            files: ['NodeNext ESM', 'NodeNext CommonJS', 'JSX'],
-            scope: 'direct compiled declarations',
-        };
-    } finally {
-        rmSync(temporary, { recursive: true, force: true });
-    }
-}
+export function InvalidJSX(props:MultipleCollaboratorsFieldProps) {return <MultipleCollaboratorsField {...props} onSelect={()=>{}}/>;}
+export function Compositions({form,portal}:{form:FormRenderScope;portal:PortalRenderScope}) {return <>
+ <AirtableForm scope={form} renderers={renderers}>{state=>state.fields.map(field=>field.node)}</AirtableForm>
+ <AirtableGrid scope={portal} renderers={renderers}>{state=>state.rows.flatMap(row=>row.cells.map(cell=>cell.node))}</AirtableGrid>
+ <AirtableList scope={portal} renderers={renderers}>{state=>state.rows.flatMap(row=>row.cells.map(cell=>cell.node))}</AirtableList>
+ </>;}
+`;
 
-/** Direct compiled-module runtime proof. This is not an installed-package claim. */
-export async function checkMultipleCollaboratorsDirectModules({
-    directory = repository,
-} = {}) {
-    const require = createRequire(join(directory, 'package.json'));
-    const { Window } = await import(
-        pathToFileURL(require.resolve('happy-dom'))
-    );
+/** Actual packed public ESM/CommonJS imports with synthetic Form/Portal owners. */
+export async function checkMultipleCollaboratorsConsumer({
+    consumerDirectory,
+    happyDomModulePath,
+}) {
+    const require = createRequire(join(consumerDirectory, 'package.json'));
+    const { Window } = await import(pathToFileURL(happyDomModulePath));
     const window = new Window();
     let network = 0;
     window.fetch = () => {
@@ -237,32 +202,61 @@ export async function checkMultipleCollaboratorsDirectModules({
     const forbidden =
         'input,button,a,img,canvas,video,audio,iframe,object,embed,svg,[contenteditable=true]';
     let checks = 0;
+    const temporary = mkdtempSync(
+        join(consumerDirectory, '.multiple-collaborators-consumer-')
+    );
+    const esmLoader = join(temporary, 'public-imports.mjs');
     try {
+        writeFileSync(
+            esmLoader,
+            `
+import * as core from '@miniextensions/sdk';
+import * as forms from '@miniextensions/sdk/forms';
+import * as portals from '@miniextensions/sdk/portals';
+import * as ui from '@miniextensions/sdk/ui';
+import * as react from '@miniextensions/sdk/react';
+export {core, forms, portals, ui, react};
+export const importPackage = (name) => import(name);
+`
+        );
         for (const format of ['esm', 'cjs']) {
-            const load = (name) => {
-                const path = join(directory, 'dist', format, name + '.js');
-                return format === 'cjs'
-                    ? require(path)
-                    : import(pathToFileURL(path));
-            };
-            const [forms, portals, ui, react, component] = await Promise.all(
-                [
-                    'forms/index',
-                    'portals/index',
-                    'ui/index',
-                    'react/index',
-                    'react/MultipleCollaboratorsField',
-                ].map(load)
-            );
+            const { core, forms, portals, ui, react, importPackage } =
+                format === 'esm'
+                    ? await import(pathToFileURL(esmLoader))
+                    : {
+                          core: require('@miniextensions/sdk'),
+                          forms: require('@miniextensions/sdk/forms'),
+                          portals: require('@miniextensions/sdk/portals'),
+                          ui: require('@miniextensions/sdk/ui'),
+                          react: require('@miniextensions/sdk/react'),
+                      };
+            assert.equal(typeof react.MultipleCollaboratorsField, 'function');
             assert.equal(
-                typeof component.MultipleCollaboratorsField,
+                typeof react.renderMultipleCollaboratorsField,
                 'function'
             );
-            assert.equal(
-                typeof component.renderMultipleCollaboratorsField,
-                'function'
-            );
-            assert.equal(component.MultipleCollaboratorsControl, undefined);
+            for (const namespace of [core, forms, portals, ui]) {
+                assert.equal(namespace.MultipleCollaboratorsField, undefined);
+                assert.equal(
+                    namespace.renderMultipleCollaboratorsField,
+                    undefined
+                );
+            }
+            assert.equal(react.MultipleCollaboratorsControl, undefined);
+            for (const subpath of [
+                'react/MultipleCollaboratorsField',
+                `dist/${format}/react/MultipleCollaboratorsField.js`,
+            ]) {
+                const name = `@miniextensions/sdk/${subpath}`;
+                if (format === 'esm')
+                    await assert.rejects(importPackage(name), {
+                        code: 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+                    });
+                else
+                    assert.throws(() => require(name), {
+                        code: 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+                    });
+            }
             checks++;
             const { loaded, expected } = multipleCollaboratorsLoadedFixture();
             let writes = 0,
@@ -347,7 +341,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                     return h(
                         'section',
                         { 'data-field': props.fieldId },
-                        component.renderMultipleCollaboratorsField(props)
+                        react.renderMultipleCollaboratorsField(props)
                     );
                 },
             };
@@ -407,7 +401,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                 ]) {
                     await act(async () =>
                         root.render(
-                            component.renderMultipleCollaboratorsField({
+                            react.renderMultipleCollaboratorsField({
                                 ...sourceProps,
                                 value,
                             })
@@ -458,7 +452,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                             });
                             await act(async () =>
                                 root.render(
-                                    component.renderMultipleCollaboratorsField(
+                                    react.renderMultipleCollaboratorsField(
                                         props
                                     )
                                 )
@@ -480,7 +474,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                 });
                 await act(async () =>
                     root.render(
-                        component.renderMultipleCollaboratorsField(
+                        react.renderMultipleCollaboratorsField(
                             inaccessibleValue
                         )
                     )
@@ -493,7 +487,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                 Object.defineProperty(noActions, 'capability', { get: poison });
                 await act(async () =>
                     root.render(
-                        component.renderMultipleCollaboratorsField(noActions)
+                        react.renderMultipleCollaboratorsField(noActions)
                     )
                 );
                 assert.equal(output().textContent, expected[0][1]);
@@ -502,7 +496,7 @@ export async function checkMultipleCollaboratorsDirectModules({
 
                 await act(async () =>
                     root.render(
-                        component.renderMultipleCollaboratorsField({
+                        react.renderMultipleCollaboratorsField({
                             ...sourceProps,
                             pending: true,
                             error: '<b>feedback</b>',
@@ -524,12 +518,8 @@ export async function checkMultipleCollaboratorsDirectModules({
                         h(
                             Fragment,
                             null,
-                            component.renderMultipleCollaboratorsField(
-                                sourceProps
-                            ),
-                            component.renderMultipleCollaboratorsField(
-                                sourceProps
-                            )
+                            react.renderMultipleCollaboratorsField(sourceProps),
+                            react.renderMultipleCollaboratorsField(sourceProps)
                         )
                     )
                 );
@@ -542,7 +532,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                 await act(async () =>
                     root.render(
                         isolate(
-                            h(component.MultipleCollaboratorsField, { binding })
+                            h(react.MultipleCollaboratorsField, { binding })
                         )
                     )
                 );
@@ -562,7 +552,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                     Object.defineProperty(noSelection, key, { get: poison });
                 await act(async () =>
                     root.render(
-                        h(component.MultipleCollaboratorsField, {
+                        h(react.MultipleCollaboratorsField, {
                             key: 'no-selection',
                             binding: noSelection,
                         })
@@ -604,7 +594,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                     // A distinct key avoids React's development prop comparison touching fixture getters.
                     await act(async () =>
                         root.render(
-                            h(component.MultipleCollaboratorsField, {
+                            h(react.MultipleCollaboratorsField, {
                                 key,
                                 binding: hidden,
                             })
@@ -636,7 +626,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                 );
                 await act(async () =>
                     root.render(
-                        h(component.MultipleCollaboratorsField, {
+                        h(react.MultipleCollaboratorsField, {
                             binding: hiddenFields.field('source'),
                         })
                     )
@@ -748,7 +738,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                                             scope: portalScope,
                                             renderers: {
                                                 renderMultipleCollaboratorsField:
-                                                    component.renderMultipleCollaboratorsField,
+                                                    react.renderMultipleCollaboratorsField,
                                             },
                                         },
                                         (state) =>
@@ -780,7 +770,7 @@ export async function checkMultipleCollaboratorsDirectModules({
                 assert.equal(output(), null);
                 await act(async () =>
                     root.render(
-                        h(component.MultipleCollaboratorsField, { binding })
+                        h(react.MultipleCollaboratorsField, { binding })
                     )
                 );
                 assert.equal(output().textContent, expected[0][1]);
@@ -799,15 +789,10 @@ export async function checkMultipleCollaboratorsDirectModules({
                 container.remove();
             }
         }
-        return {
-            checks,
-            formats: ['esm', 'cjs'],
-            react: require('react').version,
-            scope: 'direct compiled modules',
-            installedPublicExports: 'pending shared integration',
-            aggregatePackageRegistration: 'pending shared integration',
-        };
+        assert.equal(checks, multipleCollaboratorsConsumerCheckCount);
+        return { checks };
     } finally {
+        rmSync(temporary, { recursive: true, force: true });
         globals.forEach((key, index) => {
             if (originals[index])
                 Object.defineProperty(globalThis, key, originals[index]);
@@ -815,13 +800,4 @@ export async function checkMultipleCollaboratorsDirectModules({
         });
         await window.happyDOM.close();
     }
-}
-
-if (
-    process.argv[1] &&
-    resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-) {
-    const types = checkMultipleCollaboratorsDirectTypes();
-    const runtime = await checkMultipleCollaboratorsDirectModules();
-    console.log(JSON.stringify({ types, runtime }, null, 2));
 }

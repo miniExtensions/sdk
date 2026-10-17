@@ -3184,3 +3184,82 @@ source hashes, and verifies installed bundle inputs. Serve the output on loopbac
 to inspect the Form/Grid/List displays and run its interaction, remount and
 retirement checks. Fixture generation leaves browser verification pending; native
 browser interaction and layout inspection are separate from its injected DOM checks.
+
+## React Multiple Collaborators presentation
+
+The optional `/react` entry exports `MultipleCollaboratorsField`,
+`MultipleCollaboratorsFieldProps`, `MultipleCollaboratorsFieldOptions` and
+`renderMultipleCollaboratorsField`. Install the renderer in the existing physical
+`renderMultipleCollaboratorsField` slot for `AirtableForm`, `AirtableGrid` or
+`AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import {
+    MultipleCollaboratorsField,
+    renderMultipleCollaboratorsField,
+} from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+
+export const collaboratorsRenderers: FieldRendererSlots<ReactNode> = {
+    renderMultipleCollaboratorsField: (props) =>
+        renderMultipleCollaboratorsField(props, {
+            className: 'collaborators-answer',
+        }),
+};
+// With an accepted Multiple Collaborators Form binding:
+// <MultipleCollaboratorsField binding={collaboratorsBinding} />
+```
+
+The native read value remains `readonly { id: string; email: string; name: string;
+profilePicUrl?: string }[] | null | undefined`. The owner retains the array and
+objects; this presentation joins only the supplied names with `, `, preserving
+order, repeated IDs and names, blank names, whitespace, Unicode and line breaks.
+For example, names `['Ada', '', 'Ada']` display `Ada, , Ada`. An empty array, null
+or missing value displays blank. The existing native validator accepts additional
+object properties; they are preserved without being displayed or adding a stricter
+native model. There is no fallback to email, ID, field choices or another source.
+Malformed direct values display `Unavailable` with invalid status for the whole
+array, without partial names or coercion. Existing owner validation remains in
+place before dispatch.
+
+Default bound output follows hidden, blocked and retired owner state before
+reading schema or answer. The existing edit-Form `hideFieldIfEmpty` policy still
+refuses Multiple Collaborators fields, including null and empty arrays. Set it
+explicitly to `false` when displaying collaborators in an edit Form. Create Forms
+remain visible under that policy. The application-owned `render` override keeps
+existing custom-render precedence and is responsible for its own presentation
+policy.
+
+Either `obscurePassword` or `maskPasswordOnLoginScreen` in display or write
+configuration replaces the answer with a fixed mask before the renderer reads the
+value reference, array length, entries or native properties. This guarantee starts
+at the renderer or bound snapshot boundary; existing owners still validate and
+clone accepted native values. Error and validation feedback remains separate
+escaped text, with error taking precedence, including an empty error. Each output
+has a unique associated label or hidden-title accessible name, pending/invalid
+state and a feedback association when feedback is present. Feedback uses a polite
+status region. Click, auxiliary click, double click, pointer-down, key-down and
+key-up events are contained without cancelling native defaults for text selection
+or copy.
+
+This renderer provides read-only display coverage while the existing headless
+slot's editable capability remains unchanged. It does not use write actions,
+request avatars, resolve identities, create links, normalize or deduplicate
+answers, calculate a count, provide a picker or edit values. URLs and markup in
+names remain plain text. `className` decorates
+`mx-sdk-multiple-collaborators-field`; no CSS import or package subpath is added.
+Single Collaborator retains its separate slot. Core and `/ui` remain React-free.
+
+`test/reactMultipleCollaborators.test.ts` covers the source component, and
+`check:package` runs installed ESM/CommonJS runtime and public-type checks. A
+synthetic browser fixture can be built from the tested archive with
+`node scripts/build-multiple-collaborators-browser-proof.mjs /path/to/tested.tgz /path/to/output`.
+It installs offline using an already seeded npm cache
+(`SDK_MULTIPLE_COLLABORATORS_NPM_CACHE` can select that cache), records archive and
+source hashes, and verifies installed bundle inputs. Serve the output on loopback
+to inspect the Form/Grid/List displays and run its interaction, owner replacement,
+remount and retirement checks. Fixture generation leaves browser verification
+pending; native browser interaction and layout inspection are separate from its
+injected DOM checks. This synthetic fixture does not establish live-backend,
+screen-reader or clipboard behavior.

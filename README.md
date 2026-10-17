@@ -277,6 +277,14 @@ existing physical slot. It displays only the supplied name as inert text while
 preserving the native object, with masking before value access. No identity lookup,
 email/ID fallback, avatar request or editing is added.
 
+[Multiple Collaborators presentation](docs/ui.md#react-multiple-collaborators-presentation)
+exports `MultipleCollaboratorsField`, `MultipleCollaboratorsFieldProps`,
+`MultipleCollaboratorsFieldOptions` and `renderMultipleCollaboratorsField` for the
+existing physical slot. It joins supplied names with `, ` as inert text, preserving
+order, duplicates, blank names, whitespace and native arrays and objects. Masking
+precedes value access; no identity lookup, email/ID fallback, avatar, picker or
+editing is added.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,

@@ -746,11 +746,29 @@ describe('bounded one-page conditional visibility', () => {
                 fieldIdsToSchemas: { target, section },
             });
             assert.deepEqual(composed.target, {
-                type: 'blocked',
-                code: 'unsupported-hide-empty',
+                type: 'hidden',
                 diagnostics: [],
             });
             assert.equal(composed.section.type, 'visible');
+            // Raw titles, including disabled display headers, still bound the
+            // unsupported section-prefilter region. A flag without a title
+            // creates no section and cannot affect another field's emptiness.
+            const reversed = composeFormFieldVisibility({
+                ...input(),
+                fieldIds: ['section', 'target'],
+                fieldIdsToSchemas: { target, section },
+            });
+            if (
+                section.miniExtConfig &&
+                'headerSectionTitle' in section.miniExtConfig &&
+                section.miniExtConfig.headerSectionTitle
+            )
+                assert.deepEqual(reversed.target, {
+                    type: 'blocked',
+                    code: 'unsupported-hide-empty',
+                    diagnostics: [],
+                });
+            else assert.equal(reversed.target.type, 'hidden');
         }
         assert.equal(
             composeFormFieldVisibility({
@@ -766,6 +784,42 @@ describe('bounded one-page conditional visibility', () => {
             }).target.type,
             'hidden'
         );
+    });
+
+    it('preserves the supported scalar emptiness boundary before a later section', () => {
+        for (const [type, value, expected] of [
+            ['singleLineText', '  ', 'hidden'],
+            ['singleLineText', 'Kept', 'visible'],
+            ['email', null, 'hidden'],
+            ['checkbox', false, 'hidden'],
+            ['rating', 0, 'hidden'],
+            ['number', 0, 'visible'],
+            ['barcode', { text: '' }, 'hidden'],
+            ['singleLineText', [], 'blocked'],
+            ['date', null, 'blocked'],
+            ['multipleRecordLinks', [], 'blocked'],
+        ] as const) {
+            const target = {
+                ...text('target', { hideFieldIfEmpty: true }),
+                fieldType: type,
+                airtableField: {
+                    ...text('target').airtableField,
+                    config: { type, options: null },
+                },
+            } as RuntimeFieldSchema;
+            const section = text('section', { headerSectionTitle: 'Later' });
+            const data = { target: value } as Record<string, AirtableValue>;
+            const before = structuredClone(data);
+            const actual = composeFormFieldVisibility({
+                ...input(),
+                data,
+                airtableFields: [target.airtableField, section.airtableField],
+                fieldIds: ['target', 'section'],
+                fieldIdsToSchemas: { target, section },
+            });
+            assert.equal(actual.target.type, expected, type);
+            assert.deepEqual(data, before);
+        }
     });
 
     it('returns safe explicit errors and recovers when accepted driver data is repaired', () => {

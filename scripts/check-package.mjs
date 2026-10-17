@@ -123,6 +123,7 @@ import {
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
+import { checkLeadingPageVisibilityConsumer } from './leading-page-visibility-consumer-checks.mjs';
 import {
     checkCrossPageChoiceConsumer,
     crossPageChoiceTypedConsumer,
@@ -2410,6 +2411,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(conditionalValidationChecks, 126);
     console.log(
         `Installed configured conditional validation: ${conditionalValidationChecks} ESM/CJS, canonical and shipped React recipe checkpoints passed; synthetic dispatch only.`
+    );
+    const leadingPageVisibilityChecks =
+        await checkLeadingPageVisibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(leadingPageVisibilityChecks, 12);
+    console.log(
+        `Installed leading-page visibility: ${leadingPageVisibilityChecks} ESM/CJS checkpoints passed; synthetic Save dispatch only.`
     );
     const crossPageChoiceChecks = await checkCrossPageChoiceConsumer({
         consumerDirectory: temporaryDirectory,

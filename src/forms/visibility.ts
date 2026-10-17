@@ -342,24 +342,28 @@ export function composeFormFieldVisibility(
     input: ComposeFormFieldVisibilityInput
 ): Readonly<Record<string, FormFieldVisibility>> {
     const result: Record<string, FormFieldVisibility> = {};
-    const sectionContext = input.fieldIds.some((fieldId) => {
-        const field = input.fieldIdsToSchemas[fieldId];
-        return field != null && hasSectionContext(field);
-    });
+    // A later section cannot affect leading unsectioned scalar fields.
+    // The canonical prefilter recognizes raw nonblank titles even when their
+    // display header is disabled. Keep empty-hiding after that boundary refused
+    // until section-filtered values have their own parity contract.
+    let reachedRawSection = false;
     let enclosing: FormFieldVisibility | null = null;
     for (const fieldId of input.fieldIds) {
         const field = input.fieldIdsToSchemas[fieldId];
         const config = field?.miniExtConfig;
-        const startsSection =
+        const hasRawSectionTitle =
             config != null &&
             'headerSectionTitle' in config &&
             typeof config.headerSectionTitle === 'string' &&
-            config.headerSectionTitle.trim() !== '' &&
+            config.headerSectionTitle.trim() !== '';
+        if (hasRawSectionTitle) reachedRawSection = true;
+        const startsSection =
+            hasRawSectionTitle &&
             (!('enableSectionHeader' in config) ||
                 config.enableSectionHeader !== false);
         if (startsSection) enclosing = null;
         const visibility: FormFieldVisibility =
-            sectionContext &&
+            reachedRawSection &&
             input.formRecordType === 'edit' &&
             config != null &&
             'hideFieldIfEmpty' in config &&

@@ -312,6 +312,7 @@ const browserStarterFiles = [
     'dev.mjs',
     'src/main.ts',
     'src/progress.ts',
+    'src/privacy.ts',
     'src/fields.ts',
     'src/customFieldRenderer.ts',
     'src/portal.ts',

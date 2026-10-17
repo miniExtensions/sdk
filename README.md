@@ -293,6 +293,13 @@ string. Masking precedes value access. This is a safe plain-text display stage;
 formatted Rich Text parity, parsing, links, resource loading and editing are not
 included.
 
+[AI Text presentation](docs/ui.md#react-ai-text-presentation) exports `AiTextField`,
+`AiTextFieldProps`, `AiTextFieldOptions` and `renderAiTextField` for the existing
+computed, read-only slot. It displays the supplied native object's `value` as
+escaped selectable text with whitespace preserved. Native state and stale flags
+remain unchanged; masking precedes value access. No generation, retry, prompt or
+reference inspection, parsing, links, hydration or editing is added.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,

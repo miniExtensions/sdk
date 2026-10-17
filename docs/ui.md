@@ -3344,3 +3344,76 @@ retirement checks. Fixture generation leaves browser verification pending; nativ
 browser interaction and layout inspection are separate from its injected DOM
 checks. This synthetic fixture does not establish live-backend, screen-reader or
 clipboard behavior.
+
+## React AI Text presentation
+
+The optional `/react` entry exports `AiTextField`, `AiTextFieldProps`,
+`AiTextFieldOptions` and `renderAiTextField`. Register the helper in the existing
+physical `renderAiTextField` slot for `AirtableForm`, `AirtableGrid` or `AirtableList`:
+
+```tsx
+import type { ReactNode } from 'react';
+import { AiTextField, renderAiTextField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+
+export const aiTextRenderers: FieldRendererSlots<ReactNode> = {
+    renderAiTextField: (props) =>
+        renderAiTextField(props, { className: 'ai-text-answer' }),
+};
+// With an accepted AI Text Form binding:
+// <AiTextField binding={aiTextBinding} className="ai-text-answer" />
+```
+
+The runtime value is a native object with `state` (`empty`, `loading`, `generated`
+or `error`), string `value`, required boolean `isStale`, and optional string
+`errorType`. The owner retains that object. The helper displays only the supplied
+`value` in every state and for either stale flag; it does not infer generation
+progress, replace text with a status message, or inspect prompts or references.
+The older formula-side type with optional `isStale` does not broaden this runtime
+contract. Null or missing native values and empty strings display blank. Whitespace, Unicode and
+original line endings are preserved, and long lines wrap without rewriting data.
+HTML, Markdown and URLs remain escaped literal text. Malformed direct values,
+including non-string states and missing `isStale`, display `Unavailable` with
+invalid status, without coercion. Existing host admission remains authoritative.
+
+AI Text remains computed and read-only. Default bound output checks retirement
+and visibility before reading schema or value, and supports only matching AI Text
+physical kinds. Hidden, blocked and retired owners render no default output.
+Existing owner emptiness and conditional-visibility rules remain unchanged; this
+component adds no state-based visibility rule. The application-owned `render`
+override retains existing precedence and owns its presentation policy.
+
+Either password-masking flag in display or write configuration replaces the
+answer with a fixed mask before reading its native reference or properties. This
+guarantee begins at the renderer or accepted snapshot boundary. Owner `pending`,
+`error` and validation supply accessible busy/invalid state and escaped feedback;
+native `loading`, `error`, `isStale` and `errorType` do not replace those semantics.
+Each output has a unique associated label or a hidden-title accessible name.
+Feedback uses a polite status region. Click, auxiliary-click, double-click,
+pointer-down, key-down and key-up events are contained without cancelling native text
+selection defaults.
+
+This slice provides supplied-value display coverage. It adds no generation,
+retry, parser, links, resource loading, normalization, hydration, editing or save
+action. Even forged editable capabilities remain unused. `AiTextFieldOptions`
+contains only optional `className`, decorating `mx-sdk-ai-text-field`; there is no
+new stylesheet or package subpath. Core and `/ui` remain React-free.
+
+`test/reactAiText.test.ts` covers source behavior. The normal package check runs
+installed ESM/CommonJS runtime cases and public JSX/Node declaration checks. The
+separate `scripts/build-ai-text-browser-proof.mjs` fixture uses an installed tested
+archive for synthetic Form/Grid/List, visibility and lifecycle evidence. Its
+injected DOM checks and native browser inspection do not establish live-backend,
+generation, clipboard or screen-reader behavior.
+
+To build that fixture, supply a consumer already installed from the tested local
+archive and a fresh output directory:
+
+```sh
+node scripts/build-ai-text-browser-proof.mjs /path/to/installed-consumer /path/to/tested.tgz /path/to/fresh-output
+```
+
+The builder verifies archive integrity and installed bundle inputs, records source
+identities, and writes only the fresh output directory. It does not install
+dependencies, start a server or perform browser verification. Serve the output
+locally to inspect the displays and run the visible lifecycle controls.

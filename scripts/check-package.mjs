@@ -21,6 +21,12 @@ import {
     richTextConsumerCheckCount,
 } from './rich-text-consumer-checks.mjs';
 import {
+    checkAiTextConsumer,
+    aiTextReactTypedConsumer,
+    aiTextNodeTypedConsumer,
+    aiTextConsumerCheckCount,
+} from './ai-text-consumer-checks.mjs';
+import {
     checkLookupConsumer,
     lookupReactTypedConsumer,
 } from './lookup-consumer-checks.mjs';
@@ -1485,6 +1491,30 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         ]);
     }
     writeFileSync(
+        join(temporaryDirectory, 'ai-text-react-consumer.tsx'),
+        aiTextReactTypedConsumer
+    );
+    reactSources.push('ai-text-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `ai-text-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            aiTextNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2392,6 +2422,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(richTextProof.publicExportVerified, true);
     console.log(
         `Installed Rich Text literal presentation: ${richTextProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const aiTextProof = await checkAiTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+        mode: 'public-export',
+    });
+    assert.equal(aiTextProof.checks, aiTextConsumerCheckCount);
+    assert.equal(aiTextProof.publicExportVerified, true);
+    console.log(
+        `Installed AI Text literal presentation: ${aiTextProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
     );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,

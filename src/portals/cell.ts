@@ -51,6 +51,9 @@ const cellContexts = new WeakMap<
         binding: FormFieldBinding;
     }
 >();
+const isObject = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+
 export function readPortalCellBindingContext(
     cell: PortalCellBinding,
     client: MiniExtensionsClient
@@ -318,10 +321,23 @@ export const createPortalCellBinding = (
                     input.recordFieldId
                 );
                 submitted = true;
-                const result = await options.client.portals.updateGridCell(
-                    { ...input, value },
-                    { signal: abort.signal }
+                // Validate and return one detached response before observing
+                // ownership again; response accessors may replace the owner.
+                const result = structuredClone(
+                    await options.client.portals.updateGridCell(
+                        { ...input, value },
+                        { signal: abort.signal }
+                    )
                 );
+                if (
+                    !isObject(result) ||
+                    !isObject(result.record) ||
+                    typeof result.record.id !== 'string' ||
+                    result.record.id.trim() === '' ||
+                    result.record.id !== input.recordId ||
+                    !isObject(result.record.fields)
+                )
+                    throw new Error('The cell outcome is unknown.');
                 if (
                     !current() ||
                     abort.signal.aborted ||

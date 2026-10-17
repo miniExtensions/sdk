@@ -68,7 +68,7 @@ const numericTypes = ['number', 'percent', 'currency', 'rating'] as const;
 // Exact direct-field intersection of the canonical v105 condition declarations:
 // twenty operators, fourteen physical field types, ninety-nine pairs.
 const supportedPairs: Readonly<Record<string, readonly string[]>> = {
-    matchesRegex: textTypes,
+    matchesRegex: [...textTypes, 'singleSelect'],
     is: [...equalityTextTypes, 'checkbox', 'singleSelect'],
     isNot: [...equalityTextTypes, 'singleSelect'],
     contains: textTypes,
@@ -235,9 +235,9 @@ export function compileRuntimeConditions(
             return null;
         }
 
-        // Select operands are choice IDs, never native answer names. Keep this
-        // branch ahead of scalar parsing and the numeric switch fallback.
-        if (isSelect(setting.fieldType)) {
+        // Select membership operands are choice IDs. Regex patterns instead use
+        // the scalar literal/regex checks below and match native answer names.
+        if (isSelect(setting.fieldType) && operator !== 'matchesRegex') {
             const empty = operator === 'isEmpty' || operator === 'isNotEmpty';
             const equality = operator === 'is' || operator === 'isNot';
             const value = setting.value;

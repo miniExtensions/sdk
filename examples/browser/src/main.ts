@@ -912,11 +912,11 @@ const renderForm = (page: FormLoadedResult): void => {
     let progressInputRevision = 0;
     let progressSaveCleanups = 0;
     let activeUpload: RecoveryAttempt | null = null;
+    let pageReviewPresentation: AbortController | null = null;
+    let retirePageReview = (): void => {};
     const controls = new Map<string, FieldControl>();
     const manualPages =
-        settings(page.payload.publicFields).multiPageFormMode ===
-            'multi-page' &&
-        settings(page.payload.publicFields).promptUserBeforeSubmission !== true;
+        settings(page.payload.publicFields).multiPageFormMode === 'multi-page';
     let formPages: FormPageOwner | null = null;
     let currentPageFields: Set<string> | null = null;
     const pageFields = new Map<string, HTMLDivElement>();
@@ -994,6 +994,7 @@ const renderForm = (page: FormLoadedResult): void => {
         if (next !== reviewConfiguration) {
             reviewConfiguration = next;
             reviewConfigurationRevision++;
+            pageReviewPresentation?.abort();
         }
         return reviewConfigurationRevision;
     };
@@ -1066,6 +1067,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (captured == null) model.clear();
                 else model.select([captured.file]);
             }
+            pageReviewPresentation?.abort();
             if (reviewPending) cancelConfirmation();
         }
     );
@@ -1153,6 +1155,7 @@ const renderForm = (page: FormLoadedResult): void => {
     const formControlDisposers: Array<() => void> = [];
     disposeFormControls = () => {
         formRetired = true;
+        retirePageReview();
         formProgress?.retire();
         formPages?.dispose();
         for (const stop of formControlDisposers) stop();
@@ -1193,6 +1196,7 @@ const renderForm = (page: FormLoadedResult): void => {
     }
     const observeProgressInput = () => {
         progressInputRevision++;
+        pageReviewPresentation?.abort();
         formProgress?.changed();
     };
     fields.addEventListener('input', observeProgressInput, true);
@@ -2400,11 +2404,180 @@ const renderForm = (page: FormLoadedResult): void => {
                 })
             );
     };
+    const clearProgressBeforeSave = async (
+        current: () => boolean
+    ): Promise<boolean> => {
+        const progressDraftRevision = visitor.drafts.revision(draft);
+        const progressInputEpoch =
+            progressInputRevision + pendingFiles.revision();
+        const progressConfiguration = observeReviewConfiguration();
+        if (formProgress) {
+            progressSaveCleanups++;
+            let cleared = false;
+            try {
+                cleared = await formProgress.beforeSave();
+            } finally {
+                progressSaveCleanups--;
+                if (
+                    progressSaveCleanups === 0 &&
+                    !current() &&
+                    ownsLinkedRender() &&
+                    !formRetired &&
+                    mayUseForm()
+                )
+                    formProgress?.resume();
+            }
+            if (!cleared) return false;
+        }
+        if (!current() || !ownsForm()) return false;
+        if (
+            visitor.drafts.revision(draft) !== progressDraftRevision ||
+            progressInputRevision + pendingFiles.revision() !==
+                progressInputEpoch ||
+            observeReviewConfiguration() !== progressConfiguration ||
+            !current()
+        ) {
+            formProgress?.resume();
+            status(
+                'The Form changed while remembered answers were cleared. Review it before a new Save.',
+                true
+            );
+            return false;
+        }
+        return true;
+    };
     if (manualPages && bindingOwner != null) {
         formPages = createFormPageOwner({
             fields: bindingOwner,
             isCurrent: () => ownsLinkedRender() && !formRetired,
             configurationRevision: observeNavigationConfiguration,
+            review: async (request) => {
+                if (
+                    !request.isCurrent() ||
+                    !ownsLinkedFilters() ||
+                    pendingFiles.pending()
+                )
+                    return { type: 'edit' };
+                retirePageReview();
+                const presentation = new AbortController();
+                pageReviewPresentation = presentation;
+                const linkedSnapshot = linkedPresentation.snapshot();
+                const abort = () => presentation.abort();
+                request.signal.addEventListener('abort', abort, { once: true });
+                linkedSnapshot.signal.addEventListener('abort', abort, {
+                    once: true,
+                });
+                if (request.signal.aborted || linkedSnapshot.signal.aborted)
+                    abort();
+                const releaseReviewUI = () => {
+                    if (
+                        pageReviewPresentation !== presentation ||
+                        !reviewPending
+                    )
+                        return;
+                    reviewPending = false;
+                    reviewIntentRevision++;
+                    if (!formRetired && ownsForm()) updateRecovery();
+                };
+                const release = () => {
+                    request.signal.removeEventListener('abort', abort);
+                    linkedSnapshot.signal.removeEventListener('abort', abort);
+                    abort();
+                    releaseReviewUI();
+                    if (pageReviewPresentation === presentation)
+                        pageReviewPresentation = null;
+                    if (retirePageReview === release)
+                        retirePageReview = () => {};
+                };
+                retirePageReview = release;
+                reviewPending = true;
+                reviewIntentRevision++;
+                fields.inert = true;
+                updateFormActivity();
+                try {
+                    const dateContext = captureReviewDateContext();
+                    // Linked labels belong to the original accepted page. The
+                    // page owner supplies only detached native presentation data.
+                    const rows = prepareFormReviewRows(
+                        page,
+                        request.draft.data,
+                        linkedSnapshot,
+                        dateContext
+                    );
+                    const clientDateZoneRequired = rows.some(({ fieldId }) => {
+                        const config =
+                            page.payload.fieldIdsToSchemas[fieldId]
+                                ?.airtableField.config;
+                        return (
+                            config?.type === 'dateTime' &&
+                            config.options.timeZone === 'client'
+                        );
+                    });
+                    const draftRevision = visitor.drafts.revision(draft);
+                    const inputRevision =
+                        progressInputRevision + pendingFiles.revision();
+                    const configuration = observeReviewConfiguration();
+                    const formConnection = connection;
+                    const parentScope = visitor.formParentScope;
+                    const current = () => {
+                        if (presentation.signal.aborted) return false;
+                        const accepted =
+                            request.isCurrent() &&
+                            ownsLinkedRender() &&
+                            linkedSnapshot.current() &&
+                            connection === formConnection &&
+                            visitor.formContext === context &&
+                            visitor.formParentScope === parentScope &&
+                            visitor.drafts.revision(draft) === draftRevision &&
+                            progressInputRevision + pendingFiles.revision() ===
+                                inputRevision &&
+                            observeReviewConfiguration() === configuration &&
+                            !pendingFiles.pending() &&
+                            (!clientDateZoneRequired ||
+                                captureReviewDateContext().clientTimeZone ===
+                                    dateContext.clientTimeZone);
+                        if (!accepted) abort();
+                        return accepted;
+                    };
+                    status('Review your answers before saving.');
+                    const confirmed = await requestConfirmation({
+                        title: 'Review your answers',
+                        message:
+                            'Choose Edit to return to the final page, or Confirm to submit these answers.',
+                        confirmLabel: 'Confirm',
+                        cancelLabel: 'Edit',
+                        rows,
+                        signal: presentation.signal,
+                    });
+                    if (!confirmed || !current()) {
+                        if (ownsForm())
+                            status(
+                                'Review closed. Your answers were retained; no Save was sent.'
+                            );
+                        return { type: 'edit' };
+                    }
+                    // Review/Edit must not clear opted-in remembered answers.
+                    // The existing cleanup and revision fences run after Confirm.
+                    if (!(await clearProgressBeforeSave(current)) || !current())
+                        return { type: 'edit' };
+                    return {
+                        type: 'confirm',
+                        signal: presentation.signal,
+                        isCurrent: current,
+                    };
+                } catch (error) {
+                    if (ownsForm())
+                        status(
+                            error instanceof Error
+                                ? error.message
+                                : 'Review is unavailable.',
+                            true
+                        );
+                    return { type: 'edit' };
+                } finally {
+                    releaseReviewUI();
+                }
+            },
         });
         updatePageNavigation = (accepted) => {
             if (formPages == null) return;
@@ -2444,7 +2617,13 @@ const renderForm = (page: FormLoadedResult): void => {
             // Keep validation refusal reachable; the SDK owns its admission.
             next.disabled = busy || snapshot.status !== 'ready';
             submit.hidden = snapshot.activePageIndex !== last;
-            submit.disabled = busy || !snapshot.canSubmit;
+            const reviewRequired =
+                settings(page.payload.publicFields)
+                    .promptUserBeforeSubmission === true;
+            submit.textContent = reviewRequired ? 'Review answers' : 'Save';
+            submit.disabled =
+                busy ||
+                !(reviewRequired ? snapshot.canReview : snapshot.canSubmit);
             pageProblems.replaceChildren();
             for (const problem of snapshot.problems) {
                 const title =
@@ -2512,43 +2691,17 @@ const renderForm = (page: FormLoadedResult): void => {
             )
                 return;
             if (bindingOwner == null) return;
-            const progressDraftRevision = visitor.drafts.revision(draft);
-            const progressInputEpoch =
-                progressInputRevision + pendingFiles.revision();
-            const progressConfiguration = observeReviewConfiguration();
-            if (formProgress) {
-                progressSaveCleanups++;
-                let cleared = false;
-                try {
-                    cleared = await formProgress.beforeSave();
-                } finally {
-                    progressSaveCleanups--;
-                    if (
-                        progressSaveCleanups === 0 &&
-                        !current() &&
-                        ownsLinkedRender() &&
-                        !formRetired &&
-                        mayUseForm()
-                    )
-                        formProgress?.resume();
-                }
-                if (!cleared) return;
-            }
-            if (!current() || !ownsForm()) return;
             if (
-                visitor.drafts.revision(draft) !== progressDraftRevision ||
-                progressInputRevision + pendingFiles.revision() !==
-                    progressInputEpoch ||
-                observeReviewConfiguration() !== progressConfiguration ||
-                (prepared != null && !prepared.current())
-            ) {
-                formProgress?.resume();
-                status(
-                    'The Form changed while remembered answers were cleared. Review it before a new Save.',
-                    true
-                );
+                !(
+                    formPages != null &&
+                    settings(page.payload.publicFields)
+                        .promptUserBeforeSubmission === true
+                ) &&
+                !(await clearProgressBeforeSave(
+                    () => current() && (prepared?.current() ?? true)
+                ))
+            )
                 return;
-            }
             submit.disabled = true;
             discard.disabled = true;
             let normalized: ReturnType<typeof normalizeFormSaveResult>;
@@ -2637,6 +2790,10 @@ const renderForm = (page: FormLoadedResult): void => {
                 ) {
                     formProgress?.resume();
                     if (current() && ownsForm()) {
+                        if (error.reason === 'review-cancelled') {
+                            updateRecovery();
+                            return;
+                        }
                         errors.replaceChildren(
                             element(
                                 'li',
@@ -2658,6 +2815,8 @@ const renderForm = (page: FormLoadedResult): void => {
                         )
                     );
                 throw error;
+            } finally {
+                retirePageReview();
             }
             visitor.uncertainFormDraftScopes.delete(draft.scope);
             submit.disabled = false;
@@ -2718,6 +2877,15 @@ const renderForm = (page: FormLoadedResult): void => {
         }
         updateFieldVisibility();
         if (formPages != null) {
+            try {
+                readCurrentPage();
+            } catch {
+                status(
+                    'Review the current page before continuing. No Save was sent.',
+                    true
+                );
+                return;
+            }
             const snapshot = formPages.getSnapshot();
             if (
                 snapshot.pages.some(
@@ -2728,12 +2896,22 @@ const renderForm = (page: FormLoadedResult): void => {
                 navigate('next');
                 return;
             }
-            if (pendingFiles.pending() || !snapshot.canSubmit) {
+            const reviewRequired =
+                settings(page.payload.publicFields)
+                    .promptUserBeforeSubmission === true;
+            if (
+                pendingFiles.pending() ||
+                !(reviewRequired ? snapshot.canReview : snapshot.canSubmit)
+            ) {
                 updatePageNavigation();
                 status(
                     'Review the Form pages before saving. No Save was sent.',
                     true
                 );
+                return;
+            }
+            if (reviewRequired) {
+                void save();
                 return;
             }
         }

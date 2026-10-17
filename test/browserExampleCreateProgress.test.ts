@@ -1844,3 +1844,156 @@ describe(
         });
     }
 );
+
+describe('actual starter remembered answers with paged Review', () => {
+    const reviewedForm = () => {
+        const form = progressForm();
+        const title = form.payload.fieldIdsToSchemas.fld_title!;
+        assert.ok(title.fieldType === 'singleLineText');
+        form.payload.fieldIdsToSchemas.fld_details = {
+            ...structuredClone(title),
+            airtableField: {
+                ...structuredClone(title.airtableField),
+                id: 'fld_details',
+                name: 'Details',
+            },
+            miniExtConfig: { required: true, headerSectionTitle: 'Details' },
+        };
+        form.payload.fieldIdsInForm = ['fld_title', 'fld_details'];
+        form.payload.formRecord.data.fld_details = 'Last-page answer';
+        form.payload.publicFields.state.multiPageFormMode = 'multi-page';
+        form.payload.publicFields.state.promptUserBeforeSubmission = true;
+        form.payload.publicFields.state.enableFormComputeMode = false;
+        form.payload.publicFields.state.autoSubmitAfterPrefill = false;
+        return form;
+    };
+    const openFinalReview = async (h: Awaited<ReturnType<typeof fixture>>) => {
+        const card = fieldInput(h.window).closest('form');
+        assert.ok(card);
+        card.dispatchEvent(
+            new h.window.Event('submit', { bubbles: true, cancelable: true })
+        );
+        await waitFor(
+            () => h.window.document.querySelector('dialog[open]') !== null
+        );
+        const dialog = h.window.document.querySelector('dialog[open]');
+        assert.ok(dialog);
+        return dialog;
+    };
+    it('keeps remembered bytes and mounted final-page answers through Edit and Escape', async (test) => {
+        const h = await fixture(test, reviewedForm());
+        await h.rememberTitle();
+        button(h.window, 'Next').click();
+        const details = fieldInput(h.window, 'fld_details');
+        const bytes = progressEntries(h.window);
+        let cleanupCalls = 0;
+        const storage = h.window.sessionStorage;
+        const remove = storage.removeItem.bind(storage);
+        Object.defineProperty(storage, 'removeItem', {
+            configurable: true,
+            value(key: string) {
+                cleanupCalls++;
+                remove(key);
+            },
+        });
+        const first = await openFinalReview(h);
+        assert.deepEqual(progressEntries(h.window), bytes);
+        assert.equal(h.saves.length, 0);
+        button(h.window, 'Edit').click();
+        await waitFor(() => idle(h.window));
+        assert.equal(first.isConnected, false);
+        assert.equal(fieldInput(h.window, 'fld_details'), details);
+        assert.equal(details.closest('[hidden]'), null);
+        const second = await openFinalReview(h);
+        second.dispatchEvent(
+            new h.window.Event('cancel', { bubbles: false, cancelable: true })
+        );
+        await waitFor(() => idle(h.window));
+        assert.deepEqual(progressEntries(h.window), bytes);
+        assert.equal(cleanupCalls, 0);
+        assert.equal(h.journalBegins.length, 0);
+        assert.equal(h.saves.length, 0);
+        assert.equal(fieldInput(h.window).value, rememberedTitle);
+    });
+    it('waits for explicit Confirm and storage cleanup before the one native Save', async (test) => {
+        const h = await fixture(test, reviewedForm());
+        await h.rememberTitle();
+        button(h.window, 'Next').click();
+        await openFinalReview(h);
+        assert.equal(h.saves.length, 0);
+        assert.equal(h.journalBegins.length, 0);
+        const release = h.locks.hold();
+        test.after(release);
+        button(h.window, 'Confirm').click();
+        await waitFor(() => h.locks.waiting > 0);
+        assert.equal(h.saves.length, 0);
+        release();
+        await waitFor(() => h.saves.length === 1 && idle(h.window));
+        assert.deepEqual(h.progressAtSave, [[]]);
+        assert.equal(h.journalBegins.length, 1);
+        assert.equal(h.saves[0]?.formRecord.data.fld_title, rememberedTitle);
+        assert.equal(
+            h.saves[0]?.formRecord.data.fld_details,
+            'Last-page answer'
+        );
+    });
+    it('resumes opted-in remembered answers after Confirm is refused by final-page validation', async (test) => {
+        const h = await fixture(test, reviewedForm());
+        await h.rememberTitle();
+        button(h.window, 'Next').click();
+        edit(h.window, 'fld_details', '');
+        const details = fieldInput(h.window, 'fld_details');
+        await openFinalReview(h);
+        button(h.window, 'Confirm').click();
+        await waitFor(() => idle(h.window));
+        await h.locks.settle();
+        assert.equal(h.saves.length, 0);
+        assert.equal(h.journalBegins.length, 0);
+        assert.equal(fieldInput(h.window, 'fld_details'), details);
+        assert.equal(details.value, '');
+        assert.equal(details.closest('[hidden]'), null);
+        assert.equal(button(h.window, 'Back').disabled, false);
+        assert.deepEqual(storedValues(h.window), [
+            { fld_title: rememberedTitle },
+        ]);
+        assert.equal(fieldInput(h.window).value, rememberedTitle);
+    });
+    it('Cancel releases the page Review gate while its confirmed cleanup is still held', async (test) => {
+        const h = await fixture(test, reviewedForm());
+        await h.rememberTitle();
+        button(h.window, 'Next').click();
+        await openFinalReview(h);
+        const oldConfirm = button(h.window, 'Confirm');
+        const release = h.locks.hold();
+        test.after(release);
+        oldConfirm.click();
+        await waitFor(() => h.locks.waiting > 0);
+        button(h.window, 'Cancel request').click();
+        await nextTurn();
+        await nextTurn();
+        const fields = fieldInput(h.window, 'fld_details').closest(
+            '.fields'
+        ) as unknown as { inert: boolean };
+        assert.equal(
+            fields.inert,
+            false,
+            'Cancel must release Review before storage cleanup finishes'
+        );
+        const fresh = await openFinalReview(h);
+        release();
+        await h.locks.settle();
+        assert.equal(
+            fresh.isConnected,
+            true,
+            'late old Review cleanup must not retire a successor dialog'
+        );
+        oldConfirm.dispatchEvent(new h.window.Event('click'));
+        await nextTurn();
+        assert.equal(h.saves.length, 0);
+        assert.equal(h.journalBegins.length, 0);
+        button(h.window, 'Edit').click();
+        await waitFor(() => idle(h.window));
+        assert.equal(fields.inert, false);
+        assert.equal(fieldInput(h.window).value, rememberedTitle);
+    });
+});

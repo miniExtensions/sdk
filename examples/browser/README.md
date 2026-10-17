@@ -81,21 +81,27 @@ this example's origin; the client uses the existing v1 and tRPC endpoints.
 
 ## Form workflow
 
-Published manual Forms with `multiPageFormMode: 'multi-page'` and final Review
-disabled use the SDK's existing page owner. Enabled frontend section headers
+Published manual Forms with `multiPageFormMode: 'multi-page'` use the SDK's
+existing page owner. Enabled frontend section headers
 start pages; leading fields form the first page. Back keeps the same mounted
 controls and native draft. Page titles are plain text; rich section descriptions
 remain application-owned. Next validates the current page and skips pages
 whose fields are all conditionally hidden. Enter advances before the final
 page. Neither navigation action reads or saves a record.
 
-Only the final available page shows Save. It validates every page against the
+With final Review disabled, only the final available page shows Save. It validates every page against the
 current native draft, including earlier required answers revealed by later
 edits, then uses the existing Save/recovery path once. Hidden answers remain in
 the native payload. A pending file must be uploaded or explicitly cleared
 before navigation. An uncertain Save continues to require explicit inspection.
-Configured Review retains its existing presentation; this navigation slice does
-not add a multipage Review adapter, Compute or automatic submission.
+With `promptUserBeforeSubmission: true`, the final available page instead shows
+**Review answers**. Its bounded Review uses the same native draft and existing
+answer presenter. **Edit**, Escape and cancelling the request return to the same
+page and mounted controls without saving or clearing opted-in remembered answers.
+**Confirm** keeps all-page validation and completes remembered-answer cleanup
+before the existing single Save path. Ordinary required-answer errors may be reviewed;
+they still prevent dispatch. Incomplete raw input and pending files block Review.
+Compute and automatic submission remain unsupported.
 
 The page renders field-ID controls from the published payload. It supports
 text, email, URL, phone, multiline/rich text, numbers, currency, percentages,
@@ -140,7 +146,8 @@ The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
 revisions, requests, cancellation, and when to discard drafts.
 
-When the published `promptUserBeforeSubmission` setting is true, **Save** opens
+When the published `promptUserBeforeSubmission` setting is true, **Save** on a
+one-page Form or **Review answers** on the final manual page opens
 **Review your answers** before the final submission. **Edit**, Escape and closing
 the dialog preserve the native draft and perform no Save. **Confirm** submits
 the captured full native values and dirty IDs once through the existing Save
@@ -149,7 +156,7 @@ errors; an unknown outcome keeps submission blocked until explicit inspection.
 Review may open with an empty required answer: the server remains authoritative
 for required, readonly, computed and conditional-field validation.
 
-This review recipe supports a one-page manual Form with scalar section
+This review recipe supports one-page and manually paged Forms with scalar section
 conditions, containing direct
 single-line/multiline text, email, URL, phone, number, currency, percent, rating,
 checkbox, barcode, single-select, multi-select and conservatively presented linked-record fields, including readonly answers. It presents
@@ -168,7 +175,7 @@ capture. Confirmation belongs to the current visitor/client/session, loaded
 Form, configuration/context, draft handle and actual draft revision. An edit,
 including edit-away-and-back, Reload, Discard, disconnect or owner transition
 invalidates it. Returning to Edit permits fresh typing without repeating an old
-address query. Pages, compute/automatic submission, linked filters,
+address query. Compute/automatic submission, linked filters,
 lookup/computed fields, rich text and other unsupported complex
 renderers remain outside this recipe; unavailable review blocks submission
 instead of presenting an incomplete preview.

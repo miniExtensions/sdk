@@ -2573,3 +2573,407 @@ describe('actual browser starter prepared review', () => {
         assert.equal(detailReads, 1);
     });
 });
+
+describe('actual starter final Review for manual pages', () => {
+    const reviewed = () => {
+        const form = navigationForm();
+        form.payload.publicFields.state.promptUserBeforeSubmission = true;
+        return form;
+    };
+    const finalPage = (fixture: Awaited<ReturnType<typeof mount>>) => {
+        fixture.button('Next').click();
+        fixture.button('Next').click();
+    };
+    const idle = (fixture: Awaited<ReturnType<typeof mount>>) =>
+        fixture.window.document
+            .getElementById('screen')
+            ?.getAttribute('aria-busy') === 'false';
+    it('keeps page navigation and opens final Review only after the last page', async (test) => {
+        const form = navigationForm();
+        form.payload.publicFields.state.promptUserBeforeSubmission = true;
+        const fixture = await mount(test, form, {
+            save: async () => new Response(JSON.stringify(savedForm())),
+        });
+        const details = fixture.field('fld_details');
+        assert.ok(
+            details.closest('[hidden]'),
+            'Review must not flatten all configured pages into one screen'
+        );
+        const title = fixture.field('fld_title');
+        fixture.edit('fld_title', 'First reviewed answer');
+        fixture.button('Next').click();
+        assert.equal(details.closest('[hidden]'), null);
+        fixture.edit('fld_details', 'Second reviewed answer');
+        fixture.button('Next').click();
+        assert.equal(fixture.saves.length, 0);
+        assert.equal(fixture.loads(), 1);
+        const dialog = await fixture.openReview();
+        assert.match(dialog.textContent ?? '', /First reviewed answer/);
+        assert.match(dialog.textContent ?? '', /Second reviewed answer/);
+        assert.match(dialog.textContent ?? '', /Final answer/);
+        fixture.button('Edit', dialog).click();
+        await settled();
+        assert.equal(fixture.window.document.querySelector('dialog'), null);
+        assert.equal(fixture.field('fld_title'), title);
+        assert.ok(fixture.field('fld_title').closest('[hidden]'));
+        assert.equal(fixture.field('fld_final').closest('[hidden]'), null);
+        assert.equal(fixture.saves.length, 0);
+        const nextDialog = await fixture.openReview();
+        fixture.button('Confirm', nextDialog).click();
+        await waitFor(() => fixture.saves.length === 1);
+        assert.deepEqual(fixture.saves[0]?.formRecord.data, {
+            fld_title: 'First reviewed answer',
+            fld_details: 'Second reviewed answer',
+            fld_final: 'Final answer',
+            fld_hidden_native: ['record_retained'],
+        });
+        await waitFor(
+            () =>
+                fixture.window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+        assert.match(
+            fixture.window.document.getElementById('status')?.textContent ?? '',
+            /Saved record record_saved/
+        );
+    });
+
+    it('enforces Next validation but allows final Review before ordinary required validation succeeds', async (test) => {
+        const fixture = await mount(test, reviewed());
+        fixture.edit('fld_title', '');
+        fixture.button('Next').click();
+        fixture.submit();
+        await settled();
+        assert.equal(fixture.field('fld_title').closest('[hidden]'), null);
+        assert.equal(fixture.window.document.querySelector('dialog'), null);
+        assert.equal(fixture.saves.length, 0);
+        fixture.edit('fld_title', 'Accepted first answer');
+        finalPage(fixture);
+        fixture.edit('fld_final', '');
+        assert.equal(fixture.button('Review answers').disabled, false);
+        const dialog = await fixture.openReview();
+        fixture.button('Confirm', dialog).click();
+        await waitFor(() => idle(fixture));
+        assert.equal(
+            fixture.saves.length,
+            0,
+            'Confirm must retain all-page validation'
+        );
+        assert.equal(fixture.field('fld_final').closest('[hidden]'), null);
+        assert.equal(fixture.button('Back').disabled, false);
+        fixture.edit('fld_final', 'Completed last answer');
+        const fresh = await fixture.openReview();
+        fixture.button('Edit', fresh).click();
+        await waitFor(() => idle(fixture));
+        assert.equal(fixture.field('fld_final').value, 'Completed last answer');
+    });
+
+    it('revalidates an earlier required answer revealed by a later-page value before final Save', async (test) => {
+        const form = reviewed();
+        const template = form.payload.fieldIdsToSchemas.fld_title!;
+        assert.ok(template.fieldType === 'singleLineText');
+        form.payload.fieldIdsToSchemas.fld_required = {
+            ...structuredClone(template),
+            airtableField: {
+                ...structuredClone(template.airtableField),
+                id: 'fld_required',
+                name: 'Earlier required',
+            },
+            miniExtConfig: {
+                required: true,
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'show-earlier',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'is',
+                                fieldType: 'singleLineText',
+                                idOrName: { type: 'id', id: 'fld_final' },
+                                value: 'show',
+                            },
+                        },
+                    ],
+                },
+            },
+        };
+        form.payload.fieldIdsInForm.splice(1, 0, 'fld_required');
+        form.payload.formRecord.data.fld_required = null;
+        const fixture = await mount(test, form, {
+            save: async () => new Response(JSON.stringify(savedForm())),
+        });
+        finalPage(fixture);
+        fixture.edit('fld_final', 'show');
+        const first = await fixture.openReview();
+        fixture.button('Confirm', first).click();
+        await waitFor(() => idle(fixture));
+        assert.equal(fixture.saves.length, 0);
+        fixture.button('Back').click();
+        fixture.button('Back').click();
+        assert.equal(fixture.field('fld_required').closest('[hidden]'), null);
+        fixture.edit('fld_required', 'Completed earlier answer');
+        finalPage(fixture);
+        const fresh = await fixture.openReview();
+        assert.match(fresh.textContent ?? '', /Completed earlier answer/);
+        fixture.button('Confirm', fresh).click();
+        await waitFor(() => fixture.saves.length === 1 && idle(fixture));
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_required,
+            'Completed earlier answer'
+        );
+    });
+
+    it('skips hidden pages, masks the existing password presentation and preserves complete native answers', async (test) => {
+        const form = reviewed();
+        const title = form.payload.fieldIdsToSchemas.fld_title!;
+        title.miniExtConfig = { ...title.miniExtConfig, obscurePassword: true };
+        form.payload.formRecord.data.fld_title = 'PRIVATE_MASKED_ANSWER';
+        form.payload.formRecord.data.fld_details = 'PRIVATE_HIDDEN_ANSWER';
+        const details = form.payload.fieldIdsToSchemas.fld_details!;
+        details.miniExtConfig = {
+            ...details.miniExtConfig,
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'hidden-middle',
+                        type: 'singleCondition',
+                        setting: {
+                            type: 'is',
+                            fieldType: 'singleLineText',
+                            idOrName: { type: 'id', id: 'fld_title' },
+                            value: 'show',
+                        },
+                    },
+                ],
+            },
+        };
+        const fixture = await mount(test, form, {
+            save: async () => new Response(JSON.stringify(savedForm())),
+        });
+        fixture.button('Next').click();
+        assert.equal(fixture.field('fld_final').closest('[hidden]'), null);
+        const dialog = await fixture.openReview();
+        assert.doesNotMatch(
+            dialog.textContent ?? '',
+            /PRIVATE_MASKED_ANSWER|PRIVATE_HIDDEN_ANSWER/
+        );
+        assert.match(dialog.textContent ?? '', /••••••••/);
+        fixture.button('Confirm', dialog).click();
+        await waitFor(() => fixture.saves.length === 1 && idle(fixture));
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_title,
+            'PRIVATE_MASKED_ANSWER'
+        );
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_details,
+            'PRIVATE_HIDDEN_ANSWER'
+        );
+        assert.deepEqual(fixture.saves[0]?.formRecord.data.fld_hidden_native, [
+            'record_retained',
+        ]);
+        assert.equal(fixture.loads(), 1);
+    });
+
+    it('refuses an unsupported computed Review without losing final-page controls or native answers', async (test) => {
+        const form = reviewed();
+        const computed = loadedForm().payload.fieldIdsToSchemas.fld_computed;
+        assert.ok(computed);
+        form.payload.fieldIdsToSchemas.fld_computed = computed;
+        form.payload.fieldIdsInForm.push('fld_computed');
+        form.payload.formRecord.data.fld_computed = 'PRIVATE_FORMULA_ANSWER';
+        const fixture = await mount(test, form);
+        finalPage(fixture);
+        const final = fixture.field('fld_final');
+        fixture.submit();
+        await waitFor(() => idle(fixture));
+        assert.equal(fixture.saves.length, 0);
+        assert.equal(fixture.window.document.querySelector('dialog'), null);
+        assert.equal(fixture.field('fld_final'), final);
+        assert.equal(final.value, 'Final answer');
+        assert.equal(final.closest('[hidden]'), null);
+        assert.equal(fixture.button('Back').disabled, false);
+        assert.equal(fixture.button('Review answers').disabled, false);
+        const status =
+            fixture.window.document.getElementById('status')?.textContent ?? '';
+        assert.match(status, /review.*unavailable/i);
+        assert.doesNotMatch(status, /PRIVATE_FORMULA_ANSWER/);
+        assert.equal(fixture.loads(), 1);
+    });
+
+    it('presents a final-page unhydrated link generically and saves its exact native ID without another read', async (test) => {
+        const form = reviewed();
+        const linkedConfig = structuredClone(portalField.config);
+        assert.ok(
+            linkedConfig.type === AirtableFieldType.MULTIPLE_RECORD_LINKS
+        );
+        form.payload.fieldIdsToSchemas.fld_linked = {
+            fieldType: AirtableFieldType.MULTIPLE_RECORD_LINKS,
+            airtableField: {
+                ...structuredClone(portalField),
+                id: 'fld_linked',
+                name: 'Linked answer',
+                config: linkedConfig,
+            },
+            miniExtConfig: { readOnly: true },
+        };
+        form.payload.fieldIdsInForm.push('fld_linked');
+        form.payload.formRecord.data.fld_linked = ['record_linked'];
+        const fixture = await mount(test, form, {
+            save: async () => new Response(JSON.stringify(savedForm())),
+        });
+        finalPage(fixture);
+        const dialog = await fixture.openReview();
+        const row = dialog.querySelector('[data-review-field-id="fld_linked"]');
+        assert.equal(
+            row?.nextElementSibling?.textContent,
+            'Selected record — details unavailable'
+        );
+        assert.doesNotMatch(dialog.textContent ?? '', /record_linked/);
+        assert.equal(fixture.loads(), 1);
+        fixture.button('Confirm', dialog).click();
+        await waitFor(() => fixture.saves.length === 1 && idle(fixture));
+        assert.deepEqual(fixture.saves[0]?.formRecord.data.fld_linked, [
+            'record_linked',
+        ]);
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_title,
+            'First answer'
+        );
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_final,
+            'Final answer'
+        );
+        assert.equal(fixture.loads(), 1);
+    });
+
+    it('blocks final Review for a pending native file until explicit Clear', async (test) => {
+        const form = reviewed();
+        form.payload.fieldIdsToSchemas.fld_files =
+            loadedForm().payload.fieldIdsToSchemas.fld_files!;
+        form.payload.fieldIdsInForm.push('fld_files');
+        form.payload.formRecord.data.fld_files = [];
+        const fixture = await mount(test, form);
+        finalPage(fixture);
+        const input =
+            fixture.window.document.querySelector('input[type="file"]');
+        assert.ok(input instanceof fixture.window.HTMLInputElement);
+        let selected = [
+            new fixture.window.File(['synthetic'], 'PRIVATE_PENDING.txt'),
+        ];
+        Object.defineProperty(input, 'files', {
+            configurable: true,
+            get: () => selected,
+        });
+        Object.defineProperty(input, 'value', {
+            configurable: true,
+            get: () => (selected.length ? 'PRIVATE_PENDING.txt' : ''),
+            set: () => {
+                selected = [];
+            },
+        });
+        input.dispatchEvent(
+            new fixture.window.Event('change', { bubbles: true })
+        );
+        fixture.submit();
+        await settled();
+        assert.equal(fixture.window.document.querySelector('dialog'), null);
+        assert.equal(fixture.saves.length, 0);
+        fixture.button('Clear pending files').click();
+        const dialog = await fixture.openReview();
+        assert.doesNotMatch(dialog.textContent ?? '', /PRIVATE_PENDING/);
+        fixture.button('Edit', dialog).click();
+        await waitFor(() => idle(fixture));
+        assert.equal(fixture.field('fld_final').closest('[hidden]'), null);
+    });
+
+    it('retires an old confirmation on input changes and cannot close or submit a successor Review', async (test) => {
+        const fixture = await mount(test, reviewed());
+        finalPage(fixture);
+        const first = await fixture.openReview();
+        const oldConfirm = fixture.button('Confirm', first);
+        fixture.edit('fld_final', 'Changed during Review');
+        await waitFor(() => idle(fixture));
+        assert.equal(first.isConnected, false);
+        assert.equal(fixture.saves.length, 0);
+        fixture.edit('fld_final', 'Fresh reviewed answer');
+        const fresh = await fixture.openReview();
+        oldConfirm.dispatchEvent(new fixture.window.Event('click'));
+        await settled();
+        assert.equal(fresh.isConnected, true);
+        assert.match(fresh.textContent ?? '', /Fresh reviewed answer/);
+        assert.equal(fixture.saves.length, 0);
+        fixture.button('Edit', fresh).click();
+        await waitFor(() => idle(fixture));
+    });
+
+    it('Cancel request before Confirm returns to the same final-page controls without Save', async (test) => {
+        const fixture = await mount(test, reviewed());
+        finalPage(fixture);
+        const final = fixture.field('fld_final');
+        const dialog = await fixture.openReview();
+        const confirm = fixture.button('Confirm', dialog);
+        fixture.button('Cancel request').click();
+        await waitFor(
+            () => idle(fixture) && !fixture.button('Review answers').disabled
+        );
+        assert.equal(dialog.isConnected, false);
+        assert.equal(fixture.field('fld_final'), final);
+        assert.equal(final.closest('[hidden]'), null);
+        assert.equal(fixture.button('Review answers').disabled, false);
+        confirm.dispatchEvent(new fixture.window.Event('click'));
+        await settled();
+        assert.equal(fixture.saves.length, 0);
+    });
+
+    for (const outcome of ['validation', 'unknown', 'cancelled'] as const) {
+        it(`preserves draft/recovery semantics after a ${outcome} confirmed Save`, async (test) => {
+            let resolve: ((response: Response) => void) | undefined;
+            const fixture = await mount(test, reviewed(), {
+                save: async () => {
+                    if (outcome === 'validation')
+                        return new Response(JSON.stringify(invalidForm()));
+                    if (outcome === 'unknown')
+                        throw new Error('Synthetic lost Save response');
+                    return new Promise<Response>((done) => {
+                        resolve = done;
+                    });
+                },
+            });
+            finalPage(fixture);
+            const final = fixture.field('fld_final');
+            const dialog = await fixture.openReview();
+            const confirm = fixture.button('Confirm', dialog);
+            confirm.click();
+            await waitFor(() => fixture.saves.length === 1);
+            if (outcome === 'cancelled')
+                fixture.button('Cancel request').click();
+            await waitFor(() => idle(fixture));
+            assert.equal(fixture.field('fld_final'), final);
+            assert.equal(final.value, 'Final answer');
+            if (outcome === 'validation') {
+                assert.equal(fixture.button('Back').disabled, false);
+                assert.match(
+                    fixture.window.document.querySelector('.error-list')
+                        ?.textContent ?? '',
+                    /invalid|error|Required|Title/i
+                );
+            } else {
+                assert.equal(fixture.button('Review answers').disabled, true);
+                assert.equal(fixture.button('Back').disabled, true);
+                fixture.submit();
+                confirm.dispatchEvent(new fixture.window.Event('click'));
+                await settled();
+                assert.equal(fixture.saves.length, 1);
+            }
+            if (resolve) {
+                resolve(new Response(JSON.stringify(savedForm())));
+                await settled();
+                assert.equal(fixture.saves.length, 1);
+                assert.equal(fixture.button('Review answers').disabled, true);
+            }
+        });
+    }
+});

@@ -10,6 +10,7 @@ import {
 } from '@miniextensions/sdk/forms';
 import {
     createAuthFlow,
+    createBrowserSessionStorage,
     createSessionRestoration,
 } from '@miniextensions/sdk/auth';
 import { createPortalListOwner } from '@miniextensions/sdk/portals';
@@ -199,18 +200,11 @@ if (mode === 'attachment') {
             extensionId: data.auth.extensionId,
         });
     };
-    /** @type {import('@miniextensions/sdk/auth').SessionRestorationStorage} */
-    const storage = {
-        mode: 'persistent',
-        getItem: (key) => localStorage.getItem(key),
-        setItem: (key, value) => localStorage.setItem(key, value),
-        removeItem: (key) => localStorage.removeItem(key),
-        subscribe(listener) {
-            const handler = (event) => listener(event.key);
-            window.addEventListener('storage', handler);
-            return () => window.removeEventListener('storage', handler);
-        },
-    };
+    const storage = createBrowserSessionStorage(
+        localStorage,
+        'persistent',
+        window
+    );
     const remembered = mode === 'session-on';
     const owner = remembered
         ? createSessionRestoration({
@@ -231,6 +225,49 @@ if (mode === 'attachment') {
     const flow =
         owner?.flow ??
         createAuthFlow({ client, page: data.auth, getScope: () => scope });
+    // Bounded, document-local diagnostics: never record keys or credential bytes.
+    /** @param {string} type @param {Record<string, unknown>} [details] */
+    const recordSessionEvent = (type, details = {}) => {
+        let storageEntries = null;
+        try {
+            storageEntries = localStorage.length;
+        } catch {
+            // Diagnostics must not alter restoration when storage is unavailable.
+        }
+        if (events.length >= 128) events.shift();
+        events.push({
+            type,
+            at: performance.now(),
+            phase: owner?.getSnapshot().phase ?? 'memory-only',
+            sessionEntries: Object.keys(client.getSession()).length,
+            storageEntries,
+            ...details,
+        });
+    };
+    owner?.subscribe(() => recordSessionEvent('phase'));
+    window.addEventListener('storage', (event) => {
+        let area = 'unavailable';
+        let matchesStoredKey = false;
+        try {
+            area =
+                event.storageArea === localStorage
+                    ? 'local'
+                    : event.storageArea === sessionStorage
+                      ? 'session'
+                      : 'other';
+            matchesStoredKey =
+                event.key !== null && event.key === localStorage.key(0);
+        } catch {
+            // Keep the notification observable without reading private values.
+        }
+        recordSessionEvent('storage-event', {
+            area,
+            clear: event.key === null,
+            matchesStoredKey,
+            trusted: event.isTrusted,
+        });
+    });
+    recordSessionEvent('initialized');
     snapshot = () => ({
         sessionEntries: Object.keys(client.getSession()).length,
         storageEntries: localStorage.length,
@@ -248,6 +285,7 @@ if (mode === 'attachment') {
             null,
             h('p', { role: 'status' }, status),
             button('Login fake visitor', async () => {
+                recordSessionEvent('login-click');
                 if (flow.screen !== 'login_page')
                     throw Error('Expected synthetic login screen');
                 const result = await flow.login({
@@ -258,11 +296,16 @@ if (mode === 'attachment') {
                 });
                 if (result.type === 'found-record') {
                     (owner ?? flow).applySession(result.grant);
+                    recordSessionEvent('login-applied');
                     setStatus('Fake session applied');
                 }
             }),
             button('Restore fake visitor', async () => {
+                recordSessionEvent('restore-click');
                 const result = await owner?.restore();
+                recordSessionEvent('restore-settled', {
+                    accepted: result != null,
+                });
                 setStatus(
                     result
                         ? 'Fresh fake load accepted'
@@ -270,8 +313,10 @@ if (mode === 'attachment') {
                 );
             }),
             button('Logout fake visitor', () => {
+                recordSessionEvent('logout-click');
                 if (owner) owner.clear();
                 else client.setSession({});
+                recordSessionEvent('logout-settled');
                 setStatus('Logged out');
             })
         );

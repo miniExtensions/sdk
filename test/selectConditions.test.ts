@@ -293,3 +293,13 @@ it('omits only incomplete regex siblings in compatibility mode', () => {
         if (result.type === 'compiled') assert.equal(result.formula, "{choice} = 'Alpha'");
     }
 });
+
+
+it('refuses regex text that cannot round-trip through a formula literal', () => {
+    for (const mode of ['strict', 'compatibility']) {
+        const result = compile('singleSelect', 'matchesRegex', 'tail' + String.fromCharCode(92), undefined, mode);
+        assert.equal(result.type, 'invalid');
+        assert(result.diagnostics.some((d) => d.code === 'literal-roundtrip'));
+        assert(!Object.hasOwn(result, 'formula'));
+    }
+});

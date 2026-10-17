@@ -79,7 +79,17 @@ function fixture(portals, configure = () => {}) {
             },
             updateGridCell: async (input) => {
                 saves.push(structuredClone(input));
-                return { success: true };
+                return {
+                    record: {
+                        id: input.recordId,
+                        fields:
+                            input.value === null
+                                ? {}
+                                : { [input.recordFieldId]: input.value },
+                    },
+                    auditTrail: null,
+                    auditTrails: [],
+                };
             },
         },
     };

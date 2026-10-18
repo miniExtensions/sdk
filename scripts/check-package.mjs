@@ -804,17 +804,9 @@ export const display: string = formatMultiSelectValue(removeMarkdown('**Alpha**'
         .replace('export const display: string', 'export const display');
     writeFileSync(
         join(temporaryDirectory, 'consumer.mjs'),
-        javascriptConsumer +
-            formattingChecks +
-            parserChecks +
-            originTransportChecks
+        javascriptConsumer + formattingChecks + parserChecks
     );
-    assert(
-        run(process.execPath, ['consumer.mjs'])
-            .split('\n')
-            .includes(originProofSuccess)
-    );
-    console.log('ESM: ' + originProofSuccess);
+    run(process.execPath, ['consumer.mjs']);
 
     writeFileSync(
         join(temporaryDirectory, 'consumer.cjs'),
@@ -832,15 +824,32 @@ for (const options of [undefined, {}, {apiOrigin:undefined}]) {
 if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
 ${formattingChecks}
-${parserChecks}
-${originTransportChecks}`
+${parserChecks}`
     );
-    assert(
-        run(process.execPath, ['consumer.cjs'])
-            .split('\n')
-            .includes(originProofSuccess)
-    );
-    console.log('CommonJS: ' + originProofSuccess);
+    run(process.execPath, ['consumer.cjs']);
+
+    // Node-only transport probes must not enter the shared browser VM bundle.
+    for (const [file, imports] of [
+        [
+            'origin-defaults.mjs',
+            "import {createMiniExtensionsClient,DEFAULT_API_ORIGIN} from '@miniextensions/sdk';\n",
+        ],
+        [
+            'origin-defaults.cjs',
+            "const {createMiniExtensionsClient,DEFAULT_API_ORIGIN}=require('@miniextensions/sdk');\n",
+        ],
+    ]) {
+        writeFileSync(
+            join(temporaryDirectory, file),
+            imports + originTransportChecks
+        );
+        assert(
+            run(process.execPath, [file])
+                .split('\n')
+                .includes(originProofSuccess)
+        );
+        console.log(file + ': ' + originProofSuccess);
+    }
 
     // Start cold with a deliberately small stack: a warm/default-stack process
     // can hide recursive unary parsing failures on other Node builds.

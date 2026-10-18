@@ -15,7 +15,39 @@ import {
     type SelectFieldAvailability,
 } from '@miniextensions/sdk/ui';
 import { element, labeled } from './dom.js';
-import type { FormFieldBinding } from '@miniextensions/sdk/forms';
+import type {
+    FormFieldBinding,
+    FormFieldSnapshot,
+} from '@miniextensions/sdk/forms';
+import { hasMaskedValuePolicy } from './privacy.js';
+
+/** Raw backend text is presentation data only for a current, public field. */
+export const canPresentFieldValidation = (
+    state: FormFieldSnapshot | undefined
+): boolean =>
+    state != null &&
+    !state.retired &&
+    state.visibility.type === 'visible' &&
+    state.field != null &&
+    state.field.schema.airtableField.id === state.field.fieldId &&
+    !hasMaskedValuePolicy(state.field.schema.miniExtConfig);
+
+const fieldValidationText = (state: FormFieldSnapshot): string => {
+    if (state.retired || state.visibility.type !== 'visible') return '';
+    const hasError =
+        state.date?.error != null ||
+        state.scalar?.error != null ||
+        state.error != null ||
+        state.validation.length > 0;
+    if (!canPresentFieldValidation(state))
+        return hasError ? 'This field needs attention before saving.' : '';
+    return (
+        state.date?.error ??
+        state.scalar?.error ??
+        state.error ??
+        state.validation.map((error) => error.errorMessage).join('\n')
+    );
+};
 
 export type FieldControl = {
     node: HTMLDivElement;
@@ -569,11 +601,7 @@ export function mountBoundFormField(
                 )
             );
             node.setAttribute('aria-busy', String(state.pending));
-            status.textContent =
-                state.date?.error ??
-                state.scalar?.error ??
-                state.error ??
-                state.validation.map((error) => error.errorMessage).join('\n');
+            status.textContent = fieldValidationText(state);
         };
         const stop = binding.subscribe(render);
         return {
@@ -633,10 +661,7 @@ export function mountBoundFormField(
     let revision = initial.revision;
     const stop = binding.subscribe((state) => {
         control.node.setAttribute('aria-busy', String(state.pending));
-        status.textContent = state.retired
-            ? ''
-            : (state.error ??
-              state.validation.map((error) => error.errorMessage).join('\n'));
+        status.textContent = fieldValidationText(state);
         control.node.hidden = state.visibility.type !== 'visible';
         control.node.inert = !state.canEdit;
         if (!state.retired && state.revision !== revision) {

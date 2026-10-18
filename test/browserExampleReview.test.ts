@@ -2016,6 +2016,585 @@ describe('actual browser starter prepared review', () => {
         assert.equal(fixture.field('fld_title').value, 'Repaired title');
     });
 
+    for (const kind of ['text', 'number', 'date'] as const) {
+        for (const policy of [
+            { name: 'public', flags: {}, masked: false },
+            {
+                name: 'obscurePassword',
+                flags: { obscurePassword: true },
+                masked: true,
+            },
+            {
+                name: 'maskPasswordOnLoginScreen',
+                flags: { maskPasswordOnLoginScreen: true },
+                masked: true,
+            },
+        ]) {
+            it(`presents ${kind} backend validation using accepted ${policy.name} policy`, async (test) => {
+                const form = reviewForm();
+                // Date Review has its own configuration admission. Exercise
+                // this binding's validation status through direct Save.
+                if (kind === 'date')
+                    form.payload.publicFields.state.promptUserBeforeSubmission = false;
+                const id = 'fld_validation';
+                const schema: RuntimeFieldSchema =
+                    kind === 'date'
+                        ? {
+                              fieldType: 'date',
+                              airtableField: {
+                                  id,
+                                  name: 'Accepted date',
+                                  isComputed: false,
+                                  isPrimaryField: false,
+                                  description: null,
+                                  config: {
+                                      type: 'date',
+                                      options: {
+                                          dateFormat: {
+                                              name: 'iso',
+                                              format: 'YYYY-MM-DD',
+                                          },
+                                      },
+                                  },
+                              },
+                          }
+                        : scalarReviewSchema(
+                              id,
+                              'Accepted field',
+                              kind === 'number'
+                                  ? {
+                                        type: 'number',
+                                        options: { precision: 0 },
+                                    }
+                                  : { type: 'singleLineText', options: null }
+                          );
+                schema.miniExtConfig = { readOnly: false, ...policy.flags };
+                form.payload.fieldIdsToSchemas[id] = schema;
+                form.payload.fieldIdsInForm.push(id);
+                form.payload.formRecord.data[id] =
+                    kind === 'number'
+                        ? 1234
+                        : kind === 'date'
+                          ? '2040-06-15'
+                          : 'Initial private value';
+                const response = {
+                    ...invalidForm(),
+                    formValidationErrors: [
+                        {
+                            fieldId: id,
+                            fieldTitle: 'SYNTHETIC_BACKEND_PRIVATE_TITLE',
+                            errorMessage: 'SYNTHETIC_BACKEND_PRIVATE_MESSAGE',
+                        },
+                    ],
+                    formErrors: {
+                        [id]: 'SYNTHETIC_BACKEND_PRIVATE_FORM_ERROR',
+                    },
+                    concurrentEditErrorMessage: undefined,
+                };
+                const canonicalErrors = structuredClone(response);
+                const fixture = await mount(test, form, {
+                    save: async () => new Response(JSON.stringify(response)),
+                });
+                const edited =
+                    kind === 'number'
+                        ? '5678'
+                        : kind === 'date'
+                          ? '2040-06-16'
+                          : 'Edited private value';
+                fixture.edit(id, edited);
+                if (kind === 'date') fixture.submit();
+                else {
+                    const dialog = await fixture.openReview();
+                    fixture.button('Confirm', dialog).click();
+                }
+                await waitFor(
+                    () =>
+                        fixture.saves.length === 1 &&
+                        fixture.window.document
+                            .getElementById('screen')
+                            ?.getAttribute('aria-busy') === 'false'
+                );
+                const global =
+                    fixture.window.document.querySelector('.error-list');
+                const status = fixture
+                    .field(id)
+                    .closest('label')
+                    ?.parentElement?.querySelector('[role="status"]');
+                assert.ok(global && status);
+                assert.equal(
+                    global.outerHTML.includes(
+                        'SYNTHETIC_BACKEND_PRIVATE_TITLE'
+                    ),
+                    false
+                );
+                for (const sentinel of [
+                    'SYNTHETIC_BACKEND_PRIVATE_MESSAGE',
+                    'SYNTHETIC_BACKEND_PRIVATE_FORM_ERROR',
+                ]) {
+                    assert.equal(
+                        global.outerHTML.includes(sentinel),
+                        !policy.masked
+                    );
+                    assert.equal(
+                        status.outerHTML.includes(sentinel),
+                        !policy.masked
+                    );
+                }
+                if (policy.masked) {
+                    assert.match(
+                        global.textContent ?? '',
+                        /needs attention before saving/
+                    );
+                    assert.equal(
+                        status.textContent,
+                        'This field needs attention before saving.'
+                    );
+                } else {
+                    assert.match(
+                        global.textContent ?? '',
+                        /Accepted (field|date)/
+                    );
+                }
+                assert.deepEqual(response, canonicalErrors);
+                assert.equal(
+                    fixture.saves[0]?.formRecord.data[id],
+                    kind === 'number' ? 5678 : edited
+                );
+                assert.deepEqual(
+                    fixture.saves[0]?.formFieldIdsWithUnsavedChanges,
+                    [id]
+                );
+                assert.deepEqual(
+                    fixture.saves[0]?.formRecord.data.fld_hidden_native,
+                    ['record_retained']
+                );
+                if (kind === 'date') fixture.edit('fld_title', 'Public edit');
+                else {
+                    const fresh = await fixture.openReview();
+                    fixture.button('Edit', fresh).click();
+                }
+                await settled();
+                assert.equal(fixture.saves.length, 1);
+                assert.equal(fixture.loads(), 1);
+            });
+        }
+    }
+
+    for (const policy of [
+        { name: 'public', flags: {}, masked: false },
+        {
+            name: 'obscurePassword',
+            flags: { obscurePassword: true },
+            masked: true,
+        },
+        {
+            name: 'maskPasswordOnLoginScreen',
+            flags: { maskPasswordOnLoginScreen: true },
+            masked: true,
+        },
+    ]) {
+        it(`refreshes global validation after conditional visibility changes without replay or stale error replacement: ${policy.name}`, async (test) => {
+            const form = reviewForm();
+            form.payload.publicFields.state.promptUserBeforeSubmission = false;
+            form.payload.formRecord.data.fld_title = 'Show hidden field';
+            const target = form.payload.fieldIdsToSchemas.fld_readonly;
+            assert.ok(target);
+            target.miniExtConfig = {
+                readOnly: true,
+                ...policy.flags,
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'validation_visibility',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'is',
+                                fieldType: 'singleLineText',
+                                idOrName: { type: 'id', id: 'fld_title' },
+                                value: 'Show hidden field',
+                            },
+                        },
+                    ],
+                },
+            };
+            let responses = 0;
+            const fixture = await mount(test, form, {
+                save: async () => {
+                    if (++responses > 1)
+                        throw new Error('Synthetic unknown Save outcome.');
+                    return new Response(
+                        JSON.stringify({
+                            type: 'error',
+                            formValidationErrors: [
+                                {
+                                    fieldId: 'fld_readonly',
+                                    fieldTitle: 'SYNTHETIC_BACKEND_TITLE',
+                                    errorMessage:
+                                        'SYNTHETIC_BECOMES_HIDDEN_MESSAGE',
+                                },
+                                {
+                                    fieldId: 'fld_unknown',
+                                    fieldTitle: 'SYNTHETIC_UNKNOWN_TITLE',
+                                    errorMessage: 'SYNTHETIC_UNKNOWN_MESSAGE',
+                                },
+                            ],
+                            formErrors: {
+                                fld_readonly:
+                                    'SYNTHETIC_BECOMES_HIDDEN_FORM_ERROR',
+                            },
+                            concurrentEditErrorMessage:
+                                'Keep the current record open and review.',
+                        })
+                    );
+                },
+            });
+            const idle = () =>
+                fixture.window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false';
+            fixture.submit();
+            await waitFor(() => fixture.saves.length === 1 && idle());
+            const global = fixture.window.document.querySelector('.error-list');
+            const targetNode = fixture
+                .field('fld_readonly')
+                .closest('label')?.parentElement;
+            assert.ok(global);
+            assert.ok(targetNode instanceof fixture.window.HTMLElement);
+            const firstSave = structuredClone(fixture.saves[0]);
+            assert.deepEqual(
+                firstSave?.formRecord.data,
+                form.payload.formRecord.data
+            );
+            assert.deepEqual(firstSave?.formFieldIdsWithUnsavedChanges, []);
+            const assertValidation = (visible: boolean) => {
+                assert.equal(targetNode.hidden, !visible);
+                assert.equal(
+                    global.outerHTML.includes('SYNTHETIC_BACKEND_TITLE'),
+                    false
+                );
+                assert.equal(
+                    global.outerHTML.includes('SYNTHETIC_UNKNOWN'),
+                    false
+                );
+                for (const sentinel of [
+                    'SYNTHETIC_BECOMES_HIDDEN_MESSAGE',
+                    'SYNTHETIC_BECOMES_HIDDEN_FORM_ERROR',
+                ])
+                    assert.equal(
+                        global.outerHTML.includes(sentinel),
+                        visible && !policy.masked
+                    );
+                assert.match(
+                    global.textContent ?? '',
+                    /needs attention before saving/
+                );
+                assert.match(
+                    global.textContent ?? '',
+                    /Keep the current record open and review\./
+                );
+            };
+            assertValidation(true);
+            fixture.edit('fld_title', 'Hide the target now');
+            await settled();
+            assertValidation(false);
+            fixture.edit('fld_title', 'Show hidden field');
+            await settled();
+            assertValidation(true);
+            assert.deepEqual(fixture.saves[0], firstSave);
+            assert.equal(fixture.saves.length, 1);
+            assert.equal(fixture.loads(), 1);
+
+            fixture.edit('fld_title', 'Hide target for second attempt');
+            fixture.submit();
+            await waitFor(
+                () =>
+                    fixture.saves.length === 2 &&
+                    idle() &&
+                    global.textContent?.includes('may have completed') === true
+            );
+            const uncertainty = global.textContent;
+            const secondSave = structuredClone(fixture.saves[1]);
+            assert.equal(
+                secondSave?.formRecord.data.fld_title,
+                'Hide target for second attempt'
+            );
+            assert.equal(
+                secondSave?.formRecord.data.fld_readonly,
+                'Locked value'
+            );
+            assert.deepEqual(secondSave?.formFieldIdsWithUnsavedChanges, [
+                'fld_title',
+            ]);
+            const oldDriver = fixture.field('fld_title');
+            fixture.edit('fld_title', 'Show hidden field');
+            fixture.submit();
+            await settled();
+            assert.equal(global.textContent, uncertainty);
+            assert.equal(global.outerHTML.includes('SYNTHETIC_'), false);
+            assert.equal(fixture.saves.length, 2);
+            assert.deepEqual(fixture.saves[1], secondSave);
+            fixture.button('Reload').click();
+            await waitFor(
+                () => fixture.loads() === 2 && idle() && !oldDriver.isConnected
+            );
+            oldDriver.dispatchEvent(
+                new fixture.window.Event('input', { bubbles: true })
+            );
+            fixture.submit();
+            await settled();
+            assert.equal(global.textContent, uncertainty);
+            assert.match(
+                fixture.window.document.getElementById('screen')?.textContent ??
+                    '',
+                /may have completed/
+            );
+            assert.equal(fixture.button('Save').disabled, true);
+            assert.equal(fixture.saves.length, 2);
+        });
+    }
+
+    it('uses generic validation blockers for hidden and unavailable targets without leaking backend titles', async (test) => {
+        const form = reviewForm();
+        const hidden = form.payload.fieldIdsToSchemas.fld_readonly;
+        assert.ok(hidden);
+        hidden.miniExtConfig = {
+            readOnly: true,
+            conditionalFields: {
+                logicalOperator: 'and',
+                conditions: [
+                    {
+                        id: 'hidden_validation',
+                        type: 'singleCondition',
+                        setting: {
+                            type: 'is',
+                            fieldType: 'singleLineText',
+                            idOrName: { type: 'id', id: 'fld_title' },
+                            value: 'Show hidden field',
+                        },
+                    },
+                ],
+            },
+        };
+        const fixture = await mount(test, form, {
+            save: async () =>
+                new Response(
+                    JSON.stringify({
+                        type: 'error',
+                        formValidationErrors: [
+                            'fld_readonly',
+                            'fld_unavailable',
+                        ].map((fieldId) => ({
+                            fieldId,
+                            fieldTitle: 'SYNTHETIC_UNAVAILABLE_TITLE',
+                            errorMessage: 'SYNTHETIC_UNAVAILABLE_MESSAGE',
+                        })),
+                        formErrors: {
+                            fld_readonly: 'SYNTHETIC_UNAVAILABLE_FORM_ERROR',
+                            fld_unavailable: 'SYNTHETIC_UNAVAILABLE_FORM_ERROR',
+                        },
+                    })
+                ),
+        });
+        const dialog = await fixture.openReview();
+        fixture.button('Confirm', dialog).click();
+        await waitFor(
+            () =>
+                fixture.saves.length === 1 &&
+                fixture.window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+        const global = fixture.window.document.querySelector('.error-list');
+        assert.ok(global);
+        assert.match(global.textContent ?? '', /needs attention before saving/);
+        assert.equal(global.outerHTML.includes('SYNTHETIC_UNAVAILABLE'), false);
+        for (const status of fixture.window.document.querySelectorAll(
+            '[role="status"]'
+        ))
+            assert.equal(
+                status.outerHTML.includes('SYNTHETIC_UNAVAILABLE'),
+                false
+            );
+        assert.equal(fixture.saves.length, 1);
+        assert.equal(fixture.loads(), 1);
+        assert.equal(
+            fixture.saves[0]?.formRecord.data.fld_readonly,
+            'Locked value'
+        );
+    });
+
+    for (const scenario of [
+        { name: 'public unchanged', initial: {}, next: {}, retained: true },
+        {
+            name: 'new obscurePassword',
+            initial: {},
+            next: { obscurePassword: true },
+            retained: false,
+        },
+        {
+            name: 'new login mask',
+            initial: {},
+            next: { maskPasswordOnLoginScreen: true },
+            retained: false,
+        },
+        {
+            name: 'initial obscurePassword',
+            initial: { obscurePassword: true },
+            next: { obscurePassword: true },
+            retained: false,
+        },
+        {
+            name: 'initial login mask',
+            initial: { maskPasswordOnLoginScreen: true },
+            next: { maskPasswordOnLoginScreen: true },
+            retained: false,
+        },
+        { name: 'renamed same ID', initial: {}, next: {}, retained: true },
+        {
+            name: 'duplicate names',
+            initial: {},
+            next: { obscurePassword: true },
+            retained: false,
+        },
+        { name: 'removed field', initial: {}, next: {}, retained: false },
+        { name: 'missing schema', initial: {}, next: {}, retained: false },
+        { name: 'hidden field', initial: {}, next: {}, retained: false },
+        { name: 'blocked field', initial: {}, next: {}, retained: false },
+    ]) {
+        it(`revalidates retained recovery input against accepted Reload policy: ${scenario.name}`, async (test) => {
+            const form = reviewForm();
+            form.payload.publicFields.state.promptUserBeforeSubmission = false;
+            const schema = form.payload.fieldIdsToSchemas.fld_title;
+            assert.ok(schema);
+            schema.miniExtConfig = { ...scenario.initial };
+            const publicSchema = structuredClone(schema);
+            publicSchema.miniExtConfig = {};
+            publicSchema.airtableField.id = 'fld_public';
+            publicSchema.airtableField.name =
+                scenario.name === 'duplicate names'
+                    ? schema.airtableField.name
+                    : 'Public reference';
+            form.payload.fieldIdsToSchemas.fld_public = publicSchema;
+            form.payload.fieldIdsInForm.push('fld_public');
+            form.payload.formRecord.data.fld_public = 'Initial public value';
+            const fixture = await mount(test, form, {
+                save: async () => {
+                    throw new Error('Synthetic unknown Save outcome.');
+                },
+            });
+            const sentinel = 'SYNTHETIC_RETAINED_PRIVATE_VALUE';
+            const canonical = 'SYNTHETIC_FRESH_SERVER_VALUE';
+            const originalInput = fixture.field('fld_title');
+            fixture.edit('fld_title', sentinel);
+            fixture.edit('fld_public', 'SYNTHETIC_PUBLIC_REFERENCE');
+            fixture.submit();
+            await waitFor(
+                () =>
+                    fixture.saves.length === 1 &&
+                    fixture.window.document
+                        .querySelector('.error-list')
+                        ?.textContent?.includes('may have completed') ===
+                        true &&
+                    fixture.window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            const selector =
+                'details[aria-label="Earlier local input (reference only)"]';
+            const captured = fixture.window.document.querySelector(selector);
+            assert.ok(captured);
+            assert.equal(
+                captured.outerHTML.includes(sentinel),
+                Object.keys(scenario.initial).length === 0
+            );
+            const savedNative = structuredClone(fixture.saves[0]);
+            assert.equal(savedNative?.formRecord.data.fld_title, sentinel);
+            assert.deepEqual(savedNative?.formFieldIdsWithUnsavedChanges, [
+                'fld_title',
+                'fld_public',
+            ]);
+
+            schema.miniExtConfig = { ...scenario.next };
+            form.payload.formRecord.data.fld_title = canonical;
+            if (scenario.name === 'renamed same ID')
+                schema.airtableField.name = 'Accepted renamed field';
+            if (scenario.name === 'removed field')
+                form.payload.fieldIdsInForm =
+                    form.payload.fieldIdsInForm.filter(
+                        (id) => id !== 'fld_title'
+                    );
+            if (scenario.name === 'missing schema')
+                delete form.payload.fieldIdsToSchemas.fld_title;
+            if (
+                scenario.name === 'hidden field' ||
+                scenario.name === 'blocked field'
+            ) {
+                schema.miniExtConfig = {
+                    conditionalFields: {
+                        logicalOperator: 'and',
+                        conditions: [
+                            {
+                                id: 'recovery_policy',
+                                type: 'singleCondition',
+                                setting: {
+                                    type: 'is',
+                                    fieldType: 'singleLineText',
+                                    idOrName: {
+                                        type: 'id',
+                                        id:
+                                            scenario.name === 'blocked field'
+                                                ? 'fld_missing_driver'
+                                                : 'fld_public',
+                                    },
+                                    value: 'Reveal retained value',
+                                },
+                            },
+                        ],
+                    },
+                };
+            }
+            const loadedNative = structuredClone(form.payload.formRecord);
+            fixture.button('Reload').click();
+            await waitFor(
+                () =>
+                    fixture.loads() === 2 &&
+                    !originalInput.isConnected &&
+                    fixture.window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            const reference = fixture.window.document.querySelector(selector);
+            assert.ok(reference);
+            reference.setAttribute('open', '');
+            assert.equal(
+                reference.outerHTML.includes(sentinel),
+                scenario.retained
+            );
+            assert.match(
+                reference.textContent ?? '',
+                /SYNTHETIC_PUBLIC_REFERENCE/
+            );
+            if (scenario.name === 'renamed same ID')
+                assert.match(
+                    reference.textContent ?? '',
+                    /Accepted renamed field: SYNTHETIC_RETAINED_PRIVATE_VALUE/
+                );
+            if (
+                scenario.name !== 'removed field' &&
+                scenario.name !== 'missing schema'
+            )
+                assert.equal(fixture.field('fld_title').value, canonical);
+            fixture.button('Save').click();
+            await settled();
+            assert.equal(fixture.button('Save').disabled, true);
+            assert.equal(fixture.saves.length, 1);
+            assert.equal(fixture.loads(), 2);
+            assert.deepEqual(fixture.saves[0], savedNative);
+            assert.deepEqual(form.payload.formRecord, loadedNative);
+        });
+    }
+
     for (const scenario of [
         {
             label: 'obscurePassword',

@@ -32,8 +32,12 @@ The helper and browser starter evaluate both `customViewConditions` and owning
 field conditions against complete accepted `formRecord.data` and required
 `usersTableFields`, using the existing supported strict Form evaluator without
 Form empty-hiding rules. Unconditional choices accept `usersTableFields: []`;
-missing required Portal metadata is not a fallback. Unsupported/computed condition
-drivers and malformed native values remain unavailable. Raw duplicate view IDs
+missing required Portal metadata is not a fallback. Valid direct scalar Formula
+result snapshots follow the [Form Formula policy](forms.md#formula-scalar-snapshot-drivers),
+including exact saved/result types and strict native values. No Formula
+expression is calculated or refreshed by this helper; accepted parent refreshes
+supply new results. Other unsupported/computed condition drivers and malformed
+native values remain unavailable. Raw duplicate view IDs
 are refused before visibility filtering, including hidden duplicates.
 
 Never infer a legacy default from `views.length === 0`. Hidden fields, nonempty

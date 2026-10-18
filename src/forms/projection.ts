@@ -8,6 +8,7 @@ import type {
 import { extractIdentifiersFromFormula } from '../formulas/helpers/extractIdentifiersFromExpr.js';
 import {
     compileRuntimeConditions,
+    compileFormRuntimeConditions,
     type CompileRuntimeConditionsInput,
 } from './conditions.js';
 import {
@@ -310,7 +311,11 @@ function predicate(
     diagnostics: FormVisibilityDiagnostic[],
     policy: 'legacy-flat' | 'form'
 ): FormFieldVisibility {
-    const compiled = compileRuntimeConditions({
+    const compile =
+        policy === 'form'
+            ? compileFormRuntimeConditions
+            : compileRuntimeConditions;
+    const compiled = compile({
         conditions:
             field.miniExtConfig != null &&
             'conditionalFields' in field.miniExtConfig

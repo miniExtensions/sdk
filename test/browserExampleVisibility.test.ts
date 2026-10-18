@@ -129,6 +129,151 @@ const mount = async (
 };
 
 describe('actual browser starter conditional visibility', () => {
+    for (const [resultType, operator, operand, no, yes] of [
+        ['number', 'greaterThan', 4, 3, 5],
+        ['percent', 'equals', 50, 0.4, 0.5],
+        ['currency', 'equals', 5, 6, 5],
+        ['singleLineText', 'contains', 'ready', 'waiting', 'READY now'],
+    ] as const) {
+        it(`preserves native ${resultType} Formula conditions through actual starter Save and explicit reload`, async (test) => {
+            let form = loadedForm();
+            const title = form.payload.fieldIdsToSchemas.fld_title;
+            const dependency = structuredClone(title);
+            assert.ok(title && dependency);
+            dependency.airtableField.id = 'fld_dependency';
+            dependency.airtableField.name = 'Dependency';
+            dependency.miniExtConfig = {};
+            title.miniExtConfig = {
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'synthetic-formula-rule',
+                            type: 'singleCondition',
+                            setting: {
+                                type: operator,
+                                fieldType: resultType,
+                                value: operand,
+                                idOrName: { type: 'id', id: 'fld_computed' },
+                            },
+                        },
+                    ],
+                } as RuntimeConditionsDefinition,
+            };
+            form.payload.fieldIdsToSchemas = {
+                fld_title: title,
+                fld_dependency: dependency,
+                fld_computed: {
+                    fieldType: 'formula',
+                    airtableField: {
+                        id: 'fld_computed',
+                        name: 'Accepted Formula',
+                        description: null,
+                        isComputed: true,
+                        isPrimaryField: false,
+                        config: {
+                            type: 'formula',
+                            options: {
+                                isValid: true,
+                                result: {
+                                    type: resultType,
+                                    options:
+                                        resultType === 'singleLineText'
+                                            ? null
+                                            : resultType === 'currency'
+                                              ? { precision: 2, symbol: '' }
+                                              : { precision: 2 },
+                                },
+                            },
+                        },
+                    },
+                },
+            } as FormLoadedResult['payload']['fieldIdsToSchemas'];
+            form.payload.fieldIdsInForm = ['fld_dependency', 'fld_title'];
+            form.payload.publicFields.state.promptUserBeforeSubmission = false;
+            form.payload.publicFields.state.multiPageFormMode = 'one-page';
+            form.payload.publicFields.state.tableId = 'synthetic_formula_table';
+            form.payload.formRecord = {
+                type: 'edit',
+                recordId: 'synthetic_formula_record',
+                tableId: 'synthetic_formula_table',
+                data: {
+                    fld_title: 'Retained answer',
+                    fld_dependency: 'Initial',
+                    fld_computed: no,
+                },
+            };
+            form.payload.formFieldIdsWithUnsavedChanges = [];
+            form.payload.urlPrefilledFieldIds = [];
+            const saves: SaveFormInput[] = [];
+            const window = await mount(test, () => form, saves);
+            await waitFor(() => isPresented(window, 'fld_dependency'));
+            assert.equal(isPresented(window, 'fld_title'), false);
+            const input = window.document.querySelector(
+                '[data-field-id="fld_dependency"]'
+            );
+            assert.ok(input instanceof window.HTMLInputElement);
+            input.value = 'Edited dependency';
+            input.dispatchEvent(new window.Event('input', { bubbles: true }));
+            assert.equal(isPresented(window, 'fld_title'), false);
+            const card = input.closest('form');
+            assert.ok(card);
+            card.dispatchEvent(
+                new window.Event('submit', { bubbles: true, cancelable: true })
+            );
+            await waitFor(() => saves.length === 1);
+            assert.deepEqual(saves[0].formRecord.data, {
+                fld_title: 'Retained answer',
+                fld_dependency: 'Edited dependency',
+                fld_computed: no,
+            });
+            assert.deepEqual(saves[0].formFieldIdsWithUnsavedChanges, [
+                'fld_dependency',
+            ]);
+            await waitFor(
+                () =>
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            form = structuredClone(form);
+            form.payload.formRecord.data.fld_computed = yes;
+            const reload = window.document.getElementById('reload');
+            assert.ok(reload instanceof window.HTMLButtonElement);
+            reload.click();
+            await waitFor(() => isPresented(window, 'fld_title'));
+            const target = window.document.querySelector(
+                '[data-field-id="fld_title"]'
+            );
+            assert.ok(target instanceof window.HTMLInputElement);
+            assert.equal(target.value, 'Retained answer');
+            target.value = 'Visible edited answer';
+            target.dispatchEvent(new window.Event('input', { bubbles: true }));
+            const freshCard = target.closest('form');
+            assert.ok(freshCard);
+            freshCard.dispatchEvent(
+                new window.Event('submit', { bubbles: true, cancelable: true })
+            );
+            await waitFor(() => saves.length === 2);
+            assert.equal(saves[1].formRecord.data.fld_computed, yes);
+            assert.equal(
+                saves[1].formRecord.data.fld_title,
+                'Visible edited answer'
+            );
+            assert.equal(
+                saves[1].formFieldIdsWithUnsavedChanges.includes(
+                    'fld_computed'
+                ),
+                false
+            );
+            await waitFor(
+                () =>
+                    window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+        });
+    }
     it('hides and restores controls without clearing native edit drafts or changing Save types', async (test) => {
         const form = loadedForm();
         const predicate: RuntimeConditionsDefinition = {

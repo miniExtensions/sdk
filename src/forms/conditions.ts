@@ -102,9 +102,49 @@ const quoted = (value: string) => `'${value.replace(/'/g, "\\'")}'`;
 const referenced = (value: string, escapeName: boolean) =>
     `{${escapeName ? value.replace(/}/g, '\\}') : value}}`;
 
+/** Internal Form policy: direct scalar results only, never Formula execution. */
+export function formulaConditionResultType(
+    field: DeepReadonly<RuntimeAirtableField>
+): 'number' | 'percent' | 'currency' | 'singleLineText' | null {
+    if (field.config.type !== 'formula' || field.isComputed !== true)
+        return null;
+    const options = field.config.options;
+    if (!isObject(options) || options.isValid !== true) return null;
+    const result = options.result;
+    if (!isObject(result)) return null;
+    if (result.type === 'singleLineText')
+        return result.options === null ? result.type : null;
+    if (
+        (result.type === 'number' ||
+            result.type === 'percent' ||
+            result.type === 'currency') &&
+        isObject(result.options) &&
+        typeof result.options.precision === 'number' &&
+        Number.isFinite(result.options.precision) &&
+        (result.type !== 'currency' ||
+            typeof result.options.symbol === 'string')
+    )
+        return result.type;
+    return null;
+}
+
 /** Pure compilation only: no formula evaluation, record reads or write authority. */
 export function compileRuntimeConditions(
     input: CompileRuntimeConditionsInput
+): CompileRuntimeConditionsResult {
+    return compileConditions(input, false);
+}
+
+/** Internal Form consumer; the public compiler retains its direct-field policy. */
+export function compileFormRuntimeConditions(
+    input: CompileRuntimeConditionsInput
+): CompileRuntimeConditionsResult {
+    return compileConditions(input, true);
+}
+
+function compileConditions(
+    input: CompileRuntimeConditionsInput,
+    formulaResults: boolean
 ): CompileRuntimeConditionsResult {
     const diagnostics: ConditionCompileDiagnostic[] = [];
     let invalid = false;
@@ -212,11 +252,18 @@ export function compileRuntimeConditions(
         );
         const isSelect = (type: unknown) =>
             type === 'singleSelect' || type === 'multipleSelects';
+        const currentType =
+            formulaResults && field?.config.type === 'formula'
+                ? formulaConditionResultType(field)
+                : field?.config.type;
         if (
             field != null &&
-            (!allowedTypes.includes(field.config.type) ||
-                ((isSelect(setting.fieldType) || isSelect(field.config.type)) &&
-                    setting.fieldType !== field.config.type))
+            (currentType == null ||
+                !allowedTypes.includes(currentType) ||
+                (field.config.type === 'formula' &&
+                    setting.fieldType !== currentType) ||
+                ((isSelect(setting.fieldType) || isSelect(currentType)) &&
+                    setting.fieldType !== currentType))
         ) {
             report('unsupported-field-type', path, condition);
             return null;
@@ -378,7 +425,7 @@ export function compileRuntimeConditions(
                 numberValue = value;
                 try {
                     const effectiveNumber =
-                        !isLength && field?.config.type === 'percent'
+                        !isLength && currentType === 'percent'
                             ? numberValue / 100
                             : numberValue;
                     new Parser(
@@ -462,9 +509,7 @@ export function compileRuntimeConditions(
                                 ? '>='
                                 : '<=';
                 const numericValue =
-                    field.config.type === 'percent'
-                        ? numberValue / 100
-                        : numberValue;
+                    currentType === 'percent' ? numberValue / 100 : numberValue;
                 return `${fieldFormula} ${sign} ${numericValue}`;
             }
         }

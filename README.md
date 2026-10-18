@@ -611,7 +611,9 @@ ordinary sections that do not apply field conditions to their members;
 the single-field and legacy-flat adapters remain conservative for sections.
 Null/blank text, checkbox false, rating zero
 and blank barcode text hide while ordinary numeric zero remains populated.
-Unsupported predicates, computed/linked drivers, richer empty-hiding targets
+Form conditions also accept [scalar Formula result snapshots](docs/forms.md#formula-scalar-snapshot-drivers)
+with valid matching number, percent, currency or text metadata. These values are
+not recalculated after draft edits. Unsupported predicates, other computed/linked drivers, richer empty-hiding targets
 and active empty hiding inside applied-condition sections return explicit blocked outcomes.
 These presentation helpers do not grant permissions or supply a backend
 filtered-record projection.

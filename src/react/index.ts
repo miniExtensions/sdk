@@ -49,6 +49,12 @@ export {
     type MultipleAttachmentsFieldProps,
     type MultipleAttachmentsFieldOptions,
 } from './MultipleAttachmentsField.js';
+export {
+    ReadonlyAttachmentsField,
+    renderReadonlyAttachmentsField,
+    type ReadonlyAttachmentsFieldProps,
+    type ReadonlyAttachmentsFieldOptions,
+} from './ReadonlyAttachmentsField.js';
 import {
     SingleSelectControl,
     singleSelectConfiguration,

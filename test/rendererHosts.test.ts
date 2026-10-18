@@ -1405,3 +1405,118 @@ it('Portal attachment publication retires on owner replacement in the final owne
     p.cell.destroy();
     p.owner.destroy();
 });
+
+for (const readOnly of [true, false])
+    for (const hide of [false, true])
+        for (const delivery of ['one', 'two-listeners', 'two-hosts'] as const)
+            it(`Form attachment actual notification callback 5: readOnly=${readOnly}, hide=${hide}, delivery=${delivery}`, () => {
+                const loaded = loadedForm();
+                const schema = loaded.payload.fieldIdsToSchemas.fld_files;
+                assert.ok(schema.fieldType === 'multipleAttachments');
+                schema.miniExtConfig = {
+                    readOnly,
+                    hideAttachmentName: false,
+                    conditionalFields: {
+                        logicalOperator: 'and',
+                        conditions: [
+                            {
+                                id: 'visible-title',
+                                type: 'singleCondition',
+                                setting: {
+                                    type: 'is',
+                                    fieldType: 'singleLineText',
+                                    idOrName: { type: 'id', id: 'fld_title' },
+                                    value: 'Initial title',
+                                },
+                            },
+                        ],
+                    },
+                };
+                const client = createMiniExtensionsClient({
+                    apiOrigin: 'https://sdk.example.test',
+                    fetch: async () => {
+                        throw new Error('No I/O');
+                    },
+                });
+                const fields = createFormFieldBindings({
+                    client,
+                    loaded,
+                    saveOptions: formSaveOptions(),
+                    getScope: () => ({ ownerId: 'A', revision: 0 }),
+                });
+                const title = fields.field('fld_title');
+                let armed = false,
+                    checks = 0,
+                    hidden = false;
+                const options = {
+                    fields,
+                    fieldId: 'fld_files',
+                    configurationRevision: () => 0,
+                    isCurrent: () => {
+                        if (armed && ++checks === 5 && hide) {
+                            assert.equal(
+                                title.setValue('Hidden').accepted,
+                                true
+                            );
+                            hidden = true;
+                        }
+                        return true;
+                    },
+                };
+                const host = createFormFieldRendererHost(options);
+                const secondHost =
+                    delivery === 'two-hosts'
+                        ? createFormFieldRendererHost(options)
+                        : null;
+                const observed: {
+                    snapshot: FieldRendererHostSnapshot;
+                    hidden: boolean;
+                }[] = [];
+                const stop = host.subscribe((snapshot) =>
+                    observed.push({ snapshot, hidden })
+                );
+                const stopSecond =
+                    delivery === 'one'
+                        ? () => {}
+                        : (secondHost ?? host).subscribe((snapshot) =>
+                              observed.push({ snapshot, hidden })
+                          );
+                assert.equal(
+                    attachmentFacet(host).attachmentPresentation?.status,
+                    'ready'
+                );
+                observed.length = 0;
+                armed = true;
+                assert.equal(
+                    fields.controller.write('fld_title', 'Initial title'),
+                    true
+                );
+                assert.ok(checks >= 5);
+                assert.ok(observed.length > 0);
+                if (hide) {
+                    assert.ok(observed.some((entry) => entry.hidden));
+                    for (const entry of observed.filter(
+                        (entry) => entry.hidden
+                    ))
+                        if (entry.snapshot.status === 'ready')
+                            assert.deepEqual(
+                                entry.snapshot.fields[0].attachmentPresentation,
+                                { status: 'unavailable' }
+                            );
+                    assert.equal(host.getSnapshot().status, 'hidden');
+                } else {
+                    assert.ok(
+                        observed.some(
+                            (entry) =>
+                                entry.snapshot.status === 'ready' &&
+                                entry.snapshot.fields[0].attachmentPresentation
+                                    ?.status === 'ready'
+                        )
+                    );
+                }
+                stopSecond();
+                stop();
+                secondHost?.dispose();
+                host.dispose();
+                fields.destroy();
+            });

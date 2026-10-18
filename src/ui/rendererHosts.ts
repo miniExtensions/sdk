@@ -1,3 +1,4 @@
+import { captureFormVisibilityRevision } from '../forms/bindings.js';
 import { projectAttachmentPresentation } from './attachmentPresentation.js';
 import { getFormAttachmentPolicy } from '../forms/attachments.js';
 import {
@@ -585,7 +586,11 @@ export function createFormFieldRendererHost(
                                           const now = binding.getSnapshot();
                                           return (
                                               !now.retired &&
-                                              now.visibility.type === 'visible'
+                                              now.visibility.type ===
+                                                  'visible' &&
+                                              captureFormVisibilityRevision(
+                                                  options.fields
+                                              )?.() === true
                                           );
                                       },
                                       configs: [input.displayConfig],
@@ -643,8 +648,12 @@ export function createFormFieldRendererHost(
         },
         () => {
             const revision = attachmentPublicationRevision;
+            const draftCurrent = captureFormVisibilityRevision(options.fields);
             return () =>
-                attachmentVisible && attachmentPublicationRevision === revision;
+                draftCurrent !== null &&
+                draftCurrent() &&
+                attachmentVisible &&
+                attachmentPublicationRevision === revision;
         }
     );
 }

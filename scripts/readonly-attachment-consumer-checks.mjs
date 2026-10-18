@@ -26,7 +26,9 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
         const [runtime, forms, ui] = await Promise.all(
             ['runtime', 'forms', 'ui'].map(load)
         );
-        for (const { config, hideAt } of [
+        assert.equal('captureFormControllerDraftRevision' in forms, false);
+        assert.equal('captureFormVisibilityRevision' in forms, false);
+        for (const { config, hideAt, notification = false } of [
             { config: { readOnly: true, hideAttachmentName: false } },
             { config: { readOnly: false, hideAttachmentName: false } },
             { config: { readOnly: true, hideAttachmentName: true } },
@@ -40,6 +42,13 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                 config: { readOnly: false, hideAttachmentName: false },
                 hideAt: 5,
             },
+            ...[true, false].flatMap((readOnly) =>
+                [false, true].map((hide) => ({
+                    config: { readOnly, hideAttachmentName: false },
+                    hideAt: hide ? 5 : undefined,
+                    notification: true,
+                }))
+            ),
         ]) {
             const loaded = portalRecipeFixtures.makeForm({
                 childExtensionInfo: { accessType: { type: 'create' } },
@@ -61,7 +70,7 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                 },
                 miniExtConfig: {
                     ...config,
-                    ...(hideAt
+                    ...(hideAt || notification
                         ? {
                               conditionalFields: {
                                   logicalOperator: 'and',
@@ -115,21 +124,75 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
             fields.attachment = () => {
                 throw new Error('No attachment controller');
             };
-            let ownershipChecks = 0;
-            const host = ui.createFormFieldRendererHost({
+            const title = fields.field('fld_title');
+            let ownershipChecks = 0,
+                armed = !notification,
+                hidden = false;
+            const hostOptions = {
                 fields,
                 fieldId: 'fld_files',
                 isCurrent: () => {
-                    if (++ownershipChecks === hideAt)
-                        assert.equal(
-                            fields.field('fld_title').setValue('Hidden')
-                                .accepted,
-                            true
-                        );
+                    if (armed && ++ownershipChecks === hideAt) {
+                        assert.equal(title.setValue('Hidden').accepted, true);
+                        hidden = true;
+                    }
                     return true;
                 },
                 configurationRevision: () => revision,
-            });
+            };
+            const host = ui.createFormFieldRendererHost(hostOptions);
+            if (notification) {
+                const second = ui.createFormFieldRendererHost(hostOptions);
+                const observed = [];
+                const listen = (snapshot) =>
+                    observed.push({ snapshot, hidden });
+                const stops = [
+                    host.subscribe(listen),
+                    host.subscribe(listen),
+                    second.subscribe(listen),
+                ];
+                assert.equal(
+                    host.getSnapshot().fields[0].attachmentPresentation.status,
+                    'ready'
+                );
+                observed.length = 0;
+                armed = true;
+                assert.equal(
+                    fields.controller.write('fld_title', 'Initial child'),
+                    true
+                );
+                assert.ok(ownershipChecks >= 5);
+                assert.ok(observed.length > 0);
+                if (hideAt) {
+                    assert.ok(observed.some((entry) => entry.hidden));
+                    for (const entry of observed.filter(
+                        (entry) => entry.hidden
+                    ))
+                        if (entry.snapshot.status === 'ready')
+                            assert.deepEqual(
+                                entry.snapshot.fields[0].attachmentPresentation,
+                                { status: 'unavailable' }
+                            );
+                    assert.equal(host.getSnapshot().status, 'hidden');
+                } else {
+                    assert.ok(
+                        observed.some(
+                            (entry) =>
+                                entry.snapshot.status === 'ready' &&
+                                entry.snapshot.fields[0].attachmentPresentation
+                                    .status === 'ready'
+                        )
+                    );
+                }
+                assert.equal(requests, 0);
+                assert.equal(fields.hasPendingFiles(), false);
+                stops.forEach((stop) => stop());
+                second.dispose();
+                host.dispose();
+                fields.destroy();
+                checks++;
+                continue;
+            }
             const snapshot = host.getSnapshot();
             assert.equal(snapshot.status, 'ready');
             const props = snapshot.fields[0];

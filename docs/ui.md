@@ -3474,10 +3474,9 @@ Queue replacement during a flight remains available. Uncertain outcomes never
 cause automatic append or retry. Pending File names and other metadata are not
 read by this component; only its pending queue count is shown.
 
-Read-only Form and all Portal attachment slots are **unsupported for attachment
-display** in this React adapter. The headless contract provides an optional
-privacy-filtered label facet. This React adapter does not yet consume it, so
-read-only values retain the inert fallback. These slots, editable slots with missing guarded actions, and malformed
+Read-only Form and all Portal attachment slots remain **unsupported by this
+editable adapter**. Use the separate read-only label helper below for an approved
+Form or Portal-detail facet. These slots, editable slots with missing guarded actions, and malformed
 facets display only `Attachment presentation unavailable`, with no chooser,
 actions, attachment count, filename or URL. The adapter never inspects raw values
 to improve that fallback. This slice does not establish read-only display parity.
@@ -3565,5 +3564,94 @@ attachment actions, editable behavior, and native cloning/fingerprinting remain
 unchanged. Those existing native paths still access native data: the new lazy
 projection boundary is not a universal raw-value nonaccess or security boundary.
 Linked-detail and Portal inline expansion/cells do not receive this facet.
-The separate editable React adapter in PR191 is not changed or duplicated;
-read-only React consumption requires a separately coordinated adapter change.
+The separate editable React adapter is unchanged; the read-only helper below
+consumes this label-only facet without borrowing its editable capabilities.
+
+## React read-only attachment presentation
+
+The optional `/react` entry exports `ReadonlyAttachmentsField`,
+`ReadonlyAttachmentsFieldProps`, `ReadonlyAttachmentsFieldOptions` and
+`renderReadonlyAttachmentsField`. The component accepts an accepted
+`FieldRendererProps<'multipleAttachments'>` snapshot through `field`; the helper
+registers under the existing physical attachment slot:
+
+```tsx
+import type { ReactNode } from 'react';
+import {
+    ReadonlyAttachmentsField,
+    renderReadonlyAttachmentsField,
+} from '@miniextensions/sdk/react';
+import type {
+    FieldRendererProps,
+    FieldRendererSlots,
+} from '@miniextensions/sdk/ui';
+
+export const readonlyAttachmentRenderers: FieldRendererSlots<ReactNode> = {
+    renderMultipleAttachmentsField: (field) =>
+        renderReadonlyAttachmentsField(field, {
+            className: 'attachment-labels',
+        }),
+};
+
+export function AttachmentLabels({
+    field,
+}: {
+    field: FieldRendererProps<'multipleAttachments'>;
+}) {
+    return <ReadonlyAttachmentsField field={field} />;
+}
+```
+
+Only physical, noncomputed attachment fields in accepted Form and Portal-detail
+contexts are supported. The helper consumes `attachmentPresentation` exclusively.
+Read-only Grid/List nodes backed by accepted detail props also use the
+`portal-detail` context and can display these labels. Actual `portal-cell` or
+inline binding contexts remain unsupported.
+It does not read `value`, capability/actions, pending Files, raw error/validation
+messages, URLs, IDs or native indexes. No policy controller, queue, hydration,
+transport, write or save action is created. The facet can coexist with editable
+Form capabilities; choosing this helper still produces only read-only labels.
+Keep `renderMultipleAttachmentsField` for the existing explicit editable UI.
+
+Ready labels render as escaped, selectable list text in their supplied order,
+including duplicates, empty labels, whitespace and line breaks. HTML and URL
+strings remain literal text, without links, images, previews or downloads. Empty
+ready rows display `No attachments`. Masked and unavailable states have no list,
+row count or controls, and display only a fixed mask or
+`Attachment presentation unavailable`. Missing facets, unsupported linked-detail
+and Portal-cell/inline contexts, malformed policy flags and malformed facet shapes
+also fail closed. The whole facet is validated before any labels are rendered.
+Either masking flag in display or write configuration conceals before facet access;
+malformed masking flags also conceal. Valid read-only and add-only configurations
+do not override the host's supplied safe facet.
+
+Use the existing `FieldRenderer`, Form or Portal composition to subscribe to
+accepted host snapshots. Those hosts own conditional visibility, configuration
+revisions and retirement fences, including queued-notification and ABA protection.
+This component keeps no label cache and does not adapt a raw `FormFieldSnapshot`:
+bindings do not expose the label facet. Hidden, blocked and retired host snapshots
+remain omitted by the existing composition. Custom renderer dispatch keeps its
+existing precedence. The renderer's no-native-read guarantee begins at the accepted
+facet boundary; existing headless cloning and fingerprinting still access native
+values as documented above.
+
+Visible titles name the list through a unique association; a hidden title supplies
+an accessible name. Click, auxiliary-click, double-click, pointer-down/up and key
+events stay inside the field without cancelling text selection. Enter cannot
+implicitly submit a surrounding Form. `className` decorates
+`mx-sdk-readonly-attachments-field`; there is no new stylesheet or package subpath.
+
+Source tests cover direct snapshots and real subscription/lifecycle paths. The
+normal package check exercises public installed ESM/CommonJS exports and strict
+MTS/CTS/JSX consumers. Build the synthetic installed-package browser fixture with:
+
+```sh
+node scripts/build-readonly-attachments-browser-proof.mjs /path/to/installed-consumer /path/to/tested.tgz /path/to/fresh-output
+```
+
+The builder verifies the archive and consumed SDK module bytes, records source and
+bundle hashes, and writes only its fresh output directory. It does not install
+dependencies, start a server or claim browser verification. Serve the fixture on
+loopback for separate native interaction and layout checks. Synthetic controls
+change only fixture-owned data and establish no live-backend, clipboard or
+screen-reader result.

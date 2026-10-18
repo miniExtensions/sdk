@@ -2853,12 +2853,50 @@ const renderForm = (page: FormLoadedResult): void => {
                 visitor.screen = null;
                 render();
             }
-            const warnings = result.postSubmissionWarnings
-                ?.map((warning) => warning.type)
-                .join(', ');
-            status(
-                `Saved record ${result.record.id}.${warnings == null || warnings === '' ? '' : ` Post-submission warning: ${warnings}.`}`
-            );
+            const warnings = new Set<string>();
+            let updateLinkEmailFailed = false;
+            for (const warning of normalized.postSubmissionWarnings) {
+                // Result arrays may contain unknown runtime members. Never
+                // echo response metadata or fail an already accepted Save.
+                switch (warning?.type) {
+                    case 'userConfirmationEmailFailed':
+                        warnings.add(
+                            'The confirmation email could not be sent.'
+                        );
+                        break;
+                    case 'adminNotificationEmailFailed':
+                        warnings.add(
+                            'The administrator notification email could not be sent.'
+                        );
+                        break;
+                    case 'smsConfirmationFailed':
+                        warnings.add(
+                            'The confirmation text message could not be sent.'
+                        );
+                        break;
+                    case 'saveAndContinueUpdateLinkEmailFailed':
+                        updateLinkEmailFailed = true;
+                        warnings.add(
+                            'The update link email could not be sent.'
+                        );
+                        break;
+                    default:
+                        warnings.add(
+                            'An additional post-submission warning was reported.'
+                        );
+                }
+            }
+            const messages = [`Saved record ${result.record.id}.`];
+            if (
+                !updateLinkEmailFailed &&
+                normalized.postSubmissionNotifications.some(
+                    (notification) =>
+                        notification?.type ===
+                        'saveAndContinueUpdateLinkEmailSent'
+                )
+            )
+                messages.push('An update link email was sent.');
+            status([...messages, ...warnings].join(' '));
         });
     card.addEventListener('submit', async (event) => {
         event.preventDefault();

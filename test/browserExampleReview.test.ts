@@ -3142,3 +3142,289 @@ describe('actual starter final Review for manual pages', () => {
         });
     }
 });
+
+describe('actual browser starter post-save feedback', () => {
+    const sent = 'saveAndContinueUpdateLinkEmailSent';
+    const failed = 'saveAndContinueUpdateLinkEmailFailed';
+    const accepted = (notifications?: unknown[], warnings?: unknown[]) => ({
+        ...savedForm(),
+        loggedInUserRecord: null,
+        context: { type: 'direct-url' },
+        postSubmissionNotifications: notifications,
+        postSubmissionWarnings: warnings,
+    });
+    const savedFeedback = async (
+        test: TestContext,
+        result: ReturnType<typeof accepted>,
+        review = true
+    ) => {
+        const form = reviewForm();
+        form.payload.publicFields.state.promptUserBeforeSubmission = review;
+        let extraRequests = 0;
+        const fixture = await mount(test, form, {
+            save: async () => new Response(JSON.stringify(result)),
+            read: async () => {
+                extraRequests++;
+                throw new Error('No post-save request is authorized.');
+            },
+        });
+        fixture.edit('fld_title', 'Feedback request');
+        const staleCard = fixture.field('fld_title').closest('form');
+        assert.ok(staleCard);
+        if (review) {
+            const dialog = await fixture.openReview();
+            assert.equal(fixture.saves.length, 0);
+            fixture.button('Confirm', dialog).click();
+        } else fixture.submit();
+        await waitFor(
+            () =>
+                fixture.window.document
+                    .getElementById('status')
+                    ?.textContent?.startsWith('Saved record record_saved.') ===
+                    true &&
+                fixture.window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false'
+        );
+        const message =
+            fixture.window.document.getElementById('status')?.textContent;
+        assert.equal(fixture.window.document.querySelector('.fields'), null);
+        assert.equal(fixture.saves.length, 1);
+        assert.deepEqual(fixture.saves[0]?.formRecord.data, {
+            ...form.payload.formRecord.data,
+            fld_title: 'Feedback request',
+        });
+        assert.deepEqual(fixture.saves[0]?.formFieldIdsWithUnsavedChanges, [
+            'fld_title',
+        ]);
+        assert.equal(fixture.saves[0]?.isComputeMode, false);
+        staleCard.dispatchEvent(
+            new fixture.window.Event('submit', {
+                bubbles: true,
+                cancelable: true,
+            })
+        );
+        await settled();
+        assert.equal(fixture.saves.length, 1);
+        assert.equal(fixture.loads(), 1);
+        assert.equal(extraRequests, 0);
+        assert.equal(
+            fixture.window.document.getElementById('status')?.textContent,
+            message
+        );
+        return { fixture, message };
+    };
+
+    for (const review of [false, true]) {
+        it(`shows only accepted update-link email sent feedback ${review ? 'after Review' : 'after ordinary Save'}`, async (test) => {
+            const { message } = await savedFeedback(
+                test,
+                accepted([{ type: sent }], []),
+                review
+            );
+            assert.equal(
+                message,
+                'Saved record record_saved. An update link email was sent.'
+            );
+        });
+        it(`keeps known Save success when the update-link email fails ${review ? 'after Review' : 'after ordinary Save'}`, async (test) => {
+            const { message } = await savedFeedback(
+                test,
+                accepted([], [{ type: failed }]),
+                review
+            );
+            assert.equal(
+                message,
+                'Saved record record_saved. The update link email could not be sent.'
+            );
+        });
+    }
+    for (const [type, text] of [
+        [
+            'userConfirmationEmailFailed',
+            'The confirmation email could not be sent.',
+        ],
+        [
+            'adminNotificationEmailFailed',
+            'The administrator notification email could not be sent.',
+        ],
+        [
+            'smsConfirmationFailed',
+            'The confirmation text message could not be sent.',
+        ],
+    ]) {
+        it(`presents fixed copy for accepted ${type}`, async (test) => {
+            const { message } = await savedFeedback(
+                test,
+                accepted([], [{ type }])
+            );
+            assert.equal(message, `Saved record record_saved. ${text}`);
+        });
+    }
+    for (const arrays of [false, true]) {
+        it(`does not invent an email outcome for ${arrays ? 'empty' : 'absent'} result metadata`, async (test) => {
+            const { message } = await savedFeedback(
+                test,
+                arrays ? accepted([], []) : accepted()
+            );
+            assert.equal(message, 'Saved record record_saved.');
+        });
+    }
+    it('tolerates malformed metadata without exposing tags, recipients or links after known Save success', async (test) => {
+        const marker = 'UNTRUSTED_POST_SAVE_METADATA';
+        const { fixture, message } = await savedFeedback(
+            test,
+            accepted(
+                [
+                    null,
+                    marker,
+                    [],
+                    { type: marker },
+                    { type: sent, recipient: marker, url: marker },
+                ],
+                [
+                    null,
+                    marker,
+                    [],
+                    { type: marker, recipient: marker, url: marker },
+                ]
+            )
+        );
+        assert.equal(
+            message,
+            'Saved record record_saved. An update link email was sent. An additional post-submission warning was reported.'
+        );
+        assert.equal(
+            fixture.window.document.body.outerHTML.includes(marker),
+            false
+        );
+        assert.equal(
+            fixture.window.document.body.outerHTML.includes(sent),
+            false
+        );
+    });
+    it('does not claim sent when accepted metadata also reports update-link email failure', async (test) => {
+        const { message } = await savedFeedback(
+            test,
+            accepted([{ type: sent }], [{ type: failed }])
+        );
+        assert.equal(
+            message,
+            'Saved record record_saved. The update link email could not be sent.'
+        );
+    });
+    it('does not present email metadata from a rejected Save result', async (test) => {
+        const form = reviewForm();
+        form.payload.publicFields.state.promptUserBeforeSubmission = false;
+        const fixture = await mount(test, form, {
+            save: async () =>
+                new Response(
+                    JSON.stringify({
+                        ...invalidForm(),
+                        postSubmissionNotifications: [{ type: sent }],
+                        postSubmissionWarnings: [{ type: failed }],
+                    })
+                ),
+        });
+        fixture.edit('fld_title', 'Rejected feedback request');
+        fixture.submit();
+        await waitFor(
+            () =>
+                fixture.window.document
+                    .querySelector('.error-list')
+                    ?.textContent?.includes('A title is required.') === true
+        );
+        assert.equal(fixture.saves.length, 1);
+        assert.equal(
+            fixture.field('fld_title').value,
+            'Rejected feedback request'
+        );
+        assert.equal(
+            fixture.window.document.getElementById('status')?.textContent,
+            'The Form was not saved. Review the validation errors.'
+        );
+    });
+    it('does not infer an email outcome from an unknown Save outcome or replay it', async (test) => {
+        const form = reviewForm();
+        form.payload.publicFields.state.promptUserBeforeSubmission = false;
+        const fixture = await mount(test, form, {
+            save: async () => {
+                throw new Error('Synthetic lost Save response.');
+            },
+        });
+        fixture.submit();
+        await waitFor(
+            () =>
+                fixture.window.document
+                    .querySelector('.error-list')
+                    ?.textContent?.includes('may have completed') === true
+        );
+        assert.doesNotMatch(
+            fixture.window.document.getElementById('status')?.textContent ?? '',
+            /Saved record|email/i
+        );
+        fixture.submit();
+        await settled();
+        assert.equal(fixture.saves.length, 1);
+        assert.equal(fixture.button('Save').disabled, true);
+    });
+    for (const transition of ['cancel', 'visitor'] as const) {
+        for (const outcome of ['sent', 'failed'] as const) {
+            it(`ignores late ${outcome} email metadata after ${transition} retirement`, async (test) => {
+                const form = reviewForm();
+                form.payload.publicFields.state.promptUserBeforeSubmission = false;
+                const held: { resolve?: (response: Response) => void } = {};
+                const fixture = await mount(test, form, {
+                    save: async () =>
+                        new Promise<Response>((resolve) => {
+                            held.resolve = resolve;
+                        }),
+                });
+                fixture.submit();
+                await waitFor(() => fixture.saves.length === 1);
+                if (transition === 'cancel')
+                    fixture.button('Cancel request').click();
+                else {
+                    const visitor =
+                        fixture.window.document.getElementById('visitor');
+                    assert.ok(
+                        visitor instanceof fixture.window.HTMLSelectElement
+                    );
+                    for (const identity of ['B', 'A']) {
+                        visitor.value = identity;
+                        visitor.dispatchEvent(
+                            new fixture.window.Event('change', {
+                                bubbles: true,
+                            })
+                        );
+                    }
+                }
+                await settled();
+                const before =
+                    fixture.window.document.getElementById(
+                        'status'
+                    )?.textContent;
+                assert.ok(held.resolve);
+                held.resolve(
+                    new Response(
+                        JSON.stringify(
+                            outcome === 'sent'
+                                ? accepted([{ type: sent }], [])
+                                : accepted([], [{ type: failed }])
+                        )
+                    )
+                );
+                await settled();
+                assert.equal(
+                    fixture.window.document.getElementById('status')
+                        ?.textContent,
+                    before
+                );
+                assert.doesNotMatch(before ?? '', /Saved record|email/i);
+                fixture.submit();
+                await settled();
+                assert.equal(fixture.saves.length, 1);
+            });
+        }
+    }
+});

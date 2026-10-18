@@ -124,6 +124,14 @@ configured choice conditions use the installed bounded scalar helper.
 Unsupported predicates show an unavailable status; the projection limits
 below apply.
 
+After an accepted Save, fixed feedback shows the record was saved and reports
+an update-link email only when the result includes that notification. A failed
+update-link email remains a post-submission warning; it does not undo the Save
+or offer a replay. Other email/text warnings use fixed copy. Unknown metadata
+never becomes a recipient, link or raw response message. Rejected, uncertain or
+retired responses cannot supply this success feedback. This does not enable a
+Compute/Save and Continue workflow, send email or change normal Save options.
+
 When a published editable, unmasked single-line text field enables address
 autocomplete, typing reads suggestions after an 800 ms debounce. Choose
 a suggestion to accept its description, then its formatted address if that

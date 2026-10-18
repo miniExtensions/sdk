@@ -13,6 +13,7 @@ import {
     type FormProgressValues,
 } from '@miniextensions/sdk/forms';
 import { button, element, labeled, settings } from './dom.js';
+import { hasMaskedValuePolicy } from './privacy.js';
 
 type ProgressOptions = {
     page: FormLoadedResult;
@@ -127,15 +128,6 @@ const configuration = (page: FormLoadedResult) =>
         page.payload.fieldIdsInForm,
         page.payload.fieldIdsToSchemas,
     ]);
-const maskExcluded = (config: unknown): boolean => {
-    if (config === undefined || config === null) return false;
-    if (typeof config !== 'object' || Array.isArray(config)) return true;
-    for (const key of ['obscurePassword', 'maskPasswordOnLoginScreen']) {
-        const value = (config as Record<string, unknown>)[key];
-        if (value !== undefined && value !== false) return true;
-    }
-    return false;
-};
 
 export const retireBrowserCreateProgress = (visitor: string): void => {
     for (const mount of mounts.get(visitor) ?? []) mount.retire();
@@ -341,7 +333,7 @@ export const createBrowserCreateProgress = (
                 !field.isComputed &&
                 !field.readOnly &&
                 field.schema.airtableField.isComputed === false &&
-                !maskExcluded(field.schema.miniExtConfig) &&
+                !hasMaskedValuePolicy(field.schema.miniExtConfig) &&
                 visibility[field.fieldId]?.type === 'visible'
         );
     };

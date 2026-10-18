@@ -293,6 +293,21 @@ string. Masking precedes value access. This is a safe plain-text display stage;
 formatted Rich Text parity, parsing, links, resource loading and editing are not
 included.
 
+[AI Text presentation](docs/ui.md#react-ai-text-presentation) exports `AiTextField`,
+`AiTextFieldProps`, `AiTextFieldOptions` and `renderAiTextField` for the existing
+computed, read-only slot. It displays the supplied native object's `value` as
+escaped selectable text with whitespace preserved. Native state and stale flags
+remain unchanged; masking precedes value access. No generation, retry, prompt or
+reference inspection, parsing, links, hydration or editing is added.
+
+[Multiple Attachments adapter](docs/ui.md#react-multiple-attachments-adapter)
+exports `MultipleAttachmentsField` and `renderMultipleAttachmentsField` for
+editable Form slots with existing filtered snapshots and guarded actions.
+Choose, first-file Upload, Clear and Cancel remain explicit; Save stays separate.
+Read-only Form/Portal slots lack a filtered attachment snapshot and display only
+`Attachment presentation unavailable`; read-only display parity is unsupported.
+The adapter never reads raw attachment values or creates previews/downloads.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,
@@ -477,7 +492,10 @@ still enforces published access and validation rules.
 Mounting a renderer performs no Save, upload or linked search. Visitor state is
 memory-only by default. With the starter’s remembering option, refresh requires
 reconnecting with the same settings and opting in to validate the remembered
-credential. Drafts and uncertain operations are never restored. Browser/provider compatibility, CORS and live persistence require
+credential. Ordinary drafts stay in memory; eligible anonymous create Forms
+offer a separate [opt-in progress restore](docs/browser-lifecycle.md#optional-create-progress)
+for explicitly selected nonsensitive scalar answers, validated through a fresh
+load. Files and uncertain operations are never restored. Browser/provider compatibility, CORS and live persistence require
 separate deployment testing. Use the supplied guides rather than interpreting a
 typed configuration property as an implemented control.
 
@@ -533,7 +551,8 @@ Field presentation and choice workflows beyond the
 [one-page field support](docs/forms.md#one-page-conditional-field-visibility)
 and [configured scalar choices](docs/ui.md#configured-scalar-choice-availability)
 remain application-owned, along with section headers/collapse, pages,
-Save & Continue, progress persistence, CAPTCHA/fingerprint/GPS collection and
+Save & Continue, progress persistence beyond the
+[bounded create-progress recipe](docs/browser-lifecycle.md#optional-create-progress), CAPTCHA/fingerprint/GPS collection and
 advanced field widgets. Static select limits and display labels alone do not
 evaluate option conditions. The starter uses final Save and supplies no
 general conditional evaluator or CAPTCHA widget. The existing server still
@@ -563,11 +582,14 @@ explicitly composes compilation with typed formula evaluation.
 [bounded one-page field visibility](docs/forms.md#one-page-conditional-field-visibility)
 using direct scalar drivers and frontend section propagation. The starter
 recomputes after accepted edits and preserves hidden native drafts and Save
-types. Explicit edit-mode `hideFieldIfEmpty` supports the flat direct scalar
-subset, including readonly fields; null/blank text, checkbox false, rating zero
+types. Explicit edit-mode `hideFieldIfEmpty` supports direct scalar fields,
+including readonly fields. Ordered composition supports leading fields and
+ordinary sections that do not apply field conditions to their members;
+the single-field and legacy-flat adapters remain conservative for sections.
+Null/blank text, checkbox false, rating zero
 and blank barcode text hide while ordinary numeric zero remains populated.
 Unsupported predicates, computed/linked drivers, richer empty-hiding targets
-and section contexts with active empty hiding return explicit blocked outcomes.
+and active empty hiding inside applied-condition sections return explicit blocked outcomes.
 These presentation helpers do not grant permissions or supply a backend
 filtered-record projection.
 

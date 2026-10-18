@@ -41,6 +41,116 @@ async function write(root, path, content) {
     await writeFile(target, content);
 }
 
+test('documented source starter install refreshes a same-version archive lock', async (t) => {
+    const root = await temporaryRoot(t);
+    const consumer = join(root, 'examples/browser');
+    const archiveName = 'miniextensions-sdk-0.1.0-alpha.0.tgz';
+    const spec = `file:../../${archiveName}`;
+    const name = '@miniextensions/sdk';
+    const version = '0.1.0-alpha.0';
+    // No registry dependencies or live API: exercise npm's actual local-archive
+    // integrity handling with the same name/version/path as the shipped kit.
+    await write(
+        root,
+        'payload/package/package.json',
+        JSON.stringify({ name, version })
+    );
+    await write(root, 'payload/package/marker.txt', 'fresh archive');
+    execFileSync('tar', [
+        '-czf',
+        join(root, archiveName),
+        '-C',
+        join(root, 'payload'),
+        'package',
+    ]);
+    const manifest = {
+        name: 'source-starter-consumer',
+        version,
+        dependencies: { [name]: spec },
+    };
+    await write(
+        root,
+        'examples/browser/package.json',
+        JSON.stringify(manifest)
+    );
+    await write(
+        root,
+        'examples/browser/package-lock.json',
+        JSON.stringify({
+            name: manifest.name,
+            version,
+            lockfileVersion: 3,
+            requires: true,
+            packages: {
+                '': manifest,
+                [`node_modules/${name}`]: {
+                    version,
+                    resolved: spec,
+                    integrity: `sha512-${createHash('sha512').update('older same-version archive').digest('base64')}`,
+                },
+            },
+        })
+    );
+    const readme = await readFile(
+        new URL('../examples/browser/README.md', import.meta.url),
+        'utf8'
+    );
+    const section = readme
+        .split('## Run from a source checkout\n')[1]
+        ?.split('\n## ')[0];
+    const commands = section?.match(/```sh\n([\s\S]*?)```/)?.[1];
+    const install = commands
+        ?.split('\n')
+        .filter((line) => line.startsWith('npm install'));
+    assert.equal(
+        install?.length,
+        1,
+        'Expected one source-startup install command'
+    );
+    const options = {
+        cwd: consumer,
+        encoding: 'utf8',
+        timeout: 30000,
+        env: {
+            ...process.env,
+            npm_config_cache: join(root, 'npm-cache'),
+            npm_config_offline: 'true',
+            npm_config_audit: 'false',
+            npm_config_fund: 'false',
+            npm_config_ignore_scripts: 'true',
+        },
+    };
+    execFileSync('npm', install[0].split(/\s+/).slice(1), options);
+    const lock = JSON.parse(
+        await readFile(join(consumer, 'package-lock.json'), 'utf8')
+    );
+    const integrity = `sha512-${createHash('sha512')
+        .update(await readFile(join(root, archiveName)))
+        .digest('base64')}`;
+    assert.equal(lock.packages[`node_modules/${name}`].integrity, integrity);
+    assert.equal(
+        await readFile(
+            join(consumer, `node_modules/${name}/marker.txt`),
+            'utf8'
+        ),
+        'fresh archive'
+    );
+    // The refreshed lock must also support a clean reinstall of that archive.
+    await rm(join(consumer, 'node_modules'), { recursive: true, force: true });
+    execFileSync(
+        'npm',
+        ['ci', '--ignore-scripts', '--no-audit', '--no-fund'],
+        options
+    );
+    assert.equal(
+        await readFile(
+            join(consumer, `node_modules/${name}/marker.txt`),
+            'utf8'
+        ),
+        'fresh archive'
+    );
+});
+
 async function proofInventoryFixture(t) {
     const root = await temporaryRoot(t);
     const routes = [
@@ -76,6 +186,39 @@ async function proofInventoryFixture(t) {
     ]);
     return { root, menu, readme };
 }
+
+test('onboarding documents stored Share ID discovery without invented setup UI', async () => {
+    const root = new URL('../', import.meta.url);
+    const manifest = JSON.parse(
+        await readFile(new URL('package.json', root), 'utf8')
+    );
+    for (const path of manifest.files.filter((path) => path.endsWith('.md'))) {
+        const doc = await readFile(new URL(path, root), 'utf8');
+        assert.doesNotMatch(
+            doc,
+            /SDK[\s*-]+setup[\s*]+card|getSdkSetup|workspace[\s*]+SDK[\s*]+setup/i,
+            `${path} must not direct customers to nonexistent setup UI or endpoints`
+        );
+    }
+    const readme = await readFile(new URL('README.md', root), 'utf8');
+    const configuration = readme
+        .split('## Obtain the actual runtime configuration\n')[1]
+        ?.split('\n## ')[0];
+    assert.ok(
+        configuration,
+        'Runtime configuration prerequisites must be present'
+    );
+    assert.match(configuration, /extension\.shareId/);
+    assert.match(configuration, /default-domain/);
+    assert.match(configuration, /custom-domain slug is not the Share ID/);
+    assert.match(configuration, /no public SDK discovery endpoint/);
+    assert.match(configuration, /workspace administrator or deployment owner/);
+    const starter = await readFile(
+        new URL('examples/browser/README.md', root),
+        'utf8'
+    );
+    assert.match(starter, /README\.md#obtain-the-actual-runtime-configuration/);
+});
 
 test('privacy proof inventory accepts complete declarations without dispatching fixture transport', async (t) => {
     const fixture = await proofInventoryFixture(t);

@@ -2595,6 +2595,179 @@ describe('actual browser starter prepared review', () => {
         });
     }
 
+    for (const policy of [
+        { name: 'public', flags: {}, masked: false },
+        {
+            name: 'obscurePassword',
+            flags: { obscurePassword: true },
+            masked: true,
+        },
+        {
+            name: 'maskPasswordOnLoginScreen',
+            flags: { maskPasswordOnLoginScreen: true },
+            masked: true,
+        },
+    ]) {
+        it(`refreshes retained recovery input after acknowledged conditional visibility changes without replay: ${policy.name}`, async (test) => {
+            const form = reviewForm();
+            form.payload.publicFields.state.promptUserBeforeSubmission = false;
+            const targetId = 'fld_recovery_target';
+            const target = scalarReviewSchema(targetId, 'Recovery target', {
+                type: AirtableFieldType.SINGLE_LINE_TEXT,
+                options: null,
+            });
+            target.miniExtConfig = {
+                readOnly: false,
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'recovery_visibility',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'is',
+                                fieldType: 'singleLineText',
+                                idOrName: { type: 'id', id: 'fld_title' },
+                                value: 'Show recovery target',
+                            },
+                        },
+                    ],
+                },
+            };
+            form.payload.fieldIdsToSchemas[targetId] = target;
+            form.payload.fieldIdsInForm.push(targetId);
+            form.payload.formRecord = {
+                type: 'edit',
+                recordId: 'record_recovery_visibility',
+                tableId: 'table_recovery_visibility',
+                data: {
+                    ...form.payload.formRecord.data,
+                    fld_title: 'Show recovery target',
+                    [targetId]: 'Initial target value',
+                },
+            };
+            const fixture = await mount(test, form, {
+                save: async () => {
+                    throw new Error('Synthetic unknown Save outcome.');
+                },
+            });
+            const sentinel = 'SYNTHETIC_RECOVERY_BECOMES_HIDDEN_VALUE';
+            const canonical = 'SYNTHETIC_FRESH_RECOVERY_VALUE';
+            const originalInput = fixture.field(targetId);
+            const idle = () =>
+                fixture.window.document
+                    .getElementById('screen')
+                    ?.getAttribute('aria-busy') === 'false';
+            const recoveryPanel = () => {
+                const panel = fixture.window.document.querySelector(
+                    '[aria-label="Earlier request recovery"]'
+                );
+                assert.ok(panel instanceof fixture.window.HTMLElement);
+                return panel;
+            };
+            fixture.edit(targetId, sentinel);
+            fixture.submit();
+            await waitFor(
+                () =>
+                    fixture.saves.length === 1 &&
+                    idle() &&
+                    recoveryPanel().textContent?.includes(
+                        'Earlier outcome not confirmed'
+                    ) === true
+            );
+            assert.ok(recoveryPanel().outerHTML.includes(sentinel));
+            const savedNative = structuredClone(fixture.saves[0]);
+            assert.deepEqual(savedNative?.formRecord, {
+                ...form.payload.formRecord,
+                data: {
+                    ...form.payload.formRecord.data,
+                    [targetId]: sentinel,
+                },
+            });
+            assert.deepEqual(savedNative?.formFieldIdsWithUnsavedChanges, [
+                targetId,
+            ]);
+
+            // Every case captured a public value. Only the accepted Reload
+            // introduces a mask, so an omitted reference cannot pass merely
+            // because the earlier dispatch never retained its text.
+            target.miniExtConfig = {
+                ...target.miniExtConfig,
+                ...policy.flags,
+            };
+            form.payload.formRecord.data[targetId] = canonical;
+            const loadedNative = structuredClone(form.payload.formRecord);
+            fixture.button('Reload').click();
+            await waitFor(
+                () =>
+                    fixture.loads() === 2 &&
+                    !originalInput.isConnected &&
+                    idle()
+            );
+            assert.equal(fixture.field(targetId).value, canonical);
+            assert.equal(
+                recoveryPanel().outerHTML.includes(sentinel),
+                !policy.masked
+            );
+            assert.equal(fixture.button('Save').disabled, true);
+            fixture.button('Use this request', recoveryPanel()).click();
+            await waitFor(
+                () =>
+                    fixture.window.document.querySelector('dialog[open]') !==
+                    null
+            );
+            const confirmation =
+                fixture.window.document.querySelector('dialog[open]');
+            assert.ok(confirmation instanceof fixture.window.HTMLDialogElement);
+            fixture.button('Use this request', confirmation).click();
+            await waitFor(
+                () =>
+                    !fixture.button('Save').disabled &&
+                    fixture.window.document.querySelector('dialog[open]') ===
+                        null
+            );
+            const targetNode = fixture
+                .field(targetId)
+                .closest('label')?.parentElement;
+            assert.ok(targetNode instanceof fixture.window.HTMLElement);
+            const assertReference = (visible: boolean) => {
+                for (const reference of recoveryPanel().querySelectorAll(
+                    'details'
+                ))
+                    reference.setAttribute('open', '');
+                assert.equal(targetNode.hidden, !visible);
+                assert.equal(fixture.field(targetId).value, canonical);
+                assert.deepEqual(fixture.saves[0], savedNative);
+                assert.deepEqual(form.payload.formRecord, loadedNative);
+                assert.equal(fixture.saves.length, 1);
+                assert.equal(fixture.loads(), 2);
+                assert.match(
+                    fixture.window.document.body.textContent ?? '',
+                    /The earlier outcome remains unconfirmed\./
+                );
+                assert.equal(
+                    recoveryPanel().outerHTML.includes(sentinel),
+                    visible && !policy.masked,
+                    'Earlier local input must follow current accepted visibility and masking'
+                );
+            };
+            assertReference(true);
+            fixture.edit('fld_title', 'Hide recovery target');
+            await settled();
+            assertReference(false);
+            assert.equal(
+                fixture.field('fld_title').value,
+                'Hide recovery target'
+            );
+            fixture.edit('fld_title', 'Show recovery target');
+            await settled();
+            assertReference(true);
+            fixture.edit('fld_title', 'Hide recovery target again');
+            await settled();
+            assertReference(false);
+        });
+    }
+
     for (const scenario of [
         {
             label: 'obscurePassword',

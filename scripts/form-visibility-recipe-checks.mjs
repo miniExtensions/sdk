@@ -1015,12 +1015,21 @@ export async function checkBrowserEditHideEmptyExample({
                     },
                     ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail']
                 );
-                assert(
-                    doc
-                        .querySelector('.error-list')
-                        .textContent.includes(
-                            `Hidden required answer: ${fixture.state.expected.validationMessage}`
-                        )
+                const validationText =
+                    doc.querySelector('.error-list').textContent;
+                assert.equal(
+                    validationText,
+                    'A field needs attention before saving.'
+                );
+                assert.equal(
+                    validationText.includes('Hidden required answer'),
+                    false
+                );
+                assert.equal(
+                    validationText.includes(
+                        fixture.state.expected.validationMessage
+                    ),
+                    false
                 );
                 roundTrip();
                 assert.equal(shown('title'), false);

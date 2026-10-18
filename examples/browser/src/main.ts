@@ -926,6 +926,7 @@ const renderForm = (page: FormLoadedResult): void => {
     let reviewIntentRevision = 0;
     let formRetired = false;
     let updateValidationPresentation = (): void => {};
+    let updateRecoveryReferences = (): void => {};
     let formProgress: BrowserCreateProgress | null = null;
     let progressInputRevision = 0;
     let progressSaveCleanups = 0;
@@ -1179,6 +1180,7 @@ const renderForm = (page: FormLoadedResult): void => {
     disposeFormControls = () => {
         formRetired = true;
         updateValidationPresentation = () => {};
+        updateRecoveryReferences = () => {};
         retirePageReview();
         formProgress?.retire();
         formPages?.dispose();
@@ -1271,6 +1273,7 @@ const renderForm = (page: FormLoadedResult): void => {
             (result) => result.type === 'blocked'
         );
         updateValidationPresentation();
+        updateRecoveryReferences();
     };
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
@@ -2258,29 +2261,10 @@ const renderForm = (page: FormLoadedResult): void => {
     recoveryPanel.setAttribute('aria-label', 'Earlier request recovery');
     recoveryPanel.setAttribute('aria-live', 'polite');
     card.append(recoveryPanel);
-    const updateRecovery = (): void => {
-        const pending = recovery.blocking(scope, recordId);
-        const selected =
-            candidate?.outcome === 'unknown' &&
-            candidate.acknowledgment === 'none'
-                ? candidate
-                : null;
-        const expired = !(visitor.formAuthority?.() ?? true);
-        submit.disabled = pending != null || selected != null || expired;
-        discard.disabled = submit.disabled;
-        if (deleteRecord != null) deleteRecord.disabled = submit.disabled;
-        updateComments();
-        fields.inert = submit.disabled;
-        updateFormActivity();
-        recoveryPanel.replaceChildren();
-        if (visitor.preparedAttempt?.outcome === 'not-submitted')
-            recoveryPanel.append(
-                element(
-                    'p',
-                    `New local attempt: ${visitor.preparedAttempt.id}. No Form save has been submitted for this local attempt.`
-                )
-            );
-        const attempt = selected ?? pending;
+    const recoveryReferences = element('div');
+    updateRecoveryReferences = (): void => {
+        recoveryReferences.replaceChildren();
+        if (formRetired || !ownsForm()) return;
         for (const earlier of recovery
             .unknown(scope.owner)
             .filter(
@@ -2303,7 +2287,7 @@ const renderForm = (page: FormLoadedResult): void => {
                     ];
                 if (fieldId === undefined) return [];
                 const schema = page.payload.fieldIdsToSchemas[fieldId];
-                // Reload may mask, hide or remove a formerly public field.
+                // Reload or a local edit may mask, hide or remove a public field.
                 // Resolve exact accepted identity before reading retained text.
                 if (
                     !page.payload.fieldIdsInForm.includes(fieldId) ||
@@ -2336,8 +2320,34 @@ const renderForm = (page: FormLoadedResult): void => {
                 reference.append(
                     element('p', `${field.title}: ${field.value}`)
                 );
-            recoveryPanel.append(reference);
+            recoveryReferences.append(reference);
         }
+    };
+    const updateRecovery = (): void => {
+        const pending = recovery.blocking(scope, recordId);
+        const selected =
+            candidate?.outcome === 'unknown' &&
+            candidate.acknowledgment === 'none'
+                ? candidate
+                : null;
+        const expired = !(visitor.formAuthority?.() ?? true);
+        submit.disabled = pending != null || selected != null || expired;
+        discard.disabled = submit.disabled;
+        if (deleteRecord != null) deleteRecord.disabled = submit.disabled;
+        updateComments();
+        fields.inert = submit.disabled;
+        updateFormActivity();
+        recoveryPanel.replaceChildren();
+        if (visitor.preparedAttempt?.outcome === 'not-submitted')
+            recoveryPanel.append(
+                element(
+                    'p',
+                    `New local attempt: ${visitor.preparedAttempt.id}. No Form save has been submitted for this local attempt.`
+                )
+            );
+        updateRecoveryReferences();
+        recoveryPanel.append(recoveryReferences);
+        const attempt = selected ?? pending;
         if (expired)
             recoveryPanel.append(
                 element(

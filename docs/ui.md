@@ -3417,3 +3417,102 @@ The builder verifies archive integrity and installed bundle inputs, records sour
 identities, and writes only the fresh output directory. It does not install
 dependencies, start a server or perform browser verification. Serve the output
 locally to inspect the displays and run the visible lifecycle controls.
+
+## React Multiple Attachments adapter
+
+The optional `/react` entry exports `MultipleAttachmentsField`,
+`MultipleAttachmentsFieldProps`, `MultipleAttachmentsFieldOptions` and
+`renderMultipleAttachmentsField`. The component accepts `{ field, className? }`,
+where `field` is an accepted `FieldRendererProps<'multipleAttachments'>` snapshot.
+The helper installs the same component in the existing physical slot:
+
+```tsx
+import type { ReactNode } from 'react';
+import {
+    MultipleAttachmentsField,
+    renderMultipleAttachmentsField,
+} from '@miniextensions/sdk/react';
+import type {
+    FieldRendererProps,
+    FieldRendererSlots,
+} from '@miniextensions/sdk/ui';
+
+export const attachmentRenderers: FieldRendererSlots<ReactNode> = {
+    renderMultipleAttachmentsField: (field) =>
+        renderMultipleAttachmentsField(field, { className: 'attachments' }),
+};
+
+export function AttachmentSlot({
+    field,
+}: {
+    field: FieldRendererProps<'multipleAttachments'>;
+}) {
+    return <MultipleAttachmentsField field={field} />;
+}
+```
+
+Editable Form hosts need the existing attachment recovery/controller capability.
+The adapter borrows only its privacy-filtered snapshot and guarded `select`,
+`clear`, `remove`, `upload` and `cancel` actions. It never reads the native `value`,
+uses `setValue`, constructs a controller, or owns another file queue. Keep the
+Form owner, its attachment controller and recovery journal outside React mounts.
+The existing binding-based `AttachmentField` remains available unchanged.
+
+Filtered row labels appear as escaped, selectable text in their supplied order,
+including duplicates and whitespace. Removal uses the supplied native index and
+the host's captured values revision. Accessible names use visible row positions;
+hidden native indexes never appear in DOM attributes. Open/download flags do not
+create links, images, previews, downloads or additional authority.
+
+Choose files only selects into the existing queue. An empty picker completion
+or picker cancel leaves that queue intact. Upload next file invokes one guarded
+upload for the first pending file; every later upload requires another explicit
+action. Accepted uploads enter the existing draft, and the owner still performs
+Save separately. Clear removes pending selections without cancelling a flight;
+Cancel invokes the existing upload cancellation and uncertainty safeguards.
+Queue replacement during a flight remains available. Uncertain outcomes never
+cause automatic append or retry. Pending File names and other metadata are not
+read by this component; only its pending queue count is shown.
+
+Read-only Form and all Portal attachment slots are **unsupported for attachment
+display** because their current contract supplies no privacy-filtered attachment
+snapshot. These slots, editable slots with missing guarded actions, and malformed
+facets display only `Attachment presentation unavailable`, with no chooser,
+actions, attachment count, filename or URL. The adapter never inspects raw values
+to improve that fallback. This slice does not establish read-only display parity.
+Masking in either display or write configuration is checked before facet access
+and produces a fixed `••••••••` with no attachment activity or metadata.
+
+A valid editable facet can separately report unavailable row presentation while
+still retaining pending activity. In that case rows remain uninspected and
+Choose/Upload are disabled; queued Clear and busy Cancel remain available through
+their existing guards. An idle unavailable facet has the generic inert fallback.
+Error and validation diagnostics use generic text rather than exposing raw
+messages that may contain hidden attachment metadata.
+
+Unmount releases only React state. Old callbacks reject after props/owner
+replacement or unmount, and late promises do not update a successor's feedback
+or focus. Retiring a renderer host alone does not dispose its independent Form
+attachment controller: an already-dispatched operation can still finish for a
+live owner. Actual owner/session/configuration retirement remains governed by
+the existing controller and recovery model. Hidden/blocked/retired renderer
+hosts omit the slot; this adapter does not add hidden-field recovery navigation.
+
+Controls have accessible names, visible native focus and polite activity status.
+Click, pointer and keyboard events stay inside the field. Native button keyboard
+activation is retained; Enter outside an action control cannot implicitly submit
+the surrounding Form. `className` decorates `mx-sdk-multiple-attachments-field`;
+there is no new stylesheet, theme API, Uppy integration or backend flow.
+
+After qualifying an installed package, build the local synthetic browser fixture:
+
+```sh
+node scripts/build-multiple-attachments-browser-proof.mjs /path/to/installed-consumer /path/to/tested.tgz /path/to/fresh-output
+```
+
+The builder neither installs dependencies nor starts a server. It verifies the
+installed archive identity and consumed SDK module bytes, and records source and
+bundle hashes. Serve the generated output on loopback for explicit interactions.
+Fixture generation and injected DOM events do not establish native browser
+behavior; execute the browser proof separately. All fixture uploads and Saves
+are synthetic and establish no live-backend, clipboard or screen-reader result.

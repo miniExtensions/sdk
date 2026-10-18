@@ -300,6 +300,14 @@ escaped selectable text with whitespace preserved. Native state and stale flags
 remain unchanged; masking precedes value access. No generation, retry, prompt or
 reference inspection, parsing, links, hydration or editing is added.
 
+[Multiple Attachments adapter](docs/ui.md#react-multiple-attachments-adapter)
+exports `MultipleAttachmentsField` and `renderMultipleAttachmentsField` for
+editable Form slots with existing filtered snapshots and guarded actions.
+Choose, first-file Upload, Clear and Cancel remain explicit; Save stays separate.
+Read-only Form/Portal slots lack a filtered attachment snapshot and display only
+`Attachment presentation unavailable`; read-only display parity is unsupported.
+The adapter never reads raw attachment values or creates previews/downloads.
+
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
 It displays supplied finite Count values only when Count metadata is valid,

@@ -56,23 +56,25 @@ export async function checkNumberInputMaskBrowser({
     try {
         const root = realpathSync(consumer);
         directory = mkdtempSync(join(root, '.number-input-mask-'));
-        evidence.starterSources = ['fields.ts', 'dom.ts'].map((name) => {
-            const installed = join(
-                root,
-                'node_modules/@miniextensions/sdk/examples/browser/src',
-                name
-            );
-            const copied = join(directory, name);
-            const bytes = readFileSync(installed);
-            writeFileSync(copied, bytes);
-            assert.deepEqual(readFileSync(copied), bytes);
-            return {
-                installed: relative(root, installed),
-                copied: relative(root, copied),
-                bytes: bytes.length,
-                sha256: hash(bytes),
-            };
-        });
+        evidence.starterSources = ['fields.ts', 'dom.ts', 'privacy.ts'].map(
+            (name) => {
+                const installed = join(
+                    root,
+                    'node_modules/@miniextensions/sdk/examples/browser/src',
+                    name
+                );
+                const copied = join(directory, name);
+                const bytes = readFileSync(installed);
+                writeFileSync(copied, bytes);
+                assert.deepEqual(readFileSync(copied), bytes);
+                return {
+                    installed: relative(root, installed),
+                    copied: relative(root, copied),
+                    bytes: bytes.length,
+                    sha256: hash(bytes),
+                };
+            }
+        );
         const host = `
 import { AirtableFieldType } from '@miniextensions/sdk';
 import { fieldControl } from './fields.ts';

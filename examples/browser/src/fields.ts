@@ -59,6 +59,7 @@ export type FieldControl = {
     selectAvailabilityReady?(): boolean;
     isSelectOptionAvailable?(choice: SelectFieldChoice): boolean;
     setActive?(active: boolean): void;
+    refreshReadonlyPresentation?(): void;
     destroy(): void;
 };
 
@@ -182,7 +183,22 @@ export const formFieldControl = (
             schema.miniExtConfig,
             initialValue,
             onChange,
-            forceReadOnly
+            forceReadOnly,
+            binding == null
+                ? undefined
+                : () => {
+                      const state = binding.getSnapshot();
+                      return {
+                          config: state.field?.schema.miniExtConfig,
+                          active:
+                              !state.retired &&
+                              state.visibility.type === 'visible' &&
+                              state.field?.fieldId ===
+                                  schema.airtableField.id &&
+                              state.field.schema.airtableField.id ===
+                                  schema.airtableField.id,
+                      };
+                  }
         );
     return selectFieldControl(
         schema,
@@ -356,7 +372,8 @@ export const fieldControl = (
     config: RuntimeFieldSchema['miniExtConfig'],
     initialValue: AirtableValue | undefined,
     onChange: () => void,
-    forceReadOnly = false
+    forceReadOnly = false,
+    readonlyPresentation?: () => { config: unknown; active: boolean }
 ): FieldControl => {
     if (
         field.config.type === AirtableFieldType.SINGLE_SELECT ||
@@ -388,6 +405,8 @@ export const fieldControl = (
     let write: (next: AirtableValue) => void;
     let editable = !readOnly;
     let destroyed = false;
+    let refreshReadonlyPresentation: (() => void) | undefined;
+    let clearReadonlyPresentation: (() => void) | undefined;
 
     if (field.config.type === AirtableFieldType.CHECKBOX) {
         const checkbox = element('input');
@@ -477,14 +496,30 @@ export const fieldControl = (
         // Links and attachments have separate authorized picker/upload controls.
         // Other complex/computed types are displayed without coercion.
         const output = element('textarea');
-        output.value = displayValue(value);
+        const render = () => {
+            if (destroyed) return;
+            const current = readonlyPresentation?.();
+            output.value =
+                current?.active === false
+                    ? ''
+                    : hasMaskedValuePolicy(
+                            current == null ? config : current.config
+                        )
+                      ? '••••••••'
+                      : displayValue(value);
+        };
+        render();
+        refreshReadonlyPresentation = render;
+        clearReadonlyPresentation = () => {
+            output.value = '';
+        };
         output.readOnly = true;
         control = output;
         editable = false;
         read = () => value;
         write = (next) => {
             value = next;
-            output.value = displayValue(next);
+            render();
         };
     }
     control.disabled = readOnly;
@@ -503,12 +538,14 @@ export const fieldControl = (
         node,
         read,
         editable,
+        refreshReadonlyPresentation,
         write: (next) => {
             if (!destroyed) write(next);
         },
         destroy: () => {
             if (destroyed) return;
             destroyed = true;
+            clearReadonlyPresentation?.();
             control.removeEventListener('input', notify);
             control.removeEventListener('change', notify);
         },
@@ -664,6 +701,13 @@ export function mountBoundFormField(
         status.textContent = fieldValidationText(state);
         control.node.hidden = state.visibility.type !== 'visible';
         control.node.inert = !state.canEdit;
+        if (control.refreshReadonlyPresentation) {
+            // Accepted computed replacements need not change draft revision.
+            // Install the current value before applying its current policy.
+            if (state.retired) control.refreshReadonlyPresentation();
+            else control.write(state.value ?? null);
+            return;
+        }
         if (!state.retired && state.revision !== revision) {
             revision = state.revision;
             if (!writingFromControl) control.write(state.value ?? null);

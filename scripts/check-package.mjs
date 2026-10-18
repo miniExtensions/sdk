@@ -33,6 +33,12 @@ import {
     multipleAttachmentsConsumerCheckCount,
 } from './multiple-attachments-consumer-checks.mjs';
 import {
+    runReadonlyAttachmentsReactConsumerChecks,
+    readonlyAttachmentsReactConsumerCheckCount,
+    readonlyAttachmentsReactTypedConsumer,
+    readonlyAttachmentsNodeTypedConsumer,
+} from './readonly-attachments-react-consumer-checks.mjs';
+import {
     checkLookupConsumer,
     lookupReactTypedConsumer,
 } from './lookup-consumer-checks.mjs';
@@ -1546,6 +1552,30 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         ]);
     }
     writeFileSync(
+        join(temporaryDirectory, 'readonly-attachments-react-consumer.tsx'),
+        readonlyAttachmentsReactTypedConsumer
+    );
+    reactSources.push('readonly-attachments-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `readonly-attachments-react-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            readonlyAttachmentsNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
         join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
         autoNumberReactTypedConsumer
     );
@@ -2476,6 +2506,20 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(multipleAttachmentsProof.publicExportVerified, true);
     console.log(
         `Installed Multiple Attachments adapter: ${multipleAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const readonlyAttachmentsProof =
+        await runReadonlyAttachmentsReactConsumerChecks({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+            mode: 'public-export',
+        });
+    assert.equal(
+        readonlyAttachmentsProof.checks,
+        readonlyAttachmentsReactConsumerCheckCount
+    );
+    assert.equal(readonlyAttachmentsProof.publicExportVerified, true);
+    console.log(
+        `Installed read-only attachment presentation: ${readonlyAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
     );
     const countProof = await checkCountConsumer({
         consumerDirectory: temporaryDirectory,

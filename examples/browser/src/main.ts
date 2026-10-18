@@ -59,6 +59,7 @@ import {
     type FieldControl,
 } from './fields.js';
 import { flatChoiceConditionRecord } from './choiceAvailability.js';
+import { hasMaskedValuePolicy } from './privacy.js';
 import { createPortalView, type PortalView } from './portal.js';
 import {
     createConditionalLinkedFilters,
@@ -1124,12 +1125,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (schema == null || control == null) return [];
                 const config = schema.miniExtConfig;
                 // Masked values must never enter the reference journal.
-                if (
-                    config != null &&
-                    'obscurePassword' in config &&
-                    config.obscurePassword === true
-                )
-                    return [];
+                if (hasMaskedValuePolicy(config)) return [];
                 if (schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS)
                     return [];
                 if (!control.editable) return [];

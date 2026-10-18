@@ -13,6 +13,7 @@ import {
 import type { ConfirmationRow } from './confirmation.js';
 import { getSelectFieldPolicy } from '@miniextensions/sdk/ui';
 import { settings } from './dom.js';
+import { hasMaskedValuePolicy } from './privacy.js';
 import {
     unavailableLinkedAnswer,
     type LinkedReviewSnapshot,
@@ -325,7 +326,11 @@ export const prepareFormReviewRows = (
             if (typeof value !== 'number' || !Number.isFinite(value))
                 unavailable();
             if (type === AirtableFieldType.RATING && value === 0) continue;
-            text = String(value);
+            text =
+                type === AirtableFieldType.NUMBER &&
+                hasMaskedValuePolicy(field.schema.miniExtConfig)
+                    ? '••••••••'
+                    : String(value);
         } else if (type === AirtableFieldType.CHECKBOX) {
             if (typeof value !== 'boolean') unavailable();
             if (!value) continue;

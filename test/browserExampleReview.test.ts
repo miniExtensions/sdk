@@ -2016,6 +2016,171 @@ describe('actual browser starter prepared review', () => {
         assert.equal(fixture.field('fld_title').value, 'Repaired title');
     });
 
+    for (const scenario of [
+        {
+            label: 'obscurePassword',
+            flags: { obscurePassword: true },
+            masked: true,
+        },
+        {
+            label: 'maskPasswordOnLoginScreen',
+            flags: { obscurePassword: false, maskPasswordOnLoginScreen: true },
+            masked: true,
+        },
+        {
+            label: 'unknown obscurePassword',
+            flags: { obscurePassword: 'unexpected' },
+            masked: true,
+        },
+        {
+            label: 'unknown maskPasswordOnLoginScreen',
+            flags: { maskPasswordOnLoginScreen: 'unexpected' },
+            masked: true,
+        },
+        {
+            label: 'null obscurePassword',
+            flags: { obscurePassword: null },
+            masked: true,
+        },
+        {
+            label: 'null maskPasswordOnLoginScreen',
+            flags: { maskPasswordOnLoginScreen: null },
+            masked: true,
+        },
+        {
+            label: 'zero obscurePassword',
+            flags: { obscurePassword: 0 },
+            masked: true,
+        },
+        {
+            label: 'zero maskPasswordOnLoginScreen',
+            flags: { maskPasswordOnLoginScreen: 0 },
+            masked: true,
+        },
+        {
+            label: 'explicit false flags',
+            flags: { obscurePassword: false, maskPasswordOnLoginScreen: false },
+            masked: false,
+        },
+        { label: 'absent flags', flags: {}, masked: false },
+    ]) {
+        const numberForm = (): FormLoadedResult => {
+            const form = reviewForm();
+            const numeric = scalarReviewSchema('fld_number', 'Private number', {
+                type: AirtableFieldType.NUMBER,
+                options: { precision: 0 },
+            });
+            // Malformed defined flags model runtime metadata conservatively;
+            // no public field configuration contract is widened.
+            numeric.miniExtConfig = {
+                readOnly: false,
+                ...scenario.flags,
+            } as unknown as RuntimeFieldSchema['miniExtConfig'];
+            form.payload.fieldIdsToSchemas.fld_number = numeric;
+            form.payload.fieldIdsInForm.push('fld_number');
+            form.payload.formRecord.data.fld_number = 1234;
+            return form;
+        };
+        it(`keeps Number recovery references consistent with ${scenario.label} masking`, async (test) => {
+            const form = numberForm();
+            form.payload.publicFields.state.promptUserBeforeSubmission = false;
+            const fixture = await mount(test, form, {
+                save: async () => {
+                    throw new Error('Synthetic unknown Save outcome.');
+                },
+            });
+            assert.equal(
+                fixture.field('fld_number').type,
+                scenario.masked ? 'password' : 'text'
+            );
+            fixture.edit('fld_number', '56781234');
+            fixture.edit('fld_title', 'Ordinary reference remains available');
+            fixture.submit();
+            await waitFor(
+                () =>
+                    fixture.window.document
+                        .querySelector('.error-list')
+                        ?.textContent?.includes('may have completed') ===
+                        true &&
+                    fixture.window.document
+                        .getElementById('screen')
+                        ?.getAttribute('aria-busy') === 'false'
+            );
+            const reference = fixture.window.document.querySelector(
+                'details[aria-label="Earlier local input (reference only)"]'
+            );
+            assert.ok(reference);
+            assert.match(
+                reference.textContent ?? '',
+                /Ordinary reference remains available/
+            );
+            assert.equal(
+                reference.outerHTML.includes('56781234'),
+                !scenario.masked,
+                'A password-masked Number must never enter the recovery reference.'
+            );
+            assert.equal(fixture.saves.length, 1);
+            assert.equal(
+                fixture.saves[0]?.formRecord.data.fld_number,
+                56781234
+            );
+            assert.ok(
+                fixture.saves[0]?.formFieldIdsWithUnsavedChanges.includes(
+                    'fld_number'
+                )
+            );
+            fixture.submit();
+            await settled();
+            assert.equal(fixture.saves.length, 1);
+            assert.equal(fixture.button('Save').disabled, true);
+        });
+        it(`keeps Number Review consistent with ${scenario.label} masking`, async (test) => {
+            const fixture = await mount(test, numberForm());
+            assert.equal(
+                fixture.field('fld_number').type,
+                scenario.masked ? 'password' : 'text'
+            );
+            fixture.edit('fld_number', '56781234');
+            let dialog = await fixture.openReview();
+            assert.equal(fixture.saves.length, 0);
+            assert.equal(
+                dialog.outerHTML.includes('56781234'),
+                !scenario.masked,
+                'A password-masked Number must never enter the Review copy.'
+            );
+            assert.deepEqual(
+                Array.from(
+                    dialog.querySelectorAll('dd'),
+                    (row) => row.textContent
+                ),
+                [
+                    'Initial title',
+                    'Locked value',
+                    scenario.masked ? '••••••••' : '56781234',
+                ]
+            );
+            fixture.button('Edit', dialog).click();
+            await settled();
+            assert.equal(fixture.saves.length, 0);
+            assert.equal(fixture.loads(), 1);
+            assert.equal(fixture.field('fld_number').value, '56781234');
+            dialog = await fixture.openReview();
+            fixture.button('Confirm', dialog).click();
+            await waitFor(() => fixture.saves.length === 1);
+            assert.equal(
+                fixture.saves[0]?.formRecord.data.fld_number,
+                56781234
+            );
+            assert.ok(
+                fixture.saves[0]?.formFieldIdsWithUnsavedChanges.includes(
+                    'fld_number'
+                )
+            );
+            await settled();
+            assert.equal(fixture.saves.length, 1);
+        });
+    }
+
     it('keeps an unknown Save outcome blocked instead of reopening or replaying confirmation', async (test) => {
         const fixture = await mount(test, reviewForm(), {
             save: async () => {

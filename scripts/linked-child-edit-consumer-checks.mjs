@@ -24,7 +24,7 @@ owner.complete({ recordId: 'arbitrary' });
 void editableIds;
 `;
 
-export const linkedChildEditConsumerCheckCount = 38;
+export const linkedChildEditConsumerCheckCount = 40;
 
 const editChild = (fixtures, recordId) => {
     const child = fixtures.childForm('edit');
@@ -266,6 +266,52 @@ async function checkBoundedEditCases(forms, fixtures, ui) {
         );
     };
     const submit = (f) => f.owner.save(f.owner.getSnapshot().revision);
+
+    {
+        const f = setup(forms, fixtures, false, {
+            load: async () => fixtures.pagedChildForm('rec_existing'),
+        });
+        try {
+            await open(f);
+            const pages = f.owner.getSnapshot().pages;
+            assert.equal(pages.getSnapshot().pages.length, 3);
+            assert.equal(
+                pages.next(pages.getSnapshot().revision).accepted,
+                true
+            );
+            assert.equal(
+                pages.next(pages.getSnapshot().revision).accepted,
+                true
+            );
+            const stale = f.owner.getSnapshot().revision;
+            assert.equal(
+                pages.back(pages.getSnapshot().revision).accepted,
+                true
+            );
+            assert.equal(
+                pages.next(pages.getSnapshot().revision).accepted,
+                true
+            );
+            await assert.rejects(f.owner.save(stale));
+            assert.equal(f.calls.reads.length, 1);
+            assert.equal(f.calls.loads.length, 1);
+            assert.equal(f.calls.saves.length, 0);
+            assert.equal(f.journal.observed.length, 0);
+            assert.equal((await submit(f)).type, 'saved');
+            assert.equal(f.calls.saves[0].formRecord.recordId, 'rec_existing');
+            assert.equal(
+                f.calls.saves[0].formRecord.data.fld_note,
+                'Second native answer'
+            );
+            assert.deepEqual(
+                f.fields.controller.getState().draft.data.fld_children_a,
+                ['rec_existing', 'rec_existing', 'rec_sibling']
+            );
+            checks++;
+        } finally {
+            f.fields.destroy();
+        }
+    }
 
     {
         const pending = deferred();

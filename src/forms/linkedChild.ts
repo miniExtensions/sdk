@@ -533,7 +533,9 @@ export function createFormLinkedChildOwner(
                 (response.payload.publicFields.state.multiPageFormMode !=
                     null &&
                     response.payload.publicFields.state.multiPageFormMode !==
-                        'one-page') ||
+                        'one-page' &&
+                    response.payload.publicFields.state.multiPageFormMode !==
+                        'multi-page') ||
                 response.payload.publicFields.state
                     .promptUserBeforeSubmission === true ||
                 response.payload.publicFields.state.enableCaptcha === true ||
@@ -598,8 +600,18 @@ export function createFormLinkedChildOwner(
                         'This child Form configuration is unsupported.'
                     );
                 activeLoad = null;
+                // Next/Back change only the page owner. Include those local
+                // transitions in the coordinator's rendered Save revision,
+                // including navigation away and back without native edits.
+                // Page subscription is passive; own it before the controller's
+                // synchronous initial callback can close or replace this intent.
+                candidate.stops.push(
+                    pages.subscribe(() => {
+                        if (ownsIntent(candidate!) && !saving) emit();
+                    })
+                );
                 const stop = fields.controller.subscribe(() => {
-                    if (intent === candidate && !saving) emit();
+                    if (ownsIntent(candidate!) && !saving) emit();
                 });
                 if (!ownsIntent(candidate) || !parentCurrent()) {
                     stop();

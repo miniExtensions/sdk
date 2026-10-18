@@ -319,11 +319,17 @@ reference inspection, parsing, links, hydration or editing is added.
 exports `MultipleAttachmentsField` and `renderMultipleAttachmentsField` for
 editable Form slots with existing filtered snapshots and guarded actions.
 Choose, first-file Upload, Clear and Cancel remain explicit; Save stays separate.
-The headless contract provides an optional privacy-filtered label facet. This
-React adapter does not yet consume it, so read-only values retain the inert
-fallback `Attachment presentation unavailable`; read-only display parity in
-this adapter remains unsupported.
+This editable adapter leaves read-only Form/Portal slots at the inert
+`Attachment presentation unavailable` fallback.
 The adapter never reads raw attachment values or creates previews/downloads.
+
+[Read-only attachment labels](docs/ui.md#react-read-only-attachment-presentation)
+exports `ReadonlyAttachmentsField` and `renderReadonlyAttachmentsField` for the
+approved Form/Portal-detail `attachmentPresentation` facet. It renders supplied
+labels literally in order, preserving duplicates, without borrowing native values
+or editable actions. Masked, unavailable and unsupported contexts remain inert.
+Register this helper under the existing `renderMultipleAttachmentsField` slot
+when a read-only label view is wanted; the editable adapter remains separate.
 
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.

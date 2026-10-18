@@ -108,8 +108,11 @@ refusal, not a raw fallback.
 
 ### Review configuration compatibility checklist
 
-- Use one-page manual final Save with `promptUserBeforeSubmission`. Multipage,
-  compute and automatic submission remain unsupported.
+- Use one-page or manual multipage Forms with `promptUserBeforeSubmission`.
+  Multipage Review opens on the final available page; Confirm retains all-page
+  validation before final Save. Compute and automatic submission remain unsupported.
+- Linked-child coordination supports one-page and manual multipage Forms, but
+  still refuses configured Review.
 - Answers may be supported physical scalars, single/multi-selects, linked IDs or
   conservative attachment summaries and bounded date/dateTime strings. Rich-text, computed/lookup and
   other unsupported answer types remain refused, even when empty.

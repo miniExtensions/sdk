@@ -33,7 +33,7 @@ Use Node.js 22 or newer. From the SDK repository root:
 pnpm install --frozen-lockfile
 pnpm pack
 cd examples/browser
-npm install
+npm install --ignore-scripts --no-audit --no-fund ../../miniextensions-sdk-0.1.0-alpha.0.tgz
 npm run typecheck
 npm run build
 npm run dev
@@ -46,6 +46,9 @@ npm run dev -- --port 34852
 ```
 
 The example's dependency points to the SDK archive in the repository root.
+Name that archive explicitly on the first install too: the committed lockfile
+describes an older build of the same preview version. Bare `npm install` can
+fail with `EINTEGRITY`; the explicit archive argument refreshes its integrity.
 After changing the SDK, pack it again and reinstall that archive:
 
 ```sh

@@ -504,10 +504,12 @@ customer application.
 ## Current compatibility limits
 
 This preview does not promise complete Form/Portal UI parity. The starter's
-prepared Review is one-page and manual-only, with bounded scalar/select/linked/
-attachment answers and a strict supported date/dateTime contract. Rich condition
-drivers, multipage, automatic/compute workflows and other configurations listed
-in the [compatibility checklist](docs/ui.md#review-configuration-compatibility-checklist)
+prepared Review supports one-page and manual multipage Forms, with bounded
+scalar/select/linked/attachment answers and a strict supported date/dateTime
+contract. Computed fields still block final Review, and linked-child coordination
+still refuses configured Review. Rich condition drivers, automatic/compute
+workflows and other configurations listed in the
+[compatibility checklist](docs/ui.md#review-configuration-compatibility-checklist)
 remain unsupported. Portal filter controls edit one supported condition, not a
 nested filter-builder UI; inline attachments are readonly previews. The backend
 still enforces published access and validation rules.
@@ -573,7 +575,8 @@ first-page read or root Reload before further Portal actions. See
 Field presentation and choice workflows beyond the
 [one-page field support](docs/forms.md#one-page-conditional-field-visibility)
 and [configured scalar choices](docs/ui.md#configured-scalar-choice-availability)
-remain application-owned, along with section headers/collapse, pages,
+remain application-owned, along with section collapse, page workflows beyond the
+[bounded manual navigation](docs/forms.md#bounded-multipage-ownership),
 Save & Continue, progress persistence beyond the
 [bounded create-progress recipe](docs/browser-lifecycle.md#optional-create-progress), CAPTCHA/fingerprint/GPS collection and
 advanced field widgets. Static select limits and display labels alone do not
@@ -581,17 +584,25 @@ evaluate option conditions. The starter uses final Save and supplies no
 general conditional evaluator or CAPTCHA widget. The existing server still
 enforces its published rules.
 
+The packaged browser starter supplies manual multipage navigation from enabled
+frontend section headers, with Back/Next, current-page validation, conditional
+page skipping and final all-page validation. Navigation performs no Save.
+[Linked-child Create and Edit](docs/forms.md#configured-linked-child-create-and-edit)
+also support one-page and manual multipage Forms, but refuse configured Review.
+
 The packaged browser starter also supplies a
 [bounded Review/Edit/Confirm recipe](examples/browser/README.md#form-workflow)
-for the published `promptUserBeforeSubmission` setting on one-page manual
-Forms with supported scalar/select answers, conservative linked/attachment
-summaries and section conditions. It renders ordered nonempty answers as plain
+for the published `promptUserBeforeSubmission` setting on one-page and manual
+multipage Forms, opening Review on the final available page. It supports
+scalar/select answers, conservative linked/attachment summaries and section
+conditions. It renders ordered nonempty answers as plain
 text with fixed scalar password masks; attachment filenames are opt-in. The prepared intent captures the actual draft revision
 and current owner/configuration context; edits or context changes invalidate
 confirmation. Edit/dismiss performs no Save, while explicit current Confirm
 uses the existing final Save and unknown-outcome recovery path once with the
-complete native values and dirty IDs. General review renderers, compute and
-automatic workflows remain application-owned; this recipe adds no backend
+complete native values and dirty IDs. Computed fields still block final Review.
+General review renderers, compute and automatic workflows remain
+application-owned; this recipe adds no backend
 validation, permission or persistence API.
 
 `compileRuntimeConditions` from `@miniextensions/sdk/forms` compiles a

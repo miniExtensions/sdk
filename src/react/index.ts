@@ -38,6 +38,12 @@ export {
     type RichTextFieldOptions,
 } from './RichTextField.js';
 export {
+    AiTextField,
+    renderAiTextField,
+    type AiTextFieldProps,
+    type AiTextFieldOptions,
+} from './AiTextField.js';
+export {
     MultipleAttachmentsField,
     renderMultipleAttachmentsField,
     type MultipleAttachmentsFieldProps,

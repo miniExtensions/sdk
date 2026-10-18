@@ -1382,6 +1382,7 @@ describe(
             const accepted = loadedForm();
             accepted.extensionId = page.extensionId;
             const calls: RuntimeSession[] = [];
+            const signals: (AbortSignal | null | undefined)[] = [];
             let mode: 'accepted' | 'revoked' | 'failure' | 'held' = 'accepted';
             const held = deferred<Response>();
             const window = await environment(test, async (url, init) => {
@@ -1398,6 +1399,7 @@ describe(
                     'No mutation or unrelated read'
                 );
                 calls.push(body.miniExtStorageV4);
+                signals.push(init?.signal);
                 if (
                     !Object.values(body.miniExtStorageV4).includes(
                         'SYNTHETIC_REMEMBERED'
@@ -1426,6 +1428,7 @@ describe(
                 page,
                 accepted,
                 calls,
+                signals,
                 held,
                 mode: (next: typeof mode) => {
                     mode = next;
@@ -1660,6 +1663,316 @@ describe(
                 window.document.getElementById('session-summary')!.textContent!,
                 /Authenticated/
             );
+        });
+
+        describe('reconnect settings preflight', () => {
+            const storageBytes = (window: Window) =>
+                Array.from(
+                    { length: window.sessionStorage.length },
+                    (_, index) => {
+                        const key = window.sessionStorage.key(index)!;
+                        return [key, window.sessionStorage.getItem(key)];
+                    }
+                ).sort();
+            const titleInput = (window: Window) => {
+                const input = window.document.querySelector(
+                    '[data-field-id="fld_title"]'
+                );
+                assert.ok(input instanceof window.HTMLInputElement);
+                return input;
+            };
+            const editTitle = (window: Window, value: string) => {
+                const input = titleInput(window);
+                input.value = value;
+                input.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+                return input;
+            };
+            const switchVisitor = (window: Window, identity: 'A' | 'B') => {
+                const select = window.document.getElementById('visitor');
+                assert.ok(select instanceof window.HTMLSelectElement);
+                select.value = identity;
+                select.dispatchEvent(
+                    new window.Event('change', { bubbles: true })
+                );
+            };
+            const retainedFeedback = (window: Window) => {
+                const message =
+                    window.document.getElementById('status')!.textContent!;
+                assert.match(message, /connection settings.*invalid/i);
+                assert.match(message, /retained|unchanged/i);
+                assert.doesNotMatch(
+                    message,
+                    /SYNTHETIC_REMEMBERED|PRIVATE_INPUT/
+                );
+            };
+            for (const candidate of [
+                {
+                    name: 'endpoint path',
+                    origin: 'https://sdk.example.test/api/v1',
+                    remember: false,
+                },
+                {
+                    name: 'query',
+                    origin: 'https://sdk.example.test/?PRIVATE_INPUT=1',
+                    remember: false,
+                },
+                {
+                    name: 'fragment',
+                    origin: 'https://sdk.example.test/#PRIVATE_INPUT',
+                    remember: false,
+                },
+                {
+                    name: 'credentials',
+                    origin: 'https://PRIVATE_INPUT:PRIVATE_INPUT@sdk.example.test',
+                    remember: false,
+                },
+                {
+                    name: 'non-HTTP scheme',
+                    origin: 'ftp://sdk.example.test',
+                    remember: false,
+                },
+                {
+                    name: 'empty trimmed share ID',
+                    origin: 'https://sdk.example.test',
+                    shareId: '   ',
+                    remember: false,
+                },
+                {
+                    name: 'endpoint path with remembering retained',
+                    origin: 'https://sdk.example.test/api/v1',
+                    remember: true,
+                },
+            ]) {
+                it(`rejects ${candidate.name} without changing current input, session or owned storage`, async (test) => {
+                    const f = await setup(test);
+                    const input = editTitle(
+                        f.window,
+                        'Keep this unsaved answer'
+                    );
+                    const fileInput =
+                        f.window.document.querySelector('input[type="file"]');
+                    assert.ok(fileInput instanceof f.window.HTMLInputElement);
+                    const file = new f.window.File(
+                        ['synthetic'],
+                        'PRIVATE_INPUT.txt'
+                    );
+                    Object.defineProperty(fileInput, 'files', {
+                        configurable: true,
+                        value: [file],
+                    });
+                    fileInput.dispatchEvent(
+                        new f.window.Event('change', { bubbles: true })
+                    );
+                    const bytes = storageBytes(f.window);
+                    assert.equal(
+                        bytes.length,
+                        1,
+                        'real starter-owned remembered credential'
+                    );
+                    const before = f.calls.length;
+                    browserInput(f.window, 'api-origin').value =
+                        candidate.origin;
+                    browserInput(f.window, 'share-id').value =
+                        candidate.shareId ?? f.page.payload.shareId;
+                    browserInput(f.window, 'remember-session').checked =
+                        candidate.remember;
+                    submitForm(f.window, 'Connect and load');
+                    assert.equal(
+                        input.isConnected,
+                        true,
+                        'invalid settings must not render a replacement screen'
+                    );
+                    assert.equal(input.value, 'Keep this unsaved answer');
+                    assert.equal(fileInput.isConnected, true);
+                    assert.equal(fileInput.files?.[0], file);
+                    assert.deepEqual(storageBytes(f.window), bytes);
+                    assert.equal(
+                        f.calls.length,
+                        before,
+                        'rejected settings perform no request'
+                    );
+                    assert.match(
+                        f.window.document.getElementById('session-summary')!
+                            .textContent!,
+                        /Authenticated/
+                    );
+                    retainedFeedback(f.window);
+                });
+            }
+
+            it("keeps both visitors' native drafts and authenticated owners after a rejected reconnect", async (test) => {
+                const f = await setup(test);
+                editTitle(f.window, 'Visitor A retained answer');
+                switchVisitor(f.window, 'B');
+                clickById(f.window, 'reload');
+                await waitFor(() => browserIdle(f.window));
+                enterEmail(f.window, 'synthetic-b@example.test');
+                submitForm(f.window, 'Log in and use session');
+                await waitFor(() => browserIdle(f.window));
+                editTitle(f.window, 'Visitor B retained answer');
+                switchVisitor(f.window, 'A');
+                const input = titleInput(f.window);
+                const before = f.calls.length;
+                const bytes = storageBytes(f.window);
+                assert.equal(bytes.length, 2);
+                browserInput(f.window, 'api-origin').value =
+                    'https://sdk.example.test/api/v1';
+                browserInput(f.window, 'remember-session').checked = false;
+                submitForm(f.window, 'Connect and load');
+                assert.equal(input.isConnected, true);
+                assert.equal(input.value, 'Visitor A retained answer');
+                switchVisitor(f.window, 'B');
+                assert.equal(
+                    titleInput(f.window).value,
+                    'Visitor B retained answer'
+                );
+                assert.match(
+                    f.window.document.getElementById('session-summary')!
+                        .textContent!,
+                    /Authenticated/
+                );
+                switchVisitor(f.window, 'A');
+                assert.equal(
+                    titleInput(f.window).value,
+                    'Visitor A retained answer'
+                );
+                assert.deepEqual(storageBytes(f.window), bytes);
+                assert.equal(f.calls.length, before);
+                f.mode('failure');
+                clickById(f.window, 'reload');
+                await waitFor(() => browserIdle(f.window));
+                assert.deepEqual(
+                    f.calls.at(-1),
+                    f.calls[1],
+                    'original authenticated client remains usable'
+                );
+                assert.equal(
+                    titleInput(f.window).value,
+                    'Visitor A retained answer'
+                );
+            });
+
+            it('does not abort an existing request when retained Connect dispatch rejects settings', async (test) => {
+                const f = await setup(test);
+                f.mode('held');
+                clickById(f.window, 'reload');
+                await waitFor(() => f.calls.length === 3);
+                const signal = f.signals.at(-1);
+                assert.ok(signal);
+                assert.equal(signal.aborted, false);
+                browserInput(f.window, 'api-origin').value =
+                    'https://sdk.example.test/api/v1';
+                browserInput(f.window, 'remember-session').checked = false;
+                submitForm(f.window, 'Connect and load');
+                assert.equal(signal.aborted, false);
+                assert.equal(f.calls.length, 3);
+                f.held.resolve(jsonResponse(f.accepted));
+                await waitFor(() => browserIdle(f.window));
+                assert.match(
+                    f.window.document.getElementById('status')!.textContent!,
+                    /Loaded form/
+                );
+                assert.match(
+                    f.window.document.getElementById('session-summary')!
+                        .textContent!,
+                    /Authenticated/
+                );
+            });
+
+            it('validates all local settings reads before storage cleanup or owner retirement', async (test) => {
+                const f = await setup(test);
+                const input = editTitle(
+                    f.window,
+                    'Keep answers on a local settings failure'
+                );
+                const bytes = storageBytes(f.window);
+                const before = f.calls.length;
+                browserInput(f.window, 'remember-session').checked = false;
+                const descriptor = Object.getOwnPropertyDescriptor(
+                    Intl,
+                    'DateTimeFormat'
+                )!;
+                try {
+                    Object.defineProperty(Intl, 'DateTimeFormat', {
+                        configurable: true,
+                        value() {
+                            throw new Error('PRIVATE_INPUT timezone failure');
+                        },
+                    });
+                    submitForm(f.window, 'Connect and load');
+                } finally {
+                    Object.defineProperty(Intl, 'DateTimeFormat', descriptor);
+                }
+                assert.equal(input.isConnected, true);
+                assert.equal(
+                    input.value,
+                    'Keep answers on a local settings failure'
+                );
+                assert.deepEqual(storageBytes(f.window), bytes);
+                assert.equal(f.calls.length, before);
+                retainedFeedback(f.window);
+            });
+
+            for (const invalid of ['origin', 'share'] as const)
+                it(`keeps an initial invalid ${invalid} disconnected without a request`, async (test) => {
+                    let calls = 0;
+                    const window = await environment(test, async () => {
+                        calls++;
+                        throw new Error('No request permitted');
+                    });
+                    browserInput(window, 'api-origin').value =
+                        invalid === 'origin'
+                            ? 'https://sdk.example.test/api/v1'
+                            : 'https://sdk.example.test';
+                    browserInput(window, 'share-id').value =
+                        invalid === 'share' ? '   ' : 'share_synthetic';
+                    submitForm(window, 'Connect and load');
+                    assert.equal(calls, 0);
+                    assert.equal(window.sessionStorage.length, 0);
+                    assert.equal(
+                        window.document.querySelector('#screen form'),
+                        null
+                    );
+                    assert.match(
+                        window.document.getElementById('session-summary')!
+                            .textContent!,
+                        /Not connected/
+                    );
+                    retainedFeedback(window);
+                });
+
+            it('still commits a valid reconnect with fresh separate visitors and explicit remembering opt-out', async (test) => {
+                const f = await setup(test);
+                const old = editTitle(
+                    f.window,
+                    'Explicitly replaced connection answer'
+                );
+                const before = f.calls.length;
+                browserInput(f.window, 'api-origin').value =
+                    'https://sdk.example.test/';
+                browserInput(f.window, 'remember-session').checked = false;
+                submitForm(f.window, 'Connect and load');
+                await waitFor(() => browserIdle(f.window));
+                assert.equal(f.calls.length, before + 1);
+                assert.deepEqual(f.calls.at(-1), {});
+                assert.equal(old.isConnected, false);
+                assert.equal(f.window.sessionStorage.length, 0);
+                enterEmail(f.window, 'synthetic-a@example.test');
+                submitForm(f.window, 'Log in and use session');
+                await waitFor(() => browserIdle(f.window));
+                assert.equal(titleInput(f.window).value, 'Initial title');
+                switchVisitor(f.window, 'B');
+                clickById(f.window, 'reload');
+                await waitFor(() => browserIdle(f.window));
+                assert.deepEqual(
+                    f.calls.at(-1),
+                    {},
+                    'A login must not authenticate the new B client'
+                );
+                assert.ok(findButton(f.window, 'Log in and use session'));
+            });
         });
 
         it('refused opt-out preserves the current Form draft and connection when storage cannot be cleared', async (test) => {

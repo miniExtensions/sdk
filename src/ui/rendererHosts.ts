@@ -1,3 +1,6 @@
+import { captureFormVisibilityRevision } from '../forms/bindings.js';
+import { projectAttachmentPresentation } from './attachmentPresentation.js';
+import { getFormAttachmentPolicy } from '../forms/attachments.js';
 import {
     normalizeFormLeaseLoaded,
     normalizeFormLeaseField,
@@ -38,6 +41,7 @@ import {
 import type { ButtonFieldModel, ButtonFieldRecovery } from './buttonModel.js';
 import {
     createRendererProps,
+    isFieldReadValue,
     type FieldRendererHost,
     type FieldRendererHostSnapshot,
     type RendererPropsInput,
@@ -177,7 +181,9 @@ function host(
     authority: () => unknown | null,
     read: (current: () => boolean) => FieldRendererHostSnapshot,
     subscribe: (listener: () => void, current: () => boolean) => (() => void)[],
-    disposeOwned: () => void = () => {}
+    disposeOwned: () => void = () => {},
+    // Internal, callback-free publication fence for the additive attachment facet.
+    captureAttachmentPublication?: () => () => boolean
 ): FieldRendererHost {
     let disposed = false,
         retired = false;
@@ -217,13 +223,23 @@ function host(
         }
         return !disposed && !retired;
     };
+    let snapshotDepth = 0;
     const snapshot = (): FieldRendererHostSnapshot => {
+        snapshotDepth++;
+        try {
+            return readSnapshot();
+        } finally {
+            snapshotDepth--;
+        }
+    };
+    const readSnapshot = (): FieldRendererHostSnapshot => {
         if (accepted === null && !disposed && !retired) return unavailable();
         if (!current())
             return {
                 status: 'retired',
                 reason: 'The accepted field context changed.',
             };
+        const canPublishAttachments = captureAttachmentPublication?.();
         let result: FieldRendererHostSnapshot;
         try {
             result = read(current);
@@ -231,12 +247,34 @@ function host(
             result = unavailable();
         }
         // Reading presentation can invoke application ownership callbacks.
-        return current()
-            ? result
-            : {
-                  status: 'retired',
-                  reason: 'The accepted field context changed.',
-              };
+        if (!current())
+            return {
+                status: 'retired',
+                reason: 'The accepted field context changed.',
+            };
+        // Do not call an owner/binding again after the final current() above.
+        // Notifications during read/current invalidate only this new facet;
+        // existing native props, actions, and host retirement remain unchanged.
+        // Reentrant subscribers can see intermediate binding notifications while
+        // an outer owner callback is still running; conceal the facet there too.
+        if (
+            result.status === 'ready' &&
+            (snapshotDepth > 1 ||
+                (canPublishAttachments && !canPublishAttachments()))
+        )
+            return {
+                ...result,
+                fields: result.fields.map((field) =>
+                    field.physicalKind === 'multipleAttachments' &&
+                    field.attachmentPresentation
+                        ? {
+                              ...field,
+                              attachmentPresentation: { status: 'unavailable' },
+                          }
+                        : field
+                ),
+            };
+        return result;
     };
     const listeners = new Set<(s: FieldRendererHostSnapshot) => void>();
     const emit = () => {
@@ -486,9 +524,13 @@ export function createFormFieldRendererHost(
     options: FormFieldRendererHostOptions
 ): FieldRendererHost {
     const binding = options.fields.field(options.fieldId);
+    let attachmentPublicationRevision = 0;
+    let attachmentVisible = false;
     const authority = () => {
         const state = options.fields.controller.getState(),
             snapshot = binding.getSnapshot();
+        attachmentVisible =
+            !snapshot.retired && snapshot.visibility.type === 'visible';
         return snapshot.retired || !snapshot.field || state.draft === null
             ? null
             : [
@@ -531,12 +573,49 @@ export function createFormFieldRendererHost(
                 current,
                 attachment,
                 button,
-                linked
-                    ? (input) => ({
-                          ...input,
-                          linkedRecords: linked.getProps(),
-                      })
-                    : undefined
+                (input) => ({
+                    ...input,
+                    ...(linked ? { linkedRecords: linked.getProps() } : {}),
+                    ...(input.physicalKind === 'multipleAttachments'
+                        ? {
+                              attachmentPresentation:
+                                  projectAttachmentPresentation({
+                                      visible: true,
+                                      current: () => {
+                                          if (!current()) return false;
+                                          const now = binding.getSnapshot();
+                                          return (
+                                              !now.retired &&
+                                              now.visibility.type ===
+                                                  'visible' &&
+                                              captureFormVisibilityRevision(
+                                                  options.fields
+                                              )?.() === true
+                                          );
+                                      },
+                                      configs: [input.displayConfig],
+                                      readRows: () => {
+                                          const now = binding.getSnapshot();
+                                          if (
+                                              now.retired ||
+                                              now.visibility.type !== 'visible'
+                                          )
+                                              return null;
+                                          // Preserve original descriptor readOnly/add-only semantics.
+                                          const policy =
+                                              getFormAttachmentPolicy({
+                                                  loaded: options.fields.getLoaded(),
+                                                  fieldId: options.fieldId,
+                                                  value: now.value,
+                                              });
+                                          return policy.status === 'ready'
+                                              ? policy.rows
+                                              : null;
+                                      },
+                                  }),
+                          }
+                        : {}),
+                })
             ),
         (listener, current) =>
             subscribeTo(listener, [
@@ -549,6 +628,9 @@ export function createFormFieldRendererHost(
                 ...[binding, options.fields.controller].map(
                     (source) => (notify: () => void) =>
                         source.subscribe(() => {
+                            // Pure publication checks can observe changes even during
+                            // the final owner callback, including hide/show ABA.
+                            attachmentPublicationRevision++;
                             linked?.refresh();
                             notify();
                         })
@@ -563,6 +645,15 @@ export function createFormFieldRendererHost(
         () => {
             linked?.dispose();
             button?.dispose();
+        },
+        () => {
+            const revision = attachmentPublicationRevision;
+            const draftCurrent = captureFormVisibilityRevision(options.fields);
+            return () =>
+                draftCurrent !== null &&
+                draftCurrent() &&
+                attachmentVisible &&
+                attachmentPublicationRevision === revision;
         }
     );
 }
@@ -740,6 +831,56 @@ export function createPortalDetailRendererHost(
                               },
                           }
                         : { type: 'readonly' },
+                    ...(data.field.config.type === 'multipleAttachments' &&
+                    (options.context ?? 'portal-detail') === 'portal-detail'
+                        ? {
+                              attachmentPresentation:
+                                  projectAttachmentPresentation({
+                                      visible: !detail.isHidden,
+                                      current,
+                                      configs: [
+                                          detail.miniExtConfig,
+                                          ...(detail.childFormField
+                                              ? [data.writeConfig]
+                                              : []),
+                                      ],
+                                      readRows: () => {
+                                          // Portal detail has no persisted add-only baseline.
+                                          // Neither returned nor child policy may be weakened.
+                                          for (const config of [
+                                              detail.miniExtConfig,
+                                              data.writeConfig,
+                                          ]) {
+                                              if (
+                                                  config &&
+                                                  'addOnlyMode' in config &&
+                                                  config.addOnlyMode !==
+                                                      undefined &&
+                                                  config.addOnlyMode !== false
+                                              )
+                                                  return null;
+                                          }
+                                          const value =
+                                              context.row.fields[
+                                                  detail.fieldId
+                                              ];
+                                          if (
+                                              !isFieldReadValue(
+                                                  'multipleAttachments',
+                                                  value
+                                              )
+                                          )
+                                              return null;
+                                          return Array.isArray(value)
+                                              ? value.map((attachment) => ({
+                                                    visible: true,
+                                                    attachment,
+                                                }))
+                                              : [];
+                                      },
+                                  }),
+                          }
+                        : {}),
                     ...(data.field.config.type === 'multipleRecordLinks'
                         ? {
                               linkedRecords: portalLinkedPills({

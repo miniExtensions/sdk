@@ -26,12 +26,20 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
         const [runtime, forms, ui] = await Promise.all(
             ['runtime', 'forms', 'ui'].map(load)
         );
-        for (const config of [
-            { readOnly: true, hideAttachmentName: false },
-            { readOnly: false, hideAttachmentName: false },
-            { readOnly: true, hideAttachmentName: true },
-            { readOnly: true, obscurePassword: true },
-            { readOnly: true, maskPasswordOnLoginScreen: true },
+        for (const { config, hideAt } of [
+            { config: { readOnly: true, hideAttachmentName: false } },
+            { config: { readOnly: false, hideAttachmentName: false } },
+            { config: { readOnly: true, hideAttachmentName: true } },
+            { config: { readOnly: true, obscurePassword: true } },
+            { config: { readOnly: true, maskPasswordOnLoginScreen: true } },
+            {
+                config: { readOnly: true, hideAttachmentName: false },
+                hideAt: 5,
+            },
+            {
+                config: { readOnly: false, hideAttachmentName: false },
+                hideAt: 5,
+            },
         ]) {
             const loaded = portalRecipeFixtures.makeForm({
                 childExtensionInfo: { accessType: { type: 'create' } },
@@ -51,7 +59,31 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                         options: { isReversed: false },
                     },
                 },
-                miniExtConfig: config,
+                miniExtConfig: {
+                    ...config,
+                    ...(hideAt
+                        ? {
+                              conditionalFields: {
+                                  logicalOperator: 'and',
+                                  conditions: [
+                                      {
+                                          id: 'visible-title',
+                                          type: 'singleCondition',
+                                          setting: {
+                                              type: 'is',
+                                              fieldType: 'singleLineText',
+                                              idOrName: {
+                                                  type: 'id',
+                                                  id: 'fld_title',
+                                              },
+                                              value: 'Initial child',
+                                          },
+                                      },
+                                  ],
+                              },
+                          }
+                        : {}),
+                },
             };
             const native = {
                 url: 'https://files.example.test/private',
@@ -83,10 +115,19 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
             fields.attachment = () => {
                 throw new Error('No attachment controller');
             };
+            let ownershipChecks = 0;
             const host = ui.createFormFieldRendererHost({
                 fields,
                 fieldId: 'fld_files',
-                isCurrent: () => true,
+                isCurrent: () => {
+                    if (++ownershipChecks === hideAt)
+                        assert.equal(
+                            fields.field('fld_title').setValue('Hidden')
+                                .accepted,
+                            true
+                        );
+                    return true;
+                },
                 configurationRevision: () => revision,
             });
             const snapshot = host.getSnapshot();
@@ -96,18 +137,19 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                 props.capability.type,
                 config.readOnly ? 'readonly' : 'editable'
             );
-            const expected =
-                config.obscurePassword || config.maskPasswordOnLoginScreen
-                    ? { status: 'masked' }
-                    : {
-                          status: 'ready',
-                          rows: [0, 1].map(() => ({
-                              label:
-                                  config.hideAttachmentName === false
-                                      ? native.filename
-                                      : 'Attachment',
-                          })),
-                      };
+            const expected = hideAt
+                ? { status: 'unavailable' }
+                : config.obscurePassword || config.maskPasswordOnLoginScreen
+                  ? { status: 'masked' }
+                  : {
+                        status: 'ready',
+                        rows: [0, 1].map(() => ({
+                            label:
+                                config.hideAttachmentName === false
+                                    ? native.filename
+                                    : 'Attachment',
+                        })),
+                    };
             assert.deepEqual(props.attachmentPresentation, expected);
             assert.deepEqual(props.value, [native, native]);
             assert.equal(
@@ -121,6 +163,21 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                 ),
                 JSON.stringify(expected)
             );
+            if (hideAt) {
+                assert.equal(ownershipChecks, 5);
+                assert.equal(host.getSnapshot().status, 'hidden');
+                fields.field('fld_title').setValue('Initial child');
+                assert.deepEqual(
+                    host.getSnapshot().fields[0].attachmentPresentation,
+                    {
+                        status: 'ready',
+                        rows: [
+                            { label: native.filename },
+                            { label: native.filename },
+                        ],
+                    }
+                );
+            }
             assert.equal(requests, 0);
             assert.equal(fields.hasPendingFiles(), false);
             revision++;

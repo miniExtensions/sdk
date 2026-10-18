@@ -19,7 +19,10 @@ import {
 } from '../src/ui/rendererHosts.js';
 import { loadedForm, formSaveOptions } from './formsFixtures.js';
 import { portalFixture, portalListPage, portalPage } from './portalFixtures.js';
-import type { FieldRendererHost } from '../src/ui/rendererRegistry.js';
+import type {
+    FieldRendererHost,
+    FieldRendererHostSnapshot,
+} from '../src/ui/rendererRegistry.js';
 const field = (host: FieldRendererHost) => {
     const state = host.getSnapshot();
     assert.equal(state.status, 'ready');
@@ -1215,62 +1218,119 @@ it('Portal hidden detail produces no facet and configuration replacement permane
     p.owner.destroy();
 });
 
-it('Form attachment projection rechecks visibility after reentrant ownership callbacks', () => {
-    const loaded = loadedForm();
-    const schema = loaded.payload.fieldIdsToSchemas.fld_files;
-    assert.ok(schema.fieldType === 'multipleAttachments');
-    schema.miniExtConfig = {
-        readOnly: true,
-        hideAttachmentName: false,
-        conditionalFields: {
-            logicalOperator: 'and',
-            conditions: [
-                {
-                    id: 'visible-title',
-                    type: 'singleCondition',
-                    setting: {
-                        type: 'is',
-                        fieldType: 'singleLineText',
-                        idOrName: { type: 'id', id: 'fld_title' },
-                        value: 'Initial title',
+for (const hideAt of [2, 5])
+    for (const callback of ['isCurrent', 'configurationRevision'] as const)
+        for (const delivery of [
+            'snapshot',
+            'subscription',
+            'hide-show',
+        ] as const)
+            it(`Form attachment publication fences ${callback} callback ${hideAt} via ${delivery}`, () => {
+                const loaded = loadedForm();
+                const schema = loaded.payload.fieldIdsToSchemas.fld_files;
+                assert.ok(schema.fieldType === 'multipleAttachments');
+                schema.miniExtConfig = {
+                    readOnly: true,
+                    hideAttachmentName: false,
+                    conditionalFields: {
+                        logicalOperator: 'and',
+                        conditions: [
+                            {
+                                id: 'visible-title',
+                                type: 'singleCondition',
+                                setting: {
+                                    type: 'is',
+                                    fieldType: 'singleLineText',
+                                    idOrName: { type: 'id', id: 'fld_title' },
+                                    value: 'Initial title',
+                                },
+                            },
+                        ],
                     },
-                },
-            ],
-        },
-    };
-    const client = createMiniExtensionsClient({
-        apiOrigin: 'https://sdk.example.test',
-        fetch: async () => {
-            throw new Error('No I/O');
-        },
-    });
-    const fields = createFormFieldBindings({
-        client,
-        loaded,
-        saveOptions: formSaveOptions(),
-        getScope: () => ({ ownerId: 'A', revision: 0 }),
-    });
-    let checks = 0;
-    const host = createFormFieldRendererHost({
-        fields,
-        fieldId: 'fld_files',
-        configurationRevision: () => 0,
-        isCurrent: () => {
-            if (++checks === 2) fields.field('fld_title').setValue('Hidden');
-            return true;
-        },
-    });
-    const snapshot = host.getSnapshot();
-    assert.equal(snapshot.status, 'ready');
-    if (snapshot.status === 'ready') {
-        assert.deepEqual(snapshot.fields[0].attachmentPresentation, {
-            status: 'unavailable',
-        });
-    }
-    assert.equal(host.getSnapshot().status, 'hidden');
-    host.dispose();
-    fields.destroy();
-});
+                };
+                const client = createMiniExtensionsClient({
+                    apiOrigin: 'https://sdk.example.test',
+                    fetch: async () => {
+                        throw new Error('No I/O');
+                    },
+                });
+                const fields = createFormFieldBindings({
+                    client,
+                    loaded,
+                    saveOptions: formSaveOptions(),
+                    getScope: () => ({ ownerId: 'A', revision: 0 }),
+                });
+                let checks = 0,
+                    armed = false;
+                const checkOwnership = () => {
+                    if (armed && ++checks === hideAt) {
+                        assert.equal(
+                            fields.field('fld_title').setValue('Hidden')
+                                .accepted,
+                            true
+                        );
+                        if (delivery === 'hide-show')
+                            assert.equal(
+                                fields
+                                    .field('fld_title')
+                                    .setValue('Initial title').accepted,
+                                true
+                            );
+                    }
+                };
+                const host = createFormFieldRendererHost({
+                    fields,
+                    fieldId: 'fld_files',
+                    configurationRevision: () => {
+                        if (callback === 'configurationRevision')
+                            checkOwnership();
+                        return 0;
+                    },
+                    isCurrent: () => {
+                        if (callback === 'isCurrent') checkOwnership();
+                        return true;
+                    },
+                });
+                armed = true;
+                const observed: FieldRendererHostSnapshot[] = [];
+                if (delivery === 'subscription') {
+                    const stop = host.subscribe((snapshot) =>
+                        observed.push(snapshot)
+                    );
+                    stop();
+                } else observed.push(host.getSnapshot());
+                assert.ok(
+                    observed.some((snapshot) => snapshot.status === 'ready')
+                );
+                for (const snapshot of observed) {
+                    if (snapshot.status === 'ready') {
+                        assert.deepEqual(
+                            snapshot.fields[0].attachmentPresentation,
+                            { status: 'unavailable' }
+                        );
+                        // Native values/capabilities keep their original independent contract.
+                        assert.deepEqual(
+                            snapshot.fields[0].value,
+                            loaded.payload.formRecord.data.fld_files
+                        );
+                        assert.equal(
+                            snapshot.fields[0].capability.type,
+                            'readonly'
+                        );
+                    } else assert.equal(snapshot.status, 'hidden');
+                }
+                if (delivery !== 'hide-show') {
+                    assert.equal(host.getSnapshot().status, 'hidden');
+                    fields.field('fld_title').setValue('Initial title');
+                }
+                // A visibility transition must not permanently retire an accepted owner.
+                assert.deepEqual(attachmentFacet(host).attachmentPresentation, {
+                    status: 'ready',
+                    rows: [{ label: 'prefill.txt' }],
+                });
+                host.dispose();
+                fields.destroy();
+            });
 
 it('Form label facet coexists with editable capability and retains the original add-only baseline', () => {
     const loaded = loadedForm();
@@ -1318,4 +1378,30 @@ it('Form label facet coexists with editable capability and retains the original 
     assert.deepEqual(fields.controller.getState(), before);
     host.dispose();
     fields.destroy();
+});
+
+it('Portal attachment publication retires on owner replacement in the final ownership callback', async () => {
+    const schema = loadedForm().payload.fieldIdsToSchemas.fld_files;
+    assert.ok(schema.fieldType === 'multipleAttachments');
+    schema.airtableField.id = 'fld_title';
+    schema.miniExtConfig = { hideAttachmentName: false };
+    const p = await portal(false, false, 'normal', {
+        schema,
+        value: [
+            { url: 'https://files.example.test/a', filename: 'private-label' },
+        ],
+    });
+    let checks = 0;
+    const host = createPortalDetailRendererHost({
+        ...p.options,
+        isCurrent: () => {
+            if (++checks === 5) p.owner.destroy();
+            return true;
+        },
+    });
+    assert.equal(host.getSnapshot().status, 'retired');
+    assert.equal(checks, 5);
+    host.dispose();
+    p.cell.destroy();
+    p.owner.destroy();
 });

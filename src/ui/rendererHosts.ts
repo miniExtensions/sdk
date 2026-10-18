@@ -180,7 +180,9 @@ function host(
     authority: () => unknown | null,
     read: (current: () => boolean) => FieldRendererHostSnapshot,
     subscribe: (listener: () => void, current: () => boolean) => (() => void)[],
-    disposeOwned: () => void = () => {}
+    disposeOwned: () => void = () => {},
+    // Internal, callback-free publication fence for the additive attachment facet.
+    captureAttachmentPublication?: () => () => boolean
 ): FieldRendererHost {
     let disposed = false,
         retired = false;
@@ -220,13 +222,23 @@ function host(
         }
         return !disposed && !retired;
     };
+    let snapshotDepth = 0;
     const snapshot = (): FieldRendererHostSnapshot => {
+        snapshotDepth++;
+        try {
+            return readSnapshot();
+        } finally {
+            snapshotDepth--;
+        }
+    };
+    const readSnapshot = (): FieldRendererHostSnapshot => {
         if (accepted === null && !disposed && !retired) return unavailable();
         if (!current())
             return {
                 status: 'retired',
                 reason: 'The accepted field context changed.',
             };
+        const canPublishAttachments = captureAttachmentPublication?.();
         let result: FieldRendererHostSnapshot;
         try {
             result = read(current);
@@ -234,12 +246,34 @@ function host(
             result = unavailable();
         }
         // Reading presentation can invoke application ownership callbacks.
-        return current()
-            ? result
-            : {
-                  status: 'retired',
-                  reason: 'The accepted field context changed.',
-              };
+        if (!current())
+            return {
+                status: 'retired',
+                reason: 'The accepted field context changed.',
+            };
+        // Do not call an owner/binding again after the final current() above.
+        // Notifications during read/current invalidate only this new facet;
+        // existing native props, actions, and host retirement remain unchanged.
+        // Reentrant subscribers can see intermediate binding notifications while
+        // an outer owner callback is still running; conceal the facet there too.
+        if (
+            result.status === 'ready' &&
+            (snapshotDepth > 1 ||
+                (canPublishAttachments && !canPublishAttachments()))
+        )
+            return {
+                ...result,
+                fields: result.fields.map((field) =>
+                    field.physicalKind === 'multipleAttachments' &&
+                    field.attachmentPresentation
+                        ? {
+                              ...field,
+                              attachmentPresentation: { status: 'unavailable' },
+                          }
+                        : field
+                ),
+            };
+        return result;
     };
     const listeners = new Set<(s: FieldRendererHostSnapshot) => void>();
     const emit = () => {
@@ -489,9 +523,13 @@ export function createFormFieldRendererHost(
     options: FormFieldRendererHostOptions
 ): FieldRendererHost {
     const binding = options.fields.field(options.fieldId);
+    let attachmentPublicationRevision = 0;
+    let attachmentVisible = false;
     const authority = () => {
         const state = options.fields.controller.getState(),
             snapshot = binding.getSnapshot();
+        attachmentVisible =
+            !snapshot.retired && snapshot.visibility.type === 'visible';
         return snapshot.retired || !snapshot.field || state.draft === null
             ? null
             : [
@@ -585,6 +623,9 @@ export function createFormFieldRendererHost(
                 ...[binding, options.fields.controller].map(
                     (source) => (notify: () => void) =>
                         source.subscribe(() => {
+                            // Pure publication checks can observe changes even during
+                            // the final owner callback, including hide/show ABA.
+                            attachmentPublicationRevision++;
                             linked?.refresh();
                             notify();
                         })
@@ -599,6 +640,11 @@ export function createFormFieldRendererHost(
         () => {
             linked?.dispose();
             button?.dispose();
+        },
+        () => {
+            const revision = attachmentPublicationRevision;
+            return () =>
+                attachmentVisible && attachmentPublicationRevision === revision;
         }
     );
 }

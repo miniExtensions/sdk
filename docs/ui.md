@@ -3375,6 +3375,11 @@ can further restrict names or mask presentation, but cannot loosen returned
 policy. Every applicable configuration must explicitly permit filenames. Portal
 add-only policies return unavailable because that surface supplies no safe
 persisted baseline. Missing configuration is unavailable, not an empty list.
+The final Form publication fence uses observed visibility and synchronous change
+notifications after the last ownership callback, without invoking another external
+callback. A concurrent Form change makes only the new facet unavailable for that
+read; a subsequent stable read can publish labels again. Reentrant host reads also
+withhold this facet while an outer read is active.
 Hosts recheck owner and configuration before publishing; observed retirement
 stays retired, including an observed change back to an earlier configuration.
 Callers must advance the configuration revision for replacements, including ABA.

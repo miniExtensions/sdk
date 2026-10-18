@@ -556,6 +556,220 @@ const savedAttempt = (app: Awaited<ReturnType<typeof mount>>) => {
     return attempt;
 };
 
+const kanbanActionFixture = () => {
+    const fixture = actionFixture();
+    const config = linkedConfig(fixture.page);
+    config.layout = 'kanban';
+    config.kanbanCategoryField = 'fld_status';
+    const category: RuntimeAirtableField = {
+        id: 'fld_status',
+        name: 'Synthetic status',
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: {
+            type: 'singleSelect',
+            options: {
+                choices: [
+                    { id: 'sel_pending', name: 'Pending', color: 'blueBright' },
+                    { id: 'sel_done', name: 'Done', color: 'greenBright' },
+                ],
+            },
+        },
+    };
+    const table = fixture.list.tableIdsToLinkedTableStates.table_children!;
+    table.airtableFields.push(category);
+    table.recordIdsToAirtableRecords[fixture.recordId]!.fields.fld_status =
+        'Pending';
+    return fixture;
+};
+
+describe('Portal mutation parent refresh identity', () => {
+    for (const operation of ['cell Save', 'Kanban move'] as const)
+        for (const refused of [
+            {
+                name: 'another parent',
+                record: () => ({
+                    id: 'record_foreign',
+                    fields: {
+                        [driver.id]: false,
+                        fld_prefill: 'FOREIGN_PARENT_REFRESH',
+                    },
+                }),
+            },
+            {
+                name: 'a missing parent identity',
+                record: () => ({ fields: { [driver.id]: false } }),
+            },
+            {
+                name: 'missing parent fields',
+                record: (id: string) => ({ id }),
+            },
+            {
+                name: 'null parent fields',
+                record: (id: string) => ({ id, fields: null }),
+            },
+            {
+                name: 'array parent fields',
+                record: (id: string) => ({ id, fields: [] }),
+            },
+            { name: 'a missing parent record', record: () => null },
+        ])
+            it(`refuses ${refused.name} after an acknowledged ${operation}`, async (test) => {
+                const fixture =
+                    operation === 'cell Save'
+                        ? actionFixture()
+                        : kanbanActionFixture();
+                fixture.list.airtableOffset = 'synthetic-next-page';
+                const parent = structuredClone(
+                    fixture.page.payload.formRecord.data
+                );
+                const record = refused.record(
+                    fixture.page.payload.formRecord.recordId
+                );
+                const app = await mount(test, fixture.page, {
+                    ...fixture,
+                    refresh: async () =>
+                        new Response(
+                            JSON.stringify({ result: { data: record } })
+                        ),
+                    // Deliberately malformed transport data must not gain parent authority.
+                    kanban: {
+                        type: 'logged-in',
+                        loggedInUserRecord: record,
+                    } as SetKanbanCategoryResult,
+                });
+                await app.invokeRead();
+                let category: HTMLSelectElement | null = null;
+                if (operation === 'cell Save') submitCell(app);
+                else {
+                    category = app.node.querySelector<HTMLSelectElement>(
+                        `select[aria-label="Category for ${fixture.recordId}"]`
+                    );
+                    assert.ok(category);
+                    category.value = 'Done';
+                    dispatch(category, 'change');
+                    dispatch(buttonNamed(app.node, 'Move category'), 'click');
+                }
+                await app.settle();
+                assert.equal(
+                    app.writes.length,
+                    operation === 'cell Save' ? 1 : 0
+                );
+                assert.equal(
+                    app.categoryWrites.length,
+                    operation === 'Kanban move' ? 1 : 0
+                );
+                if (operation === 'cell Save') savedAttempt(app);
+                assert.deepEqual(fixture.page.payload.formRecord.data, parent);
+                assert.deepEqual(app.offered(), ['view_conditional']);
+                assert.match(
+                    app.statuses.at(-1) ?? '',
+                    /not refreshed.*Reload/
+                );
+                assert.equal(
+                    app.node.textContent?.includes('FOREIGN_PARENT_REFRESH'),
+                    false
+                );
+                if (category) {
+                    assert.equal(category.isConnected, true);
+                    assert.equal(category.value, 'Done');
+                }
+                for (const title of [
+                    'Load records',
+                    'Create record',
+                    'Next page',
+                ])
+                    dispatch(buttonNamed(app.node, title), 'click');
+                await app.settle();
+                assert.equal(app.reads.length, 1);
+                assert.equal(app.childLoads.length, 0);
+                assert.equal(
+                    app.writes.length,
+                    operation === 'cell Save' ? 1 : 0
+                );
+                assert.equal(
+                    app.categoryWrites.length,
+                    operation === 'Kanban move' ? 1 : 0
+                );
+            });
+
+    const matchingFields: Extract<
+        SetKanbanCategoryResult,
+        { type: 'logged-in' }
+    >['loggedInUserRecord']['fields'][] = [
+        {},
+        {
+            [driver.id]: true,
+            fld_prefill: 'prefill_Title=Refreshed',
+            fld_zero: 0,
+            fld_false: false,
+            fld_empty: null,
+            fld_array: ['native-a', 'native-b'],
+        },
+    ];
+    for (const operation of ['cell Save', 'Kanban move'] as const)
+        for (const fields of matchingFields)
+            it(`accepts matching ${Object.keys(fields).length === 0 ? 'sparse' : 'native'} parent fields after ${operation}`, async (test) => {
+                const fixture =
+                    operation === 'cell Save'
+                        ? actionFixture()
+                        : kanbanActionFixture();
+                const record = {
+                    id: fixture.page.payload.formRecord.recordId,
+                    fields,
+                };
+                const app = await mount(test, fixture.page, {
+                    ...fixture,
+                    refresh: async () =>
+                        new Response(
+                            JSON.stringify({ result: { data: record } })
+                        ),
+                    kanban: {
+                        type: 'logged-in',
+                        loggedInUserRecord: record,
+                    },
+                });
+                await app.invokeRead();
+                if (operation === 'cell Save') submitCell(app);
+                else {
+                    const category = app.node.querySelector<HTMLSelectElement>(
+                        `select[aria-label="Category for ${fixture.recordId}"]`
+                    );
+                    assert.ok(category);
+                    category.value = 'Done';
+                    dispatch(category, 'change');
+                    dispatch(buttonNamed(app.node, 'Move category'), 'click');
+                }
+                await app.settle();
+                assert.deepEqual(fixture.page.payload.formRecord.data, fields);
+                assert.match(
+                    app.statuses.at(-1) ?? '',
+                    operation === 'cell Save'
+                        ? /Cell saved and Portal user refreshed/
+                        : /Category moved\. Load records/
+                );
+                assert.deepEqual(
+                    app.offered(),
+                    Object.keys(fields).length === 0 ? [] : ['view_conditional']
+                );
+                assert.equal(app.reads.length, 1);
+                if (Object.keys(fields).length !== 0) {
+                    await app.invokeRead();
+                    assert.equal(app.reads.length, 2);
+                }
+                assert.equal(
+                    app.writes.length,
+                    operation === 'cell Save' ? 1 : 0
+                );
+                assert.equal(
+                    app.categoryWrites.length,
+                    operation === 'Kanban move' ? 1 : 0
+                );
+                if (operation === 'cell Save') savedAttempt(app);
+            });
+});
+
 describe('Portal cell Save parent refresh recovery', () => {
     it('keeps a completed cell Save behind Reload when the parent refresh returns null', async (test) => {
         const fixture = actionFixture();

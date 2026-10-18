@@ -141,7 +141,12 @@ conditions, containing direct
 single-line/multiline text, email, URL, phone, number, currency, percent, rating,
 checkbox, barcode, single-select, multi-select and conservatively presented linked-record fields, including readonly answers. It presents
 plain text in published field order, omits canonical empty/conditionally hidden
-answers, and masks nonempty single-line passwords as `••••••••`. A visually
+answers, and masks nonempty single-line passwords and password-masked physical
+Number answers as `••••••••`. Either defined, non-false `obscurePassword` or
+`maskPasswordOnLoginScreen` flag keeps Number answers masked, including unknown
+flag values. Recovery reference rows omit those fields entirely, using the same
+conservative exclusion as remembered create progress. This presentation policy
+does not change native numeric Save values or dirty field IDs. A visually
 hidden title retains its semantic accessible name. Numeric zero remains a
 review answer; unchecked checkboxes, zero ratings and blank barcode text do not.
 URLs are displayed as text, with no link or embedded content.

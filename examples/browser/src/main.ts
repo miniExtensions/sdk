@@ -3284,7 +3284,59 @@ const forgetRememberedSessions = (visitor: Visitor, forgetOnly = false) => {
 
 connectionForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    if (!inputById('remember-session').checked) {
+    let nextConnection: NonNullable<typeof connection>;
+    const nextVisitors = new Map<
+        Visitor,
+        { client: MiniExtensionsClient; remembered: Visitor['remembered'] }
+    >();
+    try {
+        // Validate the complete proposal before clearing storage or retiring
+        // current owners. Client/session-wrapper construction performs no I/O.
+        const apiOrigin = inputById('api-origin').value.trim();
+        const shareId = inputById('share-id').value.trim();
+        const recordId = inputById('record-id').value.trim() || null;
+        const remember = inputById('remember-session').checked;
+        if (shareId === '') throw new Error('Missing published share ID.');
+        const query = currentConditionalPrefills();
+        const clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const context = location.pathname.split('/')[1] ?? '';
+        for (const visitor of Object.values(visitors))
+            nextVisitors.set(visitor, {
+                client: createMiniExtensionsClient({ apiOrigin }),
+                remembered: null,
+            });
+        nextConnection = {
+            apiOrigin: new URL(apiOrigin).origin,
+            remember,
+            input: {
+                shareId,
+                recordId,
+                context: { type: 'direct-url' },
+                query,
+                clientTimeZone,
+            },
+        };
+        if (remember)
+            for (const [identity, visitor] of Object.entries(visitors)) {
+                const next = nextVisitors.get(visitor)!;
+                next.remembered = createRememberedSession({
+                    client: next.client,
+                    apiOrigin: nextConnection.apiOrigin,
+                    input: nextConnection.input,
+                    visitor: identity,
+                    context,
+                    storage: () => document.defaultView!.sessionStorage,
+                });
+            }
+    } catch {
+        // Do not render: replacing controls would lose pending native input.
+        status(
+            'Connection settings are invalid. Use an HTTP(S) origin without credentials, a path, query or fragment, and enter the published share ID. Current connections and answers are unchanged.',
+            true
+        );
+        return;
+    }
+    if (!nextConnection.remember) {
         for (const visitor of Object.values(visitors)) {
             if (!forgetRememberedSessions(visitor, true)) {
                 sessionSummary();
@@ -3298,38 +3350,11 @@ connectionForm.addEventListener('submit', (event) => {
     }
     try {
         for (const visitor of Object.values(visitors)) invalidate(visitor);
-        const apiOrigin = inputById('api-origin').value.trim();
-        const shareId = inputById('share-id').value.trim();
-        const recordId = inputById('record-id').value.trim() || null;
-        if (shareId === '') throw new Error('Enter the published share ID.');
-        for (const visitor of Object.values(visitors))
-            visitor.client = createMiniExtensionsClient({
-                apiOrigin,
-            });
-        connection = {
-            apiOrigin: new URL(apiOrigin).origin,
-            remember: inputById('remember-session').checked,
-            input: {
-                shareId,
-                recordId,
-                context: { type: 'direct-url' },
-                query: currentConditionalPrefills(),
-                clientTimeZone:
-                    Intl.DateTimeFormat().resolvedOptions().timeZone,
-            },
-        };
-        for (const [identity, visitor] of Object.entries(visitors)) {
-            visitor.remembered = connection.remember
-                ? createRememberedSession({
-                      client: visitor.client!,
-                      apiOrigin: connection.apiOrigin,
-                      input: connection.input,
-                      visitor: identity,
-                      context: location.pathname.split('/')[1] ?? '',
-                      storage: () => document.defaultView!.sessionStorage,
-                  })
-                : null;
+        for (const [visitor, next] of nextVisitors) {
+            visitor.client = next.client;
+            visitor.remembered = next.remembered;
         }
+        connection = nextConnection;
         render();
         load();
     } catch (error) {

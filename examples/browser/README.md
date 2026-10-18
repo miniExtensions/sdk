@@ -72,8 +72,12 @@ check pagination, criteria retirement, child context and visitor transitions.
 
 1. Publish a Form or Portal in miniExtensions.
 2. Enter the exact origin that serves the miniExtensions APIs and the
-   extension's published share ID. Use a durable API origin for a continuing
-   application; a PR preview may be retired after merge.
+   extension's stored `extension.shareId`. Follow
+   [runtime configuration prerequisites](../../README.md#obtain-the-actual-runtime-configuration)
+   to obtain it from a default-domain public link or your workspace
+   administrator/deployment owner. A custom-domain slug is not the Share ID;
+   this starter cannot resolve that slug for you. Use a durable API origin for
+   a continuing application; a PR preview may be retired after merge.
 3. Choose **Connect and load**. An optional record ID opens a direct Form edit
    if that Form permits it.
 

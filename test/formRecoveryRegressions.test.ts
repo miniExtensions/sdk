@@ -652,6 +652,7 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
                 earlierInput()?.textContent ?? '',
                 /private narrative/
             );
+            assert.ok(earlierInput()?.textContent?.includes(privateTitle));
             assert.doesNotMatch(
                 earlierInput()?.textContent ?? '',
                 /previous-visitor-private-attachment\.pdf/
@@ -676,7 +677,14 @@ describe('Form recovery and reset regressions', { concurrency: false }, () => {
                 earlierInput()?.textContent?.includes(privateFilename),
                 false
             );
-            assert.ok(earlierInput()?.textContent?.includes(privateTitle));
+            assert.equal(
+                earlierInput()?.textContent?.includes(privateTitle),
+                false
+            );
+            assert.match(
+                earlierInput()?.textContent ?? '',
+                /Current public title/
+            );
             const teardownButton = window.document.getElementById(
                 teardown === 'Logout' ? 'logout' : 'disconnect'
             );

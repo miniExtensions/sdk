@@ -57,6 +57,7 @@ import {
     displayValue,
     formFieldControl,
     mountBoundFormField,
+    canPresentFieldValidation,
     type FieldControl,
 } from './fields.js';
 import { flatChoiceConditionRecord } from './choiceAvailability.js';
@@ -157,6 +158,12 @@ const newVisitor = (): Visitor => ({
 const visitors = { A: newVisitor(), B: newVisitor() };
 let activeVisitor: keyof typeof visitors = 'A';
 const recovery = new RecoveryJournal();
+// Presentation identity stays local to the example, outside the native journal.
+// A null identity denotes only the fixed, non-sensitive attachment notice.
+const retainedInputFields = new WeakMap<
+    RecoveryAttempt['retainedInput'][number],
+    string | null
+>();
 let formLoadSequence = 0;
 let connection: {
     apiOrigin: string;
@@ -918,6 +925,8 @@ const renderForm = (page: FormLoadedResult): void => {
     let reviewPending = false;
     let reviewIntentRevision = 0;
     let formRetired = false;
+    let updateValidationPresentation = (): void => {};
+    let updateRecoveryReferences = (): void => {};
     let formProgress: BrowserCreateProgress | null = null;
     let progressInputRevision = 0;
     let progressSaveCleanups = 0;
@@ -1133,7 +1142,12 @@ const renderForm = (page: FormLoadedResult): void => {
             (fieldId) => {
                 const schema = page.payload.fieldIdsToSchemas[fieldId];
                 const control = controls.get(fieldId);
-                if (schema == null || control == null) return [];
+                if (
+                    schema?.airtableField.id !== fieldId ||
+                    control == null ||
+                    fieldVisibility[fieldId]?.type !== 'visible'
+                )
+                    return [];
                 const config = schema.miniExtConfig;
                 // Masked values must never enter the reference journal.
                 if (hasMaskedValuePolicy(config)) return [];
@@ -1141,7 +1155,9 @@ const renderForm = (page: FormLoadedResult): void => {
                     return [];
                 if (!control.editable) return [];
                 const text = displayValue(snapshot!.data[fieldId]);
-                return [{ title: schema.airtableField.name, value: text }];
+                const entry = { title: schema.airtableField.name, value: text };
+                retainedInputFields.set(entry, fieldId);
+                return [entry];
             }
         );
         if (
@@ -1151,15 +1167,20 @@ const renderForm = (page: FormLoadedResult): void => {
                     page.payload.fieldIdsToSchemas[fieldId]?.fieldType ===
                     AirtableFieldType.MULTIPLE_ATTACHMENTS
             )
-        )
-            attempt.retainedInput.push({
+        ) {
+            const notice = {
                 title: 'Attachment activity',
                 value: 'Attachment details are not retained.',
-            });
+            };
+            retainedInputFields.set(notice, null);
+            attempt.retainedInput.push(notice);
+        }
     };
     const formControlDisposers: Array<() => void> = [];
     disposeFormControls = () => {
         formRetired = true;
+        updateValidationPresentation = () => {};
+        updateRecoveryReferences = () => {};
         retirePageReview();
         formProgress?.retire();
         formPages?.dispose();
@@ -1251,6 +1272,8 @@ const renderForm = (page: FormLoadedResult): void => {
         visibilityMessage.hidden = !Object.values(fieldVisibility).some(
             (result) => result.type === 'blocked'
         );
+        updateValidationPresentation();
+        updateRecoveryReferences();
     };
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
@@ -2238,6 +2261,68 @@ const renderForm = (page: FormLoadedResult): void => {
     recoveryPanel.setAttribute('aria-label', 'Earlier request recovery');
     recoveryPanel.setAttribute('aria-live', 'polite');
     card.append(recoveryPanel);
+    const recoveryReferences = element('div');
+    updateRecoveryReferences = (): void => {
+        recoveryReferences.replaceChildren();
+        if (formRetired || !ownsForm()) return;
+        for (const earlier of recovery
+            .unknown(scope.owner)
+            .filter(
+                (earlier) =>
+                    sameRecoveryRelationship(scope, earlier.scope) &&
+                    (earlier.recordId === recordId ||
+                        (recordId != null &&
+                            earlier.associatedRecordId === recordId) ||
+                        earlier === candidate)
+            )) {
+            const referenceFields = earlier.retainedInput.flatMap((field) => {
+                if (formRetired || !ownsForm()) return [];
+                const fieldId = retainedInputFields.get(field);
+                if (fieldId === null)
+                    return [
+                        {
+                            title: 'Attachment activity',
+                            value: 'Attachment details are not retained.',
+                        },
+                    ];
+                if (fieldId === undefined) return [];
+                const schema = page.payload.fieldIdsToSchemas[fieldId];
+                // Reload or a local edit may mask, hide or remove a public field.
+                // Resolve exact accepted identity before reading retained text.
+                if (
+                    !page.payload.fieldIdsInForm.includes(fieldId) ||
+                    schema?.airtableField.id !== fieldId ||
+                    fieldVisibility[fieldId]?.type !== 'visible' ||
+                    hasMaskedValuePolicy(schema.miniExtConfig)
+                )
+                    return [];
+                return [
+                    { title: schema.airtableField.name, value: field.value },
+                ];
+            });
+            if (referenceFields.length === 0) continue;
+            const reference = element('details');
+            reference.setAttribute(
+                'aria-label',
+                'Earlier local input (reference only)'
+            );
+            reference.append(
+                element(
+                    'summary',
+                    `${earlier.id}: Earlier local input (reference only)`
+                ),
+                element(
+                    'p',
+                    'These were local values at the earlier dispatch, not the freshly loaded server values. They are never copied back or submitted automatically. Attachment details are not retained.'
+                )
+            );
+            for (const field of referenceFields)
+                reference.append(
+                    element('p', `${field.title}: ${field.value}`)
+                );
+            recoveryReferences.append(reference);
+        }
+    };
     const updateRecovery = (): void => {
         const pending = recovery.blocking(scope, recordId);
         const selected =
@@ -2260,39 +2345,9 @@ const renderForm = (page: FormLoadedResult): void => {
                     `New local attempt: ${visitor.preparedAttempt.id}. No Form save has been submitted for this local attempt.`
                 )
             );
+        updateRecoveryReferences();
+        recoveryPanel.append(recoveryReferences);
         const attempt = selected ?? pending;
-        for (const earlier of recovery
-            .unknown(scope.owner)
-            .filter(
-                (earlier) =>
-                    sameRecoveryRelationship(scope, earlier.scope) &&
-                    (earlier.recordId === recordId ||
-                        (recordId != null &&
-                            earlier.associatedRecordId === recordId) ||
-                        earlier === candidate)
-            )) {
-            if (earlier.retainedInput.length === 0) continue;
-            const reference = element('details');
-            reference.setAttribute(
-                'aria-label',
-                'Earlier local input (reference only)'
-            );
-            reference.append(
-                element(
-                    'summary',
-                    `${earlier.id}: Earlier local input (reference only)`
-                ),
-                element(
-                    'p',
-                    'These were local values at the earlier dispatch, not the freshly loaded server values. They are never copied back or submitted automatically. Attachment details are not retained.'
-                )
-            );
-            for (const field of earlier.retainedInput)
-                reference.append(
-                    element('p', `${field.title}: ${field.value}`)
-                );
-            recoveryPanel.append(reference);
-        }
         if (expired)
             recoveryPanel.append(
                 element(
@@ -2799,6 +2854,7 @@ const renderForm = (page: FormLoadedResult): void => {
                             updateRecovery();
                             return;
                         }
+                        updateValidationPresentation = () => {};
                         errors.replaceChildren(
                             element(
                                 'li',
@@ -2810,7 +2866,8 @@ const renderForm = (page: FormLoadedResult): void => {
                     return;
                 }
                 if (knownNotDispatched) formProgress?.resume();
-                if (current() && ownsForm())
+                if (current() && ownsForm()) {
+                    updateValidationPresentation = () => {};
                     errors.replaceChildren(
                         element(
                             'li',
@@ -2819,6 +2876,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 : uncertainSaveMessage
                         )
                     );
+                }
                 throw error;
             } finally {
                 retirePageReview();
@@ -2826,20 +2884,37 @@ const renderForm = (page: FormLoadedResult): void => {
             visitor.uncertainFormDraftScopes.delete(draft.scope);
             submit.disabled = false;
             discard.disabled = false;
+            updateValidationPresentation = () => {};
             errors.replaceChildren();
             if (normalized.type === 'error') {
                 formProgress?.resume();
-                for (const error of normalized.validationErrors)
-                    errors.append(
-                        element(
-                            'li',
-                            `${error.fieldTitle}: ${error.errorMessage}`
-                        )
-                    );
-                if (normalized.concurrentEditErrorMessage != null)
-                    errors.append(
-                        element('li', normalized.concurrentEditErrorMessage)
-                    );
+                const validation = normalized;
+                updateValidationPresentation = () => {
+                    if (formRetired || !ownsForm()) return;
+                    errors.replaceChildren();
+                    for (const error of validation.validationErrors) {
+                        const field = bindingOwner.controller
+                            .getState()
+                            .fields.some(
+                                (field) => field.fieldId === error.fieldId
+                            )
+                            ? bindingOwner.field(error.fieldId).getSnapshot()
+                            : undefined;
+                        errors.append(
+                            element(
+                                'li',
+                                canPresentFieldValidation(field)
+                                    ? `${field!.field!.title}: ${error.errorMessage}`
+                                    : 'A field needs attention before saving.'
+                            )
+                        );
+                    }
+                    if (validation.concurrentEditErrorMessage != null)
+                        errors.append(
+                            element('li', validation.concurrentEditErrorMessage)
+                        );
+                };
+                updateValidationPresentation();
                 status(
                     'The Form was not saved. Review the validation errors.',
                     true

@@ -28,7 +28,7 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
         );
         assert.equal('captureFormControllerDraftRevision' in forms, false);
         assert.equal('captureFormVisibilityRevision' in forms, false);
-        for (const { config, hideAt, notification = false } of [
+        for (const { config, hideAt, notification = false, aba = false } of [
             { config: { readOnly: true, hideAttachmentName: false } },
             { config: { readOnly: false, hideAttachmentName: false } },
             { config: { readOnly: true, hideAttachmentName: true } },
@@ -43,10 +43,11 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                 hideAt: 5,
             },
             ...[true, false].flatMap((readOnly) =>
-                [false, true].map((hide) => ({
+                [false, true, 'aba'].map((hide) => ({
                     config: { readOnly, hideAttachmentName: false },
                     hideAt: hide ? 5 : undefined,
                     notification: true,
+                    aba: hide === 'aba',
                 }))
             ),
         ]) {
@@ -127,7 +128,12 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
             const title = fields.field('fld_title');
             let ownershipChecks = 0,
                 armed = !notification,
-                hidden = false;
+                hidden = false,
+                stale = false;
+            // The precreated title binding marks the next visibility refresh before attachment listeners.
+            const stopTitle = title.subscribe(() => {
+                stale = false;
+            });
             const hostOptions = {
                 fields,
                 fieldId: 'fld_files',
@@ -135,6 +141,13 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                     if (armed && ++ownershipChecks === hideAt) {
                         assert.equal(title.setValue('Hidden').accepted, true);
                         hidden = true;
+                        if (aba) {
+                            assert.equal(
+                                title.setValue('Initial child').accepted,
+                                true
+                            );
+                            stale = true;
+                        }
                     }
                     return true;
                 },
@@ -144,12 +157,12 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
             if (notification) {
                 const second = ui.createFormFieldRendererHost(hostOptions);
                 const observed = [];
-                const listen = (snapshot) =>
-                    observed.push({ snapshot, hidden });
+                const listen = (listener) => (snapshot) =>
+                    observed.push({ snapshot, hidden, stale, listener });
                 const stops = [
-                    host.subscribe(listen),
-                    host.subscribe(listen),
-                    second.subscribe(listen),
+                    host.subscribe(listen(0)),
+                    host.subscribe(listen(1)),
+                    second.subscribe(listen(2)),
                 ];
                 assert.equal(
                     host.getSnapshot().fields[0].attachmentPresentation.status,
@@ -163,7 +176,55 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                 );
                 assert.ok(ownershipChecks >= 5);
                 assert.ok(observed.length > 0);
-                if (hideAt) {
+                if (aba) {
+                    assert.equal(hidden, true);
+                    for (
+                        let listener = 0;
+                        listener < stops.length;
+                        listener++
+                    ) {
+                        const staleReads = observed.filter(
+                            (entry) =>
+                                entry.listener === listener && entry.stale
+                        );
+                        assert.ok(staleReads.length > 0);
+                        for (const { snapshot } of staleReads) {
+                            assert.equal(snapshot.status, 'ready');
+                            assert.deepEqual(
+                                snapshot.fields[0].attachmentPresentation,
+                                { status: 'unavailable' }
+                            );
+                        }
+                        assert.ok(
+                            observed.some(
+                                (entry) =>
+                                    entry.listener === listener &&
+                                    !entry.stale &&
+                                    entry.snapshot.status === 'ready' &&
+                                    entry.snapshot.fields[0]
+                                        .attachmentPresentation.status ===
+                                        'ready'
+                            )
+                        );
+                    }
+                    const expected = {
+                        status: 'ready',
+                        rows: [
+                            { label: native.filename },
+                            { label: native.filename },
+                        ],
+                    };
+                    assert.equal(stale, false);
+                    assert.deepEqual(
+                        host.getSnapshot().fields[0].attachmentPresentation,
+                        expected
+                    );
+                    assert.deepEqual(
+                        second.getSnapshot().fields[0].attachmentPresentation,
+                        expected
+                    );
+                    assert.equal(title.getSnapshot().value, 'Initial child');
+                } else if (hideAt) {
                     assert.ok(observed.some((entry) => entry.hidden));
                     for (const entry of observed.filter(
                         (entry) => entry.hidden
@@ -187,6 +248,7 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
                 assert.equal(requests, 0);
                 assert.equal(fields.hasPendingFiles(), false);
                 stops.forEach((stop) => stop());
+                stopTitle();
                 second.dispose();
                 host.dispose();
                 fields.destroy();
@@ -243,6 +305,7 @@ export async function checkReadonlyAttachmentConsumer({ consumerDirectory }) {
             }
             assert.equal(requests, 0);
             assert.equal(fields.hasPendingFiles(), false);
+            stopTitle();
             revision++;
             assert.equal(host.getSnapshot().status, 'retired');
             revision--;

@@ -1520,3 +1520,138 @@ for (const readOnly of [true, false])
                 host.dispose();
                 fields.destroy();
             });
+
+for (const readOnly of [true, false])
+    for (const delivery of ['one', 'two-listeners', 'two-hosts'] as const)
+        it(`Form queued-notification hide-to-show ABA with stable recovery: readOnly=${readOnly}, delivery=${delivery}`, () => {
+            const loaded = loadedForm();
+            const schema = loaded.payload.fieldIdsToSchemas.fld_files;
+            assert.ok(schema.fieldType === 'multipleAttachments');
+            schema.miniExtConfig = {
+                readOnly,
+                hideAttachmentName: false,
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'visible-title',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'is',
+                                fieldType: 'singleLineText',
+                                idOrName: { type: 'id', id: 'fld_title' },
+                                value: 'Initial title',
+                            },
+                        },
+                    ],
+                },
+            };
+            const client = createMiniExtensionsClient({
+                apiOrigin: 'https://sdk.example.test',
+                fetch: async () => {
+                    throw new Error('No I/O');
+                },
+            });
+            const fields = createFormFieldBindings({
+                client,
+                loaded,
+                saveOptions: formSaveOptions(),
+                getScope: () => ({ ownerId: 'A', revision: 0 }),
+            });
+            const title = fields.field('fld_title');
+            let armed = false,
+                checks = 0,
+                stale = false,
+                roundTrips = 0;
+            // This precreated binding is notified before attachment bindings on each
+            // visibility refresh. It marks recovery independently of the fence API.
+            const stopTitle = title.subscribe(() => {
+                stale = false;
+            });
+            const options = {
+                fields,
+                fieldId: 'fld_files',
+                configurationRevision: () => 0,
+                isCurrent: () => {
+                    if (armed && ++checks === 5) {
+                        assert.equal(title.setValue('Hidden').accepted, true);
+                        assert.equal(
+                            title.setValue('Initial title').accepted,
+                            true
+                        );
+                        roundTrips++;
+                        stale = true;
+                    }
+                    return true;
+                },
+            };
+            const host = createFormFieldRendererHost(options);
+            const secondHost =
+                delivery === 'two-hosts'
+                    ? createFormFieldRendererHost(options)
+                    : null;
+            const observed: {
+                listener: number;
+                stale: boolean;
+                snapshot: FieldRendererHostSnapshot;
+            }[] = [];
+            const listen =
+                (listener: number) => (snapshot: FieldRendererHostSnapshot) =>
+                    observed.push({ listener, stale, snapshot });
+            const stops = [host.subscribe(listen(0))];
+            if (delivery !== 'one')
+                stops.push((secondHost ?? host).subscribe(listen(1)));
+            const expected = attachmentFacet(host).attachmentPresentation;
+            assert.equal(expected?.status, 'ready');
+            observed.length = 0;
+            armed = true;
+            assert.equal(
+                fields.controller.write('fld_title', 'Initial title'),
+                true
+            );
+            assert.equal(roundTrips, 1);
+            for (let listener = 0; listener < stops.length; listener++) {
+                const staleReads = observed.filter(
+                    (entry) => entry.listener === listener && entry.stale
+                );
+                assert.ok(
+                    staleReads.length > 0,
+                    `listener ${listener} must observe the stale interval`
+                );
+                for (const { snapshot } of staleReads) {
+                    assert.equal(snapshot.status, 'ready');
+                    if (snapshot.status === 'ready')
+                        assert.deepEqual(
+                            snapshot.fields[0].attachmentPresentation,
+                            { status: 'unavailable' }
+                        );
+                }
+                assert.ok(
+                    observed.some(
+                        (entry) =>
+                            entry.listener === listener &&
+                            !entry.stale &&
+                            entry.snapshot.status === 'ready' &&
+                            entry.snapshot.fields[0].attachmentPresentation
+                                ?.status === 'ready'
+                    ),
+                    `listener ${listener} must recover after visibility refresh`
+                );
+            }
+            assert.equal(stale, false);
+            assert.deepEqual(
+                attachmentFacet(host).attachmentPresentation,
+                expected
+            );
+            if (secondHost)
+                assert.deepEqual(
+                    attachmentFacet(secondHost).attachmentPresentation,
+                    expected
+                );
+            assert.equal(title.getSnapshot().value, 'Initial title');
+            stops.forEach((stop) => stop());
+            stopTitle();
+            secondHost?.dispose();
+            host.dispose();
+            fields.destroy();
+        });

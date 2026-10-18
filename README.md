@@ -132,9 +132,24 @@ compiler failure, and is not shipped. No source package settings are rewritten.
 ## Obtain the actual runtime configuration
 
 - Publish the Form or Portal through the existing miniExtensions workspace,
-  including permitted child create/edit Forms. Obtain its published share ID
-  through the normal Share flow. A share ID is not an admin extension, table or
-  record ID; unsaved builder settings are not the published visitor settings.
+  including permitted child create/edit Forms. The SDK's top-level `shareId`
+  input requires the stored `extension.shareId`. It is not an admin extension,
+  table or record ID; unsaved builder settings are not the published visitor
+  settings.
+- If the normal Share/Open flow gives you a default-domain public link of the
+  form `https://<default-host>/<shareId>`, use that first path segment as the
+  Share ID (not a following record ID or query string). A custom-domain link
+  can instead use `https://<custom-host>/<slug>`: a custom-domain slug is not the Share ID.
+  Do not copy that slug into `shareId` or assume changing the hostname converts
+  it into a Share ID.
+- If you only have a custom-domain link, obtain the stored `extension.shareId`
+  from your workspace administrator or deployment owner before connecting.
+  The existing authenticated workspace administration data contains it, but
+  the SDK does not expose that admin API. There is no public SDK discovery endpoint
+  that resolves a custom-domain URL/slug into the required Share ID, and no
+  dedicated SDK configuration card in the workspace. If the owner cannot
+  provide the ID, this integration prerequisite is unresolved; the browser
+  starter cannot discover it for you.
 - Obtain the deployment's HTTP(S) API origin serving `/api/v1` and `/api/trpc`.
   Supply an origin without a path, query, fragment or URL credentials. A public
   share URL or custom application URL does not establish that API origin.
@@ -292,6 +307,23 @@ literally as escaped text, preserving whitespace, line breaks and the native
 string. Masking precedes value access. This is a safe plain-text display stage;
 formatted Rich Text parity, parsing, links, resource loading and editing are not
 included.
+
+[AI Text presentation](docs/ui.md#react-ai-text-presentation) exports `AiTextField`,
+`AiTextFieldProps`, `AiTextFieldOptions` and `renderAiTextField` for the existing
+computed, read-only slot. It displays the supplied native object's `value` as
+escaped selectable text with whitespace preserved. Native state and stale flags
+remain unchanged; masking precedes value access. No generation, retry, prompt or
+reference inspection, parsing, links, hydration or editing is added.
+
+[Multiple Attachments adapter](docs/ui.md#react-multiple-attachments-adapter)
+exports `MultipleAttachmentsField` and `renderMultipleAttachmentsField` for
+editable Form slots with existing filtered snapshots and guarded actions.
+Choose, first-file Upload, Clear and Cancel remain explicit; Save stays separate.
+The headless contract provides an optional privacy-filtered label facet. This
+React adapter does not yet consume it, so read-only values retain the inert
+fallback `Attachment presentation unavailable`; read-only display parity in
+this adapter remains unsupported.
+The adapter never reads raw attachment values or creates previews/downloads.
 
 [Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
 `CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
@@ -477,7 +509,10 @@ still enforces published access and validation rules.
 Mounting a renderer performs no Save, upload or linked search. Visitor state is
 memory-only by default. With the starter’s remembering option, refresh requires
 reconnecting with the same settings and opting in to validate the remembered
-credential. Drafts and uncertain operations are never restored. Browser/provider compatibility, CORS and live persistence require
+credential. Ordinary drafts stay in memory; eligible anonymous create Forms
+offer a separate [opt-in progress restore](docs/browser-lifecycle.md#optional-create-progress)
+for explicitly selected nonsensitive scalar answers, validated through a fresh
+load. Files and uncertain operations are never restored. Browser/provider compatibility, CORS and live persistence require
 separate deployment testing. Use the supplied guides rather than interpreting a
 typed configuration property as an implemented control.
 
@@ -533,7 +568,8 @@ Field presentation and choice workflows beyond the
 [one-page field support](docs/forms.md#one-page-conditional-field-visibility)
 and [configured scalar choices](docs/ui.md#configured-scalar-choice-availability)
 remain application-owned, along with section headers/collapse, pages,
-Save & Continue, progress persistence, CAPTCHA/fingerprint/GPS collection and
+Save & Continue, progress persistence beyond the
+[bounded create-progress recipe](docs/browser-lifecycle.md#optional-create-progress), CAPTCHA/fingerprint/GPS collection and
 advanced field widgets. Static select limits and display labels alone do not
 evaluate option conditions. The starter uses final Save and supplies no
 general conditional evaluator or CAPTCHA widget. The existing server still
@@ -563,11 +599,14 @@ explicitly composes compilation with typed formula evaluation.
 [bounded one-page field visibility](docs/forms.md#one-page-conditional-field-visibility)
 using direct scalar drivers and frontend section propagation. The starter
 recomputes after accepted edits and preserves hidden native drafts and Save
-types. Explicit edit-mode `hideFieldIfEmpty` supports the flat direct scalar
-subset, including readonly fields; null/blank text, checkbox false, rating zero
+types. Explicit edit-mode `hideFieldIfEmpty` supports direct scalar fields,
+including readonly fields. Ordered composition supports leading fields and
+ordinary sections that do not apply field conditions to their members;
+the single-field and legacy-flat adapters remain conservative for sections.
+Null/blank text, checkbox false, rating zero
 and blank barcode text hide while ordinary numeric zero remains populated.
 Unsupported predicates, computed/linked drivers, richer empty-hiding targets
-and section contexts with active empty hiding return explicit blocked outcomes.
+and active empty hiding inside applied-condition sections return explicit blocked outcomes.
 These presentation helpers do not grant permissions or supply a backend
 filtered-record projection.
 

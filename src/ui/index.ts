@@ -120,3 +120,5 @@ export type {
     PortalRenderRow,
     PortalRenderCell,
 } from './portalRenderScope.js';
+
+export type { AttachmentPresentation } from './attachmentPresentation.js';

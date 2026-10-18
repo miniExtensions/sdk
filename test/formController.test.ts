@@ -1,3 +1,4 @@
+import { captureFormControllerDraftRevision } from '../src/forms/controller.js';
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
@@ -619,4 +620,51 @@ describe('headless Form controller', () => {
         assert.equal(f.controller.write('fld_title', 'Late write'), false);
         await assert.rejects(f.controller.save(), errorCode('disposed'));
     });
+});
+
+it('internal draft revision fence reads committed writes without callbacks and rejects same-revision owner replacement', () => {
+    const f = fixture();
+    let forbidScopeRead = false;
+    const options = {
+        ...f.options,
+        getScope: () => {
+            assert.equal(
+                forbidScopeRead,
+                false,
+                'revision fence must not invoke scope callbacks'
+            );
+            return { ownerId: 'visitor_A', revision: 0 };
+        },
+    };
+    f.controller.destroy();
+    const controller = createFormController(options);
+    const revision = controller.getState().draftRevision;
+    forbidScopeRead = true;
+    const unchanged = captureFormControllerDraftRevision(controller, revision);
+    assert.equal(unchanged?.(), true);
+    forbidScopeRead = false;
+    assert.equal(controller.write('fld_title', 'Committed'), true);
+    forbidScopeRead = true;
+    assert.equal(unchanged?.(), false);
+    forbidScopeRead = false;
+    const beforeResetRevision = controller.getState().draftRevision;
+    const beforeReset = captureFormControllerDraftRevision(
+        controller,
+        beforeResetRevision
+    );
+    controller.reset(options);
+    assert.equal(controller.getState().draftRevision, beforeResetRevision);
+    forbidScopeRead = true;
+    assert.equal(beforeReset?.(), false);
+    const current = captureFormControllerDraftRevision(
+        controller,
+        beforeResetRevision
+    );
+    assert.equal(current?.(), true);
+    f.store.clear();
+    assert.equal(current?.(), false);
+    forbidScopeRead = false;
+    controller.destroy();
+    assert.equal(current?.(), false);
+    assert.equal(f.calls.length, 0);
 });

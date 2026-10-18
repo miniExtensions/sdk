@@ -129,6 +129,25 @@ export type FormController = {
     destroy(): void;
 };
 
+const draftRevisionCaptures = new WeakMap<
+    FormController,
+    (expectedRevision: number | null) => () => boolean
+>();
+
+/** Internal presentation fence: no ownership callbacks, native-value reads, or notifications. */
+export function captureFormControllerDraftRevision(
+    controller: FormController,
+    expectedRevision: number | null
+): (() => boolean) | null {
+    try {
+        return (
+            draftRevisionCaptures.get(controller)?.(expectedRevision) ?? null
+        );
+    } catch {
+        return null;
+    }
+}
+
 const readScope = (getScope: () => FormOwnerScope): FormOwnerScope => {
     const scope = getScope();
     if (
@@ -396,7 +415,7 @@ export const createFormController = (
         if (!observeScope()) throw scopeError();
     };
 
-    return {
+    const controller: FormController = {
         getState: () => {
             observeScope();
             return state();
@@ -725,4 +744,26 @@ export const createFormController = (
             );
         },
     };
+    draftRevisionCaptures.set(controller, (revision) => {
+        const owner = context;
+        const epoch = generation;
+        return () => {
+            try {
+                // Draft writes commit before emit(); nested emissions may be queued.
+                // Read only the store's scalar revision, never getState()/observeScope().
+                const latest = owner.store.revision(owner.handle);
+                return (
+                    revision !== null &&
+                    latest === revision &&
+                    owner === context &&
+                    epoch === generation &&
+                    status !== 'stale' &&
+                    status !== 'disposed'
+                );
+            } catch {
+                return false;
+            }
+        };
+    });
+    return controller;
 };

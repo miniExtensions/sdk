@@ -2280,19 +2280,42 @@ export function createLinkedChildPanel(
                             null,
                             ...s.fields.map((f) =>
                                 h('div', { key: f.fieldId }, f.node)
+                            ),
+                            h(
+                                'button',
+                                {
+                                    type: 'button',
+                                    id: 'child-back',
+                                    disabled:
+                                        !s.page.canBack || phase === 'saving',
+                                    onClick: s.actions.back,
+                                },
+                                'Back'
+                            ),
+                            h(
+                                'button',
+                                {
+                                    type: 'button',
+                                    id: 'child-next',
+                                    disabled:
+                                        !s.page.canNext || phase === 'saving',
+                                    onClick: s.actions.next,
+                                },
+                                'Next'
+                            ),
+                            h(
+                                'button',
+                                {
+                                    type: 'button',
+                                    id: 'save',
+                                    disabled:
+                                        !s.page.canSubmit || phase === 'saving',
+                                    onClick: () => owner.save(revision),
+                                },
+                                'Save'
                             )
                         ),
                 }),
-            child &&
-                h(
-                    'button',
-                    {
-                        type: 'button',
-                        id: 'save',
-                        onClick: () => owner.save(revision),
-                    },
-                    'Save'
-                ),
             h(
                 'button',
                 { type: 'button', id: 'close', onClick: () => owner.close() },
@@ -2333,9 +2356,20 @@ remount preserve the child draft. Guard retired or unavailable snapshots with
 presentation. The installed-package checks execute this recipe against installed
 ESM and CJS entrypoints and actual React.
 
-This slice supports final one-page Save for ordinary child Create and Edit.
-Prepared Review, compute, captcha, automatic submission, nested child flows
-and multipage child flows remain unsupported. Existing child
+This slice supports ordinary one-page and manual multipage child Create and
+Edit. The same borrowed page owner supplies Back/Next, current-page validation,
+conditional page skipping and final all-page validation. Navigation performs no
+load, Save, journal write or native-value change. It advances the coordinator's
+revision, including Back → Next without edits, so retained Save callbacks must
+use the newly rendered owner revision. The panel's navigation actions capture
+the page revision; final Save always calls `owner.save(revision)` to retain its
+receipt, reconciliation and uncertainty lifecycle. Do not call a rendering
+scope's submit action directly for a child Save. Unfinished inputs and pending
+files keep their existing navigation/Save gates. Unmount retains pages and draft;
+Close or owner replacement unsubscribes and retires the old pages.
+
+Prepared Review, compute, captcha, automatic submission and nested child flows
+remain unsupported. Unknown page modes are refused. Existing child
 validation and backend validation remain authoritative. Successful reconciliation
 updates the shared parent's native linked IDs, rich presentation and dirty state;
 other parent values remain in the shared draft.

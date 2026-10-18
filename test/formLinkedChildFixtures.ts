@@ -248,3 +248,41 @@ export const validationError: Extract<SaveFormResult, { type: 'error' }> = {
     ],
     formErrors: { fld_title: 'Synthetic validation error' },
 };
+
+// Three ordinary manual pages. Relationship/native-only values remain complete.
+export function pagedChildForm(recordId?: string): FormLoadedResult {
+    const page = childForm('edit');
+    page.payload.publicFields.state.multiPageFormMode = 'multi-page';
+    page.payload.publicFields.state.autoSubmitAfterPrefill = false;
+    for (const [id, header] of [
+        ['fld_note', 'Second'],
+        ['fld_last', 'Last'],
+    ] as const) {
+        const schema = structuredClone(title);
+        schema.airtableField.id = id;
+        schema.airtableField.name = id;
+        schema.airtableField.isPrimaryField = false;
+        schema.miniExtConfig = { headerSectionTitle: header, required: true };
+        page.payload.fieldIdsToSchemas[id] = schema;
+        page.payload.formRecord.data[id] =
+            id === 'fld_note' ? 'Second native answer' : 'Last native answer';
+    }
+    page.payload.fieldIdsToSchemas.fld_title!.miniExtConfig = {
+        required: true,
+    };
+    page.payload.fieldIdsInForm = ['fld_title', 'fld_note', 'fld_last'];
+    page.payload.fieldNamesToSchemas = Object.fromEntries(
+        Object.values(page.payload.fieldIdsToSchemas).map((schema) => [
+            schema.airtableField.name,
+            structuredClone(schema),
+        ])
+    );
+    if (recordId !== undefined)
+        page.payload.formRecord = {
+            type: 'edit',
+            tableId: 'tbl_child',
+            recordId,
+            data: page.payload.formRecord.data,
+        };
+    return page;
+}

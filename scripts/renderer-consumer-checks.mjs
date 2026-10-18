@@ -1,3 +1,4 @@
+import { checkReadonlyAttachmentConsumer } from './readonly-attachment-consumer-checks.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { transform } from 'esbuild';
@@ -86,7 +87,7 @@ const slot = (kind) => `render${kind[0].toUpperCase()}${kind.slice(1)}Field`;
 // Compiled before installing React: every callback is contextually correlated by physical kind.
 export const rendererTypedConsumer = `
 import type { AirtableValue, AirtableCollaborator, AirtableAttachment, AirtableBarcodeValue, UploadFileResult } from '@miniextensions/sdk';
-import type { FieldKind, FieldSchema, FieldMetadata, FieldConfig, FieldReadValue, FieldRendererCapability, FieldRendererProps, FieldRendererPropsUnion, FieldRendererSlots, LinkedRecordsRendererProps, FormLinkedRecordsRendererProps, PortalLinkedPillsRendererProps, PortalLinkedPillOccurrence } from '@miniextensions/sdk/ui';
+import type { AttachmentPresentation, FieldKind, FieldSchema, FieldMetadata, FieldConfig, FieldReadValue, FieldRendererCapability, FieldRendererProps, FieldRendererPropsUnion, FieldRendererSlots, LinkedRecordsRendererProps, FormLinkedRecordsRendererProps, PortalLinkedPillsRendererProps, PortalLinkedPillOccurrence } from '@miniextensions/sdk/ui';
 import type { FormLinkedRecordsSnapshot, FormLinkedRecordsFacet } from '@miniextensions/sdk/forms';
 import { FIELD_RENDERER_SLOTS, dispatchField } from '@miniextensions/sdk/ui';
 const slots: Required<FieldRendererSlots<string>> = {
@@ -166,6 +167,22 @@ declare const ordinary: FieldRendererProps<'singleLineText'>;
 const wrongPhysicalKind: FieldRendererProps<'singleLineText'> = {...ordinary,linkedRecords:linkedPresentation};
 void [linkedPresentation,optionalLinked,fakeAcceptedDetail,fakePortal,wrongPhysicalKind];
 declare const attachment: FieldRendererProps<'multipleAttachments'>;
+const facet: AttachmentPresentation | undefined = attachment.attachmentPresentation;
+if (facet?.status === 'ready') {
+ const label: string = facet.rows[0].label;
+ // @ts-expect-error no native identifier in the facet
+ facet.rows[0].id;
+ // @ts-expect-error no native index in the facet
+ facet.rows[0].nativeIndex;
+ // @ts-expect-error no URL in the facet
+ facet.rows[0].url;
+ // @ts-expect-error no actions in the facet
+ facet.remove(0);
+ void label;
+}
+// @ts-expect-error only physical attachment props accept the facet
+const wrongFacet: FieldRendererProps<'singleLineText'> = {...ordinary, attachmentPresentation: { status: 'masked' }};
+void wrongFacet;
 if(attachment.capability.type==='editable' && attachment.capability.attachment){
  const selected:boolean=attachment.capability.attachment.select([] as readonly File[]);
  const uploading:Promise<boolean>=attachment.capability.attachment.upload();
@@ -247,6 +264,13 @@ export async function checkRendererConsumer({
         )
     );
     const cjs = consumer('@miniextensions/sdk/ui');
+    assert.equal(
+        await checkReadonlyAttachmentConsumer({ consumerDirectory }),
+        26
+    );
+    console.log(
+        'Installed label-only attachment presentation: 26 ESM/CJS groups passed; synthetic owners, no I/O.'
+    );
     let checks = 0;
     for (const api of [ui, cjs]) {
         assert.deepEqual(

@@ -3475,8 +3475,9 @@ cause automatic append or retry. Pending File names and other metadata are not
 read by this component; only its pending queue count is shown.
 
 Read-only Form and all Portal attachment slots are **unsupported for attachment
-display** because their current contract supplies no privacy-filtered attachment
-snapshot. These slots, editable slots with missing guarded actions, and malformed
+display** in this React adapter. The headless contract provides an optional
+privacy-filtered label facet. This React adapter does not yet consume it, so
+read-only values retain the inert fallback. These slots, editable slots with missing guarded actions, and malformed
 facets display only `Attachment presentation unavailable`, with no chooser,
 actions, attachment count, filename or URL. The adapter never inspects raw values
 to improve that fallback. This slice does not establish read-only display parity.
@@ -3516,3 +3517,53 @@ bundle hashes. Serve the generated output on loopback for explicit interactions.
 Fixture generation and injected DOM events do not establish native browser
 behavior; execute the browser proof separately. All fixture uploads and Saves
 are synthetic and establish no live-backend, clipboard or screen-reader result.
+
+### Read-only attachment labels
+
+Accepted Form fields and Portal detail fields can expose the optional
+`attachmentPresentation` on `FieldRendererProps<'multipleAttachments'>`:
+
+```ts
+import type { AttachmentPresentation } from '@miniextensions/sdk/ui';
+
+const presentation: AttachmentPresentation = {
+    status: 'ready',
+    rows: [{ label: 'Attachment' }],
+};
+```
+
+The other states are `{ status: 'masked' }` and `{ status: 'unavailable' }`,
+without rows or counts. Render labels as literal text, never HTML. Visible order
+and duplicates are preserved. The facet contains no URLs, IDs, native indexes,
+Files, hidden counts, or actions. Missing safe configuration or malformed policy
+rows fail closed. Either `obscurePassword` or `maskPasswordOnLoginScreen`
+conceals the whole facet before its new lazy policy read. Filenames require
+`hideAttachmentName === false`; otherwise visible rows use `Attachment`.
+
+The facet itself is read-only and can coexist with unchanged editable Form
+capabilities. Form uses the original loaded descriptor and existing persisted add-only
+baseline semantics. It does not manufacture a read-only descriptor for policy
+evaluation. Portal uses returned detail policy; an accepted child configuration
+can further restrict names or mask presentation, but cannot loosen returned
+policy. Every applicable configuration must explicitly permit filenames. Portal
+add-only policies return unavailable because that surface supplies no safe
+persisted baseline. Missing configuration is unavailable, not an empty list.
+The final Form publication fence compares the revision used to compute cached
+visibility with the committed draft revision after the last ownership callback.
+This internal scalar read does not invoke ownership callbacks or clone native
+values, and does not depend on nested notifications being delivered. Notification
+counters alone are insufficient because the controller queues nested emissions. A concurrent Form change makes only the new facet unavailable for that
+read; a subsequent stable read can publish labels again. Reentrant host reads also
+withhold this facet while an outer read is active.
+Hosts recheck owner and configuration before publishing; observed retirement
+stays retired, including an observed change back to an earlier configuration.
+Callers must advance the configuration revision for replacements, including ABA.
+
+This is an additive display contract. It creates no controller, recovery
+resource, hydration, transport, or write. Existing native `FieldValueMap`, values,
+attachment actions, editable behavior, and native cloning/fingerprinting remain
+unchanged. Those existing native paths still access native data: the new lazy
+projection boundary is not a universal raw-value nonaccess or security boundary.
+Linked-detail and Portal inline expansion/cells do not receive this facet.
+The separate editable React adapter in PR191 is not changed or duplicated;
+read-only React consumption requires a separately coordinated adapter change.

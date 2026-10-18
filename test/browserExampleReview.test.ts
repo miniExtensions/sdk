@@ -3428,3 +3428,301 @@ describe('actual browser starter post-save feedback', () => {
         }
     }
 });
+
+describe('actual browser starter child parent refresh identity', () => {
+    const marker = 'prefill_Title=ACCEPTED_PARENT_REFRESH';
+    const parentPage = (initialMarker = false) => {
+        const parent = portalPage({
+            customViews: [
+                { id: 'view_example', config: { name: 'Example view' } },
+                {
+                    id: 'view_refresh',
+                    config: {
+                        name: 'Refreshed parent view',
+                        customViewConditions: {
+                            logicalOperator: 'and',
+                            conditions: [
+                                {
+                                    type: 'singleCondition',
+                                    id: 'condition_parent_refresh',
+                                    setting: {
+                                        type: 'is',
+                                        idOrName: {
+                                            type: 'id',
+                                            id: 'fld_prefill',
+                                        },
+                                        fieldType: 'singleLineText',
+                                        value: marker,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                },
+            ],
+        });
+        parent.payload.usersTableFields = [
+            structuredClone(
+                parent.payload.fieldIdsToSchemas.fld_prefill!.airtableField
+            ),
+        ];
+        if (initialMarker) parent.payload.formRecord.data.fld_prefill = marker;
+        return parent;
+    };
+    const success = (
+        parent: { id: string; fields: Record<string, unknown> } | null
+    ) => ({
+        ...savedForm(),
+        record: {
+            id: 'record_deleted',
+            fields: { fld_title: 'Saved child answer' },
+        },
+        tableId: 'table_children',
+        loggedInUserRecord: parent,
+        context: { type: 'modal', newTableIdsToLinkedTableStates: {} },
+        postSubmissionWarnings: [],
+        postSubmissionNotifications: [],
+    });
+    const open = async (
+        test: TestContext,
+        parent: PortalLoadedResult,
+        save: (input: SaveFormInput) => Promise<Response>,
+        review = false
+    ) => {
+        const child = deletableChild();
+        child.payload.publicFields.state.promptUserBeforeSubmission = review;
+        const childLoads: LoadExtensionInput[] = [];
+        let reads = 0;
+        const fixture = await mount(test, child, {
+            initialPortal: parent,
+            childLoads,
+            read: async (url) => {
+                assert.equal(
+                    url.searchParams.get('route'),
+                    'fetchRecordsForLinkedTableOnPortal'
+                );
+                reads++;
+                return new Response(JSON.stringify(deletionRecords(child)));
+            },
+            save,
+        });
+        const { document } = fixture.window;
+        const idle = () =>
+            document.getElementById('screen')?.getAttribute('aria-busy') ===
+            'false';
+        const viewOffered = () =>
+            Array.from(document.querySelectorAll('option')).some(
+                (option) => option.textContent === 'Refreshed parent view'
+            );
+        fixture.button('Load records').click();
+        await waitFor(() => reads === 1 && idle());
+        const initialViewOffered = viewOffered();
+        const retained = [
+            'Load records',
+            'Next page',
+            'Create record',
+            'Open Form',
+        ].map((label) => fixture.button(label));
+        const oldPortal = retained[0]!.closest('section');
+        assert.ok(oldPortal);
+        fixture.button('Open Form').click();
+        await waitFor(() => childLoads.length === 1 && idle());
+        const oldBack = fixture.button('Back to Portal');
+        const oldForm = fixture.field('fld_title').closest('form');
+        assert.ok(oldForm);
+        fixture.edit('fld_title', 'Saved child answer');
+        const submit = async () => {
+            if (review) {
+                const dialog = await fixture.openReview();
+                fixture.button('Confirm', dialog).click();
+            } else fixture.submit();
+        };
+        const saved = async () => {
+            await submit();
+            await waitFor(
+                () =>
+                    idle() &&
+                    document
+                        .getElementById('status')
+                        ?.textContent?.startsWith(
+                            'Saved record record_deleted.'
+                        ) === true
+            );
+            assert.equal(fixture.saves.length, 1);
+            assert.equal(fixture.saves[0]?.formRecord.type, 'edit');
+            assert.equal(
+                fixture.saves[0]?.formRecord.data.fld_title,
+                'Saved child answer'
+            );
+            assert.deepEqual(fixture.saves[0]?.formFieldIdsWithUnsavedChanges, [
+                'fld_title',
+            ]);
+            assert.equal(fixture.saves[0]?.isComputeMode, false);
+            assert.equal(reads, 1);
+            assert.equal(fixture.loads(), 2);
+            assert.doesNotMatch(
+                document.getElementById('screen')?.textContent ?? '',
+                /may have completed/
+            );
+        };
+        return {
+            fixture,
+            document,
+            idle,
+            viewOffered,
+            initialViewOffered,
+            retained,
+            oldPortal,
+            oldBack,
+            oldForm,
+            childLoads,
+            reads: () => reads,
+            submit,
+            saved,
+        };
+    };
+    for (const review of [false, true]) {
+        for (const parentId of ['record_foreign', ' record_parent ']) {
+            it(`retires the cached Portal for parent ${JSON.stringify(parentId)} after ${review ? 'Review' : 'ordinary'} child Save without losing known success`, async (test) => {
+                const h = await open(
+                    test,
+                    parentPage(),
+                    async () =>
+                        new Response(
+                            JSON.stringify(
+                                success({
+                                    id: parentId,
+                                    fields: { fld_prefill: marker },
+                                })
+                            )
+                        ),
+                    review
+                );
+                assert.equal(h.initialViewOffered, false);
+                await h.saved();
+                assert.equal(
+                    h.viewOffered(),
+                    false,
+                    'Foreign parent fields must not activate an eligible view.'
+                );
+                assert.equal(
+                    h.oldPortal.isConnected,
+                    false,
+                    'A mismatched parent refresh must not revive the cached Portal.'
+                );
+                assert.equal(h.oldForm.isConnected, false);
+                assert.equal(h.oldBack.isConnected, false);
+                assert.match(
+                    h.document.getElementById('screen')?.textContent ?? '',
+                    /parent Portal refresh did not match/
+                );
+                assert.match(
+                    h.document.getElementById('screen')?.textContent ?? '',
+                    /Choose Reload when ready/
+                );
+                for (const action of [...h.retained, h.oldBack])
+                    action.dispatchEvent(new h.fixture.window.Event('click'));
+                h.oldForm.dispatchEvent(
+                    new h.fixture.window.Event('submit', {
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+                await settled();
+                assert.equal(h.reads(), 1);
+                assert.equal(h.fixture.loads(), 2);
+                assert.equal(h.fixture.saves.length, 1);
+                h.fixture.button('Reload').click();
+                await waitFor(() => h.fixture.loads() === 3 && h.idle());
+                assert.equal(h.viewOffered(), false);
+                h.fixture.button('Load records').click();
+                await waitFor(() => h.reads() === 2 && h.idle());
+                h.fixture.button('Open Form').click();
+                await waitFor(() => h.childLoads.length === 2 && h.idle());
+                assert.equal(h.fixture.field('fld_title').isConnected, true);
+                assert.equal(h.fixture.button('Save').disabled, false);
+                assert.equal(
+                    h.fixture.saves.length,
+                    1,
+                    'Explicit reads must not replay the earlier accepted Save.'
+                );
+                h.fixture.edit('fld_title', 'Fresh unsaved child answer');
+                const freshForm = h.fixture.field('fld_title').closest('form');
+                for (const action of [...h.retained, h.oldBack])
+                    action.dispatchEvent(new h.fixture.window.Event('click'));
+                h.oldForm.dispatchEvent(
+                    new h.fixture.window.Event('submit', {
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                );
+                await settled();
+                assert.equal(h.reads(), 2);
+                assert.equal(h.fixture.loads(), 4);
+                assert.equal(h.fixture.saves.length, 1);
+                assert.equal(freshForm?.isConnected, true);
+                assert.equal(
+                    h.fixture.field('fld_title').value,
+                    'Fresh unsaved child answer'
+                );
+            });
+        }
+    }
+    it('accepts a matching parent identity and applies its authoritative field replacement', async (test) => {
+        const h = await open(
+            test,
+            parentPage(),
+            async () =>
+                new Response(
+                    JSON.stringify(
+                        success({
+                            id: 'record_parent',
+                            fields: { fld_prefill: marker },
+                        })
+                    )
+                )
+        );
+        await h.saved();
+        assert.equal(h.oldPortal.isConnected, true);
+        assert.equal(h.viewOffered(), true);
+        assert.doesNotMatch(
+            h.document.getElementById('screen')?.textContent ?? '',
+            /parent Portal refresh did not match/
+        );
+    });
+    it('accepts a matching sparse parent as a replacement that removes prior eligibility', async (test) => {
+        const h = await open(
+            test,
+            parentPage(true),
+            async () =>
+                new Response(
+                    JSON.stringify(success({ id: 'record_parent', fields: {} }))
+                )
+        );
+        assert.equal(h.initialViewOffered, true);
+        await h.saved();
+        assert.equal(h.oldPortal.isConnected, true);
+        assert.equal(h.viewOffered(), false);
+        assert.doesNotMatch(
+            h.document.getElementById('screen')?.textContent ?? '',
+            /parent Portal refresh did not match/
+        );
+    });
+    it('preserves the existing null-parent Save completion', async (test) => {
+        const h = await open(
+            test,
+            parentPage(),
+            async () => new Response(JSON.stringify(success(null)))
+        );
+        await h.saved();
+        assert.equal(h.oldPortal.isConnected, false);
+        assert.match(
+            h.document.getElementById('screen')?.textContent ?? '',
+            /Choose Reload when ready/
+        );
+        assert.doesNotMatch(
+            h.document.getElementById('screen')?.textContent ?? '',
+            /parent Portal refresh did not match/
+        );
+    });
+});

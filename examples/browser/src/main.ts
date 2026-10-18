@@ -851,14 +851,22 @@ const renderForm = (page: FormLoadedResult): void => {
     if (visitor.root != null)
         card.append(
             button('Back to Portal', () => {
-                if (
-                    formRetired ||
-                    !card.isConnected ||
-                    visitors[activeVisitor] !== visitor ||
-                    visitor.screen !== page ||
-                    visitor.formLoadVersion !== loadVersion
-                )
+                const currentBack = (): boolean =>
+                    !formRetired &&
+                    card.isConnected &&
+                    visitors[activeVisitor] === visitor &&
+                    visitor.screen === page &&
+                    visitor.formLoadVersion === loadVersion;
+                if (!currentBack()) return;
+                const pending = mayUseForm() && pendingFiles.pending();
+                if (!currentBack()) return;
+                if (pending) {
+                    status(
+                        'Upload or clear pending file selections before returning to the Portal.',
+                        true
+                    );
                     return;
+                }
                 visitor.screen = visitor.root;
                 visitor.formContext = { type: 'direct-url' };
                 visitor.formParentScope = null;

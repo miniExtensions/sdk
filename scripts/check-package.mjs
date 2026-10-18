@@ -736,6 +736,38 @@ if (getFormattedDuration('', 'h:mm') !== '') throw new Error('Empty duration for
 if (getFormattedDuration('60', 'h:mm') !== '1:00') throw new Error('Default duration minutes failed');
 if (getFormattedDuration('60', 'h:mm', true) !== '0:01') throw new Error('Explicit duration seconds failed');
 `;
+    const originTransportChecks = `
+const originCheckTimer = setTimeout(() => {console.error('Installed origin checks did not complete');process.exitCode=1;},10000);
+(async () => {
+    const input = {shareId:'share_origin_synthetic',recordId:null,query:{},context:{type:'direct-url'}};
+    for (const apiOrigin of [undefined, 'https://private-deployment.example/']) {
+        const expected = new URL(apiOrigin === undefined ? DEFAULT_API_ORIGIN : apiOrigin).origin;
+        const calls = [];
+        const client = createMiniExtensionsClient({apiOrigin,fetch:async (url,init) => {
+            const target = new URL(String(url));
+            if (target.origin !== expected || init?.credentials !== 'omit') throw new Error('Installed origin/credential routing mismatch');
+            calls.push(target);
+            return new Response(JSON.stringify(target.pathname.startsWith('/api/trpc/') ? {result:{data:{}}} : {}),{headers:{'Content-Type':'application/json'}});
+        }});
+        if (calls.length !== 0) throw new Error('Installed client constructed with I/O');
+        await client.loadExtension(input);
+        await client.portals.getUserRecord({extensionAccessToken:'SYNTHETIC_ORIGIN_TOKEN'});
+        if (calls.length !== 2 || !calls[0].pathname.startsWith('/api/v1') || !calls[1].pathname.startsWith('/api/trpc/')) throw new Error('Installed transport coverage mismatch');
+    }
+    const calls = [];
+    const client = createMiniExtensionsClient({apiOrigin:'https://private-deployment.example',fetch:async url => {
+        calls.push(new URL(String(url)).origin);
+        throw new Error('Synthetic deployment failure');
+    }});
+    let rejected = false;
+    try {await client.loadExtension(input);} catch {rejected = true;}
+    if (!rejected || calls.length !== 1 || calls[0] !== 'https://private-deployment.example') throw new Error('Installed deployment failure changed origin or was replayed');
+    console.log('Installed runtime origin defaults: default/override v1+tRPC and no-fallback checks passed on '+process.version);
+})().catch(error => {console.error(error);process.exitCode=1;}).finally(() => clearTimeout(originCheckTimer));
+`;
+    const originProofSuccess =
+        'Installed runtime origin defaults: default/override v1+tRPC and no-fallback checks passed on ' +
+        process.version;
     const consumer = `
 import { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { AirtableFieldType as PublicFieldType } from '@miniextensions/sdk/field-types';
@@ -772,9 +804,17 @@ export const display: string = formatMultiSelectValue(removeMarkdown('**Alpha**'
         .replace('export const display: string', 'export const display');
     writeFileSync(
         join(temporaryDirectory, 'consumer.mjs'),
-        javascriptConsumer + formattingChecks + parserChecks
+        javascriptConsumer +
+            formattingChecks +
+            parserChecks +
+            originTransportChecks
     );
-    run(process.execPath, ['consumer.mjs']);
+    assert(
+        run(process.execPath, ['consumer.mjs'])
+            .split('\n')
+            .includes(originProofSuccess)
+    );
+    console.log('ESM: ' + originProofSuccess);
 
     writeFileSync(
         join(temporaryDirectory, 'consumer.cjs'),
@@ -792,9 +832,15 @@ for (const options of [undefined, {}, {apiOrigin:undefined}]) {
 if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
 ${formattingChecks}
-${parserChecks}`
+${parserChecks}
+${originTransportChecks}`
     );
-    run(process.execPath, ['consumer.cjs']);
+    assert(
+        run(process.execPath, ['consumer.cjs'])
+            .split('\n')
+            .includes(originProofSuccess)
+    );
+    console.log('CommonJS: ' + originProofSuccess);
 
     // Start cold with a deliberately small stack: a warm/default-stack process
     // can hide recursive unary parsing failures on other Node builds.

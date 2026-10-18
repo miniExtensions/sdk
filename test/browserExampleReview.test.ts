@@ -2264,3 +2264,225 @@ describe('actual browser starter prepared review', () => {
         assert.equal(detailReads, 1);
     });
 });
+
+describe('actual starter pending-file Portal Back', () => {
+    const open = async (test: TestContext, hidden = false, review = false) => {
+        const child = deletableChild();
+        child.payload.publicFields.state.allowDeletingRecords = false;
+        child.payload.publicFields.state.promptUserBeforeSubmission = review;
+        const schema = loadedForm().payload.fieldIdsToSchemas.fld_files!;
+        if (hidden)
+            schema.miniExtConfig = {
+                conditionalFields: {
+                    logicalOperator: 'and',
+                    conditions: [
+                        {
+                            id: 'pending-visible',
+                            type: 'singleCondition',
+                            setting: {
+                                type: 'is',
+                                fieldType: 'singleLineText',
+                                idOrName: { type: 'id', id: 'fld_title' },
+                                value: 'Initial title',
+                            },
+                        },
+                    ],
+                },
+            };
+        child.payload.fieldIdsToSchemas.fld_files = schema;
+        child.payload.fieldIdsInForm.push('fld_files');
+        const native = [
+            {
+                id: 'att_original',
+                url: 'https://files.example.test/original',
+                filename: 'original.txt',
+            },
+        ];
+        child.payload.formRecord.data.fld_files = native;
+        const childLoads: LoadExtensionInput[] = [];
+        let reads = 0,
+            uploadRequests = 0;
+        const fixture = await mount(test, child, {
+            initialPortal: portalPage(),
+            childLoads,
+            read: async (url) => {
+                if (
+                    url.searchParams.get('route') ===
+                    'fetchRecordsForLinkedTableOnPortal'
+                ) {
+                    reads++;
+                    return new Response(JSON.stringify(deletionRecords(child)));
+                }
+                uploadRequests++;
+                throw new Error('Synthetic uncertain upload');
+            },
+        });
+        const { document } = fixture.window;
+        const idle = () =>
+            document.getElementById('screen')?.getAttribute('aria-busy') ===
+            'false';
+        fixture.button('Load records').click();
+        await waitFor(() => reads === 1 && idle());
+        const portal = fixture.button('Load records').closest('section');
+        fixture.button('Open Form').click();
+        await waitFor(() => childLoads.length === 1 && idle());
+        const fileInput = () => {
+            const input = document.querySelector(
+                '[data-pending-field-id="fld_files"]'
+            );
+            assert.ok(input instanceof fixture.window.HTMLInputElement);
+            return input;
+        };
+        const select = (name: string) => {
+            const input = fileInput();
+            const transfer = new fixture.window.DataTransfer();
+            const file = new fixture.window.File(['pending content'], name, {
+                type: 'text/plain',
+            });
+            transfer.items.add(file);
+            input.files = transfer.files as unknown as typeof input.files;
+            input.dispatchEvent(
+                new fixture.window.Event('change', { bubbles: true })
+            );
+            return { input, file };
+        };
+        return {
+            ...fixture,
+            document,
+            child,
+            childLoads,
+            idle,
+            portal,
+            fileInput,
+            select,
+            reads: () => reads,
+            uploadRequests: () => uploadRequests,
+            native,
+        };
+    };
+
+    for (const review of [false, true])
+        it(`retains the current selected File until explicit clear before Portal Back, review=${review}`, async (test) => {
+            const h = await open(test, false, review);
+            const back = h.button('Back to Portal');
+            const card = back.closest('form');
+            assert.ok(card);
+            const { input, file } = h.select('pending.txt');
+            back.click();
+            await settled();
+            assert.equal(card.isConnected, true);
+            assert.equal(h.fileInput(), input);
+            assert.equal(input.files?.[0], file);
+            assert.match(
+                h.document.getElementById('status')!.textContent!,
+                /upload or clear/i
+            );
+            assert.equal(h.reads(), 1);
+            assert.equal(h.loads(), 2);
+            assert.equal(h.uploadRequests(), 0);
+            assert.equal(h.saves.length, 0);
+            h.button('Clear pending files').click();
+            assert.equal(input.files?.length, 0);
+            back.click();
+            assert.equal(card.isConnected, false);
+            assert.equal(h.portal?.isConnected, true);
+            h.button('Open Form').click();
+            await waitFor(() => h.childLoads.length === 2 && h.idle());
+            const successor = h.fileInput().closest('form');
+            assert.ok(successor);
+            const replacement = h.select('successor.txt');
+            const status = h.document.getElementById('status')!.textContent;
+            back.dispatchEvent(new h.window.Event('click'));
+            await settled();
+            assert.equal(successor.isConnected, true);
+            assert.equal(h.fileInput(), replacement.input);
+            assert.equal(replacement.input.files?.[0], replacement.file);
+            assert.equal(
+                h.document.getElementById('status')!.textContent,
+                status
+            );
+            assert.equal(h.loads(), 3);
+            assert.equal(h.reads(), 1);
+            assert.equal(h.saves.length, 0);
+            assert.equal(h.uploadRequests(), 0);
+        });
+
+    it('keeps the global explicit-clear exit for a conditionally hidden selection', async (test) => {
+        const h = await open(test, true);
+        const { input, file } = h.select('hidden-pending.txt');
+        h.edit('fld_title', 'Hide attachment field');
+        const wrapper = input.parentElement;
+        assert.ok(wrapper instanceof h.window.HTMLElement);
+        assert.equal(wrapper.hidden, true);
+        const back = h.button('Back to Portal');
+        const card = back.closest('form');
+        assert.ok(card);
+        back.click();
+        await settled();
+        assert.equal(card.isConnected, true);
+        assert.equal(input.files?.[0], file);
+        const clear = h.button('Clear pending files');
+        assert.equal(clear.closest('[hidden]'), null);
+        clear.click();
+        back.click();
+        assert.equal(card.isConnected, false);
+        assert.equal(h.portal?.isConnected, true);
+        assert.equal(h.saves.length, 0);
+        assert.equal(h.uploadRequests(), 0);
+    });
+
+    it('retains the ordinary no-selection Portal Back path', async (test) => {
+        const h = await open(test);
+        const card = h.button('Back to Portal').closest('form');
+        assert.ok(card);
+        h.button('Back to Portal').click();
+        assert.equal(card.isConnected, false);
+        assert.equal(h.portal?.isConnected, true);
+        assert.equal(h.reads(), 1);
+        assert.equal(h.loads(), 2);
+        assert.equal(h.saves.length, 0);
+        assert.equal(h.uploadRequests(), 0);
+    });
+
+    it('permits exit from an expired child without carrying an old File into its successor', async (test) => {
+        const h = await open(test);
+        const old = h.select('expired.txt');
+        const visitor = h.document.getElementById('visitor');
+        assert.ok(visitor instanceof h.window.HTMLSelectElement);
+        for (const id of ['B', 'A']) {
+            visitor.value = id;
+            visitor.dispatchEvent(new h.window.Event('change'));
+        }
+        const card = h.button('Back to Portal').closest('form');
+        assert.ok(card);
+        assert.notEqual(h.fileInput(), old.input);
+        assert.equal(h.fileInput().files?.length, 0);
+        h.button('Back to Portal').click();
+        assert.equal(card.isConnected, false);
+        assert.equal(h.portal?.isConnected, true);
+        assert.equal(h.saves.length, 0);
+        assert.equal(h.uploadRequests(), 0);
+    });
+
+    it('permits Back from an uncertain upload without replaying it', async (test) => {
+        const h = await open(test);
+        h.select('uncertain.txt');
+        const upload = h.button('Upload selected file');
+        upload.click();
+        await waitFor(() => h.uploadRequests() === 1 && h.idle());
+        assert.match(
+            h.document.getElementById('status')!.textContent!,
+            /inspection/i
+        );
+        const card = h.button('Back to Portal').closest('form');
+        assert.ok(card);
+        h.button('Back to Portal').click();
+        assert.equal(card.isConnected, false);
+        assert.equal(h.portal?.isConnected, true);
+        upload.dispatchEvent(new h.window.Event('click'));
+        await settled();
+        assert.equal(h.uploadRequests(), 1);
+        assert.equal(h.saves.length, 0);
+        assert.equal(h.reads(), 1);
+    });
+});

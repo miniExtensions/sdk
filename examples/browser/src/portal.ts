@@ -9,6 +9,7 @@ import {
 } from './childQueries.js';
 import {
     AirtableFieldType,
+    type AirtableRecord,
     type AirtableValue,
     type FormLoadedResult,
     type MiniExtensionsClient,
@@ -365,6 +366,19 @@ export const createPortalView = (options: {
         const previousView = viewSelect.value;
         fillViews();
         if (previousView !== viewSelect.value || !selectionAvailable()) reset();
+    };
+    const refreshedParentData = (record: AirtableRecord | null | undefined) => {
+        try {
+            if (
+                !isObject(record) ||
+                record.id !== page.payload.formRecord.recordId
+            )
+                return null;
+            const fields = record.fields;
+            return isObject(fields) ? structuredClone(fields) : null;
+        } catch {
+            return null;
+        }
     };
     const card = element('section', undefined, 'card');
     card.append(element('h2', page.payload.extensionName ?? 'Custom Portal'));
@@ -1306,7 +1320,9 @@ export const createPortalView = (options: {
                         { signal }
                     );
                     if (!current()) return;
-                    if (user == null) {
+                    const parentData = refreshedParentData(user);
+                    if (!current()) return;
+                    if (parentData === null) {
                         closeEditor();
                         renderRecords();
                         status(
@@ -1315,7 +1331,7 @@ export const createPortalView = (options: {
                         );
                         return;
                     }
-                    acceptParentData(user.fields);
+                    acceptParentData(parentData);
                     needsRefresh = false;
                     closeEditor();
                     renderRecords();
@@ -1664,16 +1680,21 @@ export const createPortalView = (options: {
                                         { signal }
                                     );
                                 if (!current()) return;
-                                if (result.type === 'no-login') {
+                                const parentData =
+                                    result.type === 'logged-in'
+                                        ? refreshedParentData(
+                                              result.loggedInUserRecord
+                                          )
+                                        : null;
+                                if (!current()) return;
+                                if (parentData === null) {
                                     status(
                                         'Category moved, but the Portal user was not refreshed. Choose Reload before taking another action.',
                                         true
                                     );
                                     return;
                                 }
-                                acceptParentData(
-                                    result.loggedInUserRecord.fields
-                                );
+                                acceptParentData(parentData);
                                 needsRefresh = false;
                                 reset();
                                 status(

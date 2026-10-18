@@ -33,7 +33,7 @@ Use Node.js 22 or newer. From the SDK repository root:
 pnpm install --frozen-lockfile
 pnpm pack
 cd examples/browser
-npm install
+npm install --ignore-scripts --no-audit --no-fund ../../miniextensions-sdk-0.1.0-alpha.0.tgz
 npm run typecheck
 npm run build
 npm run dev
@@ -46,6 +46,9 @@ npm run dev -- --port 34852
 ```
 
 The example's dependency points to the SDK archive in the repository root.
+Name that archive explicitly on the first install too: the committed lockfile
+describes an older build of the same preview version. Bare `npm install` can
+fail with `EINTEGRITY`; the explicit archive argument refreshes its integrity.
 After changing the SDK, pack it again and reinstall that archive:
 
 ```sh
@@ -138,7 +141,12 @@ conditions, containing direct
 single-line/multiline text, email, URL, phone, number, currency, percent, rating,
 checkbox, barcode, single-select, multi-select and conservatively presented linked-record fields, including readonly answers. It presents
 plain text in published field order, omits canonical empty/conditionally hidden
-answers, and masks nonempty single-line passwords as `••••••••`. A visually
+answers, and masks nonempty single-line passwords and password-masked physical
+Number answers as `••••••••`. Either defined, non-false `obscurePassword` or
+`maskPasswordOnLoginScreen` flag keeps Number answers masked, including unknown
+flag values. Recovery reference rows omit those fields entirely, using the same
+conservative exclusion as remembered create progress. This presentation policy
+does not change native numeric Save values or dirty field IDs. A visually
 hidden title retains its semantic accessible name. Numeric zero remains a
 review answer; unchecked checkboxes, zero ratings and blank barcode text do not.
 URLs are displayed as text, with no link or embedded content.

@@ -124,12 +124,15 @@ const assertVisitorInput = (input: object): void => {
     }
 };
 
+export const DEFAULT_API_ORIGIN = 'https://web.miniextensions.com';
+
 export const createMiniExtensionsClient = (
-    options: MiniExtensionsClientOptions
+    options: MiniExtensionsClientOptions = {}
 ): MiniExtensionsClient => {
     let origin: URL;
     try {
-        origin = new URL(options.apiOrigin);
+        const { apiOrigin = DEFAULT_API_ORIGIN } = options;
+        origin = new URL(apiOrigin);
     } catch {
         throw new TypeError('apiOrigin must be an HTTP(S) origin.');
     }

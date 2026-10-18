@@ -1,6 +1,7 @@
 import type { ChildQuerySnapshots } from './childQueries.js';
 import {
     createMiniExtensionsClient,
+    DEFAULT_API_ORIGIN,
     AirtableFieldType,
     SDKError,
     withExtensionPassword,
@@ -3289,6 +3290,10 @@ const forgetRememberedSessions = (visitor: Visitor, forgetOnly = false) => {
     }
     return visitor.pendingSessionCleanup.size === 0;
 };
+
+// Prefill once; an installed application's explicit input remains authoritative.
+const apiOriginInput = inputById('api-origin');
+if (apiOriginInput.value === '') apiOriginInput.value = DEFAULT_API_ORIGIN;
 
 connectionForm.addEventListener('submit', (event) => {
     event.preventDefault();

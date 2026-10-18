@@ -740,7 +740,11 @@ if (getFormattedDuration('60', 'h:mm', true) !== '0:01') throw new Error('Explic
 import { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { AirtableFieldType as PublicFieldType } from '@miniextensions/sdk/field-types';
 if (PublicFieldType !== AirtableFieldType) throw new Error('ESM field enum identity changed');
-import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
+import { createMiniExtensionsClient, DEFAULT_API_ORIGIN, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
+if (DEFAULT_API_ORIGIN !== 'https://web.miniextensions.com') throw new Error('ESM public API origin default changed');
+for (const options of [undefined, {}, {apiOrigin:undefined}]) {
+    if (Object.keys(createMiniExtensionsClient(options).getSession()).length !== 0) throw new Error('ESM default client construction failed');
+}
 const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' });
 client.setSession(withExtensionPassword({}, { extensionId: 'extExample', encryptedExtensionPassword: 'password-token' }));
 client.setSession(withLoginToken(client.getSession(), { extensionId: 'extExample', tableId: 'tblExample', loginFieldNames: ['Email'], encryptedLoginToken: 'login-token' }));
@@ -780,7 +784,11 @@ const loaded = Object.keys(require.cache).filter(path => !before.has(path));
 if (!loaded.every(path => path.endsWith('/dist/cjs/field-types.js') || path.endsWith('/dist/cjs/formulas/types.js'))) throw new Error('Field kinds CommonJS entry loaded the formula runtime');
 const { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType: FormulaFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
 if (AirtableFieldType !== FormulaFieldType) throw new Error('CommonJS field enum identity changed');
-const { createMiniExtensionsClient } = require('@miniextensions/sdk');
+const { createMiniExtensionsClient, DEFAULT_API_ORIGIN } = require('@miniextensions/sdk');
+if (DEFAULT_API_ORIGIN !== 'https://web.miniextensions.com') throw new Error('CommonJS public API origin default changed');
+for (const options of [undefined, {}, {apiOrigin:undefined}]) {
+    if (Object.keys(createMiniExtensionsClient(options).getSession()).length !== 0) throw new Error('CommonJS default client construction failed');
+}
 if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
 ${formattingChecks}

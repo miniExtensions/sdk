@@ -38,8 +38,11 @@ to `.generated` and exits. `npm run dev -- --port 34852` chooses another
 loopback port. This creates a local application; registering or publishing a
 Site is a separate action.
 
-Enter the published share ID and the exact origin serving its miniExtensions
-APIs. Use a durable API origin for a continuing demo: a branch preview may be
+Enter the published share ID. The API origin input defaults to
+`https://web.miniextensions.com`; change it explicitly for another deployment.
+An installed application's preconfigured nonempty input is preserved, and
+clearing the input is invalid. Keep private runtime overrides out of public
+source and shared artifacts. Use a durable API origin for a continuing demo: a branch preview may be
 retired after its PR merges. The deployment must permit requests from your
 application's origin. A configured Form or Portal, its actual visitor inputs
 and the returned permissions determine the available actions. No SDK key or

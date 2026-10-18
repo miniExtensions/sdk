@@ -33,7 +33,7 @@ Use Node.js 22 or newer. From the SDK repository root:
 pnpm install --frozen-lockfile
 pnpm pack
 cd examples/browser
-npm install
+npm install --ignore-scripts --no-audit --no-fund ../../miniextensions-sdk-0.1.0-alpha.0.tgz
 npm run typecheck
 npm run build
 npm run dev
@@ -46,6 +46,9 @@ npm run dev -- --port 34852
 ```
 
 The example's dependency points to the SDK archive in the repository root.
+Name that archive explicitly on the first install too: the committed lockfile
+describes an older build of the same preview version. Bare `npm install` can
+fail with `EINTEGRITY`; the explicit archive argument refreshes its integrity.
 After changing the SDK, pack it again and reinstall that archive:
 
 ```sh
@@ -84,6 +87,28 @@ deployment must allow its public tRPC routes and `miniext-context` header from
 this example's origin; the client uses the existing v1 and tRPC endpoints.
 
 ## Form workflow
+
+Published manual Forms with `multiPageFormMode: 'multi-page'` use the SDK's
+existing page owner. Enabled frontend section headers
+start pages; leading fields form the first page. Back keeps the same mounted
+controls and native draft. Page titles are plain text; rich section descriptions
+remain application-owned. Next validates the current page and skips pages
+whose fields are all conditionally hidden. Enter advances before the final
+page. Neither navigation action reads or saves a record.
+
+With final Review disabled, only the final available page shows Save. It validates every page against the
+current native draft, including earlier required answers revealed by later
+edits, then uses the existing Save/recovery path once. Hidden answers remain in
+the native payload. A pending file must be uploaded or explicitly cleared
+before navigation. An uncertain Save continues to require explicit inspection.
+With `promptUserBeforeSubmission: true`, the final available page instead shows
+**Review answers**. Its bounded Review uses the same native draft and existing
+answer presenter. **Edit**, Escape and cancelling the request return to the same
+page and mounted controls without saving or clearing opted-in remembered answers.
+**Confirm** keeps all-page validation and completes remembered-answer cleanup
+before the existing single Save path. Ordinary required-answer errors may be reviewed;
+they still prevent dispatch. Incomplete raw input and pending files block Review.
+Compute and automatic submission remain unsupported.
 
 The page renders field-ID controls from the published payload. It supports
 text, email, URL, phone, multiline/rich text, numbers, currency, percentages,
@@ -128,7 +153,8 @@ The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
 revisions, requests, cancellation, and when to discard drafts.
 
-When the published `promptUserBeforeSubmission` setting is true, **Save** opens
+When the published `promptUserBeforeSubmission` setting is true, **Save** on a
+one-page Form or **Review answers** on the final manual page opens
 **Review your answers** before the final submission. **Edit**, Escape and closing
 the dialog preserve the native draft and perform no Save. **Confirm** submits
 the captured full native values and dirty IDs once through the existing Save
@@ -137,12 +163,17 @@ errors; an unknown outcome keeps submission blocked until explicit inspection.
 Review may open with an empty required answer: the server remains authoritative
 for required, readonly, computed and conditional-field validation.
 
-This review recipe supports a one-page manual Form with scalar section
+This review recipe supports one-page and manually paged Forms with scalar section
 conditions, containing direct
 single-line/multiline text, email, URL, phone, number, currency, percent, rating,
 checkbox, barcode, single-select, multi-select and conservatively presented linked-record fields, including readonly answers. It presents
 plain text in published field order, omits canonical empty/conditionally hidden
-answers, and masks nonempty single-line passwords as `••••••••`. A visually
+answers, and masks nonempty single-line passwords and password-masked physical
+Number answers as `••••••••`. Either defined, non-false `obscurePassword` or
+`maskPasswordOnLoginScreen` flag keeps Number answers masked, including unknown
+flag values. Recovery reference rows omit those fields entirely, using the same
+conservative exclusion as remembered create progress. This presentation policy
+does not change native numeric Save values or dirty field IDs. A visually
 hidden title retains its semantic accessible name. Numeric zero remains a
 review answer; unchecked checkboxes, zero ratings and blank barcode text do not.
 URLs are displayed as text, with no link or embedded content.
@@ -156,7 +187,7 @@ capture. Confirmation belongs to the current visitor/client/session, loaded
 Form, configuration/context, draft handle and actual draft revision. An edit,
 including edit-away-and-back, Reload, Discard, disconnect or owner transition
 invalidates it. Returning to Edit permits fresh typing without repeating an old
-address query. Pages, compute/automatic submission, linked filters,
+address query. Compute/automatic submission, linked filters,
 lookup/computed fields, rich text and other unsupported complex
 renderers remain outside this recipe; unavailable review blocks submission
 instead of presenting an incomplete preview.
@@ -323,7 +354,7 @@ Frontend visibility results never replace the choice projection.
 
 The custom renderer deliberately leaves advanced presentation to your app:
 conditional field or choice presentation beyond the bounded contracts above,
-multi-page navigation, signatures, calendar pickers, custom validation presentation, and
+multi-page navigation beyond the manual workflow above, signatures, calendar pickers, custom validation presentation, and
 CAPTCHA widgets. The server still enforces those extension rules. To use a
 CAPTCHA-enabled Form, integrate the configured widget and supply its token in
 `captchaVal`; this example supplies `null`. It does not disable the Form's

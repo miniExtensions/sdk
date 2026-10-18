@@ -28,11 +28,16 @@ import {
 import {
     composeFormFieldVisibility,
     createFormFieldBindings,
+    createFormPageOwner,
+    FormPageError,
     createFormSaveInput,
     normalizeFormSaveResult,
     openLoadedFormDraft,
     type FormFieldVisibility,
     type FormAttachmentController,
+    type FormPageOwner,
+    type FormPageSnapshot,
+    type FormControllerSaveOptions,
 } from '@miniextensions/sdk/forms';
 import {
     getSelectFieldPolicy,
@@ -54,6 +59,7 @@ import {
     type FieldControl,
 } from './fields.js';
 import { flatChoiceConditionRecord } from './choiceAvailability.js';
+import { hasMaskedValuePolicy } from './privacy.js';
 import { createPortalView, type PortalView } from './portal.js';
 import {
     createConditionalLinkedFilters,
@@ -907,7 +913,17 @@ const renderForm = (page: FormLoadedResult): void => {
     let progressInputRevision = 0;
     let progressSaveCleanups = 0;
     let activeUpload: RecoveryAttempt | null = null;
+    let pageReviewPresentation: AbortController | null = null;
+    let retirePageReview = (): void => {};
     const controls = new Map<string, FieldControl>();
+    const manualPages =
+        settings(page.payload.publicFields).multiPageFormMode === 'multi-page';
+    let formPages: FormPageOwner | null = null;
+    let currentPageFields: Set<string> | null = null;
+    const pageFields = new Map<string, HTMLDivElement>();
+    const inCurrentPage = (id: string): boolean =>
+        currentPageFields == null || currentPageFields.has(id);
+    let updatePageNavigation = (_snapshot?: FormPageSnapshot): void => {};
     let updateSelectAvailability = (): void => {};
     const linkedFilterViews = new Map<string, ConditionalLinkedFilters>();
     const formClient = visitor.client;
@@ -947,9 +963,11 @@ const renderForm = (page: FormLoadedResult): void => {
                       visitor.client === formClient,
                   canWrite: mayUseForm,
                   canWriteField: (id) =>
-                      fieldVisibility[id]?.type === 'visible',
+                      manualPages || fieldVisibility[id]?.type === 'visible',
               });
-    const configurationKey = (): string =>
+    const configurationKey = (
+        schemas = page.payload.fieldIdsToSchemas
+    ): string =>
         JSON.stringify([
             page.extensionId,
             page.payload.extensionAccessToken,
@@ -961,7 +979,7 @@ const renderForm = (page: FormLoadedResult): void => {
                   ]
                 : [page.payload.formRecord.type],
             page.payload.fieldIdsInForm,
-            page.payload.fieldIdsToSchemas,
+            schemas,
             page.payload.linkedRecordFieldIdToDetailFields,
             page.payload.publicFields,
             page.payload.persistedAddOnlyAttachmentValuesByFieldId,
@@ -977,8 +995,37 @@ const renderForm = (page: FormLoadedResult): void => {
         if (next !== reviewConfiguration) {
             reviewConfiguration = next;
             reviewConfigurationRevision++;
+            pageReviewPresentation?.abort();
         }
         return reviewConfigurationRevision;
+    };
+    // Successful Add Choice installs native choices into this accepted owner.
+    // Keep every other configuration change in the navigation epoch.
+    const navigationConfigurationKey = (): string => {
+        const schemas = structuredClone(page.payload.fieldIdsToSchemas);
+        for (const schema of Object.values(schemas)) {
+            const config = schema.airtableField.config;
+            if (
+                (schema.fieldType === 'singleSelect' ||
+                    schema.fieldType === 'multipleSelects') &&
+                config.type === schema.fieldType &&
+                config.options != null &&
+                Object.hasOwn(config.options, 'choices') &&
+                Array.isArray(config.options.choices)
+            )
+                config.options.choices = [];
+        }
+        return configurationKey(schemas);
+    };
+    let navigationConfiguration = navigationConfigurationKey();
+    let navigationConfigurationRevision = 0;
+    const observeNavigationConfiguration = (): number => {
+        const next = navigationConfigurationKey();
+        if (next !== navigationConfiguration) {
+            navigationConfiguration = next;
+            navigationConfigurationRevision++;
+        }
+        return navigationConfigurationRevision;
     };
     const pendingPanel = element('section');
     pendingPanel.setAttribute('aria-label', 'Pending attachment selections');
@@ -1021,6 +1068,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (captured == null) model.clear();
                 else model.select([captured.file]);
             }
+            pageReviewPresentation?.abort();
             if (reviewPending) cancelConfirmation();
         }
     );
@@ -1079,12 +1127,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 if (schema == null || control == null) return [];
                 const config = schema.miniExtConfig;
                 // Masked values must never enter the reference journal.
-                if (
-                    config != null &&
-                    'obscurePassword' in config &&
-                    config.obscurePassword === true
-                )
-                    return [];
+                if (hasMaskedValuePolicy(config)) return [];
                 if (schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS)
                     return [];
                 if (!control.editable) return [];
@@ -1108,7 +1151,9 @@ const renderForm = (page: FormLoadedResult): void => {
     const formControlDisposers: Array<() => void> = [];
     disposeFormControls = () => {
         formRetired = true;
+        retirePageReview();
         formProgress?.retire();
+        formPages?.dispose();
         for (const stop of formControlDisposers) stop();
         bindingOwner?.destroy();
         linkedPresentation.retire();
@@ -1123,8 +1168,31 @@ const renderForm = (page: FormLoadedResult): void => {
         controls.clear();
     };
     const fields = element('div', undefined, 'fields');
+    if (manualPages) {
+        const rejectInactiveInput = (event: Event): void => {
+            if (!(event.target instanceof HTMLElement)) return;
+            const id = event.target
+                .closest('[data-form-page-field-id]')
+                ?.getAttribute('data-form-page-field-id');
+            if (id == null || inCurrentPage(id)) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+        };
+        for (const type of [
+            'beforeinput',
+            'input',
+            'change',
+            'click',
+            'keydown',
+            'compositionstart',
+            'compositionupdate',
+            'compositionend',
+        ])
+            fields.addEventListener(type, rejectInactiveInput, true);
+    }
     const observeProgressInput = () => {
         progressInputRevision++;
+        pageReviewPresentation?.abort();
         formProgress?.changed();
     };
     fields.addEventListener('input', observeProgressInput, true);
@@ -1145,9 +1213,11 @@ const renderForm = (page: FormLoadedResult): void => {
                 control.refresh();
             control.setActive?.(
                 ownsAddressReads() &&
+                    inCurrentPage(fieldId) &&
                     fieldVisibility[fieldId]?.type === 'visible'
             );
         }
+        updatePageNavigation();
     };
     const updateFieldVisibility = (): void => {
         const snapshot = visitor.drafts.snapshot(draft);
@@ -1240,6 +1310,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                   reads: formClient.addresses,
                                   isCurrent: () =>
                                       ownsAddressReads() &&
+                                      inCurrentPage(fieldId) &&
                                       fieldVisibility[fieldId]?.type ===
                                           'visible',
                               },
@@ -1262,7 +1333,13 @@ const renderForm = (page: FormLoadedResult): void => {
                         }
                     );
         controls.set(fieldId, control);
-        fields.append(control.node);
+        if (manualPages) {
+            const wrapper = element('div');
+            wrapper.dataset.formPageFieldId = fieldId;
+            wrapper.append(control.node);
+            pageFields.set(fieldId, wrapper);
+            fields.append(wrapper);
+        } else fields.append(control.node);
         const config = schema.miniExtConfig;
         if (
             (config !== undefined &&
@@ -1979,10 +2056,69 @@ const renderForm = (page: FormLoadedResult): void => {
     if (visitor.uncertainFormDraftScopes.has(draft.scope))
         errors.append(element('li', uncertainSaveMessage));
     card.append(errors);
+    const navigation = element('section');
+    navigation.setAttribute('aria-label', 'Form pages');
+    navigation.hidden = true;
+    const pageCounter = element('p');
+    pageCounter.setAttribute('aria-live', 'polite');
+    const pageTitle = element('h3');
+    const pageProblems = element('ul', undefined, 'error-list');
+    pageProblems.setAttribute('role', 'status');
+    navigation.append(pageCounter, pageTitle, pageProblems);
+    if (manualPages) card.append(navigation);
     const actions = element('div', undefined, 'actions');
     const submit = element('button', 'Save');
     submit.type = 'submit';
     submit.disabled = visitor.uncertainFormDraftScopes.has(draft.scope);
+    const readCurrentPage = (): void => {
+        for (const [fieldId, control] of controls)
+            if (
+                control.editable &&
+                inCurrentPage(fieldId) &&
+                fieldVisibility[fieldId]?.type === 'visible'
+            )
+                control.read();
+    };
+    const navigate = (direction: 'back' | 'next'): void => {
+        if (
+            formPages == null ||
+            !ownsLinkedRender() ||
+            formRetired ||
+            request != null ||
+            reviewPending ||
+            !mayUseForm()
+        )
+            return;
+        if (pendingFiles.pending()) {
+            status(
+                'Upload or clear the selected file before changing pages.',
+                true
+            );
+            return;
+        }
+        try {
+            if (direction === 'next') readCurrentPage();
+            updateFieldVisibility();
+            const snapshot = formPages.getSnapshot();
+            const result = formPages[direction](snapshot.revision);
+            updatePageNavigation();
+            if (!result.accepted)
+                status(
+                    'Review the current page before continuing. No Save was sent.',
+                    true
+                );
+        } catch (error) {
+            status(
+                error instanceof Error
+                    ? error.message
+                    : 'Review the current page before continuing.',
+                true
+            );
+        }
+    };
+    const back = button('Back', () => navigate('back'));
+    const next = button('Next', () => navigate('next'));
+    if (manualPages) actions.append(back, next);
     actions.append(submit);
     const discard = button('Discard draft', async () => {
         if (
@@ -2264,7 +2400,249 @@ const renderForm = (page: FormLoadedResult): void => {
                 })
             );
     };
+    const clearProgressBeforeSave = async (
+        current: () => boolean
+    ): Promise<boolean> => {
+        const progressDraftRevision = visitor.drafts.revision(draft);
+        const progressInputEpoch =
+            progressInputRevision + pendingFiles.revision();
+        const progressConfiguration = observeReviewConfiguration();
+        if (formProgress) {
+            progressSaveCleanups++;
+            let cleared = false;
+            try {
+                cleared = await formProgress.beforeSave();
+            } finally {
+                progressSaveCleanups--;
+                if (
+                    progressSaveCleanups === 0 &&
+                    !current() &&
+                    ownsLinkedRender() &&
+                    !formRetired &&
+                    mayUseForm()
+                )
+                    formProgress?.resume();
+            }
+            if (!cleared) return false;
+        }
+        if (!current() || !ownsForm()) return false;
+        if (
+            visitor.drafts.revision(draft) !== progressDraftRevision ||
+            progressInputRevision + pendingFiles.revision() !==
+                progressInputEpoch ||
+            observeReviewConfiguration() !== progressConfiguration ||
+            !current()
+        ) {
+            formProgress?.resume();
+            status(
+                'The Form changed while remembered answers were cleared. Review it before a new Save.',
+                true
+            );
+            return false;
+        }
+        return true;
+    };
+    if (manualPages && bindingOwner != null) {
+        formPages = createFormPageOwner({
+            fields: bindingOwner,
+            isCurrent: () => ownsLinkedRender() && !formRetired,
+            configurationRevision: observeNavigationConfiguration,
+            review: async (request) => {
+                if (
+                    !request.isCurrent() ||
+                    !ownsLinkedFilters() ||
+                    pendingFiles.pending()
+                )
+                    return { type: 'edit' };
+                retirePageReview();
+                const presentation = new AbortController();
+                pageReviewPresentation = presentation;
+                const linkedSnapshot = linkedPresentation.snapshot();
+                const abort = () => presentation.abort();
+                request.signal.addEventListener('abort', abort, { once: true });
+                linkedSnapshot.signal.addEventListener('abort', abort, {
+                    once: true,
+                });
+                if (request.signal.aborted || linkedSnapshot.signal.aborted)
+                    abort();
+                const releaseReviewUI = () => {
+                    if (
+                        pageReviewPresentation !== presentation ||
+                        !reviewPending
+                    )
+                        return;
+                    reviewPending = false;
+                    reviewIntentRevision++;
+                    if (!formRetired && ownsForm()) updateRecovery();
+                };
+                const release = () => {
+                    request.signal.removeEventListener('abort', abort);
+                    linkedSnapshot.signal.removeEventListener('abort', abort);
+                    abort();
+                    releaseReviewUI();
+                    if (pageReviewPresentation === presentation)
+                        pageReviewPresentation = null;
+                    if (retirePageReview === release)
+                        retirePageReview = () => {};
+                };
+                retirePageReview = release;
+                reviewPending = true;
+                reviewIntentRevision++;
+                fields.inert = true;
+                updateFormActivity();
+                try {
+                    const dateContext = captureReviewDateContext();
+                    // Linked labels belong to the original accepted page. The
+                    // page owner supplies only detached native presentation data.
+                    const rows = prepareFormReviewRows(
+                        page,
+                        request.draft.data,
+                        linkedSnapshot,
+                        dateContext
+                    );
+                    const clientDateZoneRequired = rows.some(({ fieldId }) => {
+                        const config =
+                            page.payload.fieldIdsToSchemas[fieldId]
+                                ?.airtableField.config;
+                        return (
+                            config?.type === 'dateTime' &&
+                            config.options.timeZone === 'client'
+                        );
+                    });
+                    const draftRevision = visitor.drafts.revision(draft);
+                    const inputRevision =
+                        progressInputRevision + pendingFiles.revision();
+                    const configuration = observeReviewConfiguration();
+                    const formConnection = connection;
+                    const parentScope = visitor.formParentScope;
+                    const current = () => {
+                        if (presentation.signal.aborted) return false;
+                        const accepted =
+                            request.isCurrent() &&
+                            ownsLinkedRender() &&
+                            linkedSnapshot.current() &&
+                            connection === formConnection &&
+                            visitor.formContext === context &&
+                            visitor.formParentScope === parentScope &&
+                            visitor.drafts.revision(draft) === draftRevision &&
+                            progressInputRevision + pendingFiles.revision() ===
+                                inputRevision &&
+                            observeReviewConfiguration() === configuration &&
+                            !pendingFiles.pending() &&
+                            (!clientDateZoneRequired ||
+                                captureReviewDateContext().clientTimeZone ===
+                                    dateContext.clientTimeZone);
+                        if (!accepted) abort();
+                        return accepted;
+                    };
+                    status('Review your answers before saving.');
+                    const confirmed = await requestConfirmation({
+                        title: 'Review your answers',
+                        message:
+                            'Choose Edit to return to the final page, or Confirm to submit these answers.',
+                        confirmLabel: 'Confirm',
+                        cancelLabel: 'Edit',
+                        rows,
+                        signal: presentation.signal,
+                    });
+                    if (!confirmed || !current()) {
+                        if (ownsForm())
+                            status(
+                                'Review closed. Your answers were retained; no Save was sent.'
+                            );
+                        return { type: 'edit' };
+                    }
+                    // Review/Edit must not clear opted-in remembered answers.
+                    // The existing cleanup and revision fences run after Confirm.
+                    if (!(await clearProgressBeforeSave(current)) || !current())
+                        return { type: 'edit' };
+                    return {
+                        type: 'confirm',
+                        signal: presentation.signal,
+                        isCurrent: current,
+                    };
+                } catch (error) {
+                    if (ownsForm())
+                        status(
+                            error instanceof Error
+                                ? error.message
+                                : 'Review is unavailable.',
+                            true
+                        );
+                    return { type: 'edit' };
+                } finally {
+                    releaseReviewUI();
+                }
+            },
+        });
+        updatePageNavigation = (accepted) => {
+            if (formPages == null) return;
+            const snapshot = accepted ?? formPages.getSnapshot();
+            currentPageFields = new Set(snapshot.currentFieldIds);
+            for (const [id, wrapper] of pageFields) {
+                wrapper.hidden = !inCurrentPage(id);
+                wrapper.inert = wrapper.hidden;
+                controls
+                    .get(id)
+                    ?.setActive?.(
+                        ownsAddressReads() &&
+                            inCurrentPage(id) &&
+                            fieldVisibility[id]?.type === 'visible'
+                    );
+            }
+            const visible = snapshot.pages.flatMap((entry, index) =>
+                entry.hidden ? [] : [index]
+            );
+            const current = snapshot.pages[snapshot.activePageIndex];
+            const last = visible.at(-1);
+            const busy = request != null || reviewPending || !mayUseForm();
+            navigation.hidden = false;
+            pageCounter.textContent =
+                visible.length === 0
+                    ? 'No available pages'
+                    : `Page ${visible.indexOf(snapshot.activePageIndex) + 1} of ${visible.length}`;
+            pageTitle.textContent = current?.title ?? '';
+            pageTitle.hidden = pageTitle.textContent === '';
+            back.hidden = !visible.some(
+                (index) => index < snapshot.activePageIndex
+            );
+            back.disabled = busy || !snapshot.canBack;
+            next.hidden = !visible.some(
+                (index) => index > snapshot.activePageIndex
+            );
+            // Keep validation refusal reachable; the SDK owns its admission.
+            next.disabled = busy || snapshot.status !== 'ready';
+            submit.hidden = snapshot.activePageIndex !== last;
+            const reviewRequired =
+                settings(page.payload.publicFields)
+                    .promptUserBeforeSubmission === true;
+            submit.textContent = reviewRequired ? 'Review answers' : 'Save';
+            submit.disabled =
+                busy ||
+                !(reviewRequired ? snapshot.canReview : snapshot.canSubmit);
+            pageProblems.replaceChildren();
+            for (const problem of snapshot.problems) {
+                const title =
+                    problem.fieldId == null
+                        ? 'Form'
+                        : (page.payload.fieldIdsToSchemas[problem.fieldId]
+                              ?.airtableField.name ?? 'Field');
+                pageProblems.append(
+                    element(
+                        'li',
+                        `${title}: ${problem.code.replaceAll('-', ' ')}.`
+                    )
+                );
+            }
+            if (snapshot.status === 'retired')
+                pageProblems.append(
+                    element('li', 'Reload this Form before continuing.')
+                );
+        };
+        formControlDisposers.push(formPages.subscribe(updatePageNavigation));
+    }
     updateRecovery();
+    updatePageNavigation();
     const save = (prepared?: {
         snapshot: FormDraftSnapshot<AirtableValue>;
         current(forOwnSave?: boolean): boolean;
@@ -2272,12 +2650,7 @@ const renderForm = (page: FormLoadedResult): void => {
         run('Saving the Form…', async ({ client, signal, current }) => {
             // Reject an invalid visible control instead of saving its last
             // valid draft value (for example, a non-finite numeric input).
-            for (const [fieldId, control] of controls)
-                if (
-                    control.editable &&
-                    fieldVisibility[fieldId]?.type === 'visible'
-                )
-                    control.read();
+            readCurrentPage();
             if (prepared != null && !prepared.current()) return;
             const snapshot =
                 prepared?.snapshot ?? visitor.drafts.snapshot(draft);
@@ -2314,43 +2687,17 @@ const renderForm = (page: FormLoadedResult): void => {
             )
                 return;
             if (bindingOwner == null) return;
-            const progressDraftRevision = visitor.drafts.revision(draft);
-            const progressInputEpoch =
-                progressInputRevision + pendingFiles.revision();
-            const progressConfiguration = observeReviewConfiguration();
-            if (formProgress) {
-                progressSaveCleanups++;
-                let cleared = false;
-                try {
-                    cleared = await formProgress.beforeSave();
-                } finally {
-                    progressSaveCleanups--;
-                    if (
-                        progressSaveCleanups === 0 &&
-                        !current() &&
-                        ownsLinkedRender() &&
-                        !formRetired &&
-                        mayUseForm()
-                    )
-                        formProgress?.resume();
-                }
-                if (!cleared) return;
-            }
-            if (!current() || !ownsForm()) return;
             if (
-                visitor.drafts.revision(draft) !== progressDraftRevision ||
-                progressInputRevision + pendingFiles.revision() !==
-                    progressInputEpoch ||
-                observeReviewConfiguration() !== progressConfiguration ||
-                (prepared != null && !prepared.current())
-            ) {
-                formProgress?.resume();
-                status(
-                    'The Form changed while remembered answers were cleared. Review it before a new Save.',
-                    true
-                );
+                !(
+                    formPages != null &&
+                    settings(page.payload.publicFields)
+                        .promptUserBeforeSubmission === true
+                ) &&
+                !(await clearProgressBeforeSave(
+                    () => current() && (prepared?.current() ?? true)
+                ))
+            )
                 return;
-            }
             submit.disabled = true;
             discard.disabled = true;
             let normalized: ReturnType<typeof normalizeFormSaveResult>;
@@ -2363,7 +2710,7 @@ const renderForm = (page: FormLoadedResult): void => {
                     formFieldIdsWithUnsavedChanges: _dirty,
                     ...freshOptions
                 } = input;
-                normalized = await bindingOwner.save({
+                const dispatchOptions: FormControllerSaveOptions = {
                     signal,
                     options: freshOptions,
                     isCurrent: () =>
@@ -2384,6 +2731,7 @@ const renderForm = (page: FormLoadedResult): void => {
                             dispatched = true;
                             visitor.preparedAttempt = null;
                             visitor.uncertainFormDraftScopes.add(draft.scope);
+                            if (formPages != null) updateRecovery();
                             return {
                                 accepted: (result) => {
                                     if (
@@ -2421,9 +2769,37 @@ const renderForm = (page: FormLoadedResult): void => {
                             };
                         },
                     },
-                });
+                };
+                normalized =
+                    formPages == null
+                        ? await bindingOwner.save(dispatchOptions)
+                        : await formPages.submit(
+                              formPages.getSnapshot().revision,
+                              dispatchOptions
+                          );
                 if (!current() || !ownsForm()) return;
             } catch (error) {
+                if (
+                    formPages != null &&
+                    error instanceof FormPageError &&
+                    !dispatched
+                ) {
+                    formProgress?.resume();
+                    if (current() && ownsForm()) {
+                        if (error.reason === 'review-cancelled') {
+                            updateRecovery();
+                            return;
+                        }
+                        errors.replaceChildren(
+                            element(
+                                'li',
+                                'The Save was not sent. Review the current Form pages before saving.'
+                            )
+                        );
+                        updateRecovery();
+                    }
+                    return;
+                }
                 if (knownNotDispatched) formProgress?.resume();
                 if (current() && ownsForm())
                     errors.replaceChildren(
@@ -2435,6 +2811,8 @@ const renderForm = (page: FormLoadedResult): void => {
                         )
                     );
                 throw error;
+            } finally {
+                retirePageReview();
             }
             visitor.uncertainFormDraftScopes.delete(draft.scope);
             submit.disabled = false;
@@ -2494,6 +2872,45 @@ const renderForm = (page: FormLoadedResult): void => {
             return;
         }
         updateFieldVisibility();
+        if (formPages != null) {
+            try {
+                readCurrentPage();
+            } catch {
+                status(
+                    'Review the current page before continuing. No Save was sent.',
+                    true
+                );
+                return;
+            }
+            const snapshot = formPages.getSnapshot();
+            if (
+                snapshot.pages.some(
+                    (entry, index) =>
+                        index > snapshot.activePageIndex && !entry.hidden
+                )
+            ) {
+                navigate('next');
+                return;
+            }
+            const reviewRequired =
+                settings(page.payload.publicFields)
+                    .promptUserBeforeSubmission === true;
+            if (
+                pendingFiles.pending() ||
+                !(reviewRequired ? snapshot.canReview : snapshot.canSubmit)
+            ) {
+                updatePageNavigation();
+                status(
+                    'Review the Form pages before saving. No Save was sent.',
+                    true
+                );
+                return;
+            }
+            if (reviewRequired) {
+                void save();
+                return;
+            }
+        }
         if (!visibilityMessage.hidden) {
             status(
                 'Review the unavailable fields before saving this Form.',

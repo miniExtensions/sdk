@@ -216,7 +216,10 @@ function browserMain({ loaded, portal }) {
             'error',
             'validation',
         ])
-            Object.defineProperty(result, key, { get: poison });
+            Object.defineProperty(result, key, {
+                get: poison,
+                enumerable: false,
+            });
         return result;
     };
     const direct = (overrides = {}) =>
@@ -233,6 +236,7 @@ function browserMain({ loaded, portal }) {
                 const field = direct({ [side]: { [flag]: value } });
                 Object.defineProperty(field, 'attachmentPresentation', {
                     get: poison,
+                    enumerable: false,
                 });
                 masked.push(field);
             }
@@ -260,7 +264,10 @@ function browserMain({ loaded, portal }) {
         },
     ]) {
         const field = direct(overrides);
-        Object.defineProperty(field, 'attachmentPresentation', { get: poison });
+        Object.defineProperty(field, 'attachmentPresentation', {
+            get: poison,
+            enumerable: false,
+        });
         unavailable.push(field);
     }
     for (const config of [
@@ -271,7 +278,10 @@ function browserMain({ loaded, portal }) {
         'malformed',
     ]) {
         const field = direct({ displayConfig: config });
-        Object.defineProperty(field, 'attachmentPresentation', { get: poison });
+        Object.defineProperty(field, 'attachmentPresentation', {
+            get: poison,
+            enumerable: false,
+        });
         unavailable.push(field);
     }
     for (const facet of [

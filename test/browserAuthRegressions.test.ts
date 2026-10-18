@@ -8,6 +8,7 @@ import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
+    DEFAULT_API_ORIGIN,
     type LoginPageResult,
     type RuntimeSession,
 } from '../src/runtime/index.js';
@@ -53,7 +54,8 @@ after(async () => rm(directory, { recursive: true, force: true }));
 
 const environment = async (
     test: TestContext,
-    fetchImpl: typeof globalThis.fetch
+    fetchImpl: typeof globalThis.fetch,
+    initialApiOrigin?: string
 ) => {
     const window = new Window({
         url: 'https://app.example.test',
@@ -69,6 +71,11 @@ const environment = async (
     window.document.write(
         markup.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '')
     );
+    if (initialApiOrigin !== undefined) {
+        const origin = window.document.getElementById('api-origin');
+        assert.ok(origin instanceof window.HTMLInputElement);
+        origin.value = initialApiOrigin;
+    }
     const globals = {
         document: window.document,
         location: window.location,
@@ -171,6 +178,51 @@ const codeControl = (window: Window) => {
     assert.ok(code instanceof window.HTMLInputElement);
     return { form, code };
 };
+
+describe('browser API origin defaults', () => {
+    for (const preset of [undefined, 'https://private-deployment.example']) {
+        it(`prefills the public origin once and preserves ${preset === undefined ? 'a visitor override' : 'an installed input override'}`, async (test) => {
+            const page = browserLoginPage();
+            const origins: string[] = [];
+            const window = await environment(
+                test,
+                async (url) => {
+                    origins.push(new URL(String(url)).origin);
+                    return jsonResponse(page);
+                },
+                preset
+            );
+            const origin = window.document.getElementById('api-origin');
+            const share = window.document.getElementById('share-id');
+            assert.ok(origin instanceof window.HTMLInputElement);
+            assert.ok(share instanceof window.HTMLInputElement);
+            assert.equal(origin.value, preset ?? DEFAULT_API_ORIGIN);
+            assert.deepEqual(origins, []);
+            share.value = page.payload.shareId;
+            submitForm(window, 'Connect and load');
+            await waitFor(() => origins.length === 1 && browserIdle(window));
+            assert.deepEqual(origins, [preset ?? DEFAULT_API_ORIGIN]);
+            origin.value = 'https://private-deployment.example/';
+            submitForm(window, 'Connect and load');
+            await waitFor(() => origins.length === 2 && browserIdle(window));
+            assert.equal(origins[1], 'https://private-deployment.example');
+            origin.value = '';
+            const screen =
+                window.document.getElementById('screen')!.firstElementChild;
+            submitForm(window, 'Connect and load');
+            assert.equal(origin.value, '');
+            assert.equal(origins.length, 2);
+            assert.equal(
+                window.document.getElementById('screen')!.firstElementChild,
+                screen
+            );
+            assert.match(
+                window.document.getElementById('status')!.textContent!,
+                /Connection settings are invalid/
+            );
+        });
+    }
+});
 
 describe(
     'deep review browser authentication ownership',

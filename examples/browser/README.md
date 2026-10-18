@@ -71,8 +71,11 @@ check pagination, criteria retirement, child context and visitor transitions.
 ## Connect
 
 1. Publish a Form or Portal in miniExtensions.
-2. Enter the exact origin that serves the miniExtensions APIs and the
-   extension's stored `extension.shareId`. Follow
+2. Enter the extension's stored `extension.shareId`. The API origin starts at
+   `https://web.miniextensions.com`; for another deployment, replace the input
+   with its exact API origin in your installed application. Keep private
+   overrides out of public source and shared artifacts. Clearing the input is
+   invalid; it does not silently reconnect to the public service. Follow
    [runtime configuration prerequisites](../../README.md#obtain-the-actual-runtime-configuration)
    to obtain it from a default-domain public link or your workspace
    administrator/deployment owner. A custom-domain slug is not the Share ID;

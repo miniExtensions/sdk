@@ -58,9 +58,7 @@ import {
     type SaveFormInput,
 } from '@miniextensions/sdk';
 
-const client = createMiniExtensionsClient({
-    apiOrigin: 'https://your-api-origin.example',
-});
+const client = createMiniExtensionsClient();
 
 const input: LoadExtensionInput = {
     shareId: 'YOUR_SHARE_ID',
@@ -202,8 +200,13 @@ public tRPC routes and the `miniext-context` header. The v1 endpoint already
 supports cross-origin requests. Node.js consumers use the same API contracts
 without browser CORS enforcement.
 
-`apiOrigin` must be an HTTP(S) origin without a path, query, fragment, or URL
-credentials. Node.js 22+ and browsers with native `fetch`, `TextEncoder`, and
+Omitting constructor options or leaving `apiOrigin` undefined uses the exported
+`DEFAULT_API_ORIGIN`, `https://web.miniextensions.com`. For another deployment,
+pass `createMiniExtensionsClient({ apiOrigin })` with its explicit origin.
+An override must be an HTTP(S) origin without a path, query, fragment, or URL
+credentials. Explicit null/blank/invalid origins are rejected; requests never
+fall back to another origin after failure. Keep private overrides in installed
+application runtime configuration, outside public source and shared artifacts. Node.js 22+ and browsers with native `fetch`, `TextEncoder`, and
 `AbortSignal.any` and `AbortSignal.prototype.throwIfAborted` are supported.
 Supply `fetch` in the constructor to use another compatible network
 implementation.

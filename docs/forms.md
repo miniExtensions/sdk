@@ -599,9 +599,10 @@ single-select and six multi-select predicates above for exact-ID direct noncompu
 inspect the original AST and loaded metadata, even when compilation reduces a
 predicate to constant `FALSE()`. Configured option eligibility also supports these
 direct select predicates through the existing Form owner. Public scalar flat/section
-projection helpers and prepared Review retain their existing boundaries. Linked,
-computed, lookup and date Form
-drivers remain unsupported. Richer saved Portal
+projection helpers and prepared Review retain their existing boundaries.
+Form visibility and advanced validation additionally admit the
+[scalar Formula snapshot policy](#formula-scalar-snapshot-drivers) below.
+Linked, lookup, date and other computed Form drivers remain unsupported. Richer saved Portal
 criteria must remain intact until explicit replacement or accepted server
 cleanup; partial known-choice compilation is not permission to drop AST values.
 
@@ -682,8 +683,9 @@ hidden values before evaluating the next field. The helper makes no requests
 and does not write data, dirty IDs, local choices or child context. A native
 checkbox remains a boolean, percentages remain fractions, and barcode drivers
 use native objects with a `text` property; malformed driver values block
-evaluation. Linked and computed drivers remain unsupported, including a
-computed field whose reported physical type looks scalar.
+evaluation. Valid scalar Formula snapshots use the separate policy below.
+Linked, lookup, rollup and other computed drivers remain unsupported, including
+a computed field whose reported physical type looks scalar.
 ID/name aliases that could select a different field or read another native
 ID-keyed value return `ambiguous-reference`; the helper does not guess.
 
@@ -727,7 +729,10 @@ codes and behavior, including scanning schemas outside the supplied order and
 rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
 adapter uses `createScalarFormRecordProjection` for supported scalar conditional
 choices. Form field bindings reuse the shared section engine internally with
-the bounded direct single-select/multi-select Form driver policy. Inactive-page drivers remain in the
+the bounded direct single-select/multi-select and scalar Formula snapshot Form
+driver policies. Formula results are permitted as visibility dependencies in
+that private projection; Formula-driven option rules themselves retain their
+existing refusal. Inactive-page drivers remain in the
 evaluation record; conditionally hidden drivers are removed only from that
 detached projection. Eligibility changes never remove native selected values.
 Manual Review also supports bounded multipage presentation while retaining its
@@ -837,6 +842,55 @@ blocked outcomes. The visitor can repair an editable driver; Save remains
 blocked while visibility is unavailable. Hiding never clears accepted values
 or prunes `createFormSaveInput`: the existing server still owns validation and
 write authorization. A presentation result grants no permission.
+
+### Formula scalar snapshot drivers
+
+Form field visibility, section propagation and advanced field validation can
+read a physical `formula` field's supplied scalar result. Accepted Portal
+owning-field and custom-view conditions use the same policy. Keep the saved
+condition's `fieldType` equal to the current result type: `number`, `percent`,
+`currency` or `singleLineText`. The physical field stays `formula` and readonly.
+For example, this percent condition matches a supplied native value of `0.75`:
+
+```ts
+const setting = {
+    type: 'greaterThanOrEqualsTo',
+    fieldType: 'percent',
+    idOrName: { type: 'id', id: 'fld_progress_formula' },
+    value: 50,
+} as const;
+```
+
+Use this setting in the existing `conditionalFields` or
+`fieldValidationConditionalFields` definition returned by the published Form.
+The referenced physical metadata must have `isComputed: true`, Formula
+`options.isValid: true` and a direct result config of the exact saved type.
+Text result options must be `null`; numeric result options need finite numeric
+`precision`, and currency needs a string `symbol`, including `''`. Percent
+operands use percentage points while native values remain fractions. Currency
+comparisons use native numbers without adding or parsing a symbol.
+
+Numeric results must be finite native numbers; text results must be strings.
+Null and missing results retain canonical emptiness behavior; numeric zero is
+populated and an empty text result is empty. Arrays, coercible numeric strings,
+error/special-value objects, invalid metadata, mismatched saved result types,
+nested Formula results and all richer results are refused. Raw Formula
+dependencies are checked even when compatibility mode drops an incomplete
+branch. ID/name ambiguity remains a refusal.
+
+These are accepted snapshots. Editing a dependency does not evaluate the
+Formula expression, run Compute, refresh data or change the Formula value.
+Visibility changes when the caller supplies an updated accepted result, such
+as an explicit accepted Form reload or Portal parent refresh. The SDK cannot
+infer freshness from result metadata. Keep hidden values and the Formula's
+native value in the complete draft and native Save payload. Formula writes
+remain refused; conditions do not grant permissions or Save authority.
+
+The public `compileRuntimeConditions`, both public scalar projection helpers,
+configured option rules, editable Portal filter criteria, selected-record
+filters and prepared Review keep their existing direct-driver boundaries.
+Formula targets still do not support edit-mode `hideFieldIfEmpty`; lookup,
+rollup and direct scalar fields marked computed remain outside this policy.
 
 ## Preserve the full native draft
 
@@ -1981,7 +2035,8 @@ unimplemented validation types remain explicit refusals.
 Configured `fieldValidationConditionalFields` supports the existing strict
 direct-scalar condition subset and the seven single-select and six multi-select
 predicates above for exact-ID direct noncomputed drivers, through the same predicate evaluator used for
-field visibility. Ordinary errors retain priority. Advanced validation applies
+field visibility, including the bounded scalar Formula snapshot policy above.
+Ordinary errors retain priority. Advanced validation applies
 only to a visible writable, noncomputed target; hiding, read-only configuration
 and canonical computed physical kinds skip that extra rule without waiving any
 independent ordinary checks. Predicates read the complete native draft, including
@@ -1997,7 +2052,7 @@ it never suppresses a malformed or unsupported rule. Null, omitted and nonempty
 messages still use the generic code, so an app may supply its own text.
 Missing/contradictory schema, ambiguous ID/name aliases, invalid native driver
 values, evaluator errors and unsupported predicates yield `unsupported-validation`.
-Linked, lookup, computed and date dependencies remain outside this
+Linked, lookup, date and other computed dependencies remain outside this
 slice. Invalid or unsupported select drivers remain refused even when
 their predicates compile to a constant formula. No linked reads or
 metadata recovery are performed.

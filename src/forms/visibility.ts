@@ -1,5 +1,6 @@
 import {
     hasSelectCondition,
+    inspectFormFormulaConditions,
     inspectFormSelectConditions,
 } from './scalarConditionBoundary.js';
 import type {
@@ -11,6 +12,8 @@ import FormulaRunner from '../formulas/runner.js';
 import { extractIdentifiersFromFormula } from '../formulas/helpers/extractIdentifiersFromExpr.js';
 import {
     compileRuntimeConditions,
+    compileFormRuntimeConditions,
+    formulaConditionResultType,
     type CompileRuntimeConditionsInput,
     type ConditionCompileDiagnostic,
 } from './conditions.js';
@@ -111,6 +114,16 @@ const nativeValueProblem = (
     value: AirtableValue | undefined
 ): 'invalid-native-value' | 'non-finite-result' | null => {
     if (value == null) return null;
+    if (field.config.type === 'formula') {
+        const result = formulaConditionResultType(field);
+        if (result === 'singleLineText')
+            return typeof value === 'string' ? null : 'invalid-native-value';
+        return result == null || typeof value !== 'number'
+            ? 'invalid-native-value'
+            : Number.isFinite(value)
+              ? null
+              : 'non-finite-result';
+    }
     // Preserve the engine's native error provenance; marker strings are data.
     if (
         isObject(value) &&
@@ -234,7 +247,11 @@ function evaluateVisibility(
     if (input.evaluationMode === 'preview')
         return { type: 'visible', diagnostics: [] };
 
-    const compiled = compileRuntimeConditions({
+    const compile =
+        policy === 'form'
+            ? compileFormRuntimeConditions
+            : compileRuntimeConditions;
+    const compiled = compile({
         conditions:
             config != null && 'conditionalFields' in config
                 ? (config.conditionalFields ?? null)
@@ -260,14 +277,37 @@ function evaluateVisibility(
         policy === 'form'
             ? inspectFormSelectConditions(definition, input.airtableFields)
             : { type: 'supported' as const, drivers: [] };
+    const formulas =
+        policy === 'form'
+            ? inspectFormFormulaConditions(definition, input.airtableFields)
+            : { type: 'supported' as const, drivers: [] };
     if (
         (policy === 'legacy-flat' &&
             hasSelectCondition(definition, input.airtableFields)) ||
-        selects.type === 'unsupported'
+        selects.type === 'unsupported' ||
+        formulas.type === 'unsupported'
     )
         return { type: 'blocked', code: 'unsupported', diagnostics };
 
     try {
+        for (const { field: driver, reference } of formulas.drivers) {
+            const matches = input.airtableFields.filter(
+                (field) => field.id === reference || field.name === reference
+            );
+            if (
+                matches.length !== 1 ||
+                (driver.name !== driver.id &&
+                    Object.hasOwn(input.data, driver.name))
+            )
+                return {
+                    type: 'blocked',
+                    code: 'ambiguous-reference',
+                    diagnostics,
+                };
+            const problem = nativeValueProblem(driver, input.data[driver.id]);
+            if (problem != null)
+                return { type: 'blocked', code: problem, diagnostics };
+        }
         for (const driver of selects.drivers) {
             const matches = input.airtableFields.filter(
                 (field) => field.id === driver.id || field.name === driver.id
@@ -317,7 +357,10 @@ function evaluateVisibility(
                     code: 'ambiguous-reference',
                     diagnostics,
                 };
-            if (driver.isComputed === true)
+            if (
+                driver.isComputed === true &&
+                !(policy === 'form' && formulaConditionResultType(driver))
+            )
                 return {
                     type: 'blocked',
                     code: 'unsupported-driver',

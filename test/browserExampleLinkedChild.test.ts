@@ -1107,6 +1107,155 @@ describe('actual starter root versus nested linked-child admission', () => {
             );
         });
 
+    for (const timing of ['before-retry', 'during-retry'] as const)
+        it(`actual global Cancel rejects late hydration ${timing} and permits a fresh selected-record read`, async (test) => {
+            const parent = configuredParent();
+            const reads: { signal: AbortSignal | null | undefined }[] = [];
+            const gates = [deferred<void>(), deferred<void>()];
+            const loads: LoadExtensionInput[] = [];
+            const saves: SaveFormInput[] = [];
+            const fetch: typeof globalThis.fetch = async (resource, init) => {
+                const url = new URL(String(resource));
+                assert.equal(url.origin, 'https://sdk.example.test');
+                if (
+                    url.searchParams.get('route') === 'fetchExtensionForEndUser'
+                ) {
+                    loads.push(JSON.parse(String(init?.body)));
+                    return new Response(JSON.stringify(parent));
+                }
+                if (
+                    url.pathname ===
+                    '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates'
+                ) {
+                    const index = reads.length;
+                    reads.push({ signal: init?.signal });
+                    assert.ok(
+                        index < gates.length,
+                        'Only explicit initial read and retry dispatch.'
+                    );
+                    // Deliberately ignore abort: admission must reject a late response.
+                    await gates[index]!.promise;
+                    const records = selectedRecords(parent);
+                    records.tbl_child.recordIdsToAirtableRecords.rec_existing!.fields.fld_title =
+                        index === 0
+                            ? 'Cancelled-only detail'
+                            : 'Fresh retry detail';
+                    return new Response(
+                        JSON.stringify({ result: { data: records } })
+                    );
+                }
+                if (url.searchParams.get('route') === 'saveForm') {
+                    saves.push(JSON.parse(String(init?.body)));
+                    assert.fail('Hydration cancellation must never Save.');
+                }
+                assert.fail(`Unexpected synthetic route: ${url.pathname}`);
+            };
+            const window = await environment(test, fetch, true);
+            await import(
+                `${pathToFileURL(join(directory, 'main.mjs')).href}?case=${++moduleRevision}`
+            );
+            const origin = window.document.getElementById('api-origin');
+            const share = window.document.getElementById('share-id');
+            const record = window.document.getElementById('record-id');
+            assert.ok(origin instanceof window.HTMLInputElement);
+            assert.ok(share instanceof window.HTMLInputElement);
+            assert.ok(record instanceof window.HTMLInputElement);
+            origin.value = 'https://sdk.example.test';
+            share.value = 'share_synthetic_parent';
+            record.value = 'rec_parent';
+            window.document.getElementById('connection-form')!.dispatchEvent(
+                new window.Event('submit', {
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+            const body = window.document.body;
+            const screen = window.document.getElementById('screen')!;
+            await waitFor(
+                () =>
+                    loads.length === 1 &&
+                    screen.getAttribute('aria-busy') === 'false'
+            );
+            const native = body.querySelector(`[data-field-id="${fieldId}"]`);
+            assert.ok(native instanceof window.HTMLTextAreaElement);
+            const before = JSON.parse(native.value);
+            const draft = edit(
+                window,
+                body,
+                'fld_title',
+                'Unsaved parent draft survives Cancel'
+            );
+            const form = native.closest('form');
+            assert.ok(form);
+            button(body, 'Load selected records').click();
+            await waitFor(() => reads.length === 1);
+            const cancel = window.document.getElementById('cancel');
+            assert.ok(cancel instanceof window.HTMLButtonElement);
+            assert.equal(cancel.disabled, false);
+            cancel.click();
+            await waitFor(() => screen.getAttribute('aria-busy') === 'false');
+            const unchanged = () => {
+                assert.equal(
+                    body.textContent!.includes('Cancelled-only detail'),
+                    false
+                );
+                assert.equal(
+                    buttons(body, 'Edit linked record rec_existing').length,
+                    0
+                );
+                assert.deepEqual(JSON.parse(native.value), before);
+                assert.equal(
+                    draft.value,
+                    'Unsaved parent draft survives Cancel'
+                );
+                assert.equal(form.isConnected, true);
+                assert.equal(
+                    loads.length,
+                    1,
+                    'Cancel must not reload or destroy the Form.'
+                );
+                assert.equal(saves.length, 0);
+            };
+            unchanged();
+            if (timing === 'before-retry') {
+                gates[0]!.resolve();
+                await settle();
+                await settle();
+                unchanged();
+            }
+            button(body, 'Load selected records').click();
+            await waitFor(() => reads.length === 2);
+            assert.equal(reads[1]!.signal?.aborted, false);
+            if (timing === 'during-retry') {
+                gates[0]!.resolve();
+                await settle();
+                await settle();
+                unchanged();
+                assert.equal(screen.getAttribute('aria-busy'), 'true');
+                assert.equal(reads[1]!.signal?.aborted, false);
+            }
+            assert.equal(reads[0]!.signal?.aborted, true);
+            gates[1]!.resolve();
+            await waitFor(
+                () =>
+                    screen.getAttribute('aria-busy') === 'false' &&
+                    buttons(body, 'Edit linked record rec_existing').length ===
+                        1
+            );
+            // The starter exposes hydrated Edit actions; rich detail values are
+            // verified separately through the shared public-facet regression.
+            assert.equal(
+                body.textContent!.includes('Cancelled-only detail'),
+                false
+            );
+            assert.deepEqual(JSON.parse(native.value), before);
+            assert.equal(draft.value, 'Unsaved parent draft survives Cancel');
+            assert.equal(form.isConnected, true);
+            assert.equal(loads.length, 1);
+            assert.equal(reads.length, 2);
+            assert.equal(saves.length, 0);
+        });
+
     for (const mode of ['create', 'edit'] as const)
         for (const outcome of [
             'reconciled',

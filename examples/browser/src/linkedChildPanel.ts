@@ -352,7 +352,7 @@ export function createLinkedChildPanel(options: Options) {
                         request(
                             'Loading selected linked records…',
                             revision,
-                            () => linked.readSelected()
+                            (signal) => linked.readSelected({ signal })
                         )
                     )
                 );

@@ -211,6 +211,52 @@ describe('owner-held Form linked-child creation', () => {
             }
         });
 
+    it('adopts an accepted Create when the inverse is omitted from the public child projection', async () => {
+        const loaded = childForm('edit');
+        delete loaded.payload.fieldIdsToSchemas.fld_parent_a;
+        delete loaded.payload.fieldNamesToSchemas.fld_parent_a;
+        delete loaded.payload.formRecord.data.fld_parent_a;
+        loaded.payload.fieldIdsInForm = ['fld_title', 'fld_parent_b'];
+        const response = childSaved('edit');
+        delete response.record.fields.fld_parent_a;
+        const context = response.context;
+        assert.ok(context.type === 'modal');
+        const table = context.newTableIdsToLinkedTableStates.tbl_child!;
+        table.airtableFields = table.airtableFields.filter(
+            (field) => field.id !== 'fld_parent_a'
+        );
+        for (const record of Object.values(table.recordIdsToAirtableRecords))
+            delete record.fields.fld_parent_a;
+        const f = fixture({
+            mode: 'edit',
+            child: loaded,
+            save: async () => response,
+        });
+        try {
+            const before = structuredClone(
+                f.fields.controller.getState().draft!.data
+            );
+            assert(await f.coordinator.openCreate());
+            child(f)
+                .field('fld_title')
+                .setValue('Accepted nonpublic-inverse child');
+            assert.equal((await save(f)).type, 'saved');
+            assert.equal(f.coordinator.getSnapshot().completion, 'reconciled');
+            assert.deepEqual(f.fields.controller.getState().draft!.data, {
+                ...before,
+                fld_children_a: [
+                    ...(before.fld_children_a as string[]),
+                    'rec_created',
+                ],
+            });
+            await assert.rejects(save(f));
+            assert.equal(f.saves.length, 1);
+            assert.equal(f.journal.observed[0]?.outcome, 'saved');
+        } finally {
+            f.close();
+        }
+    });
+
     it('reconciles latest native siblings and preserves already-present duplicate occurrences without a write', async () => {
         for (const alreadyPresent of [false, true]) {
             const f = fixture();

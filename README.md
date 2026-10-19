@@ -512,8 +512,9 @@ customer application.
 This preview does not promise complete Form/Portal UI parity. The starter's
 prepared Review supports one-page and manual multipage Forms, with bounded
 scalar/select/linked/attachment answers and a strict supported date/dateTime
-contract. Computed fields still block final Review, and linked-child coordination
-still refuses configured Review. Rich condition drivers, automatic/compute
+contract. Computed fields still block final Review. Linked-child coordination
+requires an explicit Review adapter; the browser starter does not supply one.
+Rich condition drivers, automatic/compute
 workflows and other configurations listed in the
 [compatibility checklist](docs/ui.md#review-configuration-compatibility-checklist)
 remain unsupported. Portal filter controls edit one supported condition, not a
@@ -594,7 +595,9 @@ The packaged browser starter supplies manual multipage navigation from enabled
 frontend section headers, with Back/Next, current-page validation, conditional
 page skipping and final all-page validation. Navigation performs no Save.
 [Linked-child Create and Edit](docs/forms.md#configured-linked-child-create-and-edit)
-also support one-page and manual multipage Forms, but refuse configured Review.
+also support one-page and manual multipage Forms. Custom applications may supply
+the existing page-owner Review adapter to the linked-child owner; without it,
+including in the browser starter, configured child Review remains refused.
 
 The packaged browser starter also supplies a
 [bounded Review/Edit/Confirm recipe](examples/browser/README.md#form-workflow)

@@ -51,6 +51,11 @@ jobs:
               run: node scripts/check-linked-records-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-records"
               env:
                   SDK_LINKED_RECORDS_CHROMIUM: /usr/bin/google-chrome
+            - name: Execute installed linked-child Review Chromium proof
+              timeout-minutes: 5
+              run: node scripts/check-linked-child-review-browser.mjs "${{ runner.temp }}/sdk-native-browser-results/linked-child-review"
+              env:
+                  SDK_NATIVE_CHROMIUM: /usr/bin/google-chrome
             - name: Retain native Chromium receipt and failure evidence
               if: always() && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

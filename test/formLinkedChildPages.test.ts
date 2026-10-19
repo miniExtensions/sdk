@@ -3,6 +3,11 @@ import { describe, it } from 'node:test';
 import { File } from 'node:buffer';
 import { createFormFieldBindings } from '../src/forms/bindings.js';
 import { RecoveryJournal } from '../src/forms/recovery.js';
+import type {
+    FormPageOwnerOptions,
+    FormPageReviewDecision,
+    FormPageReviewRequest,
+} from '../src/forms/pages.js';
 import { createMiniExtensionsClient } from '../src/runtime/client.js';
 import type {
     FormLoadedResult,
@@ -31,6 +36,7 @@ const setup = (
     options: {
         loaded?: FormLoadedResult;
         save?: () => Promise<SaveFormResult>;
+        review?: FormPageOwnerOptions['review'];
     } = {}
 ) => {
     const loaded =
@@ -56,6 +62,7 @@ const setup = (
     }
     const journal = new Journal();
     let scope = { ownerId: 'synthetic-owner', revision: 0 };
+    let configuration = 0;
     const client = createMiniExtensionsClient({
         apiOrigin: 'https://sdk.example.test',
         session: { visitor: 'synthetic-A' },
@@ -98,10 +105,12 @@ const setup = (
         client,
         saveOptions: formSaveOptions(),
         getScope: () => scope,
+        configurationRevision: () => configuration,
     });
     const owner = fields.linkedChild('fld_children_a', {
         journal,
         loadVersion: 1,
+        review: options.review,
     });
     const open = async () => {
         if (edit) {
@@ -138,6 +147,10 @@ const setup = (
         advance,
         final,
         save,
+        changeConfiguration: () => {
+            configuration++;
+            fields.refresh();
+        },
         replaceOwner: () => {
             scope = { ownerId: 'synthetic-B', revision: 1 };
             fields.refresh();
@@ -547,4 +560,468 @@ describe('owned linked child manual pages', () => {
             f.close();
         }
     });
+});
+
+const confirmed = (): FormPageReviewDecision => ({
+    type: 'confirm',
+    signal: new AbortController().signal,
+    isCurrent: () => true,
+});
+const reviewChild = (edit: boolean, multipage = true) => {
+    const loaded = pagedChildForm(edit ? 'rec_existing' : undefined);
+    loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
+    if (!multipage)
+        loaded.payload.publicFields.state.multiPageFormMode = 'one-page';
+    return loaded;
+};
+
+describe('configured linked-child Review composition', () => {
+    for (const edit of [false, true]) {
+        for (const multipage of [false, true]) {
+            it(`${edit ? 'Edit' : 'Create'} ${multipage ? 'multipage' : 'one-page'} reviews only at final Save and reconciles once`, async () => {
+                const entered = deferred<FormPageReviewRequest>();
+                const decision = deferred<FormPageReviewDecision>();
+                let reviews = 0;
+                const f = setup(edit, {
+                    loaded: reviewChild(edit, multipage),
+                    review: async (request) => {
+                        reviews++;
+                        entered.resolve(request);
+                        return decision.promise;
+                    },
+                });
+                try {
+                    assert.equal(await f.open(), true);
+                    const s = f.ready();
+                    if (multipage) {
+                        await assert.rejects(f.save());
+                        assert.equal(reviews, 0);
+                    }
+                    f.final();
+                    const native = structuredClone(
+                        s.child.controller.getState().draft!.data
+                    );
+                    const saving = f.save();
+                    const request = await entered.promise;
+                    assert.equal(request.isCurrent(), true);
+                    assert.deepEqual(request.draft.data, native);
+                    // Presentation copies cannot change transport values.
+                    request.draft.data.fld_title = 'Presentation-only text';
+                    request.loaded.payload.formRecord.data.fld_note =
+                        'Presentation-only note';
+                    assert.equal(s.pages.getSnapshot().reviewing, true);
+                    assert.equal(
+                        s.pages.back(s.pages.getSnapshot().revision).accepted,
+                        false
+                    );
+                    assert.equal(
+                        s.pages.next(s.pages.getSnapshot().revision).accepted,
+                        false
+                    );
+                    await assert.rejects(f.save());
+                    assert.equal(f.calls.begins, 0);
+                    assert.equal(f.calls.saves.length, 0);
+                    assert.equal(
+                        f.fields
+                            .field('fld_title')
+                            .setValue('Unrelated parent edit').accepted,
+                        true
+                    );
+                    decision.resolve(confirmed());
+                    assert.equal((await saving).type, 'saved');
+                    assert.equal(reviews, 1);
+                    assert.equal(f.calls.begins, 1);
+                    assert.equal(f.calls.saves.length, 1);
+                    assert.deepEqual(f.calls.saves[0]!.formRecord.data, native);
+                    assert.equal(
+                        f.owner.getSnapshot().completion,
+                        'reconciled'
+                    );
+                    const data = f.fields.controller.getState().draft!.data;
+                    assert.equal(data.fld_title, 'Unrelated parent edit');
+                    assert.deepEqual(data.fld_children_b, ['rec_other_field']);
+                    assert.deepEqual(
+                        data.fld_children_a,
+                        edit
+                            ? ['rec_existing', 'rec_existing', 'rec_sibling']
+                            : [
+                                  'rec_existing',
+                                  'rec_existing',
+                                  'rec_sibling',
+                                  'rec_created',
+                              ]
+                    );
+                    await assert.rejects(f.save());
+                    assert.equal(f.calls.saves.length, 1);
+                } finally {
+                    f.close();
+                }
+            });
+        }
+
+        for (const action of [
+            'edit',
+            'escape',
+            'abort',
+            'close',
+            'parent-retirement',
+            'configuration',
+            'draft',
+            'reentrant-confirm',
+        ] as const) {
+            it(`${edit ? 'Edit' : 'Create'} ${action} during Review performs zero Saves`, async () => {
+                const entered = deferred<FormPageReviewRequest>();
+                const decision = deferred<FormPageReviewDecision>();
+                const f = setup(edit, {
+                    loaded: reviewChild(edit),
+                    review: async (request) => {
+                        entered.resolve(request);
+                        return decision.promise;
+                    },
+                });
+                try {
+                    assert.equal(await f.open(), true);
+                    f.final();
+                    const s = f.ready();
+                    const abort = new AbortController();
+                    const saving = f.owner.save(s.revision, {
+                        signal: abort.signal,
+                    });
+                    const rejected = assert.rejects(saving);
+                    const request = await entered.promise;
+                    if (action === 'close') f.owner.close();
+                    else if (action === 'abort') abort.abort();
+                    else if (action === 'parent-retirement') f.replaceOwner();
+                    else if (action === 'configuration')
+                        f.changeConfiguration();
+                    else if (action === 'draft') {
+                        s.child.field('fld_title').setValue('New draft');
+                        decision.resolve(confirmed());
+                    } else if (action === 'reentrant-confirm') {
+                        decision.resolve({
+                            type: 'confirm',
+                            signal: new AbortController().signal,
+                            isCurrent: () => {
+                                s.child
+                                    .field('fld_title')
+                                    .setValue('Reentrant edit');
+                                return true;
+                            },
+                        });
+                    } else decision.resolve({ type: 'edit' }); // Edit and Escape use the same adapter decision.
+                    await rejected;
+                    assert.equal(f.calls.begins, 0);
+                    assert.equal(f.calls.saves.length, 0);
+                    if (
+                        [
+                            'close',
+                            'abort',
+                            'parent-retirement',
+                            'configuration',
+                        ].includes(action)
+                    )
+                        assert.equal(request.signal.aborted, true);
+                    if (action === 'edit' || action === 'escape') {
+                        assert.equal(f.owner.getSnapshot().phase, 'ready');
+                        assert.equal(f.owner.getSnapshot().error, null);
+                        assert.ok(f.ready().child);
+                    }
+                } finally {
+                    f.close();
+                }
+            });
+        }
+
+        it(`${edit ? 'Edit' : 'Create'} allows inspection of invalid answers but Confirm cannot bypass validation`, async () => {
+            let reviews = 0;
+            const f = setup(edit, {
+                loaded: reviewChild(edit),
+                review: async () => {
+                    reviews++;
+                    return confirmed();
+                },
+            });
+            try {
+                assert.equal(await f.open(), true);
+                f.final();
+                f.ready().child.field('fld_title').setValue('');
+                assert.equal(f.ready().pages.getSnapshot().canReview, true);
+                assert.equal(f.ready().pages.getSnapshot().canSubmit, false);
+                await assert.rejects(f.save());
+                assert.equal(reviews, 1);
+                assert.equal(f.calls.begins, 0);
+                assert.equal(f.calls.saves.length, 0);
+            } finally {
+                f.close();
+            }
+        });
+
+        it(`${edit ? 'Edit' : 'Create'} keeps backend validation and uncertain outcomes on the existing lifecycle`, async () => {
+            let attempts = 0;
+            const f = setup(edit, {
+                loaded: reviewChild(edit),
+                review: async () => confirmed(),
+                save: async () => {
+                    if (++attempts === 1)
+                        return structuredClone(validationError);
+                    throw Error('Synthetic lost response');
+                },
+            });
+            try {
+                assert.equal(await f.open(), true);
+                f.final();
+                assert.equal((await f.save()).type, 'error');
+                assert.equal(f.owner.getSnapshot().phase, 'ready');
+                await assert.rejects(f.save());
+                assert.equal(f.owner.getSnapshot().phase, 'unknown');
+                await assert.rejects(f.save());
+                assert.equal(f.calls.saves.length, 2);
+                assert.equal(f.owner.getSnapshot().completion, 'none');
+            } finally {
+                f.close();
+            }
+        });
+    }
+
+    it('keeps configured Review unavailable without an adapter and refuses unsupported presentation', async () => {
+        const noAdapter = setup(false, { loaded: reviewChild(false) });
+        try {
+            assert.equal(await noAdapter.open(), false);
+            assert.equal(noAdapter.calls.saves.length, 0);
+        } finally {
+            noAdapter.close();
+        }
+        const unsupported = setup(false, {
+            loaded: reviewChild(false),
+            review: async () => {
+                throw Error('Unsupported answers');
+            },
+        });
+        try {
+            assert.equal(await unsupported.open(), true);
+            unsupported.final();
+            await assert.rejects(unsupported.save(), /Unsupported answers/);
+            assert.equal(unsupported.calls.begins, 0);
+            assert.equal(unsupported.calls.saves.length, 0);
+        } finally {
+            unsupported.close();
+        }
+    });
+
+    it('replacing the adapter retires the old owner and pending Review', async () => {
+        const entered = deferred<FormPageReviewRequest>();
+        const decision = deferred<FormPageReviewDecision>();
+        const review = async (request: FormPageReviewRequest) => {
+            entered.resolve(request);
+            return decision.promise;
+        };
+        const f = setup(false, { loaded: reviewChild(false), review });
+        try {
+            assert.equal(
+                f.fields.linkedChild('fld_children_a', {
+                    journal: f.journal,
+                    loadVersion: 1,
+                    review,
+                }),
+                f.owner
+            );
+            assert.equal(await f.open(), true);
+            f.final();
+            const rejected = assert.rejects(f.save());
+            const request = await entered.promise;
+            const replacement = f.fields.linkedChild('fld_children_a', {
+                journal: f.journal,
+                loadVersion: 1,
+                review: async () => confirmed(),
+            });
+            assert.notEqual(replacement, f.owner);
+            await rejected;
+            assert.equal(request.signal.aborted, true);
+            assert.equal(f.calls.saves.length, 0);
+        } finally {
+            f.close();
+        }
+    });
+});
+
+describe('linked-child Review admission and receipt boundaries', () => {
+    for (const [key, value] of [
+        ['enableFormComputeMode', true],
+        ['autoSubmitAfterPrefill', true],
+        ['enableCaptcha', true],
+        ['multiPageFormMode', 'future-mode'],
+    ] as const) {
+        it(`an adapter does not admit ${key}`, async () => {
+            const loaded = reviewChild(false);
+            Object.assign(loaded.payload.publicFields.state, { [key]: value });
+            let reviews = 0;
+            const f = setup(false, {
+                loaded,
+                review: async () => {
+                    reviews++;
+                    return confirmed();
+                },
+            });
+            try {
+                assert.equal(await f.open(), false);
+                assert.equal(reviews, 0);
+                assert.equal(f.calls.begins, 0);
+                assert.equal(f.calls.saves.length, 0);
+            } finally {
+                f.close();
+            }
+        });
+    }
+
+    it('rejects a retained final action after navigation away and back before Review', async () => {
+        let reviews = 0;
+        const f = setup(false, {
+            loaded: reviewChild(false),
+            review: async () => {
+                reviews++;
+                return confirmed();
+            },
+        });
+        try {
+            assert.equal(await f.open(), true);
+            f.final();
+            const s = f.ready();
+            assert.equal(
+                s.pages.back(s.pages.getSnapshot().revision).accepted,
+                true
+            );
+            f.final();
+            await assert.rejects(f.owner.save(s.revision));
+            assert.equal(reviews, 0);
+            assert.equal(f.calls.begins, 0);
+            assert.equal((await f.save()).type, 'saved');
+            assert.equal(reviews, 1);
+        } finally {
+            f.close();
+        }
+    });
+
+    it('an aborted confirmation presentation cannot authorize transport', async () => {
+        const presentation = new AbortController();
+        const f = setup(false, {
+            loaded: reviewChild(false),
+            review: async () => {
+                presentation.abort();
+                return {
+                    type: 'confirm',
+                    signal: presentation.signal,
+                    isCurrent: () => true,
+                };
+            },
+        });
+        try {
+            assert.equal(await f.open(), true);
+            f.final();
+            await assert.rejects(f.save());
+            assert.equal(f.calls.begins, 0);
+            assert.equal(f.calls.saves.length, 0);
+        } finally {
+            f.close();
+        }
+    });
+
+    it('reentrant adapter Close prevents Save even if it returns Confirm', async () => {
+        const f = setup(false, {
+            loaded: reviewChild(false),
+            review: async () => {
+                f.owner.close();
+                return confirmed();
+            },
+        });
+        try {
+            assert.equal(await f.open(), true);
+            f.final();
+            await assert.rejects(f.save());
+            assert.equal(f.calls.begins, 0);
+            assert.equal(f.calls.saves.length, 0);
+        } finally {
+            f.close();
+        }
+    });
+
+    it('parent configuration retirement after reviewed dispatch retains the known receipt without reconciliation', async () => {
+        const response = deferred<SaveFormResult>();
+        const dispatched = deferred<void>();
+        const f = setup(false, {
+            loaded: reviewChild(false),
+            review: async () => confirmed(),
+            save: async () => {
+                dispatched.resolve();
+                return response.promise;
+            },
+        });
+        try {
+            assert.equal(await f.open(), true);
+            f.final();
+            const before = structuredClone(
+                f.fields.controller.getState().draft!.data
+            );
+            const saving = f.save();
+            await dispatched.promise;
+            f.changeConfiguration();
+            response.resolve(childSaved('edit'));
+            assert.equal((await saving).type, 'saved');
+            assert.equal(f.calls.saves.length, 1);
+            assert.equal(
+                f.owner.getSnapshot().completion,
+                'saved-not-reconciled'
+            );
+            assert.deepEqual(
+                f.fields.controller.getState().draft!.data,
+                before
+            );
+            await assert.rejects(f.save());
+            assert.equal(f.calls.saves.length, 1);
+        } finally {
+            f.close();
+        }
+    });
+});
+
+it('a late cancelled adapter cannot clear the next Review retirement guard', async () => {
+    const firstDecision = deferred<FormPageReviewDecision>();
+    const secondDecision = deferred<FormPageReviewDecision>();
+    const firstEntered = deferred<FormPageReviewRequest>();
+    const secondEntered = deferred<FormPageReviewRequest>();
+    let reviews = 0;
+    const f = setup(false, {
+        loaded: reviewChild(false),
+        review: async (request) => {
+            if (++reviews === 1) {
+                firstEntered.resolve(request);
+                return firstDecision.promise;
+            }
+            secondEntered.resolve(request);
+            return secondDecision.promise;
+        },
+    });
+    try {
+        assert.equal(await f.open(), true);
+        f.final();
+        const abort = new AbortController();
+        const first = assert.rejects(
+            f.owner.save(f.owner.getSnapshot().revision, {
+                signal: abort.signal,
+            })
+        );
+        await firstEntered.promise;
+        abort.abort();
+        await first;
+        const second = assert.rejects(f.save());
+        const request = await secondEntered.promise;
+        firstDecision.resolve({ type: 'edit' });
+        await new Promise<void>((resolve) => setImmediate(resolve));
+        f.changeConfiguration();
+        assert.equal(request.signal.aborted, true);
+        await second;
+        assert.equal(f.calls.begins, 0);
+        assert.equal(f.calls.saves.length, 0);
+    } finally {
+        f.close();
+    }
 });

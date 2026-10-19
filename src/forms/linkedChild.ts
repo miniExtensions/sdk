@@ -8,7 +8,12 @@ import type { FormFieldBindings } from './bindings.js';
 import type { FormDraftHandle } from './drafts.js';
 import type { FormOwnerScope, FormSaveLifecycle } from './controller.js';
 import type { NormalizedFormSaveResult, FormSaveOptions } from './helpers.js';
-import { createFormPageOwner, type FormPageOwner } from './pages.js';
+import {
+    createFormPageOwner,
+    FormPageError,
+    type FormPageOwner,
+    type FormPageOwnerOptions,
+} from './pages.js';
 import { withFormSaveAdmission } from './saveAdmission.js';
 import {
     RecoveryJournal,
@@ -28,6 +33,8 @@ import {
 export type FormLinkedChildRecovery = {
     journal: RecoveryJournal;
     loadVersion: number;
+    /** Optional final Review presentation; omission preserves configured-Review refusal. */
+    review?: FormPageOwnerOptions['review'];
 };
 export type FormLinkedChildSnapshot = {
     revision: number;
@@ -202,6 +209,7 @@ export function createFormLinkedChildOwner(
         saveOptions: FormSaveOptions;
         stops: (() => void)[];
         released: boolean;
+        reviewSignal: AbortSignal | null;
     };
     let intent: Intent | null = null;
     let lastRecordId: string | null = null;
@@ -210,6 +218,8 @@ export function createFormLinkedChildOwner(
         notifyPending = false;
     const retirePresentation = () => {
         parentRetired = true;
+        // Cancel presentation promptly, but retain a dispatched Save's receipt lease.
+        if (intent?.reviewSignal) intent.pages?.dispose();
     };
     const parentCurrent = () => {
         if (disposed || parentRetired) return false;
@@ -536,8 +546,9 @@ export function createFormLinkedChildOwner(
                         'one-page' &&
                     response.payload.publicFields.state.multiPageFormMode !==
                         'multi-page') ||
-                response.payload.publicFields.state
-                    .promptUserBeforeSubmission === true ||
+                (response.payload.publicFields.state
+                    .promptUserBeforeSubmission === true &&
+                    typeof options.review !== 'function') ||
                 response.payload.publicFields.state.enableCaptcha === true ||
                 hasUnsupportedChildLinkedFilters(response)
             )
@@ -586,6 +597,7 @@ export function createFormLinkedChildOwner(
                     saveOptions,
                     stops: [],
                     released: false,
+                    reviewSignal: null,
                 };
                 intent = candidate;
                 initializing = false;
@@ -593,6 +605,20 @@ export function createFormLinkedChildOwner(
                     fields,
                     isCurrent: () => childCurrent(candidate!),
                     configurationRevision: () => 0,
+                    review: options.review
+                        ? async (request) => {
+                              const held = candidate!;
+                              requireParent(held);
+                              held.reviewSignal = request.signal;
+                              try {
+                                  return await options.review!(request);
+                              } finally {
+                                  // A cancelled adapter may settle after another Review opens.
+                                  if (held.reviewSignal === request.signal)
+                                      held.reviewSignal = null;
+                              }
+                          }
+                        : undefined,
                 });
                 candidate.pages = pages;
                 if (pages.getSnapshot().status === 'blocked' || !ownsLoad())
@@ -710,7 +736,10 @@ export function createFormLinkedChildOwner(
                 throw Error('This child submission is unavailable.');
             requireParent(candidate);
             const page = candidate.pages.getSnapshot();
-            if (!page.canSubmit)
+            const reviewRequired =
+                candidate.loaded.payload.publicFields.state
+                    .promptUserBeforeSubmission === true;
+            if (!(reviewRequired ? page.canReview : page.canSubmit))
                 throw Error('Complete the child Form before submitting.');
             if (revision !== renderedRevision || !childCurrent(candidate))
                 throw Error('This child submission is stale.');
@@ -933,11 +962,18 @@ export function createFormLinkedChildOwner(
                         error =
                             'The child Save outcome is unknown. Inspect it before another submission.';
                     } else {
-                        phase = result?.type === 'error' ? 'ready' : 'error';
-                        error =
-                            result?.type === 'error'
-                                ? 'Review the returned child validation errors.'
-                                : 'Child Save was not accepted. Retry only after checking its state.';
+                        const cancelledReview =
+                            failure instanceof FormPageError &&
+                            failure.reason === 'review-cancelled';
+                        phase =
+                            result?.type === 'error' || cancelledReview
+                                ? 'ready'
+                                : 'error';
+                        error = cancelledReview
+                            ? null
+                            : result?.type === 'error'
+                              ? 'Review the returned child validation errors.'
+                              : 'Child Save was not accepted. Retry only after checking its state.';
                     }
                     emit();
                 }
@@ -998,7 +1034,7 @@ export function createFormLinkedChildOwner(
             activeLoad = null;
             load?.abort();
             // Parent-only retirement must not erase an in-flight child receipt.
-            if (intent && !saving) release(intent);
+            if (intent && (!saving || intent.reviewSignal)) release(intent);
             emit();
             listeners.clear();
         },

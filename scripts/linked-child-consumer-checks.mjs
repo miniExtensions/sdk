@@ -18,6 +18,16 @@ owner.complete({recordId:'arbitrary'});
 // @ts-expect-error a rendered revision is required
 owner.save();
 void [snapshot.child,snapshot.pages,snapshot.completion];
+const reviewed = parent.linkedChild('reviewedChildren', {
+    journal: new RecoveryJournal(), loadVersion: 1,
+    review: async request => {
+        const current: boolean = request.isCurrent();
+        const signal: AbortSignal = request.signal;
+        void [current, signal, request.loaded, request.draft];
+        return { type: 'edit' };
+    },
+});
+reviewed.save(reviewed.getSnapshot().revision);
 `;
 
 const deferred = () => {

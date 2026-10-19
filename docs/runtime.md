@@ -283,6 +283,13 @@ A session is a flat map of stored credential keys to opaque token strings.
 with a copy. `setSession({})` clears it. The token helpers return a new map and
 never persist it themselves.
 
+`generateLoginCredentialKey({extensionId, tableId, loginFieldNames})` exposes
+the same key derivation used by `withLoginToken` for host storage adapters.
+It sorts a copy of the field names using JavaScript string order, preserves
+duplicates, and URI-escapes the UTF-8 base64 encoding of the joined names,
+table ID and extension ID. It performs no storage access or authentication.
+This is the existing compatibility format, not a collision-free identity scheme.
+
 Supply only visitor credentials. Firebase website sessions (`miniExtSession`)
 are rejected. Each request captures its own session copy: v1 receives it in
 `miniExtStorageV4`, and tRPC receives the same map in the `miniext-context`

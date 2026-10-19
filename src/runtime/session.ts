@@ -57,6 +57,20 @@ const encodeBase64Utf8 = (value: string): string => {
     return encoded;
 };
 
+/** Preserve the hosted credential key format without reading or writing session storage. */
+export const generateLoginCredentialKey = (scope: {
+    extensionId: string;
+    tableId: string;
+    loginFieldNames: readonly string[];
+}): string => {
+    const sortedFieldNames = [...scope.loginFieldNames].sort();
+    return encodeURIComponent(
+        encodeBase64Utf8(
+            sortedFieldNames.join('') + scope.tableId + scope.extensionId
+        )
+    );
+};
+
 /** Supply table ID and login field names from the loaded login-page payload. */
 export const withLoginToken = (
     session: Readonly<RuntimeSession>,
@@ -67,14 +81,7 @@ export const withLoginToken = (
         encryptedLoginToken: string;
     }
 ): RuntimeSession => {
-    const sortedFieldNames = [...credential.loginFieldNames].sort();
-    const key = encodeURIComponent(
-        encodeBase64Utf8(
-            sortedFieldNames.join('') +
-                credential.tableId +
-                credential.extensionId
-        )
-    );
+    const key = generateLoginCredentialKey(credential);
     return {
         ...copyVisitorSession(session),
         [key]: credential.encryptedLoginToken,

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { withExtensionPassword, withLoginToken } from '../src/runtime/index.js';
+import {
+    generateLoginCredentialKey,
+    withExtensionPassword,
+    withLoginToken,
+} from '../src/runtime/index.js';
 
 describe('runtime credential helpers', () => {
     it('rejects a hosted Firebase principal instead of copying it into visitor credentials', () => {
@@ -103,4 +107,83 @@ describe('runtime credential helpers', () => {
         );
         assert.deepEqual(credential.loginFieldNames, ['Second', 'First']);
     });
+});
+
+describe('hosted login credential key compatibility', () => {
+    // Fixed keys produced by the unchanged hosted helper at monorepo 52444394.
+    const cases = [
+        {
+            name: 'ordered ASCII',
+            loginFieldNames: ['beta', 'alpha', 'gamma'],
+            tableId: 'tblOrders',
+            extensionId: 'extPortal',
+            expected: 'YWxwaGFiZXRhZ2FtbWF0YmxPcmRlcnNleHRQb3J0YWw%3D',
+        },
+        {
+            name: 'Unicode',
+            loginFieldNames: ['Émail', '💼', '名前'],
+            tableId: 'tblCafé',
+            extensionId: 'ext门户',
+            expected: 'w4ltYWls5ZCN5YmN8J%2BSvHRibENhZsOpZXh06Zeo5oi3',
+        },
+        {
+            name: 'UTF-16 sort',
+            loginFieldNames: ['\uE000', '\u{10000}'],
+            tableId: 'tblOne',
+            extensionId: 'extOne',
+            expected: '8JCAgO6AgHRibE9uZWV4dE9uZQ%3D%3D',
+        },
+        {
+            name: 'duplicate fields',
+            loginFieldNames: ['Email', 'Email', 'Access'],
+            tableId: 'tblOne',
+            extensionId: 'extOne',
+            expected: 'QWNjZXNzRW1haWxFbWFpbHRibE9uZWV4dE9uZQ%3D%3D',
+        },
+        {
+            name: 'empty fields',
+            loginFieldNames: [],
+            tableId: 'tblOne',
+            extensionId: 'extOne',
+            expected: 'dGJsT25lZXh0T25l',
+        },
+        {
+            name: 'URI escaping',
+            loginFieldNames: ['\uffff'],
+            tableId: 'tblOne',
+            extensionId: 'extOne',
+            expected: '77%2B%2FdGJsT25lZXh0T25l',
+        },
+        {
+            name: 'unpaired surrogate',
+            loginFieldNames: ['\ud800'],
+            tableId: 'tblOne',
+            extensionId: 'extOne',
+            expected: '77%2B9dGJsT25lZXh0T25l',
+        },
+    ];
+    for (const { name, expected, ...input } of cases) {
+        it(`preserves the legacy key and input for ${name}`, () => {
+            const scope = Object.freeze({
+                ...input,
+                loginFieldNames: Object.freeze([...input.loginFieldNames]),
+            });
+            assert.equal(generateLoginCredentialKey(scope), expected);
+            assert.equal(
+                generateLoginCredentialKey({
+                    ...scope,
+                    loginFieldNames: [...scope.loginFieldNames].reverse(),
+                }),
+                expected
+            );
+            assert.deepEqual(
+                withLoginToken(
+                    {},
+                    { ...scope, encryptedLoginToken: 'synthetic-token' }
+                ),
+                { [expected]: 'synthetic-token' }
+            );
+            assert.deepEqual(scope.loginFieldNames, input.loginFieldNames);
+        });
+    }
 });

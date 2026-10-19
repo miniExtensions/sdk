@@ -210,6 +210,7 @@ export function createFormFieldBindings(
             model: ReturnType<typeof createFormLinkedChildOwner>;
             journal: FormLinkedChildRecovery['journal'];
             loadVersion: number;
+            review: FormLinkedChildRecovery['review'];
         }
     >();
     const retainedChildren = new Set<
@@ -630,7 +631,8 @@ export function createFormFieldBindings(
                 const previous = linkedChildren.get(id);
                 if (
                     previous?.journal === recovery.journal &&
-                    previous.loadVersion === recovery.loadVersion
+                    previous.loadVersion === recovery.loadVersion &&
+                    previous.review === recovery.review
                 )
                     return previous.model;
                 if (previous) {
@@ -782,6 +784,7 @@ export function createFormFieldBindings(
                     model,
                     journal: recovery.journal,
                     loadVersion: recovery.loadVersion,
+                    review: recovery.review,
                 });
                 retainedChildren.add(model);
                 return model;

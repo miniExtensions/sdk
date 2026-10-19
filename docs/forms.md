@@ -2423,8 +2423,9 @@ scope's submit action directly for a child Save. Unfinished inputs and pending
 files keep their existing navigation/Save gates. Unmount retains pages and draft;
 Close or owner replacement unsubscribes and retires the old pages.
 
-Prepared Review, compute, captcha, automatic submission and nested child flows
-remain unsupported. Unknown page modes are refused. Existing child
+Configured Review requires the explicit adapter described below; omission
+preserves its refusal, including in the browser starter. Compute, captcha,
+automatic submission and nested child flows remain unsupported. Unknown page modes are refused. Existing child
 validation and backend validation remain authoritative. Successful reconciliation
 updates the shared parent's native linked IDs, rich presentation and dirty state;
 other parent values remain in the shared draft.
@@ -2476,6 +2477,62 @@ unknown outcome. Keep the recovery journal, inspect the outcome, and explicitly
 reload or resolve it before proceeding. There is no automatic mutation retry.
 The installed checks use synthetic load, validation and known-saved responses;
 they demonstrate the recipe and native reconciliation, not live persistence.
+
+### Configured linked-child Review
+
+Custom applications can supply the same explicit Review adapter used by
+`createFormPageOwner` when acquiring the child owner:
+
+```ts
+import {
+    RecoveryJournal,
+    type FormFieldBindings,
+    type FormPageReviewRequest,
+    type FormPageReviewDecision,
+} from '@miniextensions/sdk/forms';
+
+declare const parent: FormFieldBindings;
+declare const fieldId: string;
+declare const acceptedLoadVersion: number;
+declare function reviewChild(
+    request: FormPageReviewRequest
+): Promise<FormPageReviewDecision>;
+
+const childOwner = parent.linkedChild(fieldId, {
+    journal: new RecoveryJournal(),
+    loadVersion: acceptedLoadVersion,
+    review: reviewChild,
+});
+```
+
+Keep the adapter identity stable while reusing an owner. Changing it, the journal,
+or the load version retires the previous owner and any open Review. This is a
+headless composition hook, not a new renderer; the browser starter does not yet
+provide a child Review adapter.
+
+For configured Review, enable the final action from `snapshot.pages`'s
+`canReview` rather than `canSubmit`, and always invoke
+`childOwner.save(snapshot.revision)`. Do not call `pages.submit` or the borrowed
+child binding's Save directly. The coordinator owns the sole Save, recovery
+journal, receipt and parent reconciliation path. Review opens only on the final
+visible page of a one-page or manual multipage child. Ordinary validation errors
+may be inspected; Confirm still requires all-page validation before dispatch.
+
+Reuse the prepared Review presentation recipe and its supported-answer/privacy
+checks. An adapter must reject unsupported answers rather than confirm an
+incomplete presentation; computed-field Review remains unsupported by that
+recipe. Detached request copies are presentation-only. Confirm must return the
+fresh presentation guard and abort signal required by the page-owner contract.
+Edit and Escape return `{ type: 'edit' }`; Close cancels the child owner. Observe
+the request signal to dismiss stale presentation. These cancellations, parent
+retirement, stale child edits and stale configuration cannot dispatch Save.
+Unrelated parent edits remain intact during successful reconciliation.
+
+Cancellation rejects with `FormPageError('review-cancelled')` and leaves a live
+child available for editing without a Save-error banner. Backend validation and
+unknown-outcome recovery retain the existing child lifecycle. A known saved
+child that cannot reconcile is still `saved-not-reconciled`, never permission
+to repeat its Save.
 
 ## Optional create-Form progress
 

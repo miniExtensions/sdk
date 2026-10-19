@@ -113,7 +113,9 @@ refusal, not a raw fallback.
   Multipage Review opens on the final available page; Confirm retains all-page
   validation before final Save. Compute and automatic submission remain unsupported.
 - Linked-child coordination supports one-page and manual multipage Forms, but
-  still refuses configured Review.
+  requires an explicit page-owner Review adapter for configured Review. The
+  browser starter does not supply a child adapter and still refuses it. See
+  [linked-child Review composition](forms.md#configured-linked-child-review).
 - Answers may be supported physical scalars, single/multi-selects, linked IDs or
   conservative attachment summaries and bounded date/dateTime strings. Rich-text, computed/lookup and
   other unsupported answer types remain refused, even when empty.

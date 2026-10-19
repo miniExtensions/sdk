@@ -773,7 +773,7 @@ const originCheckTimer = setTimeout(() => {console.error('Installed origin check
 import { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { AirtableFieldType as PublicFieldType } from '@miniextensions/sdk/field-types';
 if (PublicFieldType !== AirtableFieldType) throw new Error('ESM field enum identity changed');
-import { createMiniExtensionsClient, DEFAULT_API_ORIGIN, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
+import { createMiniExtensionsClient, DEFAULT_API_ORIGIN, generateLoginCredentialKey, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
 if (DEFAULT_API_ORIGIN !== 'https://web.miniextensions.com') throw new Error('ESM public API origin default changed');
 for (const options of [undefined, {}, {apiOrigin:undefined}]) {
     if (Object.keys(createMiniExtensionsClient(options).getSession()).length !== 0) throw new Error('ESM default client construction failed');
@@ -782,6 +782,8 @@ const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com'
 client.setSession(withExtensionPassword({}, { extensionId: 'extExample', encryptedExtensionPassword: 'password-token' }));
 client.setSession(withLoginToken(client.getSession(), { extensionId: 'extExample', tableId: 'tblExample', loginFieldNames: ['Email'], encryptedLoginToken: 'login-token' }));
 if (Object.keys(client.getSession()).length !== 2) throw new Error('Session helper failed');
+const keyScope = {extensionId:'extOne',tableId:'tblOne',loginFieldNames:Object.freeze(['Email','Email','Access'])};
+if (generateLoginCredentialKey(keyScope) !== 'QWNjZXNzRW1haWxFbWFpbHRibE9uZWV4dE9uZQ%3D%3D') throw new Error('Installed credential key compatibility changed');
 interface NumericOptions { precision: number; }
 const numericOptions: NumericOptions = { precision: 0 };
 const runner = new FormulaRunner('{Quantity} * 3');
@@ -817,7 +819,8 @@ const loaded = Object.keys(require.cache).filter(path => !before.has(path));
 if (!loaded.every(path => path.endsWith('/dist/cjs/field-types.js') || path.endsWith('/dist/cjs/formulas/types.js'))) throw new Error('Field kinds CommonJS entry loaded the formula runtime');
 const { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType: FormulaFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
 if (AirtableFieldType !== FormulaFieldType) throw new Error('CommonJS field enum identity changed');
-const { createMiniExtensionsClient, DEFAULT_API_ORIGIN } = require('@miniextensions/sdk');
+const { createMiniExtensionsClient, DEFAULT_API_ORIGIN, generateLoginCredentialKey } = require('@miniextensions/sdk');
+if (generateLoginCredentialKey({extensionId:'extOne',tableId:'tblOne',loginFieldNames:['\\uffff']}) !== '77%2B%2FdGJsT25lZXh0T25l') throw new Error('CommonJS credential key compatibility changed');
 if (DEFAULT_API_ORIGIN !== 'https://web.miniextensions.com') throw new Error('CommonJS public API origin default changed');
 for (const options of [undefined, {}, {apiOrigin:undefined}]) {
     if (Object.keys(createMiniExtensionsClient(options).getSession()).length !== 0) throw new Error('CommonJS default client construction failed');

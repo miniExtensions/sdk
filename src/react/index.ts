@@ -157,7 +157,9 @@ import {
     type CheckboxFieldOptions,
 } from './CheckboxField.js';
 export {
+    CheckboxInput,
     renderCheckboxField,
+    type CheckboxInputProps,
     type CheckboxFieldOptions,
 } from './CheckboxField.js';
 import {

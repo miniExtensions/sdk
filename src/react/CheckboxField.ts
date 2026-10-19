@@ -1,6 +1,7 @@
 import {
     createElement,
     useId,
+    type InputHTMLAttributes,
     type ReactNode,
     type SyntheticEvent,
 } from 'react';
@@ -8,6 +9,30 @@ import type {
     FieldConfig,
     FieldRendererProps,
 } from '../ui/rendererRegistry.js';
+
+export type CheckboxInputProps = Pick<
+    InputHTMLAttributes<HTMLInputElement>,
+    | 'id'
+    | 'form'
+    | 'className'
+    | 'disabled'
+    | 'readOnly'
+    | 'aria-label'
+    | 'aria-labelledby'
+    | 'aria-checked'
+    | 'aria-invalid'
+    | 'aria-required'
+    | 'aria-busy'
+    | 'aria-describedby'
+> & {
+    checked: boolean;
+    onChange: NonNullable<InputHTMLAttributes<HTMLInputElement>['onChange']>;
+};
+
+/** Controlled native input; the caller owns labels, events and write policy. */
+export function CheckboxInput(props: CheckboxInputProps): ReactNode {
+    return createElement('input', { ...props, type: 'checkbox' });
+}
 
 export type CheckboxFieldOptions = {
     /** Applied to the wrapper; the optional stylesheet can be replaced entirely. */
@@ -64,10 +89,9 @@ export function CheckboxControl(props: CheckboxControlProps): ReactNode {
         createElement(
             'label',
             { className: 'mx-sdk-checkbox-label', htmlFor: id },
-            createElement('input', {
+            createElement(CheckboxInput, {
                 id,
                 className: 'mx-sdk-checkbox',
-                type: 'checkbox',
                 checked: props.checked,
                 disabled: props.disabled,
                 'aria-label': props.showTitle ? undefined : props.title,

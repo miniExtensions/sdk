@@ -4,6 +4,7 @@ import { Window } from 'happy-dom';
 import { act, createElement as h, StrictMode, type ReactNode } from 'react';
 import {
     CheckboxField,
+    CheckboxInput,
     FieldRenderer,
     renderCheckboxField,
 } from '../src/react/index.js';
@@ -128,6 +129,107 @@ async function fixture(
         container,
     };
 }
+
+it('native input preserves host labels, form association and bubbling while the host controls its value', async (t) => {
+    const f = await fixture(t);
+    const changes: boolean[] = [];
+    const events: string[] = [];
+    const view = (checked: boolean) =>
+        h(
+            'div',
+            {
+                onClick: (event: import('react').MouseEvent) => {
+                    if (Object.is(event.target, f.input()))
+                        events.push('click');
+                },
+                onChange: () => events.push('change'),
+                onKeyDown: () => events.push('keydown'),
+                onPointerDown: () => events.push('pointerdown'),
+            },
+            h('label', { htmlFor: 'host-check' }, 'Host consent'),
+            h('form', { id: 'host-form' }),
+            h('p', { id: 'host-description' }, 'Host description'),
+            h('p', { id: 'host-error' }, 'Host error'),
+            h(CheckboxInput, {
+                checked,
+                id: 'host-check',
+                form: 'host-form',
+                className: 'host-checkbox',
+                'aria-checked': checked,
+                'aria-describedby': 'host-description host-error',
+                'aria-invalid': true,
+                onChange: (event) => {
+                    assert.ok(Object.is(event.currentTarget, f.input()));
+                    changes.push(event.currentTarget.checked);
+                },
+            })
+        );
+    await f.render(view(false));
+    assert.deepEqual(changes, []);
+    assert.equal(f.input().type, 'checkbox');
+    assert.equal(f.input().form?.id, 'host-form');
+    assert.equal(f.input().className, 'host-checkbox');
+    assert.equal(f.container.querySelectorAll('label').length, 1);
+    assert.equal(f.container.querySelector('[role=status]'), null);
+    assert.equal(
+        f.input().getAttribute('aria-describedby'),
+        'host-description host-error'
+    );
+    assert.equal(f.input().getAttribute('aria-invalid'), 'true');
+    await act(async () => f.container.querySelector('label')!.click());
+    assert.deepEqual(changes, [true]);
+    assert.deepEqual(events.sort(), ['change', 'click']);
+    assert.equal(f.input().checked, false);
+    await f.render(view(true));
+    assert.equal(f.input().checked, true);
+    assert.equal(f.input().getAttribute('aria-checked'), 'true');
+    await act(async () => f.input().click());
+    assert.deepEqual(changes, [true, false]);
+    await f.render(view(false));
+    await act(async () => {
+        for (const type of ['keydown', 'pointerdown'])
+            f.input().dispatchEvent(
+                new f.window.Event(type, { bubbles: true })
+            );
+    });
+    assert.deepEqual(events.sort(), [
+        'change',
+        'change',
+        'click',
+        'click',
+        'keydown',
+        'pointerdown',
+    ]);
+    await f.render(null);
+    await f.render(view(false));
+    assert.equal(f.input().checked, false);
+    assert.deepEqual(changes, [true, false]);
+    assert.equal(f.binding.getSnapshot().value, null);
+});
+
+it('native input forwards disabled and readOnly without adding a write policy', async (t) => {
+    const f = await fixture(t);
+    const changes: boolean[] = [];
+    const view = (disabled: boolean) =>
+        h(CheckboxInput, {
+            checked: false,
+            disabled,
+            readOnly: true,
+            'aria-label': 'Consent',
+            onChange: (event) => changes.push(event.currentTarget.checked),
+        });
+    await f.render(view(true));
+    assert.equal(f.input().disabled, true);
+    assert.equal(f.input().readOnly, true);
+    assert.equal(f.input().id, '');
+    await act(async () => f.input().click());
+    assert.deepEqual(changes, []);
+    await f.render(view(false));
+    await act(async () => f.input().click());
+    assert.deepEqual(changes, [true]);
+    assert.equal(f.input().checked, false);
+    assert.equal(f.binding.getSnapshot().value, null);
+});
 
 it('binding and accepted slot retain null until interaction and survive StrictMode/remount without owning the scalar', async (t) => {
     const f = await fixture(t);

@@ -225,7 +225,7 @@ void [lookupError,malformedLookupError,upload,uploadedNative,nullAttachmentFilen
 `;
 export const rendererReactTypedConsumer = `
 import { createElement, type ReactNode } from 'react';
-import { FieldRenderer, CheckboxField, renderCheckboxField, type CheckboxFieldProps, TextField, renderSingleLineTextField, type TextFieldProps, type TextFieldOptions, NumberField, renderNumberField, type NumberFieldProps, type NumberFieldOptions, type AirtableFormProps, type AirtableGridProps, type AirtableListProps } from '@miniextensions/sdk/react';
+import { FieldRenderer, CheckboxField, CheckboxInput, renderCheckboxField, type CheckboxInputProps, type CheckboxFieldProps, TextField, renderSingleLineTextField, type TextFieldProps, type TextFieldOptions, NumberField, renderNumberField, type NumberFieldProps, type NumberFieldOptions, type AirtableFormProps, type AirtableGridProps, type AirtableListProps } from '@miniextensions/sdk/react';
 import type { FieldRendererHost, FieldRendererSlots } from '@miniextensions/sdk/ui';
 declare const host: FieldRendererHost;
 const renderers: FieldRendererSlots<ReactNode> = {
@@ -239,13 +239,28 @@ const gridSlots: AirtableGridProps['renderers'] = renderers;
 const listSlots: AirtableListProps['renderers'] = renderers;
 declare const checkboxProps: CheckboxFieldProps;
 const checkbox = createElement(CheckboxField, { ...checkboxProps, className: 'custom' });
+const checkboxInputProps: CheckboxInputProps = {
+ checked: false, id: 'host-checkbox', form: 'host-form', className: 'host-theme',
+ disabled: false, readOnly: false, 'aria-checked': false,
+ 'aria-describedby': 'host-description host-error', 'aria-invalid': true,
+ onChange: event => { const input: HTMLInputElement = event.currentTarget; void input.checked; },
+};
+const checkboxInput = createElement(CheckboxInput, checkboxInputProps);
+// @ts-expect-error a native checkbox requires its host's controlled value
+const missingChecked: CheckboxInputProps = { onChange: () => {} };
+// @ts-expect-error the host owns the change callback
+const missingOnChange: CheckboxInputProps = { checked: false };
+// @ts-expect-error the shared input has a fixed native checkbox type
+const differentInputType: CheckboxInputProps = { ...checkboxInputProps, type: 'text' };
+// @ts-expect-error the shared input is controlled, not defaulted
+const defaultChecked: CheckboxInputProps = { ...checkboxInputProps, defaultChecked: true };
 declare const textProps: TextFieldProps;
 const textOptions: TextFieldOptions = { className: 'custom', clearLabel: 'Effacer' };
 const text = createElement(TextField, { ...textProps, ...textOptions });
 declare const numberProps: NumberFieldProps;
 const numberOptions: NumberFieldOptions = { className: 'custom' };
 const numberField = createElement(NumberField, { ...numberProps, ...numberOptions });
-void [tree, formSlots, gridSlots, listSlots, checkbox, text, numberField];
+void [tree, formSlots, gridSlots, listSlots, checkbox, checkboxInput, missingChecked, missingOnChange, differentInputType, defaultChecked, text, numberField];
 `;
 
 /** Installed public entrypoints, synthetic public envelopes, no browser/backend claim. */

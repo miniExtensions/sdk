@@ -2367,9 +2367,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
-    assert.equal(checkboxProof.checks, 6);
+    assert.equal(checkboxProof.checks, 8);
     console.log(
-        `Installed Checkbox renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+        `Installed Checkbox input, renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const linkedRecordsRendererProof = await checkLinkedRecordsRendererConsumer(
         {

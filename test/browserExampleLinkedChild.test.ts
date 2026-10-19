@@ -1107,6 +1107,178 @@ describe('actual starter root versus nested linked-child admission', () => {
             );
         });
 
+    for (const mode of ['create', 'edit'] as const)
+        for (const outcome of [
+            'reconciled',
+            'validation-error',
+            'unknown',
+            'saved-not-reconciled',
+        ] as const)
+            it(`actual ${mode} child Save replaces its busy banner with ${outcome} status`, async (test) => {
+                const parent = configuredParent();
+                const requests: LoadExtensionInput[] = [];
+                const saves: SaveFormInput[] = [];
+                const gate = deferred<void>();
+                const fetch: typeof globalThis.fetch = async (
+                    resource,
+                    init
+                ) => {
+                    const url = new URL(String(resource));
+                    assert.equal(url.origin, 'https://sdk.example.test');
+                    const route = url.searchParams.get('route');
+                    if (route === 'fetchExtensionForEndUser') {
+                        const input: LoadExtensionInput = JSON.parse(
+                            String(init?.body)
+                        );
+                        requests.push(input);
+                        return new Response(
+                            JSON.stringify(
+                                'childExtensionInfo' in input
+                                    ? loadedChild(input)
+                                    : parent
+                            )
+                        );
+                    }
+                    if (
+                        url.pathname ===
+                        '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates'
+                    )
+                        return new Response(
+                            JSON.stringify({
+                                result: { data: selectedRecords(parent) },
+                            })
+                        );
+                    if (route === 'saveForm') {
+                        const input: SaveFormInput = JSON.parse(
+                            String(init?.body)
+                        );
+                        saves.push(input);
+                        await gate.promise;
+                        if (outcome === 'unknown')
+                            throw Error('Synthetic lost Save response');
+                        if (outcome === 'validation-error')
+                            return new Response(
+                                JSON.stringify(validationError)
+                            );
+                        const result = savedChild(input);
+                        assert.ok(result.type === 'saved');
+                        if (outcome === 'saved-not-reconciled')
+                            delete result.record.fields.fld_parent_a;
+                        return new Response(JSON.stringify(result));
+                    }
+                    assert.fail(
+                        `Unexpected synthetic route: ${url.pathname} ${route}`
+                    );
+                };
+                const window = await environment(test, fetch, true);
+                await import(
+                    `${pathToFileURL(join(directory, 'main.mjs')).href}?case=${++moduleRevision}`
+                );
+                const origin = window.document.getElementById('api-origin');
+                const share = window.document.getElementById('share-id');
+                const record = window.document.getElementById('record-id');
+                assert.ok(origin instanceof window.HTMLInputElement);
+                assert.ok(share instanceof window.HTMLInputElement);
+                assert.ok(record instanceof window.HTMLInputElement);
+                origin.value = 'https://sdk.example.test';
+                share.value = 'share_synthetic_parent';
+                record.value = 'rec_parent';
+                window.document
+                    .getElementById('connection-form')!
+                    .dispatchEvent(
+                        new window.Event('submit', {
+                            bubbles: true,
+                            cancelable: true,
+                        })
+                    );
+                const screen = window.document.getElementById('screen')!;
+                const banner = window.document.getElementById('status')!;
+                await waitFor(
+                    () =>
+                        requests.length === 1 &&
+                        screen.getAttribute('aria-busy') === 'false'
+                );
+                const body = window.document.body;
+                const native = body.querySelector(
+                    `[data-field-id="${fieldId}"]`
+                );
+                assert.ok(native instanceof window.HTMLTextAreaElement);
+                const before = JSON.parse(native.value);
+                if (mode === 'edit') {
+                    button(body, 'Load selected records').click();
+                    await waitFor(
+                        () =>
+                            buttons(body, 'Edit linked record rec_existing')
+                                .length === 1 &&
+                            screen.getAttribute('aria-busy') === 'false'
+                    );
+                    button(body, 'Edit linked record rec_existing').click();
+                } else button(body, 'Create linked record').click();
+                await waitFor(
+                    () =>
+                        requests.length === 2 &&
+                        buttons(body, 'Save child').length === 1 &&
+                        screen.getAttribute('aria-busy') === 'false'
+                );
+                const pane = body.querySelector('[data-linked-child-pane]');
+                assert.ok(pane instanceof window.HTMLElement);
+                edit(
+                    window,
+                    pane,
+                    'fld_title',
+                    `Synthetic ${mode} terminal outcome`
+                );
+                const action = button(body, 'Save child');
+                action.click();
+                await waitFor(() => saves.length === 1);
+                assert.equal(banner.textContent, 'Saving the linked child…');
+                assert.equal(screen.getAttribute('aria-busy'), 'true');
+                gate.resolve();
+                await waitFor(
+                    () => screen.getAttribute('aria-busy') === 'false'
+                );
+                const expected =
+                    outcome === 'reconciled'
+                        ? /Child saved and reconciled with the parent draft/
+                        : outcome === 'validation-error'
+                          ? /Review the returned child validation errors/
+                          : outcome === 'unknown'
+                            ? /child Save outcome is unknown/i
+                            : /child was saved, but the parent draft was not updated/i;
+                assert.match(banner.textContent ?? '', expected);
+                assert.equal(
+                    banner.classList.contains('error'),
+                    outcome !== 'reconciled'
+                );
+                assert.equal(
+                    button(body, 'Save').disabled,
+                    outcome !== 'reconciled'
+                );
+                assert.deepEqual(
+                    JSON.parse(native.value),
+                    mode === 'create' && outcome === 'reconciled'
+                        ? [...before, 'rec_created']
+                        : before
+                );
+                assert.equal(saves[0]!.formRecord.type, mode);
+                assert.equal(
+                    saves[0]!.extensionAccessToken,
+                    'synthetic_child_token'
+                );
+                fire(window, action);
+                await settle();
+                assert.equal(
+                    saves.length,
+                    1,
+                    'No automatic or captured child Save replay and no parent submission'
+                );
+                if (outcome === 'validation-error')
+                    assert.match(
+                        body.textContent ?? '',
+                        /Synthetic validation error/
+                    );
+            });
+
     for (const held of ['open', 'save'] as const)
         it(`releases the actual starter busy lease after configuration retires a held child ${held}`, async (test) => {
             const form = configuredParent();

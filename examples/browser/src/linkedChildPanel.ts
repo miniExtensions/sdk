@@ -27,6 +27,15 @@ type Options = {
     status(message: string, error?: boolean): void;
 };
 
+const childNotice = (state: FormLinkedChildSnapshot): string =>
+    state.completion === 'saved-not-reconciled'
+        ? 'The child was saved, but the parent draft was not updated. Inspect the linked record and reload before continuing; do not repeat the child Save.'
+        : state.phase === 'saved'
+          ? 'Child saved and reconciled with the parent draft. Save the parent Form to persist its linked selection.'
+          : state.phase === 'unknown'
+            ? 'The child Save outcome is unknown. Inspect the linked record before continuing; do not repeat the Save.'
+            : (state.error ?? '');
+
 /** A standalone Form host for the SDK's configured, explicitly opened child. */
 export function createLinkedChildPanel(options: Options) {
     const owner = options.fields.linkedChild(options.fieldId, options.recovery);
@@ -78,7 +87,8 @@ export function createLinkedChildPanel(options: Options) {
     const request = (
         description: string,
         revision: number,
-        work: (signal: AbortSignal) => Promise<unknown>
+        work: (signal: AbortSignal) => Promise<unknown>,
+        reportSave = false
     ) => {
         if (!renderedCurrent(revision)) return;
         options.request(description, async (signal, accepted) => {
@@ -97,6 +107,16 @@ export function createLinkedChildPanel(options: Options) {
             } finally {
                 if (current() && accepted()) {
                     refresh();
+                    if (reportSave && current() && accepted()) {
+                        const state = owner.getSnapshot();
+                        options.status(
+                            state.completion === 'reconciled'
+                                ? 'Child saved and reconciled with the parent draft.'
+                                : childNotice(state) ||
+                                      'The child Save did not complete. Inspect its current status before continuing.',
+                            state.completion !== 'reconciled'
+                        );
+                    }
                     if (
                         before !== 'reconciled' &&
                         owner.getSnapshot().completion === 'reconciled'
@@ -204,8 +224,11 @@ export function createLinkedChildPanel(options: Options) {
                 options.status('Review the child fields before saving.', true);
                 return;
             }
-            request('Saving the linked child…', revision, (signal) =>
-                owner.save(revision, { signal })
+            request(
+                'Saving the linked child…',
+                revision,
+                (signal) => owner.save(revision, { signal }),
+                true
             );
         });
         save.disabled = !available || !page.canSubmit;
@@ -365,14 +388,7 @@ export function createLinkedChildPanel(options: Options) {
                 action.disabled =
                     action.textContent !== 'Cancel child' &&
                     !options.canStart();
-            notice.textContent =
-                state.completion === 'saved-not-reconciled'
-                    ? 'The child was saved, but the parent draft was not updated. Inspect the linked record and reload before continuing; do not repeat the child Save.'
-                    : state.phase === 'saved'
-                      ? 'Child saved and reconciled with the parent draft. Save the parent Form to persist its linked selection.'
-                      : state.phase === 'unknown'
-                        ? 'The child Save outcome is unknown. Inspect the linked record before continuing; do not repeat the Save.'
-                        : (state.error ?? '');
+            notice.textContent = childNotice(state);
             mount(state);
             updateChild();
         } finally {

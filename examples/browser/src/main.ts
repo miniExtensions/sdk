@@ -1579,6 +1579,16 @@ const renderForm = (page: FormLoadedResult): void => {
         }
 
         if (schema.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS) {
+            // This starter supplies a list finder only. Hide-finder retains
+            // selected IDs and child permissions without offering discovery.
+            const finderMode =
+                schema.miniExtConfig != null &&
+                'recordFinderMode' in schema.miniExtConfig
+                    ? schema.miniExtConfig.recordFinderMode
+                    : undefined;
+            if (finderMode !== undefined && finderMode !== 'list') continue;
+            const finder = element('div');
+            const finderConfiguration = JSON.stringify(schema);
             const search = element('input');
             search.placeholder = 'Search available linked records';
             const choices = element('div', undefined, 'choice-list');
@@ -1588,7 +1598,64 @@ const renderForm = (page: FormLoadedResult): void => {
             let conditionalFilters: ConditionalLinkedFilters | null = null;
             let currentLoader: SelectionLoader | null = null;
             let loaderInstalled = false;
+            let finderRetired = false;
+            const retireFinder = (): false => {
+                if (!finderRetired) {
+                    finderRetired = true;
+                    generation += 1;
+                    requestVersion += 1;
+                    offset = null;
+                    currentLoader = null;
+                    choices.replaceChildren();
+                    finder.hidden = true;
+                    bindingOwner?.field(fieldId).selection?.cancel();
+                }
+                return false;
+            };
+            const finderCurrent = (): boolean => {
+                if (finderRetired) return false;
+                const live = page.payload.fieldIdsToSchemas[fieldId];
+                const liveMode =
+                    live?.miniExtConfig != null &&
+                    'recordFinderMode' in live.miniExtConfig
+                        ? live.miniExtConfig.recordFinderMode
+                        : undefined;
+                if (
+                    !page.payload.fieldIdsInForm.includes(fieldId) ||
+                    live?.fieldType !==
+                        AirtableFieldType.MULTIPLE_RECORD_LINKS ||
+                    live.airtableField.id !== fieldId ||
+                    live.airtableField.config.type !==
+                        AirtableFieldType.MULTIPLE_RECORD_LINKS ||
+                    (liveMode !== undefined && liveMode !== 'list') ||
+                    JSON.stringify(live) !== finderConfiguration
+                )
+                    return retireFinder();
+                if (
+                    !ownsLinkedFilters() ||
+                    formRetired ||
+                    reviewPending ||
+                    !inCurrentPage(fieldId) ||
+                    fieldVisibility[fieldId]?.type !== 'visible'
+                )
+                    return false;
+                const state = bindingOwner?.field(fieldId).getSnapshot();
+                return (
+                    state != null &&
+                    !state.retired &&
+                    !state.readOnly &&
+                    state.visibility.type === 'visible'
+                );
+            };
+            // Busy presentation is an intent gate, not an acceptance fence for
+            // the read that made the Form busy in the first place.
+            const canStartFinder = (): boolean =>
+                finderCurrent() &&
+                !screenNode.inert &&
+                !fields.inert &&
+                bindingOwner?.field(fieldId).getSnapshot().canEdit === true;
             const resetChoices = (): void => {
+                if (!finderCurrent()) return;
                 generation += 1;
                 requestVersion += 1;
                 offset = null;
@@ -1604,7 +1671,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 }
             };
             const fetchOptions = (more: boolean): void => {
-                if (!ownsLinkedFilters() || (more && offset == null)) return;
+                if (!canStartFinder() || (more && offset == null)) return;
                 if (!more) resetChoices();
                 const capturedGeneration = generation;
                 const capturedRequest = ++requestVersion;
@@ -1614,11 +1681,10 @@ const renderForm = (page: FormLoadedResult): void => {
                 void run(
                     'Loading allowed linked records…',
                     async ({ client, signal, current }) => {
-                        if (!ownsLinkedFilters() || client !== formClient)
-                            return;
+                        if (!finderCurrent() || client !== formClient) return;
                         const accepted = (): boolean =>
                             current() &&
-                            ownsLinkedFilters() &&
+                            finderCurrent() &&
                             capturedGeneration === generation &&
                             capturedRequest === requestVersion &&
                             capturedFilterRevision ===
@@ -1631,6 +1697,10 @@ const renderForm = (page: FormLoadedResult): void => {
                             const model =
                                 bindingOwner.field(fieldId).selection!;
                             currentLoader = async (request) => {
+                                if (!accepted())
+                                    throw new Error(
+                                        'This linked read is no longer current.'
+                                    );
                                 const abort = () => model.cancel();
                                 signal.addEventListener('abort', abort, {
                                     once: true,
@@ -1718,7 +1788,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 selectedValue.includes(record.id);
                             choice.addEventListener('change', () => {
                                 if (
-                                    !ownsLinkedFilters() ||
+                                    !canStartFinder() ||
                                     generation !== capturedGeneration ||
                                     conditionalFilters?.revision() !==
                                         capturedFilterRevision ||
@@ -1792,13 +1862,13 @@ const renderForm = (page: FormLoadedResult): void => {
             const moreButton = button('More choices', () => fetchOptions(true));
             moreButton.disabled = true;
             search.addEventListener('input', () => {
-                if (ownsLinkedFilters()) resetChoices();
+                if (canStartFinder()) resetChoices();
             });
             conditionalFilters = createConditionalLinkedFilters({
                 schema,
                 extensionAccessToken: page.payload.extensionAccessToken,
                 query: cascadeQuery,
-                current: ownsLinkedFilters,
+                current: finderCurrent,
                 readMetadata: readFilterMetadata,
                 request: (description, work) => {
                     void run(description, work);
@@ -1808,14 +1878,21 @@ const renderForm = (page: FormLoadedResult): void => {
             });
             if (conditionalFilters != null) {
                 linkedFilterViews.set(fieldId, conditionalFilters);
-                control.node.append(conditionalFilters.node);
+                finder.append(conditionalFilters.node);
             }
-            control.node.append(
+            finder.append(
                 search,
                 button('Search choices', () => fetchOptions(false)),
                 moreButton,
                 choices
             );
+            control.node.append(finder);
+            if (bindingOwner != null)
+                formControlDisposers.push(
+                    bindingOwner.field(fieldId).subscribe(() => {
+                        finderCurrent();
+                    })
+                );
         }
         if (schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS) {
             const file = element('input');

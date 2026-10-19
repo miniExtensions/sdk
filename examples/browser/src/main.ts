@@ -63,6 +63,7 @@ import {
 import { flatChoiceConditionRecord } from './choiceAvailability.js';
 import { hasMaskedValuePolicy } from './privacy.js';
 import { createPortalView, type PortalView } from './portal.js';
+import { createLinkedChildPanel } from './linkedChildPanel.js';
 import {
     createConditionalLinkedFilters,
     type ConditionalLinkedFilters,
@@ -934,6 +935,13 @@ const renderForm = (page: FormLoadedResult): void => {
     let pageReviewPresentation: AbortController | null = null;
     let retirePageReview = (): void => {};
     const controls = new Map<string, FieldControl>();
+    const childPanels = new Map<
+        string,
+        ReturnType<typeof createLinkedChildPanel>
+    >();
+    const childBlocksParent = () =>
+        [...childPanels.values()].some((panel) => panel.blocksParent());
+    let updateChildParentActivity = () => {};
     const manualPages =
         settings(page.payload.publicFields).multiPageFormMode === 'multi-page';
     let formPages: FormPageOwner | null = null;
@@ -954,6 +962,9 @@ const renderForm = (page: FormLoadedResult): void => {
         formClient != null &&
         sessionKey(formClient) === formSession;
     const ownsLinkedFilters = (): boolean => mayUseForm() && ownsLinkedRender();
+    // Constructors may read the epoch before the normalized observer exists.
+    // All accepted owners begin at zero; later observations use the same clock.
+    let bindingConfigurationRevision = () => 0;
     // The controller's accepted-render fence must be live before its first snapshot.
     screenNode.append(card);
     const bindingOwner =
@@ -962,6 +973,7 @@ const renderForm = (page: FormLoadedResult): void => {
             : createFormFieldBindings({
                   client: formClient,
                   loaded: page,
+                  configurationRevision: () => bindingConfigurationRevision(),
                   store: visitor.drafts,
                   parent: visitor.formParentScope,
                   saveOptions: {
@@ -1045,6 +1057,7 @@ const renderForm = (page: FormLoadedResult): void => {
         }
         return navigationConfigurationRevision;
     };
+    bindingConfigurationRevision = observeNavigationConfiguration;
     const pendingPanel = element('section');
     pendingPanel.setAttribute('aria-label', 'Pending attachment selections');
     const pendingInputs = new Set<HTMLInputElement>();
@@ -1184,6 +1197,11 @@ const renderForm = (page: FormLoadedResult): void => {
         retirePageReview();
         formProgress?.retire();
         formPages?.dispose();
+        for (const panel of childPanels.values()) {
+            panel.destroy();
+            panel.close();
+        }
+        childPanels.clear();
         for (const stop of formControlDisposers) stop();
         bindingOwner?.destroy();
         linkedPresentation.retire();
@@ -1248,6 +1266,7 @@ const renderForm = (page: FormLoadedResult): void => {
             );
         }
         updatePageNavigation();
+        for (const panel of childPanels.values()) panel.refresh();
     };
     const updateFieldVisibility = (): void => {
         const snapshot = visitor.drafts.snapshot(draft);
@@ -1373,6 +1392,77 @@ const renderForm = (page: FormLoadedResult): void => {
             fields.append(wrapper);
         } else fields.append(control.node);
         const config = schema.miniExtConfig;
+        if (
+            bindingOwner != null &&
+            schema.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS &&
+            page.payload.hasParentExtension === false &&
+            context.type === 'direct-url' &&
+            visitor.root === null &&
+            visitor.formParentScope === null &&
+            config != null &&
+            (('allowCreatingRecords' in config &&
+                config.allowCreatingRecords === true) ||
+                ('allowEditingRecords' in config &&
+                    config.allowEditingRecords === true))
+        ) {
+            const configuration = observeNavigationConfiguration();
+            let retired = false;
+            const childCurrent = () => {
+                if (
+                    !ownsLinkedRender() ||
+                    formRetired ||
+                    observeNavigationConfiguration() !== configuration ||
+                    !ownsLinkedRender()
+                )
+                    retired = true;
+                return !retired;
+            };
+            const panel = createLinkedChildPanel({
+                fields: bindingOwner,
+                fieldId,
+                recovery: { journal: recovery, loadVersion },
+                isCurrent: childCurrent,
+                isVisible: () =>
+                    inCurrentPage(fieldId) &&
+                    fieldVisibility[fieldId]?.type === 'visible',
+                canStart: () =>
+                    childCurrent() &&
+                    mayUseForm() &&
+                    !reviewPending &&
+                    inCurrentPage(fieldId) &&
+                    fieldVisibility[fieldId]?.type === 'visible' &&
+                    request == null &&
+                    !screenNode.inert &&
+                    !fields.inert,
+                request: (description, work) => {
+                    void run(
+                        description,
+                        async ({ client, signal, current }) => {
+                            if (client === formClient && childCurrent())
+                                await work(
+                                    signal,
+                                    () => current() && childCurrent()
+                                );
+                        },
+                        childCurrent,
+                        // Configuration retirement rejects the result, but the
+                        // same render still releases its global busy lease.
+                        ownsLinkedRender
+                    );
+                },
+                changed: () => updateChildParentActivity(),
+                reconciled: () => {
+                    if (!childCurrent()) return;
+                    updateFieldVisibility();
+                    updateSelectAvailability();
+                },
+                status,
+            });
+            childPanels.set(fieldId, panel);
+            // A readonly parent editor is inert; child Edit remains an
+            // independent configured action beside that native control.
+            fields.append(panel.node);
+        }
         if (
             (config !== undefined &&
                 'readOnly' in config &&
@@ -2118,7 +2208,8 @@ const renderForm = (page: FormLoadedResult): void => {
             formRetired ||
             request != null ||
             reviewPending ||
-            !mayUseForm()
+            !mayUseForm() ||
+            childBlocksParent()
         )
             return;
         if (pendingFiles.pending()) {
@@ -2154,6 +2245,7 @@ const renderForm = (page: FormLoadedResult): void => {
     actions.append(submit);
     const discard = button('Discard draft', async () => {
         if (
+            childBlocksParent() ||
             !ownsForm() ||
             recovery.blocking(scope, recordId) != null ||
             (candidate?.outcome === 'unknown' &&
@@ -2169,7 +2261,13 @@ const renderForm = (page: FormLoadedResult): void => {
             progressInputRevision + pendingFiles.revision();
         const discardConfiguration = observeReviewConfiguration();
         if (formProgress && !(await formProgress.discard())) return;
-        if (!ownsLinkedRender() || formRetired || !mayUseForm()) return;
+        if (
+            !ownsLinkedRender() ||
+            formRetired ||
+            !mayUseForm() ||
+            childBlocksParent()
+        )
+            return;
         if (
             (request != null && request !== discardRequest) ||
             reviewIntentRevision !== discardReviewRevision ||
@@ -2205,7 +2303,7 @@ const renderForm = (page: FormLoadedResult): void => {
         deleteRecord = button(
             'Delete this record',
             async () => {
-                const mayDelete = mayUseForm;
+                const mayDelete = () => mayUseForm() && !childBlocksParent();
                 if (!mayDelete()) return;
                 if (
                     !(await confirmCurrent({
@@ -2331,11 +2429,12 @@ const renderForm = (page: FormLoadedResult): void => {
                 ? candidate
                 : null;
         const expired = !(visitor.formAuthority?.() ?? true);
-        submit.disabled = pending != null || selected != null || expired;
+        const blocked = pending != null || selected != null || expired;
+        submit.disabled = blocked || childBlocksParent();
         discard.disabled = submit.disabled;
         if (deleteRecord != null) deleteRecord.disabled = submit.disabled;
         updateComments();
-        fields.inert = submit.disabled;
+        fields.inert = blocked;
         updateFormActivity();
         recoveryPanel.replaceChildren();
         if (visitor.preparedAttempt?.outcome === 'not-submitted')
@@ -2659,7 +2758,11 @@ const renderForm = (page: FormLoadedResult): void => {
             );
             const current = snapshot.pages[snapshot.activePageIndex];
             const last = visible.at(-1);
-            const busy = request != null || reviewPending || !mayUseForm();
+            const busy =
+                request != null ||
+                reviewPending ||
+                !mayUseForm() ||
+                childBlocksParent();
             navigation.hidden = false;
             pageCounter.textContent =
                 visible.length === 0
@@ -2705,6 +2808,9 @@ const renderForm = (page: FormLoadedResult): void => {
         };
         formControlDisposers.push(formPages.subscribe(updatePageNavigation));
     }
+    updateChildParentActivity = () => {
+        if (ownsLinkedRender()) updateRecovery();
+    };
     updateRecovery();
     updatePageNavigation();
     const save = (prepared?: {
@@ -2712,6 +2818,7 @@ const renderForm = (page: FormLoadedResult): void => {
         current(forOwnSave?: boolean): boolean;
     }): Promise<void> =>
         run('Saving the Form…', async ({ client, signal, current }) => {
+            if (childBlocksParent()) return;
             // Reject an invalid visible control instead of saving its last
             // valid draft value (for example, a non-finite numeric input).
             readCurrentPage();
@@ -2747,6 +2854,7 @@ const renderForm = (page: FormLoadedResult): void => {
             if (
                 !current() ||
                 !ownsForm() ||
+                childBlocksParent() ||
                 (prepared != null && !prepared.current())
             )
                 return;
@@ -3004,7 +3112,13 @@ const renderForm = (page: FormLoadedResult): void => {
         });
     card.addEventListener('submit', async (event) => {
         event.preventDefault();
-        if (!ownsForm() || request != null || reviewPending) return;
+        if (
+            !ownsForm() ||
+            request != null ||
+            reviewPending ||
+            childBlocksParent()
+        )
+            return;
         if (
             recovery.blocking(scope, recordId) != null ||
             (candidate?.outcome === 'unknown' &&

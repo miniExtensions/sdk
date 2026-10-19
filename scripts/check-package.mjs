@@ -331,6 +331,7 @@ const browserStarterFiles = [
     'src/main.ts',
     'src/progress.ts',
     'src/privacy.ts',
+    'src/linkedChildPanel.ts',
     'src/fields.ts',
     'src/customFieldRenderer.ts',
     'src/portal.ts',

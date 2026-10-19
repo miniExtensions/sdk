@@ -40,8 +40,12 @@ export type FormLinkedRecordsFacet = {
     subscribe(
         listener: (snapshot: FormLinkedRecordsSnapshot) => void
     ): () => void;
-    /** One explicit token-only hydration read, shared by this accepted Form owner. */
-    readSelected(): Promise<boolean>;
+    /**
+     * One explicit token-only hydration read, shared by this accepted Form owner.
+     * Aborting a participating signal cancels that pending read for all facets;
+     * it preserves the Form/draft and permits an explicit fresh retry.
+     */
+    readSelected(options?: { signal?: AbortSignal }): Promise<boolean>;
 };
 
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -141,8 +145,12 @@ export function createFormLinkedRecordsOwner(options: {
     const editedFields = new Map<string, Map<string, EditedPresentation>>();
     let phase: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
     let error: string | null = null;
-    let active: { abort: AbortController; promise: Promise<boolean> } | null =
-        null;
+    type PendingRead = {
+        abort: AbortController;
+        promise: Promise<boolean>;
+        detach: Set<() => void>;
+    };
+    let active: PendingRead | null = null;
     const facets = new Map<
         string,
         {
@@ -183,6 +191,26 @@ export function createFormLinkedRecordsOwner(options: {
     const emit = () => {
         for (const entry of [...facets.values()]) entry.emit();
     };
+    const detachSignals = (entry: PendingRead) => {
+        for (const detach of entry.detach) detach();
+        entry.detach.clear();
+    };
+    const observeAbort = (entry: PendingRead, signal?: AbortSignal) => {
+        if (!signal) return;
+        const cancel = () => {
+            // A retained signal may only cancel the shared read it joined.
+            if (active !== entry) return;
+            active = null;
+            generation++;
+            phase = 'idle';
+            error = null;
+            detachSignals(entry);
+            entry.abort.abort();
+            if (current()) emit();
+        };
+        signal.addEventListener('abort', cancel, { once: true });
+        entry.detach.add(() => signal.removeEventListener('abort', cancel));
+    };
     function destroy() {
         if (retired) return;
         retired = true;
@@ -194,19 +222,30 @@ export function createFormLinkedRecordsOwner(options: {
         active = null;
         for (const entry of [...facets.values()]) entry.destroy();
         facets.clear();
-        previous?.abort.abort();
+        if (previous) {
+            detachSignals(previous);
+            previous.abort.abort();
+        }
     }
-    const readSelected = (): Promise<boolean> => {
-        if (!current()) return Promise.resolve(false);
-        if (active) return active.promise;
+    const readSelected = (signal?: AbortSignal): Promise<boolean> => {
+        if (signal?.aborted || !current()) return Promise.resolve(false);
+        if (active) {
+            observeAbort(active, signal);
+            return active.promise;
+        }
         if (phase === 'ready' && accepted) return Promise.resolve(true);
         const ticket = ++generation;
         const abort = new AbortController();
         phase = 'loading';
         error = null;
         accepted = null;
-        const entry = { abort, promise: Promise.resolve(false) };
+        const entry: PendingRead = {
+            abort,
+            promise: Promise.resolve(false),
+            detach: new Set(),
+        };
         active = entry;
+        observeAbort(entry, signal);
         const owns = () =>
             current() &&
             active === entry &&
@@ -272,6 +311,7 @@ export function createFormLinkedRecordsOwner(options: {
                 }
                 return false;
             } finally {
+                detachSignals(entry);
                 if (active === entry) {
                     active = null;
                     if (current()) emit();
@@ -526,8 +566,10 @@ export function createFormLinkedRecordsOwner(options: {
                 }
                 return () => listeners.delete(listener);
             },
-            readSelected: () =>
-                stopped ? Promise.resolve(false) : readSelected(),
+            readSelected: (options) =>
+                stopped
+                    ? Promise.resolve(false)
+                    : readSelected(options?.signal),
         };
         const entry = {
             facet,

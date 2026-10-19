@@ -12,7 +12,17 @@ const loaded = structuredClone(edit ? data.edit : data.create);
 if (params.get('multipage') === 'false')
     loaded.payload.publicFields.state.multiPageFormMode = 'one-page';
 let configuration = 0;
-const calls = { saves: [], begins: 0, reviews: 0, settled: 0, errors: [] };
+const calls = {
+    saves: [],
+    begins: 0,
+    reviews: 0,
+    settled: 0,
+    errors: [],
+    reconciledTransitions: 0,
+    lateConfirmDeliveries: 0,
+    lateGuardCalls: 0,
+    events: [],
+};
 window.addEventListener('error', (e) => calls.errors.push(e.message));
 window.addEventListener('unhandledrejection', (e) =>
     calls.errors.push(String(e.reason))
@@ -73,6 +83,7 @@ const dialog = document.querySelector('dialog');
 let settle;
 let request;
 let presentation;
+let retainedConfirm;
 const owner = fields.linkedChild('fld_children_a', {
     journal: new Journal(),
     loadVersion: 1,
@@ -88,12 +99,30 @@ const owner = fields.linkedChild('fld_children_a', {
             'abort',
             () => {
                 dialog.close();
-                settle?.({ type: 'edit' });
+                calls.events.push({ event: 'review-aborted' });
+                // A deliberately late adapter keeps its promise pending after abort.
+                if (scenario !== 'stale') settle?.({ type: 'edit' });
             },
             { once: true }
         );
         return new Promise((resolve) => {
             settle = resolve;
+            const signal = presentation.signal;
+            retainedConfirm = () => {
+                calls.lateConfirmDeliveries++;
+                calls.events.push({
+                    event: 'late-confirm-delivered',
+                    aborted: next.signal.aborted,
+                });
+                resolve({
+                    type: 'confirm',
+                    signal,
+                    isCurrent: () => {
+                        calls.lateGuardCalls++;
+                        return next.isCurrent();
+                    },
+                });
+            };
         });
     },
 });
@@ -135,8 +164,8 @@ on('retire', () => {
 });
 on('stale', () => {
     owner.getSnapshot().child.field('fld_title').setValue('Stale edit');
-    confirm();
 });
+on('retained-confirm', () => retainedConfirm());
 on('reentrant', () => confirm(true));
 on('parent-edit', () =>
     fields.field('fld_title').setValue('Unrelated parent edit')
@@ -148,6 +177,7 @@ const save = async () => {
         calls.lastFailure = String(error);
     } finally {
         calls.settled++;
+        calls.events.push({ event: 'save-settled' });
         render();
     }
 };
@@ -183,7 +213,14 @@ function render() {
         page: p?.activePageIndex,
     });
 }
-owner.subscribe(render);
+let previousCompletion = owner.getSnapshot().completion;
+owner.subscribe(() => {
+    const completion = owner.getSnapshot().completion;
+    if (completion === 'reconciled' && previousCompletion !== 'reconciled')
+        calls.reconciledTransitions++;
+    previousCompletion = completion;
+    render();
+});
 on('open', async () => {
     if (edit) await fields.linkedRecords('fld_children_a').readSelected();
     const opened = edit

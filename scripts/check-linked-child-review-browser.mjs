@@ -114,7 +114,7 @@ try {
     report.installedSdkInputs = sdkInputs;
     const buttons = (ids) =>
         ids.map((id) => `<button id="${id}">${id}</button>`).join('');
-    const html = `<!doctype html><title>Linked-child Review synthetic proof</title><style>body{font:16px system-ui;margin:32px}dialog{max-width:720px;border:1px solid #777;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere}button{margin:4px;padding:6px}label{display:block;margin:12px 0}label[hidden]{display:none}</style><main><h1>Synthetic child adapter acceptance</h1><label id="row-title">Child title <input id="title"></label><label id="row-note">Second answer <input id="note"></label><label id="row-last">Last answer <input id="last"></label>${buttons(['open', 'next', 'back', 'save', 'retry', 'invalidate'])}<output id="status"></output><dialog><h2>Review child</h2><pre id="answers"></pre>${buttons(['confirm', 'edit', 'cancel', 'close', 'retire', 'stale', 'reentrant', 'parent-edit'])}</dialog></main><script type="module" src="/proof.js"></script>`;
+    const html = `<!doctype html><title>Linked-child Review synthetic proof</title><style>body{font:16px system-ui;margin:32px}dialog{max-width:720px;border:1px solid #777;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere}button{margin:4px;padding:6px}label{display:block;margin:12px 0}label[hidden]{display:none}</style><main><h1>Synthetic child adapter acceptance</h1><label id="row-title">Child title <input id="title"></label><label id="row-note">Second answer <input id="note"></label><label id="row-last">Last answer <input id="last"></label>${buttons(['open', 'next', 'back', 'save', 'retry', 'invalidate', 'retained-confirm'])}<output id="status"></output><dialog><h2>Review child</h2><pre id="answers"></pre>${buttons(['confirm', 'edit', 'cancel', 'close', 'retire', 'stale', 'reentrant', 'parent-edit'])}</dialog></main><script type="module" src="/proof.js"></script>`;
     writeFileSync(join(output, 'index.html'), html);
     server = createServer((req, res) => {
         res.setHeader(
@@ -204,7 +204,30 @@ try {
                 await page.locator('#confirm').click();
             else await page.locator(`#${scenario}`).click();
             await page.waitForFunction(() => window.proof().settled === 1);
+            if (scenario === 'stale') {
+                const cancelled = await page.evaluate(() => window.proof());
+                assert.equal(cancelled.aborted, true);
+                assert.equal(cancelled.lateConfirmDeliveries, 0);
+                await page.locator('#retained-confirm').click();
+                // Let the resolved adapter promise drain after the SDK's abort won.
+                await page.evaluate(
+                    () => new Promise((resolve) => setTimeout(resolve, 0))
+                );
+            }
             const actual = await page.evaluate(() => window.proof());
+            if (scenario === 'stale') {
+                assert.equal(actual.lateConfirmDeliveries, 1);
+                assert.equal(actual.lateGuardCalls, 0);
+                assert.deepEqual(actual.events, [
+                    { event: 'review-aborted' },
+                    { event: 'save-settled' },
+                    { event: 'late-confirm-delivered', aborted: true },
+                ]);
+            }
+            assert.equal(
+                actual.reconciledTransitions,
+                scenario.startsWith('success') ? 1 : 0
+            );
             assert.deepEqual(errors, []);
             assert.deepEqual(unexpectedRequests, []);
             assert.deepEqual(actual.errors, []);
@@ -237,6 +260,11 @@ try {
                     (await page.evaluate(() => window.proof())).saves.length,
                     1
                 );
+                assert.equal(
+                    (await page.evaluate(() => window.proof()))
+                        .reconciledTransitions,
+                    scenario.startsWith('success') ? 1 : 0
+                );
             } else {
                 assert.equal(actual.completion, 'none');
                 assert.deepEqual(actual.parent.fld_children_a, [
@@ -252,6 +280,11 @@ try {
                 assert.equal(
                     (await page.evaluate(() => window.proof())).saves.length,
                     1
+                );
+                assert.equal(
+                    (await page.evaluate(() => window.proof()))
+                        .reconciledTransitions,
+                    scenario.startsWith('success') ? 1 : 0
                 );
             }
             if (['close', 'retire'].includes(scenario))

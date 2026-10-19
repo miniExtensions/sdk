@@ -2540,14 +2540,22 @@ checkout; `SDK_NATIVE_CHROMIUM` can select the local Chromium executable. It
 builds and installs a fresh tarball, bundles only installed SDK exports, and
 mounts a minimal child editor and Review dialog on loopback. Its 24 Create/Edit
 cases cover one-page/manual multipage success, Cancel/Edit/Escape/Close and
-parent retirement, stale/reentrant confirmation, local/backend validation and
+parent retirement, late retained Confirm after abort, reentrant confirmation, local/backend validation and
 unknown-outcome refusal. It retains a JSON receipt and Review screenshots in
 the printed temporary directory. CI runs the same dedicated proof and retains
 its output with the native browser artifacts.
 
 All load and Save responses are synthetic. This proves real-browser adapter
-composition, dispatch counts and native parent reconciliation, **not hosted
-persistence or production starter integration**. The default browser launch uses
+composition, dispatch counts, expected native parent state and one observable
+transition to `completion: 'reconciled'`, **not hosted
+persistence or production starter integration**. There is no public counter of
+internal reconciliation calls; the completion transition does not count those
+calls, including no-op Edit reconciliation. The late Confirm case deliberately
+leaves the adapter promise pending after draft invalidation, waits for SDK
+cancellation, then invokes its retained callback. It proves that late delivery
+cannot dispatch Save; the already-aborted race ignores the decision without
+calling its freshness guard. The dialog serializes synthetic draft data and does
+not validate production Review presentation or privacy. The default browser launch uses
 Chromium's sandbox. On an already isolated local runner whose SUID helper is
 unusable, `SDK_CHILD_REVIEW_NO_SANDBOX=1` explicitly disables that browser sandbox;
 the receipt records this setting. No shared QA or published settings are used.

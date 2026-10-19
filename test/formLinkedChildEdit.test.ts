@@ -191,6 +191,51 @@ describe('owner-held selected linked child EDIT', () => {
         });
     }
 
+    for (const readOnly of [false, true])
+        it(`reconciles a nonpublic inverse Edit without writing parent membership at readOnly=${readOnly}`, async () => {
+            const loaded = editChild();
+            delete loaded.payload.fieldIdsToSchemas.fld_parent_a;
+            delete loaded.payload.fieldNamesToSchemas.fld_parent_a;
+            delete loaded.payload.formRecord.data.fld_parent_a;
+            loaded.payload.fieldIdsInForm = ['fld_title', 'fld_parent_b'];
+            const response = editSaved();
+            delete response.record.fields.fld_parent_a;
+            const context = response.context;
+            assert.ok(context.type === 'modal');
+            const table = context.newTableIdsToLinkedTableStates.tbl_child!;
+            table.airtableFields = table.airtableFields.filter(
+                (field) => field.id !== 'fld_parent_a'
+            );
+            for (const record of Object.values(
+                table.recordIdsToAirtableRecords
+            ))
+                delete record.fields.fld_parent_a;
+            const f = fixture({
+                parent: configured({ readOnly }),
+                load: async () => loaded,
+                save: async () => response,
+            });
+            try {
+                await f.hydrate();
+                assert(await f.open());
+                const before = structuredClone(
+                    f.fields.controller.getState().draft
+                );
+                f.owner
+                    .getSnapshot()
+                    .child!.field('fld_title')
+                    .setValue('Accepted nonpublic edit');
+                assert.equal((await f.save()).type, 'saved');
+                assert.equal(f.owner.getSnapshot().completion, 'reconciled');
+                assert.deepEqual(f.fields.controller.getState().draft, before);
+                await assert.rejects(f.save());
+                assert.equal(f.saves.length, 1);
+                assert.equal(f.journal.observed[0]?.outcome, 'saved');
+            } finally {
+                f.close();
+            }
+        });
+
     it('uses captured edit access, no creation query, applicable parent relation, native data and dirty IDs', async () => {
         const parent = configured({
             prefillChildFormForCreatingRecords: true,

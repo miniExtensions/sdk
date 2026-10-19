@@ -38,9 +38,10 @@ Custom layouts and advanced presentation remain application-owned.
 ## Prepared Form review in the browser starter
 
 The packaged starter's `src/review.ts` and existing DOM confirmation dialog
-implement the published `promptUserBeforeSubmission` setting for a bounded
-one-page manual Form with supported section conditions. This is application code shipped with the example,
-not a new SDK mutation or a general review renderer.
+implement the published `promptUserBeforeSubmission` setting for bounded
+one-page and manual multipage Forms with supported section conditions. Multipage
+Review opens on the final available page. This is application code shipped with
+the example, not a new SDK mutation or a general review renderer.
 
 Supported physical scalar fields are single-line/multiline text, email, URL,
 phone, number, currency, percent, rating, checkbox, barcode and bounded date/dateTime answers. Readonly scalar

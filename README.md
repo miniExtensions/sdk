@@ -63,9 +63,7 @@ npm install /absolute/path/to/miniextensions-sdk-0.1.0-alpha.0.tgz
 ```ts
 import { createMiniExtensionsClient } from '@miniextensions/sdk';
 
-const client = createMiniExtensionsClient({
-    apiOrigin: 'https://your-api-origin.example',
-});
+const client = createMiniExtensionsClient();
 const controller = new AbortController();
 const page = await client.loadExtension(
     {
@@ -79,6 +77,12 @@ const page = await client.loadExtension(
 // Render the returned redirect, password/login screen, Form or Portal.
 // Loading does not save a Form or apply returned login credentials.
 ```
+
+The client defaults to `https://web.miniextensions.com`. For another deployment,
+pass its API origin explicitly: `createMiniExtensionsClient({ apiOrigin })`.
+Keep private deployment overrides in your installed application's runtime
+configuration, outside public source and shared artifacts. Invalid explicit
+origins and failed requests never fall back to the public service.
 
 The [typed Form quickstart](docs/runtime.md#packaged-form-quickstart) supplies a
 complete load-and-save example with editable-schema checks, native values,
@@ -150,8 +154,10 @@ compiler failure, and is not shipped. No source package settings are rewritten.
   dedicated SDK configuration card in the workspace. If the owner cannot
   provide the ID, this integration prerequisite is unresolved; the browser
   starter cannot discover it for you.
-- Obtain the deployment's HTTP(S) API origin serving `/api/v1` and `/api/trpc`.
-  Supply an origin without a path, query, fragment or URL credentials. A public
+- The public API origin defaults to `https://web.miniextensions.com`. For another
+  deployment, obtain its HTTP(S) API origin serving `/api/v1` and `/api/trpc` and
+  set the installed application's override. Supply an origin without a path,
+  query, fragment or URL credentials. A public
   share URL or custom application URL does not establish that API origin.
   Use a durable deployment for a continuing application.
 - The deployment must allow your browser application's exact origin and the

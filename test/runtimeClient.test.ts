@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { describe, it } from 'node:test';
 import {
     createMiniExtensionsClient,
+    DEFAULT_API_ORIGIN,
     SDKError,
     withLoginToken,
     type LoadExtensionInput,
@@ -45,8 +46,107 @@ const configuration = {
 };
 
 describe('runtime client transport', () => {
+    it('defaults omitted options and undefined apiOrigin to the public HTTPS origin without construction I/O', async (test) => {
+        const boundary = externalFetch();
+        test.mock.method(globalThis, 'fetch', boundary.fetchImpl);
+        assert.equal(DEFAULT_API_ORIGIN, 'https://web.miniextensions.com');
+        const clients = [
+            createMiniExtensionsClient(),
+            createMiniExtensionsClient({}),
+            createMiniExtensionsClient({ apiOrigin: undefined }),
+            createMiniExtensionsClient({ fetch: boundary.fetchImpl }),
+        ];
+        assert.equal(boundary.requests.length, 0);
+        for (const client of clients) await client.loadExtension(loadInput);
+        assert.equal(boundary.requests.length, clients.length);
+        assert.ok(
+            boundary.requests.every(
+                ({ url, init }) =>
+                    new URL(url).origin === DEFAULT_API_ORIGIN &&
+                    init.credentials === 'omit'
+            )
+        );
+    });
+
+    for (const apiOrigin of [
+        undefined,
+        'https://private-deployment.example/',
+    ]) {
+        it(`uses only the ${apiOrigin === undefined ? 'default' : 'explicit override'} origin for v1 and tRPC`, async () => {
+            const urls: URL[] = [];
+            const fetchImpl: typeof fetch = async (url) => {
+                const parsed = new URL(String(url));
+                urls.push(parsed);
+                return parsed.pathname.startsWith('/api/trpc/')
+                    ? jsonResponse({
+                          result: { data: { records: [], offset: null } },
+                      })
+                    : jsonResponse(formResult);
+            };
+            const client = createMiniExtensionsClient({
+                apiOrigin,
+                fetch: fetchImpl,
+            });
+            assert.equal(urls.length, 0);
+            await client.loadExtension(loadInput);
+            await client.portals.getUserRecord({
+                extensionAccessToken: 'SYNTHETIC_PUBLIC_ORIGIN_TOKEN',
+            });
+            assert.equal(urls.length, 2);
+            assert.deepEqual(
+                urls.map((url) => url.origin),
+                Array(2).fill(
+                    apiOrigin === undefined
+                        ? DEFAULT_API_ORIGIN
+                        : new URL(apiOrigin).origin
+                )
+            );
+            assert.ok(urls[0].pathname.startsWith('/api/v1'));
+            assert.ok(urls[1].pathname.startsWith('/api/trpc/'));
+        });
+    }
+
+    it('does not fall back to the public origin when an explicit deployment fails', async () => {
+        const urls: string[] = [];
+        const client = createMiniExtensionsClient({
+            apiOrigin: 'https://private-deployment.example',
+            fetch: async (url) => {
+                urls.push(String(url));
+                throw new Error('Synthetic deployment unavailable');
+            },
+        });
+        await assert.rejects(client.loadExtension(loadInput), SDKError);
+        assert.equal(urls.length, 1);
+        assert.equal(
+            new URL(urls[0]).origin,
+            'https://private-deployment.example'
+        );
+    });
+
+    it('captures an explicit origin accessor once before choosing the endpoint', async () => {
+        const boundary = externalFetch();
+        let reads = 0;
+        const client = createMiniExtensionsClient({
+            get apiOrigin() {
+                reads++;
+                return reads === 1
+                    ? 'https://private-deployment.example'
+                    : DEFAULT_API_ORIGIN;
+            },
+            fetch: boundary.fetchImpl,
+        });
+        await client.loadExtension(loadInput);
+        assert.equal(reads, 1);
+        assert.equal(
+            new URL(boundary.requests[0].url).origin,
+            'https://private-deployment.example'
+        );
+    });
+
     it('requires an HTTP(S) origin', () => {
         for (const apiOrigin of [
+            '',
+            '   ',
             'relative',
             'file:///example',
             'https://sdk.example.test/path',
@@ -59,6 +159,13 @@ describe('runtime client transport', () => {
                 TypeError
             );
         }
+        assert.throws(
+            () =>
+                createMiniExtensionsClient({
+                    apiOrigin: null as unknown as string,
+                }),
+            TypeError
+        );
     });
 
     it('maps six methods to existing v1 POST routes without changing input or output', async () => {

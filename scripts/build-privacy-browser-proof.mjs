@@ -34,6 +34,7 @@ const starterFiles = [
     'src/main.ts',
     'src/progress.ts',
     'src/privacy.ts',
+    'src/linkedChildPanel.ts',
     'src/fields.ts',
     'src/portal.ts',
     'src/dom.ts',

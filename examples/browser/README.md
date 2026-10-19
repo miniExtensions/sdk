@@ -71,8 +71,11 @@ check pagination, criteria retirement, child context and visitor transitions.
 ## Connect
 
 1. Publish a Form or Portal in miniExtensions.
-2. Enter the exact origin that serves the miniExtensions APIs and the
-   extension's stored `extension.shareId`. Follow
+2. Enter the extension's stored `extension.shareId`. The API origin starts at
+   `https://web.miniextensions.com`; for another deployment, replace the input
+   with its exact API origin in your installed application. Keep private
+   overrides out of public source and shared artifacts. Clearing the input is
+   invalid; it does not silently reconnect to the public service. Follow
    [runtime configuration prerequisites](../../README.md#obtain-the-actual-runtime-configuration)
    to obtain it from a default-domain public link or your workspace
    administrator/deployment owner. A custom-domain slug is not the Share ID;
@@ -396,6 +399,32 @@ Custom static and dynamic Form headers also belong to your app. Render them
 from the published settings and record metadata when needed. This example uses
 `extensionName`, falling back to “Custom Form”.
 
+### Configured linked-child actions in a standalone Form
+
+A standalone direct-URL root Form offers **Create linked record** for an
+eligible configured modal child. **Load selected records** explicitly hydrates
+the current native selection; only the SDK's returned eligible IDs offer
+**Edit linked record**. These actions are independent of finder visibility.
+An eligible child Edit also remains available when the parent link is readonly
+or full. Mounting the controls never reads or saves a record.
+
+The child pane borrows the SDK owner's bindings and page owner. It retains
+mounted inputs while typing and supports one-page and manual multipage child
+Forms through **Child Back**, **Child Next**, and **Save child**. Save validates
+and submits the child once through the existing owner, then reconciles the
+current parent native draft. Save the parent separately to persist its linked
+selection. **Cancel child** closes only that intent. Child validation keeps
+the current inputs; unknown and saved-but-not-reconciled outcomes remain
+blocked with explicit inspection guidance, including after Cancel. Parent
+Save, Discard, Delete and page navigation wait for the active child.
+
+Portal-parent and nested child actions are outside this adapter. The SDK still
+refuses unsupported child Review, Compute, captcha and linked-filter settings.
+Child linked fields use their existing native controls without nested child
+actions or finder UI. Attachments use the conservative readonly label
+presentation; this pane adds no upload action. No child action automatically
+saves the parent or retries an uncertain child Save.
+
 ## Portal workflow
 
 Choose a configured linked table and view, then **Load records**. The actual
@@ -675,6 +704,8 @@ before adapting it to a production application.
   category changes.
 - `src/fields.ts` is the replaceable field renderer. Values and dirty lists use
   Airtable field IDs; login credentials use the configured field names.
+- `src/linkedChildPanel.ts` is the standalone root Form host for the SDK-owned
+  configured child actions; it borrows the child bindings and page owner.
 - `src/recovery.ts` keeps safe document-local operation metadata separate from
   draft/session clearing. It does not store credentials or signed upload URLs.
 - `dev.mjs` bundles the installed SDK and serves three local static assets.

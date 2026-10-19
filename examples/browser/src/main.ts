@@ -1,6 +1,7 @@
 import type { ChildQuerySnapshots } from './childQueries.js';
 import {
     createMiniExtensionsClient,
+    DEFAULT_API_ORIGIN,
     AirtableFieldType,
     SDKError,
     withExtensionPassword,
@@ -56,11 +57,13 @@ import {
     displayValue,
     formFieldControl,
     mountBoundFormField,
+    canPresentFieldValidation,
     type FieldControl,
 } from './fields.js';
 import { flatChoiceConditionRecord } from './choiceAvailability.js';
 import { hasMaskedValuePolicy } from './privacy.js';
 import { createPortalView, type PortalView } from './portal.js';
+import { createLinkedChildPanel } from './linkedChildPanel.js';
 import {
     createConditionalLinkedFilters,
     type ConditionalLinkedFilters,
@@ -156,6 +159,12 @@ const newVisitor = (): Visitor => ({
 const visitors = { A: newVisitor(), B: newVisitor() };
 let activeVisitor: keyof typeof visitors = 'A';
 const recovery = new RecoveryJournal();
+// Presentation identity stays local to the example, outside the native journal.
+// A null identity denotes only the fixed, non-sensitive attachment notice.
+const retainedInputFields = new WeakMap<
+    RecoveryAttempt['retainedInput'][number],
+    string | null
+>();
 let formLoadSequence = 0;
 let connection: {
     apiOrigin: string;
@@ -917,6 +926,8 @@ const renderForm = (page: FormLoadedResult): void => {
     let reviewPending = false;
     let reviewIntentRevision = 0;
     let formRetired = false;
+    let updateValidationPresentation = (): void => {};
+    let updateRecoveryReferences = (): void => {};
     let formProgress: BrowserCreateProgress | null = null;
     let progressInputRevision = 0;
     let progressSaveCleanups = 0;
@@ -924,6 +935,13 @@ const renderForm = (page: FormLoadedResult): void => {
     let pageReviewPresentation: AbortController | null = null;
     let retirePageReview = (): void => {};
     const controls = new Map<string, FieldControl>();
+    const childPanels = new Map<
+        string,
+        ReturnType<typeof createLinkedChildPanel>
+    >();
+    const childBlocksParent = () =>
+        [...childPanels.values()].some((panel) => panel.blocksParent());
+    let updateChildParentActivity = () => {};
     const manualPages =
         settings(page.payload.publicFields).multiPageFormMode === 'multi-page';
     let formPages: FormPageOwner | null = null;
@@ -944,6 +962,9 @@ const renderForm = (page: FormLoadedResult): void => {
         formClient != null &&
         sessionKey(formClient) === formSession;
     const ownsLinkedFilters = (): boolean => mayUseForm() && ownsLinkedRender();
+    // Constructors may read the epoch before the normalized observer exists.
+    // All accepted owners begin at zero; later observations use the same clock.
+    let bindingConfigurationRevision = () => 0;
     // The controller's accepted-render fence must be live before its first snapshot.
     screenNode.append(card);
     const bindingOwner =
@@ -952,6 +973,7 @@ const renderForm = (page: FormLoadedResult): void => {
             : createFormFieldBindings({
                   client: formClient,
                   loaded: page,
+                  configurationRevision: () => bindingConfigurationRevision(),
                   store: visitor.drafts,
                   parent: visitor.formParentScope,
                   saveOptions: {
@@ -1035,6 +1057,7 @@ const renderForm = (page: FormLoadedResult): void => {
         }
         return navigationConfigurationRevision;
     };
+    bindingConfigurationRevision = observeNavigationConfiguration;
     const pendingPanel = element('section');
     pendingPanel.setAttribute('aria-label', 'Pending attachment selections');
     const pendingInputs = new Set<HTMLInputElement>();
@@ -1132,7 +1155,12 @@ const renderForm = (page: FormLoadedResult): void => {
             (fieldId) => {
                 const schema = page.payload.fieldIdsToSchemas[fieldId];
                 const control = controls.get(fieldId);
-                if (schema == null || control == null) return [];
+                if (
+                    schema?.airtableField.id !== fieldId ||
+                    control == null ||
+                    fieldVisibility[fieldId]?.type !== 'visible'
+                )
+                    return [];
                 const config = schema.miniExtConfig;
                 // Masked values must never enter the reference journal.
                 if (hasMaskedValuePolicy(config)) return [];
@@ -1140,7 +1168,9 @@ const renderForm = (page: FormLoadedResult): void => {
                     return [];
                 if (!control.editable) return [];
                 const text = displayValue(snapshot!.data[fieldId]);
-                return [{ title: schema.airtableField.name, value: text }];
+                const entry = { title: schema.airtableField.name, value: text };
+                retainedInputFields.set(entry, fieldId);
+                return [entry];
             }
         );
         if (
@@ -1150,18 +1180,28 @@ const renderForm = (page: FormLoadedResult): void => {
                     page.payload.fieldIdsToSchemas[fieldId]?.fieldType ===
                     AirtableFieldType.MULTIPLE_ATTACHMENTS
             )
-        )
-            attempt.retainedInput.push({
+        ) {
+            const notice = {
                 title: 'Attachment activity',
                 value: 'Attachment details are not retained.',
-            });
+            };
+            retainedInputFields.set(notice, null);
+            attempt.retainedInput.push(notice);
+        }
     };
     const formControlDisposers: Array<() => void> = [];
     disposeFormControls = () => {
         formRetired = true;
+        updateValidationPresentation = () => {};
+        updateRecoveryReferences = () => {};
         retirePageReview();
         formProgress?.retire();
         formPages?.dispose();
+        for (const panel of childPanels.values()) {
+            panel.destroy();
+            panel.close();
+        }
+        childPanels.clear();
         for (const stop of formControlDisposers) stop();
         bindingOwner?.destroy();
         linkedPresentation.retire();
@@ -1226,6 +1266,7 @@ const renderForm = (page: FormLoadedResult): void => {
             );
         }
         updatePageNavigation();
+        for (const panel of childPanels.values()) panel.refresh();
     };
     const updateFieldVisibility = (): void => {
         const snapshot = visitor.drafts.snapshot(draft);
@@ -1250,6 +1291,8 @@ const renderForm = (page: FormLoadedResult): void => {
         visibilityMessage.hidden = !Object.values(fieldVisibility).some(
             (result) => result.type === 'blocked'
         );
+        updateValidationPresentation();
+        updateRecoveryReferences();
     };
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
@@ -1349,6 +1392,77 @@ const renderForm = (page: FormLoadedResult): void => {
             fields.append(wrapper);
         } else fields.append(control.node);
         const config = schema.miniExtConfig;
+        if (
+            bindingOwner != null &&
+            schema.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS &&
+            page.payload.hasParentExtension === false &&
+            context.type === 'direct-url' &&
+            visitor.root === null &&
+            visitor.formParentScope === null &&
+            config != null &&
+            (('allowCreatingRecords' in config &&
+                config.allowCreatingRecords === true) ||
+                ('allowEditingRecords' in config &&
+                    config.allowEditingRecords === true))
+        ) {
+            const configuration = observeNavigationConfiguration();
+            let retired = false;
+            const childCurrent = () => {
+                if (
+                    !ownsLinkedRender() ||
+                    formRetired ||
+                    observeNavigationConfiguration() !== configuration ||
+                    !ownsLinkedRender()
+                )
+                    retired = true;
+                return !retired;
+            };
+            const panel = createLinkedChildPanel({
+                fields: bindingOwner,
+                fieldId,
+                recovery: { journal: recovery, loadVersion },
+                isCurrent: childCurrent,
+                isVisible: () =>
+                    inCurrentPage(fieldId) &&
+                    fieldVisibility[fieldId]?.type === 'visible',
+                canStart: () =>
+                    childCurrent() &&
+                    mayUseForm() &&
+                    !reviewPending &&
+                    inCurrentPage(fieldId) &&
+                    fieldVisibility[fieldId]?.type === 'visible' &&
+                    request == null &&
+                    !screenNode.inert &&
+                    !fields.inert,
+                request: (description, work) => {
+                    void run(
+                        description,
+                        async ({ client, signal, current }) => {
+                            if (client === formClient && childCurrent())
+                                await work(
+                                    signal,
+                                    () => current() && childCurrent()
+                                );
+                        },
+                        childCurrent,
+                        // Configuration retirement rejects the result, but the
+                        // same render still releases its global busy lease.
+                        ownsLinkedRender
+                    );
+                },
+                changed: () => updateChildParentActivity(),
+                reconciled: () => {
+                    if (!childCurrent()) return;
+                    updateFieldVisibility();
+                    updateSelectAvailability();
+                },
+                status,
+            });
+            childPanels.set(fieldId, panel);
+            // A readonly parent editor is inert; child Edit remains an
+            // independent configured action beside that native control.
+            fields.append(panel.node);
+        }
         if (
             (config !== undefined &&
                 'readOnly' in config &&
@@ -1465,6 +1579,16 @@ const renderForm = (page: FormLoadedResult): void => {
         }
 
         if (schema.fieldType === AirtableFieldType.MULTIPLE_RECORD_LINKS) {
+            // This starter supplies a list finder only. Hide-finder retains
+            // selected IDs and child permissions without offering discovery.
+            const finderMode =
+                schema.miniExtConfig != null &&
+                'recordFinderMode' in schema.miniExtConfig
+                    ? schema.miniExtConfig.recordFinderMode
+                    : undefined;
+            if (finderMode !== undefined && finderMode !== 'list') continue;
+            const finder = element('div');
+            const finderConfiguration = JSON.stringify(schema);
             const search = element('input');
             search.placeholder = 'Search available linked records';
             const choices = element('div', undefined, 'choice-list');
@@ -1474,7 +1598,64 @@ const renderForm = (page: FormLoadedResult): void => {
             let conditionalFilters: ConditionalLinkedFilters | null = null;
             let currentLoader: SelectionLoader | null = null;
             let loaderInstalled = false;
+            let finderRetired = false;
+            const retireFinder = (): false => {
+                if (!finderRetired) {
+                    finderRetired = true;
+                    generation += 1;
+                    requestVersion += 1;
+                    offset = null;
+                    currentLoader = null;
+                    choices.replaceChildren();
+                    finder.hidden = true;
+                    bindingOwner?.field(fieldId).selection?.cancel();
+                }
+                return false;
+            };
+            const finderCurrent = (): boolean => {
+                if (finderRetired) return false;
+                const live = page.payload.fieldIdsToSchemas[fieldId];
+                const liveMode =
+                    live?.miniExtConfig != null &&
+                    'recordFinderMode' in live.miniExtConfig
+                        ? live.miniExtConfig.recordFinderMode
+                        : undefined;
+                if (
+                    !page.payload.fieldIdsInForm.includes(fieldId) ||
+                    live?.fieldType !==
+                        AirtableFieldType.MULTIPLE_RECORD_LINKS ||
+                    live.airtableField.id !== fieldId ||
+                    live.airtableField.config.type !==
+                        AirtableFieldType.MULTIPLE_RECORD_LINKS ||
+                    (liveMode !== undefined && liveMode !== 'list') ||
+                    JSON.stringify(live) !== finderConfiguration
+                )
+                    return retireFinder();
+                if (
+                    !ownsLinkedFilters() ||
+                    formRetired ||
+                    reviewPending ||
+                    !inCurrentPage(fieldId) ||
+                    fieldVisibility[fieldId]?.type !== 'visible'
+                )
+                    return false;
+                const state = bindingOwner?.field(fieldId).getSnapshot();
+                return (
+                    state != null &&
+                    !state.retired &&
+                    !state.readOnly &&
+                    state.visibility.type === 'visible'
+                );
+            };
+            // Busy presentation is an intent gate, not an acceptance fence for
+            // the read that made the Form busy in the first place.
+            const canStartFinder = (): boolean =>
+                finderCurrent() &&
+                !screenNode.inert &&
+                !fields.inert &&
+                bindingOwner?.field(fieldId).getSnapshot().canEdit === true;
             const resetChoices = (): void => {
+                if (!finderCurrent()) return;
                 generation += 1;
                 requestVersion += 1;
                 offset = null;
@@ -1490,7 +1671,7 @@ const renderForm = (page: FormLoadedResult): void => {
                 }
             };
             const fetchOptions = (more: boolean): void => {
-                if (!ownsLinkedFilters() || (more && offset == null)) return;
+                if (!canStartFinder() || (more && offset == null)) return;
                 if (!more) resetChoices();
                 const capturedGeneration = generation;
                 const capturedRequest = ++requestVersion;
@@ -1500,11 +1681,10 @@ const renderForm = (page: FormLoadedResult): void => {
                 void run(
                     'Loading allowed linked records…',
                     async ({ client, signal, current }) => {
-                        if (!ownsLinkedFilters() || client !== formClient)
-                            return;
+                        if (!finderCurrent() || client !== formClient) return;
                         const accepted = (): boolean =>
                             current() &&
-                            ownsLinkedFilters() &&
+                            finderCurrent() &&
                             capturedGeneration === generation &&
                             capturedRequest === requestVersion &&
                             capturedFilterRevision ===
@@ -1517,6 +1697,10 @@ const renderForm = (page: FormLoadedResult): void => {
                             const model =
                                 bindingOwner.field(fieldId).selection!;
                             currentLoader = async (request) => {
+                                if (!accepted())
+                                    throw new Error(
+                                        'This linked read is no longer current.'
+                                    );
                                 const abort = () => model.cancel();
                                 signal.addEventListener('abort', abort, {
                                     once: true,
@@ -1604,7 +1788,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 selectedValue.includes(record.id);
                             choice.addEventListener('change', () => {
                                 if (
-                                    !ownsLinkedFilters() ||
+                                    !canStartFinder() ||
                                     generation !== capturedGeneration ||
                                     conditionalFilters?.revision() !==
                                         capturedFilterRevision ||
@@ -1678,13 +1862,13 @@ const renderForm = (page: FormLoadedResult): void => {
             const moreButton = button('More choices', () => fetchOptions(true));
             moreButton.disabled = true;
             search.addEventListener('input', () => {
-                if (ownsLinkedFilters()) resetChoices();
+                if (canStartFinder()) resetChoices();
             });
             conditionalFilters = createConditionalLinkedFilters({
                 schema,
                 extensionAccessToken: page.payload.extensionAccessToken,
                 query: cascadeQuery,
-                current: ownsLinkedFilters,
+                current: finderCurrent,
                 readMetadata: readFilterMetadata,
                 request: (description, work) => {
                     void run(description, work);
@@ -1694,14 +1878,21 @@ const renderForm = (page: FormLoadedResult): void => {
             });
             if (conditionalFilters != null) {
                 linkedFilterViews.set(fieldId, conditionalFilters);
-                control.node.append(conditionalFilters.node);
+                finder.append(conditionalFilters.node);
             }
-            control.node.append(
+            finder.append(
                 search,
                 button('Search choices', () => fetchOptions(false)),
                 moreButton,
                 choices
             );
+            control.node.append(finder);
+            if (bindingOwner != null)
+                formControlDisposers.push(
+                    bindingOwner.field(fieldId).subscribe(() => {
+                        finderCurrent();
+                    })
+                );
         }
         if (schema.fieldType === AirtableFieldType.MULTIPLE_ATTACHMENTS) {
             const file = element('input');
@@ -2094,7 +2285,8 @@ const renderForm = (page: FormLoadedResult): void => {
             formRetired ||
             request != null ||
             reviewPending ||
-            !mayUseForm()
+            !mayUseForm() ||
+            childBlocksParent()
         )
             return;
         if (pendingFiles.pending()) {
@@ -2130,6 +2322,7 @@ const renderForm = (page: FormLoadedResult): void => {
     actions.append(submit);
     const discard = button('Discard draft', async () => {
         if (
+            childBlocksParent() ||
             !ownsForm() ||
             recovery.blocking(scope, recordId) != null ||
             (candidate?.outcome === 'unknown' &&
@@ -2145,7 +2338,13 @@ const renderForm = (page: FormLoadedResult): void => {
             progressInputRevision + pendingFiles.revision();
         const discardConfiguration = observeReviewConfiguration();
         if (formProgress && !(await formProgress.discard())) return;
-        if (!ownsLinkedRender() || formRetired || !mayUseForm()) return;
+        if (
+            !ownsLinkedRender() ||
+            formRetired ||
+            !mayUseForm() ||
+            childBlocksParent()
+        )
+            return;
         if (
             (request != null && request !== discardRequest) ||
             reviewIntentRevision !== discardReviewRevision ||
@@ -2181,7 +2380,7 @@ const renderForm = (page: FormLoadedResult): void => {
         deleteRecord = button(
             'Delete this record',
             async () => {
-                const mayDelete = mayUseForm;
+                const mayDelete = () => mayUseForm() && !childBlocksParent();
                 if (!mayDelete()) return;
                 if (
                     !(await confirmCurrent({
@@ -2237,29 +2436,10 @@ const renderForm = (page: FormLoadedResult): void => {
     recoveryPanel.setAttribute('aria-label', 'Earlier request recovery');
     recoveryPanel.setAttribute('aria-live', 'polite');
     card.append(recoveryPanel);
-    const updateRecovery = (): void => {
-        const pending = recovery.blocking(scope, recordId);
-        const selected =
-            candidate?.outcome === 'unknown' &&
-            candidate.acknowledgment === 'none'
-                ? candidate
-                : null;
-        const expired = !(visitor.formAuthority?.() ?? true);
-        submit.disabled = pending != null || selected != null || expired;
-        discard.disabled = submit.disabled;
-        if (deleteRecord != null) deleteRecord.disabled = submit.disabled;
-        updateComments();
-        fields.inert = submit.disabled;
-        updateFormActivity();
-        recoveryPanel.replaceChildren();
-        if (visitor.preparedAttempt?.outcome === 'not-submitted')
-            recoveryPanel.append(
-                element(
-                    'p',
-                    `New local attempt: ${visitor.preparedAttempt.id}. No Form save has been submitted for this local attempt.`
-                )
-            );
-        const attempt = selected ?? pending;
+    const recoveryReferences = element('div');
+    updateRecoveryReferences = (): void => {
+        recoveryReferences.replaceChildren();
+        if (formRetired || !ownsForm()) return;
         for (const earlier of recovery
             .unknown(scope.owner)
             .filter(
@@ -2270,7 +2450,32 @@ const renderForm = (page: FormLoadedResult): void => {
                             earlier.associatedRecordId === recordId) ||
                         earlier === candidate)
             )) {
-            if (earlier.retainedInput.length === 0) continue;
+            const referenceFields = earlier.retainedInput.flatMap((field) => {
+                if (formRetired || !ownsForm()) return [];
+                const fieldId = retainedInputFields.get(field);
+                if (fieldId === null)
+                    return [
+                        {
+                            title: 'Attachment activity',
+                            value: 'Attachment details are not retained.',
+                        },
+                    ];
+                if (fieldId === undefined) return [];
+                const schema = page.payload.fieldIdsToSchemas[fieldId];
+                // Reload or a local edit may mask, hide or remove a public field.
+                // Resolve exact accepted identity before reading retained text.
+                if (
+                    !page.payload.fieldIdsInForm.includes(fieldId) ||
+                    schema?.airtableField.id !== fieldId ||
+                    fieldVisibility[fieldId]?.type !== 'visible' ||
+                    hasMaskedValuePolicy(schema.miniExtConfig)
+                )
+                    return [];
+                return [
+                    { title: schema.airtableField.name, value: field.value },
+                ];
+            });
+            if (referenceFields.length === 0) continue;
             const reference = element('details');
             reference.setAttribute(
                 'aria-label',
@@ -2286,12 +2491,39 @@ const renderForm = (page: FormLoadedResult): void => {
                     'These were local values at the earlier dispatch, not the freshly loaded server values. They are never copied back or submitted automatically. Attachment details are not retained.'
                 )
             );
-            for (const field of earlier.retainedInput)
+            for (const field of referenceFields)
                 reference.append(
                     element('p', `${field.title}: ${field.value}`)
                 );
-            recoveryPanel.append(reference);
+            recoveryReferences.append(reference);
         }
+    };
+    const updateRecovery = (): void => {
+        const pending = recovery.blocking(scope, recordId);
+        const selected =
+            candidate?.outcome === 'unknown' &&
+            candidate.acknowledgment === 'none'
+                ? candidate
+                : null;
+        const expired = !(visitor.formAuthority?.() ?? true);
+        const blocked = pending != null || selected != null || expired;
+        submit.disabled = blocked || childBlocksParent();
+        discard.disabled = submit.disabled;
+        if (deleteRecord != null) deleteRecord.disabled = submit.disabled;
+        updateComments();
+        fields.inert = blocked;
+        updateFormActivity();
+        recoveryPanel.replaceChildren();
+        if (visitor.preparedAttempt?.outcome === 'not-submitted')
+            recoveryPanel.append(
+                element(
+                    'p',
+                    `New local attempt: ${visitor.preparedAttempt.id}. No Form save has been submitted for this local attempt.`
+                )
+            );
+        updateRecoveryReferences();
+        recoveryPanel.append(recoveryReferences);
+        const attempt = selected ?? pending;
         if (expired)
             recoveryPanel.append(
                 element(
@@ -2603,7 +2835,11 @@ const renderForm = (page: FormLoadedResult): void => {
             );
             const current = snapshot.pages[snapshot.activePageIndex];
             const last = visible.at(-1);
-            const busy = request != null || reviewPending || !mayUseForm();
+            const busy =
+                request != null ||
+                reviewPending ||
+                !mayUseForm() ||
+                childBlocksParent();
             navigation.hidden = false;
             pageCounter.textContent =
                 visible.length === 0
@@ -2649,6 +2885,9 @@ const renderForm = (page: FormLoadedResult): void => {
         };
         formControlDisposers.push(formPages.subscribe(updatePageNavigation));
     }
+    updateChildParentActivity = () => {
+        if (ownsLinkedRender()) updateRecovery();
+    };
     updateRecovery();
     updatePageNavigation();
     const save = (prepared?: {
@@ -2656,6 +2895,7 @@ const renderForm = (page: FormLoadedResult): void => {
         current(forOwnSave?: boolean): boolean;
     }): Promise<void> =>
         run('Saving the Form…', async ({ client, signal, current }) => {
+            if (childBlocksParent()) return;
             // Reject an invalid visible control instead of saving its last
             // valid draft value (for example, a non-finite numeric input).
             readCurrentPage();
@@ -2691,6 +2931,7 @@ const renderForm = (page: FormLoadedResult): void => {
             if (
                 !current() ||
                 !ownsForm() ||
+                childBlocksParent() ||
                 (prepared != null && !prepared.current())
             )
                 return;
@@ -2798,6 +3039,7 @@ const renderForm = (page: FormLoadedResult): void => {
                             updateRecovery();
                             return;
                         }
+                        updateValidationPresentation = () => {};
                         errors.replaceChildren(
                             element(
                                 'li',
@@ -2809,7 +3051,8 @@ const renderForm = (page: FormLoadedResult): void => {
                     return;
                 }
                 if (knownNotDispatched) formProgress?.resume();
-                if (current() && ownsForm())
+                if (current() && ownsForm()) {
+                    updateValidationPresentation = () => {};
                     errors.replaceChildren(
                         element(
                             'li',
@@ -2818,6 +3061,7 @@ const renderForm = (page: FormLoadedResult): void => {
                                 : uncertainSaveMessage
                         )
                     );
+                }
                 throw error;
             } finally {
                 retirePageReview();
@@ -2825,20 +3069,37 @@ const renderForm = (page: FormLoadedResult): void => {
             visitor.uncertainFormDraftScopes.delete(draft.scope);
             submit.disabled = false;
             discard.disabled = false;
+            updateValidationPresentation = () => {};
             errors.replaceChildren();
             if (normalized.type === 'error') {
                 formProgress?.resume();
-                for (const error of normalized.validationErrors)
-                    errors.append(
-                        element(
-                            'li',
-                            `${error.fieldTitle}: ${error.errorMessage}`
-                        )
-                    );
-                if (normalized.concurrentEditErrorMessage != null)
-                    errors.append(
-                        element('li', normalized.concurrentEditErrorMessage)
-                    );
+                const validation = normalized;
+                updateValidationPresentation = () => {
+                    if (formRetired || !ownsForm()) return;
+                    errors.replaceChildren();
+                    for (const error of validation.validationErrors) {
+                        const field = bindingOwner.controller
+                            .getState()
+                            .fields.some(
+                                (field) => field.fieldId === error.fieldId
+                            )
+                            ? bindingOwner.field(error.fieldId).getSnapshot()
+                            : undefined;
+                        errors.append(
+                            element(
+                                'li',
+                                canPresentFieldValidation(field)
+                                    ? `${field!.field!.title}: ${error.errorMessage}`
+                                    : 'A field needs attention before saving.'
+                            )
+                        );
+                    }
+                    if (validation.concurrentEditErrorMessage != null)
+                        errors.append(
+                            element('li', validation.concurrentEditErrorMessage)
+                        );
+                };
+                updateValidationPresentation();
                 status(
                     'The Form was not saved. Review the validation errors.',
                     true
@@ -2928,7 +3189,13 @@ const renderForm = (page: FormLoadedResult): void => {
         });
     card.addEventListener('submit', async (event) => {
         event.preventDefault();
-        if (!ownsForm() || request != null || reviewPending) return;
+        if (
+            !ownsForm() ||
+            request != null ||
+            reviewPending ||
+            childBlocksParent()
+        )
+            return;
         if (
             recovery.blocking(scope, recordId) != null ||
             (candidate?.outcome === 'unknown' &&
@@ -3289,6 +3556,10 @@ const forgetRememberedSessions = (visitor: Visitor, forgetOnly = false) => {
     }
     return visitor.pendingSessionCleanup.size === 0;
 };
+
+// Prefill once; an installed application's explicit input remains authoritative.
+const apiOriginInput = inputById('api-origin');
+if (apiOriginInput.value === '') apiOriginInput.value = DEFAULT_API_ORIGIN;
 
 connectionForm.addEventListener('submit', (event) => {
     event.preventDefault();

@@ -176,6 +176,119 @@ it('Form rich facets share one explicit token-only hydration and isolate per-fie
     f.fields.destroy();
 });
 
+for (const participant of ['initiator', 'joining-facet'] as const)
+    it(`aborting the ${participant} retires shared hydration and fences a held response from its successor`, async () => {
+        const old = deferred<LoadSelectedRecordsResult>();
+        const fresh = deferred<LoadSelectedRecordsResult>();
+        let attempts = 0;
+        const f = fixture(richForm(), () =>
+            ++attempts === 1 ? old.promise : fresh.promise
+        );
+        const a = f.fields.linkedRecords('fld_a');
+        const b = f.fields.linkedRecords('fld_b');
+        const initiator = new AbortController();
+        const joiner = new AbortController();
+        const first = a.readSelected({ signal: initiator.signal });
+        const shared = b.readSelected({ signal: joiner.signal });
+        assert.equal(first, shared);
+        await Promise.resolve();
+        assert.equal(f.calls.length, 1);
+        (participant === 'initiator' ? initiator : joiner).abort();
+        assert.equal(f.calls[0]!.signal?.aborted, true);
+        for (const facet of [a, b]) {
+            assert.equal(facet.getSnapshot().phase, 'idle');
+            assert.equal(facet.getSnapshot().pending, false);
+            assert.equal(facet.getSnapshot().error, null);
+            assert.deepEqual(facet.getSnapshot().selectedRecords, []);
+        }
+        assert.equal(f.fields.field('fld_a').getSnapshot().retired, false);
+        assert.deepEqual(f.fields.field('fld_a').getSnapshot().value, [
+            'rec_a',
+            'rec_a',
+        ]);
+        const retry = a.readSelected();
+        await Promise.resolve();
+        assert.equal(f.calls.length, 2);
+        old.resolve({
+            tbl_linked: table([{ id: 'rec_a', fields: { fld_name: 'stale' } }]),
+        });
+        assert.equal(await first, false);
+        assert.equal(await shared, false);
+        // Even another signal retained by the old shared read cannot cancel retry.
+        initiator.abort();
+        joiner.abort();
+        assert.equal(f.calls[1]!.signal?.aborted, false);
+        assert.equal(a.getSnapshot().phase, 'loading');
+        assert.deepEqual(a.getSnapshot().selectedRecords, []);
+        fresh.resolve({
+            tbl_linked: table([record('rec_a'), record('rec_b')]),
+        });
+        assert.equal(await retry, true);
+        assert.equal(
+            a.getSnapshot().selectedRecords[0]!.fields.fld_name,
+            'rec_a'
+        );
+        assert.equal(
+            b.getSnapshot().selectedRecords[0]!.fields.fld_name,
+            'rec_b'
+        );
+        assert.deepEqual(f.fields.field('fld_b').getSnapshot().value, [
+            'rec_b',
+        ]);
+        f.fields.destroy();
+    });
+
+it("an already-aborted caller neither dispatches nor cancels another facet's pending read", async () => {
+    const pending = deferred<LoadSelectedRecordsResult>();
+    const f = fixture(richForm(), () => pending.promise);
+    const a = f.fields.linkedRecords('fld_a');
+    const b = f.fields.linkedRecords('fld_b');
+    const abort = new AbortController();
+    abort.abort();
+    assert.equal(await a.readSelected({ signal: abort.signal }), false);
+    assert.equal(f.calls.length, 0);
+    const live = a.readSelected();
+    await Promise.resolve();
+    assert.equal(await b.readSelected({ signal: abort.signal }), false);
+    assert.equal(f.calls[0]!.signal?.aborted, false);
+    pending.resolve({ tbl_linked: table([record('rec_a')]) });
+    assert.equal(await live, true);
+    f.fields.destroy();
+});
+
+it('abort before hydration dispatch preserves the owner and permits retry', async () => {
+    const f = fixture();
+    const facet = f.fields.linkedRecords('fld_a');
+    const abort = new AbortController();
+    const read = facet.readSelected({ signal: abort.signal });
+    abort.abort();
+    assert.equal(await read, false);
+    assert.equal(f.calls.length, 0);
+    assert.equal(facet.getSnapshot().phase, 'idle');
+    assert.equal(await facet.readSelected(), true);
+    assert.equal(f.calls.length, 1);
+    f.fields.destroy();
+});
+
+it("an old failed read's signal cannot abort an explicit retry", async () => {
+    const pending = deferred<LoadSelectedRecordsResult>();
+    let attempts = 0;
+    const f = fixture(richForm(), async () => {
+        if (++attempts === 1) throw Error('synthetic failure');
+        return pending.promise;
+    });
+    const facet = f.fields.linkedRecords('fld_a');
+    const abort = new AbortController();
+    assert.equal(await facet.readSelected({ signal: abort.signal }), false);
+    const retry = facet.readSelected();
+    await Promise.resolve();
+    abort.abort();
+    assert.equal(f.calls[1]!.signal?.aborted, false);
+    pending.resolve({ tbl_linked: table([record('rec_a')]) });
+    assert.equal(await retry, true);
+    f.fields.destroy();
+});
+
 it('Form rich facets preserve missing, null and present-empty detail projection', () => {
     for (const mode of [
         'missing',

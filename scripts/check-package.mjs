@@ -331,6 +331,7 @@ const browserStarterFiles = [
     'src/main.ts',
     'src/progress.ts',
     'src/privacy.ts',
+    'src/linkedChildPanel.ts',
     'src/fields.ts',
     'src/customFieldRenderer.ts',
     'src/portal.ts',
@@ -736,11 +737,47 @@ if (getFormattedDuration('', 'h:mm') !== '') throw new Error('Empty duration for
 if (getFormattedDuration('60', 'h:mm') !== '1:00') throw new Error('Default duration minutes failed');
 if (getFormattedDuration('60', 'h:mm', true) !== '0:01') throw new Error('Explicit duration seconds failed');
 `;
+    const originTransportChecks = `
+const originCheckTimer = setTimeout(() => {console.error('Installed origin checks did not complete');process.exitCode=1;},10000);
+(async () => {
+    const input = {shareId:'share_origin_synthetic',recordId:null,query:{},context:{type:'direct-url'}};
+    for (const apiOrigin of [undefined, 'https://private-deployment.example/']) {
+        const expected = new URL(apiOrigin === undefined ? DEFAULT_API_ORIGIN : apiOrigin).origin;
+        const calls = [];
+        const client = createMiniExtensionsClient({apiOrigin,fetch:async (url,init) => {
+            const target = new URL(String(url));
+            if (target.origin !== expected || init?.credentials !== 'omit') throw new Error('Installed origin/credential routing mismatch');
+            calls.push(target);
+            return new Response(JSON.stringify(target.pathname.startsWith('/api/trpc/') ? {result:{data:{}}} : {}),{headers:{'Content-Type':'application/json'}});
+        }});
+        if (calls.length !== 0) throw new Error('Installed client constructed with I/O');
+        await client.loadExtension(input);
+        await client.portals.getUserRecord({extensionAccessToken:'SYNTHETIC_ORIGIN_TOKEN'});
+        if (calls.length !== 2 || !calls[0].pathname.startsWith('/api/v1') || !calls[1].pathname.startsWith('/api/trpc/')) throw new Error('Installed transport coverage mismatch');
+    }
+    const calls = [];
+    const client = createMiniExtensionsClient({apiOrigin:'https://private-deployment.example',fetch:async url => {
+        calls.push(new URL(String(url)).origin);
+        throw new Error('Synthetic deployment failure');
+    }});
+    let rejected = false;
+    try {await client.loadExtension(input);} catch {rejected = true;}
+    if (!rejected || calls.length !== 1 || calls[0] !== 'https://private-deployment.example') throw new Error('Installed deployment failure changed origin or was replayed');
+    console.log('Installed runtime origin defaults: default/override v1+tRPC and no-fallback checks passed on '+process.version);
+})().catch(error => {console.error(error);process.exitCode=1;}).finally(() => clearTimeout(originCheckTimer));
+`;
+    const originProofSuccess =
+        'Installed runtime origin defaults: default/override v1+tRPC and no-fallback checks passed on ' +
+        process.version;
     const consumer = `
 import { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { AirtableFieldType as PublicFieldType } from '@miniextensions/sdk/field-types';
 if (PublicFieldType !== AirtableFieldType) throw new Error('ESM field enum identity changed');
-import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
+import { createMiniExtensionsClient, DEFAULT_API_ORIGIN, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
+if (DEFAULT_API_ORIGIN !== 'https://web.miniextensions.com') throw new Error('ESM public API origin default changed');
+for (const options of [undefined, {}, {apiOrigin:undefined}]) {
+    if (Object.keys(createMiniExtensionsClient(options).getSession()).length !== 0) throw new Error('ESM default client construction failed');
+}
 const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' });
 client.setSession(withExtensionPassword({}, { extensionId: 'extExample', encryptedExtensionPassword: 'password-token' }));
 client.setSession(withLoginToken(client.getSession(), { extensionId: 'extExample', tableId: 'tblExample', loginFieldNames: ['Email'], encryptedLoginToken: 'login-token' }));
@@ -780,13 +817,40 @@ const loaded = Object.keys(require.cache).filter(path => !before.has(path));
 if (!loaded.every(path => path.endsWith('/dist/cjs/field-types.js') || path.endsWith('/dist/cjs/formulas/types.js'))) throw new Error('Field kinds CommonJS entry loaded the formula runtime');
 const { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType: FormulaFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
 if (AirtableFieldType !== FormulaFieldType) throw new Error('CommonJS field enum identity changed');
-const { createMiniExtensionsClient } = require('@miniextensions/sdk');
+const { createMiniExtensionsClient, DEFAULT_API_ORIGIN } = require('@miniextensions/sdk');
+if (DEFAULT_API_ORIGIN !== 'https://web.miniextensions.com') throw new Error('CommonJS public API origin default changed');
+for (const options of [undefined, {}, {apiOrigin:undefined}]) {
+    if (Object.keys(createMiniExtensionsClient(options).getSession()).length !== 0) throw new Error('CommonJS default client construction failed');
+}
 if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
 ${formattingChecks}
 ${parserChecks}`
     );
     run(process.execPath, ['consumer.cjs']);
+
+    // Node-only transport probes must not enter the shared browser VM bundle.
+    for (const [file, imports] of [
+        [
+            'origin-defaults.mjs',
+            "import {createMiniExtensionsClient,DEFAULT_API_ORIGIN} from '@miniextensions/sdk';\n",
+        ],
+        [
+            'origin-defaults.cjs',
+            "const {createMiniExtensionsClient,DEFAULT_API_ORIGIN}=require('@miniextensions/sdk');\n",
+        ],
+    ]) {
+        writeFileSync(
+            join(temporaryDirectory, file),
+            imports + originTransportChecks
+        );
+        assert(
+            run(process.execPath, [file])
+                .split('\n')
+                .includes(originProofSuccess)
+        );
+        console.log(file + ': ' + originProofSuccess);
+    }
 
     // Start cold with a deliberately small stack: a warm/default-stack process
     // can hide recursive unary parsing failures on other Node builds.

@@ -2441,10 +2441,13 @@ reconciliation is separate: it uses the saved inverse relationship and the
 latest parent draft, preserves duplicate occurrences, and never grants a new
 Create exemption. A prior proven Create exemption remains separate from edited
 presentation data. Edit-parent reconciliation accepts explicit inverse arrays
-and an own returned null as a native clear. Missing, inherited or undefined
-inverse evidence remains unsupported; field identity, physical linked type and
-matching parent table are still required. This remains a conservative subset of
-canonical reconciliation.
+and an own returned null as a native clear. When the inverse is entirely absent
+from the public child schema and saved fields, an accepted modal Save retains the
+parent relationship, matching canonical reconciliation. The backend binds a child
+Create to its parent through the child token. A missing, inherited or undefined
+value for a published inverse remains unsupported; field identity, physical linked
+type and matching parent table are still required. Contradictory or partial inverse
+metadata is refused.
 
 An unchanged native array may reconcile on a read-only field without writing.
 Changed membership keeps writable-field admission; re-adding a removed record

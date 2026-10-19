@@ -103,10 +103,192 @@ export function addLinkedReviewAnswers(page) {
     };
 }
 
+/** The same privacy boundary runs against source and the installed recipe. */
+export function checkLinkedReviewMasking({
+    create,
+    review,
+    generic,
+    createFormSaveInput,
+}) {
+    const mask = '••••••••';
+    const fieldId = 'fld_review_masked_link';
+    const configs = [
+        { type: 'singleLineText' },
+        { type: 'multilineText' },
+        { type: 'email' },
+        { type: 'phoneNumber' },
+        { type: 'number', options: { precision: 0 } },
+        { type: 'currency', options: { precision: 2, symbol: '$' } },
+        { type: 'percent', options: { precision: 0 } },
+        {
+            type: 'rating',
+            options: { max: 5, icon: 'star', color: 'yellowBright' },
+        },
+        { type: 'checkbox', options: { icon: 'check', color: 'greenBright' } },
+    ];
+    const setup = (config, policy, custom) => {
+        const page = createReviewFixture('review-answers').page();
+        const fixture = addLinkedReviewAnswers(page);
+        // Isolate the one linked field under test; unrelated raw labels have
+        // independent accepted policies and are not part of this assertion.
+        page.payload.fieldIdsInForm = page.payload.fieldIdsInForm.filter(
+            (id) => !['fld_review_link', 'fld_review_generic_link'].includes(id)
+        );
+        const index = custom ? 1 : 0;
+        const primary = fixture.table.airtableFields[index];
+        primary.config = config;
+        if (!custom)
+            delete page.payload.fieldIdsToSchemas[fieldId].miniExtConfig
+                .customPrimaryField;
+        const detail =
+            page.payload.linkedRecordFieldIdToDetailFields[fieldId][index];
+        detail.miniExtConfig = policy;
+        for (const record of fixture.records)
+            record.fields[primary.id] =
+                config.type === 'checkbox'
+                    ? false
+                    : ['number', 'currency', 'percent', 'rating'].includes(
+                            config.type
+                        )
+                      ? 0
+                      : 'SYNTHETIC_PRIVATE_LINKED_LABEL';
+        return { page, fixture, primary, detail };
+    };
+    const accept = (scope, fixture, source) =>
+        source === 'hydration'
+            ? scope.acceptHydration(fixture.tables)
+            : scope.acceptOptions(fieldId, fixture.options);
+    const sourceKinds = ['hydration', 'options'];
+    let checks = 0;
+    for (const config of configs)
+        for (const flag of ['obscurePassword', 'maskPasswordOnLoginScreen'])
+            for (const custom of [false, true])
+                for (const source of sourceKinds) {
+                    const { page, fixture, primary } = setup(
+                        config,
+                        { [flag]: true },
+                        custom
+                    );
+                    const before = structuredClone({ page, fixture });
+                    const scope = create(page, () => true);
+                    accept(scope, fixture, source);
+                    const snapshot = scope.snapshot();
+                    assert.equal(snapshot.label(fieldId, 'rec_original'), mask);
+                    assert.equal(
+                        snapshot.label(fieldId, 'rec_new'),
+                        source === 'options' ? mask : generic,
+                        'hydration cannot authorize new linked membership'
+                    );
+                    assert.equal(
+                        review(
+                            page,
+                            page.payload.formRecord.data,
+                            snapshot
+                        ).find((row) => row.fieldId === fieldId).value,
+                        [mask, generic, mask].join('\n'),
+                        'masking preserves native linked ID order and duplicates'
+                    );
+                    assert.deepEqual({ page, fixture }, before);
+                    const dirtyFieldIds = [fieldId, 'fld_review_title'];
+                    const saved = createFormSaveInput({
+                        loaded: page,
+                        draft: {
+                            data: page.payload.formRecord.data,
+                            dirtyFieldIds,
+                        },
+                        options: {
+                            context: { type: 'direct-url' },
+                            isComputeMode: false,
+                            captchaVal: null,
+                            searchQuery: {},
+                            conditionalLinkedRecordFieldIdsToFilteringValues:
+                                {},
+                        },
+                    });
+                    assert.deepEqual(saved.formRecord, page.payload.formRecord);
+                    assert.deepEqual(
+                        saved.formFieldIdsWithUnsavedChanges,
+                        dirtyFieldIds
+                    );
+                    let rawReads = 0;
+                    for (const record of fixture.records)
+                        Object.defineProperty(record.fields, primary.id, {
+                            configurable: true,
+                            get() {
+                                rawReads++;
+                                assert.fail('Masked native value was read.');
+                            },
+                        });
+                    const guarded = create(page, () => true);
+                    accept(guarded, fixture, source);
+                    assert.equal(
+                        guarded.snapshot().label(fieldId, 'rec_original'),
+                        mask
+                    );
+                    assert.equal(rawReads, 0);
+                    assert.deepEqual(page, before.page);
+                    checks++;
+                }
+    for (const source of sourceKinds)
+        for (const change of [
+            ({ detail }) => (detail.isHidden = true),
+            ({ primary }) => (primary.config = { type: 'url' }),
+            ({ primary }) => (primary.isComputed = true),
+            ({ fixture }) =>
+                (fixture.table.airtableFields[1].isPrimaryField = true),
+            ({ detail }) => (detail.fieldName = 'contradiction'),
+            ({ detail }) => (detail.miniExtConfig = []),
+            ...['obscurePassword', 'maskPasswordOnLoginScreen'].flatMap(
+                (flag) =>
+                    [null, 'true', 1, {}].map(
+                        (value) =>
+                            ({ detail }) =>
+                                (detail.miniExtConfig = { [flag]: value })
+                    )
+            ),
+        ]) {
+            const state = setup(
+                configs[0],
+                { maskPasswordOnLoginScreen: true },
+                false
+            );
+            change(state);
+            for (const record of state.fixture.records)
+                Object.defineProperty(record.fields, state.primary.id, {
+                    get() {
+                        assert.fail('Unaccepted linked label was read.');
+                    },
+                });
+            const scope = create(state.page, () => true);
+            accept(scope, state.fixture, source);
+            assert.equal(
+                scope.snapshot().label(fieldId, 'rec_original'),
+                generic
+            );
+            checks++;
+        }
+    for (const source of sourceKinds)
+        for (const policy of [
+            {},
+            { obscurePassword: false, maskPasswordOnLoginScreen: false },
+        ]) {
+            const { page, fixture } = setup(configs[0], policy, true);
+            const scope = create(page, () => true);
+            accept(scope, fixture, source);
+            assert.equal(
+                scope.snapshot().label(fieldId, 'rec_original'),
+                'SYNTHETIC_PRIVATE_LINKED_LABEL',
+                'an accepted public label remains readable'
+            );
+            checks++;
+        }
+    return { checks };
+}
+
 /** Executes the archive-installed presentation recipe; no fetch or transport. */
 export async function checkLinkedReviewRecipe({ consumerDirectory }) {
     const consumer = consumerDirectory;
-    for (const name of ['linkedReview.ts', 'review.ts'])
+    for (const name of ['linkedReview.ts', 'review.ts', 'privacy.ts'])
         assert.deepEqual(
             readFileSync(join(consumer, 'src', name)),
             readFileSync(
@@ -495,5 +677,15 @@ export async function checkLinkedReviewRecipe({ consumerDirectory }) {
         data: native,
     });
     assert.deepEqual(saved.formFieldIdsWithUnsavedChanges, draft.dirtyFieldIds);
-    return { checks: checks + 5 };
+    return {
+        checks:
+            checks +
+            5 +
+            checkLinkedReviewMasking({
+                create,
+                review,
+                generic,
+                createFormSaveInput,
+            }).checks,
+    };
 }

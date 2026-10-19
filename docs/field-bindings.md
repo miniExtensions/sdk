@@ -1402,6 +1402,17 @@ SDK Form and Portal linked-option loaders attach detached record data to `select
 
 A Form facet accepts SDK rich pages only from the same client, token, field, and linked table. A custom option loader can still supply native choices, but replaying a page from another client or field does not provide rich-record presentation authority.
 
+`readSelected({ signal })` optionally ties hydration to a caller's cancellation.
+The token-only request is shared by linked facets of the accepted Form owner:
+aborting any participating signal cancels that pending hydration for all waiters,
+returns its presentation to idle, and rejects a late response even if the
+transport ignores abort. An already-aborted caller does not join or cancel an
+existing read. Cancellation preserves native selections, unrelated draft values,
+candidate reads and the Form owner. Retry explicitly; it starts a fresh read
+without waiting for the cancelled transport. Old responses and retained signals
+cannot affect that successor. A settled accepted hydration remains cached;
+aborting its former signal does not erase accepted data or cancel another read.
+
 The rich Form facet’s `phase`, `pending`, and `error` describe the shared selected-hydration read. For candidate Search and More, use the existing binding’s `selection.getState()` fields `loading`, `error`, `searchTerm`, and `offset`. The facet adds no second candidate read owner; native selection and draft writes remain owned by the existing binding.
 
 Selected candidate records remain owned by the Form facet across candidate searches and renderer unmounts, even without a subscriber or intervening snapshot read. Actual owner retirement clears that presentation. The facet’s `table` is common physical metadata from the sources of its returned selected and candidate records. Empty original hydration does not override candidate metadata. If participating sources conflict or lack metadata, `table` is null; render generic values rather than pairing a record with unrelated fields.

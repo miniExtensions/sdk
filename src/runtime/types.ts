@@ -212,7 +212,8 @@ export type RuntimeRequestOptions = {
 };
 
 export type MiniExtensionsClientOptions = {
-    apiOrigin: string;
+    /** Defaults to https://web.miniextensions.com; explicit overrides stay authoritative. */
+    apiOrigin?: string;
     session?: Readonly<RuntimeSession>;
     fetch?: typeof globalThis.fetch;
 };

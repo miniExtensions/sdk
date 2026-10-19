@@ -1,5 +1,6 @@
 export {
     createMiniExtensionsClient,
+    DEFAULT_API_ORIGIN,
     SDKError,
     type SDKErrorKind,
 } from './client.js';

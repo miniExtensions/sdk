@@ -8,6 +8,7 @@ import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
+    createMiniExtensionsClient,
     type ConditionalFilterPrimaryValue,
     type FormLoadedResult,
     type ListConditionalFilterPrimaryValuesInput,
@@ -21,13 +22,19 @@ import {
     type RuntimeFieldSchema,
     type SaveFormInput,
 } from '../src/runtime/index.js';
-import { loadedForm } from './formsFixtures.js';
+import {
+    createFormFieldBindings,
+    RecoveryJournal,
+} from '../src/forms/index.js';
+import { loadedForm, formSaveOptions } from './formsFixtures.js';
+import { parentForm, childForm } from './formLinkedChildFixtures.js';
 
 type DOMElement = InstanceType<Window['Element']>;
 type DOMSelect = InstanceType<Window['HTMLSelectElement']>;
 const root = resolve(process.cwd());
 let directory: string;
 let revision = 0;
+const acceptedPages = new WeakMap<Window, () => FormLoadedResult>();
 
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-browser-linked-filters-'));
@@ -46,6 +53,23 @@ before(async () => {
         format: 'esm',
         outfile: join(directory, 'main.mjs'),
         logLevel: 'silent',
+        plugins: [
+            {
+                name: 'linked-finder-accepted-page-observer',
+                setup(bundle) {
+                    bundle.onLoad(
+                        { filter: /\/examples\/browser\/src\/main\.ts$/ },
+                        async (args) => ({
+                            loader: 'ts',
+                            // Observation only: all client, owner and loader behavior stays real.
+                            contents:
+                                (await readFile(args.path, 'utf8')) +
+                                '\nexport const linkedFinderPageForTest = () => visitors[activeVisitor].screen;\n',
+                        })
+                    );
+                },
+            },
+        ],
     });
 });
 after(async () => rm(directory, { recursive: true, force: true }));
@@ -351,9 +375,14 @@ const environment = async (
         }
         await window.happyDOM.close();
     });
-    await import(
+    const application = await import(
         `${pathToFileURL(join(directory, 'main.mjs')).href}?case=${++revision}`
     );
+    acceptedPages.set(window, () => {
+        const page = application.linkedFinderPageForTest();
+        assert.equal(page?.extensionScreen, 'form_loaded');
+        return page;
+    });
     const origin = window.document.getElementById('api-origin');
     const share = window.document.getElementById('share-id');
     assert.ok(origin instanceof window.HTMLInputElement);
@@ -458,6 +487,248 @@ const save = async (window: Window, calls: SaveFormInput[], count = 1) => {
     submit(window, card);
     await waitFor(() => calls.length === count && idle(window));
 };
+
+describe('actual starter linked finder admission', () => {
+    const finderForm = (mode?: unknown, conditional = false) => {
+        const form = makeForm();
+        const schema = form.payload.fieldIdsToSchemas.fld_projects;
+        assert.ok(schema?.fieldType === 'multipleRecordLinks');
+        Object.assign(schema.miniExtConfig!, {
+            dynamicFilteringToggle: conditional,
+            ...(mode === undefined ? {} : { recordFinderMode: mode }),
+        });
+        return form;
+    };
+    const setMode = (
+        window: Window,
+        mode: 'list' | 'hide-finder',
+        replace = false
+    ) => {
+        const page = acceptedPages.get(window)!();
+        const schema = page.payload.fieldIdsToSchemas.fld_projects;
+        assert.ok(schema?.fieldType === 'multipleRecordLinks');
+        const next = replace ? structuredClone(schema) : schema;
+        next.miniExtConfig = { ...next.miniExtConfig, recordFinderMode: mode };
+        page.payload.fieldIdsToSchemas.fld_projects = next;
+    };
+    const hasButton = (node: DOMElement, title: string) =>
+        Array.from(node.querySelectorAll('button')).some(
+            (candidate) => candidate.textContent?.trim() === title
+        );
+
+    it('offers no hidden finder or filters and preserves existing links in an unrelated Save', async (test) => {
+        const api = fixture(finderForm('hide-finder', true));
+        const window = await environment(test, api.fetch);
+        for (const title of [
+            'Search choices',
+            'More choices',
+            'Load conditional filters',
+        ])
+            assert.equal(hasButton(outer(window), title), false);
+        assert.equal(
+            outer(window).querySelector(
+                'input[placeholder="Search available linked records"]'
+            ),
+            null
+        );
+        assert.deepEqual(rawIds(window), ['rec_retained']);
+        const title = window.document.querySelector(
+            '[data-field-id="fld_title"]'
+        );
+        assert.ok(title instanceof window.HTMLInputElement);
+        title.value = 'Unrelated parent edit';
+        input(window, title);
+        await save(window, api.saves);
+        assert.deepEqual(api.saves[0]?.formRecord.data.fld_projects, [
+            'rec_retained',
+        ]);
+        assert.deepEqual(api.saves[0]?.formFieldIdsWithUnsavedChanges, [
+            'fld_title',
+        ]);
+        assert.equal(api.loads.length, 1);
+        assert.equal(api.bootstraps.length, 0);
+        assert.equal(api.filters.length, 0);
+        assert.equal(api.reads.length, 0);
+        assert.deepEqual(api.unexpected, []);
+    });
+
+    for (const mode of [undefined, 'list'])
+        it(`keeps ${mode ?? 'default'} list search and explicit paging usable`, async (test) => {
+            const api = fixture(finderForm(mode));
+            const window = await environment(test, api.fetch);
+            const search = outer(window).querySelector(
+                'input[placeholder="Search available linked records"]'
+            );
+            assert.ok(search instanceof window.HTMLInputElement);
+            search.value = 'Available';
+            input(window, search);
+            await searchOptions(window);
+            assert.equal(api.reads.length, 1);
+            assert.deepEqual(api.reads[0]?.filter, {
+                viewType: 'list',
+                searchTerm: 'Available',
+            });
+            assert.deepEqual(
+                api.reads[0]?.conditionalLinkedRecordFilteringValues,
+                {}
+            );
+            button(outer(window), 'More choices').click();
+            await waitFor(() => api.reads.length === 2 && idle(window));
+            assert.equal(api.reads[1]?.offset, 'cursor_next');
+            assert.deepEqual(rawIds(window), ['rec_retained']);
+            assert.equal(api.saves.length, 0);
+            assert.deepEqual(api.unexpected, []);
+        });
+
+    for (const mode of ['calendar', null, 'unknown-finder'])
+        it(`does not silently turn unsupported ${String(mode)} into list search`, async (test) => {
+            const api = fixture(finderForm(mode));
+            const window = await environment(test, api.fetch);
+            assert.equal(hasButton(outer(window), 'Search choices'), false);
+            assert.equal(hasButton(outer(window), 'More choices'), false);
+            assert.deepEqual(rawIds(window), ['rec_retained']);
+            assert.equal(api.reads.length, 0);
+            assert.equal(api.saves.length, 0);
+            assert.deepEqual(api.unexpected, []);
+        });
+
+    it('rejects a held finder response after observed hide and keeps retained search callbacks retired', async (test) => {
+        const api = fixture(finderForm('list'));
+        const pending = deferred<ListLinkedRecordOptionsResult>();
+        api.handlers.options = () => pending.promise;
+        const window = await environment(test, api.fetch);
+        const search = button(outer(window), 'Search choices');
+        search.click();
+        await waitFor(() => api.reads.length === 1);
+        setMode(window, 'hide-finder');
+        pending.resolve(options());
+        await waitFor(() => idle(window));
+        assert.equal(
+            outer(window).querySelector('.choice-list input') === null,
+            true
+        );
+        assert.deepEqual(rawIds(window), ['rec_retained']);
+        setMode(window, 'list');
+        search.click();
+        await settle();
+        assert.equal(api.reads.length, 1);
+        assert.equal(api.saves.length, 0);
+        assert.deepEqual(api.unexpected, []);
+    });
+
+    it('retires captured candidate toggles after whole-schema replacement and observed list/hide/list', async (test) => {
+        const api = fixture(finderForm('list'));
+        const window = await environment(test, api.fetch);
+        await searchOptions(window);
+        const candidate = choiceCheckbox(window, 'Available project');
+        const search = button(outer(window), 'Search choices');
+        setMode(window, 'hide-finder', true);
+        search.click();
+        await settle();
+        setMode(window, 'list', true);
+        candidate.checked = true;
+        change(window, candidate);
+        search.click();
+        await settle();
+        assert.deepEqual(rawIds(window), ['rec_retained']);
+        assert.equal(api.reads.length, 1);
+        assert.equal(api.saves.length, 0);
+        assert.deepEqual(api.unexpected, []);
+    });
+
+    it('leaves configured hide-finder child Create and Edit available through their SDK owner', async () => {
+        const loaded = parentForm('edit');
+        const schema = loaded.payload.fieldIdsToSchemas.fld_children_a;
+        assert.ok(schema?.fieldType === 'multipleRecordLinks');
+        schema.miniExtConfig = {
+            ...schema.miniExtConfig,
+            recordFinderMode: 'hide-finder',
+        };
+        const before = structuredClone(loaded.payload.formRecord.data);
+        const loads: LoadExtensionInput[] = [];
+        let editing = false;
+        const client = createMiniExtensionsClient({
+            apiOrigin: 'https://sdk.example.test',
+            fetch: async (resource, init) => {
+                const url = new URL(String(resource));
+                if (
+                    url.pathname ===
+                    '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates'
+                )
+                    return new Response(
+                        JSON.stringify({
+                            result: {
+                                data: {
+                                    tbl_child: {
+                                        airtableFields: [
+                                            loaded.payload.fieldIdsToSchemas
+                                                .fld_title.airtableField,
+                                        ],
+                                        recordIdsToAirtableRecords: {
+                                            rec_existing: {
+                                                id: 'rec_existing',
+                                                fields: {
+                                                    fld_title: 'Allowed child',
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        })
+                    );
+                assert.equal(
+                    url.searchParams.get('route'),
+                    'fetchExtensionForEndUser'
+                );
+                loads.push(JSON.parse(String(init?.body)));
+                const child = childForm('edit');
+                if (editing)
+                    child.payload.formRecord = {
+                        type: 'edit',
+                        tableId: 'tbl_child',
+                        recordId: 'rec_existing',
+                        data: child.payload.formRecord.data,
+                    };
+                return new Response(JSON.stringify(child));
+            },
+        });
+        const fields = createFormFieldBindings({
+            loaded,
+            client,
+            saveOptions: formSaveOptions(),
+            getScope: () => ({ ownerId: 'hide-finder-parent', revision: 0 }),
+        });
+        const child = fields.linkedChild('fld_children_a', {
+            journal: new RecoveryJournal(),
+            loadVersion: 1,
+        });
+        try {
+            assert.equal(await child.openCreate(), true);
+            assert.equal(child.getSnapshot().phase, 'ready');
+            child.close();
+            editing = true;
+            assert.equal(
+                await fields.linkedRecords('fld_children_a').readSelected(),
+                true
+            );
+            assert.equal(
+                await child.openEdit(
+                    'rec_existing',
+                    child.getSnapshot().revision
+                ),
+                true
+            );
+            assert.equal(child.getSnapshot().phase, 'ready');
+            assert.equal(loads.length, 2);
+            assert.deepEqual(fields.controller.getState().draft?.data, before);
+            assert.deepEqual(loaded.payload.formRecord.data, before);
+        } finally {
+            child.close();
+            fields.destroy();
+        }
+    });
+});
 
 describe(
     'actual Form starter conditional linked-record filters',

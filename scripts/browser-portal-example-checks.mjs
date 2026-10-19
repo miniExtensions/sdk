@@ -3949,6 +3949,12 @@ export async function checkBrowserPortalExample({
                         'Fresh public baseline';
                     fresh.payload.formRecord.data.fld_files = [];
                     fresh.payload.formFieldIdsWithUnsavedChanges = [];
+                    const firstNative = structuredClone(
+                        first.payload.formRecord
+                    );
+                    const freshNative = structuredClone(
+                        fresh.payload.formRecord
+                    );
                     const saves = [];
                     let loads = 0;
                     const fetch = async (input, init) => {
@@ -4007,6 +4013,11 @@ export async function checkBrowserPortalExample({
                         ...first.payload.formRecord.data,
                         fld_title: privateText,
                     });
+                    assert.deepEqual(saves[0].formFieldIdsWithUnsavedChanges, [
+                        'fld_files',
+                        'fld_title',
+                    ]);
+                    const savedNative = structuredClone(saves[0]);
                     assert(!reference().textContent.includes(privateFilename));
                     assert(
                         reference().textContent.includes(
@@ -4034,11 +4045,31 @@ export async function checkBrowserPortalExample({
                             'Attachment details are not retained.'
                         )
                     );
-                    for (const secret of [privateText, privateTitle])
-                        assert(
-                            reference().textContent.includes(secret),
-                            'Same-person Reload retains reference-only input.'
-                        );
+                    assert(
+                        reference().textContent.includes(privateText),
+                        'Same-person Reload retains the earlier value only as reference input.'
+                    );
+                    assert.equal(
+                        reference().textContent.includes(privateTitle),
+                        false
+                    );
+                    assert.match(
+                        reference().textContent,
+                        /Current public title/
+                    );
+                    assert.equal(oldTitle.isConnected, false);
+                    assert.equal(button(document, 'Save').disabled, true);
+                    submit(window, oldCard);
+                    submit(window, document.querySelector('#screen form'));
+                    await new Promise((resolve) => setImmediate(resolve));
+                    assert.equal(
+                        saves.length,
+                        1,
+                        'Same-person Reload must not replay the uncertain create from either old or current Form.'
+                    );
+                    assert.deepEqual(saves[0], savedNative);
+                    assert.deepEqual(first.payload.formRecord, firstNative);
+                    assert.deepEqual(fresh.payload.formRecord, freshNative);
                     document
                         .getElementById(
                             teardown === 'Logout' ? 'logout' : 'disconnect'
@@ -4091,6 +4122,9 @@ export async function checkBrowserPortalExample({
                         1,
                         'Privacy teardown must retain the uncertain-create operation guard.'
                     );
+                    assert.deepEqual(saves[0], savedNative);
+                    assert.deepEqual(first.payload.formRecord, firstNative);
+                    assert.deepEqual(fresh.payload.formRecord, freshNative);
                     document.getElementById('disconnect').click();
                     await close();
                 }

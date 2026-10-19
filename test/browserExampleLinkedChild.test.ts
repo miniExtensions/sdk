@@ -1106,4 +1106,148 @@ describe('actual starter root versus nested linked-child admission', () => {
                       ]
             );
         });
+
+    for (const held of ['open', 'save'] as const)
+        it(`releases the actual starter busy lease after configuration retires a held child ${held}`, async (test) => {
+            const form = configuredParent();
+            const requests: LoadExtensionInput[] = [];
+            const saves: SaveFormInput[] = [];
+            const gate = deferred<Response>();
+            let releasedBodyRead = false;
+            // Keep this synthetic accepted payload observable by reference so
+            // the test can replace published configuration while main.run is
+            // waiting. The actual SDK transport, host and child owner execute.
+            const reply = (data: unknown, released = false) => {
+                const response = new Response('{}');
+                response.json = async () => {
+                    if (released) releasedBodyRead = true;
+                    return data;
+                };
+                return response;
+            };
+            const fetch: typeof globalThis.fetch = async (resource, init) => {
+                const url = new URL(String(resource));
+                assert.equal(url.origin, 'https://sdk.example.test');
+                const route = url.searchParams.get('route');
+                if (route === 'fetchExtensionForEndUser') {
+                    const input: LoadExtensionInput = JSON.parse(
+                        String(init?.body)
+                    );
+                    requests.push(input);
+                    if (!('childExtensionInfo' in input)) return reply(form);
+                    return held === 'open'
+                        ? gate.promise
+                        : reply(loadedChild(input));
+                }
+                if (route === 'saveForm') {
+                    const input: SaveFormInput = JSON.parse(String(init?.body));
+                    saves.push(input);
+                    assert.equal(held, 'save');
+                    return gate.promise;
+                }
+                assert.fail(
+                    `Unexpected synthetic route: ${url.pathname} ${route}`
+                );
+            };
+            const window = await environment(test, fetch, true);
+            await import(
+                `${pathToFileURL(join(directory, 'main.mjs')).href}?case=${++moduleRevision}`
+            );
+            const origin = window.document.getElementById('api-origin');
+            const share = window.document.getElementById('share-id');
+            const record = window.document.getElementById('record-id');
+            assert.ok(origin instanceof window.HTMLInputElement);
+            assert.ok(share instanceof window.HTMLInputElement);
+            assert.ok(record instanceof window.HTMLInputElement);
+            origin.value = 'https://sdk.example.test';
+            share.value = 'share_synthetic_parent';
+            record.value = 'rec_parent';
+            const connectionForm =
+                window.document.getElementById('connection-form');
+            const screen = window.document.getElementById('screen');
+            assert.ok(connectionForm instanceof window.HTMLElement);
+            assert.ok(screen instanceof window.HTMLElement);
+            connectionForm.dispatchEvent(
+                new window.Event('submit', { bubbles: true, cancelable: true })
+            );
+            await waitFor(
+                () =>
+                    requests.length === 1 &&
+                    screen.getAttribute('aria-busy') === 'false'
+            );
+            const body = window.document.body;
+            const parentRaw = body.querySelector(
+                `[data-field-id="${fieldId}"]`
+            );
+            assert.ok(parentRaw instanceof window.HTMLTextAreaElement);
+            const nativeBefore = JSON.parse(parentRaw.value);
+            const create = button(body, 'Create linked record');
+            create.click();
+            await waitFor(() => requests.length === 2);
+            let retainedAction = create;
+            if (held === 'save') {
+                await waitFor(
+                    () =>
+                        buttons(body, 'Save child').length === 1 &&
+                        screen.getAttribute('aria-busy') === 'false'
+                );
+                const pane = body.querySelector('[data-linked-child-pane]');
+                assert.ok(pane instanceof window.HTMLElement);
+                edit(window, pane, 'fld_title', 'Synthetic held child edit');
+                retainedAction = button(body, 'Save child');
+                retainedAction.click();
+                await waitFor(() => saves.length === 1);
+            }
+            assert.equal(screen.getAttribute('aria-busy'), 'true');
+            const schema = form.payload.fieldIdsToSchemas[fieldId]!;
+            assert.ok(schema.fieldType === 'multipleRecordLinks');
+            schema.miniExtConfig = {
+                ...schema.miniExtConfig,
+                allowCreatingRecords: false,
+            };
+            gate.resolve(
+                reply(
+                    held === 'open'
+                        ? loadedChild(requests[1]!)
+                        : savedChild(saves[0]!),
+                    true
+                )
+            );
+            await waitFor(() => releasedBodyRead);
+            for (let turn = 0; turn < 8; turn++) await settle();
+            // Configuration retirement refuses the late child result while
+            // the same visitor/render still owns global busy-state cleanup.
+            assert.equal(screen.getAttribute('aria-busy'), 'false');
+            assert.equal(screen.inert, false);
+            assert.equal(connectionForm.inert, false);
+            for (const id of ['reload', 'logout']) {
+                const action = window.document.getElementById(id);
+                assert.ok(action instanceof window.HTMLButtonElement);
+                assert.equal(
+                    action.disabled,
+                    false,
+                    `${id} stays usable without global Cancel`
+                );
+            }
+            const cancel = window.document.getElementById('cancel');
+            assert.ok(cancel instanceof window.HTMLButtonElement);
+            assert.equal(cancel.disabled, true);
+            assert.deepEqual(JSON.parse(parentRaw.value), nativeBefore);
+            assert.equal(buttons(body, 'Save child').length, 0);
+            fire(window, retainedAction);
+            await settle();
+            assert.equal(requests.length, 2);
+            assert.equal(saves.length, held === 'save' ? 1 : 0);
+            const reload = window.document.getElementById('reload');
+            assert.ok(reload instanceof window.HTMLButtonElement);
+            reload.click();
+            await waitFor(
+                () =>
+                    requests.length === 3 &&
+                    screen.getAttribute('aria-busy') === 'false'
+            );
+            assert.equal(screen.inert, false);
+            assert.equal(connectionForm.inert, false);
+            assert.equal(saves.length, held === 'save' ? 1 : 0);
+        });
 });

@@ -1445,7 +1445,9 @@ const renderForm = (page: FormLoadedResult): void => {
                                 );
                         },
                         childCurrent,
-                        childCurrent
+                        // Configuration retirement rejects the result, but the
+                        // same render still releases its global busy lease.
+                        ownsLinkedRender
                     );
                 },
                 changed: () => updateChildParentActivity(),

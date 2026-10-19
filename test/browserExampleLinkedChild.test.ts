@@ -1107,6 +1107,127 @@ describe('actual starter root versus nested linked-child admission', () => {
             );
         });
 
+    for (const outcome of ['ready', 'error'] as const)
+        it(`actual selected-record hydration settles its ${outcome} banner and keeps retry status current`, async (test) => {
+            const parent = configuredParent();
+            const gate = deferred<void>();
+            let reads = 0;
+            let loads = 0;
+            let saves = 0;
+            const fetch: typeof globalThis.fetch = async (resource, init) => {
+                const url = new URL(String(resource));
+                assert.equal(url.origin, 'https://sdk.example.test');
+                if (
+                    url.searchParams.get('route') === 'fetchExtensionForEndUser'
+                ) {
+                    loads++;
+                    return new Response(JSON.stringify(parent));
+                }
+                if (
+                    url.pathname ===
+                    '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates'
+                ) {
+                    const attempt = ++reads;
+                    if (attempt === 1) {
+                        await gate.promise;
+                        if (outcome === 'error')
+                            throw Error('Synthetic hydration read failure');
+                    }
+                    return new Response(
+                        JSON.stringify({
+                            result: { data: selectedRecords(parent) },
+                        })
+                    );
+                }
+                if (url.searchParams.get('route') === 'saveForm') saves++;
+                assert.fail(`Unexpected synthetic route: ${url.pathname}`);
+            };
+            const window = await environment(test, fetch, true);
+            await import(
+                `${pathToFileURL(join(directory, 'main.mjs')).href}?case=${++moduleRevision}`
+            );
+            const origin = window.document.getElementById('api-origin');
+            const share = window.document.getElementById('share-id');
+            const record = window.document.getElementById('record-id');
+            assert.ok(origin instanceof window.HTMLInputElement);
+            assert.ok(share instanceof window.HTMLInputElement);
+            assert.ok(record instanceof window.HTMLInputElement);
+            origin.value = 'https://sdk.example.test';
+            share.value = 'share_synthetic_parent';
+            record.value = 'rec_parent';
+            window.document.getElementById('connection-form')!.dispatchEvent(
+                new window.Event('submit', {
+                    bubbles: true,
+                    cancelable: true,
+                })
+            );
+            const body = window.document.body;
+            const screen = window.document.getElementById('screen')!;
+            const banner = window.document.getElementById('status')!;
+            await waitFor(
+                () =>
+                    loads === 1 && screen.getAttribute('aria-busy') === 'false'
+            );
+            const native = body.querySelector(`[data-field-id="${fieldId}"]`);
+            assert.ok(native instanceof window.HTMLTextAreaElement);
+            const before = JSON.parse(native.value);
+            const draft = edit(
+                window,
+                body,
+                'fld_title',
+                'Unsubmitted parent text'
+            );
+            const form = native.closest('form');
+            assert.ok(form);
+            button(body, 'Load selected records').click();
+            await waitFor(() => reads === 1);
+            assert.equal(
+                banner.textContent,
+                'Loading selected linked records…'
+            );
+            assert.equal(screen.getAttribute('aria-busy'), 'true');
+            gate.resolve();
+            await waitFor(() => screen.getAttribute('aria-busy') === 'false');
+            assert.equal(
+                banner.textContent,
+                outcome === 'ready'
+                    ? 'Selected linked records loaded.'
+                    : 'Selected linked records could not be loaded. Retry explicitly.'
+            );
+            assert.equal(
+                banner.classList.contains('error'),
+                outcome === 'error'
+            );
+            if (outcome === 'error') {
+                assert.equal(
+                    buttons(body, 'Edit linked record rec_existing').length,
+                    0
+                );
+                button(body, 'Load selected records').click();
+                await waitFor(
+                    () =>
+                        reads === 2 &&
+                        screen.getAttribute('aria-busy') === 'false'
+                );
+                assert.equal(
+                    banner.textContent,
+                    'Selected linked records loaded.'
+                );
+                assert.equal(banner.classList.contains('error'), false);
+            }
+            assert.equal(
+                buttons(body, 'Edit linked record rec_existing').length,
+                1
+            );
+            assert.equal(button(body, 'Save').disabled, false);
+            assert.deepEqual(JSON.parse(native.value), before);
+            assert.equal(draft.value, 'Unsubmitted parent text');
+            assert.equal(form.isConnected, true);
+            assert.equal(loads, 1);
+            assert.equal(reads, outcome === 'ready' ? 1 : 2);
+            assert.equal(saves, 0);
+        });
+
     for (const timing of ['before-retry', 'during-retry'] as const)
         it(`actual global Cancel rejects late hydration ${timing} and permits a fresh selected-record read`, async (test) => {
             const parent = configuredParent();
@@ -1171,6 +1292,7 @@ describe('actual starter root versus nested linked-child admission', () => {
             );
             const body = window.document.body;
             const screen = window.document.getElementById('screen')!;
+            const banner = window.document.getElementById('status')!;
             await waitFor(
                 () =>
                     loads.length === 1 &&
@@ -1189,11 +1311,17 @@ describe('actual starter root versus nested linked-child admission', () => {
             assert.ok(form);
             button(body, 'Load selected records').click();
             await waitFor(() => reads.length === 1);
+            assert.equal(
+                banner.textContent,
+                'Loading selected linked records…'
+            );
             const cancel = window.document.getElementById('cancel');
             assert.ok(cancel instanceof window.HTMLButtonElement);
             assert.equal(cancel.disabled, false);
             cancel.click();
             await waitFor(() => screen.getAttribute('aria-busy') === 'false');
+            const cancelledBanner = banner.textContent;
+            assert.match(cancelledBanner ?? '', /Request cancelled/);
             const unchanged = () => {
                 assert.equal(
                     body.textContent!.includes('Cancelled-only detail'),
@@ -1222,9 +1350,14 @@ describe('actual starter root versus nested linked-child admission', () => {
                 await settle();
                 await settle();
                 unchanged();
+                assert.equal(banner.textContent, cancelledBanner);
             }
             button(body, 'Load selected records').click();
             await waitFor(() => reads.length === 2);
+            assert.equal(
+                banner.textContent,
+                'Loading selected linked records…'
+            );
             assert.equal(reads[1]!.signal?.aborted, false);
             if (timing === 'during-retry') {
                 gates[0]!.resolve();
@@ -1232,6 +1365,10 @@ describe('actual starter root versus nested linked-child admission', () => {
                 await settle();
                 unchanged();
                 assert.equal(screen.getAttribute('aria-busy'), 'true');
+                assert.equal(
+                    banner.textContent,
+                    'Loading selected linked records…'
+                );
                 assert.equal(reads[1]!.signal?.aborted, false);
             }
             assert.equal(reads[0]!.signal?.aborted, true);
@@ -1242,6 +1379,8 @@ describe('actual starter root versus nested linked-child admission', () => {
                     buttons(body, 'Edit linked record rec_existing').length ===
                         1
             );
+            assert.equal(banner.textContent, 'Selected linked records loaded.');
+            assert.equal(banner.classList.contains('error'), false);
             // The starter exposes hydrated Edit actions; rich detail values are
             // verified separately through the shared public-facet regression.
             assert.equal(

@@ -88,7 +88,7 @@ export function createLinkedChildPanel(options: Options) {
         description: string,
         revision: number,
         work: (signal: AbortSignal) => Promise<unknown>,
-        reportSave = false
+        report?: 'save' | 'selected-records'
     ) => {
         if (!renderedCurrent(revision)) return;
         options.request(description, async (signal, accepted) => {
@@ -107,7 +107,7 @@ export function createLinkedChildPanel(options: Options) {
             } finally {
                 if (current() && accepted()) {
                     refresh();
-                    if (reportSave && current() && accepted()) {
+                    if (report === 'save' && current() && accepted()) {
                         const state = owner.getSnapshot();
                         options.status(
                             state.completion === 'reconciled'
@@ -116,6 +116,23 @@ export function createLinkedChildPanel(options: Options) {
                                       'The child Save did not complete. Inspect its current status before continuing.',
                             state.completion !== 'reconciled'
                         );
+                    }
+                    if (
+                        report === 'selected-records' &&
+                        current() &&
+                        accepted()
+                    ) {
+                        const selected = options.fields
+                            .linkedRecords(options.fieldId)
+                            .getSnapshot();
+                        if (current() && accepted())
+                            options.status(
+                                selected.phase === 'ready'
+                                    ? 'Selected linked records loaded.'
+                                    : (selected.error ??
+                                          'Selected linked records were not loaded. Retry explicitly.'),
+                                selected.phase !== 'ready'
+                            );
                     }
                     if (
                         before !== 'reconciled' &&
@@ -228,7 +245,7 @@ export function createLinkedChildPanel(options: Options) {
                 'Saving the linked child…',
                 revision,
                 (signal) => owner.save(revision, { signal }),
-                true
+                'save'
             );
         });
         save.disabled = !available || !page.canSubmit;
@@ -352,7 +369,8 @@ export function createLinkedChildPanel(options: Options) {
                         request(
                             'Loading selected linked records…',
                             revision,
-                            (signal) => linked.readSelected({ signal })
+                            (signal) => linked.readSelected({ signal }),
+                            'selected-records'
                         )
                     )
                 );

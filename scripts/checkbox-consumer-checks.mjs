@@ -56,6 +56,7 @@ export async function checkCheckboxConsumer({
             );
             assert.equal(typeof react.renderCheckboxField, 'function');
             assert.equal(typeof react.CheckboxField, 'function');
+            assert.equal(typeof react.CheckboxInput, 'function');
             assert.equal(ui.renderCheckboxField, undefined);
             const loaded = portalRecipeFixtures.makeForm({
                 childExtensionInfo: { accessType: { type: 'create' } },
@@ -170,6 +171,51 @@ export async function checkCheckboxConsumer({
                 );
                 assert.ok(container.querySelector('.consumer'));
                 await act(async () => input().click());
+                assert.equal(binding.getSnapshot().value, true);
+                checks++;
+
+                const changes = [];
+                let rowClicks = 0;
+                const native = (checked) =>
+                    h(
+                        'div',
+                        {
+                            onClick: (event) => {
+                                if (event.target === input()) rowClicks++;
+                            },
+                        },
+                        h('label', { htmlFor: 'consumer-check' }, 'Consent'),
+                        h('form', { id: 'consumer-form' }),
+                        h('p', { id: 'consumer-help' }, 'Host help'),
+                        h(react.CheckboxInput, {
+                            checked,
+                            id: 'consumer-check',
+                            form: 'consumer-form',
+                            'aria-describedby': 'consumer-help',
+                            onChange: (event) => {
+                                assert.equal(event.currentTarget, input());
+                                changes.push(event.currentTarget.checked);
+                            },
+                        })
+                    );
+                await act(async () => root.render(native(false)));
+                assert.equal(input().type, 'checkbox');
+                assert.equal(input().form?.id, 'consumer-form');
+                assert.equal(
+                    input().getAttribute('aria-describedby'),
+                    'consumer-help'
+                );
+                await act(async () => container.querySelector('label').click());
+                assert.deepEqual(changes, [true]);
+                assert.equal(rowClicks, 1);
+                assert.equal(input().checked, false);
+                await act(async () => root.render(native(true)));
+                assert.equal(input().checked, true);
+                await act(async () => input().click());
+                assert.deepEqual(changes, [true, false]);
+                assert.equal(rowClicks, 2);
+                await act(async () => root.render(native(false)));
+                assert.equal(input().checked, false);
                 assert.equal(binding.getSnapshot().value, true);
                 checks++;
             } finally {

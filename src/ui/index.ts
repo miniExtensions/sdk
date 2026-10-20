@@ -128,3 +128,14 @@ export type {
 } from './portalRenderScope.js';
 
 export type { AttachmentPresentation } from './attachmentPresentation.js';
+
+export {
+    formatNumberInputCompatibility,
+    parseNumberInputCompatibility,
+    isNumberInputCompatible,
+} from './numberInputCompatibility.js';
+export type {
+    NumberInputCompatibilityConfig,
+    NumberInputCompatibilityPolicy,
+    NumberInputSeparator,
+} from './numberInputCompatibility.js';

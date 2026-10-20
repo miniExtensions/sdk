@@ -4225,3 +4225,21 @@ export function DeviceUpload({
     );
 }
 ```
+
+### Native numeric input compatibility
+
+`formatNumberInputCompatibility`, `parseNumberInputCompatibility` and
+`isNumberInputCompatible` preserve the native host number/percent/currency
+helpers. Config is structural (`type`, `options.precision`); policy contains
+optional `numberSeparator` and `allowNegativeNumbers`. These helpers perform
+no writes and own no focus or draft state. Hosts retain lifecycle and canonical
+write admission.
+
+Validation accepts partial drafts such as `-` (when negatives are enabled) and
+`0.`/`0,`, but rejects exponents and leading decimals. Parsing is deliberately
+separate and keeps parseFloat coercion, first-comma normalization, toFixed
+rounding for numbers/currency, and unrounded division by 100 for percent.
+Do not substitute the scalarModels grammar or treat parsing as validation.
+Formatting preserves Intl rounding for comma-period/period-comma and toFixed
+rounding for space separators, including their distinct rounding edge cases.
+`none` disables grouping by default; an explicit grouping argument wins.

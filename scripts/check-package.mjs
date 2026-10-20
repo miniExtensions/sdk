@@ -1,4 +1,8 @@
 import {
+    checkDateInputCompatibilityConsumer,
+    dateInputCompatibilityTypedConsumer,
+} from './date-input-compatibility-consumer-checks.mjs';
+import {
     checkFileSelectionConsumer,
     fileSelectionTypedConsumer,
 } from './file-selection-consumer-checks.mjs';
@@ -1436,6 +1440,7 @@ new Parser([]).parse({maxDepth:'48'});
                 selectProjectionTypedConsumer +
                 richTextSerializationTypedConsumer +
                 durationInputTypedConsumer +
+                dateInputCompatibilityTypedConsumer +
                 recoverableImageTypedConsumer +
                 fileSelectionTypedConsumer
         );
@@ -2911,6 +2916,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(nativeEditorMatrix.versions.length, 2);
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    assert.equal(
+        await checkDateInputCompatibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
     assert.equal(
         await checkDurationInputConsumer({
             consumerDirectory: temporaryDirectory,

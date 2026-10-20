@@ -139,3 +139,23 @@ export type {
     NumberInputCompatibilityPolicy,
     NumberInputSeparator,
 } from './numberInputCompatibility.js';
+
+export {
+    isDateInputRange,
+    getDateInputPickerValue,
+    getDateInputValueOnChange,
+    getDateInputValueOnBlur,
+    isDateInputWithinRange,
+    isDateInputTimeZone,
+    resolveDateInputRangeTimeZone,
+    isDateInputValueWithinRange,
+    getDateInputMomentLocale,
+    getDateInputTimeZone,
+    getDateInputFormat,
+    formatDateInputValue,
+} from './dateInputCompatibility.js';
+export type {
+    DateInputCompatibilityConfig,
+    DateInputRange,
+    DateInputBlurResult,
+} from './dateInputCompatibility.js';

@@ -4259,3 +4259,26 @@ synchronous mount changes must remain admitted, while callbacks captured by the
 disposed predecessor remain retired. Binding snapshots distinguish parent props
 updates from harmless internal bailout renders; a wrapper's element type/key is
 not sufficient ownership evidence.
+
+### Hosted date input compatibility
+
+Existing native picker integrations can use `getDateInputPickerValue`,
+`getDateInputValueOnChange`, `getDateInputValueOnBlur`, `formatDateInputValue`,
+`getDateInputFormat` and `getDateInputTimeZone` from `@miniextensions/sdk/ui`.
+These preserve calendar-date bytes, UTC minute writes on picker change, strict
+localized blur parsing and invalid drafts. The caller retains the vendor picker,
+input draft/caret, readonly policy and actual writer. Locale data remains caller
+loaded. `getDateInputMomentLocale` maps the canonical language contract; English
+returns null and `zh-Hans` maps to `zh-cn`.
+
+`isDateInputWithinRange`, `resolveDateInputRangeTimeZone` and
+`isDateInputValueWithinRange` share existing calendar range behavior. Use the
+optional captured `now` Moment for deterministic range checks. Date ranges use
+UTC; datetime ranges use their configured zone, with a valid supplied client
+zone or UTC fallback. Display-timezone guessing remains separate from the range
+context. `isDateInputRange` checks the supported range literals. These helpers
+neither create a model nor authorize writes. The strict bound date model and
+backend validation retain their existing contracts, including the page client's
+backend-only treatment of client-zone ranges without token-bound provenance.
+Use existing public `TextInput` for a supplied native input; retain picker-specific
+composition and themed wrappers with the host.

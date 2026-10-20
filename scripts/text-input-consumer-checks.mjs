@@ -5,7 +5,15 @@ import { pathToFileURL } from 'node:url';
 
 export const textInputTypedConsumer = `
 import { createElement, createRef } from 'react';
-import { LiteralText, type LiteralTextProps, TextInput, type TextInputProps, InputClearButton, type InputClearButtonProps, TextareaInput, type TextareaInputProps } from '@miniextensions/sdk/react';
+import { ActionButton, type ActionButtonProps, LiteralText, type LiteralTextProps, TextInput, type TextInputProps, InputClearButton, type InputClearButtonProps, TextareaInput, type TextareaInputProps } from '@miniextensions/sdk/react';
+const action: ActionButtonProps = {busy:true,busyContent:'Pending',disabled:false,form:'owner',
+    onClick:event => { const button: HTMLButtonElement = event.currentTarget; button.focus(); }};
+createElement(ActionButton,{...action,ref:createRef<HTMLButtonElement>()});
+// @ts-expect-error actions cannot request native submission
+const submitAction: ActionButtonProps = {type:'submit'};
+// @ts-expect-error use busy so pending and disabled cannot diverge
+const divergentBusy: ActionButtonProps = {'aria-busy':true};
+void submitAction; void divergentBusy;
 const literal: LiteralTextProps = {value:' <b>literal</b>',as:'p',empty:'None',preserveWhitespace:false,
     renderText:text=>text, 'aria-label':'Result'};
 createElement(LiteralText,{...literal,ref:createRef<HTMLElement>()});
@@ -52,7 +60,8 @@ void numericValue; void defaultValue; void submitClear; void unnamedClear;
 
 export const textInputJsxConsumer = `
 import { createRef } from 'react';
-import { LiteralText, TextInput, InputClearButton, TextareaInput } from '@miniextensions/sdk/react';
+import { ActionButton, LiteralText, TextInput, InputClearButton, TextareaInput } from '@miniextensions/sdk/react';
+export const action = <ActionButton busy busyContent={<em>Pending</em>} ref={createRef<HTMLButtonElement>()}>Run</ActionButton>;
 export const literalDisplay = <LiteralText value="0" empty={<em>None</em>} ref={createRef<HTMLElement>()} />;
 export const amount = <TextInput ref={createRef<HTMLInputElement>()} type="text" inputMode="decimal"
     value="1," form="host" aria-label="Amount" onChange={event => event.currentTarget.focus()} />;
@@ -167,6 +176,39 @@ export async function checkTextInputConsumer({
                 assert.equal(inputEvents, 0);
                 await react.act(async () => root.render(null));
                 assert.equal(uncontrolledRef.current, null);
+                const actionRef = react.createRef();
+                let actionCalls = 0;
+                const action = (busy) =>
+                    react.createElement(
+                        api.ActionButton,
+                        {
+                            ref: actionRef,
+                            busy,
+                            busyContent: 'Pending',
+                            form: 'action-owner',
+                            'aria-label': 'Run action',
+                            onClick: () => {
+                                actionCalls++;
+                            },
+                        },
+                        'Run action'
+                    );
+                await react.act(async () => root.render(action(true)));
+                const actionButton = container.querySelector('button');
+                assert.ok(actionButton);
+                assert.equal(actionRef.current, actionButton);
+                assert.equal(actionButton.type, 'button');
+                assert.equal(actionButton.disabled, true);
+                assert.equal(actionButton.getAttribute('aria-busy'), 'true');
+                assert.equal(actionButton.textContent, 'Pending');
+                await react.act(async () => actionButton.click());
+                assert.equal(actionCalls, 0);
+                await react.act(async () => root.render(action(false)));
+                assert.equal(actionButton.textContent, 'Run action');
+                await react.act(async () => actionButton.click());
+                assert.equal(actionCalls, 1);
+                await react.act(async () => root.render(null));
+                assert.equal(actionRef.current, null);
                 const literalRef = react.createRef();
                 const literalValue =
                     '  <img src="https://synthetic.invalid/private">\n字  ';

@@ -1826,6 +1826,64 @@ try {
                 .click();
             await idle(page);
         };
+        await run('action-button-native-form', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=action-button`);
+            const action = page.locator('#shared-action');
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await action.waitFor();
+            assert.equal(await action.getAttribute('type'), 'button');
+            await page
+                .getByRole('textbox', { name: 'Adjacent draft' })
+                .fill('  keep raw draft  ');
+            await action.click();
+            assert.equal((await state()).activations, 1);
+            assert.equal(await action.isDisabled(), true);
+            assert.equal(await action.getAttribute('aria-busy'), 'true');
+            assert.equal(await action.textContent(), 'Running action');
+            await action.evaluate((node) => node.click());
+            assert.equal((await state()).activations, 1);
+            await page
+                .getByRole('button', { name: 'Finish action', exact: true })
+                .click();
+            await action.focus();
+            await page.keyboard.press('Enter');
+            assert.equal((await state()).activations, 2);
+            await page
+                .getByRole('button', { name: 'Finish action', exact: true })
+                .click();
+            await action.focus();
+            await page.keyboard.press('Space');
+            assert.equal((await state()).activations, 3);
+            await page
+                .getByRole('button', { name: 'Finish action', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Disable action', exact: true })
+                .click();
+            await action.evaluate((node) => node.click());
+            assert.equal((await state()).activations, 3);
+            assert.equal(await action.textContent(), 'Run action');
+            await page
+                .getByRole('button', { name: 'Enable action', exact: true })
+                .click();
+            await action.click();
+            assert.equal((await state()).activations, 4);
+            assert.equal((await state()).submissions, 0);
+            assert.equal((await state()).rowClicks, 0);
+            assert.equal(
+                await page
+                    .getByRole('textbox', { name: 'Adjacent draft' })
+                    .inputValue(),
+                '  keep raw draft  '
+            );
+            await page
+                .getByRole('button', { name: 'Unmount action', exact: true })
+                .click();
+            assert.equal((await state()).refConnected, false);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
         await run('literal-text-display', async (page, origin) => {
             await page.goto(`${origin}/native.html?mode=literal-text`);
             const display = page.locator('.literal-display');
@@ -2618,7 +2676,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 12 + storageEventCases.length);
+        assert.equal(results.length, 13 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

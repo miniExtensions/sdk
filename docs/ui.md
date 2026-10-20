@@ -3847,3 +3847,22 @@ export const Result = () => (
     <LiteralText value="0" aria-label="Count" empty={<em>No value</em>} />
 );
 ```
+
+### Native actions
+
+`ActionButton` from `@miniextensions/sdk/react` shares native action and pending
+presentation with the SDK Button field. It forwards an
+actual `HTMLButtonElement` ref and native props, always uses `type="button"`,
+and disables activation when `busy` or `disabled`. `busy` also controls
+`aria-busy`; optional `busyContent` replaces children while pending. Without
+replacement content, the original children remain visible.
+
+```tsx
+<ActionButton busy={pending} busyContent={<Spinner />} onClick={runAction}>
+    Run action
+</ActionButton>
+```
+
+The caller owns action eligibility, singleflight, authentication, source identity,
+requests, errors and retry policy. This presentation does not create a Button
+model or acquire webhook authority. URL actions retain their native link owner.

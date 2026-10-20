@@ -18,6 +18,7 @@ import {
     TextField,
     TextInput,
     LiteralText,
+    ActionButton,
     RatingInput,
     AttachmentField,
     AttachmentDialog,
@@ -44,7 +45,99 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'literal-text') {
+if (mode === 'action-button') {
+    const initial = {
+        busy: false,
+        disabled: false,
+        mounted: true,
+        activations: 0,
+        submissions: 0,
+        rowClicks: 0,
+    };
+    let state = initial;
+    /** @type {import('react').RefObject<HTMLButtonElement>} */
+    const action = React.createRef();
+    snapshot = () => ({
+        ...state,
+        refConnected: action.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [current, setCurrent] = useState(initial);
+        state = current;
+        return h(
+            React.Fragment,
+            null,
+            h(
+                'form',
+                {
+                    id: 'action-form',
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        setCurrent((value) => ({
+                            ...value,
+                            submissions: value.submissions + 1,
+                        }));
+                    },
+                },
+                h('input', {
+                    'aria-label': 'Adjacent draft',
+                    defaultValue: 'keep draft',
+                }),
+                h(
+                    'div',
+                    {
+                        onClick: () =>
+                            setCurrent((value) => ({
+                                ...value,
+                                rowClicks: value.rowClicks + 1,
+                            })),
+                    },
+                    current.mounted
+                        ? h(
+                              ActionButton,
+                              {
+                                  ref: action,
+                                  id: 'shared-action',
+                                  busy: current.busy,
+                                  disabled: current.disabled,
+                                  busyContent: h(
+                                      'span',
+                                      null,
+                                      'Running action'
+                                  ),
+                                  'aria-label': 'Run action',
+                                  onClick: (event) => {
+                                      event.stopPropagation();
+                                      setCurrent((value) => ({
+                                          ...value,
+                                          busy: true,
+                                          activations: value.activations + 1,
+                                      }));
+                                  },
+                              },
+                              'Run action'
+                          )
+                        : null
+                )
+            ),
+            button('Finish action', () =>
+                setCurrent((value) => ({ ...value, busy: false }))
+            ),
+            button('Disable action', () =>
+                setCurrent((value) => ({ ...value, disabled: true }))
+            ),
+            button('Enable action', () =>
+                setCurrent((value) => ({ ...value, disabled: false }))
+            ),
+            button('Unmount action', () =>
+                setCurrent((value) => ({ ...value, mounted: false }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'literal-text') {
     const initial = {
         value: '  <img src="https://synthetic.invalid/private">\n字  ',
         custom: false,

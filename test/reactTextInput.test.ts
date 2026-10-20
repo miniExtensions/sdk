@@ -8,7 +8,7 @@ import {
     StrictMode,
     type ReactNode,
 } from 'react';
-import { TextInput } from '../src/react/index.js';
+import { TextInput, InputClearButton } from '../src/react/index.js';
 
 async function fixture(t: TestContext) {
     const window = new Window();
@@ -217,4 +217,106 @@ it('keeps native email/password constraints and callback-ref replacement without
     assert.equal(f.input().value, 'literal@invalid');
     await f.render(null);
     assert.equal(nextRef.current, null);
+});
+
+it('clear presentation forwards its native ref and remains a non-submitting owner action', async (t) => {
+    const f = await fixture(t);
+    const ref = createRef<HTMLButtonElement>();
+    let clears = 0,
+        submits = 0;
+    const runtimeProps = {
+        label: 'Clear amount',
+        ref,
+        type: 'submit',
+        className: 'host-clear',
+        indicatorClassName: 'host-indicator',
+        iconClassName: 'host-icon',
+        'aria-controls': 'owned-amount',
+        onClick: () => {
+            clears++;
+        },
+    };
+    await f.render(
+        h(
+            'form',
+            {
+                onSubmit: (event: import('react').FormEvent) => {
+                    event.preventDefault();
+                    submits++;
+                },
+            },
+            h(TextInput, { id: 'owned-amount', value: '1,', readOnly: true }),
+            h(InputClearButton, runtimeProps)
+        )
+    );
+    const button = f.container.querySelector('button');
+    assert.ok(button);
+    assert.ok(Object.is(ref.current, button));
+    assert.equal(button.type, 'button');
+    assert.equal(button.className, 'host-clear');
+    assert.equal(button.getAttribute('aria-label'), 'Clear amount');
+    assert.equal(button.getAttribute('aria-controls'), 'owned-amount');
+    assert.equal(button.querySelector('span')?.className, 'host-indicator');
+    assert.equal(
+        button.querySelector('svg')?.getAttribute('class'),
+        'host-icon'
+    );
+    await act(async () => {
+        const current = button;
+        assert.ok(current);
+        current.click();
+    });
+    assert.equal(clears, 1);
+    assert.equal(submits, 0);
+    assert.equal(f.input().value, '1,');
+    await f.render(null);
+    assert.equal(ref.current, null);
+});
+
+it('clear presentation keeps disabled native activation and literal labels under owner replacement', async (t) => {
+    const f = await fixture(t);
+    let clears = 0;
+    const view = (disabled: boolean, label: string) =>
+        h(InputClearButton, {
+            label,
+            disabled,
+            onClick: () => {
+                clears++;
+            },
+        });
+    await f.render(view(true, 'Clear <b>draft</b>'));
+    let button = f.container.querySelector('button');
+    assert.ok(button);
+    assert.equal(button.getAttribute('aria-label'), 'Clear <b>draft</b>');
+    assert.equal(button.querySelector('b'), null);
+    assert.equal(
+        button.querySelector('svg')?.getAttribute('aria-hidden'),
+        'true'
+    );
+    await act(async () => {
+        const current = button;
+        assert.ok(current);
+        current.click();
+    });
+    assert.equal(clears, 0);
+    await f.render(view(false, 'Effacer'));
+    button = f.container.querySelector('button');
+    assert.ok(button);
+    assert.equal(button.getAttribute('aria-label'), 'Effacer');
+    await act(async () => {
+        const current = button;
+        assert.ok(current);
+        current.click();
+    });
+    assert.equal(clears, 1);
+    await f.render(null);
+    await f.render(view(true, 'Effacer'));
+    button = f.container.querySelector('button');
+    assert.ok(button);
+    await act(async () => {
+        const current = button;
+        assert.ok(current);
+        current.click();
+    });
+    assert.equal(clears, 1);
 });

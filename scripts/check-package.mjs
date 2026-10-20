@@ -2863,7 +2863,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         2
     );
     console.log(
-        'Installed TextInput ESM/CommonJS native props/ref and strict declaration checks passed.'
+        'Installed TextInput/InputClearButton ESM/CommonJS native props/ref/action and strict declaration checks passed.'
     );
     const portalOwnerProof = await checkPortalOwnerConsumer({
         consumerDirectory: temporaryDirectory,

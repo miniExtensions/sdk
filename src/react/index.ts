@@ -1,3 +1,7 @@
+export {
+    InputClearButton,
+    type InputClearButtonProps,
+} from './InputClearButton.js';
 export { TextInput, type TextInputProps } from './TextInput.js';
 import {
     createElement,

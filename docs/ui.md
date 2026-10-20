@@ -3700,3 +3700,18 @@ export function HostedAmount() {
     );
 }
 ```
+
+## Shared input clear button
+
+`InputClearButton` from `@miniextensions/sdk/react` renders one native button and
+an inert clear indicator. Supply its localized `label`, native button props and
+an optional `HTMLButtonElement` ref. `indicatorClassName` and `iconClassName`
+customize its presentation alongside the native button `className`. The button
+always uses `type="button"`, so native activation cannot implicitly submit the
+surrounding form. It forwards events without adding focus, draft or save effects.
+
+The owner decides when to display it, whether clearing is currently allowed,
+and what `onClick` does. Pass `disabled` when the input is disabled or read-only.
+SDK bound Text controls keep their existing composition, readonly and focus
+behavior while borrowing this presentation. Hosted immediate/deferred editors
+can share it without moving their commit ownership into the button.

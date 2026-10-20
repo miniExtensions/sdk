@@ -13,6 +13,10 @@ import {
     richTextSerializationTypedConsumer,
 } from './rich-text-serialization-consumer-checks.mjs';
 import {
+    checkDurationInputConsumer,
+    durationInputTypedConsumer,
+} from './duration-input-consumer-checks.mjs';
+import {
     checkSelectChoiceProjectionConsumer,
     selectProjectionTypedConsumer,
 } from './select-choice-projection-consumer-checks.mjs';
@@ -1431,6 +1435,7 @@ new Parser([]).parse({maxDepth:'48'});
                 personBadgeTypedConsumer +
                 selectProjectionTypedConsumer +
                 richTextSerializationTypedConsumer +
+                durationInputTypedConsumer +
                 recoverableImageTypedConsumer +
                 fileSelectionTypedConsumer
         );
@@ -2906,6 +2911,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(nativeEditorMatrix.versions.length, 2);
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    assert.equal(
+        await checkDurationInputConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
     assert.equal(
         await checkFileSelectionConsumer({
             consumerDirectory: temporaryDirectory,

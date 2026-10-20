@@ -46,4 +46,8 @@ export {
 } from './valueConversion.js';
 export { removeMarkdown } from './removeMarkdown.js';
 export { getFormattedDuration } from './durationFormatting.js';
+export {
+    isDurationInputText,
+    parseDurationInputSeconds,
+} from './durationInput.js';
 export type { DurationFormat } from './types.js';

@@ -906,3 +906,46 @@ for (const layout of ['grid', 'list'] as const)
             );
         }
     });
+
+it('keeps four native rows by default and forwards opt-in autosizing through both accepted multiline APIs', async (t) => {
+    const f = await fixture(t, {}, 'short');
+    const style = f.window.document.createElement('style');
+    style.textContent =
+        'textarea { box-sizing: border-box; padding: 4px; border: 1px solid black; width: 200px; }';
+    f.window.document.head.append(style);
+    const prototype = f.window.HTMLTextAreaElement.prototype;
+    const previous = Object.getOwnPropertyDescriptor(prototype, 'scrollHeight');
+    Object.defineProperty(prototype, 'scrollHeight', {
+        configurable: true,
+        get() {
+            return (
+                (this as HTMLTextAreaElement).value.split('\n').length * 20 + 8
+            );
+        },
+    });
+    t.after(() => {
+        if (previous)
+            Object.defineProperty(prototype, 'scrollHeight', previous);
+        else Reflect.deleteProperty(prototype, 'scrollHeight');
+    });
+    await f.render(h(MultilineTextField, { binding: f.binding }));
+    assert.equal(f.input().getAttribute('rows'), '4');
+    assert.equal(f.input().style.height, '');
+    await f.render(
+        h(MultilineTextField, {
+            binding: f.binding,
+            autoSize: { minRows: 3, maxRows: 30 },
+        })
+    );
+    assert.equal(f.input().style.height, '70px');
+    await f.render(
+        renderMultilineTextField(f.props(), {
+            autoSize: { minRows: 5, maxRows: 30 },
+        })
+    );
+    assert.equal(f.input().style.height, '110px');
+    await f.edit('literal\ntext');
+    assert.equal(f.binding.getSnapshot().value, 'literal\ntext');
+    assert.equal(f.writes(), 1);
+    assert.equal(f.saves.length, 0);
+});

@@ -1,4 +1,9 @@
 export {
+    TextareaInput,
+    type TextareaInputProps,
+    type TextareaAutoSize,
+} from './TextareaInput.js';
+export {
     InputClearButton,
     type InputClearButtonProps,
 } from './InputClearButton.js';
@@ -1004,6 +1009,7 @@ export function MultilineTextField({
     render,
     className,
     clearLabel,
+    autoSize,
 }: MultilineTextFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
@@ -1029,6 +1035,7 @@ export function MultilineTextField({
         ...config,
         className,
         clearLabel,
+        autoSize,
         source: binding,
         title,
         value: typeof snapshot.value === 'string' ? snapshot.value : '',

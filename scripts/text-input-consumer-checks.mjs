@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 
 export const textInputTypedConsumer = `
 import { createElement, createRef } from 'react';
-import { TextInput, type TextInputProps, InputClearButton, type InputClearButtonProps } from '@miniextensions/sdk/react';
+import { TextInput, type TextInputProps, InputClearButton, type InputClearButtonProps, TextareaInput, type TextareaInputProps } from '@miniextensions/sdk/react';
 const props: TextInputProps = { value: '1,', type: 'text', inputMode: 'decimal', form: 'host',
     onChange: event => { const input: HTMLInputElement = event.currentTarget; input.focus(); },
     onCompositionEnd: event => { const data: string = event.data; void data; },
@@ -24,14 +24,23 @@ createElement(InputClearButton, { ...clear, ref: createRef<HTMLButtonElement>() 
 const submitClear: InputClearButtonProps = { label: 'Clear', type: 'submit' };
 // @ts-expect-error clear presentation requires an accessible localized name
 const unnamedClear: InputClearButtonProps = {};
+const notes: TextareaInputProps = {value:'literal', autoSize:{minRows:3,maxRows:30}, rows:4, form:'host',
+    onChange:event => { const node: HTMLTextAreaElement = event.currentTarget; node.setSelectionRange(1,2); }};
+createElement(TextareaInput, {...notes, ref:createRef<HTMLTextAreaElement>()});
+// @ts-expect-error textarea ref must be the actual textarea
+createElement(TextareaInput, {...notes, ref:createRef<HTMLInputElement>()});
+// @ts-expect-error controlled textarea cannot accept defaultValue
+const uncontrolledNotes: TextareaInputProps = {value:'',defaultValue:'old'};
+void uncontrolledNotes;
 void numericValue; void defaultValue; void submitClear; void unnamedClear;
 `;
 
 export const textInputJsxConsumer = `
 import { createRef } from 'react';
-import { TextInput, InputClearButton } from '@miniextensions/sdk/react';
+import { TextInput, InputClearButton, TextareaInput } from '@miniextensions/sdk/react';
 export const amount = <TextInput ref={createRef<HTMLInputElement>()} type="text" inputMode="decimal"
     value="1," form="host" aria-label="Amount" onChange={event => event.currentTarget.focus()} />;
+export const notes = <TextareaInput value="literal" autoSize={{minRows:3,maxRows:30}} ref={createRef<HTMLTextAreaElement>()} onChange={event => event.currentTarget.focus()} />;
 export const clear = <InputClearButton ref={createRef<HTMLButtonElement>()} label="Clear" disabled
     onClick={event => event.currentTarget.focus()} />;
 `;
@@ -49,6 +58,7 @@ export async function checkTextInputConsumer({
         'navigator',
         'HTMLElement',
         'HTMLInputElement',
+        'HTMLTextAreaElement',
         'IS_REACT_ACT_ENVIRONMENT',
     ];
     const previous = keys.map((key) =>
@@ -137,6 +147,28 @@ export async function checkTextInputConsumer({
                 await react.act(async () => button.click());
                 assert.equal(actions, 1);
                 assert.equal(submits, 0);
+                const textareaRef = react.createRef();
+                await react.act(async () =>
+                    root.render(
+                        react.createElement(api.TextareaInput, {
+                            ref: textareaRef,
+                            value: 'literal\\ntext',
+                            rows: 4,
+                            readOnly: true,
+                            'aria-label': 'Notes',
+                            autoSize: { minRows: 3, maxRows: 30 },
+                            form: 'host',
+                            maxLength: 100,
+                        })
+                    )
+                );
+                const textarea = container.querySelector('textarea');
+                assert.ok(textarea);
+                assert.equal(textareaRef.current, textarea);
+                assert.equal(textarea.value, 'literal\\ntext');
+                assert.equal(textarea.getAttribute('rows'), '4');
+                assert.equal(textarea.readOnly, true);
+                assert.equal(textarea.getAttribute('maxlength'), '100');
                 checks++;
             } finally {
                 await react.act(async () => root.unmount());

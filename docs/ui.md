@@ -3715,3 +3715,47 @@ and what `onClick` does. Pass `disabled` when the input is disabled or read-only
 SDK bound Text controls keep their existing composition, readonly and focus
 behavior while borrowing this presentation. Hosted immediate/deferred editors
 can share it without moving their commit ownership into the button.
+
+## Native textarea and opt-in autosizing
+
+`TextareaInput` from `@miniextensions/sdk/react` accepts a controlled string
+`value`, native textarea props and the actual `HTMLTextAreaElement` ref. It adds
+no wrapper, draft state, parsing, truncation, persistence or transport. Callers
+retain labels, form/ARIA associations, classes, character counters, caret policy
+and native composition/change/focus handlers. Native events bubble normally.
+
+Sizing is opt-in: `autoSize={{ minRows: 3, maxRows: 30 }}` measures content and
+placeholder text, clamps the height and permits scrolling beyond the maximum.
+It remeasures after committed renders, window resize and font loading. Row
+bounds must be positive integers with `maxRows >= minRows` (an omitted maximum
+is unbounded). Use these bounds instead of inline `minHeight`/`maxHeight`.
+Caller CSS still controls width, font, padding, borders and resize affordance.
+A manual vertical resize remains until the measured content height changes.
+Measurement nodes are removed immediately. Sizing emits no edit or Save.
+Disabling sizing preserves the native node/focus/selection and restores an
+SDK-owned height, while preserving a height changed by the caller/user.
+
+Without `autoSize`, ordinary native `rows`/style behavior stays unchanged. The
+bound `MultilineTextField` and `renderMultilineTextField` use this same control
+and accept the optional sizing settings; their default remains four rows.
+Their existing composition buffering, policy and accepted owner setter remain
+in place. DOM composition tests establish forwarding, not OS IME acceptance.
+
+```tsx
+import { useRef, useState } from 'react';
+import { TextareaInput } from '@miniextensions/sdk/react';
+
+export function HostedNotes() {
+    const ref = useRef<HTMLTextAreaElement>(null);
+    const [value, setValue] = useState('');
+    return (
+        <TextareaInput
+            ref={ref}
+            value={value}
+            autoSize={{ minRows: 3, maxRows: 30 }}
+            aria-label="Notes"
+            onChange={(event) => setValue(event.currentTarget.value)}
+        />
+    );
+}
+```

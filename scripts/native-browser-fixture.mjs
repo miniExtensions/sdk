@@ -52,12 +52,8 @@ window.addEventListener('unhandledrejection', (e) =>
 );
 const root = createRoot(document.querySelector('main'));
 if (mode === 'recoverable-image') {
-    const bad = 'data:image/png;base64,invalid-image';
-    const good =
-        'data:image/svg+xml,' +
-        encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="green"/></svg>'
-        );
+    const bad = '/native-image-missing.svg';
+    const good = '/native-image-good.svg';
     /** @type {HTMLImageElement|null} */
     let image = null;
     /** @type {WeakMap<HTMLImageElement,number>} */

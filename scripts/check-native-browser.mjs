@@ -1689,6 +1689,26 @@ try {
             `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Native synthetic SDK consumer</title><link rel="stylesheet" href="/native-rating.css"></head><body><main></main><script type="module" src="/native.js"></script></body></html>`
         );
         allowed.set('/native.html', html);
+        // Image recovery uses a separate same-origin resource fixture. Keep the
+        // original no-image CSP intact for every existing native case.
+        allowed.set(
+            '/native-image.html',
+            Buffer.from(
+                html
+                    .toString()
+                    .replace(
+                        "default-src 'none';",
+                        "default-src 'none'; img-src 'self';"
+                    )
+            )
+        );
+        allowed.set(
+            '/native-image-good.svg',
+            Buffer.from(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="green"/></svg>'
+            )
+        );
+
         server = createServer((request, response) => {
             const url = new URL(request.url, 'http://127.0.0.1');
             const bytes = allowed.get(url.pathname);
@@ -1703,7 +1723,9 @@ try {
                     ? 'text/javascript'
                     : url.pathname.endsWith('.css')
                       ? 'text/css'
-                      : 'text/html'
+                      : url.pathname.endsWith('.svg')
+                        ? 'image/svg+xml'
+                        : 'text/html'
             );
             response.end(bytes);
         });
@@ -1840,7 +1862,9 @@ try {
             await idle(page);
         };
         await run('recoverable-native-image', async (page, origin) => {
-            await page.goto(`${origin}/native.html?mode=recoverable-image`);
+            await page.goto(
+                `${origin}/native-image.html?mode=recoverable-image`
+            );
             const state = () =>
                 page.evaluate(() => window.__nativeProbe.snapshot());
             await page.waitForFunction(

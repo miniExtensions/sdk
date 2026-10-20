@@ -107,7 +107,15 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
             const ref = React.createRef();
             const writes = [];
             let latest;
-            const render = (value, readonly = false, forwarded = ref) =>
+            const defaultWriter = (stored) => writes.push(stored);
+            const render = (
+                value,
+                readonly = false,
+                forwarded = ref,
+                Editor = SlotProbe,
+                placeholder = '',
+                writer = defaultWriter
+            ) =>
                 React.act(async () =>
                     root.render(
                         React.createElement(api.NativeRichTextEditor, {
@@ -115,7 +123,8 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
                             value,
                             readOnly: readonly,
                             removeStaleEditorRoots: true,
-                            onValueChange: (stored) => writes.push(stored),
+                            onValueChange: writer,
+                            placeholder,
                             emptyContent: React.createElement(
                                 'b',
                                 null,
@@ -123,7 +132,7 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
                             ),
                             renderEditor: (native, focused) => {
                                 latest = { native, focused };
-                                return React.createElement(SlotProbe, {
+                                return React.createElement(Editor, {
                                     native,
                                     focused,
                                 });
@@ -245,6 +254,92 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
                 await React.act(async () => root.render(null));
                 assert(attaches >= 2);
                 assert.equal(detaches, attaches);
+
+                // Same text/key does not authorize an old actual instance.
+                class OtherSlot extends SlotProbe {}
+                await render('Same document');
+                const retiredSlot = latest.native;
+                const oldInstance = ref.current;
+                await render('Same document', false, ref, OtherSlot);
+                assert.notEqual(ref.current, oldInstance);
+                writes.length = 0;
+                let disposedReads = 0;
+                await React.act(async () =>
+                    retiredSlot.onChange(() => {
+                        disposedReads++;
+                        return 'Retired instance document';
+                    })
+                );
+                assert.equal(disposedReads, 0);
+                assert.deepEqual(writes, []);
+                await React.act(async () =>
+                    latest.native.onChange(() => 'Current instance document')
+                );
+                assert.deepEqual(writes, ['Current instance document']);
+
+                let commitReads = 0;
+                class PolicyFlushSlot extends SlotProbe {
+                    componentDidUpdate(previous) {
+                        super.componentDidUpdate(previous);
+                        if (
+                            previous.native.readOnly !==
+                            this.props.native.readOnly
+                        )
+                            this.props.native.onChange(() => {
+                                commitReads++;
+                                return 'Policy commit document';
+                            });
+                    }
+                }
+                await render('Policy document', false, ref, PolicyFlushSlot);
+                writes.length = 0;
+                await render('Policy document', true, ref, PolicyFlushSlot);
+                assert.equal(commitReads, 0);
+                assert.deepEqual(writes, []);
+
+                class WriterFlushSlot extends SlotProbe {
+                    componentDidUpdate(previous) {
+                        super.componentDidUpdate(previous);
+                        if (
+                            previous.native.placeholder !==
+                            this.props.native.placeholder
+                        )
+                            this.props.native.onChange(() => {
+                                commitReads++;
+                                return 'Writer commit document';
+                            });
+                    }
+                }
+                const oldWrites = [],
+                    newWrites = [];
+                await render(
+                    'Writer document',
+                    false,
+                    ref,
+                    WriterFlushSlot,
+                    'Before',
+                    (value) => oldWrites.push(value)
+                );
+                const retainedWriter = latest.native;
+                await render(
+                    'Writer document',
+                    false,
+                    ref,
+                    WriterFlushSlot,
+                    'After',
+                    (value) => newWrites.push(value)
+                );
+                assert.equal(commitReads, 1);
+                assert.deepEqual(oldWrites, []);
+                assert.deepEqual(newWrites, ['Writer commit document']);
+                await React.act(async () =>
+                    retainedWriter.onChange(() => 'Settled current writer')
+                );
+                assert.deepEqual(oldWrites, []);
+                assert.deepEqual(newWrites, [
+                    'Writer commit document',
+                    'Settled current writer',
+                ]);
                 groups++;
             } finally {
                 await React.act(async () => root.unmount());

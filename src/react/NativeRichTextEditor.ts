@@ -3,7 +3,6 @@ import {
     createElement,
     forwardRef,
     Fragment,
-    useCallback,
     useEffect,
     useLayoutEffect,
     useMemo,
@@ -55,6 +54,18 @@ export type NativeRichTextEditorProps = {
     emptyContent?: ReactNode;
 };
 
+type NativeAttachment = {
+    editor: NativeRichTextEditorHandle;
+    active: boolean;
+};
+type NativeCallbackBinding = { attachment?: NativeAttachment };
+
+/** This zero-DOM sibling commits policy before the supplied editor's layout work. */
+function NativeEditorCommit({ commit }: { commit(): void }) {
+    useLayoutEffect(commit);
+    return null;
+}
+
 /** Native editor ownership and serialization; no vendor, binding, permissions or text-renderer fallback. */
 export const NativeRichTextEditor = forwardRef<
     NativeRichTextEditorHandle,
@@ -66,26 +77,51 @@ export const NativeRichTextEditor = forwardRef<
         useState<NativeRichTextEditorHandle | null>(null);
     const lastSetValueRef = useRef<string | null>(props.value);
     const emptyView = Boolean(props.readOnly && props.value == null);
-    const generation = useMemo(
-        () => ({ attached: false }),
-        [editorKey, emptyView]
-    );
-    const committedProps = useRef(props);
-    useLayoutEffect(() => {
-        committedProps.current = props;
-    });
+    const attachment = useRef<NativeAttachment | null>(null);
+    const committed = useRef<{
+        props: NativeRichTextEditorProps;
+        binding: NativeCallbackBinding;
+    } | null>(null);
+    // Each supplied callback captures its own binding. Only a committed render
+    // and actual attachment may bind it; an abandoned render has no admission.
+    const supplied: { binding?: NativeCallbackBinding } = {};
+    const commit = () => {
+        const binding = supplied.binding!;
+        const previous = committed.current?.props;
+        if (
+            previous &&
+            previous.value !== props.value &&
+            normalizeRichTextForComparison(props.value) !==
+                normalizeRichTextForComparison(lastSetValueRef.current) &&
+            attachment.current
+        ) {
+            // Retire the old document before a child can flush its update.
+            attachment.current.active = false;
+        }
+        if (attachment.current?.active && !binding.attachment)
+            binding.attachment = attachment.current;
+        committed.current = { props, binding };
+    };
 
     const attachEditor = useMemo(() => {
         let detach: (() => void) | undefined;
         return (editor: NativeRichTextEditorHandle | null) => {
             // Retire writes before forwarding any caller-owned detach cleanup.
-            generation.attached = false;
+            const previousAttachment = attachment.current;
+            if (previousAttachment) previousAttachment.active = false;
             const previous = detach;
             detach = undefined;
             previous?.();
             setAttachedEditor(editor);
             if (editor === null) return;
-            generation.attached = true;
+            const next =
+                previousAttachment?.editor === editor
+                    ? previousAttachment
+                    : { editor, active: false };
+            next.active = true;
+            attachment.current = next;
+            if (committed.current && !committed.current.binding.attachment)
+                committed.current.binding.attachment = next;
             if (typeof forwardedRef === 'function') {
                 // React 18 types return void; React 19 callers may return cleanup.
                 const cleanup: unknown = forwardedRef(editor);
@@ -102,26 +138,35 @@ export const NativeRichTextEditor = forwardRef<
                 };
             }
         };
-    }, [forwardedRef, generation]);
-    const handleChange = useCallback(
-        (readValue: () => string) => {
-            const current = committedProps.current;
-            if (!generation.attached || current.readOnly) return;
-            const stored = convertEditorValueToStoredRichText(readValue());
-            if (
-                normalizeRichTextForComparison(stored) ===
-                normalizeRichTextForComparison(current.value)
-            ) {
-                lastSetValueRef.current = current.value;
-                return;
-            }
-            lastSetValueRef.current = stored;
-            current.onValueChange(stored);
-        },
-        [generation]
-    );
-    const handleFocus = useCallback(() => setFocused(true), []);
-    const handleBlur = useCallback(() => setFocused(false), []);
+    }, [forwardedRef]);
+    const currentProps = () => {
+        const owner = supplied.binding?.attachment;
+        return owner?.active && owner === attachment.current
+            ? committed.current?.props
+            : undefined;
+    };
+    const handleChange = (readValue: () => string) => {
+        const admitted = currentProps();
+        if (!admitted || admitted.readOnly) return;
+        const stored = convertEditorValueToStoredRichText(readValue());
+        const current = currentProps();
+        if (!current || current.readOnly) return;
+        if (
+            normalizeRichTextForComparison(stored) ===
+            normalizeRichTextForComparison(current.value)
+        ) {
+            lastSetValueRef.current = current.value;
+            return;
+        }
+        lastSetValueRef.current = stored;
+        current.onValueChange(stored);
+    };
+    const handleFocus = () => {
+        if (currentProps()) setFocused(true);
+    };
+    const handleBlur = () => {
+        if (currentProps()) setFocused(false);
+    };
 
     useEffect(() => {
         if (!props.removeStaleEditorRoots) return;
@@ -146,24 +191,43 @@ export const NativeRichTextEditor = forwardRef<
         }
     }, [props.value]);
 
-    if (emptyView) return createElement(Fragment, null, props.emptyContent);
-    return cloneElement(
-        props.renderEditor(
-            {
-                ref: attachEditor,
-                defaultValue: convertStoredRichTextToEditorMarkdown(
-                    props.value
-                ),
-                readOnly: props.readOnly ?? false,
-                placeholder: props.placeholder ?? '',
-                onChange: handleChange,
-                onFocus: handleFocus,
-                onBlur: handleBlur,
-                parsers: [{ match: parseStoredRichTextCheckbox }],
-                serializer: serializeStoredRichTextCheckbox,
-            },
-            focused
-        ),
-        { key: editorKey }
+    const editor = emptyView
+        ? null
+        : props.renderEditor(
+              {
+                  ref: attachEditor,
+                  defaultValue: convertStoredRichTextToEditorMarkdown(
+                      props.value
+                  ),
+                  readOnly: props.readOnly ?? false,
+                  placeholder: props.placeholder ?? '',
+                  onChange: handleChange,
+                  onFocus: handleFocus,
+                  onBlur: handleBlur,
+                  parsers: [{ match: parseStoredRichTextCheckbox }],
+                  serializer: serializeStoredRichTextCheckbox,
+              },
+              focused
+          );
+    supplied.binding = useMemo<NativeCallbackBinding>(
+        () => ({}),
+        [
+            attachedEditor,
+            editorKey,
+            editor?.type,
+            editor?.key,
+            props.value,
+            props.readOnly,
+            props.onValueChange,
+            props.renderEditor,
+        ]
+    );
+    return createElement(
+        Fragment,
+        null,
+        createElement(NativeEditorCommit, { commit }),
+        emptyView
+            ? props.emptyContent
+            : cloneElement(editor!, { key: editorKey })
     );
 });

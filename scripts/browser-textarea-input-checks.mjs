@@ -35,7 +35,7 @@ function App() {
     return h(TextareaInput,{value:state.value,autoSize:state.autoSize,readOnly:state.readOnly,disabled:state.disabled,placeholder:state.placeholder, ref, id:'notes', form:'host-form', name:'notes', rows:4,
         className:'host-style', 'aria-label':'Synthetic notes', 'aria-describedby':'help', maxLength:10000,
         style:{boxSizing:state.boxSizing,width:state.width,font:'16px/20px monospace',padding:4,border:'1px solid black',resize:'vertical'},
-        onChange:event=>{events.push({type:'change',value:event.currentTarget.value});setState(old=>({...old,value:event.currentTarget.value}));},
+        onChange:event=>{const value=event.currentTarget.value;events.push({type:'change',value});setState(old=>({...old,value}));},
         onCompositionStart:event=>events.push({type:event.type,data:event.data}),
         onCompositionEnd:event=>events.push({type:event.type,data:event.data}),
     });

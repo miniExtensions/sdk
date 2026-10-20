@@ -1,3 +1,9 @@
+export {
+    projectSelectChoices,
+    type SelectChoiceEvaluation,
+    type SelectChoiceProjectionInput,
+    type SelectChoiceProjection,
+} from './selectChoiceProjection.js';
 export { createSelectionModel } from './model.js';
 export {
     createAddressAutocompleteControl,

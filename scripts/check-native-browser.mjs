@@ -1826,6 +1826,67 @@ try {
                 .click();
             await idle(page);
         };
+        await run('native-select-choice-projection', async (page, origin) => {
+            await page.goto(
+                `${origin}/native.html?mode=native-select-projection`
+            );
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            const click = (name) =>
+                page.getByRole('button', { name, exact: true }).click();
+            await page
+                .getByRole('checkbox', { name: 'Draft Beta', exact: true })
+                .waitFor();
+            assert.deepEqual((await state()).eligible, [
+                'Alpha',
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            assert.deepEqual((await state()).nativeIds, ['opt_alpha', '', '']);
+            await page
+                .getByRole('checkbox', { name: 'Draft Gamma', exact: true })
+                .click();
+            assert.deepEqual((await state()).selected, [
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            assert.equal((await state()).writes, 1);
+            await click('Toggle native limits');
+            await click('Change linked hydration');
+            assert.deepEqual((await state()).eligible, [
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            assert.equal((await state()).writes, 1);
+            await click('Toggle native layout');
+            assert.deepEqual((await state()).eligible, []);
+            assert.equal(
+                await page
+                    .getByRole('status', { name: 'Current native selections' })
+                    .textContent(),
+                'Draft Beta|Draft Gamma'
+            );
+            await click('Toggle unavailable context');
+            assert.equal((await state()).status, 'retained-selected');
+            assert.deepEqual((await state()).eligible, [
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            await click('Toggle unavailable context');
+            await click('Change linked hydration');
+            assert.deepEqual((await state()).eligible, ['Alpha']);
+            await click('Toggle evaluator failure');
+            assert.equal((await state()).status, 'retained-selected');
+            assert.deepEqual((await state()).eligible, [
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            assert.equal((await state()).writes, 1);
+            assert.equal((await state()).submissions, 0);
+            assert.deepEqual((await state()).nativeIds, ['opt_alpha', '', '']);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
         await run('person-badge-native-presentation', async (page, origin) => {
             await page.goto(`${origin}/native.html?mode=person-badge`);
             const click = (name) =>
@@ -2793,7 +2854,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 15 + storageEventCases.length);
+        assert.equal(results.length, 16 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

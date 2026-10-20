@@ -1,3 +1,4 @@
+import { projectSelectChoices } from './selectChoiceProjection.js';
 import { hasSelectCondition } from '../forms/scalarConditionBoundary.js';
 import { compileRuntimeConditions } from '../forms/conditions.js';
 import { evaluateFormFieldVisibility } from '../forms/visibility.js';
@@ -57,13 +58,18 @@ export function resolveSelectFieldAvailability(
 ): SelectFieldAvailability {
     const policy = getSelectFieldPolicy(input.field);
     // Existing readonly controls preserve the full current-choice presentation.
-    const options = policy.readOnly
-        ? policy.options
-        : policy.options.filter(
-              (option) =>
-                  policy.allowedOptionIds === null ||
-                  policy.allowedOptionIds.includes(option.id)
-          );
+    const options = projectSelectChoices({
+        // Retain the existing detached non-readonly options array when unlimited.
+        choices:
+            !policy.readOnly && policy.allowedOptionIds === null
+                ? [...policy.options]
+                : policy.options,
+        selectedValues: [],
+        getValue: (option) => option.value,
+        allowedOptionIds: policy.readOnly ? null : policy.allowedOptionIds,
+        retainSelected: false,
+        evaluation: { type: 'skip' },
+    }).choices;
     const ready = (
         eligible: SelectFieldPolicy['options']
     ): SelectFieldAvailability => ({

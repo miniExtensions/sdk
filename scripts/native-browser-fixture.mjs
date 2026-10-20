@@ -4,6 +4,8 @@
 import React, { createElement as h, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createMiniExtensionsClient } from '@miniextensions/sdk';
+import { projectSelectChoices } from '@miniextensions/sdk/ui';
+import FormulaRunner from '@miniextensions/sdk/formulas';
 import {
     createFormFieldBindings,
     RecoveryJournal,
@@ -47,7 +49,182 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'person-badge') {
+if (mode === 'native-select-projection') {
+    const choices = [
+        { id: 'opt_alpha', name: 'Alpha' },
+        { id: '', name: 'Draft Beta', newOption: true },
+        { id: '', name: 'Draft Gamma', newOption: true },
+    ];
+    /** @type {import('@miniextensions/sdk').RuntimeAirtableField} */
+    const linkField = {
+        id: 'fld_links',
+        name: 'Links',
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: {
+            type: 'multipleRecordLinks',
+            options: {
+                linkedTableId: 'tbl_links',
+                isReversed: false,
+                prefersSingleRecordLink: false,
+            },
+        },
+    };
+    /** @type {import('@miniextensions/sdk').RuntimeAirtableField} */
+    const primary = {
+        id: 'fld_primary',
+        name: 'Name',
+        description: null,
+        isComputed: false,
+        isPrimaryField: true,
+        config: { type: 'singleLineText', options: null },
+    };
+    let state;
+    let projection;
+    snapshot = () => ({
+        ...state,
+        status: projection?.status,
+        eligible: projection?.choices.map((choice) => choice.name),
+        nativeIds: choices.map((choice) => choice.id),
+        calls,
+        errors,
+    });
+    function Host() {
+        const [value, setValue] = useState({
+            selected: ['Draft Beta'],
+            approved: true,
+            limited: false,
+            list: true,
+            unavailable: false,
+            fail: false,
+            writes: 0,
+            submissions: 0,
+        });
+        state = value;
+        projection = projectSelectChoices({
+            choices,
+            selectedValues: value.selected,
+            getValue: (choice) => choice.name,
+            allowedOptionIds: value.limited ? ['opt_alpha'] : null,
+            retainSelected: value.list,
+            evaluation: value.unavailable
+                ? { type: 'unavailable' }
+                : {
+                      type: 'evaluate',
+                      matches: () => {
+                          if (value.fail)
+                              throw Error(
+                                  'private synthetic evaluation context'
+                              );
+                          const runner = new FormulaRunner(
+                              "REGEX_MATCH({fld_links}, 'Approved')"
+                          );
+                          runner.context = {
+                              record: {
+                                  id: 'recbbbbbbbbbbbbbb',
+                                  fields: { fld_links: ['recaaaaaaaaaaaaaa'] },
+                              },
+                              airtableFields: [linkField],
+                              linkedTableLoadingStates: {
+                                  tbl_links: {
+                                      type: 'loaded',
+                                      data: {
+                                          state: {
+                                              airtableFields: [primary],
+                                              recordIdsToAirtableRecords: {
+                                                  recaaaaaaaaaaaaaa: {
+                                                      id: 'recaaaaaaaaaaaaaa',
+                                                      fields: {
+                                                          fld_primary:
+                                                              value.approved
+                                                                  ? 'Approved region'
+                                                                  : 'Denied region',
+                                                      },
+                                                  },
+                                              },
+                                          },
+                                      },
+                                  },
+                              },
+                          };
+                          return !FormulaRunner.isFalsyValue(runner.run());
+                      },
+                  },
+        });
+        return h(
+            React.Fragment,
+            null,
+            h(
+                'form',
+                {
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        setValue((v) => ({
+                            ...v,
+                            submissions: v.submissions + 1,
+                        }));
+                    },
+                },
+                h(
+                    'ul',
+                    { 'aria-label': 'Eligible native choices' },
+                    projection.choices.map((choice) =>
+                        h(
+                            'li',
+                            { key: choice.name },
+                            h(
+                                'label',
+                                null,
+                                h('input', {
+                                    type: 'checkbox',
+                                    checked: value.selected.includes(
+                                        choice.name
+                                    ),
+                                    onChange: () =>
+                                        setValue((v) => ({
+                                            ...v,
+                                            selected: v.selected.includes(
+                                                choice.name
+                                            )
+                                                ? v.selected.filter(
+                                                      (name) =>
+                                                          name !== choice.name
+                                                  )
+                                                : [...v.selected, choice.name],
+                                            writes: v.writes + 1,
+                                        })),
+                                }),
+                                choice.name
+                            )
+                        )
+                    )
+                ),
+                h(
+                    'output',
+                    { 'aria-label': 'Current native selections' },
+                    value.selected.join('|')
+                )
+            ),
+            button('Toggle native limits', () =>
+                setValue((v) => ({ ...v, limited: !v.limited }))
+            ),
+            button('Change linked hydration', () =>
+                setValue((v) => ({ ...v, approved: !v.approved }))
+            ),
+            button('Toggle native layout', () =>
+                setValue((v) => ({ ...v, list: !v.list }))
+            ),
+            button('Toggle unavailable context', () =>
+                setValue((v) => ({ ...v, unavailable: !v.unavailable }))
+            ),
+            button('Toggle evaluator failure', () =>
+                setValue((v) => ({ ...v, fail: !v.fail }))
+            )
+        );
+    }
+    root.render(h(React.StrictMode, null, h(Host)));
+} else if (mode === 'person-badge') {
     let state;
     /** @type {import('react').RefObject<HTMLLIElement>} */
     const personRef = React.createRef();

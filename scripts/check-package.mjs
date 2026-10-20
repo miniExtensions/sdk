@@ -1,4 +1,8 @@
 import {
+    checkSelectChoiceProjectionConsumer,
+    selectProjectionTypedConsumer,
+} from './select-choice-projection-consumer-checks.mjs';
+import {
     checkPersonBadgeConsumer,
     personBadgeTypedConsumer,
     personBadgeJsxConsumer,
@@ -1410,7 +1414,8 @@ new Parser([]).parse({maxDepth:'48'});
             textInputTypedConsumer +
                 ratingInputTypedConsumer +
                 calendlyBookingTypedConsumer +
-                personBadgeTypedConsumer
+                personBadgeTypedConsumer +
+                selectProjectionTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -2880,6 +2885,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         await checkTextInputConsumer({
             consumerDirectory: temporaryDirectory,
             happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkSelectChoiceProjectionConsumer({
+            consumerDirectory: temporaryDirectory,
         }),
         2
     );

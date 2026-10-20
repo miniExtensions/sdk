@@ -4000,3 +4000,81 @@ export function People({
     );
 }
 ```
+
+### Projecting native Select choices with an existing evaluator
+
+`projectSelectChoices` from `@miniextensions/sdk/ui` shares native-choice
+availability without replacing a caller's hydrated condition evaluator. It
+preserves original choice objects, order and canonical values, including pending
+choices with empty IDs. `getValue` reads the native canonical name/value; labels
+and DOM identity remain separate. `allowedOptionIds: null` means unlimited;
+provide normalized IDs from the caller's policy. An explicit empty array admits
+no new choices.
+
+Use `retainSelected: true` for list controls that must retain selected choices
+outside current limits or conditions. Dropdown eligibility can exclude those
+choices while the caller retains its current native value/display. Projection
+never edits selection, grants Add Choice/Save authority, normalizes pending IDs,
+loads records or performs I/O. Keep maximum selections, creation, read-only
+admission and writes with their real owners.
+
+`evaluation` is `skip` for preview/disabled evaluation, `unavailable` when the
+real evaluation context is absent, or `evaluate` with a synchronous `matches`
+callback closing over that context. A missing context or evaluator exception
+returns `status: 'retained-selected'`, the selected native choices and a safe
+reason; exception details are not returned. No selection is discarded. The
+callback runs only for eligible unselected choices when list retention applies.
+
+This is separate from `getSelectFieldPolicy` and
+`resolveSelectFieldAvailability`, whose published-metadata validation remains
+strict and still rejects empty/duplicate IDs. The latter uses this projection
+only after its own metadata guards. A native pending choice does not become
+accepted published metadata or mutation authority.
+
+```tsx
+import {
+    projectSelectChoices,
+    type SelectChoiceEvaluation,
+} from '@miniextensions/sdk/ui';
+
+type NativeChoice = { id: string; name: string };
+export function NativeChoiceList({
+    choices,
+    selected,
+    evaluation,
+    readOnly,
+    toggle,
+}: {
+    choices: readonly NativeChoice[];
+    selected: readonly string[];
+    evaluation: SelectChoiceEvaluation<NativeChoice>;
+    readOnly: boolean;
+    toggle(value: string): void;
+}) {
+    const projection = projectSelectChoices({
+        choices,
+        selectedValues: selected,
+        getValue: (choice) => choice.name,
+        allowedOptionIds: null,
+        retainSelected: true,
+        evaluation,
+    });
+    return (
+        <ul>
+            {projection.choices.map((choice) => (
+                <li key={choice.name}>
+                    <label>
+                        <input
+                            type="checkbox"
+                            disabled={readOnly}
+                            checked={selected.includes(choice.name)}
+                            onChange={() => toggle(choice.name)}
+                        />
+                        {choice.name}
+                    </label>
+                </li>
+            ))}
+        </ul>
+    );
+}
+```

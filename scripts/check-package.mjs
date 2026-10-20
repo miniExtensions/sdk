@@ -1,4 +1,8 @@
 import {
+    checkRichTextSerializationConsumer,
+    richTextSerializationTypedConsumer,
+} from './rich-text-serialization-consumer-checks.mjs';
+import {
     checkSelectChoiceProjectionConsumer,
     selectProjectionTypedConsumer,
 } from './select-choice-projection-consumer-checks.mjs';
@@ -1415,7 +1419,8 @@ new Parser([]).parse({maxDepth:'48'});
                 ratingInputTypedConsumer +
                 calendlyBookingTypedConsumer +
                 personBadgeTypedConsumer +
-                selectProjectionTypedConsumer
+                selectProjectionTypedConsumer +
+                richTextSerializationTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -2885,6 +2890,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         await checkTextInputConsumer({
             consumerDirectory: temporaryDirectory,
             happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkRichTextSerializationConsumer({
+            consumerDirectory: temporaryDirectory,
         }),
         2
     );

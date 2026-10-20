@@ -2678,3 +2678,56 @@ const image = isAttachmentTypeAllowed('images', ' Image/PNG; charset=binary ');
 
 These helpers do not inspect bytes, detect folders, authorize an upload, bind a
 privacy facet, modify native values or replace the guarded attachment owner.
+
+### Native Rich Text serialization
+
+The public forms exports `convertEditorValueToStoredRichText`,
+`normalizeRichTextForComparison`, `convertStoredRichTextToEditorMarkdown`,
+`parseStoredRichTextCheckbox` and `serializeStoredRichTextCheckbox` share the
+existing hosted native editor's stored-string contract. They do not render
+Markdown or replace the editor, its document/ref/caret/IME, paste handling,
+read-only policy or the current write owner.
+
+The stored conversion handles the exact editor empty sentinel, hard-break
+artifact and lower-case checkbox line prefixes. The parser/serializer preserve
+the native checkbox node shape and final newline. This is the existing lexical
+conversion, including its behavior inside fenced text; it is not a general
+Markdown parser or sanitizer. Other text, spaces and final newlines remain
+unchanged. The comparison helper additionally normalizes CRLF and trailing
+newline artifacts **for equality only**. Never persist that comparison key. Keep the original serialization for actual
+writes; do not add a general whitespace trim.
+
+Keep the actual native editor's change generation and write admission. This
+adapter shows where to compare and commit its returned serialization; pass the
+checkbox helpers to the real editor's existing parser/serializer hooks.
+
+```ts
+import {
+    convertEditorValueToStoredRichText,
+    normalizeRichTextForComparison,
+    convertStoredRichTextToEditorMarkdown,
+    parseStoredRichTextCheckbox,
+    serializeStoredRichTextCheckbox,
+} from '@miniextensions/sdk/forms';
+
+export function commitNativeRichText(
+    readEditorValue: () => string,
+    current: string | null,
+    setNativeValue: (stored: string) => void
+): boolean {
+    const stored = convertEditorValueToStoredRichText(readEditorValue());
+    if (
+        normalizeRichTextForComparison(stored) ===
+        normalizeRichTextForComparison(current)
+    )
+        return false;
+    setNativeValue(stored);
+    return true;
+}
+
+export const nativeRichTextSyntax = {
+    toEditor: convertStoredRichTextToEditorMarkdown,
+    parseCheckbox: parseStoredRichTextCheckbox,
+    serializeCheckbox: serializeStoredRichTextCheckbox,
+};
+```

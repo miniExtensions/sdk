@@ -1839,6 +1839,63 @@ try {
                 .click();
             await idle(page);
         };
+        await run('recoverable-native-image', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=recoverable-image`);
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await page.waitForFunction(
+                () => window.__nativeProbe.snapshot().naturalWidth > 0
+            );
+            const first = await state();
+            assert.equal(first.reactVersion, nativeReactVersion);
+            assert(first.imageId > 0 && first.seen >= 2);
+            await page
+                .getByRole('button', {
+                    name: 'Equivalent image sources',
+                    exact: true,
+                })
+                .click();
+            assert.equal((await state()).imageId, first.imageId);
+            await page
+                .getByRole('button', {
+                    name: 'All broken image sources',
+                    exact: true,
+                })
+                .click();
+            await page
+                .getByRole('status', { name: 'Image failed', exact: true })
+                .waitFor();
+            const broken = await state();
+            assert.equal(broken.imageId, null);
+            await page
+                .getByRole('button', {
+                    name: 'Retry synthetic image',
+                    exact: true,
+                })
+                .click();
+            await page.waitForFunction(
+                (old) => window.__nativeProbe.snapshot().seen > old,
+                broken.seen
+            );
+            await page
+                .getByRole('status', { name: 'Image failed', exact: true })
+                .waitFor();
+            assert.equal((await state()).retries, 1);
+            assert.equal((await state()).submits, 0);
+            assert.equal((await state()).parentClicks, 0);
+            await page
+                .getByRole('button', {
+                    name: 'Replacement image source',
+                    exact: true,
+                })
+                .click();
+            await page.waitForFunction(
+                () => window.__nativeProbe.snapshot().naturalWidth > 0
+            );
+            assert((await state()).source.endsWith('#replacement'));
+            assert.deepEqual((await state()).errors, []);
+            assert.deepEqual((await state()).calls, []);
+        });
         await run('native-rich-editor-slot-abi', async (page, origin) => {
             await page.goto(
                 `${origin}/native.html?mode=native-rich-editor-slot`
@@ -2922,7 +2979,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 17 + storageEventCases.length);
+        assert.equal(results.length, 18 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

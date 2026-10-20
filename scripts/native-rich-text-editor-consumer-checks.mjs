@@ -1,3 +1,4 @@
+import { recoverableImageTypedConsumer } from './recoverable-image-consumer-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -224,7 +225,10 @@ export function checkNativeEditorReactMatrix({
             ]);
             for (const extension of ['mts', 'cts']) {
                 const name = `native-editor.${extension}`;
-                writeFileSync(join(directory, name), nativeEditorTypedConsumer);
+                writeFileSync(
+                    join(directory, name),
+                    nativeEditorTypedConsumer + recoverableImageTypedConsumer
+                );
                 run(process.execPath, [
                     typescriptBin,
                     '--noEmit',

@@ -23,6 +23,7 @@ import {
     ActionButton,
     PersonBadge,
     NativeRichTextEditor,
+    RecoverableImage,
     useCalendlyBooking,
     RatingInput,
     AttachmentField,
@@ -50,7 +51,91 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'native-rich-editor-slot') {
+if (mode === 'recoverable-image') {
+    const bad = 'data:image/png;base64,invalid-image';
+    const good =
+        'data:image/svg+xml,' +
+        encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="green"/></svg>'
+        );
+    /** @type {HTMLImageElement|null} */
+    let image = null;
+    /** @type {WeakMap<HTMLImageElement,number>} */
+    const nodes = new WeakMap();
+    let seen = 0,
+        retries = 0,
+        submits = 0,
+        parentClicks = 0;
+    /** @param {HTMLImageElement|null} node */
+    const attach = (node) => {
+        image = node;
+        if (node && !nodes.has(node)) nodes.set(node, ++seen);
+    };
+    snapshot = () => ({
+        imageId: image ? nodes.get(image) : null,
+        source: image?.getAttribute('src') ?? null,
+        complete: image?.complete ?? false,
+        naturalWidth: image?.naturalWidth ?? 0,
+        seen,
+        retries,
+        submits,
+        parentClicks,
+        errors,
+        calls,
+    });
+    function Host() {
+        const [chain, setChain] = useState('initial');
+        const sources =
+            chain === 'broken'
+                ? [bad, bad + '-again']
+                : chain === 'replacement'
+                  ? [good + '#replacement']
+                  : chain === 'equivalent'
+                    ? ['', bad, bad, good]
+                    : [bad, good];
+        return h(
+            'div',
+            null,
+            h('h1', null, 'Synthetic native image recovery'),
+            h(
+                'form',
+                {
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                    onClick: () => parentClicks++,
+                },
+                h(RecoverableImage, {
+                    ref: attach,
+                    sources,
+                    alt: 'Synthetic attachment',
+                    renderFallback: (retry) =>
+                        h(
+                            'div',
+                            { role: 'status', 'aria-label': 'Image failed' },
+                            h(
+                                ActionButton,
+                                {
+                                    onClick: (event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        retries++;
+                                        retry();
+                                    },
+                                },
+                                'Retry synthetic image'
+                            )
+                        ),
+                })
+            ),
+            button('Equivalent image sources', () => setChain('equivalent')),
+            button('All broken image sources', () => setChain('broken')),
+            button('Replacement image source', () => setChain('replacement'))
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'native-rich-editor-slot') {
     // External React editor-slot ABI probe only; not a vendor or OS-IME claim.
     let mounts = 0;
     /** @type {import('@miniextensions/sdk/react').NativeRichTextEditorRenderProps | undefined} */

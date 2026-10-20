@@ -1,4 +1,8 @@
 export {
+    RecoverableImage,
+    type RecoverableImageProps,
+} from './RecoverableImage.js';
+export {
     NativeRichTextEditor,
     type NativeRichTextEditorHandle,
     type NativeRichTextEditorRenderProps,

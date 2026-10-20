@@ -1,3 +1,8 @@
+import {
+    checkRecoverableImageConsumer,
+    recoverableImageTypedConsumer,
+    recoverableImageJsxConsumer,
+} from './recoverable-image-consumer-checks.mjs';
 import { checkNativeEditorReactMatrix } from './native-rich-text-editor-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
@@ -1421,7 +1426,8 @@ new Parser([]).parse({maxDepth:'48'});
                 calendlyBookingTypedConsumer +
                 personBadgeTypedConsumer +
                 selectProjectionTypedConsumer +
-                richTextSerializationTypedConsumer
+                richTextSerializationTypedConsumer +
+                recoverableImageTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -1467,7 +1473,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         textInputJsxConsumer +
             ratingInputJsxConsumer +
             calendlyBookingJsxConsumer +
-            personBadgeJsxConsumer
+            personBadgeJsxConsumer +
+            recoverableImageJsxConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(
@@ -2894,6 +2901,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(nativeEditorMatrix.versions.length, 2);
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    assert.equal(
+        await checkRecoverableImageConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
     assert.equal(
         await checkTextInputConsumer({
             consumerDirectory: temporaryDirectory,

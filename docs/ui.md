@@ -4140,3 +4140,49 @@ is added. Real host editor tests establish the existing React 18 runtime's ref,
 caret, formatting, paste and synthetic composition behavior. Synthetic DOM
 composition checks do not certify an operating-system IME; protected deployed
 acceptance remains a separate gate.
+
+### Native image recovery
+
+`RecoverableImage` renders the actual native image and forwards its ref and image
+attributes. Supply caller-authorized `sources` in order and an explicit `alt`
+(use an empty string for decorative images). Empty entries and exact duplicates
+are removed without trimming, rewriting URLs or changing attachment metadata.
+The component owns one failure transition per mounted image attempt, exhaustion
+and retry remounting. Repeated errors in the same React batch cannot skip the
+next source. An equivalent ordered chain retains the current image; a changed
+chain resets immediately and retires its previous retry callback.
+
+```tsx
+import { RecoverableImage, ActionButton } from '@miniextensions/sdk/react';
+
+export function AttachmentPreview({ sources }: { sources: readonly string[] }) {
+    return (
+        <RecoverableImage
+            sources={sources}
+            alt="Attachment preview"
+            loading="lazy"
+            renderFallback={(retry) => (
+                <div role="status" aria-label="Preview unavailable">
+                    <ActionButton
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            retry();
+                        }}
+                    >
+                        Try again
+                    </ActionButton>
+                </div>
+            )}
+        />
+    );
+}
+```
+
+The caller owns source admission, signed URL lifetime, lazy-mount policy, classes,
+localized fallback and retry-event containment. Recovery renders no extra image
+wrapper and performs no explicit fetch, upload, save, URL refresh or attachment
+write. It does not infer privacy permission or resolve unknown upload outcomes.
+Do not supply `src`, `srcSet` or an overriding error handler; the ordered chain
+owns the native image source and error transitions. On failure the image ref is
+released; retry creates a new native image starting at the first source.

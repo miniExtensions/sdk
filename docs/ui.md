@@ -3726,7 +3726,10 @@ and native composition/change/focus handlers. Native events bubble normally.
 
 Sizing is opt-in: `autoSize={{ minRows: 3, maxRows: 30 }}` measures content and
 placeholder text, clamps the height and permits scrolling beyond the maximum.
-It remeasures after committed renders, window resize and font loading. Row
+It matches the native `wrap` setting and computed `white-space`,
+`overflow-wrap` and `word-break` styles, including horizontal scrolling for
+unwrapped text. It remeasures after committed renders, window resize and font
+loading. Row
 bounds must be positive integers with `maxRows >= minRows` (an omitted maximum
 is unbounded). Use these bounds instead of inline `minHeight`/`maxHeight`.
 Caller CSS still controls width, font, padding, borders and resize affordance.

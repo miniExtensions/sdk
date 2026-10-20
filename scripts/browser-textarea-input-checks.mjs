@@ -32,9 +32,9 @@ const events = [];
 const initial = {value:'',autoSize:{minRows:3,maxRows:30},boxSizing:'border-box',width:320,readOnly:false,disabled:false};
 function App() {
     const [state,setState] = useState(initial); update = next => flushSync(()=>setState(old=>({...old,...next})));
-    return h(TextareaInput,{value:state.value,autoSize:state.autoSize,readOnly:state.readOnly,disabled:state.disabled,placeholder:state.placeholder, ref, id:'notes', form:'host-form', name:'notes', rows:4,
+    return h(TextareaInput,{value:state.value,autoSize:state.autoSize,readOnly:state.readOnly,disabled:state.disabled,placeholder:state.placeholder,wrap:state.wrap, ref, id:'notes', form:'host-form', name:'notes', rows:4,
         className:'host-style', 'aria-label':'Synthetic notes', 'aria-describedby':'help', maxLength:10000,
-        style:{boxSizing:state.boxSizing,width:state.width,font:'16px/20px monospace',padding:4,border:'1px solid black',resize:'vertical'},
+        style:{boxSizing:state.boxSizing,width:state.width,font:'16px/20px monospace',padding:4,border:'1px solid black',resize:'vertical',whiteSpace:state.whiteSpace,overflowWrap:state.overflowWrap},
         onChange:event=>{const value=event.currentTarget.value;events.push({type:'change',value});setState(old=>({...old,value}));},
         onCompositionStart:event=>events.push({type:event.type,data:event.data}),
         onCompositionEnd:event=>events.push({type:event.type,data:event.data}),
@@ -144,6 +144,130 @@ window.textareaProbe.update = next => update(next);
             window.dispatchEvent(new Event('resize'));
         });
         assert((await snapshot()).height > wide);
+        // Native rows=3 clone is an independent wrapping oracle; it has no SDK sizing.
+        evidence.wrapping = [];
+        const wrappingFailures = [];
+        const spaced = Array(90).fill('word').join(' ');
+        const unbroken = 'W'.repeat(180);
+        for (const scenario of [
+            {
+                name: 'default-soft',
+                value: spaced,
+                wrap: 'soft',
+                expected: true,
+            },
+            {
+                name: 'native-hard',
+                value: spaced,
+                wrap: 'hard',
+                expected: true,
+            },
+            { name: 'native-off', value: spaced, wrap: 'off', expected: false },
+            {
+                name: 'css-pre',
+                value: spaced,
+                wrap: 'soft',
+                whiteSpace: 'pre',
+                overflowWrap: 'normal',
+                expected: false,
+            },
+            {
+                name: 'css-normal-unbroken',
+                value: unbroken,
+                wrap: 'soft',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'normal',
+                expected: false,
+            },
+            {
+                name: 'css-anywhere-unbroken',
+                value: unbroken,
+                wrap: 'soft',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
+                expected: true,
+            },
+            {
+                name: 'css-override-native-off',
+                value: unbroken,
+                wrap: 'off',
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
+            },
+        ]) {
+            await update({
+                value: scenario.value,
+                width: 160,
+                wrap: scenario.wrap,
+                whiteSpace: scenario.whiteSpace,
+                overflowWrap: scenario.overflowWrap,
+            });
+            const actual = await page.locator('textarea').evaluate((node) => {
+                const reference = node.cloneNode(false);
+                reference.removeAttribute('id');
+                reference.removeAttribute('form');
+                reference.removeAttribute('name');
+                reference.value = node.value;
+                reference.rows = 3;
+                reference.style.removeProperty('height');
+                reference.style.position = 'absolute';
+                reference.style.visibility = 'hidden';
+                document.body.append(reference);
+                try {
+                    const style = getComputedStyle(node);
+                    return {
+                        height: node.getBoundingClientRect().height,
+                        nativeMinimum: reference.getBoundingClientRect().height,
+                        nativeWraps:
+                            reference.scrollHeight > reference.clientHeight + 1,
+                        horizontal: node.scrollWidth > node.clientWidth,
+                        referenceHorizontal:
+                            reference.scrollWidth > reference.clientWidth,
+                        wrap: node.wrap,
+                        whiteSpace: style.whiteSpace,
+                        overflowWrap: style.overflowWrap,
+                        value: node.value,
+                    };
+                } finally {
+                    reference.remove();
+                }
+            });
+            const { value, ...geometry } = actual;
+            evidence.wrapping.push({ name: scenario.name, ...geometry });
+            try {
+                assert.equal(value, scenario.value);
+                if (scenario.expected !== undefined)
+                    assert.equal(
+                        actual.nativeWraps,
+                        scenario.expected,
+                        scenario.name + ' native reference'
+                    );
+                if (actual.nativeWraps)
+                    assert(
+                        actual.height > actual.nativeMinimum,
+                        scenario.name + ' should grow with native wrapping'
+                    );
+                else near(actual.height, actual.nativeMinimum);
+            } catch (error) {
+                wrappingFailures.push({
+                    name: scenario.name,
+                    error: String(error),
+                });
+            }
+        }
+        assert.deepEqual(
+            wrappingFailures,
+            [],
+            'Autosizing must match native wrap and CSS wrapping'
+        );
+        evidence.results.push(
+            'native wrap off/default and white-space/overflow-wrap overrides match an unsized native textarea'
+        );
+        await update({
+            wrap: 'soft',
+            whiteSpace: undefined,
+            overflowWrap: undefined,
+        });
         await update({ value: 'short', boxSizing: 'content-box' });
         near((await snapshot()).height, 70);
         // CSS height is content-only for content-box; borders/padding stay intact.

@@ -42,6 +42,8 @@ const sizingStyles = [
     'textTransform',
     'width',
     'wordBreak',
+    'whiteSpace',
+    'overflowWrap',
 ] as const;
 const useBrowserLayoutEffect =
     typeof document === 'undefined' ? useEffect : useLayoutEffect;
@@ -57,6 +59,7 @@ function measuredHeight(node: HTMLTextAreaElement, min: number, max: number) {
     const border =
         parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
     const probe = document.createElement('textarea');
+    probe.wrap = node.wrap;
     probe.tabIndex = -1;
     probe.setAttribute('aria-hidden', 'true');
     for (const key of sizingStyles) probe.style[key] = style[key];

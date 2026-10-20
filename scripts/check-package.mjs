@@ -1,4 +1,9 @@
 import {
+    checkTextInputConsumer,
+    textInputTypedConsumer,
+    textInputJsxConsumer,
+} from './text-input-consumer-checks.mjs';
+import {
     checkBarcodeConsumer,
     barcodeReactTypedConsumer,
 } from './barcode-consumer-checks.mjs';
@@ -1383,6 +1388,27 @@ new Parser([]).parse({maxDepth:'48'});
         '@types/react@19.2.2',
         '@types/react-dom@19.2.2',
     ]);
+    for (const extension of ['mts', 'cts']) {
+        const filename = `text-input-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, filename),
+            textInputTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--skipLibCheck',
+            'false',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            filename,
+        ]);
+    }
     const reactSources = reactRecipes.map(([, code], index) => {
         const filename = `ui-react-${index}.tsx`;
         writeFileSync(join(temporaryDirectory, filename), code);
@@ -1407,6 +1433,11 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
 `
     );
     reactSources.push('field-bindings-react.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'text-input-consumer.tsx'),
+        textInputJsxConsumer
+    );
+    reactSources.push('text-input-consumer.tsx');
     writeFileSync(
         join(temporaryDirectory, 'multiple-select-react-consumer.tsx'),
         multipleSelectReactTypedConsumer
@@ -2824,6 +2855,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(reactBindingProof.checks, 1);
+    assert.equal(
+        await checkTextInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    console.log(
+        'Installed TextInput ESM/CommonJS native props/ref and strict declaration checks passed.'
+    );
     const portalOwnerProof = await checkPortalOwnerConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),

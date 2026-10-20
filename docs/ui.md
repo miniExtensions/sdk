@@ -3661,3 +3661,42 @@ dependencies, start a server or claim browser verification. Serve the fixture on
 loopback for separate native interaction and layout checks. Synthetic controls
 change only fixture-owned data and establish no live-backend, clipboard or
 screen-reader result.
+
+## Stateless native text input
+
+`TextInput` from `@miniextensions/sdk/react` is a controlled native input with a
+forwarded `HTMLInputElement` ref and ordinary native input props. It renders only
+the input: callers retain their labels, form ownership, descriptions, classes,
+events, disabled policy and clear-button layout. Supply a string `value`; there
+is no `defaultValue`, internal draft, parser, subscription, save or implicit
+request. Native events bubble normally unless the caller stops them.
+
+Use `type="text"` and `inputMode="decimal"` for locale-aware numeric display
+text. Partial values such as `-` or `1,` remain unchanged; the existing owner
+converts them to native numbers at its established commit boundary. Email,
+password, URL and phone entry can retain their native input types. The bound SDK
+text and number renderers use this same input while keeping their existing
+owner/composition policies. This primitive does not add scanner, address lookup,
+formatting or deferred-commit behavior.
+
+```tsx
+import { useRef, useState } from 'react';
+import { TextInput } from '@miniextensions/sdk/react';
+
+export function HostedAmount() {
+    const input = useRef<HTMLInputElement>(null);
+    const [draft, setDraft] = useState('1,');
+    return (
+        <TextInput
+            ref={input}
+            id="amount"
+            form="request"
+            type="text"
+            inputMode="decimal"
+            value={draft}
+            aria-label="Amount"
+            onChange={(event) => setDraft(event.currentTarget.value)}
+        />
+    );
+}
+```

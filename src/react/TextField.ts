@@ -1,3 +1,4 @@
+import { TextInput } from './TextInput.js';
 import {
     createElement,
     useId,
@@ -151,7 +152,7 @@ export function TextControl(props: TextControlProps): ReactNode {
         createElement(
             'span',
             { className: 'mx-sdk-text-control' },
-            createElement('input', {
+            createElement(TextInput, {
                 ref: input,
                 id,
                 className: 'mx-sdk-text',

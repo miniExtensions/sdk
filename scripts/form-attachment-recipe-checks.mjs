@@ -114,6 +114,39 @@ export async function checkFormAttachmentRecipe({
         };
     }
     let checks = 0;
+    const esmForms = await import(
+        pathToFileURL(join(installed, 'dist/esm/forms/index.js')).href
+    );
+    for (const api of [require('@miniextensions/sdk/forms'), esmForms]) {
+        assert.equal(api.getEffectiveAttachmentFileLimit(2.5), 2);
+        assert.equal(api.getEffectiveAttachmentFileLimit(Infinity), 0);
+        assert.equal(api.getEffectiveAttachmentFileLimit(undefined), null);
+        assert.equal(api.getEffectiveAttachmentSizeLimit(0), null);
+        assert.equal(api.getEffectiveAttachmentSizeLimit(0.5), 0.5);
+        assert.equal(api.getEffectiveAttachmentSizeLimit(-1), 0);
+        assert.equal(
+            api.isAttachmentTypeAllowed(
+                'images',
+                ' Image/PNG; charset=binary '
+            ),
+            true
+        );
+        assert.equal(
+            api.isAttachmentTypeAllowed(
+                'compressedFiles',
+                'application/x-zip-compressed'
+            ),
+            true
+        );
+        assert.equal(
+            api.isAttachmentTypeAllowed(
+                'compressedFiles',
+                'application/x-near-zip'
+            ),
+            false
+        );
+        checks++;
+    }
     const check = (exercise) => {
         exercise(fixture());
         checks++;

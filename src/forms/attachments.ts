@@ -104,6 +104,24 @@ const typeGroups = new Set<AttachmentTypeGroup>([
     'compressedFiles',
 ]);
 
+/** Normalize configured file count. Metadata only; no upload authority. */
+export function getEffectiveAttachmentFileLimit(
+    configuredLimit: number | null | undefined
+): number | null {
+    if (configuredLimit == null) return null;
+    if (!Number.isFinite(configuredLimit)) return 0;
+    return Math.max(0, Math.floor(configuredLimit));
+}
+
+/** Normalize the configured MiB limit; null means unlimited and zero denies positive sizes. */
+export function getEffectiveAttachmentSizeLimit(
+    configuredLimit: number | null | undefined
+): number | null {
+    if (configuredLimit == null || configuredLimit === 0) return null;
+    if (!Number.isFinite(configuredLimit) || configuredLimit < 0) return 0;
+    return configuredLimit;
+}
+
 /** Opt-in presentation/admission helper; never writes, uploads or authorizes. */
 export function getFormAttachmentPolicy(
     input: FormAttachmentPolicyInput
@@ -165,19 +183,9 @@ export function getFormAttachmentPolicy(
     const persistedUrls = new Set(
         attachments(persistedValue).map((entry) => entry.url)
     );
-    const maxFiles =
-        config?.allowedFiles == null
-            ? null
-            : Number.isFinite(config.allowedFiles)
-              ? Math.max(0, Math.floor(config.allowedFiles))
-              : 0;
-    const sizeLimit = config?.sizeLimit;
-    const maxFileBytes =
-        sizeLimit == null || sizeLimit === 0
-            ? null
-            : !Number.isFinite(sizeLimit) || sizeLimit < 0
-              ? 0
-              : sizeLimit * 1048576;
+    const maxFiles = getEffectiveAttachmentFileLimit(config?.allowedFiles);
+    const sizeLimit = getEffectiveAttachmentSizeLimit(config?.sizeLimit);
+    const maxFileBytes = sizeLimit == null ? null : sizeLimit * 1048576;
     const remainingSlots =
         maxFiles === null ? null : Math.max(0, maxFiles - values.length);
     const uploadStatus =
@@ -220,7 +228,11 @@ export function getFormAttachmentPolicy(
     };
 }
 
-function allowedMime(group: AttachmentTypeGroup, rawType: string): boolean {
+/** Declared MIME classification only; no file-byte, folder, readability or authorization guarantee. */
+export function isAttachmentTypeAllowed(
+    group: AttachmentTypeGroup,
+    rawType: string
+): boolean {
     const type = rawType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
     switch (group) {
         case 'images':
@@ -282,7 +294,7 @@ export function checkFormAttachmentFiles(
         if (
             policy.upload.allowedTypes !== null &&
             !policy.upload.allowedTypes.some((group) =>
-                allowedMime(group, file.type)
+                isAttachmentTypeAllowed(group, file.type)
             )
         )
             rejected.push({ index, reason: 'type' });

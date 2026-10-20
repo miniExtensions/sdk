@@ -2648,3 +2648,33 @@ cross-tab synchronization, file persistence or an exactly-once create receipt.
 Verification of this feature must distinguish storage/CAS checks, synthetic
 starter behavior and a separately authorized live backend outcome; the presence
 of the helper or UI alone proves none of those outcomes.
+
+### Shared attachment metadata helpers
+
+`getEffectiveAttachmentFileLimit`, `getEffectiveAttachmentSizeLimit` and
+`isAttachmentTypeAllowed` are public exports from `@miniextensions/sdk/forms`.
+They are the same pure helpers used by `getFormAttachmentPolicy` and
+`checkFormAttachmentFiles`, so an existing host can reuse metadata rules while
+keeping its real producer, folder/readability checks, queue and upload transport.
+
+Count limits preserve legacy behavior: null/undefined are unlimited, fractional
+counts round down, and negative/nonfinite limits deny additional files. Size
+limits are in MiB: null/undefined/configured zero are unlimited, positive
+fractions remain exact, and negative/nonfinite values normalize to zero. The
+policy converts that normalized MiB value to bytes. MIME classification removes
+parameters, trims and lowercases the declared type; exact document/archive
+essences and well-formed image/video/audio subtypes are supported.
+
+```ts
+import {
+    getEffectiveAttachmentFileLimit,
+    getEffectiveAttachmentSizeLimit,
+    isAttachmentTypeAllowed,
+} from '@miniextensions/sdk/forms';
+const slots = getEffectiveAttachmentFileLimit(2.5); // 2
+const maxMiB = getEffectiveAttachmentSizeLimit(0); // null: unlimited
+const image = isAttachmentTypeAllowed('images', ' Image/PNG; charset=binary ');
+```
+
+These helpers do not inspect bytes, detect folders, authorize an upload, bind a
+privacy facet, modify native values or replace the guarded attachment owner.

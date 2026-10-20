@@ -4096,6 +4096,13 @@ The application keeps the editor library/extensions/styles, paste handling,
 localized empty content, current native writer and Form/session identity. Key the
 component by the application's real editing owner when that owner changes.
 
+Change callbacks belong to the attached editor generation. Semantic replacement,
+the read-only null view and unmount retire that generation before caller ref
+cleanup; late callbacks do not read the disposed document or write a value.
+Cosmetic echoes and writer changes retain the current editor and use the latest
+committed writer and read-only policy. Forward the supplied native ref so the
+wrapper can admit changes only from an attached editor.
+
 ```tsx
 import {
     NativeRichTextEditor,

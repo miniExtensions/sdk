@@ -119,6 +119,142 @@ async function fixture(t: TestContext) {
     };
 }
 
+it('retires prior editor writes across semantic replacement and A-to-B-to-A', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    const writer = (value: string) => {
+        writes.push(value);
+    };
+    const render = (value: string) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                value,
+                onValueChange: writer,
+                renderEditor: f.editor,
+            })
+        );
+    await render('Original');
+    const first = f.current();
+    await render('Replacement');
+    const second = f.current();
+    await render('Original');
+    let reads = 0;
+    await act(async () => {
+        first.onChange(() => {
+            reads++;
+            return 'Late original edit';
+        });
+        second.onChange(() => {
+            reads++;
+            return 'Late replacement edit';
+        });
+    });
+    assert.equal(
+        reads,
+        0,
+        'Retired editors must not even read a disposed document'
+    );
+    assert.deepEqual(writes, []);
+    await act(async () => f.current().onChange(() => 'Current edit'));
+    assert.deepEqual(writes, ['Current edit']);
+});
+
+it('retires captured editor writes when unmounted', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    await f.render(
+        h(NativeRichTextEditor, {
+            value: 'Original',
+            onValueChange: (value) => writes.push(value),
+            renderEditor: f.editor,
+        })
+    );
+    const retired = f.current();
+    await f.render(null);
+    let reads = 0;
+    await act(async () =>
+        retired.onChange(() => {
+            reads++;
+            return 'Late edit';
+        })
+    );
+    assert.equal(reads, 0);
+    assert.deepEqual(writes, []);
+});
+
+it('does not revive a detached empty editor after the read-only null view', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    const render = (value: string | null, readOnly: boolean) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                value,
+                readOnly,
+                onValueChange: (value) => writes.push(value),
+                renderEditor: f.editor,
+            })
+        );
+    await render('', false);
+    const retired = f.current();
+    await render(null, true);
+    await render('', false);
+    let reads = 0;
+    await act(async () =>
+        retired.onChange(() => {
+            reads++;
+            return 'Retired empty edit';
+        })
+    );
+    assert.equal(reads, 0);
+    assert.deepEqual(writes, []);
+    await act(async () => f.current().onChange(() => 'Current empty edit'));
+    assert.deepEqual(writes, ['Current empty edit']);
+});
+
+it('keeps current editor callbacks on cosmetic echoes and writer changes while respecting current read-only policy', async (t) => {
+    const f = await fixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const oldWrites: string[] = [];
+    const newWrites: string[] = [];
+    const render = (
+        value: string,
+        readOnly: boolean,
+        writer: (value: string) => void
+    ) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                ref,
+                value,
+                readOnly,
+                onValueChange: writer,
+                renderEditor: f.editor,
+            })
+        );
+    await render('Original\n', false, (value) => oldWrites.push(value));
+    const native = f.current();
+    const instance = ref.current;
+    await render('Original\n\n', false, (value) => newWrites.push(value));
+    assert.equal(ref.current, instance);
+    await act(async () => native.onChange(() => 'Current edit'));
+    assert.deepEqual(oldWrites, []);
+    assert.deepEqual(newWrites, ['Current edit']);
+    // A rejected write cannot modify comparison state or read a disposed vendor.
+    await render('Current edit', true, (value) => newWrites.push(value));
+    let reads = 0;
+    await act(async () =>
+        native.onChange(() => {
+            reads++;
+            return 'Blocked edit';
+        })
+    );
+    assert.equal(reads, 0);
+    assert.deepEqual(newWrites, ['Current edit']);
+    await render('Current edit', false, (value) => newWrites.push(value));
+    assert.equal(ref.current, instance);
+    await act(async () => f.current().onChange(() => 'Resumed edit'));
+    assert.deepEqual(newWrites, ['Current edit', 'Resumed edit']);
+});
+
 it('forwards the actual supplied editor instance, native syntax and focus with opt-in stale DOM cleanup', async (t) => {
     const f = await fixture(t);
     const ref = createRef<NativeRichTextEditorHandle>();

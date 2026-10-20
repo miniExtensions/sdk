@@ -5,6 +5,7 @@ import {
     Fragment,
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -64,15 +65,27 @@ export const NativeRichTextEditor = forwardRef<
     const [attachedEditor, setAttachedEditor] =
         useState<NativeRichTextEditorHandle | null>(null);
     const lastSetValueRef = useRef<string | null>(props.value);
+    const emptyView = Boolean(props.readOnly && props.value == null);
+    const generation = useMemo(
+        () => ({ attached: false }),
+        [editorKey, emptyView]
+    );
+    const committedProps = useRef(props);
+    useLayoutEffect(() => {
+        committedProps.current = props;
+    });
 
     const attachEditor = useMemo(() => {
         let detach: (() => void) | undefined;
         return (editor: NativeRichTextEditorHandle | null) => {
+            // Retire writes before forwarding any caller-owned detach cleanup.
+            generation.attached = false;
             const previous = detach;
             detach = undefined;
             previous?.();
             setAttachedEditor(editor);
             if (editor === null) return;
+            generation.attached = true;
             if (typeof forwardedRef === 'function') {
                 // React 18 types return void; React 19 callers may return cleanup.
                 const cleanup: unknown = forwardedRef(editor);
@@ -89,21 +102,23 @@ export const NativeRichTextEditor = forwardRef<
                 };
             }
         };
-    }, [forwardedRef]);
+    }, [forwardedRef, generation]);
     const handleChange = useCallback(
         (readValue: () => string) => {
+            const current = committedProps.current;
+            if (!generation.attached || current.readOnly) return;
             const stored = convertEditorValueToStoredRichText(readValue());
             if (
                 normalizeRichTextForComparison(stored) ===
-                normalizeRichTextForComparison(props.value)
+                normalizeRichTextForComparison(current.value)
             ) {
-                lastSetValueRef.current = props.value;
+                lastSetValueRef.current = current.value;
                 return;
             }
             lastSetValueRef.current = stored;
-            props.onValueChange(stored);
+            current.onValueChange(stored);
         },
-        [props.value, props.onValueChange]
+        [generation]
     );
     const handleFocus = useCallback(() => setFocused(true), []);
     const handleBlur = useCallback(() => setFocused(false), []);
@@ -131,8 +146,7 @@ export const NativeRichTextEditor = forwardRef<
         }
     }, [props.value]);
 
-    if (props.readOnly && props.value == null)
-        return createElement(Fragment, null, props.emptyContent);
+    if (emptyView) return createElement(Fragment, null, props.emptyContent);
     return cloneElement(
         props.renderEditor(
             {

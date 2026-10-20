@@ -134,6 +134,7 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
             try {
                 await render('[x] item');
                 const instance = ref.current;
+                const originalChange = latest.native.onChange;
                 const active = container.querySelector('[data-active]');
                 assert(instance instanceof SlotProbe);
                 assert.equal(instance.view.dom, active);
@@ -160,6 +161,18 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
                 assert.notEqual(ref.current, instance);
                 assert.equal(latest.native.defaultValue, 'External');
                 assert.deepEqual(writes, ['[x] changed  \n\n']);
+                let retiredReads = 0;
+                const retiredRead = () => {
+                    retiredReads++;
+                    return 'Late retired edit';
+                };
+                await React.act(async () => originalChange(retiredRead));
+                assert.equal(retiredReads, 0);
+                assert.deepEqual(writes, ['[x] changed  \n\n']);
+                const currentChange = latest.native.onChange;
+                await render('External', true);
+                await React.act(async () => currentChange(retiredRead));
+                assert.equal(retiredReads, 0);
                 await render(null, true);
                 assert.equal(ref.current, null);
                 assert.equal(container.textContent, 'Localized empty');
@@ -205,7 +218,11 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
                         .every((x) => x.released === 1)
                 );
                 await render('Replacement', false, secondRef);
+                const unmountedChange = latest.native.onChange;
                 await React.act(async () => root.render(null));
+                await React.act(async () => unmountedChange(retiredRead));
+                assert.equal(retiredReads, 0);
+                assert.deepEqual(writes, ['[x] changed  \n\n']);
                 assert(entries.length >= 3);
                 assert(entries.every((x) => x.released === 1));
                 assert.deepEqual(nulls, []);

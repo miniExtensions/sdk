@@ -1,4 +1,8 @@
 import {
+    checkFileSelectionConsumer,
+    fileSelectionTypedConsumer,
+} from './file-selection-consumer-checks.mjs';
+import {
     checkRecoverableImageConsumer,
     recoverableImageTypedConsumer,
     recoverableImageJsxConsumer,
@@ -1427,7 +1431,8 @@ new Parser([]).parse({maxDepth:'48'});
                 personBadgeTypedConsumer +
                 selectProjectionTypedConsumer +
                 richTextSerializationTypedConsumer +
-                recoverableImageTypedConsumer
+                recoverableImageTypedConsumer +
+                fileSelectionTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -2901,6 +2906,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(nativeEditorMatrix.versions.length, 2);
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    assert.equal(
+        await checkFileSelectionConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
     assert.equal(
         await checkRecoverableImageConsumer({
             consumerDirectory: temporaryDirectory,

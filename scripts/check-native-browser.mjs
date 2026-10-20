@@ -1861,6 +1861,82 @@ try {
                 .click();
             await idle(page);
         };
+        await run('native-file-selection', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=file-selection`);
+            const picker = page.getByRole('button', {
+                name: 'Toggle file intake',
+                exact: true,
+            });
+            await picker.waitFor();
+            const input = page.getByLabel('Choose synthetic files', {
+                exact: true,
+            });
+            const file = {
+                name: 'retry-native.txt',
+                mimeType: 'text/plain',
+                buffer: Buffer.from('synthetic file'),
+            };
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await input.setInputFiles(file);
+            await input.setInputFiles(file);
+            assert.equal((await state()).received.length, 2);
+            assert.equal(await input.inputValue(), '');
+            for (const files of (await state()).received)
+                assert.deepEqual(files, [
+                    { name: 'retry-native.txt', size: 14, type: 'text/plain' },
+                ]);
+            const drag = async (selector, type, withFile = false) =>
+                page.evaluate(
+                    ({ selector, type, withFile }) => {
+                        const transfer = new DataTransfer();
+                        if (withFile)
+                            transfer.items.add(
+                                new File(['drop'], 'drop-native.txt', {
+                                    type: 'text/plain',
+                                })
+                            );
+                        const event = new DragEvent(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            dataTransfer: transfer,
+                        });
+                        document.querySelector(selector).dispatchEvent(event);
+                        return event.defaultPrevented;
+                    },
+                    { selector, type, withFile }
+                );
+            assert.equal(await drag('[data-file-target]', 'dragenter'), true);
+            await drag('[data-file-child]', 'dragenter');
+            await drag('[data-file-child]', 'dragleave');
+            assert.equal(
+                await page
+                    .getByRole('status', { name: 'Drag status', exact: true })
+                    .textContent(),
+                'active'
+            );
+            await drag('[data-file-target]', 'dragleave');
+            assert.equal(
+                await page
+                    .getByRole('status', { name: 'Drag status', exact: true })
+                    .textContent(),
+                'idle'
+            );
+            await drag('[data-file-target]', 'drop', true);
+            assert.deepEqual((await state()).received[2], [
+                { name: 'drop-native.txt', size: 4, type: 'text/plain' },
+            ]);
+            await picker.click();
+            assert.equal(await input.isDisabled(), true);
+            await drag('[data-file-target]', 'drop', true);
+            assert.equal((await state()).received.length, 3);
+            await picker.click();
+            await input.setInputFiles(file);
+            assert.equal((await state()).received.length, 4);
+            assert.equal((await state()).parentDrops, 0);
+            assert.deepEqual((await state()).errors, []);
+            assert.deepEqual((await state()).calls, []);
+        });
         await run('recoverable-native-image', async (page, origin) => {
             await page.goto(
                 `${origin}/native-image.html?mode=recoverable-image`
@@ -3003,7 +3079,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 18 + storageEventCases.length);
+        assert.equal(results.length, 19 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

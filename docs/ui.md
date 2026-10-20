@@ -4186,3 +4186,35 @@ write. It does not infer privacy permission or resolve unknown upload outcomes.
 Do not supply `src`, `srcSet` or an overriding error handler; the ordered chain
 owns the native image source and error transitions. On failure the image ref is
 released; retry creates a new native image starting at the first source.
+
+### Native file selection
+
+`useFileSelection` shares picker reset and drag/drop intake without owning a queue or upload. Spread `inputProps` onto the real file input and `dropProps` onto its target. Native attributes/ref, localized copy, file validation, asynchronous errors, cancellation, transport, permissions and persistence stay with the caller. Both producers deliver a fresh array of the original `File` objects in native order; empty selections are ignored. Picker intake snapshots files and resets the input before calling `onFiles`, allowing the same file to be selected again after success or failure. Drag events are contained, and nested drag entries do not clear highlighting until the target is left. `disabled` denies both producers and retires drag highlighting; it does not cancel a caller-owned upload already in progress. File `accept` is a browser hint, never an authorization or validation boundary.
+
+```tsx
+import { useFileSelection } from '@miniextensions/sdk/react';
+
+export function DeviceUpload({
+    disabled,
+    onFiles,
+}: {
+    disabled: boolean;
+    onFiles(files: File[]): void;
+}) {
+    const selection = useFileSelection<HTMLDivElement>({ disabled, onFiles });
+    return (
+        <div {...selection.dropProps}>
+            <input
+                {...selection.inputProps}
+                multiple
+                aria-label="Choose files"
+            />
+            <p>
+                {selection.isDragActive
+                    ? 'Drop files here'
+                    : 'Choose or drop files'}
+            </p>
+        </div>
+    );
+}
+```

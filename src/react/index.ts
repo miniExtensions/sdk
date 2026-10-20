@@ -2308,3 +2308,8 @@ export function AirtableList(props: AirtableListProps): ReactNode {
 
 export { ButtonField, renderButtonField } from './ButtonField.js';
 export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
+
+export {
+    useFileSelection,
+    type FileSelectionOptions,
+} from './useFileSelection.js';

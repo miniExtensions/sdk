@@ -24,6 +24,7 @@ import {
     PersonBadge,
     NativeRichTextEditor,
     RecoverableImage,
+    useFileSelection,
     useCalendlyBooking,
     RatingInput,
     AttachmentField,
@@ -51,7 +52,47 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'recoverable-image') {
+if (mode === 'file-selection') {
+    const received = [];
+    let parentDrops = 0;
+    function Host() {
+        const [disabled, setDisabled] = useState(false);
+        const selection = useFileSelection({
+            disabled,
+            onFiles(files) {
+                received.push(
+                    files.map((file) => ({
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                    }))
+                );
+            },
+        });
+        snapshot = () => ({ received, parentDrops, errors, calls });
+        return h(
+            'div',
+            { onDrop: () => parentDrops++ },
+            h(
+                'div',
+                { ...selection.dropProps, 'data-file-target': true },
+                h('input', {
+                    ...selection.inputProps,
+                    multiple: true,
+                    'aria-label': 'Choose synthetic files',
+                }),
+                h('span', { 'data-file-child': true }, 'Nested file target'),
+                h(
+                    'output',
+                    { 'aria-label': 'Drag status' },
+                    selection.isDragActive ? 'active' : 'idle'
+                )
+            ),
+            button('Toggle file intake', () => setDisabled((value) => !value))
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'recoverable-image') {
     const bad = '/native-image-missing.svg';
     const good = '/native-image-good.svg';
     /** @type {HTMLImageElement|null} */

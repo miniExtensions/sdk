@@ -582,3 +582,176 @@ it('retains paired null-callback lifetime for legacy refs that return no cleanup
     assert.equal(detached, attached);
     assert.equal(live, null);
 });
+
+// Independent PR229 review probes: public editor slot only; no vendor-impact claim.
+it('review229: retired actual instance cannot write after same-value slot-type replacement', async (t) => {
+    const f = await fixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    const writer = (value: string) => {
+        writes.push(value);
+    };
+    let detachedA = 0;
+    class EditorA extends EditorSlotProbe {
+        componentWillUnmount() {
+            detachedA++;
+            super.componentWillUnmount();
+        }
+    }
+    class EditorB extends EditorSlotProbe {}
+    let supplied: NativeRichTextEditorRenderProps | undefined;
+    const render = (Editor: typeof EditorSlotProbe) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                ref,
+                value: 'Same document',
+                onValueChange: writer,
+                renderEditor: (native, focused) => {
+                    supplied = native;
+                    return h(Editor, { native, focused });
+                },
+            })
+        );
+    await render(EditorA);
+    assert(supplied);
+    const retired = supplied;
+    const instanceA = ref.current;
+    assert(instanceA instanceof EditorA);
+    const detachCountBeforeReplacement = detachedA;
+    await render(EditorB);
+    assert(supplied);
+    const current = supplied;
+    assert(ref.current instanceof EditorB);
+    assert.notEqual(ref.current, instanceA);
+    assert.equal(detachedA, detachCountBeforeReplacement + 1);
+    let retiredReads = 0;
+    await act(async () =>
+        retired.onChange(() => {
+            retiredReads++;
+            return 'Late A document';
+        })
+    );
+    const staleWrites = writes.splice(0);
+    await act(async () => current.onChange(() => 'Current B document'));
+    assert.deepEqual(writes, ['Current B document']);
+    t.diagnostic(
+        JSON.stringify({
+            retiredReads,
+            staleWrites,
+            callbackReused: retired.onChange === current.onChange,
+        })
+    );
+    assert.deepEqual(
+        { retiredReads, staleWrites },
+        { retiredReads: 0, staleWrites: [] }
+    );
+});
+
+it('review229: child update callback respects newly committed read-only policy', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    let updateReads = 0;
+    let observedReadOnly: boolean | undefined;
+    let current: NativeRichTextEditorRenderProps | undefined;
+    class FlushOnPolicyUpdate extends EditorSlotProbe {
+        componentDidUpdate(previous: Readonly<EditorSlotProbe['props']>) {
+            super.componentDidUpdate(previous);
+            if (previous.native.readOnly !== this.props.native.readOnly) {
+                observedReadOnly = this.props.native.readOnly;
+                this.props.native.onChange(() => {
+                    updateReads++;
+                    return 'Transaction flushed during policy update';
+                });
+            }
+        }
+    }
+    const writer = (value: string) => {
+        writes.push(value);
+    };
+    const render = (readOnly: boolean) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                value: 'Same document',
+                readOnly,
+                onValueChange: writer,
+                renderEditor: (native, focused) => {
+                    current = native;
+                    return h(FlushOnPolicyUpdate, { native, focused });
+                },
+            })
+        );
+    await render(false);
+    await render(true);
+    assert.equal(
+        observedReadOnly,
+        true,
+        'The actual child has received the new policy'
+    );
+    assert(current);
+    let settledReads = 0;
+    await act(async () =>
+        current?.onChange(() => {
+            settledReads++;
+            return 'After commit';
+        })
+    );
+    assert.equal(settledReads, 0, 'Settled read-only behavior remains blocked');
+    t.diagnostic(
+        JSON.stringify({ observedReadOnly, updateReads, writes, settledReads })
+    );
+    assert.deepEqual({ updateReads, writes }, { updateReads: 0, writes: [] });
+});
+
+it('review229: child update callback uses the replacement writer during commit', async (t) => {
+    const f = await fixture(t);
+    const oldWrites: string[] = [];
+    const newWrites: string[] = [];
+    let updateReads = 0;
+    let current: NativeRichTextEditorRenderProps | undefined;
+    class FlushOnPresentationUpdate extends EditorSlotProbe {
+        componentDidUpdate(previous: Readonly<EditorSlotProbe['props']>) {
+            super.componentDidUpdate(previous);
+            if (previous.native.placeholder !== this.props.native.placeholder) {
+                this.props.native.onChange(() => {
+                    updateReads++;
+                    return 'Transaction flushed during writer update';
+                });
+            }
+        }
+    }
+    const render = (
+        placeholder: string,
+        onValueChange: (value: string) => void
+    ) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                value: 'Same document',
+                placeholder,
+                onValueChange,
+                renderEditor: (native, focused) => {
+                    current = native;
+                    return h(FlushOnPresentationUpdate, { native, focused });
+                },
+            })
+        );
+    await render('Before', (value) => oldWrites.push(value));
+    await render('After', (value) => newWrites.push(value));
+    const duringCommit = {
+        oldWrites: [...oldWrites],
+        newWrites: [...newWrites],
+        updateReads,
+    };
+    assert(current);
+    await act(async () => current?.onChange(() => 'After commit'));
+    assert.equal(
+        newWrites.at(-1),
+        'After commit',
+        'Settled callbacks use the replacement writer'
+    );
+    t.diagnostic(JSON.stringify(duringCommit));
+    assert.deepEqual(duringCommit, {
+        oldWrites: [],
+        newWrites: ['Transaction flushed during writer update'],
+        updateReads: 1,
+    });
+});

@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const personBadgeTypedConsumer = `
-import { createElement, createRef } from 'react';
+import { createElement as createPersonElement, createRef as createPersonRef } from 'react';
 import { PersonBadge, type PersonBadgeProps } from '@miniextensions/sdk/react';
-const personProps:PersonBadgeProps={label:'Resolved person',avatar:createElement('span',null,'Avatar'),
+const personProps:PersonBadgeProps={label:'Resolved person',avatar:createPersonElement('span',null,'Avatar'),
     className:'host',bodyClassName:'pill',labelClassName:'label',remove:{label:'Localized remove',
         buttonProps:{disabled:false,form:'host','aria-describedby':'help'},onClick:event=>{const native:HTMLButtonElement=event.currentTarget;native.focus();}}};
-createElement(PersonBadge,{...personProps,ref:createRef<HTMLLIElement>()});
+createPersonElement(PersonBadge,{...personProps,ref:createPersonRef<HTMLLIElement>()});
 // @ts-expect-error labels must be supplied literal strings
 const numericPerson:PersonBadgeProps={label:42};
 // @ts-expect-error removals require a localized label

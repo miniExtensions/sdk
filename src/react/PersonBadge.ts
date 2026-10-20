@@ -88,6 +88,8 @@ export const PersonBadge = forwardRef<HTMLLIElement, PersonBadgeProps>(
                               'svg',
                               {
                                   className: removeIconClassName,
+                                  width: 8,
+                                  height: 8,
                                   stroke: 'currentColor',
                                   fill: 'none',
                                   viewBox: '0 0 8 8',

@@ -1844,6 +1844,15 @@ try {
             );
             const remove = () => page.getByRole('listitem').getByRole('button');
             assert.equal(await remove().getAttribute('type'), 'button');
+            const iconBox = await remove().locator('svg').boundingBox();
+            assert(
+                iconBox &&
+                    iconBox.width > 0 &&
+                    iconBox.width <= 16 &&
+                    iconBox.height > 0 &&
+                    iconBox.height <= 16,
+                'Default removal glyph must stay compact without host theme CSS'
+            );
             await remove().click();
             await click('Replace person');
             await remove().focus();

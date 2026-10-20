@@ -938,3 +938,75 @@ it('does not revive a first actual instance through same-value slot A-to-B-to-A'
     await act(async () => supplied?.onChange(() => 'Second A document'));
     assert.deepEqual(writes, ['Second A document']);
 });
+
+it('review231 wrapped actual-instance replacement admits mounted B', async (t) => {
+    const f = await fixture(t);
+    const writes: string[] = [];
+    const writer = (value: string) => {
+        writes.push(value);
+    };
+    class EditorA extends EditorSlotProbe {}
+    class EditorB extends EditorSlotProbe {
+        componentDidMount() {
+            super.componentDidMount();
+            this.props.native.onChange(() => 'Mounted B document');
+        }
+    }
+    let Editor: typeof EditorSlotProbe = EditorA;
+    let supplied: NativeRichTextEditorRenderProps | undefined;
+    function Wrapper({
+        native,
+        focused,
+    }: {
+        native: NativeRichTextEditorRenderProps;
+        focused: boolean;
+    }) {
+        return h(Editor, { native, focused });
+    }
+    const factory = (
+        native: NativeRichTextEditorRenderProps,
+        focused: boolean
+    ) => {
+        supplied = native;
+        return h(Wrapper, { native, focused });
+    };
+    const render = () =>
+        f.render(
+            h(NativeRichTextEditor, {
+                value: 'Same document',
+                onValueChange: writer,
+                renderEditor: factory,
+            })
+        );
+    await render();
+    assert(supplied);
+    const retired = supplied;
+    Editor = EditorB;
+    await render();
+    const mountWrites = [...writes];
+    writes.length = 0;
+    let retiredReads = 0;
+    await act(async () => {
+        retired.onChange(() => {
+            retiredReads++;
+            return 'Late A document';
+        });
+        retired.onFocus();
+    });
+    assert.equal(retiredReads, 0);
+    assert.deepEqual(writes, []);
+    assert.equal(
+        f.container.firstElementChild?.getAttribute('data-focused'),
+        'false'
+    );
+    assert(supplied);
+    await act(async () => supplied?.onChange(() => 'Current B document'));
+    assert.deepEqual(writes, ['Current B document']);
+    t.diagnostic(
+        JSON.stringify({ mountWrites, retiredReads, settledWrites: writes })
+    );
+    assert(
+        mountWrites.includes('Mounted B document'),
+        'Newly attached B may flush its own mount'
+    );
+});

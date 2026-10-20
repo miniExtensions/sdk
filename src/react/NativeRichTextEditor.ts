@@ -212,6 +212,9 @@ export const NativeRichTextEditor = forwardRef<
     supplied.binding = useMemo<NativeCallbackBinding>(
         () => ({}),
         [
+            // A parent render can replace an editor beneath a stable wrapper.
+            // Keep this distinct even when each individual prop is equal.
+            props,
             attachedEditor,
             editorKey,
             editor?.type,

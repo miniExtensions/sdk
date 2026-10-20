@@ -4252,3 +4252,10 @@ Do not substitute the scalarModels grammar or treat parsing as validation.
 Formatting preserves Intl rounding for comma-period/period-comma and toFixed
 rounding for space separators, including their distinct rounding edge cases.
 `none` disables grouping by default; an explicit grouping argument wins.
+
+A native editor returned inside a stable wrapper can still replace its inner
+editor on a parent render. Forward the actual inner editor ref as before. Its
+synchronous mount changes must remain admitted, while callbacks captured by the
+disposed predecessor remain retired. Binding snapshots distinguish parent props
+updates from harmless internal bailout renders; a wrapper's element type/key is
+not sufficient ownership evidence.

@@ -340,6 +340,79 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
                     'Writer commit document',
                     'Settled current writer',
                 ]);
+                // A stable public wrapper must not hide an inner instance's mount.
+                await React.act(async () => root.render(null));
+                const wrappedWrites = [];
+                const wrappedWriter = (value) => wrappedWrites.push(value);
+                let WrappedEditor = SlotProbe;
+                let wrappedNative;
+                class WrappedMountSlot extends SlotProbe {
+                    componentDidMount() {
+                        super.componentDidMount();
+                        this.props.native.onChange(() => 'Wrapped B mount');
+                    }
+                }
+                function StableWrapper({ native, focused }) {
+                    return React.createElement(WrappedEditor, {
+                        native,
+                        focused,
+                    });
+                }
+                const wrappedFactory = (native, focused) => {
+                    wrappedNative = native;
+                    return React.createElement(StableWrapper, {
+                        native,
+                        focused,
+                    });
+                };
+                const renderWrapped = () =>
+                    React.act(async () =>
+                        root.render(
+                            React.createElement(api.NativeRichTextEditor, {
+                                ref,
+                                value: 'Wrapped document',
+                                onValueChange: wrappedWriter,
+                                renderEditor: wrappedFactory,
+                            })
+                        )
+                    );
+                await renderWrapped();
+                const wrappedRetired = wrappedNative;
+                const firstWrappedInstance = ref.current;
+                WrappedEditor = WrappedMountSlot;
+                await renderWrapped();
+                assert(wrappedWrites.includes('Wrapped B mount'));
+                assert.notEqual(ref.current, firstWrappedInstance);
+                let wrappedRetiredReads = 0;
+                await React.act(async () =>
+                    wrappedRetired.onChange(() => {
+                        wrappedRetiredReads++;
+                        return 'Disposed wrapped A';
+                    })
+                );
+                assert.equal(wrappedRetiredReads, 0);
+                wrappedWrites.length = 0;
+                await React.act(async () =>
+                    wrappedNative.onChange(() => 'Current wrapped B')
+                );
+                assert.deepEqual(wrappedWrites, ['Current wrapped B']);
+                const secondWrapped = wrappedNative;
+                WrappedEditor = SlotProbe;
+                await renderWrapped();
+                wrappedWrites.length = 0;
+                await React.act(async () => {
+                    wrappedRetired.onChange(() => {
+                        wrappedRetiredReads++;
+                        return 'Disposed wrapped A';
+                    });
+                    secondWrapped.onChange(() => {
+                        wrappedRetiredReads++;
+                        return 'Disposed wrapped B';
+                    });
+                    wrappedNative.onChange(() => 'Current wrapped A2');
+                });
+                assert.equal(wrappedRetiredReads, 0);
+                assert.deepEqual(wrappedWrites, ['Current wrapped A2']);
                 groups++;
             } finally {
                 await React.act(async () => root.unmount());

@@ -17,6 +17,7 @@ import { createPortalListOwner } from '@miniextensions/sdk/portals';
 import {
     TextField,
     TextInput,
+    LiteralText,
     RatingInput,
     AttachmentField,
     AttachmentDialog,
@@ -43,7 +44,65 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'uncontrolled-text') {
+if (mode === 'literal-text') {
+    const initial = {
+        value: '  <img src="https://synthetic.invalid/private">\n字  ',
+        custom: false,
+        mounted: true,
+    };
+    let state = initial;
+    /** @type {import('react').RefObject<HTMLElement>} */
+    const literal = React.createRef();
+    snapshot = () => ({
+        ...state,
+        refConnected: literal.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [current, setCurrent] = useState(initial);
+        state = current;
+        return h(
+            React.Fragment,
+            null,
+            current.mounted
+                ? h(LiteralText, {
+                      ref: literal,
+                      value: current.value,
+                      as: current.custom ? 'div' : 'output',
+                      preserveWhitespace: !current.custom,
+                      className: 'literal-display',
+                      'aria-label': 'Literal result',
+                      empty: h(
+                          'em',
+                          { id: 'literal-empty' },
+                          'Localized empty'
+                      ),
+                      renderText: current.custom
+                          ? (text) => h('p', { id: 'caller-text' }, text)
+                          : undefined,
+                  })
+                : null,
+            button('Show literal zero', () =>
+                setCurrent((value) => ({ ...value, value: '0' }))
+            ),
+            button('Show literal empty', () =>
+                setCurrent((value) => ({ ...value, value: '' }))
+            ),
+            button('Use caller container', () =>
+                setCurrent((value) => ({
+                    ...value,
+                    custom: true,
+                    value: 'Caller URL https://synthetic.invalid',
+                }))
+            ),
+            button('Unmount literal display', () =>
+                setCurrent((value) => ({ ...value, mounted: false }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'uncontrolled-text') {
     /** @type {import('react').RefObject<HTMLInputElement>} */
     const sdk = React.createRef();
     /** @type {import('react').RefObject<HTMLInputElement>} */

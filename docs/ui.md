@@ -3825,3 +3825,25 @@ scalar writes and row-event boundaries remain enforced; appearance cannot grant
 write authority. Provide Airtable icon assets/colors through `renderIcon` when
 that metadata-specific presentation is required. The stock default does not
 infer an icon theme or supply hosted Airtable assets.
+
+## Shared literal text display
+
+`LiteralText` from `@miniextensions/sdk/react` supplies the escaped native output
+used by SDK Rich Text, AI Text and single-collaborator display controls. Callers
+supply already formatted text and retain native value validation, masking and
+field policy. It preserves whitespace and wraps long text by default, forwarding
+native classes, ARIA, events and the actual `HTMLElement` ref.
+
+Choose `as="output"` (default), `span`, `p` or `div` for an established container.
+An explicit `empty` node replaces the entire control for null, undefined or empty
+text; string `0` stays visible. Without that option an empty native element stays
+mounted. `preserveWhitespace={false}` retains caller styles without adding the
+SDK defaults. A `renderText` callback can reuse an existing safe linkifier or
+formatting component while the default renders literal text.
+
+```tsx
+import { LiteralText } from '@miniextensions/sdk/react';
+export const Result = () => (
+    <LiteralText value="0" aria-label="Count" empty={<em>No value</em>} />
+);
+```

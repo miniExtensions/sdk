@@ -5,7 +5,15 @@ import { pathToFileURL } from 'node:url';
 
 export const textInputTypedConsumer = `
 import { createElement, createRef } from 'react';
-import { TextInput, type TextInputProps, InputClearButton, type InputClearButtonProps, TextareaInput, type TextareaInputProps } from '@miniextensions/sdk/react';
+import { LiteralText, type LiteralTextProps, TextInput, type TextInputProps, InputClearButton, type InputClearButtonProps, TextareaInput, type TextareaInputProps } from '@miniextensions/sdk/react';
+const literal: LiteralTextProps = {value:' <b>literal</b>',as:'p',empty:'None',preserveWhitespace:false,
+    renderText:text=>text, 'aria-label':'Result'};
+createElement(LiteralText,{...literal,ref:createRef<HTMLElement>()});
+// @ts-expect-error display text is supplied as text, never a native object or number
+const numericLiteral: LiteralTextProps = {value:42};
+// @ts-expect-error literal presentation does not accept an HTML injection prop
+const htmlLiteral: LiteralTextProps = {value:'text',dangerouslySetInnerHTML:{__html:'bad'}};
+void numericLiteral;void htmlLiteral;
 const props: TextInputProps = { value: '1,', type: 'text', inputMode: 'decimal', form: 'host',
     onChange: event => { const input: HTMLInputElement = event.currentTarget; input.focus(); },
     onCompositionEnd: event => { const data: string = event.data; void data; },
@@ -44,7 +52,8 @@ void numericValue; void defaultValue; void submitClear; void unnamedClear;
 
 export const textInputJsxConsumer = `
 import { createRef } from 'react';
-import { TextInput, InputClearButton, TextareaInput } from '@miniextensions/sdk/react';
+import { LiteralText, TextInput, InputClearButton, TextareaInput } from '@miniextensions/sdk/react';
+export const literalDisplay = <LiteralText value="0" empty={<em>None</em>} ref={createRef<HTMLElement>()} />;
 export const amount = <TextInput ref={createRef<HTMLInputElement>()} type="text" inputMode="decimal"
     value="1," form="host" aria-label="Amount" onChange={event => event.currentTarget.focus()} />;
 export const nativeSearch = <TextInput role="combobox" defaultValue="seed" ref={createRef<HTMLInputElement>()} />;
@@ -158,6 +167,57 @@ export async function checkTextInputConsumer({
                 assert.equal(inputEvents, 0);
                 await react.act(async () => root.render(null));
                 assert.equal(uncontrolledRef.current, null);
+                const literalRef = react.createRef();
+                const literalValue =
+                    '  <img src="https://synthetic.invalid/private">\n字  ';
+                await react.act(async () =>
+                    root.render(
+                        react.createElement(api.LiteralText, {
+                            ref: literalRef,
+                            value: literalValue,
+                            'aria-label': 'Result',
+                        })
+                    )
+                );
+                assert.equal(
+                    literalRef.current,
+                    container.querySelector('output')
+                );
+                assert.equal(container.textContent, literalValue);
+                assert.equal(container.querySelector('img'), null);
+                assert.equal(literalRef.current.style.whiteSpace, 'pre-wrap');
+                await react.act(async () =>
+                    root.render(
+                        react.createElement(api.LiteralText, {
+                            value: '0',
+                            as: 'div',
+                            preserveWhitespace: false,
+                            empty: 'None',
+                            renderText: (text) =>
+                                react.createElement('p', null, text),
+                        })
+                    )
+                );
+                assert.equal(container.firstElementChild.tagName, 'DIV');
+                assert.equal(
+                    container.firstElementChild.getAttribute('style'),
+                    null
+                );
+                assert.equal(container.textContent, '0');
+                await react.act(async () =>
+                    root.render(
+                        react.createElement(api.LiteralText, {
+                            value: '',
+                            empty: react.createElement(
+                                'em',
+                                null,
+                                'Localized empty'
+                            ),
+                        })
+                    )
+                );
+                assert.equal(container.firstElementChild.tagName, 'EM');
+                assert.equal(container.querySelector('output'), null);
                 let actions = 0,
                     submits = 0;
                 await react.act(async () =>

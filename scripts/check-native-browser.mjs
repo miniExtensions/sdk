@@ -1826,6 +1826,81 @@ try {
                 .click();
             await idle(page);
         };
+        await run('literal-text-display', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=literal-text`);
+            const display = page.locator('.literal-display');
+            await display.waitFor();
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            assert.equal(
+                await display.evaluate((node) => node.tagName),
+                'OUTPUT'
+            );
+            assert.equal(await display.textContent(), (await state()).value);
+            assert.equal(await page.locator('img').count(), 0);
+            assert.equal(
+                await display.evaluate(
+                    (node) => getComputedStyle(node).whiteSpace
+                ),
+                'pre-wrap'
+            );
+            assert.equal(
+                await display.evaluate(
+                    (node) => getComputedStyle(node).overflowWrap
+                ),
+                'anywhere'
+            );
+            assert.equal(
+                await display.evaluate((node) => {
+                    const range = document.createRange();
+                    range.selectNodeContents(node);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    return selection.toString();
+                }),
+                (await state()).value
+            );
+            await page
+                .getByRole('button', { name: 'Show literal zero', exact: true })
+                .click();
+            assert.equal(await display.textContent(), '0');
+            assert.equal(await page.locator('#literal-empty').count(), 0);
+            await page
+                .getByRole('button', {
+                    name: 'Show literal empty',
+                    exact: true,
+                })
+                .click();
+            assert.equal(
+                await page.locator('#literal-empty').textContent(),
+                'Localized empty'
+            );
+            assert.equal(await display.count(), 0);
+            assert.equal((await state()).refConnected, false);
+            await page
+                .getByRole('button', {
+                    name: 'Use caller container',
+                    exact: true,
+                })
+                .click();
+            assert.equal(await display.evaluate((node) => node.tagName), 'DIV');
+            assert.equal(await display.getAttribute('style'), null);
+            assert.equal(
+                await display.locator('p').textContent(),
+                'Caller URL https://synthetic.invalid'
+            );
+            await page
+                .getByRole('button', {
+                    name: 'Unmount literal display',
+                    exact: true,
+                })
+                .click();
+            assert.equal(await display.count(), 0);
+            assert.equal((await state()).refConnected, false);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
         await run('uncontrolled-text-ref-reset', async (page, origin) => {
             await page.goto(`${origin}/native.html?mode=uncontrolled-text`);
             const sdk = page.getByRole('textbox', {
@@ -2543,7 +2618,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 11 + storageEventCases.length);
+        assert.equal(results.length, 12 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

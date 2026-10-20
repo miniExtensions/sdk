@@ -1,3 +1,4 @@
+export { LiteralText, type LiteralTextProps } from './LiteralText.js';
 export {
     RatingInput,
     type RatingInputProps,

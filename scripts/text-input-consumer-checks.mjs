@@ -11,9 +11,16 @@ const props: TextInputProps = { value: '1,', type: 'text', inputMode: 'decimal',
     onCompositionEnd: event => { const data: string = event.data; void data; },
     'aria-describedby': 'description', 'aria-invalid': true };
 createElement(TextInput, { ...props, ref: createRef<HTMLInputElement>() });
+const nativeUncontrolled: TextInputProps = {defaultValue:'initial', role:'combobox'};
+createElement(TextInput, {...nativeUncontrolled, ref:createRef<HTMLInputElement>()});
+createElement(TextInput, {role:'combobox', ref:createRef<HTMLInputElement>()});
+// @ts-expect-error native initial display text must remain a string
+const numericDefault: TextInputProps = {defaultValue:42};
+void numericDefault;
+
 // @ts-expect-error native display drafts must be strings
 const numericValue: TextInputProps = { value: 42 };
-// @ts-expect-error this primitive is controlled by its caller
+// @ts-expect-error controlled and uncontrolled ownership cannot be mixed
 const defaultValue: TextInputProps = { value: '', defaultValue: 'old' };
 // @ts-expect-error the forwarded ref is the actual native input
 createElement(TextInput, { value: '', ref: createRef<HTMLTextAreaElement>() });
@@ -40,6 +47,7 @@ import { createRef } from 'react';
 import { TextInput, InputClearButton, TextareaInput } from '@miniextensions/sdk/react';
 export const amount = <TextInput ref={createRef<HTMLInputElement>()} type="text" inputMode="decimal"
     value="1," form="host" aria-label="Amount" onChange={event => event.currentTarget.focus()} />;
+export const nativeSearch = <TextInput role="combobox" defaultValue="seed" ref={createRef<HTMLInputElement>()} />;
 export const notes = <TextareaInput value="literal" autoSize={{minRows:3,maxRows:30}} ref={createRef<HTMLTextAreaElement>()} onChange={event => event.currentTarget.focus()} />;
 export const clear = <InputClearButton ref={createRef<HTMLButtonElement>()} label="Clear" disabled
     onClick={event => event.currentTarget.focus()} />;
@@ -119,6 +127,37 @@ export async function checkTextInputConsumer({
                 assert.equal(input.form?.id, `host-${checks}`);
                 assert.equal(input.className, 'host');
                 assert.equal(container.querySelectorAll('input').length, 1);
+                await react.act(async () => root.render(null));
+                const uncontrolledRef = react.createRef();
+                let inputEvents = 0;
+                const uncontrolled = (description) =>
+                    react.createElement(api.TextInput, {
+                        ref: uncontrolledRef,
+                        defaultValue: 'seed',
+                        role: 'combobox',
+                        'aria-describedby': description,
+                        onChange: () => {
+                            inputEvents++;
+                        },
+                    });
+                await react.act(async () => root.render(uncontrolled('first')));
+                const nativeSearch = container.querySelector('input');
+                assert.equal(uncontrolledRef.current, nativeSearch);
+                assert.equal(nativeSearch.value, 'seed');
+                nativeSearch.value = 'controller text';
+                nativeSearch.focus();
+                nativeSearch.setSelectionRange(2, 7, 'backward');
+                await react.act(async () =>
+                    root.render(uncontrolled('second'))
+                );
+                assert.equal(uncontrolledRef.current, nativeSearch);
+                assert.equal(nativeSearch.value, 'controller text');
+                assert.equal(nativeSearch.selectionStart, 2);
+                assert.equal(nativeSearch.selectionEnd, 7);
+                assert.equal(nativeSearch.selectionDirection, 'backward');
+                assert.equal(inputEvents, 0);
+                await react.act(async () => root.render(null));
+                assert.equal(uncontrolledRef.current, null);
                 let actions = 0,
                     submits = 0;
                 await react.act(async () =>

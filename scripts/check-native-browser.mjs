@@ -1826,6 +1826,71 @@ try {
                 .click();
             await idle(page);
         };
+        await run('uncontrolled-text-ref-reset', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=uncontrolled-text`);
+            const sdk = page.getByRole('textbox', {
+                name: 'SDK native search',
+                exact: true,
+            });
+            const native = page.getByRole('textbox', {
+                name: 'Reference native search',
+                exact: true,
+            });
+            await sdk.waitFor();
+            assert.equal(await sdk.inputValue(), 'seed text');
+            await sdk.fill('raw  draft');
+            await native.fill('raw  draft');
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            assert.deepEqual((await state()).changes, [
+                { owner: 'sdk', value: 'raw  draft' },
+                { owner: 'native', value: 'raw  draft' },
+            ]);
+            await page
+                .getByRole('button', {
+                    name: 'Set controller text',
+                    exact: true,
+                })
+                .click();
+            assert(
+                await sdk.evaluate((node) => document.activeElement === node)
+            );
+            await page
+                .getByRole('button', { name: 'Rerender owner', exact: true })
+                .click();
+            for (const input of [sdk, native]) {
+                assert.equal(await input.inputValue(), 'controller text');
+                assert.deepEqual(
+                    await input.evaluate((node) => [
+                        node.selectionStart,
+                        node.selectionEnd,
+                        node.selectionDirection,
+                    ]),
+                    [2, 7, 'backward']
+                );
+            }
+            assert.equal(
+                await sdk.getAttribute('aria-describedby'),
+                'revision-1'
+            );
+            assert.equal((await state()).changes.length, 2);
+            await page
+                .getByRole('button', { name: 'Native reset', exact: true })
+                .click();
+            assert.equal(await sdk.inputValue(), 'seed text');
+            assert.equal(await native.inputValue(), 'seed text');
+            assert.equal((await state()).changes.length, 2);
+            await page
+                .getByRole('button', {
+                    name: 'Unmount native search',
+                    exact: true,
+                })
+                .click();
+            assert.equal((await state()).refConnected, false);
+            assert.equal(await sdk.count(), 0);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
         const openRating = async (page, origin) => {
             await page.goto(`${origin}/native.html?mode=rating`);
             await page
@@ -2478,7 +2543,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 10 + storageEventCases.length);
+        assert.equal(results.length, 11 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

@@ -320,3 +320,35 @@ it('clear presentation keeps disabled native activation and literal labels under
     });
     assert.equal(clears, 1);
 });
+
+it('leaves native uncontrolled drafts, ref-managed selection and event ownership with the existing caller', async (t) => {
+    const f = await fixture(t);
+    const ref = createRef<HTMLInputElement>();
+    const edits: string[] = [];
+    const view = (description: string) =>
+        h(TextInput, {
+            ref,
+            defaultValue: 'seed',
+            role: 'combobox',
+            'aria-describedby': description,
+            onChange: (event) => edits.push(event.currentTarget.value),
+        });
+    await f.render(view('first'));
+    const node = f.input();
+    assert.equal(ref.current, node);
+    assert.equal(node.value, 'seed');
+    await f.edit('native draft');
+    assert.deepEqual(edits, ['native draft']);
+    node.value = 'controller text';
+    node.focus();
+    node.setSelectionRange(2, 7, 'backward');
+    await f.render(view('second'));
+    assert.equal(f.input(), node);
+    assert.equal(node.value, 'controller text');
+    assert.equal(node.selectionStart, 2);
+    assert.equal(node.selectionEnd, 7);
+    assert.equal(node.selectionDirection, 'backward');
+    assert.deepEqual(edits, ['native draft']);
+    await f.render(null);
+    assert.equal(ref.current, null);
+});

@@ -3664,12 +3664,17 @@ screen-reader result.
 
 ## Stateless native text input
 
-`TextInput` from `@miniextensions/sdk/react` is a controlled native input with a
-forwarded `HTMLInputElement` ref and ordinary native input props. It renders only
-the input: callers retain their labels, form ownership, descriptions, classes,
-events, disabled policy and clear-button layout. Supply a string `value`; there
-is no `defaultValue`, internal draft, parser, subscription, save or implicit
-request. Native events bubble normally unless the caller stops them.
+`TextInput` from `@miniextensions/sdk/react` is a native input with a forwarded
+`HTMLInputElement` ref and ordinary native input props. It renders only the
+input: callers retain their labels, form ownership, descriptions, classes,
+events, disabled policy and clear-button layout. Supply a string `value` for
+controlled text, or omit `value` and optionally supply string `defaultValue`
+for an existing native/ref-managed owner such as a combobox. Choose one mode
+for the input lifetime; the type rejects supplying both. Uncontrolled rerenders
+leave native edits and ref-managed selection intact, and native form reset
+retains its normal behavior. There is no internal draft, parser, subscription,
+save or implicit request. Native events bubble normally unless the caller stops
+them.
 
 Use `type="text"` and `inputMode="decimal"` for locale-aware numeric display
 text. Partial values such as `-` or `1,` remain unchanged; the existing owner

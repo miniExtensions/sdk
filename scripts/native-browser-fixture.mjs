@@ -16,6 +16,7 @@ import {
 import { createPortalListOwner } from '@miniextensions/sdk/portals';
 import {
     TextField,
+    TextInput,
     RatingInput,
     AttachmentField,
     AttachmentDialog,
@@ -42,7 +43,76 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'rating') {
+if (mode === 'uncontrolled-text') {
+    /** @type {import('react').RefObject<HTMLInputElement>} */
+    const sdk = React.createRef();
+    /** @type {import('react').RefObject<HTMLInputElement>} */
+    const native = React.createRef();
+    /** @type {{owner:string,value:string}[]} */
+    const changes = [];
+    let revision = 0;
+    snapshot = () => ({
+        revision,
+        changes: [...changes],
+        refConnected: sdk.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [current, setCurrent] = useState({ revision: 0, mounted: true });
+        revision = current.revision;
+        return h(
+            React.Fragment,
+            null,
+            current.mounted
+                ? h(
+                      'form',
+                      { id: 'uncontrolled-form' },
+                      h(TextInput, {
+                          ref: sdk,
+                          defaultValue: 'seed text',
+                          'aria-label': 'SDK native search',
+                          'aria-describedby': `revision-${current.revision}`,
+                          onChange: (event) =>
+                              changes.push({
+                                  owner: 'sdk',
+                                  value: event.currentTarget.value,
+                              }),
+                      }),
+                      h('input', {
+                          ref: native,
+                          defaultValue: 'seed text',
+                          'aria-label': 'Reference native search',
+                          onChange: (event) =>
+                              changes.push({
+                                  owner: 'native',
+                                  value: event.currentTarget.value,
+                              }),
+                      }),
+                      h('button', { type: 'reset' }, 'Native reset')
+                  )
+                : null,
+            button('Rerender owner', () =>
+                setCurrent((value) => ({
+                    ...value,
+                    revision: value.revision + 1,
+                }))
+            ),
+            button('Set controller text', () => {
+                for (const node of [sdk.current, native.current])
+                    if (node) {
+                        node.value = 'controller text';
+                        node.setSelectionRange(2, 7, 'backward');
+                    }
+                sdk.current?.focus();
+            }),
+            button('Unmount native search', () =>
+                setCurrent((value) => ({ ...value, mounted: false }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'rating') {
     const initial = {
         value: /** @type {number|null} */ (2),
         max: 5,

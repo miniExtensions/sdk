@@ -16,6 +16,7 @@ import {
 import { createPortalListOwner } from '@miniextensions/sdk/portals';
 import {
     TextField,
+    RatingInput,
     AttachmentField,
     AttachmentDialog,
     PortalList,
@@ -41,7 +42,143 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'attachment') {
+if (mode === 'rating') {
+    const initial = {
+        value: /** @type {number|null} */ (2),
+        max: 5,
+        disabled: false,
+        grid: false,
+        mounted: true,
+        icon: 'star',
+        color: '#FFBA05',
+    };
+    let state = initial;
+    /** @type {(number|null)[]} */
+    const changes = [];
+    let submits = 0;
+    /** @type {(()=>void)|undefined} */
+    let retained;
+    /** @type {import('react').RefObject<HTMLInputElement>} */
+    const input = React.createRef();
+    snapshot = () => ({
+        value: state.value,
+        max: state.max,
+        disabled: state.disabled,
+        grid: state.grid,
+        changes: [...changes],
+        submits,
+        refCurrent:
+            input.current === document.querySelector('input[type=range]'),
+        refConnected: input.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [current, setCurrent] = useState(initial);
+        state = current;
+        return h(
+            React.Fragment,
+            null,
+            h('p', { id: 'rating-help' }, 'Synthetic native rating'),
+            h(
+                'form',
+                {
+                    id: 'rating-form',
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                },
+                current.mounted
+                    ? h(RatingInput, {
+                          ref: input,
+                          value: current.value,
+                          max: current.max,
+                          disabled: current.disabled,
+                          grid: current.grid,
+                          onChange: (value) => {
+                              changes.push(value);
+                              setCurrent((old) => ({ ...old, value }));
+                          },
+                          className: 'rating-root',
+                          iconsClassName: 'rating-icons',
+                          gridSummaryClassName: 'rating-grid-summary',
+                          printSummaryClassName: 'rating-print-summary',
+                          warningClassName: 'rating-warning',
+                          repairClassName: 'rating-repair',
+                          repairLabel: 'Repair rating',
+                          empty: h(
+                              'span',
+                              { 'data-empty-rating': true },
+                              'No rating'
+                          ),
+                          warningMessage: ({ value, max }) =>
+                              'Synthetic value ' + value + '/' + max + '.',
+                          inputProps: {
+                              id: 'native-rating',
+                              form: 'rating-form',
+                              'aria-label': 'Synthetic rating',
+                              'aria-describedby': 'rating-help',
+                          },
+                          renderIcon: (icon) => {
+                              if (icon.index === 4 && !retained)
+                                  retained = icon.activate;
+                              return h(
+                                  'svg',
+                                  {
+                                      width: 24,
+                                      height: 24,
+                                      viewBox: '0 0 24 24',
+                                      'aria-hidden': true,
+                                      'data-rating-index': icon.index,
+                                      'data-shape': current.icon,
+                                      'data-focused': String(icon.focused),
+                                      onClick: icon.activate,
+                                  },
+                                  h('path', {
+                                      fill: icon.filled
+                                          ? current.color
+                                          : '#e5e7eb',
+                                      d:
+                                          current.icon === 'heart'
+                                              ? 'M12 21L2 10C-2 2 8 0 12 6C16 0 26 2 22 10Z'
+                                              : 'M12 1L15 8L23 9L17 14L19 23L12 18L5 23L7 14L1 9L9 8Z',
+                                  })
+                              );
+                          },
+                      })
+                    : null
+            ),
+            button('Toggle readonly', () =>
+                setCurrent((old) => ({ ...old, disabled: !old.disabled }))
+            ),
+            button('Toggle grid', () =>
+                setCurrent((old) => ({ ...old, grid: !old.grid }))
+            ),
+            button('Theme heart', () =>
+                setCurrent((old) => ({
+                    ...old,
+                    icon: 'heart',
+                    color: '#DC043B',
+                }))
+            ),
+            button('Lower maximum', () =>
+                setCurrent((old) => ({ ...old, max: 3 }))
+            ),
+            button('Set stale value', () =>
+                setCurrent((old) => ({ ...old, value: 8 }))
+            ),
+            button('Clear externally', () =>
+                setCurrent((old) => ({ ...old, value: null }))
+            ),
+            button('Invoke captured icon', () => retained?.()),
+            button('Unmount rating', () =>
+                setCurrent((old) => ({ ...old, mounted: false }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'attachment') {
     client.forms.save = async (input) => {
         calls.push({ operation: 'save', input });
         return { type: 'error', formValidationErrors: [], formErrors: {} };

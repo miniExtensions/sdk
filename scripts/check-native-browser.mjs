@@ -1466,6 +1466,7 @@ try {
             'scripts/portal-recipe-checks.mjs',
             'scripts/browser-number-input-mask-checks.mjs',
             'scripts/browser-textarea-input-checks.mjs',
+            'scripts/native-rating-fixture.css',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -1667,8 +1668,12 @@ try {
         const code = bundled.outputFiles[0].contents;
         report.bundleSha256 = hash(code);
         allowed.set('/native.js', code);
+        allowed.set(
+            '/native-rating.css',
+            regular('scripts/native-rating-fixture.css')
+        );
         const html = Buffer.from(
-            `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Native synthetic SDK consumer</title></head><body><main></main><script type="module" src="/native.js"></script></body></html>`
+            `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Native synthetic SDK consumer</title><link rel="stylesheet" href="/native-rating.css"></head><body><main></main><script type="module" src="/native.js"></script></body></html>`
         );
         allowed.set('/native.html', html);
         server = createServer((request, response) => {
@@ -1821,6 +1826,187 @@ try {
                 .click();
             await idle(page);
         };
+        const openRating = async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=rating`);
+            await page
+                .getByRole('slider', { name: 'Synthetic rating' })
+                .waitFor();
+        };
+        const ratingState = (page) =>
+            page.evaluate(() => window.__nativeProbe.snapshot());
+        await run('rating-keyboard-icons-grid', async (page, origin) => {
+            await openRating(page, origin);
+            const slider = page.getByRole('slider', {
+                name: 'Synthetic rating',
+            });
+            assert.equal(await slider.getAttribute('form'), 'rating-form');
+            assert.equal(
+                await slider.getAttribute('aria-describedby'),
+                'rating-help'
+            );
+            assert.equal(await page.locator('[data-rating-index]').count(), 5);
+            assert.equal((await ratingState(page)).changes.length, 0);
+            await slider.focus();
+            await page.keyboard.press('ArrowRight');
+            assert.equal((await ratingState(page)).value, 3);
+            assert.equal(
+                await page
+                    .locator('[data-rating-index="3"]')
+                    .getAttribute('data-focused'),
+                'true'
+            );
+            await page.locator('[data-rating-index="4"]').click();
+            assert.equal((await ratingState(page)).value, 4);
+            assert(
+                await slider.evaluate((node) => node === document.activeElement)
+            );
+            await page.locator('[data-rating-index="4"]').click();
+            assert.equal((await ratingState(page)).value, null);
+            await page.locator('[data-rating-index="2"]').click();
+            await page
+                .getByRole('button', { name: 'Theme heart', exact: true })
+                .click();
+            assert.equal(
+                await page
+                    .locator('[data-rating-index="1"]')
+                    .getAttribute('data-shape'),
+                'heart'
+            );
+            assert.equal(
+                await page
+                    .locator('[data-rating-index="1"] path')
+                    .getAttribute('fill'),
+                '#DC043B'
+            );
+            assert.equal(
+                await page
+                    .locator('[data-rating-index="3"] path')
+                    .getAttribute('fill'),
+                '#e5e7eb'
+            );
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            assert(await slider.isDisabled());
+            await page.locator('[data-rating-index="1"]').click();
+            await page
+                .getByRole('button', {
+                    name: 'Invoke captured icon',
+                    exact: true,
+                })
+                .click();
+            assert.deepEqual((await ratingState(page)).changes, [
+                3,
+                4,
+                null,
+                2,
+            ]);
+            await page
+                .getByRole('button', { name: 'Toggle grid', exact: true })
+                .click();
+            assert.equal(await page.getByRole('slider').count(), 0);
+            assert.equal(
+                await page.locator('.rating-grid-summary').textContent(),
+                '(2/5)'
+            );
+            assert.equal(
+                await page.locator('.rating-print-summary').count(),
+                0
+            );
+            assert.equal((await ratingState(page)).refConnected, false);
+            assert.equal((await ratingState(page)).submits, 0);
+        });
+        await run('rating-explicit-repair-print', async (page, origin) => {
+            await openRating(page, origin);
+            await page
+                .getByRole('button', { name: 'Lower maximum', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Set stale value', exact: true })
+                .click();
+            assert.equal(await page.locator('[data-rating-index]').count(), 3);
+            assert.equal((await ratingState(page)).value, 8);
+            assert.equal((await ratingState(page)).changes.length, 0);
+            assert.match(
+                await page.locator('.rating-warning').textContent(),
+                /8\/3/
+            );
+            const repair = page.getByRole('button', {
+                name: 'Repair rating',
+                exact: true,
+            });
+            assert.equal(await repair.getAttribute('type'), 'button');
+            await repair.click();
+            assert.deepEqual((await ratingState(page)).changes, [3]);
+            assert.equal((await ratingState(page)).submits, 0);
+            await page.emulateMedia({ media: 'print' });
+            assert(await page.locator('.rating-print-summary').isVisible());
+            assert.equal(
+                await page.locator('.rating-print-summary').textContent(),
+                '(3/3)'
+            );
+            await page.emulateMedia({ media: 'screen' });
+            assert(!(await page.locator('.rating-print-summary').isVisible()));
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Set stale value', exact: true })
+                .click();
+            assert.equal(
+                await page
+                    .getByRole('button', { name: 'Repair rating', exact: true })
+                    .count(),
+                0
+            );
+            assert.equal((await ratingState(page)).value, 8);
+            assert.deepEqual((await ratingState(page)).changes, [3]);
+        });
+        await run('rating-callback-retirement-empty', async (page, origin) => {
+            await openRating(page, origin);
+            await page
+                .getByRole('button', { name: 'Clear externally', exact: true })
+                .click();
+            assert.equal((await ratingState(page)).value, null);
+            assert.equal((await ratingState(page)).changes.length, 0);
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            await page
+                .getByRole('button', {
+                    name: 'Invoke captured icon',
+                    exact: true,
+                })
+                .click();
+            assert.equal((await ratingState(page)).changes.length, 0);
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Clear externally', exact: true })
+                .click();
+            assert.equal(await page.locator('[data-rating-index]').count(), 0);
+            assert.equal(
+                await page.locator('[data-empty-rating]').textContent(),
+                'No rating'
+            );
+            await page
+                .getByRole('button', { name: 'Unmount rating', exact: true })
+                .click();
+            await page
+                .getByRole('button', {
+                    name: 'Invoke captured icon',
+                    exact: true,
+                })
+                .click();
+            assert.equal((await ratingState(page)).refConnected, false);
+            assert.equal((await ratingState(page)).changes.length, 0);
+            assert.equal(await page.getByRole('slider').count(), 0);
+            assert.equal((await ratingState(page)).calls.length, 0);
+        });
         for (const scenario of ['teardown-logout', 'teardown-disconnect'])
             await run(scenario, async (page, origin) => {
                 await connect(page, origin, scenario);

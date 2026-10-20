@@ -3762,3 +3762,61 @@ export function HostedNotes() {
     );
 }
 ```
+
+## Controlled rating presentation
+
+`RatingInput` from `@miniextensions/sdk/react` owns the native range, decorative
+icon selection/toggle-clear, focus indication, numeric grid/print summaries and
+explicit maximum repair. Its controlled `value` is a native number or `null`;
+`onChange` proposes a native value without creating a model, request or Save.
+The caller retains record identity, write policy, metadata, styles and persistence.
+A loaded value above `max` stays unchanged until an explicit repair.
+
+The input ref is the actual `HTMLInputElement` (or `null` in grid mode). Use
+`inputProps` for native form/label/ARIA associations and focus callbacks. `max`,
+range type, controlled value and disabled policy are owned by the control.
+Decorative `renderIcon` receives `index`, `filled`, `focused`, `disabled` and
+`activate`; the native range or surrounding grid owns accessible numeric meaning.
+Icon callbacks from replaced props or an unmounted control are retired. This
+presentation lifetime check does not replace the caller's write authority.
+
+Classes, an `empty` node, `warningMessage`, `repairLabel` and class slots let an
+app retain its theme and localization. `grid` omits the range and supplies a
+numeric summary; the caller styles `gridSummaryClassName` for screen readers and
+`printSummaryClassName` for print. Disabled controls never propose edits or show
+an enabled repair. Native absence is not turned into an owner write by the range's
+HTML minimum. The host must retain its native `null`/zero and required policy.
+
+```tsx
+import { useState } from 'react';
+import { RatingInput } from '@miniextensions/sdk/react';
+
+export function CustomRating() {
+    const [value, setValue] = useState<number | null>(2);
+    return (
+        <RatingInput
+            value={value}
+            max={5}
+            onChange={setValue}
+            inputProps={{ 'aria-label': 'Rating' }}
+            renderIcon={({ filled, focused, activate }) => (
+                <span
+                    onClick={activate}
+                    aria-hidden="true"
+                    className={focused ? 'rating-focus' : undefined}
+                >
+                    {filled ? '★' : '☆'}
+                </span>
+            )}
+        />
+    );
+}
+```
+
+`RatingField` and `renderRatingField` accept `iconInput` to opt accepted binding
+and renderer-host owners into this same control. Their existing numeric editor
+remains the default. Accepted read-only/pending/required policy, masking, native
+scalar writes and row-event boundaries remain enforced; appearance cannot grant
+write authority. Provide Airtable icon assets/colors through `renderIcon` when
+that metadata-specific presentation is required. The stock default does not
+infer an icon theme or supply hosted Airtable assets.

@@ -1,4 +1,9 @@
 import {
+    checkRatingInputConsumer,
+    ratingInputTypedConsumer,
+    ratingInputJsxConsumer,
+} from './rating-input-consumer-checks.mjs';
+import {
     checkTextInputConsumer,
     textInputTypedConsumer,
     textInputJsxConsumer,
@@ -1392,7 +1397,7 @@ new Parser([]).parse({maxDepth:'48'});
         const filename = `text-input-consumer.${extension}`;
         writeFileSync(
             join(temporaryDirectory, filename),
-            textInputTypedConsumer
+            textInputTypedConsumer + ratingInputTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -1435,7 +1440,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     reactSources.push('field-bindings-react.tsx');
     writeFileSync(
         join(temporaryDirectory, 'text-input-consumer.tsx'),
-        textInputJsxConsumer
+        textInputJsxConsumer + ratingInputJsxConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(
@@ -2864,6 +2869,16 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     console.log(
         'Installed TextInput/InputClearButton ESM/CommonJS native props/ref/action and strict declaration checks passed.'
+    );
+    assert.equal(
+        await checkRatingInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    console.log(
+        'Installed RatingInput ESM/CommonJS native/ref/grid/repair actions and strict declaration checks passed.'
     );
     const portalOwnerProof = await checkPortalOwnerConsumer({
         consumerDirectory: temporaryDirectory,

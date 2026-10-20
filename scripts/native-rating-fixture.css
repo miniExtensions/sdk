@@ -1,0 +1,36 @@
+.rating-icons {
+    display: flex;
+    gap: 3px;
+}
+.rating-icons svg {
+    cursor: pointer;
+}
+.rating-icons svg[data-focused='true'] {
+    outline: 2px solid black;
+    border-radius: 50%;
+}
+.rating-print-summary {
+    display: none;
+}
+.rating-grid-summary {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+.rating-warning {
+    color: #b91c1c;
+}
+.rating-repair {
+    margin-left: 4px;
+}
+@media print {
+    .rating-print-summary {
+        display: inline;
+    }
+}

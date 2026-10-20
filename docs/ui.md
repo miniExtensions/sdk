@@ -3949,3 +3949,54 @@ export function Schedule({
     );
 }
 ```
+
+### Native person badges
+
+`PersonBadge` supplies the native list item, escaped label, optional caller avatar
+and localized non-submit removal presentation used by hosted collaborator badges.
+It forwards the actual `HTMLLIElement` ref and native list-item props. Supply a
+resolved string label; name/email fallback, native collaborator IDs/objects,
+choice allow-lists, duplicate order, read-only admission and writes stay in the
+caller. Omit `remove` for display-only use such as Created By and Last Modified By.
+No picker, collaborator model, identity lookup or network call is created.
+
+`avatar` is a caller-owned React node, so an existing image component and its
+loading/caching policy stay intact. Optional avatar/body/label and removal class
+slots retain the consuming app's theme; the control supplies no theme CSS.
+An explicit null avatar retains an empty avatar slot; omission removes the slot.
+Removal uses `ActionButton`, always `type="button"`, with optional native props
+through `remove.buttonProps`. It uses the current caller callback and preserves
+native bubbling. The caller must retain action admission and persistence policy.
+
+```tsx
+import { PersonBadge } from '@miniextensions/sdk/react';
+
+export function People({
+    people,
+    readOnly,
+    removePerson,
+}: {
+    people: readonly { id: string; name: string; email: string }[];
+    readOnly: boolean;
+    removePerson(id: string): void;
+}) {
+    return (
+        <ul>
+            {people.map((person, index) => (
+                <PersonBadge
+                    key={`${person.id}-${index}`}
+                    label={person.name || person.email}
+                    remove={
+                        readOnly
+                            ? undefined
+                            : {
+                                  label: `Remove ${person.name || person.email}`,
+                                  onClick: () => removePerson(person.id),
+                              }
+                    }
+                />
+            ))}
+        </ul>
+    );
+}
+```

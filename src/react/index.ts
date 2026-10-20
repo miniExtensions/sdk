@@ -1,3 +1,4 @@
+export { PersonBadge, type PersonBadgeProps } from './PersonBadge.js';
 export {
     composeCalendlyUrl,
     useCalendlyBooking,

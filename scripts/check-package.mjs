@@ -1,4 +1,9 @@
 import {
+    checkPersonBadgeConsumer,
+    personBadgeTypedConsumer,
+    personBadgeJsxConsumer,
+} from './person-badge-consumer-checks.mjs';
+import {
     checkCalendlyBookingConsumer,
     calendlyBookingTypedConsumer,
     calendlyBookingJsxConsumer,
@@ -1404,7 +1409,8 @@ new Parser([]).parse({maxDepth:'48'});
             join(temporaryDirectory, filename),
             textInputTypedConsumer +
                 ratingInputTypedConsumer +
-                calendlyBookingTypedConsumer
+                calendlyBookingTypedConsumer +
+                personBadgeTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -1449,7 +1455,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         join(temporaryDirectory, 'text-input-consumer.tsx'),
         textInputJsxConsumer +
             ratingInputJsxConsumer +
-            calendlyBookingJsxConsumer
+            calendlyBookingJsxConsumer +
+            personBadgeJsxConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(
@@ -2871,6 +2878,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(reactBindingProof.checks, 1);
     assert.equal(
         await checkTextInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkPersonBadgeConsumer({
             consumerDirectory: temporaryDirectory,
             happyDomModulePath: require.resolve('happy-dom'),
         }),

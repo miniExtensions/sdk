@@ -19,6 +19,7 @@ import {
     TextInput,
     LiteralText,
     ActionButton,
+    PersonBadge,
     useCalendlyBooking,
     RatingInput,
     AttachmentField,
@@ -46,7 +47,101 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'calendly-booking') {
+if (mode === 'person-badge') {
+    let state;
+    /** @type {import('react').RefObject<HTMLLIElement>} */
+    const personRef = React.createRef();
+    snapshot = () => ({
+        ...state,
+        refConnected: personRef.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [value, setValue] = useState({
+            label: '<b>Resolved person</b>',
+            owner: 'A',
+            removed: [],
+            disabled: false,
+            readOnly: false,
+            mounted: true,
+            submissions: 0,
+            bubbles: 0,
+        });
+        state = value;
+        return h(
+            React.Fragment,
+            null,
+            h(
+                'form',
+                {
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        setValue((v) => ({
+                            ...v,
+                            submissions: v.submissions + 1,
+                        }));
+                    },
+                },
+                h(
+                    'ul',
+                    {
+                        onClick: () =>
+                            setValue((v) => ({ ...v, bubbles: v.bubbles + 1 })),
+                    },
+                    value.mounted
+                        ? h(PersonBadge, {
+                              ref: personRef,
+                              label: value.label,
+                              labelClassName: 'person-label',
+                              avatar: h(
+                                  'span',
+                                  {
+                                      'aria-label': 'Caller avatar',
+                                      role: 'img',
+                                  },
+                                  'Avatar'
+                              ),
+                              remove: value.readOnly
+                                  ? undefined
+                                  : {
+                                        label: 'Remove ' + value.label,
+                                        buttonProps: {
+                                            disabled: value.disabled,
+                                        },
+                                        onClick: () =>
+                                            setValue((v) => ({
+                                                ...v,
+                                                removed: [
+                                                    ...v.removed,
+                                                    value.owner,
+                                                ],
+                                            })),
+                                    },
+                          })
+                        : null
+                )
+            ),
+            button('Replace person', () =>
+                setValue((v) => ({
+                    ...v,
+                    label: 'Current email fallback',
+                    owner: 'B',
+                }))
+            ),
+            button('Toggle person disabled', () =>
+                setValue((v) => ({ ...v, disabled: !v.disabled }))
+            ),
+            button('Toggle person readonly', () =>
+                setValue((v) => ({ ...v, readOnly: !v.readOnly }))
+            ),
+            button('Unmount person', () =>
+                setValue((v) => ({ ...v, mounted: false }))
+            )
+        );
+    }
+    root.render(h(React.StrictMode, null, h(Host)));
+} else if (mode === 'calendly-booking') {
     const writes = [];
     let current;
     let oldSession;

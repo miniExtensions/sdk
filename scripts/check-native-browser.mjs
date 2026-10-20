@@ -1826,6 +1826,44 @@ try {
                 .click();
             await idle(page);
         };
+        await run('person-badge-native-presentation', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=person-badge`);
+            const click = (name) =>
+                page.getByRole('button', { name, exact: true }).click();
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await page.getByRole('listitem').waitFor();
+            assert.equal(
+                await page.locator('.person-label').textContent(),
+                '<b>Resolved person</b>'
+            );
+            assert.equal(await page.locator('b').count(), 0);
+            assert.equal(
+                await page.getByRole('img', { name: 'Caller avatar' }).count(),
+                1
+            );
+            const remove = () => page.getByRole('listitem').getByRole('button');
+            assert.equal(await remove().getAttribute('type'), 'button');
+            await remove().click();
+            await click('Replace person');
+            await remove().focus();
+            await page.keyboard.press('Enter');
+            assert.deepEqual((await state()).removed, ['A', 'B']);
+            assert.equal((await state()).submissions, 0);
+            await click('Toggle person disabled');
+            await remove().evaluate((node) => node.click());
+            assert.deepEqual((await state()).removed, ['A', 'B']);
+            await click('Toggle person readonly');
+            assert.equal(await remove().count(), 0);
+            assert.equal(
+                await page.locator('.person-label').textContent(),
+                'Current email fallback'
+            );
+            await click('Unmount person');
+            assert.equal((await state()).refConnected, false);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
         await run('calendly-frame-lifecycle', async (page, origin) => {
             await page.goto(`${origin}/native.html?mode=calendly-booking`);
             const click = (name) =>
@@ -2746,7 +2784,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 14 + storageEventCases.length);
+        assert.equal(results.length, 15 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

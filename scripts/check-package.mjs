@@ -1,4 +1,9 @@
 import {
+    checkCalendlyBookingConsumer,
+    calendlyBookingTypedConsumer,
+    calendlyBookingJsxConsumer,
+} from './calendly-booking-consumer-checks.mjs';
+import {
     checkRatingInputConsumer,
     ratingInputTypedConsumer,
     ratingInputJsxConsumer,
@@ -1397,7 +1402,9 @@ new Parser([]).parse({maxDepth:'48'});
         const filename = `text-input-consumer.${extension}`;
         writeFileSync(
             join(temporaryDirectory, filename),
-            textInputTypedConsumer + ratingInputTypedConsumer
+            textInputTypedConsumer +
+                ratingInputTypedConsumer +
+                calendlyBookingTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -1440,7 +1447,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     reactSources.push('field-bindings-react.tsx');
     writeFileSync(
         join(temporaryDirectory, 'text-input-consumer.tsx'),
-        textInputJsxConsumer + ratingInputJsxConsumer
+        textInputJsxConsumer +
+            ratingInputJsxConsumer +
+            calendlyBookingJsxConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(
@@ -2862,6 +2871,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(reactBindingProof.checks, 1);
     assert.equal(
         await checkTextInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkCalendlyBookingConsumer({
             consumerDirectory: temporaryDirectory,
             happyDomModulePath: require.resolve('happy-dom'),
         }),

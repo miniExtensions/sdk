@@ -1826,6 +1826,76 @@ try {
                 .click();
             await idle(page);
         };
+        await run('calendly-frame-lifecycle', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=calendly-booking`);
+            const click = (name) =>
+                page.getByRole('button', { name, exact: true }).click();
+            const frame = page.locator('#calendly-frame');
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await click('Open synthetic schedule');
+            assert.equal(await frame.getAttribute('src'), 'about:blank');
+            const url = new URL((await state()).url);
+            assert.equal(
+                url.searchParams.get('email'),
+                'synthetic+qa&team@example.invalid'
+            );
+            assert.equal(url.searchParams.get('name'), 'Synthetic & Team');
+            assert.equal(url.searchParams.get('keep'), 'yes');
+            await click('Capture old frame');
+            await click('Send wrong origin');
+            await click('Send wrong source');
+            assert.deepEqual((await state()).writes, []);
+            await click('Cancel schedule');
+            await click('Send old event');
+            await click('Open synthetic schedule');
+            await click('Cancel old session');
+            await click('Send old event');
+            assert.equal(await frame.count(), 1);
+            assert.deepEqual((await state()).writes, []);
+            await click('Change owner');
+            assert.equal(await frame.count(), 0);
+            await click('Send old event');
+            await click('Open synthetic schedule');
+            await click('Send current event');
+            assert.deepEqual((await state()).writes, ['B']);
+            assert.equal(await frame.count(), 0);
+            await click('Open synthetic schedule');
+            await click('Capture old frame');
+            await click('Toggle booked');
+            await click('Send old event');
+            assert.equal(await frame.count(), 0);
+            await click('Open synthetic schedule');
+            assert.equal(await frame.count(), 0);
+            await click('Toggle booked');
+            await click('Open synthetic schedule');
+            await click('Toggle enabled');
+            assert.equal(await frame.count(), 0);
+            await click('Toggle enabled');
+            await click('Open synthetic schedule');
+            await click('Capture old frame');
+            await click('Unmount schedule');
+            await click('Send old event');
+            assert.deepEqual((await state()).writes, ['B']);
+            assert.equal((await state()).submissions, 0);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+            // A fresh real React root exercises reentrant opening with no provider I/O.
+            await page.reload();
+            await click('Enable reentrant');
+            await click('Open synthetic schedule');
+            await click('Capture old frame');
+            await click('Send current event');
+            assert.deepEqual((await state()).writes, ['A']);
+            assert.equal(await frame.count(), 1);
+            await click('Cancel old session');
+            await click('Send old event');
+            assert.equal(await frame.count(), 1);
+            await click('Send current event');
+            assert.deepEqual((await state()).writes, ['A', 'A']);
+            assert.equal(await frame.count(), 0);
+            assert.deepEqual((await state()).errors, []);
+        });
         await run('action-button-native-form', async (page, origin) => {
             await page.goto(`${origin}/native.html?mode=action-button`);
             const action = page.locator('#shared-action');

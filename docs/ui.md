@@ -3882,3 +3882,70 @@ export function NativeAction({
 The caller owns action eligibility, singleflight, authentication, source identity,
 requests, errors and retry policy. This presentation does not create a Button
 model or acquire webhook authority. URL actions retain their native link owner.
+
+### Calendly frame lifecycle
+
+`composeCalendlyUrl` and `useCalendlyBooking` from `@miniextensions/sdk/react`
+share the existing HTTPS `calendly.com`/subdomain allowlist and URLSearchParams
+prefill behavior. Existing query values survive; nonempty email/name values and
+embed parameters replace their matching keys. Resolve prefill fields by actual
+field IDs in the caller; the hook does not read records or infer field names.
+
+Pass a stable `ownerKey` derived from the actual session, record and field. A
+change in that identity, composed URL, `enabled` or `booked` retires an open frame.
+Changes to the callback or frame presentation within the same owner use current
+props without retiring it. `open()` returns false while blocked or already open.
+Render `session.frame` directly: the SDK owns its native iframe ref and creates a
+new frame for every open generation. `session.cancel()` closes only that session,
+never a later reopened frame, and never proposes a native write. Unmount retires
+all admission and removes the message listener.
+
+Only the active iframe's exact `contentWindow`, exact composed URL origin and
+`calendly.event_scheduled` data event can invoke `onScheduled`. The session is
+consumed before invoking it, including for duplicate or reentrant events. This
+is local browser event admission, not provider booking verification or server
+write authority. Keep native validation, read-only admission, persistence and
+errors in the caller. No SDK client or network request is created by this hook;
+rendering its iframe navigates to the configured provider.
+
+```tsx
+import { ActionButton, useCalendlyBooking } from '@miniextensions/sdk/react';
+
+export function Schedule({
+    ownerKey,
+    booked,
+    onScheduled,
+}: {
+    ownerKey: string;
+    booked: boolean;
+    onScheduled(): void;
+}) {
+    const booking = useCalendlyBooking({
+        configuredUrl: 'https://calendly.com/example/meeting',
+        email: null,
+        name: null,
+        embedDomain: window.location.origin,
+        ownerKey,
+        booked,
+        onScheduled,
+    });
+    return (
+        <>
+            <ActionButton
+                disabled={!booking.url || booked}
+                onClick={() => booking.open()}
+            >
+                Schedule
+            </ActionButton>
+            {booking.session ? (
+                <section>
+                    <ActionButton onClick={() => booking.session?.cancel()}>
+                        Cancel
+                    </ActionButton>
+                    {booking.session.frame}
+                </section>
+            ) : null}
+        </>
+    );
+}
+```

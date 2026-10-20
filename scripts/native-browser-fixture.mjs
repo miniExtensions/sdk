@@ -19,6 +19,7 @@ import {
     TextInput,
     LiteralText,
     ActionButton,
+    useCalendlyBooking,
     RatingInput,
     AttachmentField,
     AttachmentDialog,
@@ -45,7 +46,136 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'action-button') {
+if (mode === 'calendly-booking') {
+    const writes = [];
+    let current;
+    let oldSession;
+    let oldSource;
+    let state;
+    function Booking({ owner, booked, enabled, reentrant }) {
+        const booking = useCalendlyBooking({
+            configuredUrl:
+                'https://calendly.com/synthetic/no-bookings?keep=yes',
+            email: 'synthetic+qa&team@example.invalid',
+            name: 'Synthetic & Team',
+            embedDomain: location.origin,
+            ownerKey: owner,
+            booked,
+            enabled,
+            onScheduled() {
+                writes.push(owner);
+                if (reentrant && writes.length === 1) {
+                    booking.open();
+                    send(oldSource);
+                }
+            },
+        });
+        current = booking;
+        return h(
+            React.Fragment,
+            null,
+            h(
+                ActionButton,
+                { id: 'calendly-open', onClick: () => booking.open() },
+                'Open synthetic schedule'
+            ),
+            booking.session
+                ? h(
+                      React.Fragment,
+                      null,
+                      h(
+                          ActionButton,
+                          { onClick: () => booking.session.cancel() },
+                          'Cancel schedule'
+                      ),
+                      React.cloneElement(booking.session.frame, {
+                          src: 'about:blank',
+                          id: 'calendly-frame',
+                      })
+                  )
+                : null
+        );
+    }
+    const send = (
+        source,
+        origin = 'https://calendly.com',
+        data = { event: 'calendly.event_scheduled' }
+    ) =>
+        window.dispatchEvent(
+            new MessageEvent('message', { source, origin, data })
+        );
+    snapshot = () => ({
+        ...state,
+        writes: [...writes],
+        url: current?.url,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [value, setValue] = useState({
+            owner: 'A',
+            booked: false,
+            enabled: true,
+            mounted: true,
+            reentrant: false,
+            submissions: 0,
+        });
+        state = value;
+        return h(
+            React.Fragment,
+            null,
+            h(
+                'form',
+                {
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        setValue((v) => ({
+                            ...v,
+                            submissions: v.submissions + 1,
+                        }));
+                    },
+                },
+                value.mounted ? h(Booking, value) : null
+            ),
+            button('Capture old frame', () => {
+                oldSession = current.session;
+                oldSource =
+                    document.querySelector('#calendly-frame')?.contentWindow;
+            }),
+            button('Send current event', () => {
+                const source =
+                    document.querySelector('#calendly-frame')?.contentWindow;
+                send(source);
+                send(source);
+            }),
+            button('Send old event', () => send(oldSource)),
+            button('Send wrong origin', () =>
+                send(
+                    document.querySelector('#calendly-frame')?.contentWindow,
+                    'https://attacker.invalid'
+                )
+            ),
+            button('Send wrong source', () => send(window)),
+            button('Cancel old session', () => oldSession?.cancel()),
+            button('Change owner', () =>
+                setValue((v) => ({ ...v, owner: v.owner === 'A' ? 'B' : 'A' }))
+            ),
+            button('Toggle booked', () =>
+                setValue((v) => ({ ...v, booked: !v.booked }))
+            ),
+            button('Toggle enabled', () =>
+                setValue((v) => ({ ...v, enabled: !v.enabled }))
+            ),
+            button('Enable reentrant', () =>
+                setValue((v) => ({ ...v, reentrant: true }))
+            ),
+            button('Unmount schedule', () =>
+                setValue((v) => ({ ...v, mounted: false }))
+            )
+        );
+    }
+    root.render(h(React.StrictMode, null, h(Host)));
+} else if (mode === 'action-button') {
     const initial = {
         busy: false,
         disabled: false,
@@ -97,6 +227,7 @@ if (mode === 'action-button') {
                     current.mounted
                         ? h(
                               ActionButton,
+                              useCalendlyBooking,
                               {
                                   ref: action,
                                   id: 'shared-action',

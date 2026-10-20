@@ -2746,7 +2746,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 13 + storageEventCases.length);
+        assert.equal(results.length, 14 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

@@ -139,19 +139,17 @@ if (mode === 'calendly-booking') {
             ),
             button('Capture old frame', () => {
                 oldSession = current.session;
-                oldSource =
-                    document.querySelector('#calendly-frame')?.contentWindow;
+                oldSource = document.querySelector('iframe')?.contentWindow;
             }),
             button('Send current event', () => {
-                const source =
-                    document.querySelector('#calendly-frame')?.contentWindow;
+                const source = document.querySelector('iframe')?.contentWindow;
                 send(source);
                 send(source);
             }),
             button('Send old event', () => send(oldSource)),
             button('Send wrong origin', () =>
                 send(
-                    document.querySelector('#calendly-frame')?.contentWindow,
+                    document.querySelector('iframe')?.contentWindow,
                     'https://attacker.invalid'
                 )
             ),
@@ -227,7 +225,6 @@ if (mode === 'calendly-booking') {
                     current.mounted
                         ? h(
                               ActionButton,
-                              useCalendlyBooking,
                               {
                                   ref: action,
                                   id: 'shared-action',

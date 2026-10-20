@@ -3858,9 +3858,25 @@ and disables activation when `busy` or `disabled`. `busy` also controls
 replacement content, the original children remain visible.
 
 ```tsx
-<ActionButton busy={pending} busyContent={<Spinner />} onClick={runAction}>
-    Run action
-</ActionButton>
+import { ActionButton } from '@miniextensions/sdk/react';
+
+export function NativeAction({
+    pending,
+    runAction,
+}: {
+    pending: boolean;
+    runAction(): void;
+}) {
+    return (
+        <ActionButton
+            busy={pending}
+            busyContent={<span>Running action</span>}
+            onClick={runAction}
+        >
+            Run action
+        </ActionButton>
+    );
+}
 ```
 
 The caller owns action eligibility, singleflight, authentication, source identity,

@@ -1,3 +1,9 @@
+export {
+    NativeRichTextEditor,
+    type NativeRichTextEditorHandle,
+    type NativeRichTextEditorRenderProps,
+    type NativeRichTextEditorProps,
+} from './NativeRichTextEditor.js';
 export { PersonBadge, type PersonBadgeProps } from './PersonBadge.js';
 export {
     composeCalendlyUrl,

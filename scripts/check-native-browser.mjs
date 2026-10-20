@@ -1407,6 +1407,11 @@ const regular = (path) => {
     assert(lstatSync(path).isFile() && realpathSync(path) === resolve(path));
     return readFileSync(path);
 };
+const nativeReactVersion = process.env.SDK_NATIVE_REACT_VERSION ?? '19.2.0';
+assert(
+    ['18.3.1', '19.2.0'].includes(nativeReactVersion),
+    'Unsupported native React matrix version'
+);
 const packageDirectory = resolve(process.env.SDK_NATIVE_PACKAGE_DIR ?? '');
 const proofDirectory = resolve(process.env.SDK_NATIVE_PROOF_DIR ?? '');
 const output = resolve(process.env.SDK_NATIVE_RESULT_DIR ?? '');
@@ -1490,8 +1495,8 @@ try {
                 type: 'module',
                 dependencies: {
                     '@miniextensions/sdk': `file:${archive}`,
-                    react: '19.2.0',
-                    'react-dom': '19.2.0',
+                    react: nativeReactVersion,
+                    'react-dom': nativeReactVersion,
                     '@types/react': '18.3.12',
                     '@types/react-dom': '18.3.1',
                 },
@@ -1502,6 +1507,7 @@ try {
             [
                 'install',
                 '--ignore-scripts',
+                '--strict-peer-deps',
                 '--no-audit',
                 '--no-fund',
                 '--cache',
@@ -1509,6 +1515,13 @@ try {
             ],
             { cwd: temporary, stdio: 'pipe' }
         );
+        report.reactVersion = JSON.parse(
+            readFileSync(
+                join(temporary, 'node_modules/react/package.json'),
+                'utf8'
+            )
+        ).version;
+        assert.equal(report.reactVersion, nativeReactVersion);
         const form = createReviewFixture('review-answers').page();
         addAttachmentReviewAnswers(form);
         // Reuse complete public verification envelopes; no new schema/operator authority.
@@ -1826,6 +1839,61 @@ try {
                 .click();
             await idle(page);
         };
+        await run('native-rich-editor-slot-abi', async (page, origin) => {
+            await page.goto(
+                `${origin}/native.html?mode=native-rich-editor-slot`
+            );
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            const click = (name) =>
+                page.getByRole('button', { name, exact: true }).click();
+            await page
+                .getByRole('button', {
+                    name: 'Commit native serialization',
+                    exact: true,
+                })
+                .waitFor();
+            const first = await state();
+            assert(first.instanceId > 0);
+            assert.equal(first.reactVersion, nativeReactVersion);
+            assert.equal(first.staleRoots, 0);
+            assert.equal(first.defaultValue, 'Alpha');
+            await click('Commit native serialization');
+            assert.equal((await state()).value, '[x] typed  \n\n');
+            assert.deepEqual((await state()).writes, ['[x] typed  \n\n']);
+            assert.equal((await state()).instanceId, first.instanceId);
+            await click('Cosmetic external newline');
+            assert.equal((await state()).instanceId, first.instanceId);
+            assert.equal((await state()).writes.length, 1);
+            await click('Focus slot signal');
+            assert.equal((await state()).focused, true);
+            assert.equal((await state()).instanceId, first.instanceId);
+            await click('Blur slot signal');
+            assert.equal((await state()).focused, false);
+            await click('Semantic external replacement');
+            await page.waitForFunction(
+                (old) => window.__nativeProbe.snapshot().instanceId !== old,
+                first.instanceId
+            );
+            assert.equal((await state()).defaultValue, 'Replacement');
+            assert.equal((await state()).writes.length, 1);
+            assert.equal((await state()).slotRoots, 1);
+            await click('Read-only null');
+            assert.equal((await state()).instanceId, null);
+            assert.equal((await state()).slotRoots, 0);
+            await page.getByText('Localized empty', { exact: true }).waitFor();
+            await click('Read-only empty document');
+            assert((await state()).instanceId > 0);
+            assert.equal((await state()).defaultValue, '');
+            assert.equal((await state()).writes.length, 1);
+            await page
+                .getByRole('button', {
+                    name: 'Commit native serialization',
+                    exact: true,
+                })
+                .isDisabled()
+                .then((value) => assert(value));
+        });
         await run('native-select-choice-projection', async (page, origin) => {
             await page.goto(
                 `${origin}/native.html?mode=native-select-projection`
@@ -2854,7 +2922,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 16 + storageEventCases.length);
+        assert.equal(results.length, 17 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

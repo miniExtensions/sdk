@@ -4078,3 +4078,65 @@ export function NativeChoiceList({
     );
 }
 ```
+
+### Native Rich Text editor ownership
+
+`NativeRichTextEditor` shares the native editor lifecycle and stored-string
+contract while the application supplies its **real compatible editor** through
+`renderEditor`. The SDK does not bundle an editor vendor, render plain text as a
+substitute, create a Form binding/draft, or acquire persistence permission.
+
+The component owns controlled stored-value comparison, exact serialization,
+semantic external-value remount, focus signals, actual-instance ref forwarding
+and opt-in cleanup of stale sibling editor DOM. Native typing echoes and cosmetic
+newline updates retain the current editor/document/caret. The supplied editor
+receives `defaultValue`, never a controlled `value` echo. Its ref must receive the
+actual editor instance exposing `element` and `view.dom`, not a proxy or snapshot.
+The application keeps the editor library/extensions/styles, paste handling,
+localized empty content, current native writer and Form/session identity. Key the
+component by the application's real editing owner when that owner changes.
+
+```tsx
+import {
+    NativeRichTextEditor,
+    type NativeRichTextEditorProps,
+} from '@miniextensions/sdk/react';
+
+export function RichNotes({
+    value,
+    setNativeValue,
+    renderCompatibleEditor,
+}: {
+    value: string | null;
+    setNativeValue(stored: string): void;
+    renderCompatibleEditor: NativeRichTextEditorProps['renderEditor'];
+}) {
+    return (
+        <NativeRichTextEditor
+            value={value}
+            onValueChange={setNativeValue}
+            placeholder="Write notes"
+            emptyContent={<span>No notes</span>}
+            renderEditor={renderCompatibleEditor}
+        />
+    );
+}
+```
+
+DOM cleanup defaults off. Set `removeStaleEditorRoots` only when the supplied
+`element` exclusively contains editor-view roots, with no toolbars or other caller
+content. This option removes siblings of the active `view.dom`.
+
+Pass every supplied native prop/ref to the actual editor and apply the focus
+signal to its normal theme classes. Keep its real parser/serializer and paste
+extension integration. Read-only admission and a read-only null empty view are
+presentation; the application/server still owns write authority.
+
+The SDK's React 18/19 declaration, slot ABI and browser checks are separate from
+the chosen editor vendor's compatibility. The existing host fork of
+`rich-markdown-editor` 12.26.8 declares React 16/17 peers: strict installation with
+React 18.3.1 or 19.2.0 rejects that vendor. It remains outside SDK and no peer override
+is added. Real host editor tests establish the existing React 18 runtime's ref,
+caret, formatting, paste and synthetic composition behavior. Synthetic DOM
+composition checks do not certify an operating-system IME; protected deployed
+acceptance remains a separate gate.

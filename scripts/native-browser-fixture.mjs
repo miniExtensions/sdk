@@ -22,6 +22,7 @@ import {
     LiteralText,
     ActionButton,
     PersonBadge,
+    NativeRichTextEditor,
     useCalendlyBooking,
     RatingInput,
     AttachmentField,
@@ -49,7 +50,157 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'native-select-projection') {
+if (mode === 'native-rich-editor-slot') {
+    // External React editor-slot ABI probe only; not a vendor or OS-IME claim.
+    let mounts = 0;
+    /** @type {import('@miniextensions/sdk/react').NativeRichTextEditorRenderProps | undefined} */
+    let latest;
+    let focused = false;
+    /** @type {{value:string|null,readOnly:boolean,writes:string[]}|undefined} */
+    let current;
+    /** @type {import('react').MutableRefObject<SlotProbe|null>|undefined} */
+    let editorRef;
+    /** @extends {React.Component<{native:import('@miniextensions/sdk/react').NativeRichTextEditorRenderProps,focused:boolean},{text:string}>} */
+    class SlotProbe extends React.Component {
+        id = ++mounts;
+        /** @type {HTMLElement|null} */
+        element = null;
+        /** @type {HTMLElement|null} */
+        active = null;
+        /** @type {{dom:HTMLElement}|undefined} */
+        view;
+        state = { text: this.props.native.defaultValue };
+        componentDidMount() {
+            if (this.active) this.view = { dom: this.active };
+            this.props.native.ref(this);
+        }
+        componentDidUpdate(previous) {
+            if (previous.native.ref !== this.props.native.ref) {
+                previous.native.ref(null);
+                this.props.native.ref(this);
+            }
+        }
+        componentWillUnmount() {
+            this.props.native.ref(null);
+        }
+        render() {
+            return h(
+                'section',
+                {
+                    'data-slot-probe': 'true',
+                    'data-focused': String(this.props.focused),
+                },
+                h(
+                    'div',
+                    {
+                        ref: (node) => {
+                            this.element = node;
+                        },
+                    },
+                    h(
+                        'div',
+                        {
+                            'data-slot-document': 'true',
+                            ref: (node) => {
+                                this.active = node;
+                            },
+                        },
+                        h('strong', null, this.state.text)
+                    ),
+                    h('div', { 'data-stale-slot': 'true' }, 'stale')
+                ),
+                h(
+                    'button',
+                    {
+                        type: 'button',
+                        disabled: this.props.native.readOnly,
+                        onClick: () =>
+                            this.setState({ text: '- [x] typed  \n\n' }, () =>
+                                this.props.native.onChange(
+                                    () => this.state.text
+                                )
+                            ),
+                    },
+                    'Commit native serialization'
+                )
+            );
+        }
+    }
+    snapshot = () => ({
+        ...current,
+        focused,
+        mounts,
+        instanceId: editorRef?.current?.id ?? null,
+        defaultValue: latest?.defaultValue,
+        slotRoots: document.querySelectorAll('[data-slot-document]').length,
+        staleRoots: document.querySelectorAll('[data-stale-slot]').length,
+        calls,
+        errors,
+    });
+    function Host() {
+        /** @type {{value:string|null,readOnly:boolean,writes:string[]}} */
+        const initial = { value: 'Alpha', readOnly: false, writes: [] };
+        const [value, setValue] = useState(initial);
+        /** @type {import('react').MutableRefObject<SlotProbe|null>} */
+        const ref = React.useRef(null);
+        editorRef = ref;
+        current = value;
+        return h(
+            'div',
+            null,
+            h('h1', null, 'External editor slot contract probe'),
+            h(NativeRichTextEditor, {
+                ref,
+                value: value.value,
+                removeStaleEditorRoots: true,
+                readOnly: value.readOnly,
+                onValueChange: (stored) =>
+                    setValue((previous) => ({
+                        ...previous,
+                        value: stored,
+                        writes: [...previous.writes, stored],
+                    })),
+                emptyContent: h('b', null, 'Localized empty'),
+                renderEditor: (native, focus) => {
+                    latest = native;
+                    focused = focus;
+                    return h(SlotProbe, { native, focused: focus });
+                },
+            }),
+            h(
+                'output',
+                { 'aria-label': 'Controlled stored text' },
+                value.value ?? 'null'
+            ),
+            button('Cosmetic external newline', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: (previous.value ?? '') + '\n',
+                }))
+            ),
+            button('Semantic external replacement', () =>
+                setValue((previous) => ({ ...previous, value: 'Replacement' }))
+            ),
+            button('Focus slot signal', () => latest?.onFocus()),
+            button('Blur slot signal', () => latest?.onBlur()),
+            button('Read-only null', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: null,
+                    readOnly: true,
+                }))
+            ),
+            button('Read-only empty document', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: '',
+                    readOnly: true,
+                }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'native-select-projection') {
     const choices = [
         { id: 'opt_alpha', name: 'Alpha' },
         { id: '', name: 'Draft Beta', newOption: true },
@@ -1082,4 +1233,6 @@ if (mode === 'native-select-projection') {
     }
     root.render(h(Host));
 } else throw Error('Unknown native verification mode');
-window.__nativeProbe = Object.freeze({ snapshot });
+window.__nativeProbe = Object.freeze({
+    snapshot: () => ({ ...snapshot(), reactVersion: React.version }),
+});

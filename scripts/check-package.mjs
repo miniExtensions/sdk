@@ -1,3 +1,4 @@
+import { checkNativeEditorReactMatrix } from './native-rich-text-editor-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
     richTextSerializationTypedConsumer,
@@ -2886,6 +2887,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(reactBindingProof.checks, 1);
+    const nativeEditorMatrix = checkNativeEditorReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(nativeEditorMatrix.versions.length, 2);
+    assert.equal(nativeEditorMatrix.cleanup, 'completed');
     assert.equal(
         await checkTextInputConsumer({
             consumerDirectory: temporaryDirectory,

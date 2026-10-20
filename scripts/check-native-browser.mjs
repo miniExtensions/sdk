@@ -2050,6 +2050,43 @@ try {
                 })
                 .isDisabled()
                 .then((value) => assert(value));
+            assert.equal((await state()).staleRoots, 0);
+            for (const name of [
+                'Read-only null',
+                'Editable null',
+                'Editable empty document',
+                'Read-only null',
+                'Read-only empty document',
+                'Editable empty document',
+            ]) {
+                await click(name);
+                assert.equal(
+                    (await state()).staleRoots,
+                    0,
+                    `stale roots after ${name}`
+                );
+                assert.equal(
+                    (await state()).slotRoots,
+                    name === 'Read-only null' ? 0 : 1
+                );
+            }
+            await click('Use first cleanup ref');
+            await click('Use second cleanup ref');
+            let callbacks = (await state()).callbackEntries;
+            assert(callbacks.some((x) => x.owner === 'first'));
+            assert(
+                callbacks
+                    .filter((x) => x.owner === 'first')
+                    .every((x) => x.released === 1)
+            );
+            await click('Semantic external replacement');
+            await click('Unmount native editor');
+            callbacks = (await state()).callbackEntries;
+            assert(callbacks.filter((x) => x.owner === 'second').length >= 2);
+            assert(callbacks.every((x) => x.released === 1));
+            assert.equal((await state()).callbackNulls, 0);
+            assert.equal((await state()).instanceId, null);
+            assert.deepEqual((await state()).errors, []);
         });
         await run('native-select-choice-projection', async (page, origin) => {
             await page.goto(

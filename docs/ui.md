@@ -4123,7 +4123,14 @@ export function RichNotes({
 }
 ```
 
-DOM cleanup defaults off. Set `removeStaleEditorRoots` only when the supplied
+Callback refs may return a cleanup function. The wrapper runs it once on actual
+detach, ref replacement or remount; callbacks returning no cleanup retain their
+legacy null notification. Object refs continue to receive the actual instance
+and null on detach.
+
+DOM cleanup defaults off and follows actual editor attachment, including
+read-only null/empty transitions that retain the normalized document key.
+Set `removeStaleEditorRoots` only when the supplied
 `element` exclusively contains editor-view roots, with no toolbars or other caller
 content. This option removes siblings of the active `view.dom`.
 

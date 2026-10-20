@@ -328,3 +328,121 @@ it('preserves caller sibling DOM by default', async (t) => {
     assert(f.container.querySelector('[data-active]'));
     assert(f.container.querySelector('[data-stale]'));
 });
+
+it('cleans opt-in stale roots on actual attachment across null, empty and read-only/editable transitions', async (t) => {
+    const f = await fixture(t),
+        ref = createRef<NativeRichTextEditorHandle>();
+    const render = (value: string | null, readOnly: boolean) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                value,
+                readOnly,
+                ref,
+                removeStaleEditorRoots: true,
+                onValueChange: () => assert.fail('unexpected write'),
+                renderEditor: f.editor,
+                emptyContent: 'Empty',
+            })
+        );
+    for (const [value, readOnly] of [
+        [null, true],
+        ['', true],
+        [null, true],
+        [null, false],
+        ['', false],
+        [null, true],
+        ['', true],
+        ['', false],
+    ] as const) {
+        await render(value, readOnly);
+        assert.equal(
+            f.container.querySelectorAll('[data-stale]').length,
+            0,
+            `stale root after ${String(value)}/${readOnly}`
+        );
+        assert.equal(
+            f.container.querySelectorAll('[data-active]').length,
+            readOnly && value === null ? 0 : 1
+        );
+        assert.equal(ref.current === null, readOnly && value === null);
+    }
+});
+
+it('releases returned callback-ref cleanups exactly once on ref replacement, semantic remount and unmount', async (t) => {
+    const f = await fixture(t);
+    const attachments: {
+        owner: string;
+        instance: NativeRichTextEditorHandle;
+        released: number;
+    }[] = [];
+    const nullCalls: string[] = [];
+    const callback =
+        (owner: string) => (instance: NativeRichTextEditorHandle | null) => {
+            if (instance === null) {
+                nullCalls.push(owner);
+                return;
+            }
+            const entry = { owner, instance, released: 0 };
+            attachments.push(entry);
+            return () => {
+                entry.released++;
+            };
+        };
+    const first = callback('first'),
+        second = callback('second');
+    const render = (value: string, ref: typeof first) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                value,
+                ref,
+                onValueChange: () => assert.fail('unexpected write'),
+                renderEditor: f.editor,
+            })
+        );
+    await render('Alpha', first);
+    await render('Alpha', second);
+    assert(attachments.some((item) => item.owner === 'first'));
+    assert(
+        attachments
+            .filter((item) => item.owner === 'first')
+            .every((item) => item.released === 1)
+    );
+    await render('Replacement', second);
+    assert(attachments.filter((item) => item.owner === 'second').length >= 2);
+    await f.render(null);
+    assert(attachments.every((item) => item.released === 1));
+    assert.deepEqual(nullCalls, []);
+});
+
+it('retains paired null-callback lifetime for legacy refs that return no cleanup', async (t) => {
+    const f = await fixture(t);
+    let live: NativeRichTextEditorHandle | null = null,
+        attached = 0,
+        detached = 0;
+    const legacy = (instance: NativeRichTextEditorHandle | null) => {
+        if (instance) {
+            assert.equal(live, null);
+            live = instance;
+            attached++;
+        } else {
+            assert(live);
+            live = null;
+            detached++;
+        }
+    };
+    const render = (value: string) =>
+        f.render(
+            h(NativeRichTextEditor, {
+                value,
+                ref: legacy,
+                onValueChange: () => {},
+                renderEditor: f.editor,
+            })
+        );
+    await render('Alpha');
+    await render('Replacement');
+    await f.render(null);
+    assert(attached >= 2);
+    assert.equal(detached, attached);
+    assert.equal(live, null);
+});

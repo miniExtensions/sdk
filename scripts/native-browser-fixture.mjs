@@ -248,11 +248,40 @@ if (mode === 'file-selection') {
             );
         }
     }
+    /** @type {SlotProbe|null} */
+    let callbackCurrent = null;
+    /** @type {{owner:string,id:number,released:number}[]} */
+    const callbackEntries = [];
+    let callbackNulls = 0;
+    /** @param {string} owner */
+    const cleanupRef = (owner) => {
+        /** @param {import('@miniextensions/sdk/react').NativeRichTextEditorHandle|null} instance */
+        return (instance) => {
+            if (instance === null) {
+                callbackNulls++;
+                callbackCurrent = null;
+                return;
+            }
+            if (!(instance instanceof SlotProbe))
+                throw Error('Unexpected editor instance');
+            callbackCurrent = instance;
+            const entry = { owner, id: instance.id, released: 0 };
+            callbackEntries.push(entry);
+            return () => {
+                entry.released++;
+                if (callbackCurrent === instance) callbackCurrent = null;
+            };
+        };
+    };
+    const firstCleanupRef = cleanupRef('first'),
+        secondCleanupRef = cleanupRef('second');
     snapshot = () => ({
         ...current,
+        callbackEntries,
+        callbackNulls,
         focused,
         mounts,
-        instanceId: editorRef?.current?.id ?? null,
+        instanceId: editorRef?.current?.id ?? callbackCurrent?.id ?? null,
         defaultValue: latest?.defaultValue,
         slotRoots: document.querySelectorAll('[data-slot-document]').length,
         staleRoots: document.querySelectorAll('[data-stale-slot]').length,
@@ -263,6 +292,8 @@ if (mode === 'file-selection') {
         /** @type {{value:string|null,readOnly:boolean,writes:string[]}} */
         const initial = { value: 'Alpha', readOnly: false, writes: [] };
         const [value, setValue] = useState(initial);
+        const [refMode, setRefMode] = useState('object');
+        const [shown, setShown] = useState(true);
         /** @type {import('react').MutableRefObject<SlotProbe|null>} */
         const ref = React.useRef(null);
         editorRef = ref;
@@ -271,24 +302,31 @@ if (mode === 'file-selection') {
             'div',
             null,
             h('h1', null, 'External editor slot contract probe'),
-            h(NativeRichTextEditor, {
-                ref,
-                value: value.value,
-                removeStaleEditorRoots: true,
-                readOnly: value.readOnly,
-                onValueChange: (stored) =>
-                    setValue((previous) => ({
-                        ...previous,
-                        value: stored,
-                        writes: [...previous.writes, stored],
-                    })),
-                emptyContent: h('b', null, 'Localized empty'),
-                renderEditor: (native, focus) => {
-                    latest = native;
-                    focused = focus;
-                    return h(SlotProbe, { native, focused: focus });
-                },
-            }),
+            shown
+                ? h(NativeRichTextEditor, {
+                      ref:
+                          refMode === 'first'
+                              ? firstCleanupRef
+                              : refMode === 'second'
+                                ? secondCleanupRef
+                                : ref,
+                      value: value.value,
+                      removeStaleEditorRoots: true,
+                      readOnly: value.readOnly,
+                      onValueChange: (stored) =>
+                          setValue((previous) => ({
+                              ...previous,
+                              value: stored,
+                              writes: [...previous.writes, stored],
+                          })),
+                      emptyContent: h('b', null, 'Localized empty'),
+                      renderEditor: (native, focus) => {
+                          latest = native;
+                          focused = focus;
+                          return h(SlotProbe, { native, focused: focus });
+                      },
+                  })
+                : null,
             h(
                 'output',
                 { 'aria-label': 'Controlled stored text' },
@@ -318,7 +356,24 @@ if (mode === 'file-selection') {
                     value: '',
                     readOnly: true,
                 }))
-            )
+            ),
+            button('Editable null', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: null,
+                    readOnly: false,
+                }))
+            ),
+            button('Editable empty document', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: '',
+                    readOnly: false,
+                }))
+            ),
+            button('Use first cleanup ref', () => setRefMode('first')),
+            button('Use second cleanup ref', () => setRefMode('second')),
+            button('Unmount native editor', () => setShown(false))
         );
     }
     root.render(h(Host));

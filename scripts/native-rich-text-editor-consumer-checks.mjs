@@ -23,6 +23,7 @@ function nativeEditorValue(native:SuppliedNativeProps){
 // @ts-expect-error the uncontrolled native editor receives defaultValue, never a controlled value echo
 return native.value;
 }
+nativeEditorElement(SuppliedNativeEditor,{...suppliedNative,ref(instance){if(!instance)return;return ()=>{void instance;};}});
 void numericNativeEditor;void textNativeEditor;void asynchronousNativeRead;void nativeEditorValue;
 `;
 
@@ -106,11 +107,11 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
             const ref = React.createRef();
             const writes = [];
             let latest;
-            const render = (value, readonly = false) =>
+            const render = (value, readonly = false, forwarded = ref) =>
                 React.act(async () =>
                     root.render(
                         React.createElement(api.NativeRichTextEditor, {
-                            ref,
+                            ref: forwarded,
                             value,
                             readOnly: readonly,
                             removeStaleEditorRoots: true,
@@ -162,6 +163,71 @@ async function checkInstalledSlot(consumerDirectory, happyDomModulePath) {
                 await render(null, true);
                 assert.equal(ref.current, null);
                 assert.equal(container.textContent, 'Localized empty');
+                for (const [value, readonly] of [
+                    ['', true],
+                    [null, true],
+                    [null, false],
+                    ['', false],
+                    [null, true],
+                    ['', true],
+                    ['', false],
+                ]) {
+                    await render(value, readonly);
+                    assert.equal(
+                        container.querySelectorAll('[data-stale]').length,
+                        0
+                    );
+                    assert.equal(
+                        container.querySelectorAll('[data-active]').length,
+                        readonly && value === null ? 0 : 1
+                    );
+                }
+                const entries = [],
+                    nulls = [];
+                const callback = (owner) => (instance) => {
+                    if (instance === null) {
+                        nulls.push(owner);
+                        return;
+                    }
+                    const entry = { owner, released: 0 };
+                    entries.push(entry);
+                    return () => {
+                        entry.released++;
+                    };
+                };
+                const firstRef = callback('first'),
+                    secondRef = callback('second');
+                await render('Alpha', false, firstRef);
+                await render('Alpha', false, secondRef);
+                assert(
+                    entries
+                        .filter((x) => x.owner === 'first')
+                        .every((x) => x.released === 1)
+                );
+                await render('Replacement', false, secondRef);
+                await React.act(async () => root.render(null));
+                assert(entries.length >= 3);
+                assert(entries.every((x) => x.released === 1));
+                assert.deepEqual(nulls, []);
+                let live = null,
+                    attaches = 0,
+                    detaches = 0;
+                const legacy = (instance) => {
+                    if (instance) {
+                        assert.equal(live, null);
+                        live = instance;
+                        attaches++;
+                    } else {
+                        assert(live);
+                        live = null;
+                        detaches++;
+                    }
+                };
+                await render('Legacy', false, legacy);
+                await render('Legacy replacement', false, legacy);
+                await React.act(async () => root.render(null));
+                assert(attaches >= 2);
+                assert.equal(detaches, attaches);
                 groups++;
             } finally {
                 await React.act(async () => root.unmount());

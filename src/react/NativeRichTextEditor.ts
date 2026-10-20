@@ -5,6 +5,7 @@ import {
     Fragment,
     useCallback,
     useEffect,
+    useMemo,
     useRef,
     useState,
     type ReactElement,
@@ -60,17 +61,35 @@ export const NativeRichTextEditor = forwardRef<
 >(function NativeRichTextEditor(props, forwardedRef) {
     const [focused, setFocused] = useState(false);
     const [editorKey, setEditorKey] = useState(0);
-    const editorRef = useRef<NativeRichTextEditorHandle | null>(null);
+    const [attachedEditor, setAttachedEditor] =
+        useState<NativeRichTextEditorHandle | null>(null);
     const lastSetValueRef = useRef<string | null>(props.value);
 
-    const attachEditor = useCallback(
-        (editor: NativeRichTextEditorHandle | null) => {
-            editorRef.current = editor;
-            if (typeof forwardedRef === 'function') forwardedRef(editor);
-            else if (forwardedRef) forwardedRef.current = editor;
-        },
-        [forwardedRef]
-    );
+    const attachEditor = useMemo(() => {
+        let detach: (() => void) | undefined;
+        return (editor: NativeRichTextEditorHandle | null) => {
+            const previous = detach;
+            detach = undefined;
+            previous?.();
+            setAttachedEditor(editor);
+            if (editor === null) return;
+            if (typeof forwardedRef === 'function') {
+                // React 18 types return void; React 19 callers may return cleanup.
+                const cleanup: unknown = forwardedRef(editor);
+                detach =
+                    typeof cleanup === 'function'
+                        ? () => {
+                              cleanup();
+                          }
+                        : () => forwardedRef(null);
+            } else if (forwardedRef) {
+                forwardedRef.current = editor;
+                detach = () => {
+                    forwardedRef.current = null;
+                };
+            }
+        };
+    }, [forwardedRef]);
     const handleChange = useCallback(
         (readValue: () => string) => {
             const stored = convertEditorValueToStoredRichText(readValue());
@@ -91,14 +110,14 @@ export const NativeRichTextEditor = forwardRef<
 
     useEffect(() => {
         if (!props.removeStaleEditorRoots) return;
-        const editor = editorRef.current;
+        const editor = attachedEditor;
         if (editor?.element == null || !(editor.element instanceof HTMLElement))
             return;
         const active = editor.view?.dom;
         if (!(active instanceof HTMLElement)) return;
         for (const child of Array.from(editor.element.children))
             if (child !== active) child.remove();
-    }, [editorKey, props.removeStaleEditorRoots]);
+    }, [attachedEditor, props.removeStaleEditorRoots]);
 
     useEffect(() => {
         if (

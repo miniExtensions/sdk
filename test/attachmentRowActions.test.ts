@@ -369,3 +369,46 @@ it('refuses malformed authority and sparse, duplicate or invalid row actions', (
     }
     assert.equal(writes, 0);
 });
+
+it('copies the public label facet without requiring structuredClone in the host realm', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        'structuredClone'
+    );
+    Reflect.defineProperty(globalThis, 'structuredClone', {
+        configurable: true,
+        writable: true,
+        value: undefined,
+    });
+    try {
+        const authority: AttachmentRowAuthority = {
+            owner: 'actual',
+            revision: 1,
+            visible: true,
+            editable: true,
+            configs: [{}],
+        };
+        const facet = captureAttachmentRowActions({
+            getAuthority: () => authority,
+            readRows: () => [
+                {
+                    nativeIndex: 0,
+                    visible: true,
+                    removeAllowed: true,
+                    attachment: { filename: 'PRIVATE' },
+                },
+            ],
+            isCurrent: () => true,
+            remove: () => true,
+        });
+        assert.deepEqual(facet.presentation, {
+            status: 'ready',
+            rows: [{ label: 'Attachment' }],
+        });
+        assert.equal(facet.remove(0), true);
+    } finally {
+        if (descriptor)
+            Reflect.defineProperty(globalThis, 'structuredClone', descriptor);
+        else Reflect.deleteProperty(globalThis, 'structuredClone');
+    }
+});

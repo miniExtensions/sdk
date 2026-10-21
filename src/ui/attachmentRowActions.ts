@@ -1,5 +1,6 @@
 import {
     projectAttachmentPresentation,
+    copyAttachmentPresentation,
     type AttachmentPresentation,
 } from './attachmentPresentation.js';
 
@@ -171,7 +172,8 @@ export function captureAttachmentRowActions(options: {
         removeAllowed: editable && row.removeAllowed,
     }));
     return {
-        presentation: structuredClone(rendered.presentation),
+        presentation:
+            copyAttachmentPresentation(rendered.presentation) ?? unavailable,
         rows: rows.map((row) => ({ ...row })),
         remove(nativeIndex) {
             if (

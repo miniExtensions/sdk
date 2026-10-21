@@ -305,7 +305,11 @@ window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...curr
                 .getAttribute('name'),
             'sdk-native-choice'
         );
+        const beforeGroupSpace = (await snapshot()).intents.length;
         await page.keyboard.press('Space');
+        await checked('b', 'b');
+        assert.equal((await snapshot()).intents.length, beforeGroupSpace);
+        await page.locator('label[for=secondary-b]').click();
         await checked('b', null);
         await finish('arrows-groups');
 

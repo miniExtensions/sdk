@@ -2749,3 +2749,22 @@ checks, asynchronous owner retirement, localization, upload/persistence and
 cleanup. If folder checks remove files, enforce count against the remaining
 batch after those checks. `checkFormAttachmentFiles` retains the genuine loaded
 Form policy and shares this metadata stage internally.
+
+### Hosted attachment row ownership
+
+`getAttachmentRowPolicy` shares native-index/add-only membership rules with the
+loaded Form policy. Pass original native URLs and the authoritative persisted
+baseline; never substitute display URLs or invent an empty missing baseline.
+It returns index/visibility/removal flags only and supplies no upload authority.
+
+`captureAttachmentRowActions` from `/ui` borrows a real host's scoped authority,
+monotonic native/configuration/visibility revision and admitted row provider.
+It uses the same label-only privacy projection as SDK renderer hosts, gates
+row reads behind current/visible/masking configuration, and captures removal
+against that revision. It rechecks current policy before calling the host
+writer. Public snapshots contain labels and native indexes, never native URLs
+or raw metadata. Missing, masked, hidden or stale contexts grant no actions.
+The mounted lease is an additional action guard; snapshot construction is pure.
+No Form envelope, draft store, client, File queue or cleanup owner is created.
+Host revisions must advance on relevant changes including observed ABA; this
+bridge does not manufacture authoritative generations or verify remote writes.

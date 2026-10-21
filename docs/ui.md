@@ -4294,6 +4294,12 @@ and cancelled activation emit no selection writes. A refused intent retains the
 controlled checked state. No selection model, pending-name policy or transport
 is created.
 
+For a native choice group, supply a shared nonempty `name` and the intended
+native form owner. Repeated field instances need separate group identities or
+form owners. The control cannot infer that scope. Keyboard activation retains
+the browser's native radio semantics; `allowDeselect` handles repeated click
+activation rather than introducing a custom Space/Arrow handler.
+
 ```tsx
 import { useState } from 'react';
 import { RadioInput } from '@miniextensions/sdk/react';

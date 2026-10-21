@@ -1,8 +1,11 @@
 import type {
-    GetFormattedAddressInput,
     ListAddressPredictionsInput,
     MiniExtensionsClient,
 } from '../runtime/types.js';
+import {
+    createAddressAutocompleteRequests,
+    type AddressAutocompleteRequestState,
+} from './addressAutocompleteRequests.js';
 
 export type AddressAutocompleteOptions = {
     input: Pick<
@@ -121,16 +124,7 @@ export const createAddressAutocompleteControl = (
     let active = true;
     let destroyed = false;
     let composing = false;
-    let predictionGeneration = 0;
-    let intentGeneration = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let predictionRequest: AbortController | undefined;
-    let detailRequest: AbortController | undefined;
-    let predictions: Awaited<
-        ReturnType<MiniExtensionsClient['addresses']['listPredictions']>
-    > = [];
-    let selectedPlace: string | null = null;
-    let failed: 'predictions' | 'details' | null = null;
+    let predictions: AddressAutocompleteRequestState['predictions'] = [];
     let highlighted = -1;
 
     const current = (): boolean => {
@@ -161,27 +155,7 @@ export const createAddressAutocompleteControl = (
         highlighted = -1;
         updateHighlightedOptions();
     };
-    const clearPredictions = (): void => {
-        predictions = [];
-        list.replaceChildren();
-        closeList();
-    };
-    const retire = (): void => {
-        predictionGeneration += 1;
-        intentGeneration += 1;
-        if (timer !== undefined) clearTimeout(timer);
-        timer = undefined;
-        predictionRequest?.abort();
-        detailRequest?.abort();
-        predictionRequest = undefined;
-        detailRequest = undefined;
-        selectedPlace = null;
-        failed = null;
-        retry.hidden = true;
-        status.textContent = '';
-        status.setAttribute('role', 'status');
-        clearPredictions();
-    };
+    const retire = (): void => requests.retire();
     const accept = (next: string): boolean => {
         if (!current()) return false;
         value = limit == null ? next : next.slice(0, limit);
@@ -189,57 +163,10 @@ export const createAddressAutocompleteControl = (
         options.onChange(value);
         return true;
     };
-    const fail = (kind: 'predictions' | 'details'): void => {
-        failed = kind;
-        retry.hidden = false;
-        status.setAttribute('role', 'alert');
-        status.textContent =
-            'Address suggestions could not be loaded. You can keep typing manually or try again.';
-    };
-    const readDetails = async (placeId: string, generation: number) => {
-        if (!current() || generation !== intentGeneration) return;
-        const controller = new AbortController();
-        detailRequest?.abort();
-        detailRequest = controller;
-        failed = null;
-        retry.hidden = true;
-        status.setAttribute('role', 'status');
-        status.textContent = 'Loading selected address…';
-        const owned = (): boolean =>
-            current() &&
-            !controller.signal.aborted &&
-            generation === intentGeneration &&
-            selectedPlace === placeId;
-        try {
-            const request: GetFormattedAddressInput = { ...context, placeId };
-            const result = await options.reads.getFormattedAddress(request, {
-                signal: controller.signal,
-            });
-            if (!owned()) return;
-            if (typeof result !== 'string') throw new TypeError();
-            if (!accept(result) || !owned()) return;
-            status.textContent = '';
-        } catch {
-            if (owned()) fail('details');
-        } finally {
-            if (detailRequest === controller) detailRequest = undefined;
-        }
-    };
     const choose = (index: number): void => {
         const prediction = predictions[index];
         if (!current() || composing || prediction == null) return;
-        predictionGeneration += 1;
-        if (timer !== undefined) clearTimeout(timer);
-        timer = undefined;
-        predictionRequest?.abort();
-        predictionRequest = undefined;
-        detailRequest?.abort();
-        const generation = ++intentGeneration;
-        selectedPlace = prediction.placeId;
-        clearPredictions();
-        if (!accept(prediction.description)) return;
-        input.focus();
-        void readDetails(prediction.placeId, generation);
+        requests.select(prediction);
     };
     const renderPredictions = (): void => {
         closeList();
@@ -271,50 +198,47 @@ export const createAddressAutocompleteControl = (
         updateHighlightedOptions();
         input.setAttribute('aria-expanded', String(!list.hidden));
     };
-    const readPredictions = async (query: string, generation: number) => {
-        if (!current() || generation !== predictionGeneration) return;
-        const controller = new AbortController();
-        predictionRequest?.abort();
-        predictionRequest = controller;
-        failed = null;
-        retry.hidden = true;
-        status.setAttribute('role', 'status');
-        status.textContent = 'Loading address suggestions…';
-        const owned = (): boolean =>
-            current() &&
-            !controller.signal.aborted &&
-            generation === predictionGeneration;
-        try {
-            const result = await options.reads.listPredictions(
-                { ...context, addressFieldValue: query },
-                { signal: controller.signal }
-            );
-            if (!owned()) return;
-            if (
-                !Array.isArray(result) ||
-                result.some(
-                    (item) =>
-                        item == null ||
-                        typeof item.description !== 'string' ||
-                        typeof item.placeId !== 'string'
-                )
-            )
-                throw new TypeError();
-            predictions = result.map((item) => ({ ...item }));
-            renderPredictions();
-            status.textContent =
-                predictions.length === 0
-                    ? 'No address suggestions. You can keep typing manually.'
-                    : '';
-        } catch {
-            if (owned()) {
-                clearPredictions();
-                fail('predictions');
-            }
-        } finally {
-            if (predictionRequest === controller) predictionRequest = undefined;
-        }
+    const renderRequestState = (
+        state: AddressAutocompleteRequestState
+    ): void => {
+        predictions = state.predictions;
+        renderPredictions();
+        const failed =
+            state.phase === 'failed-predictions' ||
+            state.phase === 'failed-details';
+        retry.hidden = !failed;
+        status.setAttribute('role', failed ? 'alert' : 'status');
+        status.textContent = failed
+            ? 'Address suggestions could not be loaded. You can keep typing manually or try again.'
+            : state.phase === 'loading-predictions'
+              ? 'Loading address suggestions…'
+              : state.phase === 'loading-details'
+                ? 'Loading selected address…'
+                : state.phase === 'predictions' && predictions.length === 0
+                  ? 'No address suggestions. You can keep typing manually.'
+                  : '';
     };
+    const requests = createAddressAutocompleteRequests({
+        reads: {
+            listPredictions: (query, requestOptions) =>
+                options.reads.listPredictions(
+                    { ...context, addressFieldValue: query },
+                    requestOptions
+                ),
+            getFormattedAddress: (placeId, requestOptions) =>
+                options.reads.getFormattedAddress(
+                    { ...context, placeId },
+                    requestOptions
+                ),
+        },
+        isCurrent: current,
+        onValue: (next, source) => {
+            const accepted = accept(next);
+            if (accepted && source === 'selection') input.focus();
+            return accepted;
+        },
+        onStateChange: renderRequestState,
+    });
     const startComposition = (): void => {
         if (!current()) return;
         composing = true;
@@ -335,12 +259,7 @@ export const createAddressAutocompleteControl = (
         const next = input.value;
         retire();
         if (!accept(next) || !current() || value.trim() === '') return;
-        const generation = predictionGeneration;
-        const query = value;
-        timer = setTimeout(() => {
-            timer = undefined;
-            void readPredictions(query, generation);
-        }, 800);
+        requests.schedulePredictions(value);
     };
     const endComposition = (): void => {
         if (!composing) return;
@@ -389,11 +308,11 @@ export const createAddressAutocompleteControl = (
     };
     const retryRead = (): void => {
         if (!current() || composing) return;
-        if (failed === 'details' && selectedPlace != null) {
-            void readDetails(selectedPlace, ++intentGeneration);
-        } else if (failed === 'predictions' && value.trim() !== '') {
-            void readPredictions(value, ++predictionGeneration);
-        }
+        if (
+            requests.getState().phase === 'failed-details' ||
+            value.trim() !== ''
+        )
+            requests.retry(value);
     };
     input.addEventListener('input', typed);
     input.addEventListener('compositionstart', startComposition);
@@ -428,7 +347,8 @@ export const createAddressAutocompleteControl = (
             if (destroyed) return;
             destroyed = true;
             composing = false;
-            retire();
+            requests.destroy();
+            renderRequestState(requests.getState());
             input.removeEventListener('input', typed);
             input.removeEventListener('compositionstart', startComposition);
             input.removeEventListener('compositionend', endComposition);

@@ -315,6 +315,7 @@ export async function checkBrowserReviewExample({
                 'Retained section';
             form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.enableSectionHeader = false;
             form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.hideFieldIfEmpty = true;
+            form.payload.fieldIdsToSchemas.fld_review_readonly.miniExtConfig.applyFieldConditionsToSection = true;
         }
         if (
             [
@@ -532,7 +533,10 @@ export async function checkBrowserReviewExample({
                 // controls before Review can mount; retain that earlier refusal.
                 if (field('fld_review_title')) submit();
                 await settled();
-                assert.equal(document.querySelector('dialog'), null);
+                assert.ok(
+                    document.querySelector('dialog') === null,
+                    'Packed Review refusal must keep dialog closed.'
+                );
                 assert(
                     document
                         .getElementById('status')
@@ -1529,12 +1533,18 @@ export async function checkBrowserCombinedEmptyReviewExample({
                     call.input.conditionalLinkedRecordFieldIdsToFilteringValues,
                     {}
                 );
+                const validationText =
+                    doc.querySelector('.error-list').textContent;
                 assert(
-                    doc
-                        .querySelector('.error-list')
-                        .textContent.includes(
-                            `Hidden required answer: ${fixture.state.expected.validationMessage}`
-                        )
+                    validationText.includes(
+                        'A field needs attention before saving.'
+                    )
+                );
+                assert(!validationText.includes('Hidden required answer'));
+                assert(
+                    !validationText.includes(
+                        fixture.state.expected.validationMessage
+                    )
                 );
                 assert.equal(doc.querySelector('dialog'), null);
                 assert.deepEqual(

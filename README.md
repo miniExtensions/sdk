@@ -63,9 +63,7 @@ npm install /absolute/path/to/miniextensions-sdk-0.1.0-alpha.0.tgz
 ```ts
 import { createMiniExtensionsClient } from '@miniextensions/sdk';
 
-const client = createMiniExtensionsClient({
-    apiOrigin: 'https://your-api-origin.example',
-});
+const client = createMiniExtensionsClient();
 const controller = new AbortController();
 const page = await client.loadExtension(
     {
@@ -79,6 +77,12 @@ const page = await client.loadExtension(
 // Render the returned redirect, password/login screen, Form or Portal.
 // Loading does not save a Form or apply returned login credentials.
 ```
+
+The client defaults to `https://web.miniextensions.com`. For another deployment,
+pass its API origin explicitly: `createMiniExtensionsClient({ apiOrigin })`.
+Keep private deployment overrides in your installed application's runtime
+configuration, outside public source and shared artifacts. Invalid explicit
+origins and failed requests never fall back to the public service.
 
 The [typed Form quickstart](docs/runtime.md#packaged-form-quickstart) supplies a
 complete load-and-save example with editable-schema checks, native values,
@@ -132,11 +136,28 @@ compiler failure, and is not shipped. No source package settings are rewritten.
 ## Obtain the actual runtime configuration
 
 - Publish the Form or Portal through the existing miniExtensions workspace,
-  including permitted child create/edit Forms. Obtain its published share ID
-  through the normal Share flow. A share ID is not an admin extension, table or
-  record ID; unsaved builder settings are not the published visitor settings.
-- Obtain the deployment's HTTP(S) API origin serving `/api/v1` and `/api/trpc`.
-  Supply an origin without a path, query, fragment or URL credentials. A public
+  including permitted child create/edit Forms. The SDK's top-level `shareId`
+  input requires the stored `extension.shareId`. It is not an admin extension,
+  table or record ID; unsaved builder settings are not the published visitor
+  settings.
+- If the normal Share/Open flow gives you a default-domain public link of the
+  form `https://<default-host>/<shareId>`, use that first path segment as the
+  Share ID (not a following record ID or query string). A custom-domain link
+  can instead use `https://<custom-host>/<slug>`: a custom-domain slug is not the Share ID.
+  Do not copy that slug into `shareId` or assume changing the hostname converts
+  it into a Share ID.
+- If you only have a custom-domain link, obtain the stored `extension.shareId`
+  from your workspace administrator or deployment owner before connecting.
+  The existing authenticated workspace administration data contains it, but
+  the SDK does not expose that admin API. There is no public SDK discovery endpoint
+  that resolves a custom-domain URL/slug into the required Share ID, and no
+  dedicated SDK configuration card in the workspace. If the owner cannot
+  provide the ID, this integration prerequisite is unresolved; the browser
+  starter cannot discover it for you.
+- The public API origin defaults to `https://web.miniextensions.com`. For another
+  deployment, obtain its HTTP(S) API origin serving `/api/v1` and `/api/trpc` and
+  set the installed application's override. Supply an origin without a path,
+  query, fragment or URL credentials. A public
   share URL or custom application URL does not establish that API origin.
   Use a durable deployment for a continuing application.
 - The deployment must allow your browser application's exact origin and the
@@ -160,20 +181,25 @@ The SDK has no administrative workspace/configure/publish API.
 
 ## Choose the integration layer
 
-| Import                         | Included behavior                                                                                                                                         | Guide                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                           | [Runtime](docs/runtime.md)                                                   |
-| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                            | [Form helpers](docs/forms.md)                                                |
-| `@miniextensions/sdk/portals`  | `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests      | [Portal helpers](docs/portals.md)                                            |
-| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                          | [Authentication](docs/auth.md)                                               |
-| `@miniextensions/sdk/ui`       | Typed field hosts/slots, `createFormRenderScope`, `createPortalRenderScope`, selection/scalar/date models, authorized linked loaders and address controls | [Renderer startup](docs/field-bindings.md#custom-form-grid-and-list-startup) |
-| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                 | [Formulas](docs/formulas.md)                                                 |
-| `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering | [Field bindings](docs/field-bindings.md)                                     |
+| Import                         | Included behavior                                                                                                                                                                      | Guide                                                                        |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `@miniextensions/sdk`          | `createMiniExtensionsClient`, native contracts, explicit session helpers and runtime operations                                                                                        | [Runtime](docs/runtime.md)                                                   |
+| `@miniextensions/sdk/forms`    | `FormDraftStore`, `createFormController`, `createFormFieldBindings`, field descriptors, native Save composition and validation                                                         | [Form helpers](docs/forms.md)                                                |
+| `@miniextensions/sdk/portals`  | `evaluatePortalViewAvailability`, `createPortalCollection`, `createPortalListOwner`, `createPortalSortEditor`, `createPortalFilterEditor`, cell bindings and configured child requests | [Portal helpers](docs/portals.md)                                            |
+| `@miniextensions/sdk/auth`     | `createAuthFlow`, explicit credential application, verification challenges and opt-in `createSessionRestoration`                                                                       | [Authentication](docs/auth.md)                                               |
+| `@miniextensions/sdk/ui`       | Typed field hosts/slots, `createFormRenderScope`, `createPortalRenderScope`, selection/scalar/date models, authorized linked loaders and address controls                              | [Renderer startup](docs/field-bindings.md#custom-form-grid-and-list-startup) |
+| `@miniextensions/sdk/formulas` | `FormulaRunner`, parser and local evaluation against supplied native field/record context                                                                                              | [Formulas](docs/formulas.md)                                                 |
+| `@miniextensions/sdk/react`    | Optional `FieldRenderer`, `AirtableForm`, `AirtableGrid`, `AirtableList`, field and criteria components using owner-held state and app-supplied rendering                              | [Field bindings](docs/field-bindings.md)                                     |
 
-Helpers are optional. Core, Form and Portal models are framework-neutral; `/ui`
-also includes optional DOM controls. The `/react` subpath provides `TextField`, `NumberField`, `CheckboxField`,
-`SelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
-`DateTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
+Helpers are optional. Core, Form and Portal models are framework-neutral.
+Before creating a Portal collection, use
+[`evaluatePortalViewAvailability`](docs/portals.md) with the complete accepted
+Portal user/schema to choose an eligible view or explicitly supported legacy
+default. The result makes no request and grants no access or freshness.
+
+The `/ui` subpath also includes optional DOM controls. The `/react` subpath provides `TextField`, `MultilineTextField`, `EmailField`, `UrlField`, `PhoneNumberField`, `NumberField`, `PercentField`, `RatingField`, `AutoNumberField`, `CountField`, `ExternalSyncSourceField`, `CreatedByField`, `LastModifiedByField`, `CheckboxField`,
+`SelectField`, `SingleSelectField`, `LinkedField`, `AttachmentField`, `AttachmentDialog`, `DateField`,
+`DateTimeField`, `CreatedTimeField`, `LastModifiedTimeField`, `DurationField`, `PortalList`, `PortalSortEditor` and `PortalFilterEditor`, with
 app-supplied rendering through render props. React is an optional peer for that
 subpath only; non-React imports require no React installation. See the
 [field-binding usage guide](docs/field-bindings.md) and
@@ -185,6 +211,184 @@ renderer does not replace its owner. The shipped guides also include
 [React/Next selection](docs/ui.md#react-and-next-integration) and
 [React authentication](docs/auth.md#react-client-panel) recipes for your own
 framework application.
+
+[Single Select presentation](docs/ui.md#react-single-select-presentation) exports
+`SingleSelectField`, `SingleSelectFieldProps`, `SingleSelectFieldOptions` and the
+`renderSingleSelectField` slot. It uses a native dropdown with optional
+`@miniextensions/sdk/react/single-select.css`, existing owner options and native
+choice-name drafts. Configured choice creation remains an explicit Form-owner
+action; saving the record remains separate. List/radio layouts and choice-color
+presentation require a custom renderer.
+
+[Multiline Text presentation](docs/ui.md#react-multiline-text-presentation) exports
+`MultilineTextField`, `MultilineTextFieldProps`, `MultilineTextFieldOptions` and the
+typed `renderMultilineTextField` slot. It uses a plain textarea and optional
+`@miniextensions/sdk/react/text.css` for native string/null drafts. Append-only,
+attachment-display and explicit masking modes require a custom renderer.
+
+[Email presentation](docs/ui.md#react-email-presentation) exports `EmailField`,
+`EmailFieldProps`, `EmailFieldOptions` and the typed `renderEmailField` slot. It
+reuses the Text control and optional `@miniextensions/sdk/react/text.css` for native
+single-line text drafts; page and server validation remain authoritative.
+
+[URL presentation](docs/ui.md#react-url-presentation) exports `UrlField`,
+`UrlFieldProps`, `UrlFieldOptions` and the typed `renderUrlField` slot. It reuses
+the Text control and optional `@miniextensions/sdk/react/text.css` for manual
+single-line entry. URL text does not create links or grant navigation authority.
+
+[Last Modified Time presentation](docs/ui.md#react-last-modified-time-presentation)
+exports `LastModifiedTimeField`, `LastModifiedTimeFieldProps`,
+`LastModifiedTimeFieldOptions` and the typed `renderLastModifiedTimeField` slot.
+It presents supplied raw timestamp strings only when Last Modified Time metadata
+has `options.isValid === true`, using the disabled DateTime control and optional
+`@miniextensions/sdk/react/datetime.css`. It does not format dates, calculate
+modification times or change native values.
+
+[Created Time presentation](docs/ui.md#react-created-time-presentation) exports
+`CreatedTimeField`, `CreatedTimeFieldProps`, `CreatedTimeFieldOptions` and the typed
+`renderCreatedTimeField` slot. It presents supplied raw timestamp strings through
+the disabled DateTime control and optional `@miniextensions/sdk/react/datetime.css`,
+without parsing, formatting, timezone conversion or writes.
+
+[Last Modified By presentation](docs/ui.md#react-last-modified-by-presentation) exports
+`LastModifiedByField`, `LastModifiedByFieldProps`, `LastModifiedByFieldOptions` and the typed
+`renderLastModifiedByField` slot. It displays the supplied native collaborator name
+with the disabled Text control and optional `@miniextensions/sdk/react/text.css`.
+It does not resolve identities, display email or avatar data, or grant writes.
+
+[Created By presentation](docs/ui.md#react-created-by-presentation) exports
+`CreatedByField`, `CreatedByFieldProps`, `CreatedByFieldOptions` and the typed
+`renderCreatedByField` slot. It displays the supplied native collaborator name
+with the disabled Text control and optional `@miniextensions/sdk/react/text.css`.
+It does not resolve identities, display email or avatar data, or grant writes.
+
+[External Sync Source presentation](docs/ui.md#react-external-sync-source-presentation)
+exports `ExternalSyncSourceField`, `ExternalSyncSourceFieldProps`,
+`ExternalSyncSourceFieldOptions` and the typed `renderExternalSyncSourceField` slot.
+It displays the supplied SDK string with the disabled Text control and optional
+`@miniextensions/sdk/react/text.css`, without resolving choice IDs or changing values.
+
+[Formula presentation](docs/ui.md#react-formula-presentation) exports
+`FormulaField`, `FormulaFieldProps`, `FormulaFieldOptions` and the typed
+`renderFormulaField` slot. It formats supplied computed results as inert text,
+with native values and readonly authority retained by the existing controller.
+No CSS import is required. Lookup remains a separate presentation.
+
+[Rollup presentation](docs/ui.md#react-rollup-presentation) exports
+`RollupField`, `RollupFieldProps`, `RollupFieldOptions` and the typed
+`renderRollupField` slot. It displays supplied aggregate results as inert text
+using existing native formatting, without evaluating the aggregation or reading
+linked records. No CSS import is required. Lookup keeps its separate contract.
+
+[Lookup presentation](docs/ui.md#react-lookup-presentation) exports `LookupField`,
+`LookupFieldProps`, `LookupFieldOptions` and `renderLookupField` for the existing
+`renderMultipleLookupValuesField` slot. It formats supplied flat native arrays as
+inert text without flattening, hydration or editing. No CSS import is required.
+
+[Barcode presentation](docs/ui.md#react-barcode-presentation) exports `BarcodeField`,
+`BarcodeFieldProps`, `BarcodeFieldOptions` and `renderBarcodeField` for the existing
+physical slot. It displays supplied text while preserving the native object and
+type, with masking applied before reading the value. This is read-only display
+coverage; scanning, generated images, links and editing are not included.
+
+[Single Collaborator presentation](docs/ui.md#react-single-collaborator-presentation)
+exports `SingleCollaboratorField`, `SingleCollaboratorFieldProps`,
+`SingleCollaboratorFieldOptions` and `renderSingleCollaboratorField` for the
+existing physical slot. It displays only the supplied name as inert text while
+preserving the native object, with masking before value access. No identity lookup,
+email/ID fallback, avatar request or editing is added.
+
+[Multiple Collaborators presentation](docs/ui.md#react-multiple-collaborators-presentation)
+exports `MultipleCollaboratorsField`, `MultipleCollaboratorsFieldProps`,
+`MultipleCollaboratorsFieldOptions` and `renderMultipleCollaboratorsField` for the
+existing physical slot. It joins supplied names with `, ` as inert text, preserving
+order, duplicates, blank names, whitespace and native arrays and objects. Masking
+precedes value access; no identity lookup, email/ID fallback, avatar, picker or
+editing is added.
+
+[Rich Text presentation](docs/ui.md#react-rich-text-presentation) exports
+`RichTextField`, `RichTextFieldProps`, `RichTextFieldOptions` and
+`renderRichTextField` for the existing physical slot. It displays supplied Markdown
+literally as escaped text, preserving whitespace, line breaks and the native
+string. Masking precedes value access. This is a safe plain-text display stage;
+formatted Rich Text parity, parsing, links, resource loading and editing are not
+included.
+
+[AI Text presentation](docs/ui.md#react-ai-text-presentation) exports `AiTextField`,
+`AiTextFieldProps`, `AiTextFieldOptions` and `renderAiTextField` for the existing
+computed, read-only slot. It displays the supplied native object's `value` as
+escaped selectable text with whitespace preserved. Native state and stale flags
+remain unchanged; masking precedes value access. No generation, retry, prompt or
+reference inspection, parsing, links, hydration or editing is added.
+
+[Multiple Attachments adapter](docs/ui.md#react-multiple-attachments-adapter)
+exports `MultipleAttachmentsField` and `renderMultipleAttachmentsField` for
+editable Form slots with existing filtered snapshots and guarded actions.
+Choose, first-file Upload, Clear and Cancel remain explicit; Save stays separate.
+This editable adapter leaves read-only Form/Portal slots at the inert
+`Attachment presentation unavailable` fallback.
+The adapter never reads raw attachment values or creates previews/downloads.
+
+[Read-only attachment labels](docs/ui.md#react-read-only-attachment-presentation)
+exports `ReadonlyAttachmentsField` and `renderReadonlyAttachmentsField` for the
+approved Form/Portal-detail `attachmentPresentation` facet. It renders supplied
+labels literally in order, preserving duplicates, without borrowing native values
+or editable actions. Masked, unavailable and unsupported contexts remain inert.
+Register this helper under the existing `renderMultipleAttachmentsField` slot
+when a read-only label view is wanted; the editable adapter remains separate.
+
+[Count presentation](docs/ui.md#react-count-presentation) exports `CountField`,
+`CountFieldProps`, `CountFieldOptions` and the typed `renderCountField` slot.
+It displays supplied finite Count values only when Count metadata is valid,
+using the disabled Number control and optional `@miniextensions/sdk/react/number.css`.
+It does not calculate counts, normalize native values or grant write authority.
+
+[AutoNumber presentation](docs/ui.md#react-autonumber-presentation) exports
+`AutoNumberField`, `AutoNumberFieldProps`, `AutoNumberFieldOptions` and the typed
+`renderAutoNumberField` slot. It displays supplied finite native numbers in a
+disabled control using optional `@miniextensions/sdk/react/number.css`. It never
+generates, increments or writes an identifier.
+
+[Rating presentation](docs/ui.md#react-rating-presentation) exports `RatingField`,
+`RatingFieldProps`, `RatingFieldOptions` and the typed `renderRatingField` slot.
+It reuses the Number control and optional `@miniextensions/sdk/react/number.css`
+for manual native numeric entry. Rating maximum, icon and color metadata do not
+add stars, clamping or rounding; existing page validation remains authoritative.
+
+[Percent presentation](docs/ui.md#react-percent-presentation) exports `PercentField`,
+`PercentFieldProps`, `PercentFieldOptions` and the typed `renderPercentField` slot.
+It reuses the Number control and optional `@miniextensions/sdk/react/number.css`:
+native fractions such as `0.25` remain `0.25`, without percent scaling or a suffix.
+
+[Phone Number presentation](docs/ui.md#react-phone-number-presentation) exports
+`PhoneNumberField`, `PhoneNumberFieldProps`, `PhoneNumberFieldOptions` and the typed
+`renderPhoneNumberField` slot. It reuses the Text control and optional
+`@miniextensions/sdk/react/text.css` for literal single-line drafts, with no phone
+normalization, country selector or dialing action.
+
+For calendar dates, `/react` also exports the `renderDateField` named slot,
+`DateFieldProps` and `DateFieldOptions`. Both the slot and `DateField` use the
+owner's date model for manual `YYYY-MM-DD` input, retained partial drafts and
+explicit clearing. Optional styles are exported at
+`@miniextensions/sdk/react/date.css`; see [React Date presentation](docs/ui.md#react-date-presentation).
+
+For explicit-offset timestamps, `/react` also exports the `renderDateTimeField`
+named slot, `DateTimeFieldProps` and `DateTimeFieldOptions`. Both the slot and
+`DateTimeField` use the owner's date model for manual input, retained partial
+drafts and explicit clearing. Optional styles are exported at
+`@miniextensions/sdk/react/datetime.css`; see [React DateTime presentation](docs/ui.md#react-datetime-presentation).
+
+For duration clocks, `/react` also exports the `renderDurationField` named slot,
+`DurationFieldProps` and `DurationFieldOptions`. Both the slot and `DurationField`
+use the existing scalar model for native seconds, retained partial input and
+formatting on blur. Optional styles are exported at
+`@miniextensions/sdk/react/duration.css`; see [React Duration presentation](docs/ui.md#react-duration-presentation).
+
+For currency input, `/react` also exports `CurrencyField`, `CurrencyFieldProps`,
+`CurrencyFieldOptions` and the `renderCurrencyField` named slot. These use the
+existing numeric scalar model and show a literal currency symbol beside raw
+native-unit input. Optional styles are exported at
+`@miniextensions/sdk/react/currency.css`; see [React Currency presentation](docs/ui.md#react-currency-presentation).
 
 ## Runtime operation map
 
@@ -245,7 +449,10 @@ archive and intended deployment separately.
   unlink and Kanban category changes. Valid lookup results targeting linked
   records support paging and configured existing-child edits while preserving
   the outer Portal field ID. Lookup collections expose no create or parent
-  unlink actions. See [Portal controls](examples/browser/README.md#portal-workflow).
+  unlink actions. Subscribed list owners expose sanitized read-failure kind/status
+  for [host-owned manual recovery](docs/portals.md#manual-read-failure-guidance),
+  without automatic retry or session changes. See
+  [Portal controls](examples/browser/README.md#portal-workflow).
 - **Authentication:** password, configured login and verification controls,
   deliberate session application, basic configured signup using the login
   inputs, and memory-only visitor sessions by default. The starter offers explicit
@@ -303,10 +510,13 @@ customer application.
 ## Current compatibility limits
 
 This preview does not promise complete Form/Portal UI parity. The starter's
-prepared Review is one-page and manual-only, with bounded scalar/select/linked/
-attachment answers and a strict supported date/dateTime contract. Rich condition
-drivers, multipage, automatic/compute workflows and other configurations listed
-in the [compatibility checklist](docs/ui.md#review-configuration-compatibility-checklist)
+prepared Review supports one-page and manual multipage Forms, with bounded
+scalar/select/linked/attachment answers and a strict supported date/dateTime
+contract. Computed fields still block final Review. Linked-child coordination
+requires an explicit Review adapter; the browser starter does not supply one.
+Rich condition drivers, automatic/compute
+workflows and other configurations listed in the
+[compatibility checklist](docs/ui.md#review-configuration-compatibility-checklist)
 remain unsupported. Portal filter controls edit one supported condition, not a
 nested filter-builder UI; inline attachments are readonly previews. The backend
 still enforces published access and validation rules.
@@ -314,7 +524,10 @@ still enforces published access and validation rules.
 Mounting a renderer performs no Save, upload or linked search. Visitor state is
 memory-only by default. With the starter’s remembering option, refresh requires
 reconnecting with the same settings and opting in to validate the remembered
-credential. Drafts and uncertain operations are never restored. Browser/provider compatibility, CORS and live persistence require
+credential. Ordinary drafts stay in memory; eligible anonymous create Forms
+offer a separate [opt-in progress restore](docs/browser-lifecycle.md#optional-create-progress)
+for explicitly selected nonsensitive scalar answers, validated through a fresh
+load. Files and uncertain operations are never restored. Browser/provider compatibility, CORS and live persistence require
 separate deployment testing. Use the supplied guides rather than interpreting a
 typed configuration property as an implemented control.
 
@@ -369,24 +582,36 @@ first-page read or root Reload before further Portal actions. See
 Field presentation and choice workflows beyond the
 [one-page field support](docs/forms.md#one-page-conditional-field-visibility)
 and [configured scalar choices](docs/ui.md#configured-scalar-choice-availability)
-remain application-owned, along with section headers/collapse, pages,
-Save & Continue, progress persistence, CAPTCHA/fingerprint/GPS collection and
+remain application-owned, along with section collapse, page workflows beyond the
+[bounded manual navigation](docs/forms.md#bounded-multipage-ownership),
+Save & Continue, progress persistence beyond the
+[bounded create-progress recipe](docs/browser-lifecycle.md#optional-create-progress), CAPTCHA/fingerprint/GPS collection and
 advanced field widgets. Static select limits and display labels alone do not
 evaluate option conditions. The starter uses final Save and supplies no
 general conditional evaluator or CAPTCHA widget. The existing server still
 enforces its published rules.
 
+The packaged browser starter supplies manual multipage navigation from enabled
+frontend section headers, with Back/Next, current-page validation, conditional
+page skipping and final all-page validation. Navigation performs no Save.
+[Linked-child Create and Edit](docs/forms.md#configured-linked-child-create-and-edit)
+also support one-page and manual multipage Forms. Custom applications may supply
+the existing page-owner Review adapter to the linked-child owner; without it,
+including in the browser starter, configured child Review remains refused.
+
 The packaged browser starter also supplies a
 [bounded Review/Edit/Confirm recipe](examples/browser/README.md#form-workflow)
-for the published `promptUserBeforeSubmission` setting on one-page manual
-Forms with supported scalar/select answers, conservative linked/attachment
-summaries and section conditions. It renders ordered nonempty answers as plain
+for the published `promptUserBeforeSubmission` setting on one-page and manual
+multipage Forms, opening Review on the final available page. It supports
+scalar/select answers, conservative linked/attachment summaries and section
+conditions. It renders ordered nonempty answers as plain
 text with fixed scalar password masks; attachment filenames are opt-in. The prepared intent captures the actual draft revision
 and current owner/configuration context; edits or context changes invalidate
 confirmation. Edit/dismiss performs no Save, while explicit current Confirm
 uses the existing final Save and unknown-outcome recovery path once with the
-complete native values and dirty IDs. General review renderers, compute and
-automatic workflows remain application-owned; this recipe adds no backend
+complete native values and dirty IDs. Computed fields still block final Review.
+General review renderers, compute and automatic workflows remain
+application-owned; this recipe adds no backend
 validation, permission or persistence API.
 
 `compileRuntimeConditions` from `@miniextensions/sdk/forms` compiles a
@@ -400,11 +625,16 @@ explicitly composes compilation with typed formula evaluation.
 [bounded one-page field visibility](docs/forms.md#one-page-conditional-field-visibility)
 using direct scalar drivers and frontend section propagation. The starter
 recomputes after accepted edits and preserves hidden native drafts and Save
-types. Explicit edit-mode `hideFieldIfEmpty` supports the flat direct scalar
-subset, including readonly fields; null/blank text, checkbox false, rating zero
+types. Explicit edit-mode `hideFieldIfEmpty` supports direct scalar fields,
+including readonly fields. Ordered composition supports leading fields and
+ordinary sections that do not apply field conditions to their members;
+the single-field and legacy-flat adapters remain conservative for sections.
+Null/blank text, checkbox false, rating zero
 and blank barcode text hide while ordinary numeric zero remains populated.
-Unsupported predicates, computed/linked drivers, richer empty-hiding targets
-and section contexts with active empty hiding return explicit blocked outcomes.
+Form conditions also accept [scalar Formula result snapshots](docs/forms.md#formula-scalar-snapshot-drivers)
+with valid matching number, percent, currency or text metadata. These values are
+not recalculated after draft edits. Unsupported predicates, other computed/linked drivers, richer empty-hiding targets
+and active empty hiding inside applied-condition sections return explicit blocked outcomes.
 These presentation helpers do not grant permissions or supply a backend
 filtered-record projection.
 

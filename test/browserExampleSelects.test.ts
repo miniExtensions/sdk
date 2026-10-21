@@ -791,7 +791,10 @@ const selectPortal = async (
             auditTrails: [],
         };
     };
-    client.portals.getUserRecord = async () => null;
+    client.portals.getUserRecord = async () => ({
+        id: page.payload.formRecord.recordId,
+        fields: { fld_prefill: 'prefill_Title=Example' },
+    });
     let pending = Promise.resolve();
     const view = createPortalView({
         page,
@@ -1310,7 +1313,10 @@ describe(
                     auditTrails: [],
                 };
             };
-            client.portals.getUserRecord = async () => null;
+            client.portals.getUserRecord = async () => ({
+                id: page.payload.formRecord.recordId,
+                fields: { fld_prefill: 'prefill_Title=Example' },
+            });
             let pending = Promise.resolve();
             const view = createPortalView({
                 page,

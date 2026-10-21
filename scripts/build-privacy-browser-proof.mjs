@@ -32,6 +32,9 @@ const starterFiles = [
     'index.html',
     'styles.css',
     'src/main.ts',
+    'src/progress.ts',
+    'src/privacy.ts',
+    'src/linkedChildPanel.ts',
     'src/fields.ts',
     'src/portal.ts',
     'src/dom.ts',
@@ -237,7 +240,7 @@ function createPrivacyFixture(scenario) {
         titleOverride: null,
         isHidden: false,
         fieldIsInEditingChildForm: true,
-        // Conflicting detail config deliberately proves the child config wins.
+        // Detail policy controls row summaries; child config controls the editor.
         miniExtConfig: { obscurePassword: !childMasked },
         childFormField: {
             idOrName: { type: 'id', id: entry.id },
@@ -391,7 +394,7 @@ function createPrivacyFixture(scenario) {
                       saved: 'Different-length Saved Value',
                       fixedMask: '••••••••',
                       emptyRecordId: 'rec_empty_synthetic',
-                      unmasked: 'Ordinary public value',
+                      unmasked: 'Exact Case-Sensitive Original',
                   }
                 : {
                       name: selected.name,
@@ -1381,10 +1384,11 @@ export function createEditHideEmptyFixture(scenario) {
                 ...(field.id === 'fld_empty_title' && !create && !unavailable
                     ? { required: true }
                     : {}),
-                ...(field.id === 'fld_empty_tail' && blocked
+                ...(field.id === 'fld_empty_title' && blocked
                     ? {
                           headerSectionTitle: 'Retained disabled section',
                           enableSectionHeader: false,
+                          applyFieldConditionsToSection: true,
                       }
                     : {}),
             },
@@ -3412,7 +3416,7 @@ renderPanel();
         const links = privacyScenarioInventory
             .map(
                 (name) =>
-                    `<li><a href="starter/index.html?scenario=${name}">Actual starter: ${name === 'portal' ? 'obscured Portal child-config Grid save/reopen' : name}</a>${privacyAuthScenarioInventory.includes(name) ? ` · <a href="auth/index.html?scenario=${name}">Complete AuthPanel: ${name}</a>` : ''}</li>`
+                    `<li><a href="starter/index.html?scenario=${name}">Actual starter: ${name === 'portal' ? 'obscured Portal display-policy Grid save/reopen' : name}</a>${privacyAuthScenarioInventory.includes(name) ? ` · <a href="auth/index.html?scenario=${name}">Complete AuthPanel: ${name}</a>` : ''}</li>`
             )
             .join('');
         write(
@@ -3463,7 +3467,7 @@ For each Actual starter login link, choose Connect and load (origin/share are al
 1. **PIN/Password positive:** PIN uses returned title Portal PIN and credential Exact-Case PIN 07; Password uses Portal Password and Exact-Case Password 09. The starter label remains Identifier. Inspect its input type=password, type the exact credential, then choose Log in and use session (starter) or Log in (AuthPanel). Synthetic response is no-record. The trace must contain one login with exactly {Identifier: entered value}, preserving case/spacing. Input masking must not rewrite credentials.
 2. **Ordinary-word negative:** returned title Spinning Identifier contains the substring pin without a password/PIN word boundary. Input type must remain text. Enter Exact ordinary identifier and log in. Trace must preserve that exact Identifier credential and contain one login. No title-inferred password/OTP permission is granted.
 3. **Explicit masked email/phone OTP:** Email credential/destination is Privacy.Exact+Email@example.test; Phone is +15550102030. Both use maskPasswordOnLoginScreen=true plus their matching configured requireEmailVerificationToLogin/requirePhoneNumberVerificationToLogin flag. Input type=password. Log in once. The app status must show a fixed eight-bullet destination, not the raw destination. Enter code 123456 and choose Confirm and use session (starter) or Confirm code (AuthPanel). Trace must show login followed by confirmVerificationCodeForLogin with verificationId verification_privacy_synthetic, verificationCode 123456 and language en. On React the message must offer Apply session; no session is applied before you click it. On the starter the existing UI explicitly applies the returned fake session and asks you to Reload. No real email/SMS is delivered.
-4. **Portal child-config mask/native Grid:** choose Connect and load, then Load records. In Row Alpha, Private text must show fixed eight bullets and its cell title must not contain the synthetic original; Row Empty must show an empty value (its Edit cell action may remain, but no bullets); Ordinary text must show Ordinary public value. Effective child config wins over deliberately contradictory detail config in both masked and unmasked fields. Click Edit cell in Row Alpha's Private text column. Input type=password and native input value must be Exact Case-Sensitive Original (inspect only; no visible plaintext cell). Replace it with Different-length Saved Value and choose Save cell. Exactly one POST airtable.updatePortalRecord must use recordId rec_private_synthetic, recordFieldId fld_secret_synthetic, portalFieldId fld_children_synthetic, selectedCustomViewId view_privacy_synthetic and that exact native value. The returned body cell must remain fixed-mask. Reopen Edit cell: type=password and native input value must equal the saved value. Choose Cancel, Load records, then Open Form for Row Alpha to inspect the fresh native child payload: Private text remains a password control with that exact saved value. Do not submit the child Form; unrelated mutation routes are deliberately rejected. Empty and ordinary controls must remain unchanged.
+4. **Portal display-policy mask/native Grid:** choose Connect and load, then Load records. The accepted returned detail display policy controls row summaries and masks. In this deliberately contradictory fixture, Title and Ordinary text must show fixed eight bullets and their cell titles must not contain the native values; Private text must show Exact Case-Sensitive Original in the first row and an empty value in the second row. Masked summaries keep the same eight bullets even for an empty native value. The second row's empty Private text is unmasked, so it is not a masked-empty case. Child config still controls write/editor admission and the editor's input masking. Click Edit cell in the first row's Private text column. Input type=password and native input value must be Exact Case-Sensitive Original. Replace it with Different-length Saved Value and choose Save cell. Exactly one POST airtable.updatePortalRecord must use recordId rec_private_synthetic, recordFieldId fld_secret_synthetic, portalFieldId fld_children_synthetic, selectedCustomViewId view_privacy_synthetic and that exact native value. The returned Private text cell must show the saved value under its unchanged unmasked detail display policy; Title and Ordinary text remain fixed-mask. Reopen Edit cell: type=password and native input value must equal the saved value. Choose Cancel, Load records, then Open Form for the first row to inspect the fresh native child payload: Private text remains a password control with that exact saved value. Do not submit the child Form; unrelated mutation routes are deliberately rejected. The second row's empty Private text and fixed-mask Title/Ordinary text summaries must remain unchanged.
 
 At each stage choose Inspect current trace and UI, or read window.__privacyBrowserProof.snapshot() in normal browser developer tools. It only reads state; it triggers no app action/request. Save the manual observations/screenshots and scenario URLs with the manifest digest separately. The snapshot contains synthetic expected values and trace inputs on purpose; privacy assertions apply to applicationText/status/cells, not the diagnostics banner/README or synthetic transport trace. Input values are omitted from the generic DOM snapshot. A rejected/extra route, browser error or nonempty unexpected list must be reported; never hide it or claim all assertions passed merely because the page loaded.
 
@@ -3513,7 +3517,7 @@ Choose Reload before either teardown: the active Form must contain Fresh public 
 
 hide-empty-edit uses explicit edit-mode hideFieldIfEmpty:true on twelve matching direct scalar families, including richText. Readonly null, blank text, false checkbox, zero rating and blank native barcode remain hidden; ordinary number/currency/percent zero stay visible. Replace the populated required answer with one SPACE in one native key command, then edit the visible sibling and Save. The complete whitespace/native snapshot, readonly/unrendered values, initial dirty ID, URL-prefilled ID and accepted edits must appear in the single Save. The synthetic returned hidden-field required error remains visible. Visitor A-to-B-to-A retains the accepted hidden draft without a read or replay; Discard restores initial controls without another Save. This is presentation and returned-error handling, not hosted required-rule evaluation, hidden-write authority or persistence.
 
-hide-empty-create keeps the same empty scalar controls visible because ordinary empty hiding is inactive in create mode. The installed/packed checks assert the exact create envelope and full native data after an adjacent edit. hide-empty-unavailable retains a nonblank disabled section title: active edit empty hiding is blocked, the unavailable alert is visible and deliberate Save dispatches zero requests. Visitor round trip keeps the adjacent accepted draft. A normal Reload supplies the explicitly supported no-section/hide-false configuration; only a later explicit Save may dispatch. Review's separate row preparation supports eleven direct scalar types and excludes richText; these empty-hiding scenarios use promptUserBeforeSubmission:false/absent and grant no Review richText support.
+hide-empty-create keeps the same empty scalar controls visible because ordinary empty hiding is inactive in create mode. The installed/packed checks assert the exact create envelope and full native data after an adjacent edit. hide-empty-unavailable retains a nonblank disabled section title with applyFieldConditionsToSection:true: inherited-section edit empty hiding is blocked, the unavailable alert is visible and deliberate Save dispatches zero requests. Visitor round trip keeps the adjacent accepted draft. A normal Reload supplies the explicitly supported no-section/hide-false configuration; only a later explicit Save may dispatch. Review's separate row preparation supports eleven direct scalar types and excludes richText; these empty-hiding scenarios use promptUserBeforeSubmission:false/absent and grant no Review richText support.
 
 hide-empty-review combines edit hideFieldIfEmpty:true with promptUserBeforeSubmission:true. All eleven Review-supported scalar targets contain exact whitespace native strings and remain hidden. RichText is retained as unrendered native data; it receives no Review support. Only the readonly locked answer and accepted visible sibling appear as ordered semantic review rows. Edit/Escape dispatch zero Saves. One fresh Confirm preserves all original whitespace bytes, readonly/unrendered native values, all eleven initial dirty IDs, the duplicate URL-prefilled numeric ID and accepted sibling ID in the full unique Save union. Returned hidden-required errors remain synthetic. hide-empty-review-malformed changes only the barcode answer to nonblank malformed native text and disables hide-empty for that field; ordinary visibility stays available, while Review rejects without opening a dialog or dispatching Save. This isolates Review's nonblank validation from empty-hiding's unavailable gate.
 

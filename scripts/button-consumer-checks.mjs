@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
 
@@ -98,12 +99,29 @@ export async function checkButtonConsumer({
         portals: consumer('@miniextensions/sdk/portals'),
         react: consumer('@miniextensions/sdk/react'),
     };
+    const stylesheet = readFileSync(
+        consumer.resolve('@miniextensions/sdk/react/button.css'),
+        'utf8'
+    );
+    assert(stylesheet.includes('.mx-sdk-button:focus-visible'));
+    assert(stylesheet.includes('prefers-reduced-motion'));
+    const { createElement: element } = consumer('react');
+    const { renderToStaticMarkup } = consumer('react-dom/server');
     let checks = 0;
     for (const api of [esm, cjs]) {
         assert.equal(typeof api.ui.createButtonFieldModel, 'function');
         assert.equal(typeof api.ui.createFormButtonFieldModel, 'function');
         assert.equal(typeof api.ui.createPortalButtonFieldModel, 'function');
         assert.equal(typeof api.react.useButtonField, 'function');
+        const visual = makeCore(api.ui, api.forms);
+        assert.equal(typeof api.react.renderButtonField, 'function');
+        const markup = renderToStaticMarkup(
+            element(api.react.ButtonField, visual.model.getRenderProps())
+        );
+        assert(markup.includes('type="button"'));
+        assert(markup.includes('mx-sdk-button'));
+        assert.equal(visual.calls.length, 0);
+        visual.model.dispose();
         checks++;
         for (const mode of [undefined, '_self', '_blank', '_parent']) {
             const f = makeCore(api.ui, api.forms, (data) => {
@@ -948,17 +966,13 @@ export async function checkButtonConsumer({
         return createElement(
             'section',
             { 'data-phase': props.phase },
-            createElement(
-                'button',
-                {
-                    type: 'button',
-                    disabled: !props.canTrigger,
-                    onClick: () => {
-                        lastAction = props.triggerWebhook();
-                    },
+            createElement(esm.react.ButtonField, {
+                ...props,
+                triggerWebhook: () => {
+                    lastAction = props.triggerWebhook();
+                    return lastAction;
                 },
-                props.value?.label ?? 'Unavailable'
-            ),
+            }),
             createElement('output', null, props.feedback?.text ?? '')
         );
     };
@@ -1250,7 +1264,11 @@ export const typedPortalButtonFactory: typeof createPortalButtonFieldModel = cre
 
 export const buttonReactTypedConsumer = `
 import type { ButtonFieldModel, ButtonFieldRenderProps } from '@miniextensions/sdk/ui';
-import { useButtonField } from '@miniextensions/sdk/react';
+import { createElement, type ReactNode } from 'react';
+import { ButtonField, renderButtonField, useButtonField } from '@miniextensions/sdk/react';
+import type { FieldRendererSlots } from '@miniextensions/sdk/ui';
+export const slots: FieldRendererSlots<ReactNode> = { renderButtonField };
+export const visualButton = (props: ButtonFieldRenderProps) => createElement(ButtonField, props);
 export function typedReactButtonConsumer(model: ButtonFieldModel): ButtonFieldRenderProps {
     const props: ButtonFieldRenderProps = useButtonField(model);
     const prepared = props.prepareLink();

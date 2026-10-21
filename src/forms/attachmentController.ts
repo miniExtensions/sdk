@@ -487,10 +487,12 @@ export function createFormAttachmentController(
                     binding.getSnapshot().visibility.type === 'visible'
                 );
             };
+            let uploadInvoked = false;
             try {
                 options.onAttempt?.(attempt);
                 emit();
                 if (!ownsAttempt()) return false;
+                uploadInvoked = true;
                 const returned = await client.attachments.uploadFile(
                     {
                         file: selected,
@@ -532,11 +534,19 @@ export function createFormAttachmentController(
             } catch {
                 return false;
             } finally {
+                // Before invocation no signing/PUT could have started. Keep the lease
+                // through journal notifications; only a fresh explicit action may retry.
+                const notDispatched =
+                    !uploadInvoked && journal.notDispatched(attempt);
+                if (notDispatched) attempted.delete(selected);
                 journal.finishFlight(attempt);
                 if (active === abort) {
                     active = null;
                     if (current()) {
-                        if (attempt.outcome === 'unknown') {
+                        if (notDispatched) {
+                            phase = files.length === 0 ? 'idle' : 'selected';
+                            error = null;
+                        } else if (attempt.outcome === 'unknown') {
                             phase = 'uncertain';
                             error =
                                 'Upload outcome needs inspection. It was not added or retried automatically.';

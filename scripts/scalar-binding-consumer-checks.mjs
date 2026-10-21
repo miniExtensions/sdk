@@ -188,8 +188,14 @@ export async function checkScalarBindingConsumer({
                 })
             );
         await act(async () => root.render(tree()));
-        const stockNumber = () =>
-            container.querySelector('label input[inputmode=decimal]');
+        const stockNumber = () => {
+            const label = Array.from(container.querySelectorAll('label')).find(
+                (label) => label.textContent === 'fld_number'
+            );
+            assert.ok(label?.control, 'Expected the labelled Number control');
+            assert.equal(label.control.inputMode, 'decimal');
+            return label.control;
+        };
         const setValue = async (input, value) =>
             act(async () => {
                 Object.getOwnPropertyDescriptor(

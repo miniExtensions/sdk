@@ -538,87 +538,189 @@ export async function checkPortalSortCases({
     await check(
         'installed standalone sorting recipe rejects malformed metadata and never guesses first primary',
         async () => {
-            const { window } = await environment();
-            const { mountPortalSortEditor } = await loadExample('portalSort');
-            for (const mode of [
-                'duplicate',
-                'name',
-                'config',
-                'order',
-                'first-primary',
-                'primary-type',
-                'computed-type',
-                'restriction',
-                'view-shape',
-                'view-config-array',
-                'view-config-number',
-                'view-config-string',
-            ]) {
-                const p = editablePortal();
-                const snapshot = {
-                    ...f.page([]),
-                    detailFields: [],
-                    criteriaKey: 'fixture',
-                    layoutSettings: {},
-                };
-                const fields =
-                    snapshot.tableIdsToLinkedTableStates.tbl_children
-                        .airtableFields;
-                if (mode === 'duplicate')
-                    fields.push(structuredClone(fields[0]));
-                if (mode === 'name') fields[0].name = 123;
-                if (mode === 'config') fields[0].config = null;
-                if (mode === 'order') fields[0].config = { type: 'notAField' };
-                if (mode === 'first-primary') fields[0].isPrimaryField = false;
-                if (mode === 'primary-type') fields[0].isPrimaryField = 'true';
-                if (mode === 'computed-type') fields[0].isComputed = 'true';
-                if (mode === 'restriction')
-                    p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.sortingOnExtensionFields =
-                        'fld_title';
-                if (mode === 'view-shape')
-                    p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.customViews =
-                        [null];
-                if (mode.startsWith('view-config-'))
-                    p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.customViews[0].config =
-                        mode === 'view-config-array'
-                            ? []
-                            : mode === 'view-config-number'
-                              ? 123
-                              : 'custom';
-                const result = mountPortalSortEditor({
-                    portal: p,
-                    portalFieldId: 'fld_children',
-                    criteria: criteria(),
-                    snapshot,
-                    isCurrent: () => true,
-                    onApply: () => assert.fail('No malformed apply'),
-                });
-                assert.equal(result.type, 'unavailable', mode);
-                if (mode.startsWith('view-config-')) {
-                    const h = await mount({
+            const { window, close } = await environment();
+            try {
+                const { mountPortalSortEditor } =
+                    await loadExample('portalSort');
+                for (const mode of [
+                    'duplicate',
+                    'name',
+                    'config',
+                    'order',
+                    'first-primary',
+                    'primary-type',
+                    'computed-type',
+                    'restriction',
+                    'view-shape',
+                    'view-config-array',
+                    'view-config-number',
+                    'view-config-string',
+                ]) {
+                    const p = editablePortal();
+                    const snapshot = {
+                        ...f.page([]),
+                        detailFields: [],
+                        criteriaKey: 'fixture',
+                        layoutSettings: {},
+                    };
+                    const fields =
+                        snapshot.tableIdsToLinkedTableStates.tbl_children
+                            .airtableFields;
+                    if (mode === 'duplicate')
+                        fields.push(structuredClone(fields[0]));
+                    if (mode === 'name') fields[0].name = 123;
+                    if (mode === 'config') fields[0].config = null;
+                    if (mode === 'order')
+                        fields[0].config = { type: 'notAField' };
+                    if (mode === 'first-primary')
+                        fields[0].isPrimaryField = false;
+                    if (mode === 'primary-type')
+                        fields[0].isPrimaryField = 'true';
+                    if (mode === 'computed-type') fields[0].isComputed = 'true';
+                    if (mode === 'restriction')
+                        p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.sortingOnExtensionFields =
+                            'fld_title';
+                    if (mode === 'view-shape')
+                        p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.customViews =
+                            [null];
+                    if (mode.startsWith('view-config-'))
+                        p.payload.fieldIdsToSchemas.fld_children.miniExtConfig.customViews[0].config =
+                            mode === 'view-config-array'
+                                ? []
+                                : mode === 'view-config-number'
+                                  ? 123
+                                  : 'custom';
+                    const result = mountPortalSortEditor({
                         portal: p,
-                        initialCriteria: criteria(),
-                        handlers: {
-                            list: () =>
-                                f.page([f.record('rec_one', 'Ordinary read')]),
-                        },
+                        portalFieldId: 'fld_children',
+                        criteria: criteria(),
+                        snapshot,
+                        isCurrent: () => true,
+                        onApply: () => assert.fail('No malformed apply'),
                     });
-                    await h.click('Load records');
-                    assert.deepEqual(ids(h.view.node), ['rec_one']);
-                    assert.equal(
-                        h.view.node.querySelector(
-                            '[aria-label="Portal sorting"]'
-                        ),
-                        null
-                    );
-                    assert.equal(
-                        h.calls.filter((x) => x.operation === 'list').length,
-                        1
-                    );
-                    await h.dispose();
+                    assert.equal(result.type, 'unavailable', mode);
+                    if (mode.startsWith('view-config-')) {
+                        const h = await mount({
+                            portal: p,
+                            initialCriteria: criteria(),
+                            handlers: {
+                                list: () =>
+                                    f.page([
+                                        f.record('rec_one', 'Ordinary read'),
+                                    ]),
+                            },
+                        });
+                        try {
+                            const selectedView =
+                                h.view.node.querySelectorAll(
+                                    '.toolbar select'
+                                )[1];
+                            assert.deepEqual(
+                                [...selectedView.options].map(
+                                    (option) => option.value
+                                ),
+                                ['view_other', 'view_readonly'],
+                                mode
+                            );
+                            assert.equal(
+                                selectedView.value,
+                                'view_other',
+                                mode
+                            );
+                            assert.equal(
+                                selectedView.selectedOptions[0]?.textContent,
+                                'Other view',
+                                mode
+                            );
+                            assert.equal(h.calls.length, 0, mode);
+                            await h.click('Load records');
+                            assert.deepEqual(ids(h.view.node), ['rec_one']);
+                            assert.deepEqual(
+                                h.calls
+                                    .filter((call) => call.operation === 'list')
+                                    .map(
+                                        (call) =>
+                                            call.input.selectedCustomViewId
+                                    ),
+                                ['view_other'],
+                                mode
+                            );
+                            assert.equal(
+                                Boolean(
+                                    h.view.node.querySelector(
+                                        '[aria-label="Portal sorting"]'
+                                    )
+                                ),
+                                true,
+                                mode
+                            );
+                            assert.equal(h.failures.length, 0, mode);
+                        } finally {
+                            await h.dispose();
+                        }
+
+                        const refusedPortal = structuredClone(p);
+                        refusedPortal.payload.fieldIdsToSchemas.fld_children.miniExtConfig.customViews =
+                            [
+                                structuredClone(
+                                    p.payload.fieldIdsToSchemas.fld_children
+                                        .miniExtConfig.customViews[0]
+                                ),
+                            ];
+                        const refused = await mount({
+                            portal: refusedPortal,
+                            initialCriteria: criteria(),
+                            handlers: {
+                                list: () =>
+                                    assert.fail('No malformed-only view read'),
+                            },
+                        });
+                        try {
+                            const selectedView =
+                                refused.view.node.querySelectorAll(
+                                    '.toolbar select'
+                                )[1];
+                            assert.equal(selectedView.options.length, 0, mode);
+                            assert.equal(selectedView.disabled, true, mode);
+                            const load = button(
+                                refused.view.node,
+                                'Load records'
+                            );
+                            assert.equal(load.disabled, true, mode);
+                            load.dispatchEvent(
+                                new refused.window.Event('click', {
+                                    bubbles: true,
+                                })
+                            );
+                            await refused.settle();
+                            assert.equal(refused.calls.length, 0, mode);
+                            assert.deepEqual(ids(refused.view.node), [], mode);
+                            assert.equal(
+                                Boolean(
+                                    refused.view.node.querySelector('tbody')
+                                ),
+                                false,
+                                mode
+                            );
+                            assert.equal(
+                                Boolean(
+                                    refused.view.node.querySelector(
+                                        '[aria-label="Portal sorting"]'
+                                    )
+                                ),
+                                false,
+                                mode
+                            );
+                            assert.equal(refused.failures.length, 0, mode);
+                        } finally {
+                            await refused.dispose();
+                        }
+                    }
                 }
+                assert(window.document);
+            } finally {
+                await close();
             }
-            assert(window.document);
         }
     );
     await check(

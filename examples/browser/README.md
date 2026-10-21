@@ -33,7 +33,7 @@ Use Node.js 22 or newer. From the SDK repository root:
 pnpm install --frozen-lockfile
 pnpm pack
 cd examples/browser
-npm install
+npm install --ignore-scripts --no-audit --no-fund ../../miniextensions-sdk-0.1.0-alpha.0.tgz
 npm run typecheck
 npm run build
 npm run dev
@@ -46,6 +46,9 @@ npm run dev -- --port 34852
 ```
 
 The example's dependency points to the SDK archive in the repository root.
+Name that archive explicitly on the first install too: the committed lockfile
+describes an older build of the same preview version. Bare `npm install` can
+fail with `EINTEGRITY`; the explicit archive argument refreshes its integrity.
 After changing the SDK, pack it again and reinstall that archive:
 
 ```sh
@@ -68,9 +71,16 @@ check pagination, criteria retirement, child context and visitor transitions.
 ## Connect
 
 1. Publish a Form or Portal in miniExtensions.
-2. Enter the exact origin that serves the miniExtensions APIs and the
-   extension's published share ID. Use a durable API origin for a continuing
-   application; a PR preview may be retired after merge.
+2. Enter the extension's stored `extension.shareId`. The API origin starts at
+   `https://web.miniextensions.com`; for another deployment, replace the input
+   with its exact API origin in your installed application. Keep private
+   overrides out of public source and shared artifacts. Clearing the input is
+   invalid; it does not silently reconnect to the public service. Follow
+   [runtime configuration prerequisites](../../README.md#obtain-the-actual-runtime-configuration)
+   to obtain it from a default-domain public link or your workspace
+   administrator/deployment owner. A custom-domain slug is not the Share ID;
+   this starter cannot resolve that slug for you. Use a durable API origin for
+   a continuing application; a PR preview may be retired after merge.
 3. Choose **Connect and load**. An optional record ID opens a direct Form edit
    if that Form permits it.
 
@@ -80,6 +90,28 @@ deployment must allow its public tRPC routes and `miniext-context` header from
 this example's origin; the client uses the existing v1 and tRPC endpoints.
 
 ## Form workflow
+
+Published manual Forms with `multiPageFormMode: 'multi-page'` use the SDK's
+existing page owner. Enabled frontend section headers
+start pages; leading fields form the first page. Back keeps the same mounted
+controls and native draft. Page titles are plain text; rich section descriptions
+remain application-owned. Next validates the current page and skips pages
+whose fields are all conditionally hidden. Enter advances before the final
+page. Neither navigation action reads or saves a record.
+
+With final Review disabled, only the final available page shows Save. It validates every page against the
+current native draft, including earlier required answers revealed by later
+edits, then uses the existing Save/recovery path once. Hidden answers remain in
+the native payload. A pending file must be uploaded or explicitly cleared
+before navigation. An uncertain Save continues to require explicit inspection.
+With `promptUserBeforeSubmission: true`, the final available page instead shows
+**Review answers**. Its bounded Review uses the same native draft and existing
+answer presenter. **Edit**, Escape and cancelling the request return to the same
+page and mounted controls without saving or clearing opted-in remembered answers.
+**Confirm** keeps all-page validation and completes remembered-answer cleanup
+before the existing single Save path. Ordinary required-answer errors may be reviewed;
+they still prevent dispatch. Incomplete raw input and pending files block Review.
+Compute and automatic submission remain unsupported.
 
 The page renders field-ID controls from the published payload. It supports
 text, email, URL, phone, multiline/rich text, numbers, currency, percentages,
@@ -94,6 +126,14 @@ even when a retained `allowAddingNewOptions` flag is true. In a supported one-pa
 configured choice conditions use the installed bounded scalar helper.
 Unsupported predicates show an unavailable status; the projection limits
 below apply.
+
+After an accepted Save, fixed feedback shows the record was saved and reports
+an update-link email only when the result includes that notification. A failed
+update-link email remains a post-submission warning; it does not undo the Save
+or offer a replay. Other email/text warnings use fixed copy. Unknown metadata
+never becomes a recipient, link or raw response message. Rejected, uncertain or
+retired responses cannot supply this success feedback. This does not enable a
+Compute/Save and Continue workflow, send email or change normal Save options.
 
 When a published editable, unmasked single-line text field enables address
 autocomplete, typing reads suggestions after an 800 ms debounce. Choose
@@ -124,7 +164,8 @@ The example imports its draft store and load/save helpers from
 `@miniextensions/sdk/forms` in the installed archive. `src/main.ts` owns visitor
 revisions, requests, cancellation, and when to discard drafts.
 
-When the published `promptUserBeforeSubmission` setting is true, **Save** opens
+When the published `promptUserBeforeSubmission` setting is true, **Save** on a
+one-page Form or **Review answers** on the final manual page opens
 **Review your answers** before the final submission. **Edit**, Escape and closing
 the dialog preserve the native draft and perform no Save. **Confirm** submits
 the captured full native values and dirty IDs once through the existing Save
@@ -133,12 +174,17 @@ errors; an unknown outcome keeps submission blocked until explicit inspection.
 Review may open with an empty required answer: the server remains authoritative
 for required, readonly, computed and conditional-field validation.
 
-This review recipe supports a one-page manual Form with scalar section
+This review recipe supports one-page and manually paged Forms with scalar section
 conditions, containing direct
 single-line/multiline text, email, URL, phone, number, currency, percent, rating,
 checkbox, barcode, single-select, multi-select and conservatively presented linked-record fields, including readonly answers. It presents
 plain text in published field order, omits canonical empty/conditionally hidden
-answers, and masks nonempty single-line passwords as `••••••••`. A visually
+answers, and masks nonempty single-line passwords and password-masked physical
+Number answers as `••••••••`. Either defined, non-false `obscurePassword` or
+`maskPasswordOnLoginScreen` flag keeps Number answers masked, including unknown
+flag values. Recovery reference rows omit those fields entirely, using the same
+conservative exclusion as remembered create progress. This presentation policy
+does not change native numeric Save values or dirty field IDs. A visually
 hidden title retains its semantic accessible name. Numeric zero remains a
 review answer; unchecked checkboxes, zero ratings and blank barcode text do not.
 URLs are displayed as text, with no link or embedded content.
@@ -152,7 +198,7 @@ capture. Confirmation belongs to the current visitor/client/session, loaded
 Form, configuration/context, draft handle and actual draft revision. An edit,
 including edit-away-and-back, Reload, Discard, disconnect or owner transition
 invalidates it. Returning to Edit permits fresh typing without repeating an old
-address query. Pages, compute/automatic submission, linked filters,
+address query. Compute/automatic submission, linked filters,
 lookup/computed fields, rich text and other unsupported complex
 renderers remain outside this recipe; unavailable review blocks submission
 instead of presenting an incomplete preview.
@@ -295,7 +341,10 @@ Frontend visibility results never replace the choice projection.
   references survive Visitor A/B switching and returning from a child Form to
   its Portal. Drafts belong to the visitor, Form, record, and parent Portal
   field. **Discard draft** resets only that Form to its loaded values without
-  saving. It does not undo a completed upload or a created Airtable choice.
+  saving. For eligible create progress, it first clears the matching stored
+  token, including a previous page's slot while remembering is unchecked; a
+  cleanup refusal keeps the current draft. It does not undo a completed upload
+  or a created Airtable choice.
 - Linked fields offer an authorized search and paginated selection. Selecting
   choices only edits the local draft; **Save** writes the relationship.
 - Configured conditional linked filters expose **Load conditional filters**.
@@ -316,7 +365,7 @@ Frontend visibility results never replace the choice projection.
 
 The custom renderer deliberately leaves advanced presentation to your app:
 conditional field or choice presentation beyond the bounded contracts above,
-multi-page navigation, signatures, calendar pickers, custom validation presentation, and
+multi-page navigation beyond the manual workflow above, signatures, calendar pickers, custom validation presentation, and
 CAPTCHA widgets. The server still enforces those extension rules. To use a
 CAPTCHA-enabled Form, integrate the configured widget and supply its token in
 `captchaVal`; this example supplies `null`. It does not disable the Form's
@@ -349,6 +398,32 @@ new schema read, or additional mutation permission.
 Custom static and dynamic Form headers also belong to your app. Render them
 from the published settings and record metadata when needed. This example uses
 `extensionName`, falling back to “Custom Form”.
+
+### Configured linked-child actions in a standalone Form
+
+A standalone direct-URL root Form offers **Create linked record** for an
+eligible configured modal child. **Load selected records** explicitly hydrates
+the current native selection; only the SDK's returned eligible IDs offer
+**Edit linked record**. These actions are independent of finder visibility.
+An eligible child Edit also remains available when the parent link is readonly
+or full. Mounting the controls never reads or saves a record.
+
+The child pane borrows the SDK owner's bindings and page owner. It retains
+mounted inputs while typing and supports one-page and manual multipage child
+Forms through **Child Back**, **Child Next**, and **Save child**. Save validates
+and submits the child once through the existing owner, then reconciles the
+current parent native draft. Save the parent separately to persist its linked
+selection. **Cancel child** closes only that intent. Child validation keeps
+the current inputs; unknown and saved-but-not-reconciled outcomes remain
+blocked with explicit inspection guidance, including after Cancel. Parent
+Save, Discard, Delete and page navigation wait for the active child.
+
+Portal-parent and nested child actions are outside this adapter. The SDK still
+refuses unsupported child Review, Compute, captcha and linked-filter settings.
+Child linked fields use their existing native controls without nested child
+actions or finder UI. Attachments use the conservative readonly label
+presentation; this pane adds no upload action. No child action automatically
+saves the parent or retries an uncertain child Save.
 
 ## Portal workflow
 
@@ -405,6 +480,15 @@ are omitted; this does not convert a computed lookup into a writable link.
 - **Open Form** loads the configured edit child for a returned record.
   **Create record** loads the configured create child and preserves the inverse
   link to the Portal user. Loading either Form makes no write.
+- An acknowledged child **Delete** retires the cached Portal rows, paging cursor
+  and child actions. Choose **Reload**, then **Load records**, to obtain the
+  current parent and permitted records. The starter makes no automatic read or
+  repeated Delete. Cancelling the confirmation preserves the current Form and
+  Portal. A retained Back control from an older Form cannot navigate away from
+  a replacement Form opened after Reload. The current Back control remains usable
+  when the child has lost write authority. A lost or cancelled Delete response can
+  still leave its outcome unknown;
+  this acknowledged-success cleanup does not establish Delete replay protection.
 
 Child filter-prefill snapshots belong to the dispatched plan and accepted Form
 load. Create cascades use configured dynamic prefills plus static child overrides;
@@ -423,7 +507,9 @@ show a diagnostic without pruning native data or denying otherwise-allowed edits
 - Editable Grid views expose **Edit cell** and an explicit **Save cell**. Linked
   cells use the Portal's authorized selector. After saving, the current Portal
   user's record is refreshed. Choose **Load records** before paging or opening
-  a child again. If that refresh fails, choose **Reload**.
+  a child again. If that refresh fails or returns no user record, the cell Save
+  remains complete; choose **Reload** before taking another action. Reload never
+  repeats that Save.
 - Inline select cells use the same static policy control as Forms: configured
   choice IDs limit new selections, saved values remain native choice names,
   and numeric maxima permit removal from an existing over-limit value.
@@ -450,12 +536,87 @@ does not recreate the hosted Portal's Gallery, Calendar, Map, or Chart
 presenters, conditional view presentation, advanced filter builder, or custom
 menu. Those interfaces can call the same typed runtime APIs.
 
+After a child Form Save, a refreshed parent record must match the loaded
+Portal's parent ID before its fields are adopted. A mismatch preserves the
+known child Save success, retires the cached Portal and requires explicit
+**Reload**. Retained controls cannot revive that Portal or replay the Save;
+there is no automatic refresh request. Matching parent fields remain an
+authoritative replacement, including an empty object.
+
+## Optional create progress in this tab
+
+Drafts are memory-only by default. An anonymous root direct-URL create Form can
+offer **Remember selected answers in this tab** when its published
+`saveFormProgress` setting is true. The loaded Form must have a concrete table
+and published version; edit records, parent/child contexts, authenticated
+visitors, prepared recovery and unknown operations are excluded.
+
+The option and every **Remember …** field checkbox start unchecked. Choose
+only nonsensitive answers you want retained in this tab. The starter reads an
+answer for storage only after current owner/schema/configuration checks and
+explicit selection of a visible, unmasked, noncomputed, writable supported
+scalar field. It supports single-line/multiline text, ordinary numeric families
+and checkboxes. Files, linked records, selects, computed/read-only answers,
+hidden/masked fields and unsupported values are excluded. Entered credentials,
+verification codes and recovery references do not belong in progress storage;
+an ordinary text field cannot automatically identify sensitive content.
+
+Answers use per-tab `sessionStorage` in a nonsecret namespace bound to the
+application/API origins, share, visitor's anonymous owner, extension, table and
+published version. They are not encrypted: same-origin scripts can read them,
+and duplicating a tab may copy them. This option is separate from remembering
+an encrypted login credential below.
+
+After a page refresh, reconnect to the same anonymous context and opt in again.
+The app does not restore answers automatically. Select fields and choose
+**Restore remembered answers**, or explicitly **Discard remembered answers**.
+Restore requires a pristine accepted draft. If you have edited current answers,
+they are retained; explicitly Reload to replace those inputs before restoring.
+Restore filters the selected answers through current field eligibility, sends
+them in the existing direct-URL load `context.localStorageRecord`, and accepts
+a fresh server response only while the same owner and configuration remain
+current. The returned server values and rules replace the draft; stored
+answers are never merged over that response locally.
+
+Writes and removal require working browser Web Locks; there is no unlocked
+fallback. Concurrent progress is compared with both its draft and write IDs,
+so an older owner cannot remove a newer stored incarnation. Missing/denied
+storage or locks and conflicts show fixed feedback rather than claiming that
+answers were remembered or discarded.
+
+The Form's **Discard draft** inspects the matching slot left by a previous page
+even while remembering is unchecked. **Clear this visitor's session** captures
+matching SDK-owned progress slot identities for that visitor on the current
+application origin; **Disconnect** does so for both visitors. This snapshot is
+taken before namespace rotation or asynchronous lock waits. Exact draft/write-token
+removal preserves a successor created after capture and unrelated visitor or
+storage entries. Failed reads, malformed matching owned slots and cleanup
+failures show fixed incomplete-cleanup feedback. They do not produce an
+all-answers-cleared promise.
+
+Before an admitted create **Save** is sent, progress is suspended, queued work
+settles and the exact stored copy is removed. An existing slot is inspected
+even when remembering is unchecked after a refresh. If it cannot be read or
+cleared safely, Save is blocked. Confirmed server validation or a known
+pre-dispatch refusal may resume remembering; an unknown dispatched Save does
+not. Inspect the server outcome before another create. Progress never persists
+the recovery journal or establishes that an unknown create failed.
+
+See [optional create-Form progress](../../docs/forms.md#optional-create-form-progress)
+for the helper's compare-and-set tokens, ownership and failure contract. This
+is not edit-Form persistence, cross-tab synchronization or live persistence
+verification.
+
 ## Authentication and visitor isolation
 
 Password verification and login return credentials without changing the SDK's
 session. This example's **Verify and use password**, **Log in and use session**,
 and **Confirm and use session** actions explicitly apply successful credentials
-to the active visitor. Choose **Reload** to load the authenticated screen.
+to the active visitor, then load the authenticated screen without another click.
+The SDK's session application remains read-free; this continuation belongs to
+the app's successful user-submit handler. If the load fails, **Reload** retries
+only that read using the applied session. It never repeats login, password
+verification, code confirmation or sign-up.
 
 Visitor A and Visitor B have separate clients and session maps. Switching
 visitors cancels pending UI work; a response from a different visitor or older
@@ -483,8 +644,10 @@ and opt in again, even if storage removal fails. **Disconnect** forgets both vis
 unrelated storage is preserved. If storage cannot be cleared, the app reports it
 instead of promising that the remembered credential is gone. Reconnecting to a
 different share does not erase the former share’s remembered entry; reconnect to
-that share and clear its session to forget it. Drafts, files, entered passwords,
-verification codes and uncertain-write journals are never persisted. Choosing
+that share and clear its session to forget it. Authentication remembering never
+persists Form answers, files, entered passwords, verification codes or
+uncertain-write journals; the separate create-progress option above stores
+only explicitly selected eligible scalar answers. Choosing
 Reload still replaces drafts only after a successful read. Reconnecting with
 remembering unchecked explicitly forgets the previously opted-in connection;
 if storage cannot be cleared, reconnect is refused with an explanation.
@@ -541,6 +704,8 @@ before adapting it to a production application.
   category changes.
 - `src/fields.ts` is the replaceable field renderer. Values and dirty lists use
   Airtable field IDs; login credentials use the configured field names.
+- `src/linkedChildPanel.ts` is the standalone root Form host for the SDK-owned
+  configured child actions; it borrows the child bindings and page owner.
 - `src/recovery.ts` keeps safe document-local operation metadata separate from
   draft/session clearing. It does not store credentials or signed upload URLs.
 - `dev.mjs` bundles the installed SDK and serves three local static assets.

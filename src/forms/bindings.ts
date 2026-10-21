@@ -29,6 +29,7 @@ import type {
 } from '../ui/types.js';
 import {
     createFormController,
+    captureFormControllerDraftRevision,
     type FormController,
     type FormControllerOptions,
     type FormControllerSaveOptions,
@@ -152,6 +153,18 @@ export type FormFieldBindings = {
     destroy(): void;
 };
 
+const visibilityRevisionCaptures = new WeakMap<
+    FormFieldBindings,
+    () => (() => boolean) | null
+>();
+
+/** Internal: cached visibility must belong to the still-current native draft revision. */
+export function captureFormVisibilityRevision(
+    fields: FormFieldBindings
+): (() => boolean) | null {
+    return visibilityRevisionCaptures.get(fields)?.() ?? null;
+}
+
 const invalid = (): FormFieldVisibility => ({
     type: 'blocked',
     code: 'invalid',
@@ -197,6 +210,7 @@ export function createFormFieldBindings(
             model: ReturnType<typeof createFormLinkedChildOwner>;
             journal: FormLinkedChildRecovery['journal'];
             loadVersion: number;
+            review: FormLinkedChildRecovery['review'];
         }
     >();
     const retainedChildren = new Set<
@@ -214,6 +228,7 @@ export function createFormFieldBindings(
     let readGeneration = 0;
     let readError: string | null = null;
     let visibility: Record<string, FormFieldVisibility> = {};
+    let visibilityRevision: number | null = null;
     let linkedRecordsOwner: ReturnType<
         typeof createFormLinkedRecordsOwner
     > | null = null;
@@ -294,6 +309,7 @@ export function createFormFieldBindings(
                 retired = true;
                 retireEntries();
                 visibility = {};
+                visibilityRevision = null;
                 notify();
                 return;
             }
@@ -339,6 +355,8 @@ export function createFormFieldBindings(
                 evaluationMode: 'runtime',
                 invalidConditionMode: 'strict',
             });
+            // Keep the revision used to compute visibility, not a later queued write.
+            visibilityRevision = state.draftRevision;
             for (const [id, entry] of entries) {
                 const descriptor = state.fields.find(
                     (field) => field.fieldId === id
@@ -613,7 +631,8 @@ export function createFormFieldBindings(
                 const previous = linkedChildren.get(id);
                 if (
                     previous?.journal === recovery.journal &&
-                    previous.loadVersion === recovery.loadVersion
+                    previous.loadVersion === recovery.loadVersion &&
+                    previous.review === recovery.review
                 )
                     return previous.model;
                 if (previous) {
@@ -765,6 +784,7 @@ export function createFormFieldBindings(
                     model,
                     journal: recovery.journal,
                     loadVersion: recovery.loadVersion,
+                    review: recovery.review,
                 });
                 retainedChildren.add(model);
                 return model;
@@ -1258,5 +1278,14 @@ export function createFormFieldBindings(
             previous?.abort();
         },
     };
+    visibilityRevisionCaptures.set(owner, () => {
+        const draftCurrent = captureFormControllerDraftRevision(
+            controller,
+            visibilityRevision
+        );
+        return draftCurrent === null
+            ? null
+            : () => !retired && !disposed && draftCurrent();
+    });
     return owner;
 }

@@ -17,6 +17,49 @@ on every visitor, connection, session, token or context transition, including
 anonymous visitors and A → B → A. Credential equality alone cannot identify
 those transitions.
 
+Before creating a collection, call `evaluatePortalViewAvailability` with the
+complete accepted `PortalLoadedResult` and its outer published `portalFieldId`.
+It returns a detached snapshot with three readonly fields: `views` contains
+eligible `{ id, config }` descriptors in configured order, `legacy` permits a
+genuine absent/empty-list default, and `unavailable` reports unsupported or
+malformed definitions generically. Eligible neighbors can remain usable when
+`unavailable` is true. Readonly types do not recursively freeze returned objects.
+Eligible configs are opaque application metadata, **not
+log-safe or redacted display payloads**; they may contain field references and
+condition literals. Do not log or render the complete result.
+
+The helper and browser starter evaluate both `customViewConditions` and owning
+field conditions against complete accepted `formRecord.data` and required
+`usersTableFields`, using the existing supported strict Form evaluator without
+Form empty-hiding rules. Unconditional choices accept `usersTableFields: []`;
+missing required Portal metadata is not a fallback. Valid direct scalar Formula
+result snapshots follow the [Form Formula policy](forms.md#formula-scalar-snapshot-drivers),
+including exact saved/result types and strict native values. No Formula
+expression is calculated or refreshed by this helper; accepted parent refreshes
+supply new results. Other unsupported/computed condition drivers and malformed
+native values remain unavailable. Raw duplicate view IDs
+are refused before visibility filtering, including hidden duplicates.
+
+Never infer a legacy default from `views.length === 0`. Hidden fields, nonempty
+all-hidden/refused lists and malformed lists (including `null`) do not permit it.
+Only `legacy: true` permits the explicit `selectedCustomViewId: ''` branch;
+hosts requiring named views may reject that branch too. Otherwise choose an exact
+ID from `views`, or expose generic unavailable feedback without a read action.
+
+Accepted parent refreshes rebuild the choices and retire a selection that is no
+longer eligible. Eligibility is cached only within that accepted parent snapshot
+and Portal field; accepting new parent values clears the cache. Retained read,
+row and child actions recheck the current
+selection; changing views never loads records automatically. This presentation
+uses accepted client data, not a new backend grant or a promise that a server
+condition cannot change. The canonical server still re-evaluates published
+field/view conditions and authorizes every read and mutation.
+
+The helper performs no I/O, detects no freshness and revokes no owner or captured
+callback. Re-evaluate after accepting new parent data/schema and retire/rebind
+old list, child and action owners through existing scope/configuration revisions,
+including A → B → A. Equal returned values cannot revive an earlier owner.
+
 Collections accept direct linked-record fields and valid lookup fields whose
 returned `options.isValid` is `true` and whose `options.result.type` is
 `multipleRecordLinks`. `getPortalLinkedRecordFieldConfig` resolves that direct
@@ -62,6 +105,7 @@ import {
 import type { AirtableValue } from '@miniextensions/sdk';
 import {
     createPortalCollection,
+    evaluatePortalViewAvailability,
     type PortalCollection,
     type PortalCollectionCriteria,
     type PortalCollectionSnapshot,
@@ -151,6 +195,18 @@ export function createPortalScreenOwner(options: {
     ) => {
         if (!owned(expected, session)) throw new Error('Stale Portal');
         const captured = structuredClone(portal);
+        const available = evaluatePortalViewAvailability({
+            portal: captured,
+            portalFieldId: selection.portalFieldId,
+        });
+        const viewId = selection.criteria.selectedCustomViewId;
+        if (viewId === '') {
+            // This recipe explicitly permits a genuine legacy default.
+            if (!available.legacy)
+                throw new Error('An available Portal view is required.');
+        } else if (!available.views.some((view) => view.id === viewId)) {
+            throw new Error('An available Portal view is required.');
+        }
         const e: Entry = {
             portal: captured,
             selection: structuredClone(selection),
@@ -579,6 +635,26 @@ empty projections stay empty. A configured custom view also replaces layout
 settings, including settings it omits. These are UI hints; the backend
 authorizes every action.
 
+The browser starter admits a detail column only when its field ID identifies
+one detail in the selected raw list and one physical field across the returned
+tables. Raw detail identity counts include hidden descriptors, before applying
+the accepted visible projection. Only a null returned map uses the legacy list;
+a missing or empty selected entry stays empty. A supplied child Form field must use that exact ID and physical type; malformed
+or ambiguous identities expose neither the native value nor an inline editor.
+Null child metadata keeps the returned detail configuration as the supported
+write-policy fallback. `fieldIsInEditingChildForm` is informational and is not
+an additional admission gate. A valid child configuration remains write policy;
+the returned detail configuration governs row summaries separately from that
+write policy. Either `obscurePassword: true` or
+`maskPasswordOnLoginScreen: true` produces a fixed mask for every native field
+type, including Number and empty values. A defined non-boolean mask flag produces
+`Value unavailable`; absent or null configuration keeps ordinary presentation,
+including the existing attachment-summary rules. The starter checks this policy
+before reading the value and rechecks accepted ownership and display policy
+after formatting. This changes display only: native values and inline-edit
+admission stay intact. Display names do not resolve physical identity, so
+distinct field IDs may share a label.
+
 When a read returns `criteria-cleanup-required`, show the actual returned
 `raw.endUserSortCleanup`/`raw.endUserFilterCleanup` to the application. After
 the visitor accepts, replace the relevant persisted criteria, call
@@ -672,6 +748,84 @@ cell text**: custom renderers must honor returned detail display/privacy policy
 and must never derive Save data from presentation. This is list/table ownership,
 not a complete grid editor or support for every Portal layout.
 
+### Manual read failure guidance
+
+`PortalListSnapshot.failure` is optional for adapter compatibility. The SDK owner
+emits `null` or a detached, readonly `PortalListReadFailure` with only `kind`
+(`network`, `http`, `api`, `protocol`, `cancelled` or `unknown`) and `status`.
+Status is an integer HTTP status from 100 through 599 for recognized HTTP/API/
+protocol failures, otherwise `null`. Error messages, codes, causes and response
+bodies are omitted. The existing generic `error` and Boolean read results are
+unchanged. A new read, criteria replacement, success, cleanup or retirement clears
+the previous failure; cancelled reads report `cancelled` without inferring why.
+
+This small custom shell consumes that metadata through the shipped `PortalList`.
+It renders fixed application copy, including a generic fallback for older
+adapters. Rows and cleanup acceptance remain separate application presentation.
+
+```ts
+import { createElement } from 'react';
+import { PortalList, type PortalListProps } from '@miniextensions/sdk/react';
+
+export function PortalReadFailureList({ owner, readOptions }: PortalListProps) {
+    return createElement(PortalList, {
+        owner,
+        readOptions,
+        render: ({ snapshot, owner }) => {
+            if (snapshot.phase === 'retired') return null;
+            const failure = snapshot.failure;
+            const message =
+                snapshot.phase !== 'error'
+                    ? snapshot.pending
+                        ? 'Loading records…'
+                        : ''
+                    : failure?.kind === 'network' ||
+                        (failure?.kind === 'http' &&
+                            failure.status !== null &&
+                            failure.status >= 500 &&
+                            failure.status <= 599)
+                      ? 'The Portal read could not complete. Choose Load records to try a fresh read.'
+                      : failure?.kind === 'http' && failure.status === 403
+                        ? 'Access to these Portal records was denied. Check the permitted view or contact the workspace owner.'
+                        : 'The Portal read did not complete. Use an explicit fresh Load.';
+            return createElement(
+                'section',
+                { 'aria-label': 'Portal read recovery' },
+                createElement(
+                    'p',
+                    { role: snapshot.phase === 'error' ? 'alert' : 'status' },
+                    message
+                ),
+                createElement(
+                    'button',
+                    {
+                        type: 'button',
+                        disabled:
+                            snapshot.pending || snapshot.phase === 'cleanup',
+                        onClick: () => {
+                            void owner.readFirst(
+                                snapshot.revision,
+                                readOptions
+                            );
+                        },
+                    },
+                    'Load records'
+                )
+            );
+        },
+    });
+}
+```
+
+These messages select presentation only. A 403 does not establish an expired
+login, and a network or 5xx failure does not schedule a retry. Keep the captured
+snapshot revision on controls; do not refresh it inside a retained handler.
+Continue to replace owners and advance accepted configuration leases as above.
+Only a new explicit read can restore row/action eligibility. The vanilla browser
+starter still uses `createPortalCollection` and its existing generic request
+feedback; it does not consume this list-owner snapshot or infer authentication
+actions from a failed read.
+
 ### Renderer-neutral bounded criteria editors
 
 `createPortalSortEditor` and `createPortalFilterEditor` from `/portals` prepare
@@ -706,3 +860,36 @@ remounts. Destroy it on owner/page/criteria replacement or editor cancellation.
 Retained handlers fail closed after observed owner/configuration changes,
 including observed A→B→A; unobserved in-place restoration is not detectable.
 The core subpath has no React dependency.
+
+### Hosted summary refresh bridge
+
+`refreshPortalSummaryFields` and `PortalSummaryRefreshOptions<RecordType>` from
+`/portals` share the hosted Portal's bounded summary-read workflow. Pass
+`fetchRecord`, the captured `generation`, `isLatestGeneration`, synchronous
+`onFresh(record)` and synchronous `onStale()` callbacks. A failed read is retried
+once immediately, preserving the legacy two-read limit. The current owner gets
+one successful record application or one stale-summary notification after two
+failed reads. The helper returns `Promise<void>`.
+
+The host owns generation allocation and an actual accepted owner lease. Its
+predicate must reject replaced or unmounted owners and changed session, record
+or configuration, including observed A→B→A. A counter alone is sufficient only
+when the host advances it on every relevant replacement. Never allocate a new
+current generation from an already-retired handler. The helper checks ownership
+before each read and after settlement; an already-started read is not aborted,
+but its retired result cannot invoke either callback or cause another read.
+
+`fetchRecord` must only read. Signing, authentication, tRPC, backend persistence,
+record identity, Redux/state dispatch and warning/Retry UI stay in the host.
+This function neither replays a save nor interprets a failed read as permission
+to switch accounts or recover authentication. Callbacks and ownership predicates
+must be synchronous. Their exceptions propagate; application failure never
+retries the read or becomes a stale-summary warning.
+
+The existing monorepo adapter is not changed by this SDK addition. Its ordinary
+success/failure and latest-generation behavior is retained, with two deliberate
+hardening differences for future adoption: already-retired invocations do not
+start a read, and a throwing `onFresh` is not treated as a transport failure.
+Host adoption must bind the existing owner's mount/session/record/configuration
+lease and keep its transport, dispatch and warning UI in place. This bridge does
+not replace `createPortalListOwner` or create another persistent Portal owner.

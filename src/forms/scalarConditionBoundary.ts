@@ -1,4 +1,52 @@
 import type { RuntimeAirtableField } from '../runtime/types.js';
+import { formulaConditionResultType } from './conditions.js';
+
+/** Formula dependencies survive incomplete-branch removal in compatibility mode. */
+export function inspectFormFormulaConditions(
+    definition: unknown,
+    fields: readonly RuntimeAirtableField[]
+):
+    | {
+          type: 'supported';
+          drivers: { field: RuntimeAirtableField; reference: string }[];
+      }
+    | { type: 'unsupported' } {
+    const drivers: { field: RuntimeAirtableField; reference: string }[] = [];
+    const visited = new WeakSet<object>();
+    const object = (v: unknown): v is Record<string, unknown> =>
+        v != null && typeof v === 'object' && !Array.isArray(v);
+    const visit = (node: unknown): boolean => {
+        if (!object(node) || visited.has(node)) return true;
+        visited.add(node);
+        if (Array.isArray(node.conditions) && !node.conditions.every(visit))
+            return false;
+        const setting = node.setting;
+        if (!object(setting) || !object(setting.idOrName)) return true;
+        const ref = setting.idOrName;
+        const matches = fields.filter((field) =>
+            ref.type === 'id'
+                ? field.id === ref.id
+                : ref.type === 'name' && field.name === ref.name
+        );
+        if (!matches.some((field) => field.config.type === 'formula'))
+            return true;
+        const field = matches[0];
+        const result = field && formulaConditionResultType(field);
+        const reference = ref.type === 'id' ? ref.id : ref.name;
+        if (
+            matches.length !== 1 ||
+            result == null ||
+            setting.fieldType !== result ||
+            typeof reference !== 'string'
+        )
+            return false;
+        drivers.push({ field, reference });
+        return true;
+    };
+    return visit(definition)
+        ? { type: 'supported', drivers }
+        : { type: 'unsupported' };
+}
 
 /** Internal consumer boundary: inspect the AST, not an optimized formula. */
 export function hasSelectCondition(
@@ -85,6 +133,7 @@ export function inspectFormSelectConditions(
                           'isNot',
                           'isAnyOf',
                           'isNoneOf',
+                          'matchesRegex',
                           'isEmpty',
                           'isNotEmpty',
                       ]

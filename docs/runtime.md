@@ -58,9 +58,7 @@ import {
     type SaveFormInput,
 } from '@miniextensions/sdk';
 
-const client = createMiniExtensionsClient({
-    apiOrigin: 'https://your-api-origin.example',
-});
+const client = createMiniExtensionsClient();
 
 const input: LoadExtensionInput = {
     shareId: 'YOUR_SHARE_ID',
@@ -202,8 +200,13 @@ public tRPC routes and the `miniext-context` header. The v1 endpoint already
 supports cross-origin requests. Node.js consumers use the same API contracts
 without browser CORS enforcement.
 
-`apiOrigin` must be an HTTP(S) origin without a path, query, fragment, or URL
-credentials. Node.js 22+ and browsers with native `fetch`, `TextEncoder`, and
+Omitting constructor options or leaving `apiOrigin` undefined uses the exported
+`DEFAULT_API_ORIGIN`, `https://web.miniextensions.com`. For another deployment,
+pass `createMiniExtensionsClient({ apiOrigin })` with its explicit origin.
+An override must be an HTTP(S) origin without a path, query, fragment, or URL
+credentials. Explicit null/blank/invalid origins are rejected; requests never
+fall back to another origin after failure. Keep private overrides in installed
+application runtime configuration, outside public source and shared artifacts. Node.js 22+ and browsers with native `fetch`, `TextEncoder`, and
 `AbortSignal.any` and `AbortSignal.prototype.throwIfAborted` are supported.
 Supply `fetch` in the constructor to use another compatible network
 implementation.
@@ -279,6 +282,13 @@ A session is a flat map of stored credential keys to opaque token strings.
 `getSession()` returns a copy, and `setSession(next)` replaces the entire map
 with a copy. `setSession({})` clears it. The token helpers return a new map and
 never persist it themselves.
+
+`generateLoginCredentialKey({extensionId, tableId, loginFieldNames})` exposes
+the same key derivation used by `withLoginToken` for host storage adapters.
+It sorts a copy of the field names using JavaScript string order, preserves
+duplicates, and URI-escapes the UTF-8 base64 encoding of the joined names,
+table ID and extension ID. It performs no storage access or authentication.
+This is the existing compatibility format, not a collision-free identity scheme.
 
 Supply only visitor credentials. Firebase website sessions (`miniExtSession`)
 are rejected. Each request captures its own session copy: v1 receives it in

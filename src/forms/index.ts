@@ -18,6 +18,11 @@ export {
     type NormalizedFormSaveResult,
 } from './helpers.js';
 export {
+    reconcileFormComputeResult,
+    type ReconcileFormComputeResultInput,
+    type FormComputeReconciliationResult,
+} from './computeReconciliation.js';
+export {
     createFormController,
     FormControllerError,
     type FormController,
@@ -53,6 +58,9 @@ export {
     type FlatScalarFormRecordProjection,
 } from './projection.js';
 export {
+    getEffectiveAttachmentFileLimit,
+    getEffectiveAttachmentSizeLimit,
+    isAttachmentTypeAllowed,
     getFormAttachmentPolicy,
     checkFormAttachmentFiles,
     type AttachmentFileDescriptor,
@@ -134,3 +142,26 @@ export {
     type FormPageErrorReason,
 } from './pages.js';
 export type { FormPageProblem } from './pageValidation.js';
+
+export {
+    createFormProgressStorage,
+    type FormProgressValues,
+    type FormProgressToken,
+    type FormProgressSnapshot,
+    type FormProgressStorageAdapter,
+    type FormProgressLockManager,
+    type FormProgressStorageOptions,
+    type FormProgressReadResult,
+    type FormProgressWriteResult,
+    type FormProgressRemovalResult,
+    type FormProgressStorage,
+} from './createProgress.js';
+export {
+    convertEditorValueToStoredRichText,
+    normalizeRichTextForComparison,
+    convertStoredRichTextToEditorMarkdown,
+    parseStoredRichTextCheckbox,
+    serializeStoredRichTextCheckbox,
+    type RichTextCheckboxNode,
+    type ParsedRichTextCheckbox,
+} from './richTextSerialization.js';

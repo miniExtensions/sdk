@@ -1,4 +1,210 @@
 import {
+    checkAddressRequestsConsumer,
+    addressRequestsTypedConsumer,
+} from './address-requests-consumer-checks.mjs';
+import {
+    checkPortalSummaryRefreshConsumer,
+    portalSummaryRefreshTypedConsumer,
+} from './portal-summary-refresh-consumer-checks.mjs';
+import {
+    checkDropdownFilterConsumer,
+    dropdownFilterTypedConsumer,
+} from './dropdown-filter-consumer-checks.mjs';
+import {
+    checkAttachmentInputConsumer,
+    attachmentInputTypedConsumer,
+} from './attachment-input-consumer-checks.mjs';
+import {
+    checkSelectPresentationConsumer,
+    selectPresentationTypedConsumer,
+} from './select-presentation-consumer-checks.mjs';
+import {
+    checkRadioInputConsumer,
+    radioInputTypedConsumer,
+} from './radio-input-consumer-checks.mjs';
+import {
+    checkDateInputCompatibilityConsumer,
+    dateInputCompatibilityTypedConsumer,
+} from './date-input-compatibility-consumer-checks.mjs';
+import {
+    checkFileSelectionConsumer,
+    fileSelectionTypedConsumer,
+} from './file-selection-consumer-checks.mjs';
+import {
+    checkRecoverableImageConsumer,
+    recoverableImageTypedConsumer,
+    recoverableImageJsxConsumer,
+} from './recoverable-image-consumer-checks.mjs';
+import { checkNativeEditorReactMatrix } from './native-rich-text-editor-consumer-checks.mjs';
+import {
+    checkRichTextSerializationConsumer,
+    richTextSerializationTypedConsumer,
+} from './rich-text-serialization-consumer-checks.mjs';
+import {
+    checkDurationInputConsumer,
+    durationInputTypedConsumer,
+} from './duration-input-consumer-checks.mjs';
+import {
+    checkSelectChoiceProjectionConsumer,
+    selectProjectionTypedConsumer,
+} from './select-choice-projection-consumer-checks.mjs';
+import {
+    checkPersonBadgeConsumer,
+    personBadgeTypedConsumer,
+    personBadgeJsxConsumer,
+} from './person-badge-consumer-checks.mjs';
+import {
+    checkCalendlyBookingConsumer,
+    calendlyBookingTypedConsumer,
+    calendlyBookingJsxConsumer,
+} from './calendly-booking-consumer-checks.mjs';
+import {
+    checkRatingInputConsumer,
+    ratingInputTypedConsumer,
+    ratingInputJsxConsumer,
+} from './rating-input-consumer-checks.mjs';
+import {
+    checkTextInputConsumer,
+    textInputTypedConsumer,
+    textInputJsxConsumer,
+} from './text-input-consumer-checks.mjs';
+import {
+    checkBarcodeConsumer,
+    barcodeReactTypedConsumer,
+} from './barcode-consumer-checks.mjs';
+import {
+    checkSingleCollaboratorConsumer,
+    singleCollaboratorReactTypedConsumer,
+    singleCollaboratorNodeTypedConsumer,
+    singleCollaboratorConsumerCheckCount,
+} from './single-collaborator-consumer-checks.mjs';
+import {
+    checkMultipleCollaboratorsConsumer,
+    multipleCollaboratorsReactTypedConsumer,
+    multipleCollaboratorsNodeTypedConsumer,
+    multipleCollaboratorsConsumerCheckCount,
+} from './multiple-collaborators-consumer-checks.mjs';
+import {
+    checkRichTextConsumer,
+    richTextReactTypedConsumer,
+    richTextNodeTypedConsumer,
+    richTextConsumerCheckCount,
+} from './rich-text-consumer-checks.mjs';
+import {
+    checkAiTextConsumer,
+    aiTextReactTypedConsumer,
+    aiTextNodeTypedConsumer,
+    aiTextConsumerCheckCount,
+} from './ai-text-consumer-checks.mjs';
+import {
+    checkMultipleAttachmentsConsumer,
+    multipleAttachmentsReactTypedConsumer,
+    multipleAttachmentsNodeTypedConsumer,
+    multipleAttachmentsConsumerCheckCount,
+} from './multiple-attachments-consumer-checks.mjs';
+import {
+    runReadonlyAttachmentsReactConsumerChecks,
+    readonlyAttachmentsReactConsumerCheckCount,
+    readonlyAttachmentsReactTypedConsumer,
+    readonlyAttachmentsNodeTypedConsumer,
+} from './readonly-attachments-react-consumer-checks.mjs';
+import {
+    checkLookupConsumer,
+    lookupReactTypedConsumer,
+} from './lookup-consumer-checks.mjs';
+import {
+    checkRollupConsumer,
+    rollupReactTypedConsumer,
+} from './rollup-consumer-checks.mjs';
+import {
+    checkFormulaConsumer,
+    formulaReactTypedConsumer,
+} from './formula-consumer-checks.mjs';
+import {
+    checkLinkedRecordsRendererConsumer,
+    linkedRecordsReactTypedConsumer,
+} from './linked-records-renderer-consumer-checks.mjs';
+import { checkCheckboxConsumer } from './checkbox-consumer-checks.mjs';
+import {
+    checkMultipleSelectConsumer,
+    multipleSelectReactTypedConsumer,
+} from './multiple-select-consumer-checks.mjs';
+import {
+    checkCreatedTimeConsumer,
+    createdTimeReactTypedConsumer,
+} from './created-time-consumer-checks.mjs';
+import { checkTextConsumer } from './text-consumer-checks.mjs';
+import {
+    checkReactSingleSelectConsumer,
+    reactSingleSelectTypedConsumer,
+    reactSingleSelectCommonJsTypedConsumer,
+} from './react-single-select-consumer-checks.mjs';
+import {
+    checkLastModifiedTimeConsumer,
+    lastModifiedTimeReactTypedConsumer,
+} from './last-modified-time-consumer-checks.mjs';
+import {
+    checkLastModifiedByConsumer,
+    lastModifiedByReactTypedConsumer,
+} from './last-modified-by-consumer-checks.mjs';
+import {
+    checkCreatedByConsumer,
+    createdByReactTypedConsumer,
+} from './created-by-consumer-checks.mjs';
+import {
+    checkExternalSyncSourceConsumer,
+    externalSyncSourceReactTypedConsumer,
+} from './external-sync-source-consumer-checks.mjs';
+import {
+    checkMultilineTextConsumer,
+    multilineTextReactTypedConsumer,
+} from './multiline-text-consumer-checks.mjs';
+import {
+    checkPhoneNumberConsumer,
+    phoneNumberReactTypedConsumer,
+} from './phone-number-consumer-checks.mjs';
+import {
+    checkUrlConsumer,
+    urlReactTypedConsumer,
+} from './url-consumer-checks.mjs';
+import {
+    checkEmailConsumer,
+    emailReactTypedConsumer,
+} from './email-consumer-checks.mjs';
+import { checkNumberConsumer } from './number-consumer-checks.mjs';
+import {
+    checkCountConsumer,
+    countReactTypedConsumer,
+} from './count-consumer-checks.mjs';
+import {
+    checkAutoNumberConsumer,
+    autoNumberReactTypedConsumer,
+} from './autonumber-consumer-checks.mjs';
+import {
+    checkRatingConsumer,
+    ratingReactTypedConsumer,
+} from './rating-consumer-checks.mjs';
+import {
+    checkPercentConsumer,
+    percentReactTypedConsumer,
+} from './percent-consumer-checks.mjs';
+import {
+    checkDateRendererConsumer,
+    dateRendererReactTypedConsumer,
+} from './date-renderer-consumer-checks.mjs';
+import {
+    checkDateTimeRendererConsumer,
+    dateTimeRendererReactTypedConsumer,
+} from './datetime-renderer-consumer-checks.mjs';
+import {
+    checkDurationRendererConsumer,
+    durationRendererReactTypedConsumer,
+} from './duration-renderer-consumer-checks.mjs';
+import {
+    checkCurrencyRendererConsumer,
+    currencyRendererReactTypedConsumer,
+} from './currency-renderer-consumer-checks.mjs';
+import {
     checkPortalButtonCompositionConsumer,
     portalButtonCompositionTypedConsumer,
     portalButtonCompositionReactTypedConsumer,
@@ -23,6 +229,8 @@ import {
 import { checkPortalLinkedPillConsumer } from './portal-linked-pill-consumer-checks.mjs';
 import { checkCollaboratorValidationConsumer } from './collaborator-validation-consumer-checks.mjs';
 import { checkConditionalPageValidationConsumer } from './conditional-page-validation-consumer-checks.mjs';
+import { checkLeadingPageVisibilityConsumer } from './leading-page-visibility-consumer-checks.mjs';
+import { checkSectionEmptyVisibilityConsumer } from './section-empty-visibility-consumer-checks.mjs';
 import {
     checkCrossPageChoiceConsumer,
     crossPageChoiceTypedConsumer,
@@ -65,7 +273,17 @@ import { checkPortalEditorConsumer } from './portal-editor-consumer-checks.mjs';
 import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
+import { checkFormSaveIdentityConsumer } from './form-save-identity-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
+import {
+    checkPortalViewAvailabilityConsumer,
+    portalViewAvailabilityTypedConsumer,
+} from './portal-view-availability-consumer-checks.mjs';
+import {
+    checkPortalReadFailureConsumer,
+    checkPortalReadFailureRecipeConsumer,
+    portalReadFailureTypedConsumer,
+} from './portal-read-failure-consumer-checks.mjs';
 import { checkSelectChoiceConsumer } from './select-choice-consumer-checks.mjs';
 import { checkExistingAttachmentConsumer } from './existing-attachment-consumer-checks.mjs';
 import { checkScalarBindingConsumer } from './scalar-binding-consumer-checks.mjs';
@@ -129,12 +347,9 @@ import { checkBrowserSelectExample } from './browser-select-example-checks.mjs';
 import { checkSectionProjectionRecipe } from './section-projection-recipe-checks.mjs';
 import { checkFormPageReviewRecipe } from './form-page-review-recipe-checks.mjs';
 import { checkFormReviewRecipe } from './form-review-recipe-checks.mjs';
-import { checkAttachmentReviewRecipe } from './attachment-review-recipe-checks.mjs';
+import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import { checkLinkedReviewRecipe } from './linked-review-recipe-checks.mjs';
-import {
-    checkBrowserReviewExample,
-    checkBrowserCombinedEmptyReviewExample,
-} from './browser-review-example-checks.mjs';
+import { checkBrowserCombinedEmptyReviewExample } from './browser-review-example-checks.mjs';
 import { checkBrowserLinkedFilterExample } from './browser-linked-filter-example-checks.mjs';
 import { createHash } from 'node:crypto';
 import { buildPrivacyBrowserProof } from './build-privacy-browser-proof.mjs';
@@ -155,6 +370,7 @@ const uiDirectory = realpathSync(
     mkdtempSync(join(tmpdir(), 'miniextensions-ui-'))
 );
 const packageMetadata = JSON.parse(readFileSync('package.json', 'utf8'));
+let packageConsumerCleanupSafe = true;
 let browserPortalChecks = 0;
 let browserPortalSortChecks = 0;
 let browserPortalFilterChecks = 0;
@@ -183,6 +399,9 @@ const browserStarterFiles = [
     'build.mjs',
     'dev.mjs',
     'src/main.ts',
+    'src/progress.ts',
+    'src/privacy.ts',
+    'src/linkedChildPanel.ts',
     'src/fields.ts',
     'src/customFieldRenderer.ts',
     'src/portal.ts',
@@ -256,6 +475,28 @@ try {
     for (const path of [
         'docs/browser-lifecycle.md',
         'docs/testing.md',
+        'dist/esm/react/button.css',
+        'dist/cjs/react/button.css',
+        'dist/esm/react/checkbox.css',
+        'dist/cjs/react/checkbox.css',
+        'dist/esm/react/single-select.css',
+        'dist/cjs/react/single-select.css',
+        'dist/esm/react/text.css',
+        'dist/cjs/react/text.css',
+        'dist/esm/react/number.css',
+        'dist/cjs/react/number.css',
+        'dist/esm/react/date.css',
+        'dist/cjs/react/date.css',
+        'dist/esm/react/datetime.css',
+        'dist/cjs/react/datetime.css',
+        'dist/esm/react/duration.css',
+        'dist/cjs/react/duration.css',
+        'dist/esm/react/currency.css',
+        'dist/cjs/react/currency.css',
+        'dist/esm/react/multiple-select.css',
+        'dist/cjs/react/multiple-select.css',
+        'dist/esm/react/linked-records.css',
+        'dist/cjs/react/linked-records.css',
         ...browserStarterFiles,
     ]) {
         assert(
@@ -431,6 +672,7 @@ try {
         join(installedPackage, 'docs/portals.md'),
         'utf8'
     );
+    const portalsReactGuideSources = [];
     const portalsGuideSources = [
         ...portalsGuide.matchAll(/```ts\n([\s\S]*?)\n```/g),
     ].map(([, code], index) => {
@@ -440,6 +682,12 @@ try {
             ? 'portal-owner.ts'
             : `portals-guide-${index}.ts`;
         writeFileSync(join(temporaryDirectory, filename), code);
+        if (
+            /\b(?:from\s*|(?:import|require)\s*(?:\(\s*)?)['"](?:react(?:-dom)?(?:\/[^'"]*)?|@miniextensions\/sdk\/react(?:\/[^'"]*)?)['"]/.test(
+                code
+            )
+        )
+            portalsReactGuideSources.push(filename);
         return filename;
     });
     assert(portalsGuideSources.length > 0, 'Missing complete Portal recipes');
@@ -453,8 +701,12 @@ try {
         'ESNext',
         '--moduleResolution',
         'Bundler',
-        ...portalsGuideSources,
+        ...portalsGuideSources.filter(
+            (filename) => !portalsReactGuideSources.includes(filename)
+        ),
     ]);
+    // Keep the complete exact-doc provenance input, including deferred React
+    // blocks; this headless recipe runner executes only its named owner block.
     const portalRecipe = await checkPortalRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: portalsGuideSources,
@@ -555,15 +807,53 @@ if (getFormattedDuration('', 'h:mm') !== '') throw new Error('Empty duration for
 if (getFormattedDuration('60', 'h:mm') !== '1:00') throw new Error('Default duration minutes failed');
 if (getFormattedDuration('60', 'h:mm', true) !== '0:01') throw new Error('Explicit duration seconds failed');
 `;
+    const originTransportChecks = `
+const originCheckTimer = setTimeout(() => {console.error('Installed origin checks did not complete');process.exitCode=1;},10000);
+(async () => {
+    const input = {shareId:'share_origin_synthetic',recordId:null,query:{},context:{type:'direct-url'}};
+    for (const apiOrigin of [undefined, 'https://private-deployment.example/']) {
+        const expected = new URL(apiOrigin === undefined ? DEFAULT_API_ORIGIN : apiOrigin).origin;
+        const calls = [];
+        const client = createMiniExtensionsClient({apiOrigin,fetch:async (url,init) => {
+            const target = new URL(String(url));
+            if (target.origin !== expected || init?.credentials !== 'omit') throw new Error('Installed origin/credential routing mismatch');
+            calls.push(target);
+            return new Response(JSON.stringify(target.pathname.startsWith('/api/trpc/') ? {result:{data:{}}} : {}),{headers:{'Content-Type':'application/json'}});
+        }});
+        if (calls.length !== 0) throw new Error('Installed client constructed with I/O');
+        await client.loadExtension(input);
+        await client.portals.getUserRecord({extensionAccessToken:'SYNTHETIC_ORIGIN_TOKEN'});
+        if (calls.length !== 2 || !calls[0].pathname.startsWith('/api/v1') || !calls[1].pathname.startsWith('/api/trpc/')) throw new Error('Installed transport coverage mismatch');
+    }
+    const calls = [];
+    const client = createMiniExtensionsClient({apiOrigin:'https://private-deployment.example',fetch:async url => {
+        calls.push(new URL(String(url)).origin);
+        throw new Error('Synthetic deployment failure');
+    }});
+    let rejected = false;
+    try {await client.loadExtension(input);} catch {rejected = true;}
+    if (!rejected || calls.length !== 1 || calls[0] !== 'https://private-deployment.example') throw new Error('Installed deployment failure changed origin or was replayed');
+    console.log('Installed runtime origin defaults: default/override v1+tRPC and no-fallback checks passed on '+process.version);
+})().catch(error => {console.error(error);process.exitCode=1;}).finally(() => clearTimeout(originCheckTimer));
+`;
+    const originProofSuccess =
+        'Installed runtime origin defaults: default/override v1+tRPC and no-fallback checks passed on ' +
+        process.version;
     const consumer = `
 import { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { AirtableFieldType as PublicFieldType } from '@miniextensions/sdk/field-types';
 if (PublicFieldType !== AirtableFieldType) throw new Error('ESM field enum identity changed');
-import { createMiniExtensionsClient, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
+import { createMiniExtensionsClient, DEFAULT_API_ORIGIN, generateLoginCredentialKey, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
+if (DEFAULT_API_ORIGIN !== 'https://web.miniextensions.com') throw new Error('ESM public API origin default changed');
+for (const options of [undefined, {}, {apiOrigin:undefined}]) {
+    if (Object.keys(createMiniExtensionsClient(options).getSession()).length !== 0) throw new Error('ESM default client construction failed');
+}
 const client = createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' });
 client.setSession(withExtensionPassword({}, { extensionId: 'extExample', encryptedExtensionPassword: 'password-token' }));
 client.setSession(withLoginToken(client.getSession(), { extensionId: 'extExample', tableId: 'tblExample', loginFieldNames: ['Email'], encryptedLoginToken: 'login-token' }));
 if (Object.keys(client.getSession()).length !== 2) throw new Error('Session helper failed');
+const keyScope = {extensionId:'extOne',tableId:'tblOne',loginFieldNames:Object.freeze(['Email','Email','Access'])};
+if (generateLoginCredentialKey(keyScope) !== 'QWNjZXNzRW1haWxFbWFpbHRibE9uZWV4dE9uZQ%3D%3D') throw new Error('Installed credential key compatibility changed');
 interface NumericOptions { precision: number; }
 const numericOptions: NumericOptions = { precision: 0 };
 const runner = new FormulaRunner('{Quantity} * 3');
@@ -599,13 +889,41 @@ const loaded = Object.keys(require.cache).filter(path => !before.has(path));
 if (!loaded.every(path => path.endsWith('/dist/cjs/field-types.js') || path.endsWith('/dist/cjs/formulas/types.js'))) throw new Error('Field kinds CommonJS entry loaded the formula runtime');
 const { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType: FormulaFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
 if (AirtableFieldType !== FormulaFieldType) throw new Error('CommonJS field enum identity changed');
-const { createMiniExtensionsClient } = require('@miniextensions/sdk');
+const { createMiniExtensionsClient, DEFAULT_API_ORIGIN, generateLoginCredentialKey } = require('@miniextensions/sdk');
+if (generateLoginCredentialKey({extensionId:'extOne',tableId:'tblOne',loginFieldNames:['\\uffff']}) !== '77%2B%2FdGJsT25lZXh0T25l') throw new Error('CommonJS credential key compatibility changed');
+if (DEFAULT_API_ORIGIN !== 'https://web.miniextensions.com') throw new Error('CommonJS public API origin default changed');
+for (const options of [undefined, {}, {apiOrigin:undefined}]) {
+    if (Object.keys(createMiniExtensionsClient(options).getSession()).length !== 0) throw new Error('CommonJS default client construction failed');
+}
 if (Object.keys(createMiniExtensionsClient({ apiOrigin: 'https://api.example.com' }).getSession()).length !== 0) throw new Error('CommonJS runtime client failed');
 if (new FormulaRunner('2 + 3 * 4').run() !== 14) throw new Error('CommonJS formula evaluation failed');
 ${formattingChecks}
 ${parserChecks}`
     );
     run(process.execPath, ['consumer.cjs']);
+
+    // Node-only transport probes must not enter the shared browser VM bundle.
+    for (const [file, imports] of [
+        [
+            'origin-defaults.mjs',
+            "import {createMiniExtensionsClient,DEFAULT_API_ORIGIN} from '@miniextensions/sdk';\n",
+        ],
+        [
+            'origin-defaults.cjs',
+            "const {createMiniExtensionsClient,DEFAULT_API_ORIGIN}=require('@miniextensions/sdk');\n",
+        ],
+    ]) {
+        writeFileSync(
+            join(temporaryDirectory, file),
+            imports + originTransportChecks
+        );
+        assert(
+            run(process.execPath, [file])
+                .split('\n')
+                .includes(originProofSuccess)
+        );
+        console.log(file + ': ' + originProofSuccess);
+    }
 
     // Start cold with a deliberately small stack: a warm/default-stack process
     // can hide recursive unary parsing failures on other Node builds.
@@ -811,6 +1129,8 @@ ${authConsumerBody.replace('export const disposed', 'const disposed')}`
         buttonTypedConsumer +
         portalButtonCompositionTypedConsumer +
         durationTypedConsumer +
+        portalViewAvailabilityTypedConsumer +
+        portalReadFailureTypedConsumer +
         `
 import type { DurationFormat } from '@miniextensions/sdk/formulas';
 const publicDurationFormat: DurationFormat = 'h:mm:ss.SSS';
@@ -1078,10 +1398,18 @@ new Parser([]).parse({maxDepth:'48'});
         metafile: true,
     });
     assert(
-        !Object.keys(bundled.metafile.inputs).some((path) =>
-            /\/sdk\/dist\/esm\/(?:ui|forms|portals|auth)\//.test(path)
-        ),
-        'Core consumer unexpectedly bundled optional UI/Form/Portal/Auth helpers'
+        !Object.keys(bundled.metafile.inputs).some((path) => {
+            const normalized = path.replace(/\\/g, '/');
+            return (
+                /\/sdk\/dist\/(?:esm|cjs)\/(?:ui|forms|portals|auth|react)\//.test(
+                    normalized
+                ) ||
+                /(?:^|\/)node_modules\/(?:react|react-dom)(?:\/|$)/.test(
+                    normalized
+                )
+            );
+        }),
+        'Core consumer unexpectedly bundled optional UI/Form/Portal/Auth/React helpers'
     );
     const browserContext = { URL, TextEncoder, fetch };
     runInNewContext(bundled.outputFiles[0].text, browserContext, {
@@ -1125,11 +1453,50 @@ new Parser([]).parse({maxDepth:'48'});
         '@types/react@19.2.2',
         '@types/react-dom@19.2.2',
     ]);
+    for (const extension of ['mts', 'cts']) {
+        const filename = `text-input-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, filename),
+            textInputTypedConsumer +
+                radioInputTypedConsumer +
+                selectPresentationTypedConsumer +
+                attachmentInputTypedConsumer +
+                dropdownFilterTypedConsumer +
+                addressRequestsTypedConsumer +
+                portalSummaryRefreshTypedConsumer +
+                ratingInputTypedConsumer +
+                calendlyBookingTypedConsumer +
+                personBadgeTypedConsumer +
+                selectProjectionTypedConsumer +
+                richTextSerializationTypedConsumer +
+                durationInputTypedConsumer +
+                dateInputCompatibilityTypedConsumer +
+                recoverableImageTypedConsumer +
+                fileSelectionTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--skipLibCheck',
+            'false',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            filename,
+        ]);
+    }
     const reactSources = reactRecipes.map(([, code], index) => {
         const filename = `ui-react-${index}.tsx`;
         writeFileSync(join(temporaryDirectory, filename), code);
         return filename;
     });
+    // These exact Portal doc blocks retain strict compilation, after the normal
+    // optional React peers/types have been installed in this consumer.
+    reactSources.push(...portalsReactGuideSources);
     writeFileSync(
         join(temporaryDirectory, 'field-bindings-react.tsx'),
         `
@@ -1147,6 +1514,25 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('field-bindings-react.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'text-input-consumer.tsx'),
+        textInputJsxConsumer +
+            ratingInputJsxConsumer +
+            calendlyBookingJsxConsumer +
+            personBadgeJsxConsumer +
+            recoverableImageJsxConsumer
+    );
+    reactSources.push('text-input-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'multiple-select-react-consumer.tsx'),
+        multipleSelectReactTypedConsumer
+    );
+    reactSources.push('multiple-select-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'linked-records-react-consumer.tsx'),
+        linkedRecordsReactTypedConsumer
+    );
+    reactSources.push('linked-records-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'button-react-consumer.tsx'),
         buttonReactTypedConsumer
     );
@@ -1157,10 +1543,280 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     reactSources.push('renderer-react-consumer.tsx');
     writeFileSync(
+        join(temporaryDirectory, 'single-select-react-consumer.tsx'),
+        reactSingleSelectTypedConsumer
+    );
+    reactSources.push('single-select-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'single-select-react-consumer.cts'),
+        reactSingleSelectCommonJsTypedConsumer
+    );
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--target',
+        'ES2022',
+        '--module',
+        'NodeNext',
+        '--moduleResolution',
+        'NodeNext',
+        'single-select-react-consumer.cts',
+    ]);
+    writeFileSync(
+        join(temporaryDirectory, 'last-modified-time-react-consumer.tsx'),
+        lastModifiedTimeReactTypedConsumer
+    );
+    reactSources.push('last-modified-time-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'created-time-react-consumer.tsx'),
+        createdTimeReactTypedConsumer
+    );
+    reactSources.push('created-time-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'last-modified-by-react-consumer.tsx'),
+        lastModifiedByReactTypedConsumer
+    );
+    reactSources.push('last-modified-by-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'created-by-react-consumer.tsx'),
+        createdByReactTypedConsumer
+    );
+    reactSources.push('created-by-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'external-sync-source-react-consumer.tsx'),
+        externalSyncSourceReactTypedConsumer
+    );
+    reactSources.push('external-sync-source-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'count-react-consumer.tsx'),
+        countReactTypedConsumer
+    );
+    reactSources.push('count-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'formula-react-consumer.tsx'),
+        formulaReactTypedConsumer
+    );
+    reactSources.push('formula-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'rollup-react-consumer.tsx'),
+        rollupReactTypedConsumer
+    );
+    reactSources.push('rollup-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'lookup-react-consumer.tsx'),
+        lookupReactTypedConsumer
+    );
+    reactSources.push('lookup-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'barcode-react-consumer.tsx'),
+        barcodeReactTypedConsumer
+    );
+    reactSources.push('barcode-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'single-collaborator-react-consumer.tsx'),
+        singleCollaboratorReactTypedConsumer
+    );
+    reactSources.push('single-collaborator-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `single-collaborator-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            singleCollaboratorNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
+        join(temporaryDirectory, 'multiple-collaborators-react-consumer.tsx'),
+        multipleCollaboratorsReactTypedConsumer
+    );
+    reactSources.push('multiple-collaborators-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `multiple-collaborators-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            multipleCollaboratorsNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
+        join(temporaryDirectory, 'rich-text-react-consumer.tsx'),
+        richTextReactTypedConsumer
+    );
+    reactSources.push('rich-text-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `rich-text-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            richTextNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
+        join(temporaryDirectory, 'ai-text-react-consumer.tsx'),
+        aiTextReactTypedConsumer
+    );
+    reactSources.push('ai-text-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `ai-text-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            aiTextNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
+        join(temporaryDirectory, 'multiple-attachments-react-consumer.tsx'),
+        multipleAttachmentsReactTypedConsumer
+    );
+    reactSources.push('multiple-attachments-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `multiple-attachments-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            multipleAttachmentsNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
+        join(temporaryDirectory, 'readonly-attachments-react-consumer.tsx'),
+        readonlyAttachmentsReactTypedConsumer
+    );
+    reactSources.push('readonly-attachments-react-consumer.tsx');
+    for (const extension of ['mts', 'cts']) {
+        const source = `readonly-attachments-react-node-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, source),
+            readonlyAttachmentsNodeTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            source,
+        ]);
+    }
+    writeFileSync(
+        join(temporaryDirectory, 'autonumber-react-consumer.tsx'),
+        autoNumberReactTypedConsumer
+    );
+    reactSources.push('autonumber-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'rating-react-consumer.tsx'),
+        ratingReactTypedConsumer
+    );
+    reactSources.push('rating-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'multiline-text-react-consumer.tsx'),
+        multilineTextReactTypedConsumer
+    );
+    reactSources.push('multiline-text-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'percent-react-consumer.tsx'),
+        percentReactTypedConsumer
+    );
+    reactSources.push('percent-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'phone-number-react-consumer.tsx'),
+        phoneNumberReactTypedConsumer
+    );
+    reactSources.push('phone-number-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'url-react-consumer.tsx'),
+        urlReactTypedConsumer
+    );
+    reactSources.push('url-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'email-react-consumer.tsx'),
+        emailReactTypedConsumer
+    );
+    reactSources.push('email-react-consumer.tsx');
+    writeFileSync(
         join(temporaryDirectory, 'duration-react-consumer.tsx'),
         durationReactTypedConsumer
     );
     reactSources.push('duration-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'date-renderer-react-consumer.tsx'),
+        dateRendererReactTypedConsumer
+    );
+    reactSources.push('date-renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'datetime-renderer-react-consumer.tsx'),
+        dateTimeRendererReactTypedConsumer
+    );
+    reactSources.push('datetime-renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'duration-renderer-react-consumer.tsx'),
+        durationRendererReactTypedConsumer
+    );
+    reactSources.push('duration-renderer-react-consumer.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'currency-renderer-react-consumer.tsx'),
+        currencyRendererReactTypedConsumer
+    );
+    reactSources.push('currency-renderer-react-consumer.tsx');
     writeFileSync(
         join(temporaryDirectory, 'form-composition-consumer.ts'),
         formCompositionTypedConsumer
@@ -1261,15 +1917,855 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
             happyDomModulePath: require.resolve('happy-dom'),
         }),
-        17
+        23
     );
+    // Resolve CSS and React through the installed archive, not checkout aliases.
+    for (const name of [
+        'button',
+        'checkbox',
+        'multiple-select',
+        'linked-records',
+        'single-select',
+        'text',
+        'last-modified-time',
+        'last-modified-by',
+        'created-by',
+        'created-time',
+        'external-sync-source',
+        'multiline-text',
+        'phone-number',
+        'url',
+        'number',
+        'autonumber',
+        'rating',
+        'percent',
+        'count',
+        'date',
+        'datetime',
+        'duration',
+        'email',
+        'currency',
+    ]) {
+        const stylesheet =
+            name === 'last-modified-time'
+                ? 'datetime'
+                : ['autonumber', 'percent', 'rating', 'count'].includes(name)
+                  ? 'number'
+                  : [
+                          'email',
+                          'url',
+                          'phone-number',
+                          'multiline-text',
+                          'last-modified-by',
+                          'created-by',
+                          'external-sync-source',
+                      ].includes(name)
+                    ? 'text'
+                    : name === 'created-time'
+                      ? 'datetime'
+                      : name;
+        if (name === 'autonumber') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'build.mjs',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+            ].map((file) => `examples/react-autonumber/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing AutoNumber example source: ${path}`
+                );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-autonumber/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'AutoNumber preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'AutoNumber example sources must remain unignored'
+            );
+        }
+        if (name === 'currency') {
+            const sourcePaths = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-currency/${file}`);
+            for (const path of sourcePaths)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Currency example source: ${path}`
+                );
+            const generatedPaths = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-currency/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generatedPaths],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generatedPaths,
+                'Currency preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sourcePaths],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Currency example sources must remain unignored'
+            );
+        }
+        if (name === 'count') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-count/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Count example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Count example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-count/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Count preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Count example sources must remain unignored'
+            );
+        }
+        if (name === 'single-select') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-single-select/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Single Select example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Single Select example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-single-select/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Single Select preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Single Select example sources must remain unignored'
+            );
+        }
+        if (name === 'last-modified-time') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-last-modified-time/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Last Modified Time example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Last Modified Time example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-last-modified-time/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Last Modified Time preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Last Modified Time example sources must remain unignored'
+            );
+        }
+        if (name === 'created-time') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-created-time/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Created Time example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Created Time example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-created-time/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Created Time preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Created Time example sources must remain unignored'
+            );
+        }
+        if (name === 'last-modified-by') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-last-modified-by/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Last Modified By example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Last Modified By example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-last-modified-by/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Last Modified By preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Last Modified By example sources must remain unignored'
+            );
+        }
+        if (name === 'created-by') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-created-by/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing Created By example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'Created By example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) => `examples/react-created-by/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'Created By preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'Created By example sources must remain unignored'
+            );
+        }
+        if (name === 'external-sync-source') {
+            const sources = [
+                '.gitignore',
+                'README.md',
+                'dev.mjs',
+                'index.html',
+                'main.ts',
+                'styles.css',
+                'tsconfig.json',
+            ].map((file) => `examples/react-external-sync-source/${file}`);
+            for (const path of sources)
+                assert(
+                    existsSync(join(process.cwd(), path)),
+                    `Missing External Sync Source example source: ${path}`
+                );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['ls-files', '--error-unmatch', ...sources],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                sources,
+                'External Sync Source example sources must remain tracked'
+            );
+            const generated = ['index.html', 'main.js', 'main.css'].map(
+                (file) =>
+                    `examples/react-external-sync-source/.generated/${file}`
+            );
+            assert.deepEqual(
+                run(
+                    'git',
+                    ['check-ignore', '--no-index', ...generated],
+                    process.cwd()
+                )
+                    .trim()
+                    .split(/\r?\n/),
+                generated,
+                'External Sync Source preview outputs must remain ignored'
+            );
+            assert.throws(
+                () =>
+                    run(
+                        'git',
+                        ['check-ignore', '--no-index', ...sources],
+                        process.cwd()
+                    ),
+                (error) =>
+                    error.status === 1 &&
+                    String(error.stdout ?? '').trim() === '',
+                'External Sync Source example sources must remain unignored'
+            );
+        }
+        const exampleDirectory = join(temporaryDirectory, `${name}-example`);
+        mkdirSync(exampleDirectory);
+        const exampleFiles = ['main.ts', 'styles.css'];
+        if (name === 'email') exampleFiles.push('owners.ts');
+        for (const file of exampleFiles) {
+            cpSync(
+                join(process.cwd(), `examples/react-${name}`, file),
+                join(exampleDirectory, file)
+            );
+        }
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            `${name}-example/main.ts`,
+        ]);
+        const exampleBundle = await build({
+            absWorkingDir: temporaryDirectory,
+            entryPoints: [`${name}-example/main.ts`],
+            bundle: true,
+            platform: 'browser',
+            format: 'esm',
+            target: 'es2022',
+            outdir: `${name}-example/dist`,
+            write: false,
+        });
+        assert(
+            exampleBundle.outputFiles.some(
+                (file) =>
+                    file.path.endsWith('.css') &&
+                    file.text.includes(`.mx-sdk-${stylesheet}`)
+            )
+        );
+        assert.equal(
+            readFileSync(
+                join(installedPackage, `dist/esm/react/${stylesheet}.css`),
+                'utf8'
+            ),
+            readFileSync(
+                join(installedPackage, `dist/cjs/react/${stylesheet}.css`),
+                'utf8'
+            )
+        );
+    }
     const buttonProof = await checkButtonConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(buttonProof.checks, 67);
     console.log(
-        `Installed Button model and custom React renderers: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
+        `Installed Button model, stock renderer, CSS and local example: ${buttonProof.checks} checkpoints passed; synthetic dispatch only.`
+    );
+    const checkboxProof = await checkCheckboxConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(checkboxProof.checks, 8);
+    console.log(
+        `Installed Checkbox input, renderer, binding, CSS and local example: ${checkboxProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const linkedRecordsRendererProof = await checkLinkedRecordsRendererConsumer(
+        {
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }
+    );
+    assert.equal(linkedRecordsRendererProof.checks, 6);
+    console.log(
+        `Installed bounded Linked Records renderer, Form/Grid/List declarations, CSS and example: ${linkedRecordsRendererProof.checks} ESM/CJS groups passed.`
+    );
+    const multipleSelectProof = await checkMultipleSelectConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(multipleSelectProof.checks, 4);
+    console.log(
+        `Installed Multiple Select component, Form/Grid/List declarations, CSS and example: ${multipleSelectProof.checks} ESM/CJS groups passed.`
+    );
+    const singleSelectProof = await checkReactSingleSelectConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(singleSelectProof.checks, 24);
+    console.log(
+        `Installed Single Select renderer, native choice drafts, explicit Add Choice/Save, accepted Portal surfaces, CSS and local example: ${singleSelectProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const lastModifiedTimeProof = await checkLastModifiedTimeConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(lastModifiedTimeProof.checks, 20);
+    console.log(
+        `Installed Last Modified Time renderer, validity-gated native timestamps, shared DateTime CSS and local example: ${lastModifiedTimeProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const createdTimeProof = await checkCreatedTimeConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(createdTimeProof.checks, 20);
+    console.log(
+        `Installed Created Time renderer, readonly native timestamp text, shared DateTime CSS and local example: ${createdTimeProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const lastModifiedByProof = await checkLastModifiedByConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(lastModifiedByProof.checks, 20);
+    console.log(
+        `Installed Last Modified By renderer, readonly native names, shared Text CSS and local example: ${lastModifiedByProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const createdByProof = await checkCreatedByConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(createdByProof.checks, 20);
+    console.log(
+        `Installed Created By renderer, readonly native names, shared Text CSS and local example: ${createdByProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const externalSyncSourceProof = await checkExternalSyncSourceConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(externalSyncSourceProof.checks, 20);
+    console.log(
+        `Installed External Sync Source renderer, readonly SDK strings, shared Text CSS and local example: ${externalSyncSourceProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const textProof = await checkTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(textProof.checks, 8);
+    console.log(
+        `Installed Text renderer, binding, CSS and local example: ${textProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const multilineTextProof = await checkMultilineTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(multilineTextProof.checks, 20);
+    console.log(
+        `Installed Multiline Text renderer, binding, shared Text CSS and local example: ${multilineTextProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const phoneNumberProof = await checkPhoneNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(phoneNumberProof.checks, 12);
+    console.log(
+        `Installed Phone Number renderer, binding, shared Text CSS and local example: ${phoneNumberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const urlProof = await checkUrlConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(urlProof.checks, 12);
+    console.log(
+        `Installed URL renderer, binding, shared Text CSS and local example: ${urlProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const emailProof = await checkEmailConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(emailProof.checks, 12);
+    console.log(
+        `Installed Email renderer, binding, shared Text CSS and local example: ${emailProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const numberProof = await checkNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(numberProof.checks, 8);
+    console.log(
+        `Installed Number renderer, scalar binding, CSS and local example: ${numberProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const formulaProof = await checkFormulaConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(formulaProof.checks, 26);
+    console.log(
+        `Installed Formula presentation: ${formulaProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const rollupProof = await checkRollupConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(rollupProof.checks, 26);
+    console.log(
+        `Installed Rollup presentation: ${rollupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const lookupProof = await checkLookupConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(lookupProof.checks, 44);
+    console.log(
+        `Installed Lookup presentation: ${lookupProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const barcodeProof = await checkBarcodeConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(barcodeProof.checks, 60);
+    console.log(
+        `Installed Barcode presentation: ${barcodeProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const singleCollaboratorProof = await checkSingleCollaboratorConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(
+        singleCollaboratorProof.checks,
+        singleCollaboratorConsumerCheckCount
+    );
+    console.log(
+        `Installed Single Collaborator presentation: ${singleCollaboratorProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const multipleCollaboratorsProof = await checkMultipleCollaboratorsConsumer(
+        {
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }
+    );
+    assert.equal(
+        multipleCollaboratorsProof.checks,
+        multipleCollaboratorsConsumerCheckCount
+    );
+    console.log(
+        `Installed Multiple Collaborators presentation: ${multipleCollaboratorsProof.checks} ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const richTextProof = await checkRichTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+        mode: 'public-export',
+    });
+    assert.equal(richTextProof.checks, richTextConsumerCheckCount);
+    assert.equal(richTextProof.publicExportVerified, true);
+    console.log(
+        `Installed Rich Text literal presentation: ${richTextProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const aiTextProof = await checkAiTextConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+        mode: 'public-export',
+    });
+    assert.equal(aiTextProof.checks, aiTextConsumerCheckCount);
+    assert.equal(aiTextProof.publicExportVerified, true);
+    console.log(
+        `Installed AI Text literal presentation: ${aiTextProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const multipleAttachmentsProof = await checkMultipleAttachmentsConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+        mode: 'public-export',
+    });
+    assert.equal(
+        multipleAttachmentsProof.checks,
+        multipleAttachmentsConsumerCheckCount
+    );
+    assert.equal(multipleAttachmentsProof.publicExportVerified, true);
+    console.log(
+        `Installed Multiple Attachments adapter: ${multipleAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const readonlyAttachmentsProof =
+        await runReadonlyAttachmentsReactConsumerChecks({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+            mode: 'public-export',
+        });
+    assert.equal(
+        readonlyAttachmentsProof.checks,
+        readonlyAttachmentsReactConsumerCheckCount
+    );
+    assert.equal(readonlyAttachmentsProof.publicExportVerified, true);
+    console.log(
+        `Installed read-only attachment presentation: ${readonlyAttachmentsProof.checks} public-export ESM/CJS scenarios passed; synthetic owners only.`
+    );
+    const countProof = await checkCountConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(countProof.checks, 20);
+    console.log(
+        `Installed Count renderer, readonly native display, shared Number CSS and local example: ${countProof.checks} ESM/CJS groups passed; synthetic owners only.`
+    );
+    const autoNumberProof = await checkAutoNumberConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(autoNumberProof.checks, 16);
+    console.log(
+        `Installed AutoNumber renderer, readonly owners, shared Number CSS and local example: ${autoNumberProof.checks} ESM/CJS groups passed; synthetic data only.`
+    );
+    const ratingProof = await checkRatingConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(ratingProof.checks, 18);
+    console.log(
+        `Installed Rating renderer, native scalar, shared Number CSS and local example: ${ratingProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const percentProof = await checkPercentConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(percentProof.checks, 16);
+    console.log(
+        `Installed Percent renderer, native scalar, shared Number CSS and local example: ${percentProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const dateRendererProof = await checkDateRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(dateRendererProof.checks, 16);
+    console.log(
+        `Installed Date renderer, binding, CSS and local example: ${dateRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const dateTimeRendererProof = await checkDateTimeRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(dateTimeRendererProof.checks, 18);
+    console.log(
+        `Installed DateTime renderer, binding, CSS and local example: ${dateTimeRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
+    );
+    const durationRendererProof = await checkDurationRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(durationRendererProof.checks, 80);
+    console.log(
+        `Installed Duration renderer, binding, CSS and local example: ${durationRendererProof.checks} ESM/CJS groups across five formats passed; synthetic drafts only.`
+    );
+    const currencyRendererProof = await checkCurrencyRendererConsumer({
+        consumerDirectory: temporaryDirectory,
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(currencyRendererProof.checks, 20);
+    console.log(
+        `Installed Currency renderer, binding, CSS and local example: ${currencyRendererProof.checks} ESM/CJS groups passed; synthetic drafts only.`
     );
     const linkedRecordsProof = await checkLinkedRecordsConsumer({
         consumerDirectory: temporaryDirectory,
@@ -1281,14 +2777,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     const linkedChildProof = await checkLinkedChildConsumer({
         consumerDirectory: temporaryDirectory,
     });
-    assert.equal(linkedChildProof, 64);
+    assert.equal(linkedChildProof, 68);
     console.log(
         `Installed configured linked-child create: ${linkedChildProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
     );
     const linkedChildEditProof = await checkLinkedChildEditConsumer({
         consumerDirectory: temporaryDirectory,
     });
-    assert.equal(linkedChildEditProof, 34);
+    assert.equal(linkedChildEditProof, 40);
     console.log(
         `Installed configured linked-child edit: ${linkedChildEditProof} ESM/CJS and React groups passed; synthetic Save dispatch only.`
     );
@@ -1351,6 +2847,22 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(conditionalValidationChecks, 126);
     console.log(
         `Installed configured conditional validation: ${conditionalValidationChecks} ESM/CJS, canonical and shipped React recipe checkpoints passed; synthetic dispatch only.`
+    );
+    const leadingPageVisibilityChecks =
+        await checkLeadingPageVisibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(leadingPageVisibilityChecks, 12);
+    console.log(
+        `Installed leading-page visibility: ${leadingPageVisibilityChecks} ESM/CJS checkpoints passed; synthetic Save dispatch only.`
+    );
+    const sectionEmptyVisibilityChecks =
+        await checkSectionEmptyVisibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        });
+    assert.equal(sectionEmptyVisibilityChecks, 18);
+    console.log(
+        `Installed ordinary-section empty visibility: ${sectionEmptyVisibilityChecks} ESM/CJS checkpoints passed; synthetic Save dispatch only.`
     );
     const crossPageChoiceChecks = await checkCrossPageChoiceConsumer({
         consumerDirectory: temporaryDirectory,
@@ -1427,12 +2939,174 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(reactBindingProof.checks, 1);
+    const nativeEditorMatrix = checkNativeEditorReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(nativeEditorMatrix.versions.length, 2);
+    assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    assert.equal(
+        await checkSelectPresentationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkAttachmentInputConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkPortalSummaryRefreshConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkDropdownFilterConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkAddressRequestsConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    writeFileSync(
+        join(temporaryDirectory, 'address-requests-bundler-consumer.ts'),
+        addressRequestsTypedConsumer
+    );
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--skipLibCheck',
+        'false',
+        '--target',
+        'ES2022',
+        '--module',
+        'ESNext',
+        '--moduleResolution',
+        'Bundler',
+        'address-requests-bundler-consumer.ts',
+    ]);
+    console.log(
+        'Installed address request lifecycle: ESM/CommonJS runtime and strict NodeNext/Bundler consumers passed.'
+    );
+    assert.equal(
+        await checkRadioInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkDateInputCompatibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkDurationInputConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkFileSelectionConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkRecoverableImageConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkTextInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkRichTextSerializationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkSelectChoiceProjectionConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkPersonBadgeConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkCalendlyBookingConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    console.log(
+        'Installed TextInput/InputClearButton ESM/CommonJS native props/ref/action and strict declaration checks passed.'
+    );
+    assert.equal(
+        await checkRatingInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    console.log(
+        'Installed RatingInput ESM/CommonJS native/ref/grid/repair actions and strict declaration checks passed.'
+    );
     const portalOwnerProof = await checkPortalOwnerConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(portalOwnerProof.checks, 19);
     console.log('Installed Portal owner checkpoints: 19');
+    const portalViewAvailabilityChecks = checkPortalViewAvailabilityConsumer({
+        consumerDirectory: temporaryDirectory,
+        run,
+    });
+    assert.equal(portalViewAvailabilityChecks, 16);
+    console.log(
+        `Installed Portal view availability: ${portalViewAvailabilityChecks} ESM/CommonJS behavior groups passed; strict NodeNext/Bundler declarations checked.`
+    );
+    const portalReadFailureChecks = checkPortalReadFailureConsumer({
+        consumerDirectory: temporaryDirectory,
+        run,
+    });
+    assert.equal(portalReadFailureChecks, 16);
+    console.log(
+        `Installed Portal read failures: ${portalReadFailureChecks} ESM/CommonJS groups passed; strict NodeNext/Bundler declarations checked; synthetic transport only.`
+    );
+    const portalReadFailureRecipeChecks =
+        await checkPortalReadFailureRecipeConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        });
+    assert.equal(portalReadFailureRecipeChecks, 3);
+    console.log(
+        `Installed Portal read failure host recipe: ${portalReadFailureRecipeChecks} actual PortalList/custom-render groups passed; synthetic DOM/transport only.`
+    );
 
     const authGuide = readFileSync(
         join(installedPackage, 'docs/auth.md'),
@@ -1532,13 +3206,20 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                 await checkFormPageConsumer({
                     consumerDirectory: temporaryDirectory,
                 }),
-                1092
+                1118
             );
             assert.equal(
                 await checkFormDispositionConsumer({
                     consumerDirectory: temporaryDirectory,
                 }),
                 19
+            );
+            const formSaveIdentityProof = await checkFormSaveIdentityConsumer({
+                consumerDirectory: temporaryDirectory,
+            });
+            assert.equal(formSaveIdentityProof, 34);
+            console.log(
+                `Installed Form Save response identity: ${formSaveIdentityProof} ESM/CJS checkpoints passed; synthetic transport only.`
             );
             // A customer copies only the shipped starter and documentation,
             // then installs the supplied TGZ. No checkout source/dist is copied.
@@ -1798,16 +3479,21 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             linkedReviewRecipeChecks = (
                 await checkLinkedReviewRecipe({ consumerDirectory: directory })
             ).checks;
-            const attachmentReview = await checkAttachmentReviewRecipe({
-                consumerDirectory: directory,
-                happyDomModulePath: require.resolve('happy-dom'),
-            });
+            let tail;
+            try {
+                tail = await runPackedTailChecks({
+                    consumerDirectory: directory,
+                    happyDomModulePath: require.resolve('happy-dom'),
+                });
+            } catch (error) {
+                if (error.cleanupSafe === false)
+                    packageConsumerCleanupSafe = false;
+                throw error;
+            }
+            const attachmentReview = tail.attachment;
             attachmentReviewChecks = attachmentReview.checks;
             browserAttachmentReviewChecks = attachmentReview.browserChecks;
-            const reviewExample = await checkBrowserReviewExample({
-                consumerDirectory: directory,
-                happyDomModulePath: require.resolve('happy-dom'),
-            });
+            const reviewExample = tail.review;
             browserReviewChecks = reviewExample.checks;
             const combinedReview = await checkBrowserCombinedEmptyReviewExample(
                 {
@@ -1917,7 +3603,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         `${packageMetadata.name}: packed core/UI/Form/Portal/Auth ESM/CommonJS and optional React renderer consumers, declarations, installed React StrictMode/remount and synthetic picker-cancel group, doc links/recipes (7 UI, 4 Form, ${attachmentRecipe.checks} attachment, ${linkedFilterRecipe.checks} cascade, ${portalRecipe.checks} Portal and ${authRecipeChecks.checks} Auth cases), ${additionalRuntimeChecks.checks} additional runtime transport cases, ${browserPortalChecks} actual packed browser Portal cases, ${browserPortalSortChecks} actual installed Portal-sort recipe/starter cases, ${browserPortalFilterChecks} installed scalar-filter groups, ${browserSelectChecks} actual packed browser select cases, ${browserLinkedFilterChecks} actual packed browser linked-filter cases, ${browserChildQueryChecks} actual packed Portal-child query cases, ${selectAvailabilityRecipeChecks} actual installed configured-choice recipe cases, ${browserVisibilityChecks} actual packed browser field-visibility cases, ${formVisibilityRecipe.checks} installed one-page field-visibility recipe cases, ${editHideEmptyRecipe.checks} installed edit empty-hiding checkpoints, ${browserEditHideEmptyChecks} actual packed browser edit empty-hiding cases, ${addressAutocompleteRecipe.checks} actual installed address recipe checkpoints, ${browserAddressChecks} actual packed browser address checkpoints, ${addressCompositionRecipe.checks} actual installed address DOM-composition checkpoints and ${browserAddressCompositionChecks} actual packed browser address DOM-composition checkpoints (no OS IME proof), ${sectionProjectionChecks} canonical/installed section-projection checks, ${attachmentReviewChecks} installed attachment-review checkpoints and ${browserAttachmentReviewChecks} copied-starter attachment-review cases, ${linkedReviewRecipeChecks} installed linked-review checkpoints, ${formPageReviewRecipeChecks} installed multipage Review row/dialog cases, ${formReviewRecipeChecks} actual installed prepared-review recipe checkpoints, ${browserReviewChecks} actual packed browser prepared-review cases, ${scalarVisibilityRecipe.checks} actual installed scalar visibility recipe cases, ${formConditionsChecks.checks} installed scalar compiler/formula outcome cases with ${formConditionsChecks.typedConsumers} strict declaration consumers, and full browser/UI examples typecheck/build passed (${packed.integrity})`
     );
 } finally {
-    rmSync(temporaryDirectory, { recursive: true, force: true });
-    rmSync(browserKitDirectory, { recursive: true, force: true });
-    rmSync(uiDirectory, { recursive: true, force: true });
+    if (packageConsumerCleanupSafe) {
+        rmSync(temporaryDirectory, { recursive: true, force: true });
+        rmSync(browserKitDirectory, { recursive: true, force: true });
+        rmSync(uiDirectory, { recursive: true, force: true });
+    } else {
+        console.error(
+            'Packed-tail process cleanup is unconfirmed; temporary package consumers were retained:',
+            { temporaryDirectory, browserKitDirectory, uiDirectory }
+        );
+    }
 }

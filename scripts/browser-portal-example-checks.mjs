@@ -278,6 +278,7 @@ export async function checkBrowserPortalExample({
     const recoveryMain = async ({
         attachments = false,
         delayedEdit = null,
+        delayedDelete = null,
         deletable = false,
         failedUpload = false,
         obscurePassword = false,
@@ -390,6 +391,10 @@ export async function checkBrowserPortalExample({
                 throw new Error(
                     'Synthetic connection lost after dispatch; outcome is unknown.'
                 );
+            if (route === '/api/trpc/airtable.deleteRecord' && deletable) {
+                if (delayedDelete != null) await delayedDelete.promise;
+                return new Response(JSON.stringify({ result: { data: null } }));
+            }
             throw new Error(`Unexpected packed recovery route: ${route}`);
         };
         const { window, close } = await environment(fetch);
@@ -987,7 +992,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'resolved child password config masks cells before and after native Grid saves',
+            'plain returned Detail remains visible while child password config masks only the editor before and after native Grid saves',
             async () => {
                 const portal = editablePortal();
                 const detail =
@@ -1016,9 +1021,9 @@ export async function checkBrowserPortalExample({
                 });
                 await h.click('Load records');
                 const cell = () => h.view.node.querySelector('tbody td');
-                assert.equal(cell().textContent, '••••••••Edit cell');
+                assert.equal(cell().textContent, `${original}Edit cell`);
                 assert.equal(cell().title, '');
-                assert.equal(h.view.node.textContent.includes(original), false);
+                assert.equal(h.view.node.textContent.includes(original), true);
                 await h.click('Edit cell');
                 let input = h.view.node.querySelector(
                     'input[data-field-id="fld_title"]'
@@ -1029,8 +1034,8 @@ export async function checkBrowserPortalExample({
                 change(h.window, input, 'input');
                 submit(h.window, input.closest('form'));
                 await h.settle();
-                assert.equal(cell().textContent, '••••••••Edit cell');
-                assert.equal(h.view.node.textContent.includes(saved), false);
+                assert.equal(cell().textContent, `${saved}Edit cell`);
+                assert.equal(h.view.node.textContent.includes(saved), true);
                 assert.deepEqual(
                     h.calls
                         .filter(({ operation }) => operation === 'grid')
@@ -1049,7 +1054,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'published detail password config masks nonempty cells while empty values stay empty',
+            'published Detail password config masks every row value including empty and null values',
             async () => {
                 const portal = editablePortal();
                 portal.payload.linkedRecordFieldIdToDetailFields.fld_children[0].miniExtConfig =
@@ -1070,7 +1075,11 @@ export async function checkBrowserPortalExample({
                     [...h.view.node.querySelectorAll('tbody tr')].map(
                         (row) => row.querySelector('td').textContent
                     ),
-                    ['••••••••Edit cell', 'Edit cell', 'Edit cell']
+                    [
+                        '••••••••Edit cell',
+                        '••••••••Edit cell',
+                        '••••••••Edit cell',
+                    ]
                 );
                 assert.equal(
                     h.view.node.textContent.includes('Private content'),
@@ -1086,7 +1095,7 @@ export async function checkBrowserPortalExample({
         );
 
         await check(
-            'ordinary cells and authoritative nonmasked child config preserve their display values',
+            'masked returned Detail cannot be weakened by an ordinary child write config',
             async () => {
                 const portal = editablePortal();
                 const detail =
@@ -1112,14 +1121,143 @@ export async function checkBrowserPortalExample({
                     [...h.view.node.querySelectorAll('tbody td')]
                         .slice(0, 2)
                         .map((cell) => cell.textContent),
-                    ['Ordinary titleEdit cell', '42Edit cell']
+                    ['••••••••Edit cell', '42Edit cell']
                 );
+                assert.equal(
+                    h.view.node.textContent.includes('Ordinary title'),
+                    false
+                );
+                await h.click('Edit cell');
+                const input = h.view.node.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                assert.equal(
+                    input.type,
+                    'text',
+                    'The unmasked child still owns editor policy.'
+                );
+                assert.equal(input.value, 'Ordinary title');
                 assert.equal(
                     h.calls.filter(({ operation }) => operation === 'grid')
                         .length,
                     0
                 );
                 await h.dispose();
+            }
+        );
+
+        await check(
+            'installed starter row summaries use both mask flags across native types and refuse malformed display flags without writes',
+            async () => {
+                const cases = [
+                    {
+                        config: { obscurePassword: true },
+                        value: 'Private text',
+                        numeric: false,
+                        expected: '••••••••',
+                    },
+                    {
+                        config: { maskPasswordOnLoginScreen: true },
+                        value: 'Private text',
+                        numeric: false,
+                        expected: '••••••••',
+                    },
+                    {
+                        config: { obscurePassword: true },
+                        value: 0,
+                        numeric: true,
+                        expected: '••••••••',
+                    },
+                    {
+                        config: { maskPasswordOnLoginScreen: true },
+                        value: 1234,
+                        numeric: true,
+                        expected: '••••••••',
+                    },
+                    {
+                        config: { obscurePassword: 'false' },
+                        value: 'Private text',
+                        numeric: false,
+                        expected: 'Value unavailable',
+                    },
+                    {
+                        config: { maskPasswordOnLoginScreen: null },
+                        value: 1234,
+                        numeric: true,
+                        expected: 'Value unavailable',
+                    },
+                    {
+                        config: {
+                            obscurePassword: true,
+                            maskPasswordOnLoginScreen: [],
+                        },
+                        value: 'Private text',
+                        numeric: false,
+                        expected: 'Value unavailable',
+                    },
+                    {
+                        config: undefined,
+                        value: 'Ordinary text',
+                        numeric: false,
+                        expected: 'Ordinary text',
+                    },
+                    { config: null, value: 0, numeric: true, expected: '0' },
+                    {
+                        config: {
+                            obscurePassword: false,
+                            maskPasswordOnLoginScreen: false,
+                        },
+                        value: 42,
+                        numeric: true,
+                        expected: '42',
+                    },
+                ];
+                for (const example of cases) {
+                    const portal = editablePortal();
+                    const detail =
+                        portal.payload.linkedRecordFieldIdToDetailFields
+                            .fld_children[0];
+                    detail.miniExtConfig = example.config;
+                    detail.childFormField = {
+                        idOrName: { type: 'id', id: 'fld_title' },
+                        config: {
+                            type: example.numeric ? 'number' : 'singleLineText',
+                            config: {},
+                        },
+                    };
+                    const loaded = page([record('rec_one', example.value, 0)]);
+                    if (example.numeric)
+                        loaded.tableIdsToLinkedTableStates.tbl_children.airtableFields[0].config =
+                            { type: 'number', options: { precision: 0 } };
+                    const untouched = structuredClone({ portal, loaded });
+                    const h = await mount({
+                        portal,
+                        handlers: { list: () => loaded },
+                    });
+                    await h.click('Load records');
+                    const cell = h.view.node.querySelector('tbody td');
+                    assert.equal(
+                        cell.textContent,
+                        `${example.expected}Edit cell`
+                    );
+                    assert.equal(cell.title, '');
+                    if (example.value === 'Private text')
+                        assert.equal(
+                            h.view.node.outerHTML.includes(example.value),
+                            false
+                        );
+                    assert.deepEqual(
+                        h.calls.map(({ operation }) => operation),
+                        ['list']
+                    );
+                    assert.deepEqual(
+                        { portal, loaded },
+                        untouched,
+                        'Display must preserve native values and child configuration.'
+                    );
+                    assert.deepEqual(h.failures, []);
+                    await h.dispose();
+                }
             }
         );
 
@@ -1577,6 +1715,7 @@ export async function checkBrowserPortalExample({
                 const childCalls = h.calls.filter(
                     (call) => call.operation === 'child'
                 ).length;
+                const childHandoffs = h.handoffs.length;
                 for (const old of oldChildren) {
                     old.click();
                     await h.settle();
@@ -1585,12 +1724,8 @@ export async function checkBrowserPortalExample({
                     h.calls.filter((call) => call.operation === 'child').length,
                     childCalls
                 );
-                assert.equal(h.failures.length, 2);
-                assert(
-                    h.failures.every(
-                        (error) => error.code === 'record-not-listed'
-                    )
-                );
+                assert.equal(h.handoffs.length, childHandoffs);
+                assert.equal(h.failures.length, 0);
                 await h.click('Open Form');
                 assert.equal(h.handoffs.length, 3);
                 assert.equal(
@@ -1688,7 +1823,8 @@ export async function checkBrowserPortalExample({
                     h.calls.filter((call) => call.operation === 'child').length,
                     0
                 );
-                assert.equal(h.failures[0]?.code, 'child-not-configured');
+                assert.equal(h.handoffs.length, 0);
+                assert.equal(h.failures.length, 0);
                 await h.dispose();
 
                 const portal = editablePortal();
@@ -3357,6 +3493,242 @@ export async function checkBrowserPortalExample({
             }
         );
         await check(
+            'actual main acknowledged child Delete retires cached rows and callbacks until explicit Reload',
+            async () => {
+                const h = await recoveryMain({ deletable: true });
+                const { document, window } = h;
+                h.latest(
+                    page(
+                        [
+                            record('rec_one', 'Delete me'),
+                            record('rec_two', 'Keep me'),
+                        ],
+                        'old_cursor'
+                    )
+                );
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).length === 2 &&
+                        document.getElementById('screen').inert === false
+                );
+                const retained = [
+                    'Load records',
+                    'Next page',
+                    'Create record',
+                    'Open Form',
+                ].map((title) => button(document, title));
+                const oldPortal = retained[0].closest('section');
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Delete this record').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const back = button(document, 'Back to Portal');
+                const oldDelete = button(document, 'Delete this record');
+                oldDelete.click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Delete record'
+                ).click();
+                await waitFor(
+                    () =>
+                        h.count('/api/trpc/airtable.deleteRecord') === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.match(
+                    document.getElementById('screen').textContent,
+                    /Choose Reload when ready/
+                );
+                assert.equal(oldPortal.isConnected, false);
+                assert.deepEqual(rowIds(document), []);
+                const callsAfterDelete = h.calls.length;
+                for (const action of [...retained, back, oldDelete])
+                    action.dispatchEvent(new window.Event('click'));
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    h.calls.length,
+                    callsAfterDelete,
+                    'Retained callbacks cannot read or mutate the deleted context.'
+                );
+                assert.match(
+                    document.getElementById('screen').textContent,
+                    /Choose Reload when ready/
+                );
+                assert.deepEqual(
+                    h.calls.find(
+                        (call) =>
+                            call.route === '/api/trpc/airtable.deleteRecord'
+                    ).body,
+                    { extensionAccessToken: 'child_access_example' }
+                );
+                assert.equal(h.count('fetchRecordsForLinkedTableOnPortal'), 1);
+                assert.equal(h.count('fetchExtensionForEndUser'), 2);
+                h.latest(page([record('rec_two', 'Keep me')]));
+                document.getElementById('reload').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Load records').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).includes('rec_two') &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.deepEqual(rowIds(document), ['rec_two']);
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Back to Portal').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                assert.equal(
+                    h.calls.findLast((call) => call.body?.childExtensionInfo)
+                        ?.body.childExtensionInfo.accessType
+                        .childExtensionRecordId,
+                    'rec_two'
+                );
+                const replacementField = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                const replacementForm = replacementField.closest('form');
+                const replacementBack = button(document, 'Back to Portal');
+                replacementField.value = 'Unsaved replacement child answer';
+                change(window, replacementField, 'input');
+                const callsBeforeOldBack = h.calls.length;
+                assert.equal(back.isConnected, false);
+                assert.notEqual(replacementBack, back);
+                back.dispatchEvent(new window.Event('click'));
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    replacementForm.isConnected,
+                    true,
+                    'A detached Back callback must not navigate away from the replacement child.'
+                );
+                assert.equal(
+                    document.querySelector('input[data-field-id="fld_title"]'),
+                    replacementField
+                );
+                assert.equal(
+                    replacementField.value,
+                    'Unsaved replacement child answer'
+                );
+                assert.equal(
+                    button(document, 'Back to Portal'),
+                    replacementBack
+                );
+                assert.equal(replacementBack.isConnected, true);
+                assert.equal(h.calls.length, callsBeforeOldBack);
+                assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 1);
+                assert.equal(h.count('saveForm'), 0);
+                replacementBack.click();
+                assert.equal(replacementForm.isConnected, false);
+                assert.deepEqual(rowIds(document), ['rec_two']);
+                assert.equal(h.calls.length, callsBeforeOldBack);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main cancelled child Delete confirmation preserves the draft and cached Portal without a request',
+            async () => {
+                const h = await recoveryMain({ deletable: true });
+                const { document, window } = h;
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const oldPortal = button(document, 'Load records').closest(
+                    'section'
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Delete this record').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                const title = document.querySelector(
+                    'input[data-field-id="fld_title"]'
+                );
+                title.value = 'Keep this unsaved answer';
+                change(window, title, 'input');
+                const before = h.calls.length;
+                button(document, 'Delete this record').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(document.querySelector('dialog'), 'Cancel').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(title.value, 'Keep this unsaved answer');
+                assert.equal(h.calls.length, before);
+                button(document, 'Back to Portal').click();
+                assert.equal(oldPortal.isConnected, true);
+                assert.deepEqual(rowIds(document), ['rec_same_title']);
+                assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 0);
+                assert.equal(h.count('saveForm'), 0);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
+            'actual main late child Delete acknowledgment cannot retire a replacement visitor presentation',
+            async () => {
+                const delayedDelete = deferred();
+                const h = await recoveryMain({
+                    deletable: true,
+                    delayedDelete,
+                });
+                const { document } = h;
+                button(document, 'Load records').click();
+                await waitFor(
+                    () =>
+                        rowIds(document).length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Open Form').click();
+                await waitFor(
+                    () =>
+                        buttons(document, 'Delete this record').length === 1 &&
+                        document.getElementById('screen').inert === false
+                );
+                button(document, 'Delete this record').click();
+                await waitFor(() => document.querySelector('dialog') != null);
+                button(
+                    document.querySelector('dialog'),
+                    'Delete record'
+                ).click();
+                await waitFor(
+                    () => h.count('/api/trpc/airtable.deleteRecord') === 1
+                );
+                button(document, 'Cancel request').click();
+                await new Promise((resolve) => setImmediate(resolve));
+                h.aba();
+                assert.equal(button(document, 'Save').disabled, true);
+                const successor =
+                    document.getElementById('screen').firstElementChild;
+                const status = document.getElementById('status').textContent;
+                delayedDelete.resolve();
+                await new Promise((resolve) => setImmediate(resolve));
+                await new Promise((resolve) => setImmediate(resolve));
+                assert.equal(
+                    document.getElementById('screen').firstElementChild,
+                    successor
+                );
+                assert.equal(
+                    document.getElementById('status').textContent,
+                    status
+                );
+                assert.equal(h.count('/api/trpc/airtable.deleteRecord'), 1);
+                assert.equal(h.count('saveForm'), 0);
+                button(document, 'Disconnect').click();
+                await h.close();
+            }
+        );
+        await check(
             'actual main expired edit blocks Delete, comments and retained controls without dispatch',
             async () => {
                 const h = await recoveryMain({ deletable: true });
@@ -3426,6 +3798,19 @@ export async function checkBrowserPortalExample({
                     h.count('/api/trpc/airtable.addAirtableCommentForRecord'),
                     0
                 );
+                const expiredForm = expiredDelete.closest('form');
+                const callsBeforeBack = h.calls.length;
+                button(document, 'Back to Portal').click();
+                assert.equal(
+                    expiredForm.isConnected,
+                    false,
+                    'The current Back control must allow navigation from an expired child.'
+                );
+                assert.equal(
+                    button(document, 'Load records').isConnected,
+                    true
+                );
+                assert.equal(h.calls.length, callsBeforeBack);
                 button(document, 'Disconnect').click();
                 await h.close();
             }
@@ -3564,6 +3949,12 @@ export async function checkBrowserPortalExample({
                         'Fresh public baseline';
                     fresh.payload.formRecord.data.fld_files = [];
                     fresh.payload.formFieldIdsWithUnsavedChanges = [];
+                    const firstNative = structuredClone(
+                        first.payload.formRecord
+                    );
+                    const freshNative = structuredClone(
+                        fresh.payload.formRecord
+                    );
                     const saves = [];
                     let loads = 0;
                     const fetch = async (input, init) => {
@@ -3622,6 +4013,11 @@ export async function checkBrowserPortalExample({
                         ...first.payload.formRecord.data,
                         fld_title: privateText,
                     });
+                    assert.deepEqual(saves[0].formFieldIdsWithUnsavedChanges, [
+                        'fld_files',
+                        'fld_title',
+                    ]);
+                    const savedNative = structuredClone(saves[0]);
                     assert(!reference().textContent.includes(privateFilename));
                     assert(
                         reference().textContent.includes(
@@ -3649,11 +4045,31 @@ export async function checkBrowserPortalExample({
                             'Attachment details are not retained.'
                         )
                     );
-                    for (const secret of [privateText, privateTitle])
-                        assert(
-                            reference().textContent.includes(secret),
-                            'Same-person Reload retains reference-only input.'
-                        );
+                    assert(
+                        reference().textContent.includes(privateText),
+                        'Same-person Reload retains the earlier value only as reference input.'
+                    );
+                    assert.equal(
+                        reference().textContent.includes(privateTitle),
+                        false
+                    );
+                    assert.match(
+                        reference().textContent,
+                        /Current public title/
+                    );
+                    assert.equal(oldTitle.isConnected, false);
+                    assert.equal(button(document, 'Save').disabled, true);
+                    submit(window, oldCard);
+                    submit(window, document.querySelector('#screen form'));
+                    await new Promise((resolve) => setImmediate(resolve));
+                    assert.equal(
+                        saves.length,
+                        1,
+                        'Same-person Reload must not replay the uncertain create from either old or current Form.'
+                    );
+                    assert.deepEqual(saves[0], savedNative);
+                    assert.deepEqual(first.payload.formRecord, firstNative);
+                    assert.deepEqual(fresh.payload.formRecord, freshNative);
                     document
                         .getElementById(
                             teardown === 'Logout' ? 'logout' : 'disconnect'
@@ -3706,6 +4122,9 @@ export async function checkBrowserPortalExample({
                         1,
                         'Privacy teardown must retain the uncertain-create operation guard.'
                     );
+                    assert.deepEqual(saves[0], savedNative);
+                    assert.deepEqual(first.payload.formRecord, firstNative);
+                    assert.deepEqual(fresh.payload.formRecord, freshNative);
                     document.getElementById('disconnect').click();
                     await close();
                 }

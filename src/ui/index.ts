@@ -1,4 +1,21 @@
+export {
+    projectSelectChoices,
+    type SelectChoiceEvaluation,
+    type SelectChoiceProjectionInput,
+    type SelectChoiceProjection,
+} from './selectChoiceProjection.js';
 export { createSelectionModel } from './model.js';
+export {
+    getFiltersAfterDropdownChange,
+    type DropdownFilterChangeInput,
+} from './dropdownFilterCompatibility.js';
+export {
+    isAttachmentUploadUrlCompatible,
+    getAttachmentFilenameFromUrl,
+    getUploadProgressWeight,
+    getAggregateUploadProgress,
+    type AttachmentUploadProgressInput,
+} from './attachmentInputCompatibility.js';
 export {
     createAddressAutocompleteControl,
     AddressAutocompleteConfigurationError,
@@ -6,12 +23,27 @@ export {
     type AddressAutocompleteControl,
 } from './addressAutocomplete.js';
 export {
+    createAddressAutocompleteRequests,
+    type AddressAutocompleteRequests,
+    type AddressAutocompleteRequestOptions,
+    type AddressAutocompleteRequestState,
+} from './addressAutocompleteRequests.js';
+export {
     createSelectControl,
     mountSelectControl,
     mountSelectionControl,
 } from './controls.js';
 export { getSelectFieldPolicy } from './selectPolicy.js';
 export type { SelectFieldPolicy } from './selectPolicy.js';
+export {
+    makeSelectOptionPresentations,
+    getSelectAddOptionPresentation,
+    type SelectAddOptionPresentation,
+    getSelectOptionPresentationKey,
+    makeUnavailableSelectOptionPresentation,
+    type SelectOptionPresentation,
+    type SelectPresentationConfig,
+} from './selectPresentation.js';
 export {
     resolveSelectFieldAvailability,
     type SelectFieldAvailability,
@@ -120,3 +152,36 @@ export type {
     PortalRenderRow,
     PortalRenderCell,
 } from './portalRenderScope.js';
+
+export type { AttachmentPresentation } from './attachmentPresentation.js';
+
+export {
+    formatNumberInputCompatibility,
+    parseNumberInputCompatibility,
+    isNumberInputCompatible,
+} from './numberInputCompatibility.js';
+export type {
+    NumberInputCompatibilityConfig,
+    NumberInputCompatibilityPolicy,
+    NumberInputSeparator,
+} from './numberInputCompatibility.js';
+
+export {
+    isDateInputRange,
+    getDateInputPickerValue,
+    getDateInputValueOnChange,
+    getDateInputValueOnBlur,
+    isDateInputWithinRange,
+    isDateInputTimeZone,
+    resolveDateInputRangeTimeZone,
+    isDateInputValueWithinRange,
+    getDateInputMomentLocale,
+    getDateInputTimeZone,
+    getDateInputFormat,
+    formatDateInputValue,
+} from './dateInputCompatibility.js';
+export type {
+    DateInputCompatibilityConfig,
+    DateInputRange,
+    DateInputBlurResult,
+} from './dateInputCompatibility.js';

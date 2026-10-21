@@ -289,6 +289,72 @@ export function resolveLinkedChildCreatePolicy(input: {
     }
 }
 
+/** Internal accepted-Save projection; callers still own token/session/intent admission. */
+const savedInverseMembership = (input: {
+    parent: Extract<
+        FormLoadedResult['payload']['formRecord'],
+        { type: 'edit' }
+    >;
+    field: NonNullable<ReturnType<typeof physicalLink>>;
+    fieldId: string;
+    child: FormLoadedResult;
+    savedRecord: AirtableRecord;
+    allowNull: boolean;
+}): { type: 'available'; add: boolean } | Unavailable => {
+    const inverseId =
+        input.field.airtableField.config.options.inverseLinkFieldId;
+    if (!nonempty(inverseId)) return unavailable('unavailable-inverse');
+    const schemas = input.child.payload.fieldIdsToSchemas;
+    const matches = Object.values(schemas).filter(
+        (schema) =>
+            schema.airtableField.config.type === 'multipleRecordLinks' &&
+            schema.airtableField.config.options.inverseLinkFieldId ===
+                input.fieldId
+    );
+    const identities = Object.values(schemas).filter(
+        (schema) => schema.airtableField.id === inverseId
+    );
+    // Public load/Save projections omit a nonpublic inverse entirely. An accepted
+    // modal Create is linked by its token-bound parent; Edit retains that modal
+    // relationship, matching canonical reconciliation. This is not missing-value
+    // evidence for an inverse that was published, nor an inferred unlink.
+    if (
+        !(inverseId in schemas) &&
+        matches.length === 0 &&
+        identities.length === 0 &&
+        !input.child.payload.fieldIdsInForm.includes(inverseId) &&
+        !Object.values(input.child.payload.fieldNamesToSchemas).some(
+            (schema) => schema.airtableField.id === inverseId
+        ) &&
+        !(inverseId in input.savedRecord.fields)
+    )
+        return { type: 'available', add: true };
+    const inverse = matches[0];
+    if (
+        matches.length !== 1 ||
+        !inverse ||
+        inverse.airtableField.id !== inverseId ||
+        !Object.hasOwn(schemas, inverseId) ||
+        schemas[inverseId] !== inverse ||
+        identities.length !== 1 ||
+        inverse.fieldType !== 'multipleRecordLinks' ||
+        inverse.airtableField.isComputed !== false ||
+        inverse.airtableField.config.type !== 'multipleRecordLinks' ||
+        inverse.airtableField.config.options.linkedTableId !==
+            input.parent.tableId ||
+        !Object.hasOwn(input.savedRecord.fields, inverseId)
+    )
+        return unavailable('unavailable-inverse');
+    const value = input.savedRecord.fields[inverseId];
+    const linked = recordIds(value);
+    if (
+        (!Array.isArray(value) && !(input.allowNull && value === null)) ||
+        !linked
+    )
+        return unavailable('unavailable-inverse');
+    return { type: 'available', add: linked.includes(input.parent.recordId) };
+};
+
 /** Internal accepted-create reconciliation, never a receipt or bypass-ID API. */
 export function reconcileLinkedChildCreate(input: {
     parent: FormLoadedResult;
@@ -318,44 +384,16 @@ export function reconcileLinkedChildCreate(input: {
         let add = true;
         const parent = input.parent.payload.formRecord;
         if (parent.type === 'edit') {
-            const inverseId =
-                field.airtableField.config.options.inverseLinkFieldId;
-            const matches = Object.values(
-                input.child.payload.fieldIdsToSchemas
-            ).filter(
-                (schema) =>
-                    schema.airtableField.config.type ===
-                        'multipleRecordLinks' &&
-                    schema.airtableField.config.options.inverseLinkFieldId ===
-                        input.fieldId
-            );
-            const inverse = matches[0];
-            if (
-                !nonempty(inverseId) ||
-                matches.length !== 1 ||
-                !inverse ||
-                inverse.airtableField.id !== inverseId ||
-                !Object.hasOwn(
-                    input.child.payload.fieldIdsToSchemas,
-                    inverseId
-                ) ||
-                input.child.payload.fieldIdsToSchemas[inverseId] !== inverse ||
-                Object.values(input.child.payload.fieldIdsToSchemas).filter(
-                    (schema) => schema.airtableField.id === inverseId
-                ).length !== 1 ||
-                inverse.fieldType !== 'multipleRecordLinks' ||
-                inverse.airtableField.isComputed !== false ||
-                inverse.airtableField.config.type !== 'multipleRecordLinks' ||
-                inverse.airtableField.config.options.linkedTableId !==
-                    parent.tableId ||
-                !Object.hasOwn(input.savedRecord.fields, inverseId)
-            )
-                return unavailable('unavailable-inverse');
-            const linked = recordIds(input.savedRecord.fields[inverseId]);
-            // A returned explicit array is required; null/missing is not unlink evidence.
-            if (!Array.isArray(input.savedRecord.fields[inverseId]) || !linked)
-                return unavailable('unavailable-inverse');
-            add = linked.includes(parent.recordId);
+            const membership = savedInverseMembership({
+                parent,
+                field,
+                fieldId: input.fieldId,
+                child: input.child,
+                savedRecord: input.savedRecord,
+                allowNull: false,
+            });
+            if (membership.type === 'unavailable') return membership;
+            add = membership.add;
         }
         const alreadyPresent = nativeIds.includes(input.savedRecord.id);
         const next = add
@@ -517,8 +555,8 @@ export function resolveLinkedChildEditPolicy(input: {
     }
 }
 
-/** Exact EDIT receipt only. Explicit inverse arrays are a conservative SDK subset;
- * canonical reconciliation also accepts missing inverse metadata. */
+/** Exact EDIT receipt only. Explicit inverse arrays or own null are a conservative
+ * SDK subset; canonical reconciliation also accepts missing inverse metadata. */
 export function reconcileLinkedChildEdit(input: {
     parent: FormLoadedResult;
     fieldId: string;
@@ -552,44 +590,16 @@ export function reconcileLinkedChildEdit(input: {
         let add = true;
         const parent = input.parent.payload.formRecord;
         if (parent.type === 'edit') {
-            const inverseId =
-                field.airtableField.config.options.inverseLinkFieldId;
-            const matches = Object.values(
-                input.child.payload.fieldIdsToSchemas
-            ).filter(
-                (schema) =>
-                    schema.airtableField.config.type ===
-                        'multipleRecordLinks' &&
-                    schema.airtableField.config.options.inverseLinkFieldId ===
-                        input.fieldId
-            );
-            const inverse = matches[0];
-            if (
-                !nonempty(inverseId) ||
-                matches.length !== 1 ||
-                !inverse ||
-                inverse.airtableField.id !== inverseId ||
-                !Object.hasOwn(
-                    input.child.payload.fieldIdsToSchemas,
-                    inverseId
-                ) ||
-                input.child.payload.fieldIdsToSchemas[inverseId] !== inverse ||
-                Object.values(input.child.payload.fieldIdsToSchemas).filter(
-                    (schema) => schema.airtableField.id === inverseId
-                ).length !== 1 ||
-                inverse.fieldType !== 'multipleRecordLinks' ||
-                inverse.airtableField.isComputed !== false ||
-                inverse.airtableField.config.type !== 'multipleRecordLinks' ||
-                inverse.airtableField.config.options.linkedTableId !==
-                    parent.tableId ||
-                !Object.hasOwn(input.savedRecord.fields, inverseId)
-            )
-                return unavailable('unavailable-inverse');
-            const linked = recordIds(input.savedRecord.fields[inverseId]);
-            // A returned explicit array is required; null/missing is not unlink evidence.
-            if (!Array.isArray(input.savedRecord.fields[inverseId]) || !linked)
-                return unavailable('unavailable-inverse');
-            add = linked.includes(parent.recordId);
+            const membership = savedInverseMembership({
+                parent,
+                field,
+                fieldId: input.fieldId,
+                child: input.child,
+                savedRecord: input.savedRecord,
+                allowNull: true,
+            });
+            if (membership.type === 'unavailable') return membership;
+            add = membership.add;
         }
         const alreadyPresent = nativeIds.includes(input.savedRecord.id);
         // Capacity limits only an append; retain, remove and no-op stay admissible.

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+    copyFileSync,
+    mkdirSync,
+    readFileSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { compilerMetadata, fingerprint } from './build-metadata.mjs';
@@ -125,6 +131,27 @@ for (const format of ['esm', 'cjs']) {
         `dist/${format}/runtime/contracts/generated.provenance.json`,
         JSON.stringify(publicProvenance, null, 4) + '\n'
     );
+}
+
+for (const format of ['esm', 'cjs']) {
+    for (const name of [
+        'button',
+        'checkbox',
+        'text',
+        'number',
+        'date',
+        'datetime',
+        'duration',
+        'currency',
+        'multiple-select',
+        'linked-records',
+        'single-select',
+    ]) {
+        copyFileSync(
+            `src/react/${name}.css`,
+            `dist/${format}/react/${name}.css`
+        );
+    }
 }
 
 // Prepack inherits this boundary: malformed output must never become a TGZ.

@@ -5,6 +5,7 @@ import type {
     RuntimeTableStates,
 } from '@miniextensions/sdk';
 import { getReadableStringFromAirtableValue } from '@miniextensions/sdk/formulas';
+import { hasMaskedValuePolicy } from './privacy.js';
 
 export const unavailableLinkedAnswer = 'Selected record — details unavailable';
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -160,11 +161,9 @@ export function createLinkedReviewPresentation(
         )
             return next;
         const config = detail.miniExtConfig ?? {};
-        if (
-            config.obscurePassword !== undefined &&
-            typeof config.obscurePassword !== 'boolean'
-        )
-            return next;
+        for (const flag of ['obscurePassword', 'maskPasswordOnLoginScreen'])
+            if (config[flag] !== undefined && typeof config[flag] !== 'boolean')
+                return next;
         if (primary.isComputed === true || !plainTypes.has(primary.config.type))
             return next;
         const recordIds = new Set<string>();
@@ -179,10 +178,7 @@ export function createLinkedReviewPresentation(
                 return new Map<string, string>();
             recordIds.add(record.id);
             // Never retain raw values; privacy decisions precede value access.
-            if (
-                primary.config.type === 'singleLineText' &&
-                config.obscurePassword === true
-            ) {
+            if (hasMaskedValuePolicy(config)) {
                 next.set(record.id, '••••••••');
                 continue;
             }

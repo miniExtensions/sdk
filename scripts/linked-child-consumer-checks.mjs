@@ -18,6 +18,16 @@ owner.complete({recordId:'arbitrary'});
 // @ts-expect-error a rendered revision is required
 owner.save();
 void [snapshot.child,snapshot.pages,snapshot.completion];
+const reviewed = parent.linkedChild('reviewedChildren', {
+    journal: new RecoveryJournal(), loadVersion: 1,
+    review: async request => {
+        const current: boolean = request.isCurrent();
+        const signal: AbortSignal = request.signal;
+        void [current, signal, request.loaded, request.draft];
+        return { type: 'edit' };
+    },
+});
+reviewed.save(reviewed.getSnapshot().revision);
 `;
 
 const deferred = () => {
@@ -615,12 +625,62 @@ async function checkCoordinator(forms, fixtures) {
             f.fields.destroy();
         }
     }
+    {
+        const loaded = fixtures.pagedChildForm();
+        const f = setup({ mode: 'edit', load: async () => loaded });
+        try {
+            assert.equal(await f.owner.openCreate(), true);
+            const child = f.owner.getSnapshot().child;
+            const pages = f.owner.getSnapshot().pages;
+            assert.equal(pages.getSnapshot().pages.length, 3);
+            await assert.rejects(f.owner.save(f.owner.getSnapshot().revision));
+            assert.equal(f.journal.observed.length, 0);
+            assert.equal(
+                pages.next(pages.getSnapshot().revision).accepted,
+                true
+            );
+            assert.equal(
+                pages.next(pages.getSnapshot().revision).accepted,
+                true
+            );
+            const stale = f.owner.getSnapshot().revision;
+            assert.equal(
+                pages.back(pages.getSnapshot().revision).accepted,
+                true
+            );
+            assert.equal(
+                pages.next(pages.getSnapshot().revision).accepted,
+                true
+            );
+            await assert.rejects(f.owner.save(stale));
+            assert.equal(f.calls.loads.length, 1);
+            assert.equal(f.calls.saves.length, 0);
+            assert.equal(f.journal.observed.length, 0);
+            const native = structuredClone(
+                child.controller.getState().draft.data
+            );
+            assert.equal(
+                (await f.owner.save(f.owner.getSnapshot().revision)).type,
+                'saved'
+            );
+            assert.deepEqual(f.calls.saves[0].formRecord.data, native);
+            assert.deepEqual(f.native(), [
+                'rec_existing',
+                'rec_existing',
+                'rec_sibling',
+                'rec_created',
+            ]);
+            checks++;
+        } finally {
+            f.fields.destroy();
+        }
+    }
     for (const invalid of [
         'table',
         'extension',
         'review',
         'compute',
-        'multipage',
+        'page-mode',
     ]) {
         const child = fixtures.childForm();
         if (invalid === 'table')
@@ -630,8 +690,8 @@ async function checkCoordinator(forms, fixtures) {
             child.payload.publicFields.state.promptUserBeforeSubmission = true;
         if (invalid === 'compute')
             child.payload.publicFields.state.enableFormComputeMode = true;
-        if (invalid === 'multipage')
-            child.payload.publicFields.state.multiPageFormMode = 'multi-page';
+        if (invalid === 'page-mode')
+            child.payload.publicFields.state.multiPageFormMode = 'future-mode';
         const f = setup({ load: async () => child });
         try {
             assert.equal(await f.owner.openCreate(), false);
@@ -720,13 +780,16 @@ export async function checkLinkedChildConsumer({ consumerDirectory }) {
         );
     assert.equal(blocks.length, 1, 'Unique installed linked child recipe');
     let checks = 0;
-    for (const [forms, ui, react] of [
-        apis,
-        ['forms', 'ui', 'react'].map((e) =>
-            require(`@miniextensions/sdk/${e}`)
-        ),
+    const cjs = ['forms', 'ui', 'react'].map((e) =>
+        require(`@miniextensions/sdk/${e}`)
+    );
+    for (const [forms, ui, react, multipage] of [
+        [...apis, false],
+        [...apis, true],
+        [...cjs, false],
+        [...cjs, true],
     ]) {
-        checks += await checkCoordinator(forms, fixtures);
+        if (!multipage) checks += await checkCoordinator(forms, fixtures);
         const { Window } = createRequire(import.meta.url)('happy-dom');
         const window = new Window();
         const keys = [
@@ -757,7 +820,10 @@ export async function checkLinkedChildConsumer({ consumerDirectory }) {
             getSession: () => ({}),
             loadExtension: async (input) => {
                 calls.loads.push(structuredClone(input));
-                return fixtures.childForm();
+                if (!multipage) return fixtures.childForm();
+                const page = fixtures.pagedChildForm();
+                page.payload.formRecord.data.fld_parent_a = [];
+                return page;
             },
             forms: {
                 save: async (input) => {
@@ -859,6 +925,25 @@ export async function checkLinkedChildConsumer({ consumerDirectory }) {
                 'Edited child'
             );
             assert.equal(calls.loads.length, 1);
+            if (multipage) {
+                assert.equal(container.querySelector('#save').disabled, true);
+                await act(async () =>
+                    container.querySelector('#child-next').click()
+                );
+                await act(async () =>
+                    container.querySelector('#child-next').click()
+                );
+                const stalePage = owner.getSnapshot().revision;
+                await act(async () =>
+                    container.querySelector('#child-back').click()
+                );
+                await act(async () =>
+                    container.querySelector('#child-next').click()
+                );
+                await assert.rejects(owner.save(stalePage));
+                assert.equal(calls.saves.length, 0);
+                assert.equal(calls.loads.length, 1);
+            }
             await act(async () => container.querySelector('#save').click());
             assert.equal(calls.saves.length, 1);
             assert.equal(owner.getSnapshot().phase, 'ready');

@@ -1,3 +1,4 @@
+import { checkReadonlyAttachmentConsumer } from './readonly-attachment-consumer-checks.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { transform } from 'esbuild';
@@ -86,7 +87,7 @@ const slot = (kind) => `render${kind[0].toUpperCase()}${kind.slice(1)}Field`;
 // Compiled before installing React: every callback is contextually correlated by physical kind.
 export const rendererTypedConsumer = `
 import type { AirtableValue, AirtableCollaborator, AirtableAttachment, AirtableBarcodeValue, UploadFileResult } from '@miniextensions/sdk';
-import type { FieldKind, FieldSchema, FieldMetadata, FieldConfig, FieldReadValue, FieldRendererCapability, FieldRendererProps, FieldRendererPropsUnion, FieldRendererSlots, LinkedRecordsRendererProps, FormLinkedRecordsRendererProps, PortalLinkedPillsRendererProps, PortalLinkedPillOccurrence } from '@miniextensions/sdk/ui';
+import type { AttachmentPresentation, FieldKind, FieldSchema, FieldMetadata, FieldConfig, FieldReadValue, FieldRendererCapability, FieldRendererProps, FieldRendererPropsUnion, FieldRendererSlots, LinkedRecordsRendererProps, FormLinkedRecordsRendererProps, PortalLinkedPillsRendererProps, PortalLinkedPillOccurrence } from '@miniextensions/sdk/ui';
 import type { FormLinkedRecordsSnapshot, FormLinkedRecordsFacet } from '@miniextensions/sdk/forms';
 import { FIELD_RENDERER_SLOTS, dispatchField } from '@miniextensions/sdk/ui';
 const slots: Required<FieldRendererSlots<string>> = {
@@ -166,6 +167,22 @@ declare const ordinary: FieldRendererProps<'singleLineText'>;
 const wrongPhysicalKind: FieldRendererProps<'singleLineText'> = {...ordinary,linkedRecords:linkedPresentation};
 void [linkedPresentation,optionalLinked,fakeAcceptedDetail,fakePortal,wrongPhysicalKind];
 declare const attachment: FieldRendererProps<'multipleAttachments'>;
+const facet: AttachmentPresentation | undefined = attachment.attachmentPresentation;
+if (facet?.status === 'ready') {
+ const label: string = facet.rows[0].label;
+ // @ts-expect-error no native identifier in the facet
+ facet.rows[0].id;
+ // @ts-expect-error no native index in the facet
+ facet.rows[0].nativeIndex;
+ // @ts-expect-error no URL in the facet
+ facet.rows[0].url;
+ // @ts-expect-error no actions in the facet
+ facet.remove(0);
+ void label;
+}
+// @ts-expect-error only physical attachment props accept the facet
+const wrongFacet: FieldRendererProps<'singleLineText'> = {...ordinary, attachmentPresentation: { status: 'masked' }};
+void wrongFacet;
 if(attachment.capability.type==='editable' && attachment.capability.attachment){
  const selected:boolean=attachment.capability.attachment.select([] as readonly File[]);
  const uploading:Promise<boolean>=attachment.capability.attachment.upload();
@@ -208,15 +225,42 @@ void [lookupError,malformedLookupError,upload,uploadedNative,nullAttachmentFilen
 `;
 export const rendererReactTypedConsumer = `
 import { createElement, type ReactNode } from 'react';
-import { FieldRenderer } from '@miniextensions/sdk/react';
+import { FieldRenderer, CheckboxField, CheckboxInput, renderCheckboxField, type CheckboxInputProps, type CheckboxFieldProps, TextField, renderSingleLineTextField, type TextFieldProps, type TextFieldOptions, NumberField, renderNumberField, type NumberFieldProps, type NumberFieldOptions, type AirtableFormProps, type AirtableGridProps, type AirtableListProps } from '@miniextensions/sdk/react';
 import type { FieldRendererHost, FieldRendererSlots } from '@miniextensions/sdk/ui';
 declare const host: FieldRendererHost;
 const renderers: FieldRendererSlots<ReactNode> = {
- renderSingleLineTextField: props => createElement('span', null, props.value),
- renderCheckboxField: props => createElement('span', null, String(props.value)),
+ renderSingleLineTextField,
+ renderCheckboxField,
+ renderNumberField,
 };
 const tree = createElement(FieldRenderer, { host, renderers, fallback: () => null });
-void tree;
+const formSlots: AirtableFormProps['renderers'] = renderers;
+const gridSlots: AirtableGridProps['renderers'] = renderers;
+const listSlots: AirtableListProps['renderers'] = renderers;
+declare const checkboxProps: CheckboxFieldProps;
+const checkbox = createElement(CheckboxField, { ...checkboxProps, className: 'custom' });
+const checkboxInputProps: CheckboxInputProps = {
+ checked: false, id: 'host-checkbox', form: 'host-form', className: 'host-theme',
+ disabled: false, readOnly: false, 'aria-checked': false,
+ 'aria-describedby': 'host-description host-error', 'aria-invalid': true,
+ onChange: event => { const input: HTMLInputElement = event.currentTarget; void input.checked; },
+};
+const checkboxInput = createElement(CheckboxInput, checkboxInputProps);
+// @ts-expect-error a native checkbox requires its host's controlled value
+const missingChecked: CheckboxInputProps = { onChange: () => {} };
+// @ts-expect-error the host owns the change callback
+const missingOnChange: CheckboxInputProps = { checked: false };
+// @ts-expect-error the shared input has a fixed native checkbox type
+const differentInputType: CheckboxInputProps = { ...checkboxInputProps, type: 'text' };
+// @ts-expect-error the shared input is controlled, not defaulted
+const defaultChecked: CheckboxInputProps = { ...checkboxInputProps, defaultChecked: true };
+declare const textProps: TextFieldProps;
+const textOptions: TextFieldOptions = { className: 'custom', clearLabel: 'Effacer' };
+const text = createElement(TextField, { ...textProps, ...textOptions });
+declare const numberProps: NumberFieldProps;
+const numberOptions: NumberFieldOptions = { className: 'custom' };
+const numberField = createElement(NumberField, { ...numberProps, ...numberOptions });
+void [tree, formSlots, gridSlots, listSlots, checkbox, checkboxInput, missingChecked, missingOnChange, differentInputType, defaultChecked, text, numberField];
 `;
 
 /** Installed public entrypoints, synthetic public envelopes, no browser/backend claim. */
@@ -235,6 +279,13 @@ export async function checkRendererConsumer({
         )
     );
     const cjs = consumer('@miniextensions/sdk/ui');
+    assert.equal(
+        await checkReadonlyAttachmentConsumer({ consumerDirectory }),
+        26
+    );
+    console.log(
+        'Installed label-only attachment presentation: 26 ESM/CJS groups passed; synthetic owners, no I/O.'
+    );
     let checks = 0;
     for (const api of [ui, cjs]) {
         assert.deepEqual(
@@ -950,13 +1001,7 @@ export async function checkRendererConsumer({
                     renderers: {
                         renderButtonField: (props) => {
                             buttonProps = props;
-                            return h(
-                                'span',
-                                null,
-                                props.capability.type === 'button'
-                                    ? props.capability.button.phase
-                                    : 'readonly'
-                            );
+                            return reactApi.renderButtonField(props);
                         },
                     },
                     fallback: () => null,
@@ -978,7 +1023,11 @@ export async function checkRendererConsumer({
         await act(async () => root.render(buttonTree()));
         assert.equal(buttonProps.capability.button.phase, 'uncertain');
         assert.equal(buttonProps.capability.button.canTrigger, false);
-        assert.equal(container.querySelector('span').textContent, 'uncertain');
+        assert.equal(container.querySelector('button').disabled, true);
+        assert.equal(
+            container.querySelector('[role=status]').textContent,
+            'Error triggering webhook'
+        );
         await act(async () =>
             assert.equal(
                 (await buttonProps.capability.button.triggerWebhook()).type,

@@ -17,24 +17,35 @@ import { join, resolve, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
+import {
+    checkAttachmentPresentationBrowser,
+    cleanupAttachmentPresentation,
+} from './attachment-presentation-browser-checks.mjs';
 import { createReviewFixture } from './build-privacy-browser-proof.mjs';
 import { addAttachmentReviewAnswers } from './attachment-review-recipe-checks.mjs';
 import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
+import { checkTextareaInputBrowser } from './browser-textarea-input-checks.mjs';
+import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
+import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
 const createFileChooserOwner = async (
     page,
     evidence,
-    timers = { setTimeout, clearTimeout }
+    timers = { setTimeout, clearTimeout },
+    inputSelector = 'dialog[open] input[type=file]'
 ) => {
     assert.equal(page.listenerCount('filechooser'), 0);
+    assert.equal(typeof inputSelector, 'string');
+    assert(inputSelector.trim(), 'Current file input selector required');
     let session;
     let retired = false;
     let active;
     let failure;
     let disposal;
     let sequence = 0;
+    evidence.inputSelector = inputSelector;
     evidence.events = [];
     evidence.cleanup = {};
     // Setup and each cleanup command have a separate 5s budget. Expiry does
@@ -98,21 +109,28 @@ const createFileChooserOwner = async (
         const { nodeId } = await wait(
             session.send('DOM.querySelector', {
                 nodeId: root.nodeId,
-                selector: 'dialog[open] input[type=file]',
+                selector: inputSelector,
             })
         );
-        assert(nodeId, 'Current dialog file input required');
+        assert(nodeId, 'Current file input required');
         const { node } = await wait(
             session.send('DOM.describeNode', { nodeId })
         );
         const { frameTree } = await wait(session.send('Page.getFrameTree'));
         const actual = await wait(
-            input.evaluate((element) => ({
-                multiple: element.multiple,
-                current:
-                    element ===
-                    document.querySelector('dialog[open] input[type=file]'),
-            }))
+            input.evaluate((element, selector) => {
+                const matches =
+                    element.ownerDocument.querySelectorAll(selector);
+                return {
+                    multiple: element.multiple,
+                    current:
+                        element.isConnected &&
+                        element.tagName === 'INPUT' &&
+                        element.type === 'file' &&
+                        matches.length === 1 &&
+                        matches[0] === element,
+                };
+            }, inputSelector)
         );
         assert(actual.current, 'File input identity changed');
         return {
@@ -218,7 +236,7 @@ const createFileChooserOwner = async (
                 current(ticket);
                 return result;
             };
-            let error;
+            let primaryFailure;
             try {
                 ticket.expected = await identity(input, wait);
                 current(ticket);
@@ -242,7 +260,7 @@ const createFileChooserOwner = async (
                 await wait(input.setInputFiles(files));
                 current(ticket);
             } catch (caught) {
-                error = caught;
+                primaryFailure = { error: caught };
             } finally {
                 timers.clearTimeout(ticket.timer);
                 ticket.phase = 'draining';
@@ -263,19 +281,25 @@ const createFileChooserOwner = async (
                         fail(cleanupError);
                         retired = true;
                         evidence.activationCleanup = {
-                            error: cleanupError.message,
+                            error:
+                                cleanupError instanceof Error
+                                    ? cleanupError.message
+                                    : 'Chooser activation cleanup failed',
                         };
-                        error = error
-                            ? new AggregateError(
-                                  [error, cleanupError],
-                                  'Chooser activation cleanup failed'
-                              )
-                            : cleanupError;
+                        primaryFailure = {
+                            error:
+                                primaryFailure === undefined
+                                    ? cleanupError
+                                    : new AggregateError(
+                                          [primaryFailure.error, cleanupError],
+                                          'Chooser activation cleanup failed'
+                                      ),
+                        };
                     }
                 }
                 if (active === ticket) active = undefined;
             }
-            if (error) throw error;
+            if (primaryFailure !== undefined) throw primaryFailure.error;
             if (failure) throw failure;
         },
     };
@@ -958,6 +982,416 @@ const checkFileChooserOwner = async () => {
         f.cleaned();
         groups.push('synchronous cleanup reentry returns memoized disposal');
     }
+    // Execute the actual page-evaluation callback against a tiny owned document;
+    // a stub that always reports current would miss selector-adapter mistakes.
+    const standalone = (onSend) => {
+        const f = make(onSend);
+        const selector = 'input[type=file]';
+        const target = {
+            nodeId: 2,
+            tagName: 'INPUT',
+            type: 'file',
+            multiple: true,
+            isConnected: true,
+        };
+        const decoy = { ...target, nodeId: 3 };
+        let matches = [target];
+        const queried = [];
+        const document = {
+            querySelectorAll(value) {
+                queried.push(value);
+                return value === selector ? matches : [decoy];
+            },
+        };
+        target.ownerDocument = decoy.ownerDocument = document;
+        f.input.evaluate = async (evaluate, value) => evaluate(target, value);
+        const send = f.session.send;
+        f.session.send = async (method, params = {}) => {
+            const result = await send(method, params);
+            if (method === 'DOM.querySelector')
+                return {
+                    nodeId:
+                        document.querySelectorAll(params.selector)[0]?.nodeId ??
+                        0,
+                };
+            if (method === 'DOM.describeNode')
+                return { node: { backendNodeId: params.nodeId } };
+            return result;
+        };
+        return {
+            ...f,
+            selector,
+            target,
+            decoy,
+            queried,
+            replace(nextMatches) {
+                matches = nextMatches;
+            },
+        };
+    };
+    {
+        const enabled = deferred(),
+            release = deferred();
+        let activations = 0;
+        const f = standalone(async (method, params) => {
+            if (
+                method === 'Page.setInterceptFileChooserDialog' &&
+                params.enabled
+            ) {
+                enabled.resolve();
+                await release.promise;
+            }
+        });
+        const owner = await createFileChooserOwner(
+            f.page,
+            {},
+            undefined,
+            f.selector
+        );
+        try {
+            const pending = owner.choose(
+                f.input,
+                async () => {
+                    activations++;
+                    f.emit();
+                },
+                ['standalone']
+            );
+            await enabled.promise;
+            assert.equal(activations, 0);
+            assert.deepEqual(f.completed, []);
+            release.resolve();
+            await pending;
+            assert.equal(activations, 1);
+            assert.deepEqual(f.completed, [['standalone']]);
+            assert(f.queried.length >= 2);
+            assert(f.queried.every((value) => value === f.selector));
+        } finally {
+            release.resolve();
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push(
+            'standalone selector executes current-input checks and awaits acknowledgment'
+        );
+    }
+    for (const scenario of [
+        'missing',
+        'decoy',
+        'duplicate',
+        'wrong-type',
+        'disconnected',
+    ]) {
+        const f = standalone();
+        if (scenario === 'missing') f.replace([]);
+        if (scenario === 'decoy') f.replace([f.decoy]);
+        if (scenario === 'duplicate') f.replace([f.target, f.decoy]);
+        if (scenario === 'wrong-type') f.target.type = 'text';
+        if (scenario === 'disconnected') f.target.isConnected = false;
+        let activations = 0;
+        const owner = await createFileChooserOwner(
+            f.page,
+            {},
+            undefined,
+            f.selector
+        );
+        try {
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        activations++;
+                        f.emit();
+                    },
+                    ['refused']
+                )
+            );
+            assert.equal(activations, 0);
+            assert.deepEqual(f.completed, []);
+            assert.equal(
+                f.sent.some(
+                    ({ method, enabled }) =>
+                        method === 'Page.setInterceptFileChooserDialog' &&
+                        enabled
+                ),
+                false
+            );
+        } finally {
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push(
+            `standalone selector refuses ${scenario} input before activation`
+        );
+    }
+    for (const scenario of ['replacement', 'ambiguity']) {
+        const f = standalone();
+        let activations = 0;
+        const owner = await createFileChooserOwner(
+            f.page,
+            {},
+            undefined,
+            f.selector
+        );
+        try {
+            await assert.rejects(
+                owner.choose(
+                    f.input,
+                    async () => {
+                        activations++;
+                        f.emit();
+                        if (scenario === 'replacement') {
+                            f.target.isConnected = false;
+                            f.replace([f.decoy]);
+                        } else f.replace([f.target, f.decoy]);
+                    },
+                    ['refused']
+                )
+            );
+            assert.equal(activations, 1);
+            assert.deepEqual(f.completed, []);
+        } finally {
+            await owner.dispose();
+        }
+        f.cleaned();
+        groups.push(
+            `standalone selector refuses post-event ${scenario} before completion`
+        );
+    }
+    {
+        const primaryError = new Error('controlled primary failure');
+        const primaryFailure = { error: primaryError };
+        const ownerError = new AggregateError([
+            new Error('controlled owner cleanup'),
+        ]);
+        const traceError = new Error('controlled trace cleanup');
+        const contextError = new Error('controlled context cleanup');
+        const calls = [],
+            boundedCalls = [],
+            evidence = { cleanup: {} };
+        const result = await cleanupAttachmentPresentation({
+            evidence,
+            primaryFailure,
+            bounded: async (label, operation) => {
+                boundedCalls.push(label);
+                return operation();
+            },
+            steps: [
+                [
+                    'chooserOwner',
+                    true,
+                    async () => {
+                        calls.push('owner');
+                        throw ownerError;
+                    },
+                    true,
+                ],
+                [
+                    'activationTrace',
+                    true,
+                    async () => {
+                        calls.push('trace');
+                        throw traceError;
+                    },
+                    false,
+                ],
+                [
+                    'context',
+                    true,
+                    async () => {
+                        calls.push('context');
+                        throw contextError;
+                    },
+                    false,
+                ],
+                [
+                    'server',
+                    true,
+                    async () => {
+                        calls.push('server');
+                    },
+                    false,
+                ],
+                [
+                    'unacquired',
+                    false,
+                    async () => {
+                        assert.fail('Unacquired resource cleaned');
+                    },
+                    false,
+                ],
+            ],
+        });
+        assert(result.error instanceof AggregateError);
+        assert.deepEqual(result.error.errors, [
+            primaryError,
+            ownerError,
+            traceError,
+            contextError,
+        ]);
+        assert.equal(result.error.errors[0], primaryError);
+        assert.equal(result.error.errors[1], ownerError);
+        assert.equal(result.error.errors[2], traceError);
+        assert.equal(result.error.errors[3], contextError);
+        assert.deepEqual(calls, ['owner', 'trace', 'context', 'server']);
+        assert.deepEqual(boundedCalls, [
+            'Attachment cleanup activationTrace',
+            'Attachment cleanup context',
+            'Attachment cleanup server',
+        ]);
+        assert.deepEqual(evidence, {
+            status: 'failed',
+            cleanup: {
+                chooserOwner: { status: 'failed' },
+                activationTrace: { status: 'failed' },
+                context: { status: 'failed' },
+                server: 'completed',
+                unacquired: 'not-acquired',
+            },
+        });
+        assert.equal(
+            await cleanupAttachmentPresentation({
+                evidence: { cleanup: {} },
+                primaryFailure,
+                bounded: async (_label, operation) => operation(),
+                steps: [['server', true, async () => {}, false]],
+            }),
+            primaryFailure
+        );
+        assert.equal(
+            await cleanupAttachmentPresentation({
+                evidence: { cleanup: {} },
+                bounded: async (_label, operation) => operation(),
+                steps: [['server', true, async () => {}, false]],
+            }),
+            undefined
+        );
+        const cleanupOnly = await cleanupAttachmentPresentation({
+            evidence: { cleanup: {} },
+            bounded: async (_label, operation) => operation(),
+            steps: [
+                [
+                    'server',
+                    true,
+                    async () => {
+                        throw contextError;
+                    },
+                    false,
+                ],
+            ],
+        });
+        assert(cleanupOnly.error instanceof AggregateError);
+        assert.equal(cleanupOnly.error.errors.length, 1);
+        assert.equal(cleanupOnly.error.errors[0], contextError);
+        groups.push(
+            'presentation cleanup attempts every resource and preserves primary/cleanup causes'
+        );
+    }
+    for (const [name, error] of [
+        ['zero', 0],
+        ['null', null],
+        ['undefined', undefined],
+        ['false', false],
+        ['empty string', ''],
+    ]) {
+        const primaryFailure = { error };
+        const cleanupError = new Error('controlled cleanup failure');
+        const bounded = async (_label, operation) => operation();
+        const preserved = await cleanupAttachmentPresentation({
+            evidence: { cleanup: {} },
+            primaryFailure,
+            bounded,
+            steps: [['server', true, async () => {}, false]],
+        });
+        assert.equal(preserved, primaryFailure);
+        assert.equal(preserved.error, error);
+        const aggregated = await cleanupAttachmentPresentation({
+            evidence: { cleanup: {} },
+            primaryFailure,
+            bounded,
+            steps: [
+                [
+                    'server',
+                    true,
+                    async () => {
+                        throw cleanupError;
+                    },
+                    false,
+                ],
+            ],
+        });
+        assert(aggregated.error instanceof AggregateError);
+        assert.equal(aggregated.error.errors.length, 2);
+        assert.equal(aggregated.error.errors[0], error);
+        assert.equal(aggregated.error.errors[1], cleanupError);
+        groups.push(`presentation cleanup preserves ${name} primary rejection`);
+    }
+    for (const [name, primaryError] of [
+        ['zero', 0],
+        ['null', null],
+        ['undefined', undefined],
+        ['false', false],
+        ['empty string', ''],
+    ]) {
+        for (const cleanupFails of [false, true]) {
+            const cleanupError = new Error('controlled activation cleanup');
+            const evidence = {};
+            let disableCalls = 0,
+                activations = 0;
+            const f = make(async (method, params) => {
+                if (
+                    method === 'Page.setInterceptFileChooserDialog' &&
+                    !params.enabled &&
+                    ++disableCalls === 1 &&
+                    cleanupFails
+                )
+                    throw cleanupError;
+            });
+            const owner = await createFileChooserOwner(f.page, evidence);
+            try {
+                const result = await owner
+                    .choose(
+                        f.input,
+                        async () => {
+                            activations++;
+                            f.emit();
+                            throw primaryError;
+                        },
+                        ['never-assigned']
+                    )
+                    .then(
+                        () => ({ rejected: false }),
+                        (error) => ({ rejected: true, error })
+                    );
+                assert.equal(result.rejected, true);
+                if (cleanupFails) {
+                    assert(result.error instanceof AggregateError);
+                    assert.equal(result.error.errors.length, 2);
+                    assert.equal(result.error.errors[0], primaryError);
+                    assert.equal(result.error.errors[1], cleanupError);
+                } else assert.equal(result.error, primaryError);
+                assert.equal(activations, 1);
+                assert.equal(evidence.events.length, 1);
+                assert.equal(evidence.events[0].phase, 'activated');
+                assert.equal(
+                    evidence.events[0].backendNodeId,
+                    expected.backendNodeId
+                );
+                assert.deepEqual(f.completed, []);
+            } finally {
+                await owner.dispose();
+            }
+            f.cleaned();
+            assert.deepEqual(evidence.cleanup, {
+                listener: 'completed',
+                interception: 'completed',
+                session: 'completed',
+            });
+        }
+        groups.push(
+            `chooser owner preserves ${name} activation rejection and cleanup causes`
+        );
+    }
     return {
         checks: groups.length,
         groups,
@@ -974,6 +1408,11 @@ const regular = (path) => {
     assert(lstatSync(path).isFile() && realpathSync(path) === resolve(path));
     return readFileSync(path);
 };
+const nativeReactVersion = process.env.SDK_NATIVE_REACT_VERSION ?? '19.2.0';
+assert(
+    ['18.3.1', '19.2.0'].includes(nativeReactVersion),
+    'Unsupported native React matrix version'
+);
 const packageDirectory = resolve(process.env.SDK_NATIVE_PACKAGE_DIR ?? '');
 const proofDirectory = resolve(process.env.SDK_NATIVE_PROOF_DIR ?? '');
 const output = resolve(process.env.SDK_NATIVE_RESULT_DIR ?? '');
@@ -1029,7 +1468,11 @@ try {
         fixtureSources: [
             'scripts/build-privacy-browser-proof.mjs',
             'scripts/attachment-review-recipe-checks.mjs',
+            'scripts/attachment-presentation-browser-checks.mjs',
             'scripts/portal-recipe-checks.mjs',
+            'scripts/browser-number-input-mask-checks.mjs',
+            'scripts/browser-textarea-input-checks.mjs',
+            'scripts/native-rating-fixture.css',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -1053,8 +1496,8 @@ try {
                 type: 'module',
                 dependencies: {
                     '@miniextensions/sdk': `file:${archive}`,
-                    react: '19.2.0',
-                    'react-dom': '19.2.0',
+                    react: nativeReactVersion,
+                    'react-dom': nativeReactVersion,
                     '@types/react': '18.3.12',
                     '@types/react-dom': '18.3.1',
                 },
@@ -1065,6 +1508,7 @@ try {
             [
                 'install',
                 '--ignore-scripts',
+                '--strict-peer-deps',
                 '--no-audit',
                 '--no-fund',
                 '--cache',
@@ -1072,6 +1516,13 @@ try {
             ],
             { cwd: temporary, stdio: 'pipe' }
         );
+        report.reactVersion = JSON.parse(
+            readFileSync(
+                join(temporary, 'node_modules/react/package.json'),
+                'utf8'
+            )
+        ).version;
+        assert.equal(report.reactVersion, nativeReactVersion);
         const form = createReviewFixture('review-answers').page();
         addAttachmentReviewAnswers(form);
         // Reuse complete public verification envelopes; no new schema/operator authority.
@@ -1231,10 +1682,34 @@ try {
         const code = bundled.outputFiles[0].contents;
         report.bundleSha256 = hash(code);
         allowed.set('/native.js', code);
+        allowed.set(
+            '/native-rating.css',
+            regular('scripts/native-rating-fixture.css')
+        );
         const html = Buffer.from(
-            `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Native synthetic SDK consumer</title></head><body><main></main><script type="module" src="/native.js"></script></body></html>`
+            `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Native synthetic SDK consumer</title><link rel="stylesheet" href="/native-rating.css"></head><body><main></main><script type="module" src="/native.js"></script></body></html>`
         );
         allowed.set('/native.html', html);
+        // Image recovery uses a separate same-origin resource fixture. Keep the
+        // original no-image CSP intact for every existing native case.
+        allowed.set(
+            '/native-image.html',
+            Buffer.from(
+                html
+                    .toString()
+                    .replace(
+                        "default-src 'none';",
+                        "default-src 'none'; img-src 'self';"
+                    )
+            )
+        );
+        allowed.set(
+            '/native-image-good.svg',
+            Buffer.from(
+                '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="green"/></svg>'
+            )
+        );
+
         server = createServer((request, response) => {
             const url = new URL(request.url, 'http://127.0.0.1');
             const bytes = allowed.get(url.pathname);
@@ -1249,7 +1724,9 @@ try {
                     ? 'text/javascript'
                     : url.pathname.endsWith('.css')
                       ? 'text/css'
-                      : 'text/html'
+                      : url.pathname.endsWith('.svg')
+                        ? 'image/svg+xml'
+                        : 'text/html'
             );
             response.end(bytes);
         });
@@ -1258,7 +1735,9 @@ try {
             server.listen(0, '127.0.0.1', resolve);
         });
         const origin = `http://127.0.0.1:${server.address().port}`;
-        const executablePath = realpathSync('/opt/google/chrome/chrome');
+        const executablePath = realpathSync(
+            process.env.SDK_NATIVE_CHROMIUM ?? '/opt/google/chrome/chrome'
+        );
         report.browserExecutable = {
             path: executablePath,
             version: execFileSync(executablePath, ['--version'], {
@@ -1266,11 +1745,45 @@ try {
             }).trim(),
         };
         browser = await chromium.launch({
-            channel: 'chrome',
+            executablePath,
             headless: true,
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
+        report.numberInputMask = {};
+        await checkNumberInputMaskBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.numberInputMask,
+        });
+        report.textareaInput = {};
+        await checkTextareaInputBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.textareaInput,
+        });
+        report.attachmentPresentation = {};
+        report.radioInput = {};
+        await checkRadioInputBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.radioInput,
+            output,
+        });
+        await checkAttachmentPresentationBrowser({
+            browser,
+            consumer: temporary,
+            fixture: form,
+            output,
+            evidence: report.attachmentPresentation,
+            createChooserOwner: (page, evidence) =>
+                createFileChooserOwner(
+                    page,
+                    evidence,
+                    undefined,
+                    'input[type=file]'
+                ),
+        });
         const run = async (name, exercise) => {
             const context = await browser.newContext({
                 serviceWorkers: 'block',
@@ -1356,6 +1869,790 @@ try {
                 .click();
             await idle(page);
         };
+        await run('native-file-selection', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=file-selection`);
+            const picker = page.getByRole('button', {
+                name: 'Toggle file intake',
+                exact: true,
+            });
+            await picker.waitFor();
+            const input = page.getByLabel('Choose synthetic files', {
+                exact: true,
+            });
+            const file = {
+                name: 'retry-native.txt',
+                mimeType: 'text/plain',
+                buffer: Buffer.from('synthetic file'),
+            };
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await input.setInputFiles(file);
+            await input.setInputFiles(file);
+            assert.equal((await state()).received.length, 2);
+            assert.equal(await input.inputValue(), '');
+            for (const files of (await state()).received)
+                assert.deepEqual(files, [
+                    { name: 'retry-native.txt', size: 14, type: 'text/plain' },
+                ]);
+            const drag = async (selector, type, withFile = false) =>
+                page.evaluate(
+                    ({ selector, type, withFile }) => {
+                        const transfer = new DataTransfer();
+                        if (withFile)
+                            transfer.items.add(
+                                new File(['drop'], 'drop-native.txt', {
+                                    type: 'text/plain',
+                                })
+                            );
+                        const event = new DragEvent(type, {
+                            bubbles: true,
+                            cancelable: true,
+                            dataTransfer: transfer,
+                        });
+                        document.querySelector(selector).dispatchEvent(event);
+                        return event.defaultPrevented;
+                    },
+                    { selector, type, withFile }
+                );
+            assert.equal(await drag('[data-file-target]', 'dragenter'), true);
+            await drag('[data-file-child]', 'dragenter');
+            await drag('[data-file-child]', 'dragleave');
+            assert.equal(
+                await page
+                    .getByRole('status', { name: 'Drag status', exact: true })
+                    .textContent(),
+                'active'
+            );
+            await drag('[data-file-target]', 'dragleave');
+            assert.equal(
+                await page
+                    .getByRole('status', { name: 'Drag status', exact: true })
+                    .textContent(),
+                'idle'
+            );
+            await drag('[data-file-target]', 'drop', true);
+            assert.deepEqual((await state()).received[2], [
+                { name: 'drop-native.txt', size: 4, type: 'text/plain' },
+            ]);
+            await picker.click();
+            assert.equal(await input.isDisabled(), true);
+            await drag('[data-file-target]', 'drop', true);
+            assert.equal((await state()).received.length, 3);
+            await picker.click();
+            await input.setInputFiles(file);
+            assert.equal((await state()).received.length, 4);
+            assert.equal((await state()).parentDrops, 0);
+            assert.deepEqual((await state()).errors, []);
+            assert.deepEqual((await state()).calls, []);
+        });
+        await run('recoverable-native-image', async (page, origin) => {
+            await page.goto(
+                `${origin}/native-image.html?mode=recoverable-image`
+            );
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await page.waitForFunction(
+                () => window.__nativeProbe.snapshot().naturalWidth > 0
+            );
+            const first = await state();
+            assert.equal(first.reactVersion, nativeReactVersion);
+            assert(first.imageId > 0 && first.seen >= 2);
+            await page
+                .getByRole('button', {
+                    name: 'Equivalent image sources',
+                    exact: true,
+                })
+                .click();
+            assert.equal((await state()).imageId, first.imageId);
+            await page
+                .getByRole('button', {
+                    name: 'All broken image sources',
+                    exact: true,
+                })
+                .click();
+            await page
+                .getByRole('status', { name: 'Image failed', exact: true })
+                .waitFor();
+            const broken = await state();
+            assert.equal(broken.imageId, null);
+            await page
+                .getByRole('button', {
+                    name: 'Retry synthetic image',
+                    exact: true,
+                })
+                .click();
+            await page.waitForFunction(
+                (old) => window.__nativeProbe.snapshot().seen > old,
+                broken.seen
+            );
+            await page
+                .getByRole('status', { name: 'Image failed', exact: true })
+                .waitFor();
+            assert.equal((await state()).retries, 1);
+            assert.equal((await state()).submits, 0);
+            assert.equal((await state()).parentClicks, 0);
+            await page
+                .getByRole('button', {
+                    name: 'Replacement image source',
+                    exact: true,
+                })
+                .click();
+            await page.waitForFunction(
+                () => window.__nativeProbe.snapshot().naturalWidth > 0
+            );
+            assert((await state()).source.endsWith('#replacement'));
+            assert.deepEqual((await state()).errors, []);
+            assert.deepEqual((await state()).calls, []);
+        });
+        await run('native-rich-editor-slot-abi', async (page, origin) => {
+            await page.goto(
+                `${origin}/native.html?mode=native-rich-editor-slot`
+            );
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            const click = (name) =>
+                page.getByRole('button', { name, exact: true }).click();
+            await page
+                .getByRole('button', {
+                    name: 'Commit native serialization',
+                    exact: true,
+                })
+                .waitFor();
+            const first = await state();
+            assert(first.instanceId > 0);
+            assert.equal(first.reactVersion, nativeReactVersion);
+            assert.equal(first.staleRoots, 0);
+            assert.equal(first.defaultValue, 'Alpha');
+            await click('Commit native serialization');
+            assert.equal((await state()).value, '[x] typed  \n\n');
+            assert.deepEqual((await state()).writes, ['[x] typed  \n\n']);
+            assert.equal((await state()).instanceId, first.instanceId);
+            await click('Cosmetic external newline');
+            assert.equal((await state()).instanceId, first.instanceId);
+            assert.equal((await state()).writes.length, 1);
+            await click('Focus slot signal');
+            assert.equal((await state()).focused, true);
+            assert.equal((await state()).instanceId, first.instanceId);
+            await click('Blur slot signal');
+            assert.equal((await state()).focused, false);
+            await click('Semantic external replacement');
+            await page.waitForFunction(
+                (old) => window.__nativeProbe.snapshot().instanceId !== old,
+                first.instanceId
+            );
+            assert.equal((await state()).defaultValue, 'Replacement');
+            assert.equal((await state()).writes.length, 1);
+            assert.equal((await state()).slotRoots, 1);
+            await click('Read-only null');
+            assert.equal((await state()).instanceId, null);
+            assert.equal((await state()).slotRoots, 0);
+            await page.getByText('Localized empty', { exact: true }).waitFor();
+            await click('Read-only empty document');
+            assert((await state()).instanceId > 0);
+            assert.equal((await state()).defaultValue, '');
+            assert.equal((await state()).writes.length, 1);
+            await page
+                .getByRole('button', {
+                    name: 'Commit native serialization',
+                    exact: true,
+                })
+                .isDisabled()
+                .then((value) => assert(value));
+            assert.equal((await state()).staleRoots, 0);
+            for (const name of [
+                'Read-only null',
+                'Editable null',
+                'Editable empty document',
+                'Read-only null',
+                'Read-only empty document',
+                'Editable empty document',
+            ]) {
+                await click(name);
+                assert.equal(
+                    (await state()).staleRoots,
+                    0,
+                    `stale roots after ${name}`
+                );
+                assert.equal(
+                    (await state()).slotRoots,
+                    name === 'Read-only null' ? 0 : 1
+                );
+            }
+            await click('Use first cleanup ref');
+            await click('Use second cleanup ref');
+            let callbacks = (await state()).callbackEntries;
+            assert(callbacks.some((x) => x.owner === 'first'));
+            assert(
+                callbacks
+                    .filter((x) => x.owner === 'first')
+                    .every((x) => x.released === 1)
+            );
+            await click('Semantic external replacement');
+            await click('Unmount native editor');
+            callbacks = (await state()).callbackEntries;
+            assert(callbacks.filter((x) => x.owner === 'second').length >= 2);
+            assert(callbacks.every((x) => x.released === 1));
+            assert.equal((await state()).callbackNulls, 0);
+            assert.equal((await state()).instanceId, null);
+            assert.deepEqual((await state()).errors, []);
+        });
+        await run('native-select-choice-projection', async (page, origin) => {
+            await page.goto(
+                `${origin}/native.html?mode=native-select-projection`
+            );
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            const click = (name) =>
+                page.getByRole('button', { name, exact: true }).click();
+            await page
+                .getByRole('checkbox', { name: 'Draft Beta', exact: true })
+                .waitFor();
+            assert.deepEqual((await state()).eligible, [
+                'Alpha',
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            assert.deepEqual((await state()).nativeIds, ['opt_alpha', '', '']);
+            await page
+                .getByRole('checkbox', { name: 'Draft Gamma', exact: true })
+                .click();
+            assert.deepEqual((await state()).selected, [
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            assert.equal((await state()).writes, 1);
+            await click('Toggle native limits');
+            await click('Change linked hydration');
+            assert.deepEqual((await state()).eligible, [
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            assert.equal((await state()).writes, 1);
+            await click('Toggle native layout');
+            assert.deepEqual((await state()).eligible, []);
+            assert.equal(
+                await page
+                    .getByRole('status', { name: 'Current native selections' })
+                    .textContent(),
+                'Draft Beta|Draft Gamma'
+            );
+            await click('Toggle unavailable context');
+            assert.equal((await state()).status, 'retained-selected');
+            assert.deepEqual((await state()).eligible, [
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            await click('Toggle unavailable context');
+            await click('Change linked hydration');
+            assert.deepEqual((await state()).eligible, ['Alpha']);
+            await click('Toggle evaluator failure');
+            assert.equal((await state()).status, 'retained-selected');
+            assert.deepEqual((await state()).eligible, [
+                'Draft Beta',
+                'Draft Gamma',
+            ]);
+            assert.equal((await state()).writes, 1);
+            assert.equal((await state()).submissions, 0);
+            assert.deepEqual((await state()).nativeIds, ['opt_alpha', '', '']);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
+        await run('person-badge-native-presentation', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=person-badge`);
+            const click = (name) =>
+                page.getByRole('button', { name, exact: true }).click();
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await page.getByRole('listitem').waitFor();
+            assert.equal(
+                await page.locator('.person-label').textContent(),
+                '<b>Resolved person</b>'
+            );
+            assert.equal(await page.locator('b').count(), 0);
+            assert.equal(
+                await page.getByRole('img', { name: 'Caller avatar' }).count(),
+                1
+            );
+            const remove = () => page.getByRole('listitem').getByRole('button');
+            assert.equal(await remove().getAttribute('type'), 'button');
+            const iconBox = await remove().locator('svg').boundingBox();
+            assert(
+                iconBox &&
+                    iconBox.width > 0 &&
+                    iconBox.width <= 16 &&
+                    iconBox.height > 0 &&
+                    iconBox.height <= 16,
+                'Default removal glyph must stay compact without host theme CSS'
+            );
+            await remove().click();
+            await click('Replace person');
+            await remove().focus();
+            await page.keyboard.press('Enter');
+            assert.deepEqual((await state()).removed, ['A', 'B']);
+            assert.equal((await state()).submissions, 0);
+            await click('Toggle person disabled');
+            await remove().evaluate((node) => node.click());
+            assert.deepEqual((await state()).removed, ['A', 'B']);
+            await click('Toggle person readonly');
+            assert.equal(await remove().count(), 0);
+            assert.equal(
+                await page.locator('.person-label').textContent(),
+                'Current email fallback'
+            );
+            await click('Unmount person');
+            assert.equal((await state()).refConnected, false);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
+        await run('calendly-frame-lifecycle', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=calendly-booking`);
+            const click = (name) =>
+                page.getByRole('button', { name, exact: true }).click();
+            const frame = page.locator('#calendly-frame');
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await click('Open synthetic schedule');
+            assert.equal(await frame.getAttribute('src'), 'about:blank');
+            const url = new URL((await state()).url);
+            assert.equal(
+                url.searchParams.get('email'),
+                'synthetic+qa&team@example.invalid'
+            );
+            assert.equal(url.searchParams.get('name'), 'Synthetic & Team');
+            assert.equal(url.searchParams.get('keep'), 'yes');
+            await click('Capture old frame');
+            await click('Send wrong origin');
+            await click('Send wrong source');
+            assert.deepEqual((await state()).writes, []);
+            await click('Cancel schedule');
+            await click('Send old event');
+            await click('Open synthetic schedule');
+            await click('Cancel old session');
+            await click('Send old event');
+            assert.equal(await frame.count(), 1);
+            assert.deepEqual((await state()).writes, []);
+            await click('Change owner');
+            assert.equal(await frame.count(), 0);
+            await click('Send old event');
+            await click('Open synthetic schedule');
+            await click('Send current event');
+            assert.deepEqual((await state()).writes, ['B']);
+            assert.equal(await frame.count(), 0);
+            await click('Open synthetic schedule');
+            await click('Capture old frame');
+            await click('Toggle booked');
+            await click('Send old event');
+            assert.equal(await frame.count(), 0);
+            await click('Open synthetic schedule');
+            assert.equal(await frame.count(), 0);
+            await click('Toggle booked');
+            await click('Open synthetic schedule');
+            await click('Toggle enabled');
+            assert.equal(await frame.count(), 0);
+            await click('Toggle enabled');
+            await click('Open synthetic schedule');
+            await click('Capture old frame');
+            await click('Unmount schedule');
+            await click('Send old event');
+            assert.deepEqual((await state()).writes, ['B']);
+            assert.equal((await state()).submissions, 0);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+            // A fresh real React root exercises reentrant opening with no provider I/O.
+            await page.reload();
+            await click('Enable reentrant');
+            await click('Open synthetic schedule');
+            await click('Capture old frame');
+            await click('Send current event');
+            assert.deepEqual((await state()).writes, ['A']);
+            assert.equal(await frame.count(), 1);
+            await click('Cancel old session');
+            await click('Send old event');
+            assert.equal(await frame.count(), 1);
+            await click('Send current event');
+            assert.deepEqual((await state()).writes, ['A', 'A']);
+            assert.equal(await frame.count(), 0);
+            assert.deepEqual((await state()).errors, []);
+        });
+        await run('action-button-native-form', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=action-button`);
+            const action = page.locator('#shared-action');
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            await action.waitFor();
+            assert.equal(await action.getAttribute('type'), 'button');
+            await page
+                .getByRole('textbox', { name: 'Adjacent draft' })
+                .fill('  keep raw draft  ');
+            await action.click();
+            assert.equal((await state()).activations, 1);
+            assert.equal(await action.isDisabled(), true);
+            assert.equal(await action.getAttribute('aria-busy'), 'true');
+            assert.equal(await action.textContent(), 'Running action');
+            await action.evaluate((node) => node.click());
+            assert.equal((await state()).activations, 1);
+            await page
+                .getByRole('button', { name: 'Finish action', exact: true })
+                .click();
+            await action.focus();
+            await page.keyboard.press('Enter');
+            assert.equal((await state()).activations, 2);
+            await page
+                .getByRole('button', { name: 'Finish action', exact: true })
+                .click();
+            await action.focus();
+            await page.keyboard.press('Space');
+            assert.equal((await state()).activations, 3);
+            await page
+                .getByRole('button', { name: 'Finish action', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Disable action', exact: true })
+                .click();
+            await action.evaluate((node) => node.click());
+            assert.equal((await state()).activations, 3);
+            assert.equal(await action.textContent(), 'Run action');
+            await page
+                .getByRole('button', { name: 'Enable action', exact: true })
+                .click();
+            await action.click();
+            assert.equal((await state()).activations, 4);
+            assert.equal((await state()).submissions, 0);
+            assert.equal((await state()).rowClicks, 0);
+            assert.equal(
+                await page
+                    .getByRole('textbox', { name: 'Adjacent draft' })
+                    .inputValue(),
+                '  keep raw draft  '
+            );
+            await page
+                .getByRole('button', { name: 'Unmount action', exact: true })
+                .click();
+            assert.equal((await state()).refConnected, false);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
+        await run('literal-text-display', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=literal-text`);
+            const display = page.locator('.literal-display');
+            await display.waitFor();
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            assert.equal(
+                await display.evaluate((node) => node.tagName),
+                'OUTPUT'
+            );
+            assert.equal(await display.textContent(), (await state()).value);
+            assert.equal(await page.locator('img').count(), 0);
+            assert.equal(
+                await display.evaluate(
+                    (node) => getComputedStyle(node).whiteSpace
+                ),
+                'pre-wrap'
+            );
+            assert.equal(
+                await display.evaluate(
+                    (node) => getComputedStyle(node).overflowWrap
+                ),
+                'anywhere'
+            );
+            assert.equal(
+                await display.evaluate((node) => {
+                    const range = document.createRange();
+                    range.selectNodeContents(node);
+                    const selection = window.getSelection();
+                    selection.removeAllRanges();
+                    selection.addRange(range);
+                    return selection.toString();
+                }),
+                (await state()).value
+            );
+            await page
+                .getByRole('button', { name: 'Show literal zero', exact: true })
+                .click();
+            assert.equal(await display.textContent(), '0');
+            assert.equal(await page.locator('#literal-empty').count(), 0);
+            await page
+                .getByRole('button', {
+                    name: 'Show literal empty',
+                    exact: true,
+                })
+                .click();
+            assert.equal(
+                await page.locator('#literal-empty').textContent(),
+                'Localized empty'
+            );
+            assert.equal(await display.count(), 0);
+            assert.equal((await state()).refConnected, false);
+            await page
+                .getByRole('button', {
+                    name: 'Use caller container',
+                    exact: true,
+                })
+                .click();
+            assert.equal(await display.evaluate((node) => node.tagName), 'DIV');
+            assert.equal(await display.getAttribute('style'), null);
+            assert.equal(
+                await display.locator('p').textContent(),
+                'Caller URL https://synthetic.invalid'
+            );
+            await page
+                .getByRole('button', {
+                    name: 'Unmount literal display',
+                    exact: true,
+                })
+                .click();
+            assert.equal(await display.count(), 0);
+            assert.equal((await state()).refConnected, false);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
+        await run('uncontrolled-text-ref-reset', async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=uncontrolled-text`);
+            const sdk = page.getByRole('textbox', {
+                name: 'SDK native search',
+                exact: true,
+            });
+            const native = page.getByRole('textbox', {
+                name: 'Reference native search',
+                exact: true,
+            });
+            await sdk.waitFor();
+            assert.equal(await sdk.inputValue(), 'seed text');
+            await sdk.fill('raw  draft');
+            await native.fill('raw  draft');
+            const state = () =>
+                page.evaluate(() => window.__nativeProbe.snapshot());
+            assert.deepEqual((await state()).changes, [
+                { owner: 'sdk', value: 'raw  draft' },
+                { owner: 'native', value: 'raw  draft' },
+            ]);
+            await page
+                .getByRole('button', {
+                    name: 'Set controller text',
+                    exact: true,
+                })
+                .click();
+            assert(
+                await sdk.evaluate((node) => document.activeElement === node)
+            );
+            await page
+                .getByRole('button', { name: 'Rerender owner', exact: true })
+                .click();
+            for (const input of [sdk, native]) {
+                assert.equal(await input.inputValue(), 'controller text');
+                assert.deepEqual(
+                    await input.evaluate((node) => [
+                        node.selectionStart,
+                        node.selectionEnd,
+                        node.selectionDirection,
+                    ]),
+                    [2, 7, 'backward']
+                );
+            }
+            assert.equal(
+                await sdk.getAttribute('aria-describedby'),
+                'revision-1'
+            );
+            assert.equal((await state()).changes.length, 2);
+            await page
+                .getByRole('button', { name: 'Native reset', exact: true })
+                .click();
+            assert.equal(await sdk.inputValue(), 'seed text');
+            assert.equal(await native.inputValue(), 'seed text');
+            assert.equal((await state()).changes.length, 2);
+            await page
+                .getByRole('button', {
+                    name: 'Unmount native search',
+                    exact: true,
+                })
+                .click();
+            assert.equal((await state()).refConnected, false);
+            assert.equal(await sdk.count(), 0);
+            assert.deepEqual((await state()).calls, []);
+            assert.deepEqual((await state()).errors, []);
+        });
+        const openRating = async (page, origin) => {
+            await page.goto(`${origin}/native.html?mode=rating`);
+            await page
+                .getByRole('slider', { name: 'Synthetic rating' })
+                .waitFor();
+        };
+        const ratingState = (page) =>
+            page.evaluate(() => window.__nativeProbe.snapshot());
+        await run('rating-keyboard-icons-grid', async (page, origin) => {
+            await openRating(page, origin);
+            const slider = page.getByRole('slider', {
+                name: 'Synthetic rating',
+            });
+            assert.equal(await slider.getAttribute('form'), 'rating-form');
+            assert.equal(
+                await slider.getAttribute('aria-describedby'),
+                'rating-help'
+            );
+            assert.equal(await page.locator('[data-rating-index]').count(), 5);
+            assert.equal((await ratingState(page)).changes.length, 0);
+            await slider.focus();
+            await page.keyboard.press('ArrowRight');
+            assert.equal((await ratingState(page)).value, 3);
+            assert.equal(
+                await page
+                    .locator('[data-rating-index="3"]')
+                    .getAttribute('data-focused'),
+                'true'
+            );
+            await page.locator('[data-rating-index="4"]').click();
+            assert.equal((await ratingState(page)).value, 4);
+            assert(
+                await slider.evaluate((node) => node === document.activeElement)
+            );
+            await page.locator('[data-rating-index="4"]').click();
+            assert.equal((await ratingState(page)).value, null);
+            await page.locator('[data-rating-index="2"]').click();
+            await page
+                .getByRole('button', { name: 'Theme heart', exact: true })
+                .click();
+            assert.equal(
+                await page
+                    .locator('[data-rating-index="1"]')
+                    .getAttribute('data-shape'),
+                'heart'
+            );
+            assert.equal(
+                await page
+                    .locator('[data-rating-index="1"] path')
+                    .getAttribute('fill'),
+                '#DC043B'
+            );
+            assert.equal(
+                await page
+                    .locator('[data-rating-index="3"] path')
+                    .getAttribute('fill'),
+                '#e5e7eb'
+            );
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            assert(await slider.isDisabled());
+            await page.locator('[data-rating-index="1"]').click();
+            await page
+                .getByRole('button', {
+                    name: 'Invoke captured icon',
+                    exact: true,
+                })
+                .click();
+            assert.deepEqual((await ratingState(page)).changes, [
+                3,
+                4,
+                null,
+                2,
+            ]);
+            await page
+                .getByRole('button', { name: 'Toggle grid', exact: true })
+                .click();
+            assert.equal(await page.getByRole('slider').count(), 0);
+            assert.equal(
+                await page.locator('.rating-grid-summary').textContent(),
+                '(2/5)'
+            );
+            assert.equal(
+                await page.locator('.rating-print-summary').count(),
+                0
+            );
+            assert.equal((await ratingState(page)).refConnected, false);
+            assert.equal((await ratingState(page)).submits, 0);
+        });
+        await run('rating-explicit-repair-print', async (page, origin) => {
+            await openRating(page, origin);
+            await page
+                .getByRole('button', { name: 'Lower maximum', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Set stale value', exact: true })
+                .click();
+            assert.equal(await page.locator('[data-rating-index]').count(), 3);
+            assert.equal((await ratingState(page)).value, 8);
+            assert.equal((await ratingState(page)).changes.length, 0);
+            assert.match(
+                await page.locator('.rating-warning').textContent(),
+                /8\/3/
+            );
+            const repair = page.getByRole('button', {
+                name: 'Repair rating',
+                exact: true,
+            });
+            assert.equal(await repair.getAttribute('type'), 'button');
+            await repair.click();
+            assert.deepEqual((await ratingState(page)).changes, [3]);
+            assert.equal((await ratingState(page)).submits, 0);
+            await page.emulateMedia({ media: 'print' });
+            assert(await page.locator('.rating-print-summary').isVisible());
+            assert.equal(
+                await page.locator('.rating-print-summary').textContent(),
+                '(3/3)'
+            );
+            await page.emulateMedia({ media: 'screen' });
+            assert(!(await page.locator('.rating-print-summary').isVisible()));
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Set stale value', exact: true })
+                .click();
+            assert.equal(
+                await page
+                    .getByRole('button', { name: 'Repair rating', exact: true })
+                    .count(),
+                0
+            );
+            assert.equal((await ratingState(page)).value, 8);
+            assert.deepEqual((await ratingState(page)).changes, [3]);
+        });
+        await run('rating-callback-retirement-empty', async (page, origin) => {
+            await openRating(page, origin);
+            await page
+                .getByRole('button', { name: 'Clear externally', exact: true })
+                .click();
+            assert.equal((await ratingState(page)).value, null);
+            assert.equal((await ratingState(page)).changes.length, 0);
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            await page
+                .getByRole('button', {
+                    name: 'Invoke captured icon',
+                    exact: true,
+                })
+                .click();
+            assert.equal((await ratingState(page)).changes.length, 0);
+            await page
+                .getByRole('button', { name: 'Toggle readonly', exact: true })
+                .click();
+            await page
+                .getByRole('button', { name: 'Clear externally', exact: true })
+                .click();
+            assert.equal(await page.locator('[data-rating-index]').count(), 0);
+            assert.equal(
+                await page.locator('[data-empty-rating]').textContent(),
+                'No rating'
+            );
+            await page
+                .getByRole('button', { name: 'Unmount rating', exact: true })
+                .click();
+            await page
+                .getByRole('button', {
+                    name: 'Invoke captured icon',
+                    exact: true,
+                })
+                .click();
+            assert.equal((await ratingState(page)).refConnected, false);
+            assert.equal((await ratingState(page)).changes.length, 0);
+            assert.equal(await page.getByRole('slider').count(), 0);
+            assert.equal((await ratingState(page)).calls.length, 0);
+        });
         for (const scenario of ['teardown-logout', 'teardown-disconnect'])
             await run(scenario, async (page, origin) => {
                 await connect(page, origin, scenario);
@@ -1635,6 +2932,22 @@ try {
             assert.equal(state.calls.length, 2);
             assert.equal(state.state.phase, 'retired');
         });
+        // Preserve checkpoints across reloads; each document's diagnostic ring resets.
+        const sessionCheckpoint = async (page, label) => {
+            const state = await page.evaluate(() =>
+                window.__nativeProbe.snapshot()
+            );
+            report.sessionCheckpoints ??= [];
+            report.sessionCheckpoints.push({
+                label,
+                phase: state.phase,
+                sessionEntries: state.sessionEntries,
+                storageEntries: state.storageEntries,
+                calls: state.calls.length,
+                events: state.events,
+            });
+            return state;
+        };
         for (const mode of ['session-off', 'session-on'])
             await run(mode, async (page, origin) => {
                 await nativeSetup(page, origin, mode);
@@ -1645,8 +2958,9 @@ try {
                     .getByRole('status')
                     .getByText('Fake session applied', { exact: true })
                     .waitFor();
-                let state = await page.evaluate(() =>
-                    window.__nativeProbe.snapshot()
+                let state = await sessionCheckpoint(
+                    page,
+                    mode + ':after-login'
                 );
                 assert.equal(state.sessionEntries, 1);
                 assert.equal(state.calls.length, 0);
@@ -1663,11 +2977,14 @@ try {
                 await page
                     .getByRole('button', { name: 'Restore fake visitor' })
                     .waitFor();
-                state = await page.evaluate(() =>
-                    window.__nativeProbe.snapshot()
-                );
+                state = await sessionCheckpoint(page, mode + ':after-reload');
                 assert.equal(state.sessionEntries, 0);
                 assert.equal(state.calls.length, 0);
+                assert.equal(
+                    state.phase,
+                    mode === 'session-on' ? 'idle' : 'memory-only',
+                    'A fresh document must own an idle restoration adapter.'
+                );
                 await page
                     .getByRole('button', { name: 'Restore fake visitor' })
                     .click();
@@ -1680,9 +2997,7 @@ try {
                         { exact: true }
                     )
                     .waitFor();
-                state = await page.evaluate(() =>
-                    window.__nativeProbe.snapshot()
-                );
+                state = await sessionCheckpoint(page, mode + ':after-restore');
                 assert.equal(state.calls.length, mode === 'session-on' ? 1 : 0);
                 if (mode === 'session-on') {
                     assert.equal(state.calls[0].credentialMatched, true);
@@ -1714,7 +3029,102 @@ try {
                     0
                 );
             });
-        assert.equal(results.length, 7);
+        // Deliberately untrusted notifications test adapter routing, not native
+        // cross-document event delivery or the unexplained original CI failure.
+        const storageEventCases = [
+            {
+                name: 'session-event-session-clear',
+                area: 'session',
+                clear: true,
+            },
+            {
+                name: 'session-event-session-key',
+                area: 'session',
+                clear: false,
+            },
+            { name: 'session-event-local-clear', area: 'local', clear: true },
+            { name: 'session-event-local-key', area: 'local', clear: false },
+        ];
+        for (const testCase of storageEventCases)
+            await run(testCase.name, async (page, origin) => {
+                await nativeSetup(page, origin, 'session-on');
+                await page
+                    .getByRole('button', { name: 'Login fake visitor' })
+                    .click();
+                await page
+                    .getByRole('status')
+                    .getByText('Fake session applied', { exact: true })
+                    .waitFor();
+                await page.reload();
+                await page
+                    .getByRole('button', { name: 'Restore fake visitor' })
+                    .waitFor();
+                let state = await sessionCheckpoint(
+                    page,
+                    testCase.name + ':before-event'
+                );
+                assert.equal(state.phase, 'idle');
+                assert.equal(state.sessionEntries, 0);
+                assert.equal(state.storageEntries, 1);
+                assert.equal(state.calls.length, 0);
+                await page.evaluate(({ area, clear }) => {
+                    const key = localStorage.key(0);
+                    if (key === null)
+                        throw Error('Missing synthetic remembered entry');
+                    window.dispatchEvent(
+                        new StorageEvent('storage', {
+                            key: clear ? null : key,
+                            storageArea:
+                                area === 'local'
+                                    ? localStorage
+                                    : sessionStorage,
+                        })
+                    );
+                }, testCase);
+                const retires = testCase.area === 'local';
+                state = await sessionCheckpoint(
+                    page,
+                    testCase.name + ':after-event'
+                );
+                assert.equal(state.phase, retires ? 'retired' : 'idle');
+                assert.equal(state.sessionEntries, 0);
+                assert.equal(state.storageEntries, 1);
+                assert.equal(state.calls.length, 0);
+                const notifications = state.events.filter(
+                    (event) => event.type === 'storage-event'
+                );
+                assert.equal(notifications.length, 1);
+                assert.equal(notifications[0].area, testCase.area);
+                assert.equal(notifications[0].clear, testCase.clear);
+                assert.equal(
+                    notifications[0].matchesStoredKey,
+                    !testCase.clear
+                );
+                assert.equal(notifications[0].trusted, false);
+                await page
+                    .getByRole('button', { name: 'Restore fake visitor' })
+                    .click();
+                await page
+                    .getByRole('status')
+                    .getByText(
+                        retires
+                            ? 'No remembered session'
+                            : 'Fresh fake load accepted',
+                        { exact: true }
+                    )
+                    .waitFor();
+                state = await sessionCheckpoint(
+                    page,
+                    testCase.name + ':after-restore'
+                );
+                assert.equal(state.calls.length, retires ? 0 : 1);
+                assert.equal(state.sessionEntries, retires ? 0 : 1);
+                assert.equal(state.storageEntries, 1);
+                assert.equal(state.phase, retires ? 'retired' : 'restored');
+                if (!retires)
+                    assert.equal(state.calls[0].credentialMatched, true);
+            });
+        assert.equal(results.length, 19 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

@@ -728,19 +728,55 @@ export async function checkEditHideEmptyRecipe({ consumerDirectory }) {
         }).type,
         'visible'
     );
-    for (const section of [
-        { headerSectionTitle: 'Retained section', enableSectionHeader: false },
-        { applyFieldConditionsToSection: true },
+    for (const [section, afterSection] of [
+        [
+            {
+                headerSectionTitle: 'Retained section',
+                applyFieldConditionsToSection: true,
+                enableSectionHeader: false,
+            },
+            {
+                type: 'blocked',
+                code: 'unsupported-hide-empty',
+                diagnostics: [],
+            },
+        ],
+        [
+            { applyFieldConditionsToSection: true },
+            { type: 'hidden', diagnostics: [] },
+        ],
     ]) {
         const copy = structuredClone(schemas);
         copy.fld_empty_tail.miniExtConfig = section;
+        // The populated leading field and its explicit empty twin are outside
+        // any later section. Neither assertion changes the retained native data.
         assert.deepEqual(
             compose({
                 ...base,
                 fieldIds: loaded.payload.fieldIdsInForm,
                 fieldIdsToSchemas: copy,
             }).fld_empty_title,
-            { type: 'blocked', code: 'unsupported-hide-empty', diagnostics: [] }
+            { type: 'visible', diagnostics: [] }
+        );
+        assert.deepEqual(
+            compose({
+                ...base,
+                data: { ...data, fld_empty_title: null },
+                fieldIds: loaded.payload.fieldIdsInForm,
+                fieldIdsToSchemas: copy,
+            }).fld_empty_title,
+            { type: 'hidden', diagnostics: [] }
+        );
+        // A raw disabled title still establishes a section boundary; its flag
+        // without a title does not establish one.
+        assert.deepEqual(
+            compose({
+                ...base,
+                data: { ...data, fld_empty_title: null },
+                fieldIds: ['fld_empty_tail', 'fld_empty_title'],
+                fieldIdsToSchemas: copy,
+            }).fld_empty_title,
+            afterSection
         );
     }
     // HE-I3: conditional projection and Save remain distinct from presentation.
@@ -979,12 +1015,21 @@ export async function checkBrowserEditHideEmptyExample({
                     },
                     ['fld_empty_title', 'fld_empty_number', 'fld_empty_tail']
                 );
-                assert(
-                    doc
-                        .querySelector('.error-list')
-                        .textContent.includes(
-                            `Hidden required answer: ${fixture.state.expected.validationMessage}`
-                        )
+                const validationText =
+                    doc.querySelector('.error-list').textContent;
+                assert.equal(
+                    validationText,
+                    'A field needs attention before saving.'
+                );
+                assert.equal(
+                    validationText.includes('Hidden required answer'),
+                    false
+                );
+                assert.equal(
+                    validationText.includes(
+                        fixture.state.expected.validationMessage
+                    ),
+                    false
                 );
                 roundTrip();
                 assert.equal(shown('title'), false);

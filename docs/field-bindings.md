@@ -184,8 +184,9 @@ Search does not narrow the set used to admit a choice.
 Configured Add Choice is explicit. Attach `owner.selectChoice(fieldId, recovery,
 adapter)` with the same `RecoveryJournal`, accepted scope and load version as
 Save/upload. This owner-held controller also appears as `binding.choiceCreation`
-and `snapshot.choiceCreation`; optional React `SelectField` stock markup and a
-custom `render` consume the same state/actions. Mounting never creates a choice.
+and `snapshot.choiceCreation`; optional React `SingleSelectField` and `SelectField`
+stock markup, plus custom rendering, consume the same state/actions. Mounting
+never creates a choice.
 
 `create(name)` reuses configured permission, visibility, selection limits and
 conditional availability. Refused preflight creates no request or journal attempt.
@@ -263,9 +264,9 @@ or persistence across a page refresh.
 
 ## Optional React components
 
-Import `TextField`, `NumberField`, `CheckboxField`, `SelectField`, `LinkedField`, `AttachmentField` and
-`AttachmentDialog` from `@miniextensions/sdk/react`. React is an optional peer
-only for this entry point; use the supported React 18.3.1 or React 19 range from
+Import `TextField`, `NumberField`, `CheckboxField`, `SelectField`, `SingleSelectField`,
+`LinkedField`, `AttachmentField` and `AttachmentDialog` from
+`@miniextensions/sdk/react`. React is an optional peer only for this entry point; use the supported React 18.3.1 or React 19 range from
 `package.json`. No UI library is required. Each field supports a `render(state)`
 function replacing its default markup, using the same snapshot/actions.
 
@@ -278,14 +279,36 @@ export function AppTextField({ binding, render }: FieldProps) {
 }
 ```
 
+For a stock single-choice dropdown, use `SingleSelectField` with an accepted Form
+binding or `renderSingleSelectField` in a named slot. Both borrow existing owner
+state/actions and preserve native choice names. `SelectField` uses the same stock
+single-select presentation while retaining its existing multi-select path. The
+[Single Select guide](ui.md#react-single-select-presentation) covers optional CSS,
+masking, configured Add Choice and the standalone helper's presentation identity.
+The stock helper does not create conditional Portal inline editing authority;
+accepted detail hosts remain readonly.
+
 Unmount removes subscriptions, not the owner, draft or pending File identities.
 React reflects the owner-held linked search query on remount and replaces it when
 the binding identity changes. Neither mounting nor StrictMode starts linked reads,
 uploads or Saves.
 
+`TextField` keeps this binding API and adds an accessible Clear control, configured
+placeholder, password masking and character limit. Its named
+`renderSingleLineTextField` helper works in Form/Grid/List slots. Import
+`@miniextensions/sdk/react/text.css` for optional defaults; see
+[React Text presentation](ui.md#react-text-presentation) for composition behavior,
+customization and the manual-entry scope.
+
 `AttachmentField` additionally takes the owner's attachment controller. Selection
 and drop run admission without upload; `upload()` is explicit and uploads the first
-queued File only. Status reports phases, not byte progress. Empty chooser completion
+queued File only. The stock control shows the pending count and labels this action
+“Upload next file.” Its live status distinguishes selected, uploading, accepted into
+the draft (still requiring Save) and uncertain outcomes. Activity is indeterminate;
+there is no byte-progress contract. Disabled or removed controls hand focus to an
+available action within the same rendered owner, or to the field region when no
+upload action is available. Completion never takes focus from another control,
+and owner replacement discards the previous view's focus tracking. Empty chooser completion
 preserves pending Files; Clear removes them explicitly. Cancellation preserves
 uncertainty and never automatically replays Upload. `AttachmentDialog` dismisses
 only when a cancel event originates on the dialog itself. A bubbling file-input
@@ -362,6 +385,30 @@ blocked and retired bindings reject writes. Accepted explicit reload replaces th
 models; old actions cannot edit the replacement. Ordinary remount does not reload
 or Save.
 
+The optional React `CheckboxField` keeps its existing `{ binding, render }` API
+and also accepts `className`. The shared `renderCheckboxField` helper plugs into
+the named Form/Grid/List slot. Both use the same native checkbox presentation;
+import `@miniextensions/sdk/react/checkbox.css` for optional scoped defaults.
+See [React Checkbox presentation](ui.md#react-checkbox-presentation) for capability
+handling, accessibility and the current native-only scope.
+
+For plain Number fields, `NumberField` retains its `{ binding, render }` API and
+accepts `className`. The optional `renderNumberField` helper consumes the existing
+scalar capability in Form/Grid/List slots; an absent scalar does not become an
+editor from the native value alone. Import `@miniextensions/sdk/react/number.css`
+for scoped defaults. See [React Number presentation](ui.md#react-number-presentation)
+for accessibility, draft behavior and compatibility with other numeric bindings.
+
+The optional React `CurrencyField` and `renderCurrencyField` helper reuse the
+numeric scalar model and native units. The accepted currency symbol is literal
+text beside the input, associated through its accessible description. Input stays
+raw: precision, number separators and thousands-separator settings do not round,
+group or reinterpret an answer. `CurrencyField` supports the existing
+`{ binding, render }` API plus `className` and `clearLabel`; `NumberField` continues
+to recognize currency bindings. Import `@miniextensions/sdk/react/currency.css`
+for optional defaults. See [React Currency presentation](ui.md#react-currency-presentation)
+for the bounded input contract, readonly fallback and Form/Grid/List usage.
+
 ## Duration clock input
 
 Duration uses the existing `binding.scalar` owner and native numeric seconds or
@@ -371,11 +418,18 @@ physical field's `options.durationFormat`: `h:mm`, `h:mm:ss`, `h:mm:ss.S`,
 `h:mm:ss.SS` or `h:mm:ss.SSS`. Missing or unsupported formats produce generic
 feedback rather than a guessed display.
 
-Use `/react` `DurationField`, the existing `renderDurationField` slot, or a custom
-renderer. Duration scalar actions include typed `setFocused(boolean)`; focusing
+Use `/react` `DurationField`, its `renderDurationField` helper for the named slot,
+or a custom renderer. Duration scalar actions include typed `setFocused(boolean)`; focusing
 preserves raw input, and blurring formats the committed native seconds without
 rounding or writing them. Owner lifetime stays outside mounts, so remounting keeps
 unfinished input. Existing `NumberField` also recognizes duration bindings.
+
+`DurationField` also accepts `className` and `clearLabel`; its existing `render`
+prop still replaces all markup. The helper requires the accepted duration scalar
+bridge, including `setFocused`, for editing. Import
+`@miniextensions/sdk/react/duration.css` for optional scoped defaults. See
+[React Duration presentation](ui.md#react-duration-presentation) for binding and
+Form/Grid/List usage, readonly display and customization.
 
 ```tsx
 import { DurationField, type FieldProps } from '@miniextensions/sdk/react';
@@ -466,6 +520,14 @@ It does not delete remote bytes, clear pending Files, cancel an upload, or repla
 an uncertain operation. Remounts keep the owner-held native answer and pending
 queue. Unobserved in-place configuration A→B→A is not detected by this contract.
 
+An upload cancelled or refused by ownership checks before the controller invokes
+`client.attachments.uploadFile` finishes as `not-dispatched`. The current pending
+File queue and native values are preserved; another explicit action may retry.
+Retiring the owner still clears its private queue. Once the uploader is invoked,
+even a synchronous throw, cancellation before PUT or a lost response remains
+unknown and blocks replay/Save. Cancellation does not undo remote bytes, and no
+upload is retried automatically.
+
 Missing add-only baseline or malformed presentation yields generic unavailable
 state and no removal. Canonical empty values remain untouched. Filenames require
 explicit `hideAttachmentName: false`; otherwise rows say `Attachment`. Explicit
@@ -478,6 +540,20 @@ filename opt-in with no filename says `Attachment — filename unavailable`.
 model; their `render` prop supports custom markup without custom conversion.
 The copied starter's stock and custom adapters also use this model. Keep the
 binding owner through ordinary remounts; dispose it on visitor/context replacement.
+
+For calendar dates, `DateField` accepts `className` and `clearLabel`, and
+`renderDateField` supplies the named Form/Grid/List slot using its accepted date
+bridge. Import `@miniextensions/sdk/react/date.css` for optional scoped defaults.
+See [React Date presentation](ui.md#react-date-presentation) for the manual-entry
+contract and customization.
+
+For explicit-offset timestamps, `DateTimeField` accepts the same options, and
+`renderDateTimeField` supplies the named slot using its accepted dateTime bridge.
+Import `@miniextensions/sdk/react/datetime.css` for optional scoped defaults. See
+[React DateTime presentation](ui.md#react-datetime-presentation) for its
+manual-entry contract. `DateTimeField` remains an alias of `DateField`; the shared
+binding component chooses the calendar or timestamp control from the accepted
+model kind. Both preserve custom render overrides.
 
 Dates accept only valid calendar `YYYY-MM-DD` strings. Calendar parsing and
 preview avoid a local-midnight or implicit UTC shift, including skipped civil
@@ -516,7 +592,7 @@ or accessibility certification is claimed by synthetic consumer tests.
 
 ## Configured Button actions
 
-Button values are computed or readonly native values, but value editability does not decide whether a configured action is available. The SDK owns action state; the app owns markup, navigation and localized fallback feedback. There is no default visual Button component in this slice.
+Button values are computed or readonly native values, but value editability does not decide whether a configured action is available. The SDK owns action state; the app owns markup, navigation and localized fallback feedback. The optional `/react` entry now includes a polished `ButtonField` renderer and `renderButtonField` slot helper; import its CSS explicitly. See [React Button presentation](ui.md#react-button-presentation).
 
 ```ts
 import { createFormButtonFieldModel } from '@miniextensions/sdk/ui';
@@ -1326,6 +1402,17 @@ SDK Form and Portal linked-option loaders attach detached record data to `select
 
 A Form facet accepts SDK rich pages only from the same client, token, field, and linked table. A custom option loader can still supply native choices, but replaying a page from another client or field does not provide rich-record presentation authority.
 
+`readSelected({ signal })` optionally ties hydration to a caller's cancellation.
+The token-only request is shared by linked facets of the accepted Form owner:
+aborting any participating signal cancels that pending hydration for all waiters,
+returns its presentation to idle, and rejects a late response even if the
+transport ignores abort. An already-aborted caller does not join or cancel an
+existing read. Cancellation preserves native selections, unrelated draft values,
+candidate reads and the Form owner. Retry explicitly; it starts a fresh read
+without waiting for the cancelled transport. Old responses and retained signals
+cannot affect that successor. A settled accepted hydration remains cached;
+aborting its former signal does not erase accepted data or cancel another read.
+
 The rich Form facet’s `phase`, `pending`, and `error` describe the shared selected-hydration read. For candidate Search and More, use the existing binding’s `selection.getState()` fields `loading`, `error`, `searchTerm`, and `offset`. The facet adds no second candidate read owner; native selection and draft writes remain owned by the existing binding.
 
 Selected candidate records remain owned by the Form facet across candidate searches and renderer unmounts, even without a subscriber or intervening snapshot read. Actual owner retirement clears that presentation. The facet’s `table` is common physical metadata from the sources of its returned selected and candidate records. Empty original hydration does not override candidate metadata. If participating sources conflict or lack metadata, `table` is null; render generic values rather than pairing a record with unrelated fields.
@@ -1350,3 +1437,39 @@ Calendar ordering, nested/computed/date conditions and sorts are outside this sl
 For an outer Portal list, call `owner.getRecords(owner.getSnapshot().revision)` after an accepted read. It returns detached records and physical table metadata for that field, or null while no accepted presentation exists or the revision/owner is stale. These snapshots grant no new write capability and trigger no reads. Retire the owner when its visitor, session, or configuration changes.
 
 The installed package checks use synthetic transports for these owner and race guarantees. They do not establish live backend filtering behavior or native browser presentation.
+
+## Multiple Select presentation
+
+`MultipleSelectField` from `@miniextensions/sdk/react` borrows a Form field
+binding. `renderMultipleSelectsField` is the corresponding named slot for existing
+Form, Grid and List hosts. Import the optional
+`@miniextensions/sdk/react/multiple-select.css` stylesheet, or supply your own
+styles with `className`. `clearLabel` overrides the accessible Clear label and
+the binding wrapper supports the existing `render` override.
+
+Native values remain ordered choice-name arrays; labels and IDs never replace
+them. Missing selection capability is read-only. The existing selection owner
+retains filters, limits, conditional availability and stale-action guards.
+Unavailable selected names remain visible, and blocked availability does not
+disable authorized removal or Clear. The component never saves a record.
+
+Add Choice appears only in Form context when the application has explicitly
+installed the existing choice-creation controller. It calls that controller's
+creation/cancellation actions and displays its pending/error/result state;
+creation and record Save remain separate actions. Generic `SelectField` is
+unchanged. See `examples/react-multiple-select` for local synthetic hosts.
+
+The default Multiple Select presentation masks selected/option names, removal
+labels and value-derived feedback when either display or write configuration
+enables `obscurePassword` or `maskPasswordOnLoginScreen`. Its optional creation
+input uses password presentation; selection and creation actions still receive
+the original native names.
+
+Unsubmitted creation text belongs to the current React presentation. The Form
+binding wrapper and `FieldRenderer` use stable binding/host identity so ordinary
+snapshots preserve that text. Each observed source replacement retires it,
+including A→B→A, and late creation completion cannot clear a successor's input.
+For standalone `renderMultipleSelectsField(props)` calls outside those wrappers,
+the incoming props object is the conservative source: local input rerenders
+retain text, but a new props object clears it. Refreshed standalone snapshots do
+not guarantee retention. This internal identity is never an owner or write lease.

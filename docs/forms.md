@@ -548,7 +548,7 @@ optional editor condition ID. They do not copy operands, record values,
 formulas or exception text. If unsupported and invalid rules coexist, the
 result is `unsupported` and retains the collected diagnostics.
 
-The supported boundary is **99 operator/type pairs**, **20 operators** and
+The supported boundary is **100 operator/type pairs**, **20 operators** and
 **14 direct physical field types**. Let T7 mean `singleLineText`, `email`,
 `url`, `multilineText`, `phoneNumber`, `barcode`, `richText`; T6 excludes
 `richText`; N4 means `number`, `percent`, `currency`, `rating`.
@@ -570,11 +570,15 @@ computed formula/lookup/rollup fields and other richer variants block the whole
 definition, including in compatibility mode. The helper does not unwrap a
 computed result type or partially compile richer rules.
 
-Direct select compilation adds exactly twelve pairs: single-select `is`, `isNot`,
-`isAnyOf`, `isNoneOf`, `isEmpty`, `isNotEmpty`; multi-select `hasAnyOf`,
+Direct select compilation adds exactly thirteen pairs: single-select `is`, `isNot`,
+`isAnyOf`, `isNoneOf`, `matchesRegex`, `isEmpty`, `isNotEmpty`; multi-select `hasAnyOf`,
 `hasAllOf`, `hasNoneOf`, `isExactly`, `isEmpty`, `isNotEmpty`.
-Single-select `matchesRegex` remains unsupported. Select operands are exact
-canonical **choice IDs**, not native answer names or display labels. Any saved
+Select membership operands are exact canonical **choice IDs**, not native answer
+names or display labels. Single-select `matchesRegex` instead takes regex pattern
+text and matches the native answer name without resolving a choice ID. Null and
+empty native answers evaluate as empty text; an empty pattern is valid. Invalid
+patterns and unsafe formula-literal round trips return `invalid`. Multi-select
+`matchesRegex` remains unsupported. Any saved
 or current select type requires exact physical-type equality; selects cannot
 be silently reinterpreted as text or as the other select family.
 
@@ -590,14 +594,15 @@ use the dedicated emptiness operators. Native multi-select serialization, escape
 and exact serialized length are preserved. Unsafe literal/regex round trips
 fail closed rather than approximating set membership or splitting commas.
 
-Form binding visibility and page advanced validation additionally admit the six
+Form binding visibility and page advanced validation additionally admit the seven
 single-select and six multi-select predicates above for exact-ID direct noncomputed drivers. They
 inspect the original AST and loaded metadata, even when compilation reduces a
 predicate to constant `FALSE()`. Configured option eligibility also supports these
 direct select predicates through the existing Form owner. Public scalar flat/section
-projection helpers and prepared Review retain their existing boundaries. Linked,
-computed, lookup and date Form
-drivers remain unsupported. Richer saved Portal
+projection helpers and prepared Review retain their existing boundaries.
+Form visibility and advanced validation additionally admit the
+[scalar Formula snapshot policy](#formula-scalar-snapshot-drivers) below.
+Linked, lookup, date and other computed Form drivers remain unsupported. Richer saved Portal
 criteria must remain intact until explicit replacement or accepted server
 cleanup; partial known-choice compilation is not permission to drop AST values.
 
@@ -678,8 +683,9 @@ hidden values before evaluating the next field. The helper makes no requests
 and does not write data, dirty IDs, local choices or child context. A native
 checkbox remains a boolean, percentages remain fractions, and barcode drivers
 use native objects with a `text` property; malformed driver values block
-evaluation. Linked and computed drivers remain unsupported, including a
-computed field whose reported physical type looks scalar.
+evaluation. Valid scalar Formula snapshots use the separate policy below.
+Linked, lookup, rollup and other computed drivers remain unsupported, including
+a computed field whose reported physical type looks scalar.
 ID/name aliases that could select a different field or read another native
 ID-keyed value return `ambiguous-reference`; the helper does not guess.
 
@@ -723,7 +729,10 @@ codes and behavior, including scanning schemas outside the supplied order and
 rejecting untitled `applyFieldConditionsToSection: true`. The browser choice
 adapter uses `createScalarFormRecordProjection` for supported scalar conditional
 choices. Form field bindings reuse the shared section engine internally with
-the bounded direct single-select/multi-select Form driver policy. Inactive-page drivers remain in the
+the bounded direct single-select/multi-select and scalar Formula snapshot Form
+driver policies. Formula results are permitted as visibility dependencies in
+that private projection; Formula-driven option rules themselves retain their
+existing refusal. Inactive-page drivers remain in the
 evaluation record; conditionally hidden drivers are removed only from that
 detached projection. Eligibility changes never remove native selected values.
 Manual Review also supports bounded multipage presentation while retaining its
@@ -812,14 +821,18 @@ numbers block rather than being coerced or treated as empty.
 
 Empty hiding precedes the preview condition bypass. A populated supported
 field still evaluates its condition in runtime mode. The ordinary flag is
-inactive in create mode and when absent or false. The bounded empty-hiding
-adapter does not cover sections, linked, lookup, computed or other richer
-targets; the frontend compositor blocks active edit empty hiding in any
-section context, including a retained nonblank disabled section title.
-Lookup fields hide empty values by default in both modes and therefore block
-unless that flag is explicitly false. Conditional-only frontend sections
-retain the behavior described above. Multi-page layout remains application-owned;
-use [`createFormPageOwner`](#bounded-multipage-ownership) for bounded navigation.
+inactive in create mode and when absent or false. The single-field and
+legacy-flat adapters remain conservative for section context. Ordered frontend
+composition also supports the same direct scalar fields inside ordinary sections
+that do not apply field conditions to their members. Raw nonblank titles establish
+the filtering boundary even when their display header is disabled; blank titles
+do not reset it. Edit empty hiding inside an applied-condition raw section remains
+blocked. Disabled display headers do not reset enclosing hidden-header propagation.
+Linked, lookup, computed and other richer targets retain their existing refusal
+rules; lookup fields hide empty by default unless explicitly false. Hiding changes
+presentation only and never prunes native Save data or dirty IDs. Multi-page layout
+remains application-owned; use
+[`createFormPageOwner`](#bounded-multipage-ownership) for bounded navigation.
 Richer native filtered-value adapters remain application-owned.
 
 The shipped browser starter applies these results to field presentation after
@@ -829,6 +842,55 @@ blocked outcomes. The visitor can repair an editable driver; Save remains
 blocked while visibility is unavailable. Hiding never clears accepted values
 or prunes `createFormSaveInput`: the existing server still owns validation and
 write authorization. A presentation result grants no permission.
+
+### Formula scalar snapshot drivers
+
+Form field visibility, section propagation and advanced field validation can
+read a physical `formula` field's supplied scalar result. Accepted Portal
+owning-field and custom-view conditions use the same policy. Keep the saved
+condition's `fieldType` equal to the current result type: `number`, `percent`,
+`currency` or `singleLineText`. The physical field stays `formula` and readonly.
+For example, this percent condition matches a supplied native value of `0.75`:
+
+```ts
+const setting = {
+    type: 'greaterThanOrEqualsTo',
+    fieldType: 'percent',
+    idOrName: { type: 'id', id: 'fld_progress_formula' },
+    value: 50,
+} as const;
+```
+
+Use this setting in the existing `conditionalFields` or
+`fieldValidationConditionalFields` definition returned by the published Form.
+The referenced physical metadata must have `isComputed: true`, Formula
+`options.isValid: true` and a direct result config of the exact saved type.
+Text result options must be `null`; numeric result options need finite numeric
+`precision`, and currency needs a string `symbol`, including `''`. Percent
+operands use percentage points while native values remain fractions. Currency
+comparisons use native numbers without adding or parsing a symbol.
+
+Numeric results must be finite native numbers; text results must be strings.
+Null and missing results retain canonical emptiness behavior; numeric zero is
+populated and an empty text result is empty. Arrays, coercible numeric strings,
+error/special-value objects, invalid metadata, mismatched saved result types,
+nested Formula results and all richer results are refused. Raw Formula
+dependencies are checked even when compatibility mode drops an incomplete
+branch. ID/name ambiguity remains a refusal.
+
+These are accepted snapshots. Editing a dependency does not evaluate the
+Formula expression, run Compute, refresh data or change the Formula value.
+Visibility changes when the caller supplies an updated accepted result, such
+as an explicit accepted Form reload or Portal parent refresh. The SDK cannot
+infer freshness from result metadata. Keep hidden values and the Formula's
+native value in the complete draft and native Save payload. Formula writes
+remain refused; conditions do not grant permissions or Save authority.
+
+The public `compileRuntimeConditions`, both public scalar projection helpers,
+configured option rules, editable Portal filter criteria, selected-record
+filters and prepared Review keep their existing direct-driver boundaries.
+Formula targets still do not support edit-mode `hideFieldIfEmpty`; lookup,
+rollup and direct scalar fields marked computed remain outside this policy.
 
 ## Preserve the full native draft
 
@@ -966,6 +1028,18 @@ server outcome and obtain a fresh load before deciding whether to submit
 again. Do not call it blindly a second time. Use the controller below for
 these presentation guards.
 
+Pass the captured loaded Form to `normalizeFormSaveResult(result, loaded)`
+to check a saved response against its target identity. The returned table must
+match `loaded.payload.publicFields.state.tableId`. For an edit, the returned
+record must also match the loaded edit record, and its table must agree with
+that configuration. A create accepts the server-assigned record ID; it does
+not have a record ID before submission. Compute saves use the same identity
+checks. Without the loaded argument, normalization checks response structure
+only. The controller supplies its captured loaded Form automatically, before
+accepting success or clearing dirty fields. An inconsistent response after
+dispatch leaves the draft unsaved and requires reconciliation; it does not
+prove that the server failed to commit, and must not trigger an automatic retry.
+
 The store scopes a draft by actual extension ID, create/edit record ID and
 optional parent Portal/record/relationship IDs. Reopening the same live scope
 retains its draft. `discard(handle)` invalidates that handle; `clear()`
@@ -973,6 +1047,161 @@ invalidates all handles. Store handles are object identities: an expired handle
 cannot write into a new draft with the same scope string. `addChoice` retains
 local choice metadata only; it does not call `forms.addSelectOption` or save a
 record. Never share a store across visitors or connections.
+
+## Reconcile accepted compute values in an edit Form
+
+`reconcileFormComputeResult` is an opt-in, client-only transformation for a host
+that already owns a compute workflow. Compute **can write on the backend**; it
+is not local formula evaluation. A top-level `saved` response is not a per-field
+commit receipt. These are application draft acknowledgment rules, not proof of
+backend persistence. Do not retry automatically after errors or uncertain
+outcomes; reconcile the outcome and obtain a fresh load before another request.
+Do not reuse a completed create context. The recipe below accepts only an edit
+Form and provides no create-identity handoff.
+
+Supply `submittedData` from the actual eligible frontend values that the host's
+accepted request policy can acknowledge. It must contain only own enumerable,
+defined native values. Exclude computed/read-only fields, conditionally omitted
+fields and fields whose acknowledgment is uncertain. **Do not use the complete
+request-start draft or `formRecord.data` as this map**: those records can contain
+baseline, computed and omitted values even when they cannot be acknowledged.
+Inherited, nonenumerable and `undefined` submitted keys never acknowledge.
+
+`latestData` is the complete current own-enumerable draft, including current
+append inputs and explicit blank strings. Supply accurate `latestDirtyFieldIds`;
+the helper does not invent dirty IDs from value differences. Supply
+`retainDirtyFieldIds` for current dirty fields whose per-field edit generation
+changed after capture, including A → B → A, or whose acknowledgment is uncertain.
+The host owns this tracking; value equality alone cannot identify newer intent.
+The helper never acknowledges those retained fields. The required
+`areValuesEquivalent` callback supplies the host's rich/native comparison policy.
+
+The result starts with accepted `serverData`, keeps retained dirty values and
+restores only acknowledged submitted frontend bytes. Existing computed values
+therefore accept their server result when absent from the eligible submitted
+map. Acknowledged add-only text clears to `''`; every other append input retains
+its latest local value, even when blank and not dirty, instead of displaying
+server history. Missing retained/append keys are omitted; explicit own
+`undefined` stays an own `undefined` value. Dirty order and duplicates survive.
+Top-level records, ID arrays and sets are snapshotted before comparisons; native
+value references are preserved, and the helper does not mutate its inputs.
+
+For example, an edit request submits quantity `1` and append text `Sent note`.
+Before its response arrives, quantity becomes `2`, a hidden draft stays local,
+and another append input contains `Next note`. The server returns total `20`
+while the previous local total was `10`. Reconciliation keeps quantity `2` and
+the hidden/new append drafts dirty, accepts total `20`, clears only the
+acknowledged `Sent note` input, and keeps an unsubmitted blank append input blank.
+If an append changed A → B → A, its newer generation retains A and its dirty ID.
+
+The following host methods and types are application-owned. `current` must
+check the captured visitor/session, client, Form token/table/record/parent
+context, configuration and request sequence. Every native edit, including
+equal-value intent, must advance its field generation and the native revision.
+`applyIfCurrent` must recheck those identities and the expected revision inside
+one atomic application-state update; it must never dispatch another write.
+
+```ts
+import type {
+    AirtableValue,
+    FormLoadedResult,
+    MiniExtensionsClient,
+} from '@miniextensions/sdk';
+import {
+    createFormSaveInput,
+    normalizeFormSaveResult,
+    reconcileFormComputeResult,
+    type FormComputeReconciliationResult,
+    type FormDraftSnapshot,
+    type FormSaveOptions,
+} from '@miniextensions/sdk/forms';
+
+type ComputeRequest = {
+    loaded: FormLoadedResult;
+    draft: FormDraftSnapshot<AirtableValue>;
+    options: FormSaveOptions;
+    submittedData: Readonly<Record<string, AirtableValue>>;
+    fieldGenerations: Readonly<Record<string, number>>;
+    addOnlyTextFieldIds: ReadonlySet<string>;
+};
+type ComputeHost = {
+    current(request: ComputeRequest): boolean;
+    nativeRevision(): number;
+    snapshot(): {
+        revision: number;
+        data: Readonly<Record<string, AirtableValue | undefined>>;
+        dirtyFieldIds: readonly string[];
+        fieldGenerations: Readonly<Record<string, number>>;
+    };
+    uncertainFieldIds(request: ComputeRequest): ReadonlySet<string>;
+    equivalent(
+        latest: AirtableValue | undefined,
+        submitted: AirtableValue | undefined
+    ): boolean;
+    applyIfCurrent(
+        request: ComputeRequest,
+        revision: number,
+        next: FormComputeReconciliationResult
+    ): boolean;
+};
+
+async function computeEdit(
+    client: MiniExtensionsClient,
+    request: ComputeRequest,
+    host: ComputeHost
+) {
+    if (
+        request.loaded.payload.formRecord.type !== 'edit' ||
+        !host.current(request)
+    )
+        return false;
+    const session = client.getSession();
+    const input = createFormSaveInput({
+        loaded: request.loaded,
+        draft: request.draft,
+        options: { ...request.options, isComputeMode: true },
+    });
+    if (!host.current(request)) return false;
+    const response = await client.forms.save(input, { session });
+    if (!host.current(request)) return false;
+    const accepted = normalizeFormSaveResult(response, request.loaded);
+    if (accepted.type !== 'saved' || !host.current(request)) return false;
+    const latest = host.snapshot();
+    const uncertain = host.uncertainFieldIds(request);
+    const retained = new Set(
+        latest.dirtyFieldIds.filter(
+            (id) =>
+                uncertain.has(id) ||
+                !Object.hasOwn(request.fieldGenerations, id) ||
+                !Object.hasOwn(latest.fieldGenerations, id) ||
+                request.fieldGenerations[id] !== latest.fieldGenerations[id]
+        )
+    );
+    if (!host.current(request) || host.nativeRevision() !== latest.revision)
+        return false;
+    const next = reconcileFormComputeResult({
+        submittedData: request.submittedData,
+        latestData: latest.data,
+        latestDirtyFieldIds: latest.dirtyFieldIds,
+        retainDirtyFieldIds: retained,
+        serverData: accepted.raw.record.fields,
+        addOnlyTextFieldIds: request.addOnlyTextFieldIds,
+        areValuesEquivalent: (current, submitted) =>
+            host.equivalent(current, submitted),
+    });
+    if (!host.current(request) || host.nativeRevision() !== latest.revision)
+        return false;
+    return host.applyIfCurrent(request, latest.revision, next);
+}
+```
+
+Response normalization uses the existing SDK table/edit-record identity checks.
+Owner/request/native-revision checks must surround the helper because getters
+and comparison callbacks can have effects. Callback errors propagate: do not
+apply a partial result or automatically repeat the compute write. This helper
+does not dispatch requests, authenticate, evaluate formulas, update
+`FormDraftStore` or clear final-save state. It does not enable automatic compute
+in the controller, browser starter, Review, pages or linked-child flows.
 
 ## Headless controller with explicit Save
 
@@ -1804,9 +2033,10 @@ do not add ordinary frontend validation. Existing visibility refusals still appl
 lookup presentation requires an explicit `hideFieldIfEmpty: false`. Other
 unimplemented validation types remain explicit refusals.
 Configured `fieldValidationConditionalFields` supports the existing strict
-direct-scalar condition subset and the six exact-ID direct noncomputed
-single-select/multi-select driver predicates above through the same predicate evaluator used for
-field visibility. Ordinary errors retain priority. Advanced validation applies
+direct-scalar condition subset and the seven single-select and six multi-select
+predicates above for exact-ID direct noncomputed drivers, through the same predicate evaluator used for
+field visibility, including the bounded scalar Formula snapshot policy above.
+Ordinary errors retain priority. Advanced validation applies
 only to a visible writable, noncomputed target; hiding, read-only configuration
 and canonical computed physical kinds skip that extra rule without waiving any
 independent ordinary checks. Predicates read the complete native draft, including
@@ -1822,16 +2052,21 @@ it never suppresses a malformed or unsupported rule. Null, omitted and nonempty
 messages still use the generic code, so an app may supply its own text.
 Missing/contradictory schema, ambiguous ID/name aliases, invalid native driver
 values, evaluator errors and unsupported predicates yield `unsupported-validation`.
-Linked, lookup, computed and date dependencies remain outside this
+Linked, lookup, date and other computed dependencies remain outside this
 slice. Invalid or unsupported select drivers remain refused even when
 their predicates compile to a constant formula. No linked reads or
 metadata recovery are performed.
 
-Unsupported conditional rules and `requireOpenLinkedRecords` without review
-tracking remain blocked when their page is relevant. Rules on a future page do
-not block Next on an earlier page; reaching that page exposes their feedback or
-refusal. Final submission checks all pages again, including earlier answers and
-cross-field dependencies changed after navigation. Pass each rendered revision
+Unsupported conditional rules remain blocked when their page is relevant. For
+ordinary linked fields, `requireOpenLinkedRecords` without review tracking blocks
+visible, nonempty linked selections. Canonical empty selections and valid hidden
+linked selections have no review obligation; required and minimum-selection checks
+still follow their existing visibility rules. This exemption does not grant review
+credit or admit malformed values, physical-kind mismatches or computed presentation.
+Rules on a future page do not block Next on an earlier page; reaching that page
+exposes their feedback or refusal. Final submission checks all pages again,
+including earlier answers and cross-field dependencies changed after navigation.
+Pass each rendered revision
 to Next or Submit; a retained callback cannot approve newer answers. Existing
 native/input/navigation/configuration/owner tickets, pending-file gates and
 uncertainty remain authoritative. Existing blocked visibility results remain
@@ -2100,19 +2335,42 @@ export function createLinkedChildPanel(
                             null,
                             ...s.fields.map((f) =>
                                 h('div', { key: f.fieldId }, f.node)
+                            ),
+                            h(
+                                'button',
+                                {
+                                    type: 'button',
+                                    id: 'child-back',
+                                    disabled:
+                                        !s.page.canBack || phase === 'saving',
+                                    onClick: s.actions.back,
+                                },
+                                'Back'
+                            ),
+                            h(
+                                'button',
+                                {
+                                    type: 'button',
+                                    id: 'child-next',
+                                    disabled:
+                                        !s.page.canNext || phase === 'saving',
+                                    onClick: s.actions.next,
+                                },
+                                'Next'
+                            ),
+                            h(
+                                'button',
+                                {
+                                    type: 'button',
+                                    id: 'save',
+                                    disabled:
+                                        !s.page.canSubmit || phase === 'saving',
+                                    onClick: () => owner.save(revision),
+                                },
+                                'Save'
                             )
                         ),
                 }),
-            child &&
-                h(
-                    'button',
-                    {
-                        type: 'button',
-                        id: 'save',
-                        onClick: () => owner.save(revision),
-                    },
-                    'Save'
-                ),
             h(
                 'button',
                 { type: 'button', id: 'close', onClick: () => owner.close() },
@@ -2153,9 +2411,21 @@ remount preserve the child draft. Guard retired or unavailable snapshots with
 presentation. The installed-package checks execute this recipe against installed
 ESM and CJS entrypoints and actual React.
 
-This slice supports final one-page Save for ordinary child Create and Edit.
-Prepared Review, compute, captcha, automatic submission, nested child flows
-and multipage child flows remain unsupported. Existing child
+This slice supports ordinary one-page and manual multipage child Create and
+Edit. The same borrowed page owner supplies Back/Next, current-page validation,
+conditional page skipping and final all-page validation. Navigation performs no
+load, Save, journal write or native-value change. It advances the coordinator's
+revision, including Back → Next without edits, so retained Save callbacks must
+use the newly rendered owner revision. The panel's navigation actions capture
+the page revision; final Save always calls `owner.save(revision)` to retain its
+receipt, reconciliation and uncertainty lifecycle. Do not call a rendering
+scope's submit action directly for a child Save. Unfinished inputs and pending
+files keep their existing navigation/Save gates. Unmount retains pages and draft;
+Close or owner replacement unsubscribes and retires the old pages.
+
+Configured Review requires the explicit adapter described below; omission
+preserves its refusal, including in the browser starter. Compute, captcha,
+automatic submission and nested child flows remain unsupported. Unknown page modes are refused. Existing child
 validation and backend validation remain authoritative. Successful reconciliation
 updates the shared parent's native linked IDs, rich presentation and dirty state;
 other parent values remain in the shared draft.
@@ -2171,9 +2441,14 @@ record to remain locally selected or spare Create capacity. Native relationship
 reconciliation is separate: it uses the saved inverse relationship and the
 latest parent draft, preserves duplicate occurrences, and never grants a new
 Create exemption. A prior proven Create exemption remains separate from edited
-presentation data. Explicit inverse arrays are required for edit-parent
-reconciliation; missing/null inverse evidence remains unsupported. This is a
-conservative subset of canonical reconciliation.
+presentation data. Edit-parent reconciliation accepts explicit inverse arrays
+and an own returned null as a native clear. When the inverse is entirely absent
+from the public child schema and saved fields, an accepted modal Save retains the
+parent relationship, matching canonical reconciliation. The backend binds a child
+Create to its parent through the child token. A missing, inherited or undefined
+value for a published inverse remains unsupported; field identity, physical linked
+type and matching parent table are still required. Contradictory or partial inverse
+metadata is refused.
 
 An unchanged native array may reconcile on a read-only field without writing.
 Changed membership keeps writable-field admission; re-adding a removed record
@@ -2202,3 +2477,257 @@ unknown outcome. Keep the recovery journal, inspect the outcome, and explicitly
 reload or resolve it before proceeding. There is no automatic mutation retry.
 The installed checks use synthetic load, validation and known-saved responses;
 they demonstrate the recipe and native reconciliation, not live persistence.
+
+### Configured linked-child Review
+
+Custom applications can supply the same explicit Review adapter used by
+`createFormPageOwner` when acquiring the child owner:
+
+```ts
+import {
+    RecoveryJournal,
+    type FormFieldBindings,
+    type FormPageReviewRequest,
+    type FormPageReviewDecision,
+} from '@miniextensions/sdk/forms';
+
+declare const parent: FormFieldBindings;
+declare const fieldId: string;
+declare const acceptedLoadVersion: number;
+declare function reviewChild(
+    request: FormPageReviewRequest
+): Promise<FormPageReviewDecision>;
+
+const childOwner = parent.linkedChild(fieldId, {
+    journal: new RecoveryJournal(),
+    loadVersion: acceptedLoadVersion,
+    review: reviewChild,
+});
+```
+
+Keep the adapter identity stable while reusing an owner. Changing it, the journal,
+or the load version retires the previous owner and any open Review. This is a
+headless composition hook, not a new renderer; the browser starter does not yet
+provide a child Review adapter.
+
+For configured Review, enable the final action from `snapshot.pages`'s
+`canReview` rather than `canSubmit`, and always invoke
+`childOwner.save(snapshot.revision)`. Do not call `pages.submit` or the borrowed
+child binding's Save directly. The coordinator owns the sole Save, recovery
+journal, receipt and parent reconciliation path. Review opens only on the final
+visible page of a one-page or manual multipage child. Ordinary validation errors
+may be inspected; Confirm still requires all-page validation before dispatch.
+
+Reuse the prepared Review presentation recipe and its supported-answer/privacy
+checks. An adapter must reject unsupported answers rather than confirm an
+incomplete presentation; computed-field Review remains unsupported by that
+recipe. Detached request copies are presentation-only. Confirm must return the
+fresh presentation guard and abort signal required by the page-owner contract.
+Edit and Escape return `{ type: 'edit' }`; Close cancels the child owner. Observe
+the request signal to dismiss stale presentation. These cancellations, parent
+retirement, stale child edits and stale configuration cannot dispatch Save.
+Unrelated parent edits remain intact during successful reconciliation.
+
+Cancellation rejects with `FormPageError('review-cancelled')` and leaves a live
+child available for editing without a Save-error banner. Backend validation and
+unknown-outcome recovery retain the existing child lifecycle. A known saved
+child that cannot reconcile is still `saved-not-reconciled`, never permission
+to repeat its Save.
+
+The dedicated installed-package Chromium proof is separate from the browser
+starter. Run `node scripts/check-linked-child-review-browser.mjs` from the SDK
+checkout; `SDK_NATIVE_CHROMIUM` can select the local Chromium executable. It
+builds and installs a fresh tarball, bundles only installed SDK exports, and
+mounts a minimal child editor and Review dialog on loopback. Its 24 Create/Edit
+cases cover one-page/manual multipage success, Cancel/Edit/Escape/Close and
+parent retirement, late retained Confirm after abort, reentrant confirmation, local/backend validation and
+unknown-outcome refusal. It retains a JSON receipt and Review screenshots in
+the printed temporary directory. CI runs the same dedicated proof and retains
+its output with the native browser artifacts.
+
+All load and Save responses are synthetic. This proves real-browser adapter
+composition, dispatch counts, expected native parent state and one observable
+transition to `completion: 'reconciled'`, **not hosted
+persistence or production starter integration**. There is no public counter of
+internal reconciliation calls; the completion transition does not count those
+calls, including no-op Edit reconciliation. The late Confirm case deliberately
+leaves the adapter promise pending after draft invalidation, waits for SDK
+cancellation, then invokes its retained callback. It proves that late delivery
+cannot dispatch Save; the already-aborted race ignores the decision without
+calling its freshness guard. The dialog serializes synthetic draft data and does
+not validate production Review presentation or privacy. The default browser launch uses
+Chromium's sandbox. On an already isolated local runner whose SUID helper is
+unusable, `SDK_CHILD_REVIEW_NO_SANDBOX=1` explicitly disables that browser sandbox;
+the receipt records this setting. No shared QA or published settings are used.
+
+## Optional create-Form progress
+
+`createFormProgressStorage` from `@miniextensions/sdk/forms` is an opt-in
+primitive storage owner for application-owned create progress. Construction
+performs no I/O. It does not choose fields, grant restore or Save authority,
+persist a recovery journal, or establish whether an earlier write committed.
+Ordinary Form drafts remain in memory unless an application explicitly adopts
+this separate flow.
+
+Supply an opaque, nonsecret `scope`, lazy `getStorage()` and `getLocks()`
+adapters, a globally unique `createId()` function and a live `isCurrent()`
+owner check. The browser recipe partitions scope by application/API origin,
+share, visitor's anonymous namespace, extension, table and published version;
+the storage protocol also has its own version. Never use credentials,
+extension access tokens, field values or recovery input as scope identifiers.
+The helper accepts only own-enumerable field entries containing strings,
+finite numbers, booleans or `null`. It has no schema or privacy policy, so the
+caller must select and validate fields before reading their values.
+
+`read()` returns a detached snapshot or a failure status; reading neither
+consumes it nor authorizes restoration. `write({ expected, values })` compares
+the current token, and returns a new snapshot on success. `expected: null`
+requires an absent slot and starts a new `draftId`; subsequent accepted writes
+retain that draft ID and issue a fresh `writeId`. Both IDs must match when
+replacing or removing progress. `remove(token)` removes only that exact stored
+incarnation, or reports absence, conflict or failure. A conflict is not permission
+to overwrite or delete a successor. `destroy()` retires the owner and queued
+work without deleting stored bytes.
+
+Mutations require a working cooperating exclusive Web Locks adapter. There is
+no unlocked fallback: missing or denied locks/storage, malformed data and
+retired ownership produce explicit statuses. Handle those outcomes before
+continuing. Storage, locks and an opaque scope are not a security boundary
+against other scripts on the same origin. The starter uses per-tab
+`sessionStorage`, which those scripts can read and a browser may copy when a
+tab is duplicated; it does not encrypt answers.
+
+The [browser starter](../examples/browser/README.md#optional-create-progress-in-this-tab)
+exposes this only for an anonymous root direct-URL create Form with published
+`saveFormProgress: true`, a concrete table/published version and no parent,
+record-edit or uncertain-operation context. **Remember selected answers in this
+tab** and every field checkbox start unchecked. Selection admits only current
+visible, unmasked, noncomputed, writable supported scalar fields: single-line
+or multiline text, ordinary numeric families and checkboxes. An answer is read
+for storage only after those gates and explicit field selection. Files, links,
+selects, computed/read-only values, hidden fields and masked or unsupported
+fields are excluded. Never select credentials or other sensitive text; an
+ordinary text field does not identify sensitive content for the application.
+
+After a refresh, reconnect to the same anonymous context and opt in again.
+Choose fields, then explicitly **Restore remembered answers** or **Discard
+remembered answers**. Restore requires the pristine accepted in-memory draft;
+if current answers were edited, it retains them and requires an explicit Reload
+before restoration. Its draft revision stays fenced through the read and cleanup.
+Restore rechecks current ownership, schema, visibility
+and masking, passes only admitted selected values through the existing
+`loadExtension` direct-URL `context.localStorageRecord`, and accepts a fresh
+server response only for the same current configuration. Its returned native
+values and rules are authoritative; stored answers are never merged over that
+response locally. This introduces no backend endpoint or new permission.
+
+The Form's **Discard draft** also inspects its matching progress slot from a
+previous page, even when remembering is currently unchecked. It removes only
+the captured exact token before discarding the in-memory draft. **Clear this
+visitor's session** captures matching SDK-owned progress slot identities for
+that visitor on the current application origin; **Disconnect** does so for
+both visitor slots. Capture precedes namespace rotation and asynchronous lock waits.
+Cleanup compares both `draftId` and `writeId`, preserving a successor written
+after capture and unrelated visitor/storage entries. An unreadable or malformed
+matching owned slot is not treated as absent. Read, enumeration or removal
+failure produces fixed incomplete-cleanup feedback rather than claiming that
+all remembered answers were cleared.
+
+Before any admitted create Save dispatch, the starter suspends progress,
+drains queued work and removes the matching stored token. It also inspects a
+previous slot when remembering is currently unchecked, including after a page
+refresh. If it cannot establish absence or clear the exact token, Save is not
+sent. This deliberately prevents an unknown create from leaving a restorable
+copy for a later refresh. Only a confirmed validation response or known
+`notDispatched` result may resume progress; an unknown dispatched outcome
+requires server inspection, not storage restoration or automatic replay.
+Successful local forgetting does not resolve a recovery-journal entry.
+
+This recipe is not edit-Form persistence, authenticated draft restoration,
+cross-tab synchronization, file persistence or an exactly-once create receipt.
+Verification of this feature must distinguish storage/CAS checks, synthetic
+starter behavior and a separately authorized live backend outcome; the presence
+of the helper or UI alone proves none of those outcomes.
+
+### Shared attachment metadata helpers
+
+`getEffectiveAttachmentFileLimit`, `getEffectiveAttachmentSizeLimit` and
+`isAttachmentTypeAllowed` are public exports from `@miniextensions/sdk/forms`.
+They are the same pure helpers used by `getFormAttachmentPolicy` and
+`checkFormAttachmentFiles`, so an existing host can reuse metadata rules while
+keeping its real producer, folder/readability checks, queue and upload transport.
+
+Count limits preserve legacy behavior: null/undefined are unlimited, fractional
+counts round down, and negative/nonfinite limits deny additional files. Size
+limits are in MiB: null/undefined/configured zero are unlimited, positive
+fractions remain exact, and negative/nonfinite values normalize to zero. The
+policy converts that normalized MiB value to bytes. MIME classification removes
+parameters, trims and lowercases the declared type; exact document/archive
+essences and well-formed image/video/audio subtypes are supported.
+
+```ts
+import {
+    getEffectiveAttachmentFileLimit,
+    getEffectiveAttachmentSizeLimit,
+    isAttachmentTypeAllowed,
+} from '@miniextensions/sdk/forms';
+const slots = getEffectiveAttachmentFileLimit(2.5); // 2
+const maxMiB = getEffectiveAttachmentSizeLimit(0); // null: unlimited
+const image = isAttachmentTypeAllowed('images', ' Image/PNG; charset=binary ');
+```
+
+These helpers do not inspect bytes, detect folders, authorize an upload, bind a
+privacy facet, modify native values or replace the guarded attachment owner.
+
+### Native Rich Text serialization
+
+The public forms exports `convertEditorValueToStoredRichText`,
+`normalizeRichTextForComparison`, `convertStoredRichTextToEditorMarkdown`,
+`parseStoredRichTextCheckbox` and `serializeStoredRichTextCheckbox` share the
+existing hosted native editor's stored-string contract. They do not render
+Markdown or replace the editor, its document/ref/caret/IME, paste handling,
+read-only policy or the current write owner.
+
+The stored conversion handles the exact editor empty sentinel, hard-break
+artifact and lower-case checkbox line prefixes. The parser/serializer preserve
+the native checkbox node shape and final newline. This is the existing lexical
+conversion, including its behavior inside fenced text; it is not a general
+Markdown parser or sanitizer. Other text, spaces and final newlines remain
+unchanged. The comparison helper additionally normalizes CRLF and trailing
+newline artifacts **for equality only**. Never persist that comparison key. Keep the original serialization for actual
+writes; do not add a general whitespace trim.
+
+Keep the actual native editor's change generation and write admission. This
+adapter shows where to compare and commit its returned serialization; pass the
+checkbox helpers to the real editor's existing parser/serializer hooks.
+
+```ts
+import {
+    convertEditorValueToStoredRichText,
+    normalizeRichTextForComparison,
+    convertStoredRichTextToEditorMarkdown,
+    parseStoredRichTextCheckbox,
+    serializeStoredRichTextCheckbox,
+} from '@miniextensions/sdk/forms';
+
+export function commitNativeRichText(
+    readEditorValue: () => string,
+    current: string | null,
+    setNativeValue: (stored: string) => void
+): boolean {
+    const stored = convertEditorValueToStoredRichText(readEditorValue());
+    if (
+        normalizeRichTextForComparison(stored) ===
+        normalizeRichTextForComparison(current)
+    )
+        return false;
+    setNativeValue(stored);
+    return true;
+}
+
+export const nativeRichTextSyntax = {
+    toEditor: convertStoredRichTextToEditorMarkdown,
+    parseCheckbox: parseStoredRichTextCheckbox,
+    serializeCheckbox: serializeStoredRichTextCheckbox,
+};
+```

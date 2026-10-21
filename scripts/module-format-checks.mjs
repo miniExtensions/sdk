@@ -168,6 +168,43 @@ export function assertModuleFormats(root) {
     const entries = [];
     const require = createRequire(join(root, 'package.json'));
     for (const [subpath, mapping] of Object.entries(manifest.exports).sort()) {
+        // Opt-in stylesheets are assets, never JavaScript modules.
+        if (
+            [
+                './react/button.css',
+                './react/checkbox.css',
+                './react/text.css',
+                './react/number.css',
+                './react/date.css',
+                './react/datetime.css',
+                './react/duration.css',
+                './react/currency.css',
+                './react/multiple-select.css',
+                './react/linked-records.css',
+                './react/single-select.css',
+            ].includes(subpath)
+        ) {
+            assert.equal(mapping, `./dist/esm/${subpath.slice(2)}`);
+            const file = join(root, mapping);
+            assert(
+                lstatSync(file).isFile(),
+                'CSS export target must be regular'
+            );
+            assert.equal(
+                require.resolve(manifest.name + subpath.slice(1)),
+                file
+            );
+            const bytes = readFileSync(file);
+            entries.push({
+                subpath,
+                asset: {
+                    path: mapping,
+                    size: bytes.length,
+                    sha256: createHash('sha256').update(bytes).digest('hex'),
+                },
+            });
+            continue;
+        }
         assert(subpath === '.' || /^\.\/[A-Za-z0-9_-]+$/.test(subpath));
         assert(
             record(mapping) && record(mapping.import) && record(mapping.require)

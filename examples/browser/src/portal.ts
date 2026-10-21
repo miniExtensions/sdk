@@ -9,6 +9,7 @@ import {
 } from './childQueries.js';
 import {
     AirtableFieldType,
+    type AirtableRecord,
     type AirtableValue,
     type FormLoadedResult,
     type MiniExtensionsClient,
@@ -23,6 +24,7 @@ import {
     createPortalCellBinding,
     type PortalCellBinding,
     getPortalLinkedRecordFieldConfig,
+    evaluatePortalViewAvailability,
     type PortalCollection,
     type PortalCollectionSnapshot,
     type PortalCollectionCriteria,
@@ -80,6 +82,7 @@ type CustomView = {
 };
 type DetailField = {
     fieldId: string;
+    airtableField: RuntimeAirtableField;
     title: string | null;
     miniExtConfig?: RuntimeFieldSchema['miniExtConfig'];
     displayConfig: unknown;
@@ -88,6 +91,64 @@ type DetailField = {
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value != null && !Array.isArray(value);
+
+// Row display uses returned Detail policy; child settings only govern editing.
+// Keep native value access lazy so a concealed value is never formatted first.
+const portalCellSummary = (
+    displayConfig: unknown,
+    format: () => string,
+    isCurrent: () => boolean
+): string => {
+    const unavailable = 'Value unavailable';
+    const mask = '••••••••';
+    try {
+        const policy = () => {
+            if (!isCurrent()) return null;
+            if (displayConfig == null)
+                return {
+                    type: 'plain',
+                    flags: [undefined, undefined, undefined],
+                };
+            if (!isObject(displayConfig)) return null;
+            const flags = [
+                displayConfig.obscurePassword,
+                displayConfig.maskPasswordOnLoginScreen,
+                displayConfig.hideAttachmentName,
+            ];
+            if (
+                flags
+                    .slice(0, 2)
+                    .some(
+                        (flag) =>
+                            flag !== undefined && typeof flag !== 'boolean'
+                    ) ||
+                !isCurrent()
+            )
+                return null;
+            return {
+                type:
+                    flags[0] === true || flags[1] === true ? 'masked' : 'plain',
+                flags,
+            };
+        };
+        const before = policy();
+        if (before === null) return unavailable;
+        if (before.type === 'masked') return mask;
+        const text = format();
+        const after = policy();
+        if (after === null) return unavailable;
+        if (after.type === 'masked') return mask;
+        if (
+            !before.flags.every((flag, index) =>
+                Object.is(flag, after.flags[index])
+            )
+        )
+            return unavailable;
+        return text;
+    } catch {
+        return unavailable;
+    }
+};
 
 // A deliberately plain Portal presentation, not a Form policy or an uploader.
 // Returned native metadata stays untouched and is never serialized into the DOM.
@@ -142,18 +203,18 @@ const hasInlineBlockingConfig = (
                 config.filterLinkedRecordsToggle !== false) &&
             config.filterLinkedRecordsConditionFields != null));
 
-const customViews = (config: PortalFieldConfig | undefined): CustomView[] => {
-    if (!Array.isArray(config?.customViews)) return [];
-    return config.customViews.flatMap((view): CustomView[] =>
-        isObject(view) && typeof view.id === 'string'
-            ? [
-                  {
-                      id: view.id,
-                      config: isObject(view.config) ? view.config : null,
-                  },
-              ]
-            : []
-    );
+const customViews = (
+    page: PortalLoadedResult,
+    fieldId: string
+): { views: CustomView[]; legacy: boolean; unavailable: boolean } => {
+    const result = evaluatePortalViewAvailability({
+        portal: page,
+        portalFieldId: fieldId,
+    });
+    return {
+        ...result,
+        views: result.views.map(({ id, config }) => ({ id, config })),
+    };
 };
 const configuredChildId = (
     config: PortalFieldConfig | undefined,
@@ -181,9 +242,27 @@ const configuredChildId = (
     return typeof value === 'string' && value !== '' ? value : null;
 };
 const detailFields = (
-    value: RuntimeLinkedRecordDetailField[] | undefined
+    value: RuntimeLinkedRecordDetailField[] | undefined,
+    rawDetails: RuntimeLinkedRecordDetailField[] | undefined,
+    tableId: string,
+    tables: PortalCollectionSnapshot['tableIdsToLinkedTableStates']
 ): DetailField[] => {
-    if (!Array.isArray(value)) return [];
+    if (!Array.isArray(value) || !Array.isArray(rawDetails)) return [];
+    // Count the selected raw projection before considering visible descriptors.
+    // Hidden siblings still make a field identity ambiguous.
+    const detailCounts = new Map<string, number>();
+    for (const field of rawDetails) {
+        if (isObject(field) && typeof field.fieldId === 'string')
+            detailCounts.set(
+                field.fieldId,
+                (detailCounts.get(field.fieldId) ?? 0) + 1
+            );
+    }
+    const tableFields = tables[tableId]?.airtableFields;
+    if (!Array.isArray(tableFields)) return [];
+    const returnedFields = Object.values(tables).flatMap((table) =>
+        Array.isArray(table?.airtableFields) ? table.airtableFields : []
+    );
     return value.flatMap((field): DetailField[] => {
         if (
             !isObject(field) ||
@@ -191,16 +270,40 @@ const detailFields = (
             field.isHidden === true
         )
             return [];
+        const matches = tableFields.filter(
+            (entry) => isObject(entry) && entry.id === field.fieldId
+        );
+        if (
+            detailCounts.get(field.fieldId) !== 1 ||
+            matches.length !== 1 ||
+            returnedFields.filter(
+                (entry) => isObject(entry) && entry.id === field.fieldId
+            ).length !== 1
+        )
+            return [];
+        const airtableField = matches[0];
+        if (!isObject(airtableField.config)) return [];
+        const child = field.childFormField;
+        if (
+            child != null &&
+            (!isObject(child) ||
+                !isObject(child.idOrName) ||
+                child.idOrName.type !== 'id' ||
+                child.idOrName.id !== field.fieldId ||
+                !isObject(child.config) ||
+                child.config.type !== airtableField.config.type)
+        )
+            return [];
         // Inline authorization uses the child Form config when present,
         // including its defaults, and otherwise the published detail config.
+        // The editing-membership flag is not an additional admission gate.
         const config =
-            field.childFormField != null
-                ? field.childFormField.config.config
-                : field.miniExtConfig;
+            child != null ? child.config.config : field.miniExtConfig;
         const miniExtConfig = isObject(config) ? config : undefined;
         return [
             {
                 fieldId: field.fieldId,
+                airtableField,
                 title:
                     typeof field.titleOverride === 'string'
                         ? field.titleOverride
@@ -245,9 +348,37 @@ export const createPortalView = (options: {
     // Configuration stays detached; accepted parent data advances after a
     // successful child Save without changing this view's identity or settings.
     const page = structuredClone(options.page);
+    const eligibilityByField = new Map<
+        string,
+        ReturnType<typeof customViews>
+    >();
+    const availableViews = (fieldId: string) => {
+        const accepted = eligibilityByField.get(fieldId);
+        if (accepted != null) return accepted;
+        const evaluated = customViews(page, fieldId);
+        eligibilityByField.set(fieldId, evaluated);
+        return evaluated;
+    };
     const acceptParentData = (data: typeof page.payload.formRecord.data) => {
         page.payload.formRecord.data = structuredClone(data);
         options.page.payload.formRecord.data = structuredClone(data);
+        eligibilityByField.clear();
+        const previousView = viewSelect.value;
+        fillViews();
+        if (previousView !== viewSelect.value || !selectionAvailable()) reset();
+    };
+    const refreshedParentData = (record: AirtableRecord | null | undefined) => {
+        try {
+            if (
+                !isObject(record) ||
+                record.id !== page.payload.formRecord.recordId
+            )
+                return null;
+            const fields = record.fields;
+            return isObject(fields) ? structuredClone(fields) : null;
+        } catch {
+            return null;
+        }
     };
     const card = element('section', undefined, 'card');
     card.append(element('h2', page.payload.extensionName ?? 'Custom Portal'));
@@ -284,6 +415,9 @@ export const createPortalView = (options: {
         labeled('Search', search)
     );
     card.append(toolbar);
+    const eligibilityMessage = element('p', undefined, 'hint');
+    eligibilityMessage.setAttribute('role', 'status');
+    card.append(eligibilityMessage);
     const actions = element('div', undefined, 'actions');
     const results = element('div', undefined, 'table-scroll');
     const sorting = element('section');
@@ -364,6 +498,13 @@ export const createPortalView = (options: {
     };
     const getCollection = (): PortalCollection => {
         if (destroyed) throw new Error('This Portal view has been replaced.');
+        if (
+            !selectionAvailable() ||
+            criteria.selectedCustomViewId !== viewSelect.value
+        )
+            throw new Error(
+                'Choose an available Portal view before loading records.'
+            );
         return (collection ??= createPortalCollection({
             client: options.client,
             portal: page,
@@ -433,7 +574,15 @@ export const createPortalView = (options: {
         );
     };
     const selectedView = () =>
-        customViews(config()).find((view) => view.id === viewSelect.value);
+        availableViews(fieldSelect.value).views.find(
+            (view) => view.id === viewSelect.value
+        );
+    const selectionAvailable = (): boolean => {
+        const available = availableViews(fieldSelect.value);
+        return available.legacy
+            ? viewSelect.value === ''
+            : available.views.some((view) => view.id === viewSelect.value);
+    };
     // Custom views replace these layout settings, including omitted values.
     const layoutSetting = (
         key: keyof Pick<
@@ -450,8 +599,10 @@ export const createPortalView = (options: {
               ? selectedView()?.config?.[key]
               : config()?.[key];
     const fillViews = (): void => {
+        const previousView = viewSelect.value;
+        const available = availableViews(fieldSelect.value);
         viewSelect.replaceChildren();
-        for (const view of customViews(config())) {
+        for (const view of available.views) {
             viewSelect.append(
                 new Option(
                     typeof view.config?.name === 'string'
@@ -461,8 +612,28 @@ export const createPortalView = (options: {
                 )
             );
         }
-        if (viewSelect.options.length === 0)
+        if (available.legacy)
             viewSelect.append(new Option('Legacy default view', ''));
+        const retainsPrevious = Array.from(viewSelect.options).some(
+            (option) => option.value === previousView
+        );
+        // Set the choice before capturing criteria, including before mounting.
+        // An implicit first-option selection must not change that identity later.
+        viewSelect.value = retainsPrevious
+            ? previousView
+            : (viewSelect.options[0]?.value ?? '');
+        const empty = viewSelect.options.length === 0;
+        viewSelect.disabled = empty;
+        first.disabled = empty;
+        eligibilityMessage.textContent = [
+            empty ? 'No available views for this table.' : '',
+            available.unavailable
+                ? 'Some configured views are unavailable because their conditions could not be evaluated.'
+                : '',
+        ]
+            .filter(Boolean)
+            .join(' ');
+        eligibilityMessage.hidden = eligibilityMessage.textContent === '';
     };
     const reset = (): void => {
         criteriaEpoch += 1;
@@ -482,7 +653,10 @@ export const createPortalView = (options: {
         );
         next.disabled = true;
         create.disabled =
-            readRequired || needsRefresh || creatingChildId() == null;
+            readRequired ||
+            needsRefresh ||
+            !selectionAvailable() ||
+            creatingChildId() == null;
         renderRecovery();
     };
 
@@ -527,6 +701,7 @@ export const createPortalView = (options: {
                 !readRequired &&
                 current.ownerId === scope.ownerId &&
                 current.revision === scope.revision &&
+                selectionAvailable() &&
                 acceptedCollection.isCurrent()
             );
         };
@@ -590,7 +765,8 @@ export const createPortalView = (options: {
                 criteriaEpoch === epoch &&
                 owner.isCurrent() &&
                 current.ownerId === scope.ownerId &&
-                current.revision === scope.revision
+                current.revision === scope.revision &&
+                selectionAvailable()
             );
         };
         // Cleanup is not an empty successful read and grants no actions.
@@ -661,6 +837,13 @@ export const createPortalView = (options: {
         recordId: string | null,
         candidate?: RecoveryAttempt
     ): Promise<void> => {
+        if (!selectionAvailable()) {
+            status(
+                'Choose an available Portal view before opening a child Form.',
+                true
+            );
+            return;
+        }
         const creating = recordId == null;
         const childId = creating
             ? creatingChildId()
@@ -739,7 +922,10 @@ export const createPortalView = (options: {
                     plan.input.context.prefillDataForLinkedRecordsForm
                         ?.prefillQueryForChildExtension;
                 const accepted = () =>
-                    current() && collection === owner && plan.isCurrent();
+                    current() &&
+                    selectionAvailable() &&
+                    collection === owner &&
+                    plan.isCurrent();
                 if (!accepted() || client !== options.client) return;
                 const loaded = await client.loadExtension(plan.input, {
                     signal,
@@ -798,7 +984,8 @@ export const createPortalView = (options: {
                     {
                         candidate,
                         newAttempt,
-                        isCurrent: plan.isCurrent,
+                        isCurrent: () =>
+                            selectionAvailable() && plan.isCurrent(),
                     },
                     childQuerySnapshots(dispatchedDynamic, loaded)
                 );
@@ -833,6 +1020,7 @@ export const createPortalView = (options: {
             destroyed ||
             !card.isConnected ||
             criteriaReadRequired ||
+            !selectionAvailable() ||
             !sameOwner() ||
             data == null ||
             !data.recordIds.includes(recordId)
@@ -867,6 +1055,7 @@ export const createPortalView = (options: {
                 data === acceptedData &&
                 fieldSelect.value === portalFieldId &&
                 viewSelect.value === selectedCustomViewId &&
+                selectionAvailable() &&
                 sameOwner();
             form.append(
                 button('Close', () => {
@@ -905,7 +1094,8 @@ export const createPortalView = (options: {
                 sameOwner() &&
                 data === acceptedData &&
                 fieldSelect.value === portalFieldId &&
-                viewSelect.value === selectedCustomViewId
+                viewSelect.value === selectedCustomViewId &&
+                selectionAvailable()
             );
         };
         const cell = createPortalCellBinding({
@@ -1130,7 +1320,18 @@ export const createPortalView = (options: {
                         { signal }
                     );
                     if (!current()) return;
-                    if (user != null) acceptParentData(user.fields);
+                    const parentData = refreshedParentData(user);
+                    if (!current()) return;
+                    if (parentData === null) {
+                        closeEditor();
+                        renderRecords();
+                        status(
+                            'Cell saved, but the Portal user was not refreshed. Choose Reload before taking another action.',
+                            true
+                        );
+                        return;
+                    }
+                    acceptParentData(parentData);
                     needsRefresh = false;
                     closeEditor();
                     renderRecords();
@@ -1149,6 +1350,7 @@ export const createPortalView = (options: {
 
     const renderRecords = (): void => {
         results.replaceChildren();
+        if (!selectionAvailable()) return;
         const linkedTableId = tableId();
         if (linkedTableId == null || data == null) return;
         const state = data.tableIdsToLinkedTableStates[linkedTableId];
@@ -1156,8 +1358,20 @@ export const createPortalView = (options: {
             results.append(element('p', 'No table data was returned.', 'hint'));
             return;
         }
-        const columns = detailFields(data.detailFields).filter((column) =>
-            state.airtableFields.some((field) => field.id === column.fieldId)
+        // Non-null returned maps replace the legacy map, even when their
+        // selected key is missing or empty. Keep the SDK's visible projection.
+        const rawDetailMap =
+            data.customViewDetailFields === null
+                ? page.payload.linkedRecordFieldIdToDetailFields
+                : data.customViewDetailFields;
+        const rawDetails = Object.hasOwn(rawDetailMap, fieldSelect.value)
+            ? rawDetailMap[fieldSelect.value]
+            : [];
+        const columns = detailFields(
+            data.detailFields,
+            rawDetails,
+            linkedTableId,
+            data.tableIdsToLinkedTableStates
         );
         const table = element('table');
         const head = element('tr');
@@ -1165,11 +1379,7 @@ export const createPortalView = (options: {
             head.append(
                 element(
                     'th',
-                    column.title ??
-                        state.airtableFields.find(
-                            (entry) => entry.id === column.fieldId
-                        )?.name ??
-                        column.fieldId
+                    column.title ?? column.airtableField.name ?? column.fieldId
                 )
             );
         head.append(element('th', 'Actions'));
@@ -1183,39 +1393,89 @@ export const createPortalView = (options: {
         const renderedOwner = dataScope == null ? null : { ...dataScope };
         const renderedFieldId = fieldSelect.value;
         const renderedViewId = viewSelect.value;
+        const renderedCollection = collection;
+        const renderedCriteriaEpoch = criteriaEpoch;
+        const renderedMountEpoch = mountEpoch;
+        const renderedSession = JSON.stringify(options.client.getSession());
+        // Initial rows are detached while formatting, so their display lease
+        // checks the accepted owner rather than row.isConnected.
+        const summaryIsCurrent = (): boolean => {
+            const owner = options.getScope();
+            return (
+                !destroyed &&
+                card.isConnected &&
+                data === renderedData &&
+                renderedOwner != null &&
+                owner.ownerId === renderedOwner.ownerId &&
+                owner.revision === renderedOwner.revision &&
+                collection === renderedCollection &&
+                (renderedCollection === null ||
+                    renderedCollection.isCurrent()) &&
+                criteriaEpoch === renderedCriteriaEpoch &&
+                mountEpoch === renderedMountEpoch &&
+                JSON.stringify(options.client.getSession()) ===
+                    renderedSession &&
+                fieldSelect.value === renderedFieldId &&
+                viewSelect.value === renderedViewId &&
+                selectionAvailable()
+            );
+        };
         for (const recordId of data.recordIds) {
             const record = state.recordIdsToAirtableRecords[recordId];
             if (record == null) continue;
             const row = element('tr');
             row.dataset.recordId = recordId;
-            for (const column of columns) {
-                const recordField = state.airtableFields.find(
-                    (entry) => entry.id === column.fieldId
+            const rowSelectionCurrent = (): boolean => {
+                return (
+                    !destroyed &&
+                    row.isConnected &&
+                    card.isConnected &&
+                    data === renderedData &&
+                    fieldSelect.value === renderedFieldId &&
+                    viewSelect.value === renderedViewId &&
+                    selectionAvailable()
                 );
-                const value = record.fields[column.fieldId];
-                const obscured =
-                    recordField?.config.type ===
-                        AirtableFieldType.SINGLE_LINE_TEXT &&
-                    column.miniExtConfig != null &&
-                    'obscurePassword' in column.miniExtConfig &&
-                    column.miniExtConfig.obscurePassword === true &&
-                    typeof value === 'string' &&
-                    value.length > 0;
+            };
+            const rowIsCurrent = (): boolean => {
+                const owner = options.getScope();
+                return (
+                    rowSelectionCurrent() &&
+                    renderedOwner != null &&
+                    owner.ownerId === renderedOwner.ownerId &&
+                    owner.revision === renderedOwner.revision
+                );
+            };
+            for (const column of columns) {
+                const recordField = column.airtableField;
                 const cell = element(
                     'td',
-                    recordField?.config.type ===
-                        AirtableFieldType.MULTIPLE_ATTACHMENTS
-                        ? attachmentSummary(value, column.displayConfig)
-                        : obscured
-                          ? '••••••••'
-                          : displayValue(value)
+                    portalCellSummary(
+                        column.displayConfig,
+                        () => {
+                            const value = record.fields[column.fieldId];
+                            return recordField.config.type ===
+                                AirtableFieldType.MULTIPLE_ATTACHMENTS
+                                ? attachmentSummary(value, column.displayConfig)
+                                : displayValue(value);
+                        },
+                        () => {
+                            const current = renderedData.detailFields.filter(
+                                (detail) => detail.fieldId === column.fieldId
+                            );
+                            return (
+                                summaryIsCurrent() &&
+                                current.length === 1 &&
+                                current[0]?.miniExtConfig ===
+                                    column.displayConfig
+                            );
+                        }
+                    )
                 );
                 const gridMode = (layoutSetting('layout') ?? 'grid') === 'grid';
                 if (
                     gridMode &&
                     allowEditing &&
                     column.inlineEditable &&
-                    recordField != null &&
                     !recordField.isComputed &&
                     layoutSetting('disableInlineEdit') !== true
                 ) {
@@ -1256,6 +1516,7 @@ export const createPortalView = (options: {
             if (allowEditing && configuredChildId(config(), false) != null)
                 controls.append(
                     button('Open Form', () => {
+                        if (!rowIsCurrent()) return;
                         void openChild(recordId);
                     })
                 );
@@ -1277,7 +1538,7 @@ export const createPortalView = (options: {
                             !acceptedOwner.isCurrent() ||
                             readRequired ||
                             needsRefresh ||
-                            !row.isConnected
+                            !rowIsCurrent()
                         )
                             return;
                         void openChild(recordId, pending);
@@ -1293,6 +1554,7 @@ export const createPortalView = (options: {
                     button('Unlink', async () => {
                         const owner = collection;
                         if (
+                            !rowIsCurrent() ||
                             readRequired ||
                             owner == null ||
                             !owner.isCurrent()
@@ -1315,6 +1577,7 @@ export const createPortalView = (options: {
                         )
                             return;
                         if (
+                            !rowIsCurrent() ||
                             collection !== owner ||
                             !owner.isCurrent() ||
                             fieldSelect.value !== portalFieldId ||
@@ -1324,6 +1587,13 @@ export const createPortalView = (options: {
                         await run(
                             'Unlinking this record…',
                             async ({ client, signal, current }) => {
+                                if (
+                                    !current() ||
+                                    !rowIsCurrent() ||
+                                    collection !== owner ||
+                                    !owner.isCurrent()
+                                )
+                                    return;
                                 // Retire before dispatch: even a cancelled or failed unlink
                                 // may have changed the parent token on the server.
                                 needsRefresh = true;
@@ -1376,6 +1646,15 @@ export const createPortalView = (options: {
                         void run(
                             'Moving the record category…',
                             async ({ client, signal, current }) => {
+                                // A fresh explicit Run may use the displayed
+                                // cached category choices after a visitor round
+                                // trip; it does not revive the retired collection.
+                                if (
+                                    !current() ||
+                                    client !== options.client ||
+                                    !rowSelectionCurrent()
+                                )
+                                    return;
                                 if (needsRefresh)
                                     throw new Error(
                                         'Reload the Portal before moving another category.'
@@ -1401,16 +1680,21 @@ export const createPortalView = (options: {
                                         { signal }
                                     );
                                 if (!current()) return;
-                                if (result.type === 'no-login') {
+                                const parentData =
+                                    result.type === 'logged-in'
+                                        ? refreshedParentData(
+                                              result.loggedInUserRecord
+                                          )
+                                        : null;
+                                if (!current()) return;
+                                if (parentData === null) {
                                     status(
                                         'Category moved, but the Portal user was not refreshed. Choose Reload before taking another action.',
                                         true
                                     );
                                     return;
                                 }
-                                acceptParentData(
-                                    result.loggedInUserRecord.fields
-                                );
+                                acceptParentData(parentData);
                                 needsRefresh = false;
                                 reset();
                                 status(
@@ -1425,6 +1709,9 @@ export const createPortalView = (options: {
             tbody.append(row);
         }
         table.append(tbody);
+        // A later cell can retire the lease after earlier cells were formatted.
+        // Publish the detached table only while the whole render is still owned.
+        if (!summaryIsCurrent()) return;
         results.append(
             element(
                 'p',
@@ -1452,6 +1739,13 @@ export const createPortalView = (options: {
 
     const fetchRecords = (more: boolean): void => {
         if (destroyed || !card.isConnected) return;
+        if (!selectionAvailable()) {
+            status(
+                'Choose an available Portal view before loading records.',
+                true
+            );
+            return;
+        }
         if (cleanupRequired) {
             status(
                 'Review and accept the criteria cleanup proposal before loading again.',
@@ -1467,6 +1761,7 @@ export const createPortalView = (options: {
         void run(
             'Loading the permitted Portal records…',
             async ({ signal, current }) => {
+                if (!current() || !selectionAvailable()) return;
                 signal.throwIfAborted();
                 retireCriteriaEditors();
                 if (!more) {
@@ -1482,7 +1777,10 @@ export const createPortalView = (options: {
                 next.disabled = true;
                 create.disabled = true;
                 const accepted = () =>
-                    current() && collection === owner && owner.isCurrent();
+                    current() &&
+                    selectionAvailable() &&
+                    collection === owner &&
+                    owner.isCurrent();
                 try {
                     const readOptions = {
                         pagesToFetch: 1 as const,
@@ -1503,9 +1801,11 @@ export const createPortalView = (options: {
                     }
                     criteriaReadRequired = false;
                     readRequired = false;
-                    create.disabled = creatingChildId() == null;
+                    create.disabled =
+                        !selectionAvailable() || creatingChildId() == null;
                     closeEditor();
                     renderRecords();
+                    if (!accepted()) return;
                     mountCriteriaEditors();
                     status(
                         result == null
@@ -1566,7 +1866,12 @@ export const createPortalView = (options: {
     });
     fillViews();
     if (options.initialCriteria != null) {
-        viewSelect.value = criteria.selectedCustomViewId;
+        if (
+            Array.from(viewSelect.options).some(
+                (option) => option.value === criteria.selectedCustomViewId
+            )
+        )
+            viewSelect.value = criteria.selectedCustomViewId;
         search.value = criteria.searchTerm ?? '';
     }
     reset();

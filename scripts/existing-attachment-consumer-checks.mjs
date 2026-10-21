@@ -1,14 +1,294 @@
 import assert from 'node:assert/strict';
+import { File } from 'node:buffer';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { portalRecipeFixtures } from './portal-recipe-checks.mjs';
+
+/** Actual installed ESM/CommonJS controllers; synthetic upload calls, never remote persistence. */
+export async function checkAttachmentUploadDispatchConsumer({
+    consumerDirectory,
+}) {
+    const require = createRequire(join(consumerDirectory, 'package.json'));
+    const installed = (entry) =>
+        import(
+            pathToFileURL(
+                join(
+                    consumerDirectory,
+                    `node_modules/@miniextensions/sdk/dist/esm/${entry}/index.js`
+                )
+            )
+        );
+    const flavors = [
+        {
+            name: 'ESM',
+            forms: await installed('forms'),
+            runtime: await installed('runtime'),
+        },
+        {
+            name: 'CommonJS',
+            forms: require('@miniextensions/sdk/forms'),
+            runtime: require('@miniextensions/sdk'),
+        },
+    ];
+    let groups = 0;
+    for (const { name, forms, runtime } of flavors) {
+        const make = (cancelFromAttempt = false) => {
+            const loaded = portalRecipeFixtures.makeForm({
+                childExtensionInfo: { accessType: { type: 'create' } },
+            });
+            loaded.payload.hasParentExtension = false;
+            loaded.payload.fieldIdsInForm.push('fld_files');
+            loaded.payload.fieldIdsToSchemas.fld_files = {
+                fieldType: 'multipleAttachments',
+                airtableField: {
+                    id: 'fld_files',
+                    name: 'Files',
+                    isComputed: false,
+                    isPrimaryField: false,
+                    description: null,
+                    config: {
+                        type: 'multipleAttachments',
+                        options: { isReversed: false },
+                    },
+                },
+                miniExtConfig: {},
+            };
+            const existing = {
+                url: 'https://files.example.test/existing',
+                filename: 'existing.txt',
+            };
+            loaded.payload.formRecord.data.fld_files = [existing, existing];
+            let networkCalls = 0;
+            let saveCalls = 0;
+            const client = runtime.createMiniExtensionsClient({
+                apiOrigin: 'https://sdk.example.test',
+                session: { visitor: 'A' },
+                fetch: async () => {
+                    networkCalls++;
+                    throw Error('No external request is permitted');
+                },
+            });
+            client.forms.save = async () => {
+                saveCalls++;
+                return {
+                    type: 'error',
+                    formErrors: {},
+                    formValidationErrors: [],
+                };
+            };
+            const owner = forms.createFormFieldBindings({
+                client,
+                loaded,
+                getScope: () => ({ ownerId: 'A', revision: 0 }),
+                saveOptions: {
+                    captchaVal: null,
+                    isComputeMode: false,
+                    context: { type: 'direct-url' },
+                    searchQuery: {},
+                    conditionalLinkedRecordFieldIdsToFilteringValues: {},
+                },
+            });
+            const journal = new forms.RecoveryJournal();
+            const scope = {
+                owner: 'A',
+                parentFieldId: null,
+                tableId: null,
+                childExtensionId: 'form',
+                context: 'modal',
+            };
+            const attempts = [];
+            const controller = owner.attachment(
+                'fld_files',
+                { journal, scope, loadVersion: 1 },
+                {
+                    onAttempt(attempt) {
+                        attempts.push(attempt);
+                        if (cancelFromAttempt) {
+                            cancelFromAttempt = false;
+                            controller.cancel();
+                        }
+                    },
+                }
+            );
+            const selected = new File(['content'], 'synthetic.txt', {
+                type: 'text/plain',
+            });
+            const uploaded = {
+                url: 'https://files.example.test/uploaded',
+                filename: selected.name,
+                id: null,
+                size: selected.size,
+                type: selected.type,
+            };
+            return {
+                owner,
+                client,
+                controller,
+                journal,
+                scope,
+                attempts,
+                selected,
+                uploaded,
+                get networkCalls() {
+                    return networkCalls;
+                },
+                get saveCalls() {
+                    return saveCalls;
+                },
+            };
+        };
+        for (const cancellation of ['onAttempt', 'subscriber']) {
+            const f = make(cancellation === 'onAttempt');
+            const calls = [];
+            let stop = () => {};
+            try {
+                f.client.attachments.uploadFile = async (input, options) => {
+                    calls.push({ input, options });
+                    return f.uploaded;
+                };
+                if (cancellation === 'subscriber') {
+                    let cancelOnce = true;
+                    stop = f.controller.subscribe((snapshot) => {
+                        if (cancelOnce && snapshot.phase === 'uploading') {
+                            cancelOnce = false;
+                            f.controller.cancel();
+                        }
+                    });
+                }
+                const before = structuredClone(
+                    f.owner.controller.getState().draft
+                );
+                assert.equal(f.controller.select([f.selected]), true);
+                assert.equal(await f.controller.upload(), false);
+                assert.equal(calls.length, 0, `${name} ${cancellation}`);
+                assert.equal(f.attempts.length, 1);
+                const first = f.attempts[0];
+                assert.equal(first.outcome, 'not-dispatched');
+                assert.equal(first.flight, false);
+                assert.equal(first.acknowledgment, 'none');
+                assert.deepEqual(first.retainedInput, []);
+                assert.equal(f.journal.blocking(f.scope, null), undefined);
+                assert.deepEqual(f.journal.unknown('A'), []);
+                assert.deepEqual(f.owner.controller.getState().draft, before);
+                assert.equal(f.controller.getSnapshot().files[0], f.selected);
+                assert.equal(f.controller.getSnapshot().phase, 'selected');
+                assert.equal(f.controller.getSnapshot().busy, false);
+                assert.equal(f.controller.getSnapshot().error, null);
+                assert.equal(f.controller.blocksForm(), false);
+                assert.equal(f.owner.hasPendingFiles(), true);
+                stop();
+                // The same in-memory File is retried only by this explicit call.
+                assert.equal(await f.controller.upload(), true);
+                assert.equal(calls.length, 1);
+                assert.equal(calls[0].input.file, f.selected);
+                assert.equal(calls[0].input.filename, f.selected.name);
+                assert.equal(calls[0].input.fieldId, 'fld_files');
+                assert.equal(
+                    calls[0].input.extensionAccessToken,
+                    'child_access_example'
+                );
+                assert.deepEqual(calls[0].options.session, { visitor: 'A' });
+                assert.equal(calls[0].options.signal.aborted, false);
+                assert.equal(f.attempts.length, 2);
+                assert.notEqual(f.attempts[1].id, first.id);
+                assert.equal(first.outcome, 'not-dispatched');
+                assert.equal(f.attempts[1].outcome, 'uploaded');
+                assert.equal(f.attempts[1].flight, false);
+                assert.deepEqual(
+                    f.owner.field('fld_files').getSnapshot().value,
+                    [...before.data.fld_files, f.uploaded]
+                );
+                assert.equal(
+                    f.owner.field('fld_files').getSnapshot().dirty,
+                    true
+                );
+                assert.deepEqual(f.controller.getSnapshot().files, []);
+                assert.equal(f.controller.getSnapshot().phase, 'accepted');
+                assert.equal(f.controller.blocksForm(), false);
+                assert.equal(f.journal.blocking(f.scope, null), undefined);
+                assert.equal(f.networkCalls, 0);
+                assert.equal(f.saveCalls, 0);
+                groups++;
+            } finally {
+                stop();
+                f.owner.destroy();
+            }
+        }
+        for (const outcome of ['synchronous-throw', 'cancel-after-call']) {
+            const f = make();
+            const calls = [];
+            let resolveUpload;
+            try {
+                f.client.attachments.uploadFile = (input, options) => {
+                    calls.push({ input, options });
+                    if (outcome === 'synchronous-throw')
+                        throw Error('Synthetic response loss after invocation');
+                    return new Promise((resolve) => {
+                        resolveUpload = resolve;
+                    });
+                };
+                const before = structuredClone(
+                    f.owner.controller.getState().draft
+                );
+                assert.equal(f.controller.select([f.selected]), true);
+                const flight = f.controller.upload();
+                assert.equal(calls.length, 1, `${name} ${outcome}`);
+                if (outcome === 'cancel-after-call') {
+                    assert.equal(f.controller.getSnapshot().busy, true);
+                    f.controller.cancel();
+                    assert.equal(calls[0].options.signal.aborted, true);
+                    // An abort-ignoring uploader may still report stored bytes.
+                    resolveUpload(f.uploaded);
+                }
+                assert.equal(await flight, false);
+                assert.equal(f.attempts.length, 1);
+                const attempt = f.attempts[0];
+                assert.equal(attempt.outcome, 'unknown');
+                assert.equal(attempt.flight, false);
+                assert.equal(attempt.acknowledgment, 'none');
+                assert.equal(f.journal.blocking(f.scope, null), attempt);
+                assert.deepEqual(f.journal.unknown('A'), [attempt]);
+                assert.deepEqual(f.owner.controller.getState().draft, before);
+                assert.equal(f.controller.getSnapshot().files[0], f.selected);
+                assert.equal(f.controller.getSnapshot().phase, 'uncertain');
+                assert.equal(f.controller.getSnapshot().busy, false);
+                assert.equal(f.controller.blocksForm(), true);
+                assert.equal(await f.controller.upload(), false);
+                assert.equal(calls.length, 1);
+                // Clear only the local queue so the journal is the Save fence.
+                f.controller.clear();
+                assert.equal(f.owner.hasPendingFiles(), false);
+                assert.equal(f.controller.blocksForm(), true);
+                await assert.rejects(f.owner.save());
+                assert.equal(f.saveCalls, 0);
+                assert.equal(f.controller.select([f.selected]), false);
+                assert.equal(f.attempts.length, 1);
+                assert.equal(attempt.outcome, 'unknown');
+                assert.deepEqual(f.owner.controller.getState().draft, before);
+                assert.equal(f.networkCalls, 0);
+                groups++;
+            } finally {
+                resolveUpload?.(f.uploaded);
+                f.owner.destroy();
+            }
+        }
+    }
+    return groups;
+}
 
 /** Installed SDK and React with local synthetic Save validation; no browser/backend claim. */
 export async function checkExistingAttachmentConsumer({
     consumerDirectory,
     happyDomModulePath,
 }) {
+    const uploadDispatchGroups = await checkAttachmentUploadDispatchConsumer({
+        consumerDirectory,
+    });
+    assert.equal(uploadDispatchGroups, 8);
+    console.log(
+        `Installed attachment upload dispatch: ${uploadDispatchGroups} ESM/CommonJS controller groups passed (synthetic upload calls only, no remote persistence).`
+    );
     const require = createRequire(join(consumerDirectory, 'package.json'));
     const { Window } = createRequire(import.meta.url)(happyDomModulePath);
     const window = new Window();

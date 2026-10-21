@@ -85,7 +85,18 @@
                 "types": "./dist/cjs/field-types.d.ts",
                 "default": "./dist/cjs/field-types.js"
             }
-        }
+        },
+        "./react/button.css": "./dist/esm/react/button.css",
+        "./react/checkbox.css": "./dist/esm/react/checkbox.css",
+        "./react/text.css": "./dist/esm/react/text.css",
+        "./react/number.css": "./dist/esm/react/number.css",
+        "./react/date.css": "./dist/esm/react/date.css",
+        "./react/datetime.css": "./dist/esm/react/datetime.css",
+        "./react/duration.css": "./dist/esm/react/duration.css",
+        "./react/currency.css": "./dist/esm/react/currency.css",
+        "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
+        "./react/linked-records.css": "./dist/esm/react/linked-records.css",
+        "./react/single-select.css": "./dist/esm/react/single-select.css"
     },
     "files": [
         "dist/esm",
@@ -123,7 +134,7 @@
     "scripts": {
         "build": "node scripts/build.mjs",
         "typecheck": "tsc --project tsconfig.test.json --noEmit",
-        "test": "node --test scripts/coverage-policy.test.mjs && node scripts/coverage.mjs",
+        "test": "node --test scripts/coverage-policy.test.mjs scripts/rich-text-proof-browser.test.mjs scripts/rich-text-proof-output.test.mjs && node scripts/coverage.mjs",
         "check:browser": "node scripts/check-native-browser.mjs",
         "check:package": "node --test scripts/package-checks.test.mjs scripts/runtime-cors-check.test.mjs scripts/module-format-checks.test.mjs && node scripts/check-package.mjs",
         "format": "prettier --write .",

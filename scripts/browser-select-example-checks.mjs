@@ -874,7 +874,16 @@ const checkPackedPortalSelects = async ({ consumer, Window, outfile }) => {
                 );
             }
             if (route === '/api/trpc/airtable.getUserRecord')
-                return new Response(JSON.stringify({ result: { data: null } }));
+                return new Response(
+                    JSON.stringify({
+                        result: {
+                            data: {
+                                id: portal.payload.formRecord.recordId,
+                                fields: portal.payload.formRecord.data,
+                            },
+                        },
+                    })
+                );
             unexpected.push(route);
             throw new Error(
                 'Packed Portal select attempted an unexpected call.'

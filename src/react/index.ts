@@ -1,3 +1,41 @@
+export { RadioInput, type RadioInputProps } from './RadioInput.js';
+export {
+    RecoverableImage,
+    type RecoverableImageProps,
+} from './RecoverableImage.js';
+export {
+    NativeRichTextEditor,
+    type NativeRichTextEditorHandle,
+    type NativeRichTextEditorRenderProps,
+    type NativeRichTextEditorProps,
+} from './NativeRichTextEditor.js';
+export { PersonBadge, type PersonBadgeProps } from './PersonBadge.js';
+export {
+    composeCalendlyUrl,
+    useCalendlyBooking,
+    type CalendlyUrlOptions,
+    type CalendlyBookingOptions,
+    type CalendlyBookingSession,
+    type CalendlyBooking,
+} from './CalendlyBooking.js';
+export { ActionButton, type ActionButtonProps } from './ActionButton.js';
+export { LiteralText, type LiteralTextProps } from './LiteralText.js';
+export {
+    RatingInput,
+    type RatingInputProps,
+    type RatingIconState,
+    type RatingWarningState,
+} from './RatingInput.js';
+export {
+    TextareaInput,
+    type TextareaInputProps,
+    type TextareaAutoSize,
+} from './TextareaInput.js';
+export {
+    InputClearButton,
+    type InputClearButtonProps,
+} from './InputClearButton.js';
+export { TextInput, type TextInputProps } from './TextInput.js';
 import {
     createElement,
     Fragment,
@@ -5,11 +43,211 @@ import {
     useState,
     useRef,
     useEffect,
+    useLayoutEffect,
+    useId,
     useSyncExternalStore,
     type ReactNode,
     type ChangeEvent,
 } from 'react';
 import { dispatchField } from '../ui/rendererRegistry.js';
+import { FieldRendererSource } from './fieldRendererSource.js';
+export {
+    BarcodeField,
+    renderBarcodeField,
+    type BarcodeFieldProps,
+    type BarcodeFieldOptions,
+} from './BarcodeField.js';
+export {
+    SingleCollaboratorField,
+    renderSingleCollaboratorField,
+    type SingleCollaboratorFieldProps,
+    type SingleCollaboratorFieldOptions,
+} from './SingleCollaboratorField.js';
+export {
+    MultipleCollaboratorsField,
+    renderMultipleCollaboratorsField,
+    type MultipleCollaboratorsFieldProps,
+    type MultipleCollaboratorsFieldOptions,
+} from './MultipleCollaboratorsField.js';
+export {
+    RichTextField,
+    renderRichTextField,
+    type RichTextFieldProps,
+    type RichTextFieldOptions,
+} from './RichTextField.js';
+export {
+    AiTextField,
+    renderAiTextField,
+    type AiTextFieldProps,
+    type AiTextFieldOptions,
+} from './AiTextField.js';
+export {
+    MultipleAttachmentsField,
+    renderMultipleAttachmentsField,
+    type MultipleAttachmentsFieldProps,
+    type MultipleAttachmentsFieldOptions,
+} from './MultipleAttachmentsField.js';
+export {
+    ReadonlyAttachmentsField,
+    renderReadonlyAttachmentsField,
+    type ReadonlyAttachmentsFieldProps,
+    type ReadonlyAttachmentsFieldOptions,
+} from './ReadonlyAttachmentsField.js';
+import {
+    SingleSelectControl,
+    singleSelectConfiguration,
+    singleSelectDisplayOptions,
+    type SingleSelectFieldOptions,
+} from './SingleSelectField.js';
+export {
+    renderSingleSelectField,
+    type SingleSelectFieldOptions,
+} from './SingleSelectField.js';
+import { LookupControl, type LookupFieldOptions } from './LookupField.js';
+export { renderLookupField, type LookupFieldOptions } from './LookupField.js';
+import { RollupControl, type RollupFieldOptions } from './RollupField.js';
+export { renderRollupField, type RollupFieldOptions } from './RollupField.js';
+import { FormulaControl, type FormulaFieldOptions } from './FormulaField.js';
+export {
+    renderFormulaField,
+    type FormulaFieldOptions,
+} from './FormulaField.js';
+export {
+    renderMultipleRecordLinksField,
+    type LinkedRecordsFieldOptions,
+} from './LinkedRecordsField.js';
+import {
+    renderMultipleSelectsField,
+    type MultipleSelectFieldOptions,
+} from './MultipleSelectField.js';
+export {
+    renderMultipleSelectsField,
+    type MultipleSelectFieldOptions,
+} from './MultipleSelectField.js';
+import {
+    DateControl,
+    dateConfiguration,
+    type DateFieldOptions,
+} from './DateField.js';
+export { renderDateField, type DateFieldOptions } from './DateField.js';
+import {
+    TextControl,
+    textConfiguration,
+    type TextFieldOptions,
+} from './TextField.js';
+export {
+    renderSingleLineTextField,
+    type TextFieldOptions,
+} from './TextField.js';
+import type { ExternalSyncSourceFieldOptions } from './ExternalSyncSourceField.js';
+import {
+    lastModifiedByName,
+    type LastModifiedByFieldOptions,
+} from './LastModifiedByField.js';
+export {
+    renderLastModifiedByField,
+    type LastModifiedByFieldOptions,
+} from './LastModifiedByField.js';
+export {
+    renderExternalSyncSourceField,
+    type ExternalSyncSourceFieldOptions,
+} from './ExternalSyncSourceField.js';
+import { createdByName, type CreatedByFieldOptions } from './CreatedByField.js';
+export {
+    renderCreatedByField,
+    type CreatedByFieldOptions,
+} from './CreatedByField.js';
+import {
+    lastModifiedTimeInput,
+    type LastModifiedTimeFieldOptions,
+} from './LastModifiedTimeField.js';
+export {
+    renderLastModifiedTimeField,
+    type LastModifiedTimeFieldOptions,
+} from './LastModifiedTimeField.js';
+import {
+    createdTimeInput,
+    type CreatedTimeFieldOptions,
+} from './CreatedTimeField.js';
+export {
+    renderCreatedTimeField,
+    type CreatedTimeFieldOptions,
+} from './CreatedTimeField.js';
+import {
+    MultilineTextControl,
+    multilineTextConfiguration,
+    multilineTextUnavailable,
+    type MultilineTextFieldOptions,
+} from './MultilineTextField.js';
+export {
+    renderMultilineTextField,
+    type MultilineTextFieldOptions,
+} from './MultilineTextField.js';
+export {
+    renderPhoneNumberField,
+    type PhoneNumberFieldOptions,
+} from './PhoneNumberField.js';
+export { renderUrlField, type UrlFieldOptions } from './UrlField.js';
+export { renderEmailField, type EmailFieldOptions } from './EmailField.js';
+import {
+    CheckboxControl,
+    checkboxConfiguration,
+    type CheckboxFieldOptions,
+} from './CheckboxField.js';
+export {
+    CheckboxInput,
+    renderCheckboxField,
+    type CheckboxInputProps,
+    type CheckboxFieldOptions,
+} from './CheckboxField.js';
+import {
+    NumberControl,
+    numberConfiguration,
+    type NumberFieldOptions,
+} from './NumberField.js';
+export { renderNumberField, type NumberFieldOptions } from './NumberField.js';
+import { countInput, type CountFieldOptions } from './CountField.js';
+export { renderCountField, type CountFieldOptions } from './CountField.js';
+export {
+    renderAutoNumberField,
+    type AutoNumberFieldOptions,
+} from './AutoNumberField.js';
+import {
+    renderOwnedRatingInput,
+    type RatingFieldOptions,
+} from './RatingField.js';
+export { renderRatingField, type RatingFieldOptions } from './RatingField.js';
+export {
+    renderPercentField,
+    type PercentFieldOptions,
+} from './PercentField.js';
+import {
+    CurrencyControl,
+    currencyConfiguration,
+    type CurrencyFieldOptions,
+} from './CurrencyField.js';
+export {
+    renderCurrencyField,
+    type CurrencyFieldOptions,
+} from './CurrencyField.js';
+import {
+    DurationControl,
+    durationConfiguration,
+    type DurationFieldOptions,
+} from './DurationField.js';
+export {
+    renderDurationField,
+    type DurationFieldOptions,
+} from './DurationField.js';
+import {
+    DateTimeControl,
+    dateTimeConfiguration,
+    type DateTimeFieldOptions,
+} from './DateTimeField.js';
+export {
+    renderDateTimeField,
+    type DateTimeFieldOptions,
+} from './DateTimeField.js';
 import type {
     FormRenderScope,
     FormRenderSnapshot,
@@ -82,6 +320,16 @@ export function AttachmentField({
 }: AttachmentFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     const input = useRef<HTMLInputElement>(null);
+    const section = useRef<HTMLElement>(null);
+    const choose = useRef<HTMLButtonElement>(null);
+    const upload = useRef<HTMLButtonElement>(null);
+    const cancel = useRef<HTMLButtonElement>(null);
+    const statusId = useId();
+    // Focus belongs to this rendered owner, never to an asynchronous upload.
+    const focus = useMemo<{ element: HTMLButtonElement | null }>(
+        () => ({ element: null }),
+        [binding, controller]
+    );
     const store = useMemo(() => {
         let value = controller.getSnapshot();
         return {
@@ -98,17 +346,97 @@ export function AttachmentField({
         store.getSnapshot,
         store.getSnapshot
     );
+    useLayoutEffect(() => {
+        const node = section.current;
+        const previous = focus.element;
+        if (node == null || previous == null) return;
+        const active = node.ownerDocument.activeElement;
+        if (
+            active !== previous &&
+            !(active === node.ownerDocument.body && !previous.isConnected)
+        )
+            return;
+        if (previous.isConnected && !previous.disabled && !previous.hidden)
+            return;
+        const removals = Array.from(
+            node.querySelectorAll<HTMLButtonElement>(
+                'button[data-attachment-remove]:not(:disabled)'
+            )
+        );
+        const index = previous.dataset.attachmentRemove;
+        const nextRow =
+            index == null
+                ? null
+                : (removals.find(
+                      (button) =>
+                          Number(button.dataset.attachmentRemove) >=
+                          Number(index)
+                  ) ?? removals.at(-1));
+        const next =
+            nextRow ??
+            [
+                attachment.busy ? cancel.current : upload.current,
+                choose.current,
+            ].find((button) => button && !button.disabled && !button.hidden);
+        (next ?? node).focus();
+    });
     if (render) return render({ snapshot, attachment, binding, controller });
     if (snapshot.retired || attachment.retired) return null;
     const visible = snapshot.visibility.type === 'visible';
     if (!visible && attachment.files.length === 0 && !attachment.busy)
         return null;
+    const pending = `${attachment.files.length} pending ${
+        attachment.files.length === 1 ? 'file' : 'files'
+    }.`;
+    const message =
+        attachment.phase === 'uncertain'
+            ? 'Upload outcome uncertain. Inspect the upload before continuing; it was not added or retried automatically.'
+            : attachment.phase === 'uploading'
+              ? 'Uploading one attachment. Wait for confirmation before uploading the next file.'
+              : attachment.phase === 'accepted'
+                ? 'Attachment accepted into the draft. Save to submit your changes.'
+                : attachment.files.length > 0
+                  ? 'Files selected. Upload each file explicitly, then Save.'
+                  : 'No pending files. Choose files to begin.';
+    const actions = {
+        display: 'flex',
+        flexWrap: 'wrap' as const,
+        gap: '0.5rem',
+        alignItems: 'center',
+    };
     return createElement(
         'section',
         {
+            ref: section,
+            tabIndex: -1,
             'aria-label': visible
                 ? (snapshot.field?.title ?? 'Attachments')
                 : 'Pending attachment activity',
+            'aria-describedby': statusId,
+            style: {
+                display: 'grid',
+                gap: '0.75rem',
+                padding: '1rem',
+                border: '1px solid #cbd5e1',
+                borderRadius: '0.5rem',
+                minWidth: 0,
+                overflowWrap: 'anywhere',
+            },
+            onFocusCapture: (
+                event: import('react').FocusEvent<HTMLElement>
+            ) => {
+                focus.element =
+                    event.target.tagName === 'BUTTON'
+                        ? (event.target as HTMLButtonElement)
+                        : null;
+            },
+            onBlurCapture: (event: import('react').FocusEvent<HTMLElement>) => {
+                if (
+                    event.relatedTarget &&
+                    !event.currentTarget.contains(event.relatedTarget)
+                )
+                    focus.element = null;
+            },
             onDragOver: (event: import('react').DragEvent<HTMLElement>) =>
                 event.preventDefault(),
             onDrop: (event: import('react').DragEvent<HTMLElement>) => {
@@ -118,25 +446,53 @@ export function AttachmentField({
         },
         visible
             ? createElement(
-                  'ul',
+                  'strong',
                   null,
+                  snapshot.field?.title ?? 'Attachments'
+              )
+            : null,
+        visible && attachment.rows.length > 0
+            ? createElement(
+                  'ul',
+                  {
+                      'aria-label': 'Existing attachments',
+                      style: { margin: 0, paddingInlineStart: '1.5rem' },
+                  },
                   ...attachment.rows.map((row) =>
                       createElement(
                           'li',
-                          { key: row.nativeIndex },
-                          createElement('span', null, row.label),
+                          {
+                              key: row.nativeIndex,
+                              style: { paddingBlock: '0.25rem' },
+                          },
                           createElement(
-                              'button',
+                              'div',
                               {
-                                  type: 'button',
-                                  disabled: !row.removeAllowed,
-                                  onClick: () =>
-                                      controller.remove(
-                                          attachment.valuesRevision,
-                                          row.nativeIndex
-                                      ),
+                                  style: {
+                                      ...actions,
+                                      justifyContent: 'space-between',
+                                  },
                               },
-                              'Remove attachment'
+                              createElement(
+                                  'span',
+                                  { style: { minWidth: 0 } },
+                                  row.label
+                              ),
+                              createElement(
+                                  'button',
+                                  {
+                                      type: 'button',
+                                      'data-attachment-remove': row.nativeIndex,
+                                      'aria-label': `Remove attachment ${row.nativeIndex + 1}`,
+                                      disabled: !row.removeAllowed,
+                                      onClick: () =>
+                                          controller.remove(
+                                              attachment.valuesRevision,
+                                              row.nativeIndex
+                                          ),
+                                  },
+                                  'Remove attachment'
+                              )
                           )
                       )
                   )
@@ -157,55 +513,89 @@ export function AttachmentField({
             },
         }),
         createElement(
-            'button',
-            {
-                type: 'button',
-                hidden: !visible,
-                disabled: !snapshot.canEdit && !attachment.busy,
-                onClick: () => input.current?.click(),
-            },
-            'Choose files'
+            'div',
+            { id: statusId, role: 'status', 'aria-atomic': true },
+            createElement(
+                'p',
+                { style: { margin: 0, fontWeight: 600 } },
+                pending
+            ),
+            createElement('p', { style: { margin: '0.25rem 0 0' } }, message),
+            attachment.error && attachment.phase !== 'uncertain'
+                ? createElement(
+                      'p',
+                      { style: { margin: '0.25rem 0 0' } },
+                      attachment.error
+                  )
+                : null
+        ),
+        attachment.busy
+            ? createElement('progress', {
+                  'aria-label':
+                      attachment.phase === 'uncertain'
+                          ? 'Awaiting upload outcome'
+                          : 'Uploading attachment',
+                  style: { width: '100%' },
+              })
+            : null,
+        createElement(
+            'div',
+            { style: actions },
+            createElement(
+                'button',
+                {
+                    ref: choose,
+                    type: 'button',
+                    hidden: !visible,
+                    'aria-describedby': statusId,
+                    disabled:
+                        (!snapshot.canEdit && !attachment.busy) ||
+                        (attachment.phase === 'uncertain' && !attachment.busy),
+                    onClick: () => input.current?.click(),
+                },
+                'Choose files'
+            ),
+            createElement(
+                'button',
+                {
+                    ref: upload,
+                    type: 'button',
+                    hidden: !visible,
+                    'aria-describedby': statusId,
+                    disabled:
+                        attachment.busy ||
+                        attachment.phase === 'uncertain' ||
+                        attachment.files.length === 0 ||
+                        !snapshot.canEdit,
+                    onClick: () => void controller.upload(),
+                },
+                'Upload next file'
+            )
         ),
         createElement(
-            'p',
-            { role: 'status', 'aria-busy': attachment.busy },
-            attachment.error ??
-                (attachment.busy
-                    ? 'Uploading attachment'
-                    : attachment.files.length > 0
-                      ? 'Files selected'
-                      : 'No pending files')
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                hidden: !visible,
-                disabled:
-                    attachment.busy ||
-                    attachment.files.length === 0 ||
-                    !snapshot.canEdit,
-                onClick: () => void controller.upload(),
-            },
-            'Upload'
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                disabled: attachment.files.length === 0,
-                onClick: () => controller.clear(),
-            },
-            'Clear pending files'
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                disabled: !attachment.busy,
-                onClick: () => controller.cancel(),
-            },
-            'Cancel upload'
+            'div',
+            { style: actions },
+            createElement(
+                'button',
+                {
+                    type: 'button',
+                    'aria-describedby': statusId,
+                    disabled: attachment.files.length === 0,
+                    onClick: () => controller.clear(),
+                },
+                'Clear pending files'
+            ),
+            createElement(
+                'button',
+                {
+                    ref: cancel,
+                    type: 'button',
+                    'aria-describedby': statusId,
+                    disabled: !attachment.busy,
+                    onClick: () => controller.cancel(),
+                },
+                'Cancel upload'
+            )
         )
     );
 }
@@ -245,37 +635,545 @@ const status = (snapshot: FormFieldSnapshot) =>
             snapshot.error ??
             snapshot.validation.map((error) => error.errorMessage).join('\n')
     );
-export function TextField({ binding, render }: FieldProps): ReactNode {
+export type LastModifiedTimeFieldProps = FieldProps &
+    LastModifiedTimeFieldOptions;
+/** Valid supplied modification timestamps stay readonly without recomputation. */
+export function LastModifiedTimeField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: LastModifiedTimeFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
-    const obscure = snapshot.field?.schema.miniExtConfig;
-    return createElement(
-        'div',
-        null,
-        createElement(
-            'label',
-            null,
-            snapshot.field?.title,
-            createElement('input', {
-                type:
-                    obscure &&
-                    'obscurePassword' in obscure &&
-                    obscure.obscurePassword === true
-                        ? 'password'
-                        : 'text',
-                value: typeof snapshot.value === 'string' ? snapshot.value : '',
-                disabled: !snapshot.canEdit,
-                onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                    binding.setValue(event.currentTarget.value || null),
-            })
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'lastModifiedTime' ||
+        schema.airtableField.config.type !== 'lastModifiedTime'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Last Modified Time fields.'
+        );
+    return createElement(DateTimeControl, {
+        ...dateTimeConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input: lastModifiedTimeInput(
+            snapshot.value,
+            schema.airtableField.config
         ),
-        status(snapshot)
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+        clear: () => {},
+    });
+}
+export type CreatedTimeFieldProps = FieldProps & CreatedTimeFieldOptions;
+/** The supplied creation timestamp stays readonly regardless of result metadata. */
+export function CreatedTimeField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: CreatedTimeFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'createdTime' ||
+        schema.airtableField.config.type !== 'createdTime'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Created Time fields.'
+        );
+    return createElement(DateTimeControl, {
+        ...dateTimeConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input: createdTimeInput(snapshot.value),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+        clear: () => {},
+    });
+}
+export type LastModifiedByFieldProps = FieldProps & LastModifiedByFieldOptions;
+/** The supplied modifier name stays readonly regardless of forged editing state. */
+export function LastModifiedByField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: LastModifiedByFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'lastModifiedBy' ||
+        schema.airtableField.config.type !== 'lastModifiedBy'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Last Modified By fields.'
+        );
+    return createElement(TextControl, {
+        ...textConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        value: lastModifiedByName(snapshot.value),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: () => false,
+    });
+}
+export type CreatedByFieldProps = FieldProps & CreatedByFieldOptions;
+/** The supplied creator name stays readonly regardless of forged editing state. */
+export function CreatedByField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: CreatedByFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'createdBy' ||
+        schema.airtableField.config.type !== 'createdBy'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Created By fields.'
+        );
+    return createElement(TextControl, {
+        ...textConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        value: createdByName(snapshot.value),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: () => false,
+    });
+}
+export type ExternalSyncSourceFieldProps = FieldProps &
+    ExternalSyncSourceFieldOptions;
+/** The supplied source name stays readonly regardless of forged editing state. */
+export function ExternalSyncSourceField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: ExternalSyncSourceFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'externalSyncSource' ||
+        schema.airtableField.config.type !== 'externalSyncSource'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports External Sync Source fields.'
+        );
+    return createElement(TextControl, {
+        ...textConfiguration(schema.miniExtConfig),
+        className,
+        clearLabel,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: () => false,
+    });
+}
+export type FormulaFieldProps = FieldProps & FormulaFieldOptions;
+/** Present the accepted computed answer without borrowing any binding actions. */
+export function FormulaField({
+    binding,
+    render,
+    className,
+}: FormulaFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'formula' ||
+        schema.airtableField.config.type !== 'formula'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Formula fields.'
+        );
+    return createElement(FormulaControl, {
+        field: schema.airtableField,
+        title: snapshot.field?.title ?? '',
+        value: snapshot.value,
+        displayConfig: schema.miniExtConfig,
+        pending: snapshot.pending,
+        error: snapshot.error,
+        validation: snapshot.validation,
+        className,
+    });
+}
+export type LookupFieldProps = FieldProps & LookupFieldOptions;
+/** Present the accepted Lookup array without borrowing binding or linked actions. */
+export function LookupField({
+    binding,
+    render,
+    className,
+}: LookupFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'multipleLookupValues' ||
+        schema.airtableField.config.type !== 'multipleLookupValues'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Lookup fields.'
+        );
+    return createElement(LookupControl, {
+        field: schema.airtableField,
+        title: snapshot.field?.title ?? '',
+        value: snapshot.value,
+        displayConfig: schema.miniExtConfig,
+        pending: snapshot.pending,
+        error: snapshot.error,
+        validation: snapshot.validation,
+        className,
+    });
+}
+export type RollupFieldProps = FieldProps & RollupFieldOptions;
+/** Present the accepted computed answer without borrowing any binding actions. */
+export function RollupField({
+    binding,
+    render,
+    className,
+}: RollupFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'rollup' ||
+        schema.airtableField.config.type !== 'rollup'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Rollup fields.'
+        );
+    return createElement(RollupControl, {
+        field: schema.airtableField,
+        title: snapshot.field?.title ?? '',
+        value: snapshot.value,
+        displayConfig: schema.miniExtConfig,
+        pending: snapshot.pending,
+        error: snapshot.error,
+        validation: snapshot.validation,
+        className,
+    });
+}
+export type CountFieldProps = FieldProps & CountFieldOptions;
+/** Computed Count metadata and native values remain owned by the binding. */
+export function CountField({
+    binding,
+    render,
+    className,
+}: CountFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'count' ||
+        schema.airtableField.config.type !== 'count'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Count fields.'
+        );
+    return createElement(NumberControl, {
+        ...numberConfiguration(schema.miniExtConfig),
+        className,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input: countInput(snapshot.value, schema.airtableField.config),
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+    });
+}
+export type AutoNumberFieldProps = FieldProps & NumberFieldOptions;
+/** Computed native numbers have no local input model or write action. */
+export function AutoNumberField({
+    binding,
+    render,
+    className,
+}: AutoNumberFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'autoNumber' ||
+        schema.airtableField.config.type !== 'autoNumber'
+    )
+        return status(snapshot);
+    return createElement(NumberControl, {
+        ...numberConfiguration(schema.miniExtConfig),
+        className,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        input:
+            typeof snapshot.value === 'number' &&
+            Number.isFinite(snapshot.value)
+                ? String(snapshot.value)
+                : '',
+        disabled: true,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: () => {},
+    });
+}
+export type TextFieldProps = FieldProps & TextFieldOptions;
+export function TextField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: TextFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const config = textConfiguration(snapshot.field?.schema.miniExtConfig);
+    return createElement(TextControl, {
+        ...config,
+        className,
+        clearLabel,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : (snapshot.field?.schema.airtableField.name ?? ''),
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        disabled:
+            config.configuredReadOnly || !snapshot.canEdit || snapshot.pending,
+        pending: snapshot.pending,
+        invalid:
+            snapshot.scalar?.error != null ||
+            snapshot.error !== null ||
+            snapshot.validation.length > 0,
+        feedback:
+            snapshot.scalar?.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: (value) => binding.setValue(value).accepted,
+    });
+}
+/** Plain multiline text borrows the owner setter and never submits on Enter. */
+export type MultilineTextFieldProps = FieldProps & MultilineTextFieldOptions;
+export function MultilineTextField({
+    binding,
+    render,
+    className,
+    clearLabel,
+    autoSize,
+}: MultilineTextFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const title = snapshot.field?.title.trim()
+        ? snapshot.field.title
+        : (snapshot.field?.schema.airtableField.name ?? '');
+    const config = multilineTextConfiguration(
+        snapshot.field?.schema.miniExtConfig ?? null
     );
+    const unavailable =
+        snapshot.field?.schema.fieldType !== 'multilineText'
+            ? 'This control supports plain multiline text fields.'
+            : config.unavailable;
+    if (unavailable)
+        return multilineTextUnavailable(
+            title,
+            unavailable,
+            className,
+            config.showTitle
+        );
+    return createElement(MultilineTextControl, {
+        ...config,
+        className,
+        clearLabel,
+        autoSize,
+        source: binding,
+        title,
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        disabled:
+            config.configuredReadOnly || !snapshot.canEdit || snapshot.pending,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setValue: (value) => binding.setValue(value).accepted,
+    });
+}
+/** Phone drafts stay literal text without formatting or dialing actions. */
+export type PhoneNumberFieldProps = TextFieldProps;
+export function PhoneNumberField(props: PhoneNumberFieldProps): ReactNode {
+    return createElement(TextField, props);
+}
+/** URL drafts stay literal text and grant no navigation authority. */
+export type UrlFieldProps = TextFieldProps;
+export function UrlField(props: UrlFieldProps): ReactNode {
+    return createElement(TextField, props);
+}
+/** Email preserves exact text; surrounding page and server owners validate it. */
+export type EmailFieldProps = TextFieldProps;
+export function EmailField(props: EmailFieldProps): ReactNode {
+    return createElement(TextField, props);
 }
 /** Numeric input uses native units, including fractional percent values. */
-export function NumberField({ binding, render }: FieldProps): ReactNode {
+export type NumberFieldProps = FieldProps & NumberFieldOptions;
+export type RatingFieldProps = NumberFieldProps & RatingFieldOptions;
+/** Native numeric rating drafts stay with the accepted scalar owner. */
+export function RatingField(props: RatingFieldProps): ReactNode {
+    return props.iconInput
+        ? createElement(BoundIconRatingField, props)
+        : createElement(NumberField, props);
+}
+function BoundIconRatingField({
+    binding,
+    render,
+    className,
+    iconInput,
+}: RatingFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (
+        snapshot.retired ||
+        snapshot.visibility.type !== 'visible' ||
+        snapshot.field?.schema.fieldType !== 'rating' ||
+        snapshot.scalar?.kind !== 'number' ||
+        snapshot.scalar.retired
+    )
+        return null;
+    const config = numberConfiguration(snapshot.field.schema.miniExtConfig);
+    if (config.password)
+        return createElement(NumberField, { binding, render, className });
+    const title = snapshot.field.title.trim()
+        ? snapshot.field.title
+        : snapshot.field.schema.airtableField.name;
+    return renderOwnedRatingInput({
+        ...iconInput,
+        className: className ?? iconInput?.className,
+        title,
+        showTitle: config.showTitle,
+        value: typeof snapshot.value === 'number' ? snapshot.value : null,
+        max: snapshot.field.schema.airtableField.config.options.max,
+        disabled:
+            config.configuredReadOnly ||
+            !snapshot.canEdit ||
+            !snapshot.scalar.canEdit ||
+            snapshot.pending,
+        inputProps: {
+            ...iconInput?.inputProps,
+            'aria-label': config.showTitle
+                ? iconInput?.inputProps?.['aria-label']
+                : title,
+            'aria-invalid':
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            'aria-busy': snapshot.pending,
+            'aria-required': config.required || undefined,
+        },
+        feedback:
+            snapshot.scalar.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        onChange: (value) =>
+            binding.scalar?.setInput(value === null ? '' : String(value)),
+    });
+}
+export type PercentFieldProps = NumberFieldProps;
+export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
+export type DurationFieldProps = FieldProps & DurationFieldOptions;
+export function NumberField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: NumberFieldProps & DurationFieldOptions & CurrencyFieldOptions): ReactNode {
+    const subscribed = useFieldBinding(binding);
+    // Accepted duration metadata can change without a native write.
+    const snapshot =
+        subscribed.scalar?.kind === 'duration'
+            ? binding.getSnapshot()
+            : subscribed;
     if (render) return render({ snapshot, binding });
     if (
         snapshot.retired ||
@@ -284,6 +1182,115 @@ export function NumberField({ binding, render }: FieldProps): ReactNode {
         snapshot.scalar.kind === 'checkbox'
     )
         return null;
+    if (
+        snapshot.field?.schema.fieldType === 'number' ||
+        snapshot.field?.schema.fieldType === 'percent' ||
+        snapshot.field?.schema.fieldType === 'rating'
+    ) {
+        if (snapshot.scalar.retired || snapshot.scalar.kind !== 'number')
+            return null;
+        const config = numberConfiguration(snapshot.field.schema.miniExtConfig);
+        return createElement(NumberControl, {
+            ...config,
+            className,
+            title: snapshot.field.title.trim()
+                ? snapshot.field.title
+                : snapshot.field.schema.airtableField.name,
+            input: snapshot.scalar.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.scalar.canEdit ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.scalar.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (input) => binding.scalar?.setInput(input),
+        });
+    }
+    if (snapshot.field?.schema.fieldType === 'currency') {
+        if (snapshot.scalar.kind !== 'number' || snapshot.scalar.retired)
+            return null;
+        const config = currencyConfiguration(
+            snapshot.field.schema.miniExtConfig
+        );
+        const metadata = snapshot.field.schema.airtableField.config;
+        return createElement(CurrencyControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field.title.trim()
+                ? snapshot.field.title
+                : snapshot.field.schema.airtableField.name,
+            symbol: metadata.type === 'currency' ? metadata.options.symbol : '',
+            input: snapshot.scalar.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.scalar.canEdit ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.scalar.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (input) => binding.scalar?.setInput(input),
+            clear: () => binding.scalar?.setInput(''),
+        });
+    }
+    if (snapshot.field?.schema.fieldType === 'duration') {
+        if (snapshot.scalar.kind !== 'duration' || snapshot.scalar.retired)
+            return null;
+        const config = durationConfiguration(
+            snapshot.field.schema.miniExtConfig,
+            undefined,
+            snapshot.scalar.durationFormat
+        );
+        return createElement(DurationControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field.title.trim()
+                ? snapshot.field.title
+                : snapshot.field.schema.airtableField.name,
+            input: snapshot.scalar.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.scalar.canEdit ||
+                snapshot.scalar.durationFormat === null ||
+                typeof binding.scalar?.setFocused !== 'function' ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.scalar.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (input) => binding.scalar?.setInput(input),
+            setFocused: (focused) => binding.scalar?.setFocused?.(focused),
+            clear: () => binding.scalar?.setInput(''),
+        });
+    }
     return createElement(
         'div',
         null,
@@ -318,36 +1325,242 @@ export function NumberField({ binding, render }: FieldProps): ReactNode {
         status(snapshot)
     );
 }
-/** Clock editing shares the existing scalar owner; render may replace all markup. */
-export function DurationField(props: FieldProps): ReactNode {
+/** Percent input preserves native fractions without display conversion. */
+export function PercentField(props: PercentFieldProps): ReactNode {
     return createElement(NumberField, props);
 }
-export function CheckboxField({ binding, render }: FieldProps): ReactNode {
+/** Currency adornment shares the existing numeric owner and raw native units. */
+export function CurrencyField(props: CurrencyFieldProps): ReactNode {
+    return createElement(NumberField, props);
+}
+/** Clock editing shares the existing scalar owner; render may replace all markup. */
+export function DurationField(props: DurationFieldProps): ReactNode {
+    return createElement(NumberField, props);
+}
+export type CheckboxFieldProps = FieldProps & CheckboxFieldOptions;
+export function CheckboxField({
+    binding,
+    render,
+    className,
+}: CheckboxFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
     if (
         snapshot.retired ||
         snapshot.visibility.type !== 'visible' ||
-        snapshot.scalar?.kind !== 'checkbox'
+        snapshot.scalar?.kind !== 'checkbox' ||
+        snapshot.scalar.retired ||
+        snapshot.field?.schema.fieldType !== 'checkbox'
     )
         return null;
-    return createElement(
-        'div',
-        null,
-        createElement(
-            'label',
-            null,
-            snapshot.field?.title,
-            createElement('input', {
-                type: 'checkbox',
-                checked: snapshot.scalar.checked,
-                disabled: !snapshot.canEdit,
-                onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                    binding.scalar?.setChecked(event.currentTarget.checked),
-            })
-        ),
-        status(snapshot)
+    const config = checkboxConfiguration(snapshot.field.schema.miniExtConfig);
+    return createElement(CheckboxControl, {
+        ...config,
+        className,
+        title: snapshot.field.title.trim()
+            ? snapshot.field.title
+            : snapshot.field.schema.airtableField.name,
+        checked: snapshot.scalar.checked,
+        disabled:
+            config.disabled ||
+            !snapshot.canEdit ||
+            !snapshot.scalar.canEdit ||
+            snapshot.pending,
+        pending: snapshot.pending,
+        invalid:
+            !snapshot.scalar.valid ||
+            snapshot.error !== null ||
+            snapshot.validation.length > 0,
+        feedback:
+            snapshot.scalar.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setChecked: (checked) => binding.scalar?.setChecked(checked) ?? false,
+    });
+}
+
+export type MultipleSelectFieldProps = FieldProps & MultipleSelectFieldOptions;
+/** Borrow a Form binding; the existing owner retains every selection policy. */
+export function MultipleSelectField({
+    binding,
+    render,
+    ...options
+}: MultipleSelectFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'multipleSelects' ||
+        (snapshot.value != null &&
+            (!Array.isArray(snapshot.value) ||
+                !snapshot.value.every((value) => typeof value === 'string')))
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Multiple Select fields.'
+        );
+    const selection = binding.selection;
+    const choice = binding.choiceCreation;
+    const control = renderMultipleSelectsField(
+        {
+            physicalKind: 'multipleSelects',
+            presentation: {
+                type: 'physical',
+                config: schema.airtableField.config,
+            },
+            fieldId: schema.airtableField.id,
+            title: snapshot.field!.title,
+            field: schema.airtableField,
+            displayConfig: schema.miniExtConfig ?? null,
+            writeConfig: schema.miniExtConfig ?? null,
+            value: snapshot.value as readonly string[] | null | undefined,
+            context: 'form',
+            computed: schema.airtableField.isComputed === true,
+            dirty: snapshot.dirty,
+            pending: snapshot.pending,
+            error: snapshot.error,
+            validation: snapshot.validation,
+            selectAvailability: snapshot.selectAvailability ?? undefined,
+            capability: snapshot.readOnly
+                ? { type: 'readonly' }
+                : {
+                      type: 'editable',
+                      setValue: binding.setValue,
+                      selection:
+                          selection && snapshot.selection
+                              ? {
+                                    choose: selection.choose,
+                                    toggle: selection.toggle,
+                                    clear: selection.clear,
+                                    setSearchInput: selection.setSearchInput,
+                                    reload: selection.reload,
+                                    loadMore: selection.loadMore,
+                                    cancel: selection.cancel,
+                                    state: {
+                                        ...snapshot.selection,
+                                        disabled:
+                                            snapshot.selection.disabled ||
+                                            !snapshot.canEdit,
+                                    },
+                                }
+                              : undefined,
+                      choice:
+                          choice && snapshot.choiceCreation
+                              ? {
+                                    state: snapshot.choiceCreation,
+                                    create: choice.create,
+                                    cancel: choice.cancel,
+                                }
+                              : undefined,
+                  },
+        },
+        options
     );
+    return createElement(
+        FieldRendererSource.Provider,
+        { value: binding },
+        control
+    );
+}
+
+export type SingleSelectFieldProps = FieldProps &
+    Omit<SingleSelectFieldOptions, 'source'>;
+
+function singleSelectBinding(
+    binding: FormFieldBinding,
+    snapshot: FormFieldSnapshot,
+    options: Omit<SingleSelectFieldOptions, 'source'> = {}
+): ReactNode {
+    if (snapshot.retired || snapshot.visibility.type !== 'visible') return null;
+    const schema = snapshot.field?.schema;
+    if (
+        schema?.fieldType !== 'singleSelect' ||
+        schema.airtableField.config.type !== 'singleSelect'
+    )
+        return createElement(
+            'p',
+            { role: 'status' },
+            'This control supports Single Select fields.'
+        );
+    const config = singleSelectConfiguration(schema.miniExtConfig);
+    const model = binding.selection;
+    const state = snapshot.selection;
+    const selection =
+        model && state?.multiple === false
+            ? {
+                  state,
+                  choose: model.choose,
+                  toggle: model.toggle,
+                  clear: model.clear,
+                  setSearchInput: model.setSearchInput,
+                  reload: model.reload,
+                  loadMore: model.loadMore,
+                  cancel: model.cancel,
+              }
+            : undefined;
+    const creator = binding.choiceCreation;
+    const computed =
+        snapshot.field?.isComputed === true ||
+        schema.airtableField.isComputed === true;
+    return createElement(SingleSelectControl, {
+        ...config,
+        ...options,
+        source: binding,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : schema.airtableField.name,
+        value: typeof snapshot.value === 'string' ? snapshot.value : '',
+        displayOptions: config.password
+            ? []
+            : singleSelectDisplayOptions(
+                  schema.airtableField,
+                  schema.miniExtConfig
+              ),
+        selection,
+        choice:
+            selection &&
+            creator &&
+            snapshot.choiceCreation &&
+            !computed &&
+            !snapshot.readOnly &&
+            !config.configuredReadOnly &&
+            !config.password
+                ? {
+                      state: snapshot.choiceCreation,
+                      create: creator.create,
+                      cancel: creator.cancel,
+                  }
+                : undefined,
+        availability: snapshot.selectAvailability,
+        disabled:
+            config.password ||
+            config.configuredReadOnly ||
+            computed ||
+            !snapshot.canEdit ||
+            snapshot.pending ||
+            !selection ||
+            selection.state.disabled ||
+            selection.state.readOnly,
+        pending: snapshot.pending,
+        invalid: snapshot.error !== null || snapshot.validation.length > 0,
+        feedback:
+            selection?.state.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+    });
+}
+
+/** Borrows the accepted binding; local choice text is scoped to its identity. */
+export function SingleSelectField({
+    binding,
+    render,
+    ...options
+}: SingleSelectFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    return singleSelectBinding(binding, snapshot, options);
 }
 
 export function SelectField({ binding, render }: FieldProps): ReactNode {
@@ -356,6 +1569,8 @@ export function SelectField({ binding, render }: FieldProps): ReactNode {
     const [intent, setIntent] = useState({ binding, name: '' });
     const name = intent.binding === binding ? intent.name : '';
     if (render) return render({ snapshot, binding });
+    if (snapshot.field?.schema.fieldType === 'singleSelect')
+        return singleSelectBinding(binding, snapshot);
     if (
         snapshot.retired ||
         snapshot.visibility.type !== 'visible' ||
@@ -656,7 +1871,14 @@ export function PortalList({
 }
 
 /** Calendar-only date or explicit-offset dateTime; no browser local-time conversion. */
-export function DateField({ binding, render }: FieldProps): ReactNode {
+export type DateFieldProps = FieldProps & DateFieldOptions;
+export type DateTimeFieldProps = FieldProps & DateTimeFieldOptions;
+export function DateField({
+    binding,
+    render,
+    className,
+    clearLabel,
+}: DateFieldProps): ReactNode {
     useFieldBinding(binding);
     // Date context can change independently of a native write; observe it on rerender.
     const snapshot = binding.getSnapshot();
@@ -667,52 +1889,69 @@ export function DateField({ binding, render }: FieldProps): ReactNode {
         snapshot.date == null
     )
         return null;
+    if (snapshot.date.kind === 'date') {
+        if (snapshot.date.retired) return null;
+        const config = dateConfiguration(snapshot.field?.schema.miniExtConfig);
+        return createElement(DateControl, {
+            ...config,
+            className,
+            clearLabel,
+            title: snapshot.field?.title.trim()
+                ? snapshot.field.title
+                : (snapshot.field?.schema.airtableField.name ?? ''),
+            input: snapshot.date.input,
+            disabled:
+                config.configuredReadOnly ||
+                !snapshot.canEdit ||
+                !snapshot.date.canEdit ||
+                snapshot.pending,
+            pending: snapshot.pending,
+            invalid:
+                !snapshot.date.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            feedback:
+                snapshot.date.error ??
+                snapshot.error ??
+                snapshot.validation
+                    .map((error) => error.errorMessage)
+                    .join('\n'),
+            setInput: (value) => binding.date?.setInput(value),
+            clear: () => binding.date?.clear(),
+        });
+    }
     if (snapshot.date.retired)
         return createElement(
             'p',
             { role: 'status' },
             'Load a fresh Form before editing this date.'
         );
-    const privacy = snapshot.field?.schema.miniExtConfig;
-    const masked =
-        privacy != null &&
-        'obscurePassword' in privacy &&
-        privacy.obscurePassword === true;
-    return createElement(
-        'div',
-        null,
-        createElement(
-            'label',
-            null,
-            snapshot.field?.title,
-            createElement('input', {
-                type: masked ? 'password' : 'text',
-                value: snapshot.date.input,
-                disabled: !snapshot.date.canEdit,
-                'aria-invalid': !snapshot.date.valid,
-                placeholder:
-                    snapshot.date.kind === 'date'
-                        ? 'YYYY-MM-DD'
-                        : 'YYYY-MM-DDTHH:mm:ssZ',
-                onChange: (event: ChangeEvent<HTMLInputElement>) =>
-                    binding.date?.setInput(event.currentTarget.value),
-            })
-        ),
-        createElement(
-            'p',
-            { role: 'status' },
-            snapshot.date.error ?? snapshot.error ?? ''
-        ),
-        createElement(
-            'button',
-            {
-                type: 'button',
-                disabled: !snapshot.date.canEdit,
-                onClick: () => binding.date?.clear(),
-            },
-            'Clear date'
-        )
-    );
+    const config = dateTimeConfiguration(snapshot.field?.schema.miniExtConfig);
+    return createElement(DateTimeControl, {
+        ...config,
+        className,
+        clearLabel,
+        title: snapshot.field?.title.trim()
+            ? snapshot.field.title
+            : (snapshot.field?.schema.airtableField.name ?? ''),
+        input: snapshot.date.input,
+        disabled:
+            config.configuredReadOnly ||
+            !snapshot.canEdit ||
+            !snapshot.date.canEdit ||
+            snapshot.pending,
+        pending: snapshot.pending,
+        invalid:
+            !snapshot.date.valid ||
+            snapshot.error !== null ||
+            snapshot.validation.length > 0,
+        feedback:
+            snapshot.date.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        setInput: (value) => binding.date?.setInput(value),
+        clear: () => binding.date?.clear(),
+    });
 }
 /** Same owner/model authority; stock rendering accepts an explicit offset, not a naive local timestamp. */
 export const DateTimeField = DateField;
@@ -907,8 +2146,8 @@ export function FieldRenderer({
     const snapshot = useFieldRendererHost(host);
     if (snapshot.status !== 'ready') return fallback?.(snapshot) ?? null;
     return createElement(
-        Fragment,
-        null,
+        FieldRendererSource.Provider,
+        { value: host },
         ...snapshot.fields.map((field) =>
             createElement(
                 Fragment,
@@ -1067,3 +2306,11 @@ export function AirtableGrid(props: AirtableGridProps): ReactNode {
 export function AirtableList(props: AirtableListProps): ReactNode {
     return createElement(AirtablePortal, props);
 }
+
+export { ButtonField, renderButtonField } from './ButtonField.js';
+export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
+
+export {
+    useFileSelection,
+    type FileSelectionOptions,
+} from './useFileSelection.js';

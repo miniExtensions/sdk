@@ -56,6 +56,14 @@ async function fixture() {
     const loaded = loadedForm();
     for (const [id, type, options, value] of [
         ['number', 'number', { precision: 2 }, 1.25],
+        ['percent', 'percent', { precision: 2 }, 0.25],
+        ['currency', 'currency', { precision: 2, symbol: '$' }, 12.5],
+        [
+            'rating',
+            'rating',
+            { max: 5, icon: 'star', color: 'yellowBright' },
+            3,
+        ],
         ['duration', 'duration', { durationFormat: 'h:mm:ss' }, 60],
         [
             'checkbox',
@@ -99,22 +107,24 @@ async function fixture() {
     }
     let writable = true;
     let requests = 0;
+    const client = createMiniExtensionsClient({
+        apiOrigin: 'https://sdk.example.test',
+        fetch: async () => {
+            requests++;
+            throw new Error('Synthetic offline');
+        },
+    });
     const owner = createFormFieldBindings({
         loaded,
         saveOptions: formSaveOptions(),
-        client: createMiniExtensionsClient({
-            apiOrigin: 'https://sdk.example.test',
-            fetch: async () => {
-                requests++;
-                throw new Error('Synthetic offline');
-            },
-        }),
+        client,
         getScope: () => ({ ownerId: 'fields', revision: 0 }),
         canWriteField: () => writable,
         getClientTimeZone: () => 'UTC',
     });
     return {
         window,
+        client,
         owner,
         loaded,
         requests: () => requests,
@@ -211,6 +221,42 @@ it('NumberField retains invalid draft text without corrupting native value, reco
         assert.equal(f.window.document.querySelector('input'), null);
         assert.equal(binding.scalar!.setInput('999'), false);
         assert.equal(binding.getSnapshot().value, null);
+        assert.equal(f.requests(), 0);
+    } finally {
+        await f.close();
+    }
+});
+
+it('NumberField retains existing percent, currency and rating native units and custom markup', async () => {
+    const f = await fixture();
+    try {
+        const cases = [
+            ['percent', '0.25'],
+            ['currency', '12.5'],
+            ['rating', '3'],
+        ].map(([id, initial]) => ({ binding: f.owner.field(id), initial }));
+        for (const { binding, initial } of cases) {
+            await f.render(createElement(NumberField, { binding }));
+            assert.equal(f.input().value, initial);
+            assert.equal(f.input().inputMode, 'decimal');
+            await f.edit('0.125');
+            assert.equal(binding.getSnapshot().value, 0.125);
+            await f.edit('-');
+            assert.equal(f.input().value, '-');
+            assert.equal(binding.getSnapshot().value, 0.125);
+            await f.render(
+                createElement(NumberField, {
+                    binding,
+                    render: ({ snapshot }) =>
+                        createElement('output', null, snapshot.scalar?.input),
+                })
+            );
+            assert.equal(f.window.document.querySelector('input'), null);
+            assert.equal(
+                f.window.document.querySelector('output')!.textContent,
+                '-'
+            );
+        }
         assert.equal(f.requests(), 0);
     } finally {
         await f.close();
@@ -335,7 +381,7 @@ it('AttachmentField accepts chooser changes and clearing pending files leaves na
             assert.ok(button);
             return button;
         };
-        assert.equal(button('Upload').disabled, true);
+        assert.equal(button('Upload next file').disabled, true);
         assert.equal(button('Cancel upload').disabled, true);
         const file = new f.window.File(['test'], 'local.txt', {
             type: 'text/plain',
@@ -353,13 +399,23 @@ it('AttachmentField accepts chooser changes and clearing pending files leaves na
         assert.equal(controller.getSnapshot().files[0], file);
         assert.equal(f.input().value, '');
         assert.equal(f.input().files.length, 0);
-        assert.equal(button('Upload').disabled, false);
+        assert.equal(button('Upload next file').disabled, false);
         assert.match(f.text()!, /Files selected/);
         assert.deepEqual(binding.getSnapshot().value, original);
+        assert.match(
+            f.window.document.querySelector('[role=status]')!.textContent!,
+            /1 pending file\./
+        );
+        assert.equal(
+            button('Choose files').getAttribute('aria-describedby'),
+            f.window.document.querySelector('[role=status]')!.id
+        );
+        button('Clear pending files').focus();
         await act(async () => button('Clear pending files').click());
+        assert.equal(f.window.document.activeElement, button('Choose files'));
         assert.equal(controller.getSnapshot().files.length, 0);
         assert.match(f.text()!, /No pending files/);
-        assert.equal(button('Upload').disabled, true);
+        assert.equal(button('Upload next file').disabled, true);
         assert.deepEqual(binding.getSnapshot().value, original);
         assert.equal(f.requests(), 0);
     } finally {
@@ -387,7 +443,7 @@ it('AttachmentField shows uncertain upload failure and never retries the same se
         assert.equal(controller.select([file]), true);
         await f.render(createElement(AttachmentField, { binding, controller }));
         const upload = [...f.window.document.querySelectorAll('button')].find(
-            (node) => node.textContent === 'Upload'
+            (node) => node.textContent === 'Upload next file'
         )!;
         let unsubscribe = () => {};
         const settled = new Promise<void>((resolve) => {
@@ -406,14 +462,226 @@ it('AttachmentField shows uncertain upload failure and never retries the same se
         assert.equal(controller.getSnapshot().files[0], file);
         assert.match(
             f.window.document.querySelector('[role=status]')!.textContent!,
-            /Upload outcome needs inspection/
+            /Upload outcome uncertain/
         );
         assert.deepEqual(binding.getSnapshot().value, original);
         await act(async () => {
             upload.click();
         });
         assert.equal(f.requests(), 1);
+        assert.equal(upload.disabled, true);
+        assert.equal(
+            [...f.window.document.querySelectorAll('button')].find(
+                (node) => node.textContent === 'Choose files'
+            )!.disabled,
+            true
+        );
+        await act(async () => controller.clear());
+        await f.render(null);
+        await f.render(createElement(AttachmentField, { binding, controller }));
+        assert.match(
+            f.window.document.querySelector('[role=status]')!.textContent!,
+            /0 pending files.*Upload outcome uncertain/s
+        );
+        await assert.rejects(f.owner.save());
+        assert.equal(f.requests(), 1);
         assert.deepEqual(binding.getSnapshot().value, original);
+    } finally {
+        await f.close();
+    }
+});
+
+const attachmentRecovery = () => ({
+    journal: new RecoveryJournal(),
+    loadVersion: 1,
+    scope: {
+        owner: 'fields',
+        parentFieldId: null,
+        tableId: null,
+        childExtensionId: 'form',
+        context: 'modal' as const,
+    },
+});
+const acceptedFile = {
+    id: null,
+    url: 'https://files.example.test/PRIVATE_accepted',
+    filename: 'PRIVATE_selected.txt',
+    size: 4,
+    type: 'text/plain',
+};
+
+it('AttachmentField announces first-file acceptance, retains duplicate queue order and hands off disabled focus', async () => {
+    const f = await fixture();
+    try {
+        const binding = f.owner.field('fld_files');
+        const original = binding.getSnapshot().value as unknown[];
+        const controller = f.owner.attachment(
+            'fld_files',
+            attachmentRecovery()
+        );
+        const first = new File(['test'], 'PRIVATE_selected.txt', {
+            type: 'text/plain',
+        });
+        const last = new File(['last'], 'PRIVATE_last.txt', {
+            type: 'text/plain',
+        });
+        let finish!: (value: typeof acceptedFile) => void;
+        const calls: Blob[] = [];
+        f.client.attachments.uploadFile = async ({ file }) => {
+            calls.push(file);
+            return new Promise((resolve) => {
+                finish = resolve;
+            });
+        };
+        controller.select([first, first, last]);
+        await f.render(createElement(AttachmentField, { binding, controller }));
+        const button = (label: string) =>
+            [...f.window.document.querySelectorAll('button')].find(
+                (node) => node.textContent === label
+            )!;
+        assert.match(
+            f.window.document.querySelector('[role=status]')!.textContent!,
+            /3 pending files.*Files selected/s
+        );
+        button('Upload next file').focus();
+        await act(async () => button('Upload next file').click());
+        assert.equal(f.window.document.activeElement, button('Cancel upload'));
+        assert.match(
+            f.window.document.querySelector('[role=status]')!.textContent!,
+            /Uploading one attachment/
+        );
+        const progress = f.window.document.querySelector('progress')!;
+        assert.equal(progress.hasAttribute('value'), false);
+        assert.equal(progress.hasAttribute('aria-valuenow'), false);
+        await act(async () => finish(acceptedFile));
+        assert.deepEqual(calls, [first]);
+        assert.deepEqual(controller.getSnapshot().files, [first, last]);
+        assert.deepEqual(binding.getSnapshot().value, [
+            ...original,
+            acceptedFile,
+        ]);
+        assert.match(
+            f.window.document.querySelector('[role=status]')!.textContent!,
+            /2 pending files.*accepted into the draft.*Save/s
+        );
+        assert.equal(
+            f.window.document.activeElement,
+            button('Upload next file')
+        );
+        assert.equal(f.window.document.querySelector('progress'), null);
+        assert.doesNotMatch(f.window.document.body.innerHTML, /PRIVATE/);
+        assert.equal(f.requests(), 0);
+    } finally {
+        await f.close();
+    }
+});
+
+it('AttachmentField replacement cannot inherit late upload status, queue or focus', async () => {
+    const f = await fixture();
+    const next = createFormFieldBindings({
+        client: f.client,
+        loaded: loadedForm(),
+        saveOptions: formSaveOptions(),
+        getScope: () => ({ ownerId: 'next', revision: 0 }),
+    });
+    try {
+        const oldController = f.owner.attachment(
+            'fld_files',
+            attachmentRecovery()
+        );
+        let finish!: (value: typeof acceptedFile) => void;
+        f.client.attachments.uploadFile = async () =>
+            new Promise((resolve) => {
+                finish = resolve;
+            });
+        oldController.select([
+            new File(['test'], 'PRIVATE_selected.txt', { type: 'text/plain' }),
+        ]);
+        await f.render(
+            createElement(AttachmentField, {
+                binding: f.owner.field('fld_files'),
+                controller: oldController,
+            })
+        );
+        let flight!: Promise<boolean>;
+        await act(async () => {
+            flight = oldController.upload();
+        });
+        const nextController = next.attachment(
+            'fld_files',
+            attachmentRecovery()
+        );
+        await f.render(
+            createElement(AttachmentField, {
+                binding: next.field('fld_files'),
+                controller: nextController,
+            })
+        );
+        const choose = [...f.window.document.querySelectorAll('button')].find(
+            (node) => node.textContent === 'Choose files'
+        )!;
+        choose.focus();
+        await act(async () => f.owner.destroy());
+        await act(async () => {
+            finish(acceptedFile);
+            assert.equal(await flight, false);
+        });
+        assert.equal(f.window.document.activeElement, choose);
+        assert.match(
+            f.window.document.querySelector('[role=status]')!.textContent!,
+            /No pending files/
+        );
+        assert.equal(nextController.getSnapshot().phase, 'idle');
+        assert.deepEqual(
+            next.field('fld_files').getSnapshot().value,
+            loadedForm().payload.formRecord.data.fld_files
+        );
+    } finally {
+        await act(async () => next.destroy());
+        await f.close();
+    }
+});
+
+it('AttachmentField unmount keeps owner-held activity and late acceptance without stealing external focus', async () => {
+    const f = await fixture();
+    try {
+        const binding = f.owner.field('fld_files');
+        const controller = f.owner.attachment(
+            'fld_files',
+            attachmentRecovery()
+        );
+        let finish!: (value: typeof acceptedFile) => void;
+        let signal: AbortSignal | undefined;
+        f.client.attachments.uploadFile = async (_, options) => {
+            signal = options?.signal;
+            return new Promise((resolve) => {
+                finish = resolve;
+            });
+        };
+        controller.select([
+            new File(['test'], 'PRIVATE_selected.txt', { type: 'text/plain' }),
+        ]);
+        await f.render(createElement(AttachmentField, { binding, controller }));
+        let flight!: Promise<boolean>;
+        await act(async () => {
+            flight = controller.upload();
+        });
+        await f.render(createElement('button', null, 'Outside'));
+        const outside = f.window.document.querySelector('button')!;
+        outside.focus();
+        assert.equal(signal?.aborted, false);
+        await act(async () => {
+            finish(acceptedFile);
+            assert.equal(await flight, true);
+        });
+        assert.equal(f.window.document.activeElement, outside);
+        assert.equal(controller.getSnapshot().phase, 'accepted');
+        await f.render(createElement(AttachmentField, { binding, controller }));
+        assert.match(
+            f.window.document.querySelector('[role=status]')!.textContent!,
+            /0 pending files.*accepted into the draft/s
+        );
+        assert.equal(f.requests(), 0);
     } finally {
         await f.close();
     }

@@ -58,9 +58,25 @@ export type FormAttachmentPolicy =
               allowedTypes: readonly AttachmentTypeGroup[] | null;
           };
       };
-export type FormAttachmentFileCheck = {
+/** Normalized metadata limits; permissions and producer capabilities are caller-owned. */
+export type AttachmentFileMetadataInput = {
+    files: readonly AttachmentFileDescriptor[];
+    /** Complete native count after caller-owned asynchronous validation. */
+    currentCount: number;
+    maxFiles: number | null;
+    /** Infinity is supported when a finite configured MiB limit overflows in bytes. */
+    maxFileBytes: number | null;
+    allowedTypes: readonly AttachmentTypeGroup[] | null;
+};
+export type AttachmentFileMetadataCheck = {
     acceptedIndexes: readonly number[];
     rejected: readonly { index: number; reason: 'type' | 'size' }[];
+    batchError: 'count' | null;
+};
+export type FormAttachmentFileCheck = Omit<
+    AttachmentFileMetadataCheck,
+    'batchError'
+> & {
     batchError:
         | 'unavailable-policy'
         | 'read-only'
@@ -256,15 +272,12 @@ export function isAttachmentTypeAllowed(
     }
 }
 
-/** Metadata-only batch check. Pending upload cancellation is caller-owned. */
-export function checkFormAttachmentFiles(
-    input: FormAttachmentPolicyInput & {
-        files: readonly AttachmentFileDescriptor[];
-    }
-): FormAttachmentFileCheck {
+function validateAttachmentFiles(
+    files: readonly AttachmentFileDescriptor[]
+): void {
     if (
-        !Array.isArray(input.files) ||
-        Array.from(input.files).some(
+        !Array.isArray(files) ||
+        Array.from(files).some(
             (file) =>
                 !object(file) ||
                 typeof file.type !== 'string' ||
@@ -276,6 +289,71 @@ export function checkFormAttachmentFiles(
         throw new TypeError(
             'Expected string MIME types and finite nonnegative sizes.'
         );
+}
+
+function checkValidatedAttachmentFileMetadata(
+    input: AttachmentFileMetadataInput
+): AttachmentFileMetadataCheck {
+    const acceptedIndexes: number[] = [];
+    const rejected: { index: number; reason: 'type' | 'size' }[] = [];
+    input.files.forEach((file, index) => {
+        if (
+            input.allowedTypes !== null &&
+            !input.allowedTypes.some((group) =>
+                isAttachmentTypeAllowed(group, file.type)
+            )
+        )
+            rejected.push({ index, reason: 'type' });
+        else if (input.maxFileBytes !== null && file.size > input.maxFileBytes)
+            rejected.push({ index, reason: 'size' });
+        else acceptedIndexes.push(index);
+    });
+    // Use the whole native array, not visible rows or clamped remainingSlots.
+    // Existing-over-cap plus even an empty valid batch remains a count error.
+    const overflow =
+        input.maxFiles !== null &&
+        input.currentCount + acceptedIndexes.length > input.maxFiles;
+    return {
+        acceptedIndexes: overflow ? [] : acceptedIndexes,
+        rejected,
+        batchError: overflow ? 'count' : null,
+    };
+}
+
+/**
+ * Metadata only: no folder/readability check, permissions, upload allocation or writes.
+ * Callers retain asynchronous validation, owner retirement and producer capability checks.
+ */
+export function checkAttachmentFileMetadata(
+    input: AttachmentFileMetadataInput
+): AttachmentFileMetadataCheck {
+    validateAttachmentFiles(input.files);
+    if (
+        !Number.isSafeInteger(input.currentCount) ||
+        input.currentCount < 0 ||
+        (input.maxFiles !== null &&
+            (!Number.isInteger(input.maxFiles) || input.maxFiles < 0)) ||
+        (input.maxFileBytes !== null &&
+            (typeof input.maxFileBytes !== 'number' ||
+                Number.isNaN(input.maxFileBytes) ||
+                input.maxFileBytes < 0)) ||
+        (input.allowedTypes !== null &&
+            (!Array.isArray(input.allowedTypes) ||
+                Array.from(input.allowedTypes).some(
+                    (group) => !typeGroups.has(group)
+                )))
+    )
+        throw new TypeError('Expected normalized attachment metadata limits.');
+    return checkValidatedAttachmentFileMetadata(input);
+}
+
+/** Metadata-only batch check. Pending upload cancellation is caller-owned. */
+export function checkFormAttachmentFiles(
+    input: FormAttachmentPolicyInput & {
+        files: readonly AttachmentFileDescriptor[];
+    }
+): FormAttachmentFileCheck {
+    validateAttachmentFiles(input.files);
     const policy = getFormAttachmentPolicy(input);
     const blocked = (
         batchError: FormAttachmentFileCheck['batchError']
@@ -288,31 +366,9 @@ export function checkFormAttachmentFiles(
     if (policy.upload.status === 'unsupported-mode')
         return blocked('unsupported-mode');
     if (policy.readOnly) return blocked('read-only');
-    const acceptedIndexes: number[] = [];
-    const rejected: { index: number; reason: 'type' | 'size' }[] = [];
-    input.files.forEach((file, index) => {
-        if (
-            policy.upload.allowedTypes !== null &&
-            !policy.upload.allowedTypes.some((group) =>
-                isAttachmentTypeAllowed(group, file.type)
-            )
-        )
-            rejected.push({ index, reason: 'type' });
-        else if (
-            policy.upload.maxFileBytes !== null &&
-            file.size > policy.upload.maxFileBytes
-        )
-            rejected.push({ index, reason: 'size' });
-        else acceptedIndexes.push(index);
+    return checkValidatedAttachmentFileMetadata({
+        files: input.files,
+        currentCount: policy.rows.length,
+        ...policy.upload,
     });
-    // Use the whole native array, not visible rows or clamped remainingSlots.
-    // Existing-over-cap plus even an empty valid batch remains a count error.
-    const overflow =
-        policy.upload.maxFiles !== null &&
-        policy.rows.length + acceptedIndexes.length > policy.upload.maxFiles;
-    return {
-        acceptedIndexes: overflow ? [] : acceptedIndexes,
-        rejected,
-        batchError: overflow ? 'count' : null,
-    };
 }

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
     getFormAttachmentPolicy,
     checkFormAttachmentFiles,
+    checkAttachmentFileMetadata,
     createFormSaveInput,
     FormDraftStore,
     openLoadedFormDraft,
@@ -567,4 +568,46 @@ describe('canonical Form attachment metadata admission comparison', () => {
             [0]
         );
     });
+});
+
+it('shares metadata results without changing the genuine Form policy wrapper', () => {
+    const files = [
+        { type: 'image/png', size: 0 },
+        { type: 'text/plain', size: 2 },
+        { type: 'image/png', size: 8 },
+    ];
+    let comparisons = 0;
+    const groups: Config['allowedAttachmentTypes'][] = [
+        undefined,
+        [],
+        ['images'],
+    ];
+    for (const allowedFiles of [undefined, 0, 1, 2.5, Number.MAX_VALUE])
+        for (const sizeLimit of [
+            undefined,
+            0,
+            -1,
+            4 / 1048576,
+            Number.MAX_VALUE,
+        ])
+            for (const allowedAttachmentTypes of groups) {
+                const args = input(
+                    { allowedFiles, sizeLimit, allowedAttachmentTypes },
+                    [stored]
+                );
+                const policy = getFormAttachmentPolicy(args);
+                assert.equal(policy.status, 'ready');
+                if (policy.status !== 'ready')
+                    throw new Error('Fixture policy');
+                assert.deepEqual(
+                    checkFormAttachmentFiles({ ...args, files }),
+                    checkAttachmentFileMetadata({
+                        files,
+                        currentCount: policy.rows.length,
+                        ...policy.upload,
+                    })
+                );
+                comparisons++;
+            }
+    assert.equal(comparisons, 75);
 });

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -14,7 +15,22 @@ const emptyFileWeight:number=getUploadProgressWeight(0);
 getAggregateUploadProgress({...attachmentProgress,totalUploadWeight:'4'});
 // @ts-expect-error native upload URL input is text
 getAttachmentFilenameFromUrl(null);
+
 void attachmentPercent;void attachmentName;void attachmentUrlCompatible;void emptyFileWeight;
+`;
+
+export const attachmentMetadataTypedConsumer = `
+import {checkAttachmentFileMetadata,type AttachmentFileMetadataInput,type AttachmentFileMetadataCheck} from '@miniextensions/sdk/forms';
+const metadataInput:AttachmentFileMetadataInput={files:Object.freeze([{type:'image/png',size:4}]),currentCount:1,maxFiles:2,maxFileBytes:4,allowedTypes:['images']};
+const metadataResult:AttachmentFileMetadataCheck=checkAttachmentFileMetadata(metadataInput);
+const metadataAccepted:readonly number[]=metadataResult.acceptedIndexes;
+// @ts-expect-error metadata remains a separate API, not a fabricated loaded Form
+checkAttachmentFileMetadata({files:[]});
+// @ts-expect-error native size metadata is numeric
+checkAttachmentFileMetadata({...metadataInput,files:[{type:'image/png',size:'4'}]});
+// @ts-expect-error type groups remain canonical
+checkAttachmentFileMetadata({...metadataInput,allowedTypes:['unknown']});
+void metadataAccepted;
 `;
 
 export async function checkAttachmentInputConsumer({ consumerDirectory }) {
@@ -26,6 +42,99 @@ export async function checkAttachmentInputConsumer({ consumerDirectory }) {
                 'node_modules/@miniextensions/sdk/dist/esm/ui/index.js'
             )
         )
+    );
+    const metadataLoader = join(
+        consumerDirectory,
+        'attachment-metadata-public.mjs'
+    );
+    writeFileSync(
+        metadataLoader,
+        "export {checkAttachmentFileMetadata} from '@miniextensions/sdk/forms';\n"
+    );
+    const metadataEsm = await import(pathToFileURL(metadataLoader).href);
+    for (const api of [metadataEsm, consumer('@miniextensions/sdk/forms')]) {
+        const files = Object.freeze([
+            Object.freeze({ type: 'IMAGE/PNG; charset=binary', size: 4 }),
+            Object.freeze({ type: 'text/plain', size: 99 }),
+            Object.freeze({ type: 'image/png', size: 5 }),
+            Object.freeze({ type: 'image/png', size: 4 }),
+        ]);
+        const input = Object.freeze({
+            files,
+            currentCount: 1,
+            maxFiles: 3,
+            maxFileBytes: 4,
+            allowedTypes: Object.freeze(['images']),
+        });
+        assert.deepEqual(api.checkAttachmentFileMetadata(input), {
+            acceptedIndexes: [0, 3],
+            rejected: [
+                { index: 1, reason: 'type' },
+                { index: 2, reason: 'size' },
+            ],
+            batchError: null,
+        });
+        assert.deepEqual(
+            api.checkAttachmentFileMetadata({ ...input, maxFiles: 2 }),
+            {
+                acceptedIndexes: [],
+                rejected: [
+                    { index: 1, reason: 'type' },
+                    { index: 2, reason: 'size' },
+                ],
+                batchError: 'count',
+            }
+        );
+        assert.equal(
+            api.checkAttachmentFileMetadata({
+                ...input,
+                files: [],
+                currentCount: 4,
+            }).batchError,
+            'count'
+        );
+        assert.throws(
+            () =>
+                api.checkAttachmentFileMetadata({
+                    ...input,
+                    currentCount: NaN,
+                }),
+            {
+                name: 'TypeError',
+                message: 'Expected normalized attachment metadata limits.',
+            }
+        );
+        const sparseTypes = new Array(2);
+        sparseTypes[1] = 'images';
+        for (const allowedTypes of [new Array(1), sparseTypes])
+            assert.throws(
+                () =>
+                    api.checkAttachmentFileMetadata({ ...input, allowedTypes }),
+                {
+                    name: 'TypeError',
+                    message: 'Expected normalized attachment metadata limits.',
+                }
+            );
+        const single = { ...input, files: [files[0]], currentCount: 0 };
+        assert.deepEqual(
+            api.checkAttachmentFileMetadata({ ...single, allowedTypes: [] }),
+            {
+                acceptedIndexes: [],
+                rejected: [{ index: 0, reason: 'type' }],
+                batchError: null,
+            }
+        );
+        assert.deepEqual(
+            api.checkAttachmentFileMetadata({ ...single, allowedTypes: null }),
+            {
+                acceptedIndexes: [0],
+                rejected: [],
+                batchError: null,
+            }
+        );
+    }
+    console.log(
+        'Installed attachment metadata: public ESM/CommonJS runtime and strict NodeNext/Bundler declarations passed.'
     );
     let groups = 0;
     for (const api of [esm, consumer('@miniextensions/sdk/ui')]) {

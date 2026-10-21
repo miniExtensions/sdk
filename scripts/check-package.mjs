@@ -17,6 +17,7 @@ import {
 import {
     checkAttachmentInputConsumer,
     attachmentInputTypedConsumer,
+    attachmentMetadataTypedConsumer,
 } from './attachment-input-consumer-checks.mjs';
 import {
     checkCollaboratorSelectionConsumer,
@@ -1341,6 +1342,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         writeFileSync(
             join(temporaryDirectory, filename),
             declarationConsumer +
+                attachmentMetadataTypedConsumer +
                 formulaCompatibilityTypedConsumer +
                 collaboratorSelectionTypedConsumer +
                 `

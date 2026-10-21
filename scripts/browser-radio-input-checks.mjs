@@ -59,9 +59,9 @@ function App(){
  const [state,setState]=useState(initial);current=state;
  const toggle=key=>setState(old=>({...old,[key]:!old[key]}));
  return h(React.Fragment,null,
-  ...['primary','secondary'].map(group=>h('form',{id:group+'-form',key:group,onSubmit:event=>{event.preventDefault();submits++;}})),
+  ...['primary','secondary'].map(group=>h('form',{id:group+'-form',key:group+'-form',onSubmit:event=>{event.preventDefault();submits++;}})),
   h('p',{id:'radio-help'},'Synthetic choices only'),
-  ...['primary','secondary'].map(group=>h('fieldset',{key:group,onClickCapture:event=>{if(state.cancel)event.preventDefault();}},
+  ...['primary','secondary'].map(group=>h('fieldset',{key:group+'-choices',onClickCapture:event=>{if(state.cancel)event.preventDefault();}},
    h('legend',null,group==='primary'?'Primary choice':'Secondary choice'),
    ...['a','b'].map(value=>{const id=group+'-'+value;return h('div',{key:value},
     h(RadioInput,{id,name:'sdk-native-choice',value,form:group+'-form','aria-describedby':'radio-help',checked:state[group]===value,allowDeselect:state.allowDeselect,readOnly:state.readOnly,disabled:state.disabled,

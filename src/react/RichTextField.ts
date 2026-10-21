@@ -1,3 +1,4 @@
+import { LiteralText } from './LiteralText.js';
 import {
     createElement,
     useId,
@@ -48,24 +49,14 @@ function RichTextControl(props: RichTextControlProps): ReactNode {
         props.showTitle
             ? createElement('label', { htmlFor: id }, props.title)
             : null,
-        createElement(
-            'output',
-            {
-                id,
-                'aria-label': props.showTitle ? undefined : props.title,
-                'aria-busy': props.pending,
-                'aria-invalid': props.invalid || props.text === null,
-                'aria-describedby': props.feedback
-                    ? `${id}-feedback`
-                    : undefined,
-                style: {
-                    whiteSpace: 'pre-wrap',
-                    overflowWrap: 'anywhere',
-                    display: 'block',
-                },
-            },
-            props.text ?? 'Unavailable'
-        ),
+        createElement(LiteralText, {
+            id,
+            'aria-label': props.showTitle ? undefined : props.title,
+            'aria-busy': props.pending,
+            'aria-invalid': props.invalid || props.text === null,
+            'aria-describedby': props.feedback ? `${id}-feedback` : undefined,
+            value: props.text ?? 'Unavailable',
+        }),
         createElement(
             'span',
             { id: `${id}-feedback`, role: 'status', 'aria-live': 'polite' },

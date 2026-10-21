@@ -1,3 +1,4 @@
+import { ActionButton } from './ActionButton.js';
 import {
     createElement,
     useId,
@@ -52,7 +53,6 @@ export function ButtonField(props: ButtonFieldProps): ReactNode {
         id,
         className: 'mx-sdk-button',
         'data-color': props.config?.buttonColor,
-        'aria-busy': props.busy,
         'aria-describedby': feedback ? `${id}-feedback` : undefined,
     };
     // Keep native link semantics, but revalidate the captured capability at activation.
@@ -70,17 +70,18 @@ export function ButtonField(props: ButtonFieldProps): ReactNode {
             event.currentTarget.removeAttribute('href');
         }
     };
-    const content = createElement(
-        'span',
-        { className: 'mx-sdk-button-content' },
-        props.busy
-            ? createElement('span', {
-                  className: 'mx-sdk-button-spinner',
-                  'aria-hidden': true,
-              })
-            : null,
-        createElement('span', null, label)
-    );
+    const content = (busy: boolean) =>
+        createElement(
+            'span',
+            { className: 'mx-sdk-button-content' },
+            busy
+                ? createElement('span', {
+                      className: 'mx-sdk-button-spinner',
+                      'aria-hidden': true,
+                  })
+                : null,
+            createElement('span', null, label)
+        );
     return createElement(
         'span',
         {
@@ -96,22 +97,24 @@ export function ButtonField(props: ButtonFieldProps): ReactNode {
         },
         webhook
             ? createElement(
-                  'button',
+                  ActionButton,
                   {
                       ...common,
-                      type: 'button',
-                      disabled: !props.canTrigger || props.busy,
+                      busy: props.busy,
+                      busyContent: content(true),
+                      disabled: !props.canTrigger,
                       onClick: (event: SyntheticEvent) => {
                           event.stopPropagation();
                           void props.triggerWebhook();
                       },
                   },
-                  content
+                  content(false)
               )
             : createElement(
                   'a',
                   {
                       ...common,
+                      'aria-busy': props.busy,
                       href: link?.href,
                       target: link?.target,
                       rel: link?.rel,
@@ -121,7 +124,7 @@ export function ButtonField(props: ButtonFieldProps): ReactNode {
                       onAuxClick: validateLink,
                       onContextMenu: validateLink,
                   },
-                  content
+                  content(props.busy)
               ),
         // Declarative feedback avoids toast/alert effects being replayed by StrictMode.
         createElement(
@@ -173,14 +176,16 @@ export function renderButtonField(
             onKeyUp: stop,
         },
         createElement(
-            'button',
+            ActionButton,
             {
                 className: 'mx-sdk-button',
-                'data-color':
-                    props.displayConfig && 'buttonColor' in props.displayConfig
-                        ? props.displayConfig.buttonColor
-                        : undefined,
-                type: 'button',
+                ...{
+                    'data-color':
+                        props.displayConfig &&
+                        'buttonColor' in props.displayConfig
+                            ? props.displayConfig.buttonColor
+                            : undefined,
+                },
                 disabled: true,
             },
             props.value.label.trim() ? props.value.label : props.title

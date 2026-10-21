@@ -565,3 +565,20 @@ native outputs, masking, unresolved-ID suppression, malformed-value refusals,
 unchanged native data, zero I/O/actions, retirement and desktop/mobile/forced-color
 screenshots. It supplements the unchanged ordinary `pnpm check:browser`; it is
 not a separate hosted CI stage or live backend, OS picker or screen-reader proof.
+
+## Native radio input acceptance
+
+The existing `pnpm check:browser` harness also runs the installed public
+`RadioInput` through `scripts/browser-radio-input-checks.mjs`. Its separate
+`radioInput` receipt contains four native-browser groups: a plain native-radio reference; trusted label/Space
+activation with opt-in/default repeat behavior; Arrow navigation and identical
+names isolated by native form owners; and controlled refusal plus readonly,
+disabled and cancelled-event admission. Space selects an unchecked radio and leaves an already-checked radio unchanged, matching the plain native control. Opt-in repeat mouse/label clicks clear. Every group checks native refs and zero
+form submits. The fixture owns only synthetic checked state and explicit flags.
+
+The normal sandboxed browser and isolated contexts are retained. Source and
+bundle hashes, installed SDK inputs, trusted-event receipts, accessibility
+snapshots, screenshots, unexpected requests, page errors and cleanup are saved.
+A launch/access denial means no acceptance evidence. These actual Chromium
+checks supplement source/Happy DOM checks and do not claim hosted persistence,
+manual dogfooding, other browser engines or a screen-reader session.

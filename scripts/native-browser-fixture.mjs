@@ -4,6 +4,8 @@
 import React, { createElement as h, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createMiniExtensionsClient } from '@miniextensions/sdk';
+import { projectSelectChoices } from '@miniextensions/sdk/ui';
+import FormulaRunner from '@miniextensions/sdk/formulas';
 import {
     createFormFieldBindings,
     RecoveryJournal,
@@ -16,6 +18,15 @@ import {
 import { createPortalListOwner } from '@miniextensions/sdk/portals';
 import {
     TextField,
+    TextInput,
+    LiteralText,
+    ActionButton,
+    PersonBadge,
+    NativeRichTextEditor,
+    RecoverableImage,
+    useFileSelection,
+    useCalendlyBooking,
+    RatingInput,
     AttachmentField,
     AttachmentDialog,
     PortalList,
@@ -41,7 +52,1083 @@ window.addEventListener('unhandledrejection', (e) =>
     errors.push(String(e.reason))
 );
 const root = createRoot(document.querySelector('main'));
-if (mode === 'attachment') {
+if (mode === 'file-selection') {
+    const received = [];
+    let parentDrops = 0;
+    function Host() {
+        const [disabled, setDisabled] = useState(false);
+        const selection = useFileSelection({
+            disabled,
+            onFiles(files) {
+                received.push(
+                    files.map((file) => ({
+                        name: file.name,
+                        size: file.size,
+                        type: file.type,
+                    }))
+                );
+            },
+        });
+        snapshot = () => ({ received, parentDrops, errors, calls });
+        return h(
+            'div',
+            { onDrop: () => parentDrops++ },
+            h(
+                'div',
+                { ...selection.dropProps, 'data-file-target': true },
+                h('input', {
+                    ...selection.inputProps,
+                    multiple: true,
+                    'aria-label': 'Choose synthetic files',
+                }),
+                h('span', { 'data-file-child': true }, 'Nested file target'),
+                h(
+                    'output',
+                    { 'aria-label': 'Drag status' },
+                    selection.isDragActive ? 'active' : 'idle'
+                )
+            ),
+            button('Toggle file intake', () => setDisabled((value) => !value))
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'recoverable-image') {
+    const bad = '/native-image-missing.svg';
+    const good = '/native-image-good.svg';
+    /** @type {HTMLImageElement|null} */
+    let image = null;
+    /** @type {WeakMap<HTMLImageElement,number>} */
+    const nodes = new WeakMap();
+    let seen = 0,
+        retries = 0,
+        submits = 0,
+        parentClicks = 0;
+    /** @param {HTMLImageElement|null} node */
+    const attach = (node) => {
+        image = node;
+        if (node && !nodes.has(node)) nodes.set(node, ++seen);
+    };
+    snapshot = () => ({
+        imageId: image ? nodes.get(image) : null,
+        source: image?.getAttribute('src') ?? null,
+        complete: image?.complete ?? false,
+        naturalWidth: image?.naturalWidth ?? 0,
+        seen,
+        retries,
+        submits,
+        parentClicks,
+        errors,
+        calls,
+    });
+    function Host() {
+        const [chain, setChain] = useState('initial');
+        const sources =
+            chain === 'broken'
+                ? [bad, bad + '-again']
+                : chain === 'replacement'
+                  ? [good + '#replacement']
+                  : chain === 'equivalent'
+                    ? ['', bad, bad, good]
+                    : [bad, good];
+        return h(
+            'div',
+            null,
+            h('h1', null, 'Synthetic native image recovery'),
+            h(
+                'form',
+                {
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                    onClick: () => parentClicks++,
+                },
+                h(RecoverableImage, {
+                    ref: attach,
+                    sources,
+                    alt: 'Synthetic attachment',
+                    renderFallback: (retry) =>
+                        h(
+                            'div',
+                            { role: 'status', 'aria-label': 'Image failed' },
+                            h(
+                                ActionButton,
+                                {
+                                    onClick: (event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                        retries++;
+                                        retry();
+                                    },
+                                },
+                                'Retry synthetic image'
+                            )
+                        ),
+                })
+            ),
+            button('Equivalent image sources', () => setChain('equivalent')),
+            button('All broken image sources', () => setChain('broken')),
+            button('Replacement image source', () => setChain('replacement'))
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'native-rich-editor-slot') {
+    // External React editor-slot ABI probe only; not a vendor or OS-IME claim.
+    let mounts = 0;
+    /** @type {import('@miniextensions/sdk/react').NativeRichTextEditorRenderProps | undefined} */
+    let latest;
+    let focused = false;
+    /** @type {{value:string|null,readOnly:boolean,writes:string[]}|undefined} */
+    let current;
+    /** @type {import('react').MutableRefObject<SlotProbe|null>|undefined} */
+    let editorRef;
+    /** @extends {React.Component<{native:import('@miniextensions/sdk/react').NativeRichTextEditorRenderProps,focused:boolean},{text:string}>} */
+    class SlotProbe extends React.Component {
+        id = ++mounts;
+        /** @type {HTMLElement|null} */
+        element = null;
+        /** @type {HTMLElement|null} */
+        active = null;
+        /** @type {{dom:HTMLElement}|undefined} */
+        view;
+        state = { text: this.props.native.defaultValue };
+        componentDidMount() {
+            if (this.active) this.view = { dom: this.active };
+            this.props.native.ref(this);
+        }
+        componentDidUpdate(previous) {
+            if (previous.native.ref !== this.props.native.ref) {
+                previous.native.ref(null);
+                this.props.native.ref(this);
+            }
+        }
+        componentWillUnmount() {
+            this.props.native.ref(null);
+        }
+        render() {
+            return h(
+                'section',
+                {
+                    'data-slot-probe': 'true',
+                    'data-focused': String(this.props.focused),
+                },
+                h(
+                    'div',
+                    {
+                        ref: (node) => {
+                            this.element = node;
+                        },
+                    },
+                    h(
+                        'div',
+                        {
+                            'data-slot-document': 'true',
+                            ref: (node) => {
+                                this.active = node;
+                            },
+                        },
+                        h('strong', null, this.state.text)
+                    ),
+                    h('div', { 'data-stale-slot': 'true' }, 'stale')
+                ),
+                h(
+                    'button',
+                    {
+                        type: 'button',
+                        disabled: this.props.native.readOnly,
+                        onClick: () =>
+                            this.setState({ text: '- [x] typed  \n\n' }, () =>
+                                this.props.native.onChange(
+                                    () => this.state.text
+                                )
+                            ),
+                    },
+                    'Commit native serialization'
+                )
+            );
+        }
+    }
+    /** @type {SlotProbe|null} */
+    let callbackCurrent = null;
+    /** @type {{owner:string,id:number,released:number}[]} */
+    const callbackEntries = [];
+    let callbackNulls = 0;
+    /** @param {string} owner */
+    const cleanupRef = (owner) => {
+        /** @param {import('@miniextensions/sdk/react').NativeRichTextEditorHandle|null} instance */
+        return (instance) => {
+            if (instance === null) {
+                callbackNulls++;
+                callbackCurrent = null;
+                return;
+            }
+            if (!(instance instanceof SlotProbe))
+                throw Error('Unexpected editor instance');
+            callbackCurrent = instance;
+            const entry = { owner, id: instance.id, released: 0 };
+            callbackEntries.push(entry);
+            return () => {
+                entry.released++;
+                if (callbackCurrent === instance) callbackCurrent = null;
+            };
+        };
+    };
+    const firstCleanupRef = cleanupRef('first'),
+        secondCleanupRef = cleanupRef('second');
+    snapshot = () => ({
+        ...current,
+        callbackEntries,
+        callbackNulls,
+        focused,
+        mounts,
+        instanceId: editorRef?.current?.id ?? callbackCurrent?.id ?? null,
+        defaultValue: latest?.defaultValue,
+        slotRoots: document.querySelectorAll('[data-slot-document]').length,
+        staleRoots: document.querySelectorAll('[data-stale-slot]').length,
+        calls,
+        errors,
+    });
+    function Host() {
+        /** @type {{value:string|null,readOnly:boolean,writes:string[]}} */
+        const initial = { value: 'Alpha', readOnly: false, writes: [] };
+        const [value, setValue] = useState(initial);
+        const [refMode, setRefMode] = useState('object');
+        const [shown, setShown] = useState(true);
+        /** @type {import('react').MutableRefObject<SlotProbe|null>} */
+        const ref = React.useRef(null);
+        editorRef = ref;
+        current = value;
+        return h(
+            'div',
+            null,
+            h('h1', null, 'External editor slot contract probe'),
+            shown
+                ? h(NativeRichTextEditor, {
+                      ref:
+                          refMode === 'first'
+                              ? firstCleanupRef
+                              : refMode === 'second'
+                                ? secondCleanupRef
+                                : ref,
+                      value: value.value,
+                      removeStaleEditorRoots: true,
+                      readOnly: value.readOnly,
+                      onValueChange: (stored) =>
+                          setValue((previous) => ({
+                              ...previous,
+                              value: stored,
+                              writes: [...previous.writes, stored],
+                          })),
+                      emptyContent: h('b', null, 'Localized empty'),
+                      renderEditor: (native, focus) => {
+                          latest = native;
+                          focused = focus;
+                          return h(SlotProbe, { native, focused: focus });
+                      },
+                  })
+                : null,
+            h(
+                'output',
+                { 'aria-label': 'Controlled stored text' },
+                value.value ?? 'null'
+            ),
+            button('Cosmetic external newline', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: (previous.value ?? '') + '\n',
+                }))
+            ),
+            button('Semantic external replacement', () =>
+                setValue((previous) => ({ ...previous, value: 'Replacement' }))
+            ),
+            button('Focus slot signal', () => latest?.onFocus()),
+            button('Blur slot signal', () => latest?.onBlur()),
+            button('Read-only null', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: null,
+                    readOnly: true,
+                }))
+            ),
+            button('Read-only empty document', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: '',
+                    readOnly: true,
+                }))
+            ),
+            button('Editable null', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: null,
+                    readOnly: false,
+                }))
+            ),
+            button('Editable empty document', () =>
+                setValue((previous) => ({
+                    ...previous,
+                    value: '',
+                    readOnly: false,
+                }))
+            ),
+            button('Use first cleanup ref', () => setRefMode('first')),
+            button('Use second cleanup ref', () => setRefMode('second')),
+            button('Unmount native editor', () => setShown(false))
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'native-select-projection') {
+    const choices = [
+        { id: 'opt_alpha', name: 'Alpha' },
+        { id: '', name: 'Draft Beta', newOption: true },
+        { id: '', name: 'Draft Gamma', newOption: true },
+    ];
+    /** @type {import('@miniextensions/sdk').RuntimeAirtableField} */
+    const linkField = {
+        id: 'fld_links',
+        name: 'Links',
+        description: null,
+        isComputed: false,
+        isPrimaryField: false,
+        config: {
+            type: 'multipleRecordLinks',
+            options: {
+                linkedTableId: 'tbl_links',
+                isReversed: false,
+                prefersSingleRecordLink: false,
+            },
+        },
+    };
+    /** @type {import('@miniextensions/sdk').RuntimeAirtableField} */
+    const primary = {
+        id: 'fld_primary',
+        name: 'Name',
+        description: null,
+        isComputed: false,
+        isPrimaryField: true,
+        config: { type: 'singleLineText', options: null },
+    };
+    let state;
+    let projection;
+    snapshot = () => ({
+        ...state,
+        status: projection?.status,
+        eligible: projection?.choices.map((choice) => choice.name),
+        nativeIds: choices.map((choice) => choice.id),
+        calls,
+        errors,
+    });
+    function Host() {
+        const [value, setValue] = useState({
+            selected: ['Draft Beta'],
+            approved: true,
+            limited: false,
+            list: true,
+            unavailable: false,
+            fail: false,
+            writes: 0,
+            submissions: 0,
+        });
+        state = value;
+        projection = projectSelectChoices({
+            choices,
+            selectedValues: value.selected,
+            getValue: (choice) => choice.name,
+            allowedOptionIds: value.limited ? ['opt_alpha'] : null,
+            retainSelected: value.list,
+            evaluation: value.unavailable
+                ? { type: 'unavailable' }
+                : {
+                      type: 'evaluate',
+                      matches: () => {
+                          if (value.fail)
+                              throw Error(
+                                  'private synthetic evaluation context'
+                              );
+                          const runner = new FormulaRunner(
+                              "REGEX_MATCH({fld_links}, 'Approved')"
+                          );
+                          runner.context = {
+                              record: {
+                                  id: 'recbbbbbbbbbbbbbb',
+                                  fields: { fld_links: ['recaaaaaaaaaaaaaa'] },
+                              },
+                              airtableFields: [linkField],
+                              linkedTableLoadingStates: {
+                                  tbl_links: {
+                                      type: 'loaded',
+                                      data: {
+                                          state: {
+                                              airtableFields: [primary],
+                                              recordIdsToAirtableRecords: {
+                                                  recaaaaaaaaaaaaaa: {
+                                                      id: 'recaaaaaaaaaaaaaa',
+                                                      fields: {
+                                                          fld_primary:
+                                                              value.approved
+                                                                  ? 'Approved region'
+                                                                  : 'Denied region',
+                                                      },
+                                                  },
+                                              },
+                                          },
+                                      },
+                                  },
+                              },
+                          };
+                          return !FormulaRunner.isFalsyValue(runner.run());
+                      },
+                  },
+        });
+        return h(
+            React.Fragment,
+            null,
+            h(
+                'form',
+                {
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        setValue((v) => ({
+                            ...v,
+                            submissions: v.submissions + 1,
+                        }));
+                    },
+                },
+                h(
+                    'ul',
+                    { 'aria-label': 'Eligible native choices' },
+                    projection.choices.map((choice) =>
+                        h(
+                            'li',
+                            { key: choice.name },
+                            h(
+                                'label',
+                                null,
+                                h('input', {
+                                    type: 'checkbox',
+                                    checked: value.selected.includes(
+                                        choice.name
+                                    ),
+                                    onChange: () =>
+                                        setValue((v) => ({
+                                            ...v,
+                                            selected: v.selected.includes(
+                                                choice.name
+                                            )
+                                                ? v.selected.filter(
+                                                      (name) =>
+                                                          name !== choice.name
+                                                  )
+                                                : [...v.selected, choice.name],
+                                            writes: v.writes + 1,
+                                        })),
+                                }),
+                                choice.name
+                            )
+                        )
+                    )
+                ),
+                h(
+                    'output',
+                    { 'aria-label': 'Current native selections' },
+                    value.selected.join('|')
+                )
+            ),
+            button('Toggle native limits', () =>
+                setValue((v) => ({ ...v, limited: !v.limited }))
+            ),
+            button('Change linked hydration', () =>
+                setValue((v) => ({ ...v, approved: !v.approved }))
+            ),
+            button('Toggle native layout', () =>
+                setValue((v) => ({ ...v, list: !v.list }))
+            ),
+            button('Toggle unavailable context', () =>
+                setValue((v) => ({ ...v, unavailable: !v.unavailable }))
+            ),
+            button('Toggle evaluator failure', () =>
+                setValue((v) => ({ ...v, fail: !v.fail }))
+            )
+        );
+    }
+    root.render(h(React.StrictMode, null, h(Host)));
+} else if (mode === 'person-badge') {
+    let state;
+    /** @type {import('react').RefObject<HTMLLIElement>} */
+    const personRef = React.createRef();
+    snapshot = () => ({
+        ...state,
+        refConnected: personRef.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [value, setValue] = useState({
+            label: '<b>Resolved person</b>',
+            owner: 'A',
+            removed: [],
+            disabled: false,
+            readOnly: false,
+            mounted: true,
+            submissions: 0,
+            bubbles: 0,
+        });
+        state = value;
+        return h(
+            React.Fragment,
+            null,
+            h(
+                'form',
+                {
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        setValue((v) => ({
+                            ...v,
+                            submissions: v.submissions + 1,
+                        }));
+                    },
+                },
+                h(
+                    'ul',
+                    {
+                        onClick: () =>
+                            setValue((v) => ({ ...v, bubbles: v.bubbles + 1 })),
+                    },
+                    value.mounted
+                        ? h(PersonBadge, {
+                              ref: personRef,
+                              label: value.label,
+                              labelClassName: 'person-label',
+                              avatar: h(
+                                  'span',
+                                  {
+                                      'aria-label': 'Caller avatar',
+                                      role: 'img',
+                                  },
+                                  'Avatar'
+                              ),
+                              remove: value.readOnly
+                                  ? undefined
+                                  : {
+                                        label: 'Remove ' + value.label,
+                                        buttonProps: {
+                                            disabled: value.disabled,
+                                        },
+                                        onClick: () =>
+                                            setValue((v) => ({
+                                                ...v,
+                                                removed: [
+                                                    ...v.removed,
+                                                    value.owner,
+                                                ],
+                                            })),
+                                    },
+                          })
+                        : null
+                )
+            ),
+            button('Replace person', () =>
+                setValue((v) => ({
+                    ...v,
+                    label: 'Current email fallback',
+                    owner: 'B',
+                }))
+            ),
+            button('Toggle person disabled', () =>
+                setValue((v) => ({ ...v, disabled: !v.disabled }))
+            ),
+            button('Toggle person readonly', () =>
+                setValue((v) => ({ ...v, readOnly: !v.readOnly }))
+            ),
+            button('Unmount person', () =>
+                setValue((v) => ({ ...v, mounted: false }))
+            )
+        );
+    }
+    root.render(h(React.StrictMode, null, h(Host)));
+} else if (mode === 'calendly-booking') {
+    const writes = [];
+    let current;
+    let oldSession;
+    let oldSource;
+    let state;
+    function Booking({ owner, booked, enabled, reentrant }) {
+        const booking = useCalendlyBooking({
+            configuredUrl:
+                'https://calendly.com/synthetic/no-bookings?keep=yes',
+            email: 'synthetic+qa&team@example.invalid',
+            name: 'Synthetic & Team',
+            embedDomain: location.origin,
+            ownerKey: owner,
+            booked,
+            enabled,
+            onScheduled() {
+                writes.push(owner);
+                if (reentrant && writes.length === 1) {
+                    booking.open();
+                    send(oldSource);
+                }
+            },
+        });
+        current = booking;
+        return h(
+            React.Fragment,
+            null,
+            h(
+                ActionButton,
+                { id: 'calendly-open', onClick: () => booking.open() },
+                'Open synthetic schedule'
+            ),
+            booking.session
+                ? h(
+                      React.Fragment,
+                      null,
+                      h(
+                          ActionButton,
+                          { onClick: () => booking.session.cancel() },
+                          'Cancel schedule'
+                      ),
+                      React.cloneElement(booking.session.frame, {
+                          src: 'about:blank',
+                          id: 'calendly-frame',
+                      })
+                  )
+                : null
+        );
+    }
+    const send = (
+        source,
+        origin = 'https://calendly.com',
+        data = { event: 'calendly.event_scheduled' }
+    ) =>
+        window.dispatchEvent(
+            new MessageEvent('message', { source, origin, data })
+        );
+    snapshot = () => ({
+        ...state,
+        writes: [...writes],
+        url: current?.url,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [value, setValue] = useState({
+            owner: 'A',
+            booked: false,
+            enabled: true,
+            mounted: true,
+            reentrant: false,
+            submissions: 0,
+        });
+        state = value;
+        return h(
+            React.Fragment,
+            null,
+            h(
+                'form',
+                {
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        setValue((v) => ({
+                            ...v,
+                            submissions: v.submissions + 1,
+                        }));
+                    },
+                },
+                value.mounted ? h(Booking, value) : null
+            ),
+            button('Capture old frame', () => {
+                oldSession = current.session;
+                oldSource = document.querySelector('iframe')?.contentWindow;
+            }),
+            button('Send current event', () => {
+                const source = document.querySelector('iframe')?.contentWindow;
+                send(source);
+                send(source);
+            }),
+            button('Send old event', () => send(oldSource)),
+            button('Send wrong origin', () =>
+                send(
+                    document.querySelector('iframe')?.contentWindow,
+                    'https://attacker.invalid'
+                )
+            ),
+            button('Send wrong source', () => send(window)),
+            button('Cancel old session', () => oldSession?.cancel()),
+            button('Change owner', () =>
+                setValue((v) => ({ ...v, owner: v.owner === 'A' ? 'B' : 'A' }))
+            ),
+            button('Toggle booked', () =>
+                setValue((v) => ({ ...v, booked: !v.booked }))
+            ),
+            button('Toggle enabled', () =>
+                setValue((v) => ({ ...v, enabled: !v.enabled }))
+            ),
+            button('Enable reentrant', () =>
+                setValue((v) => ({ ...v, reentrant: true }))
+            ),
+            button('Unmount schedule', () =>
+                setValue((v) => ({ ...v, mounted: false }))
+            )
+        );
+    }
+    root.render(h(React.StrictMode, null, h(Host)));
+} else if (mode === 'action-button') {
+    const initial = {
+        busy: false,
+        disabled: false,
+        mounted: true,
+        activations: 0,
+        submissions: 0,
+        rowClicks: 0,
+    };
+    let state = initial;
+    /** @type {import('react').RefObject<HTMLButtonElement>} */
+    const action = React.createRef();
+    snapshot = () => ({
+        ...state,
+        refConnected: action.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [current, setCurrent] = useState(initial);
+        state = current;
+        return h(
+            React.Fragment,
+            null,
+            h(
+                'form',
+                {
+                    id: 'action-form',
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        setCurrent((value) => ({
+                            ...value,
+                            submissions: value.submissions + 1,
+                        }));
+                    },
+                },
+                h('input', {
+                    'aria-label': 'Adjacent draft',
+                    defaultValue: 'keep draft',
+                }),
+                h(
+                    'div',
+                    {
+                        onClick: () =>
+                            setCurrent((value) => ({
+                                ...value,
+                                rowClicks: value.rowClicks + 1,
+                            })),
+                    },
+                    current.mounted
+                        ? h(
+                              ActionButton,
+                              {
+                                  ref: action,
+                                  id: 'shared-action',
+                                  busy: current.busy,
+                                  disabled: current.disabled,
+                                  busyContent: h(
+                                      'span',
+                                      null,
+                                      'Running action'
+                                  ),
+                                  'aria-label': 'Run action',
+                                  onClick: (event) => {
+                                      event.stopPropagation();
+                                      setCurrent((value) => ({
+                                          ...value,
+                                          busy: true,
+                                          activations: value.activations + 1,
+                                      }));
+                                  },
+                              },
+                              'Run action'
+                          )
+                        : null
+                )
+            ),
+            button('Finish action', () =>
+                setCurrent((value) => ({ ...value, busy: false }))
+            ),
+            button('Disable action', () =>
+                setCurrent((value) => ({ ...value, disabled: true }))
+            ),
+            button('Enable action', () =>
+                setCurrent((value) => ({ ...value, disabled: false }))
+            ),
+            button('Unmount action', () =>
+                setCurrent((value) => ({ ...value, mounted: false }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'literal-text') {
+    const initial = {
+        value: '  <img src="https://synthetic.invalid/private">\n字  ',
+        custom: false,
+        mounted: true,
+    };
+    let state = initial;
+    /** @type {import('react').RefObject<HTMLElement>} */
+    const literal = React.createRef();
+    snapshot = () => ({
+        ...state,
+        refConnected: literal.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [current, setCurrent] = useState(initial);
+        state = current;
+        return h(
+            React.Fragment,
+            null,
+            current.mounted
+                ? h(LiteralText, {
+                      ref: literal,
+                      value: current.value,
+                      as: current.custom ? 'div' : 'output',
+                      preserveWhitespace: !current.custom,
+                      className: 'literal-display',
+                      'aria-label': 'Literal result',
+                      empty: h(
+                          'em',
+                          { id: 'literal-empty' },
+                          'Localized empty'
+                      ),
+                      renderText: current.custom
+                          ? (text) => h('p', { id: 'caller-text' }, text)
+                          : undefined,
+                  })
+                : null,
+            button('Show literal zero', () =>
+                setCurrent((value) => ({ ...value, value: '0' }))
+            ),
+            button('Show literal empty', () =>
+                setCurrent((value) => ({ ...value, value: '' }))
+            ),
+            button('Use caller container', () =>
+                setCurrent((value) => ({
+                    ...value,
+                    custom: true,
+                    value: 'Caller URL https://synthetic.invalid',
+                }))
+            ),
+            button('Unmount literal display', () =>
+                setCurrent((value) => ({ ...value, mounted: false }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'uncontrolled-text') {
+    /** @type {import('react').RefObject<HTMLInputElement>} */
+    const sdk = React.createRef();
+    /** @type {import('react').RefObject<HTMLInputElement>} */
+    const native = React.createRef();
+    /** @type {{owner:string,value:string}[]} */
+    const changes = [];
+    let revision = 0;
+    snapshot = () => ({
+        revision,
+        changes: [...changes],
+        refConnected: sdk.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [current, setCurrent] = useState({ revision: 0, mounted: true });
+        revision = current.revision;
+        return h(
+            React.Fragment,
+            null,
+            current.mounted
+                ? h(
+                      'form',
+                      { id: 'uncontrolled-form' },
+                      h(TextInput, {
+                          ref: sdk,
+                          defaultValue: 'seed text',
+                          'aria-label': 'SDK native search',
+                          'aria-describedby': `revision-${current.revision}`,
+                          onChange: (event) =>
+                              changes.push({
+                                  owner: 'sdk',
+                                  value: event.currentTarget.value,
+                              }),
+                      }),
+                      h('input', {
+                          ref: native,
+                          defaultValue: 'seed text',
+                          'aria-label': 'Reference native search',
+                          onChange: (event) =>
+                              changes.push({
+                                  owner: 'native',
+                                  value: event.currentTarget.value,
+                              }),
+                      }),
+                      h('button', { type: 'reset' }, 'Native reset')
+                  )
+                : null,
+            button('Rerender owner', () =>
+                setCurrent((value) => ({
+                    ...value,
+                    revision: value.revision + 1,
+                }))
+            ),
+            button('Set controller text', () => {
+                for (const node of [sdk.current, native.current])
+                    if (node) {
+                        node.value = 'controller text';
+                        node.setSelectionRange(2, 7, 'backward');
+                    }
+                sdk.current?.focus();
+            }),
+            button('Unmount native search', () =>
+                setCurrent((value) => ({ ...value, mounted: false }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'rating') {
+    const initial = {
+        value: /** @type {number|null} */ (2),
+        max: 5,
+        disabled: false,
+        grid: false,
+        mounted: true,
+        icon: 'star',
+        color: '#FFBA05',
+    };
+    let state = initial;
+    /** @type {(number|null)[]} */
+    const changes = [];
+    let submits = 0;
+    /** @type {(()=>void)|undefined} */
+    let retained;
+    /** @type {import('react').RefObject<HTMLInputElement>} */
+    const input = React.createRef();
+    snapshot = () => ({
+        value: state.value,
+        max: state.max,
+        disabled: state.disabled,
+        grid: state.grid,
+        changes: [...changes],
+        submits,
+        refCurrent:
+            input.current === document.querySelector('input[type=range]'),
+        refConnected: input.current?.isConnected ?? false,
+        calls,
+        errors,
+    });
+    function Host() {
+        const [current, setCurrent] = useState(initial);
+        state = current;
+        return h(
+            React.Fragment,
+            null,
+            h('p', { id: 'rating-help' }, 'Synthetic native rating'),
+            h(
+                'form',
+                {
+                    id: 'rating-form',
+                    onSubmit: (event) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                },
+                current.mounted
+                    ? h(RatingInput, {
+                          ref: input,
+                          value: current.value,
+                          max: current.max,
+                          disabled: current.disabled,
+                          grid: current.grid,
+                          onChange: (value) => {
+                              changes.push(value);
+                              setCurrent((old) => ({ ...old, value }));
+                          },
+                          className: 'rating-root',
+                          iconsClassName: 'rating-icons',
+                          gridSummaryClassName: 'rating-grid-summary',
+                          printSummaryClassName: 'rating-print-summary',
+                          warningClassName: 'rating-warning',
+                          repairClassName: 'rating-repair',
+                          repairLabel: 'Repair rating',
+                          empty: h(
+                              'span',
+                              { 'data-empty-rating': true },
+                              'No rating'
+                          ),
+                          warningMessage: ({ value, max }) =>
+                              'Synthetic value ' + value + '/' + max + '.',
+                          inputProps: {
+                              id: 'native-rating',
+                              form: 'rating-form',
+                              'aria-label': 'Synthetic rating',
+                              'aria-describedby': 'rating-help',
+                          },
+                          renderIcon: (icon) => {
+                              if (icon.index === 4 && !retained)
+                                  retained = icon.activate;
+                              return h(
+                                  'svg',
+                                  {
+                                      width: 24,
+                                      height: 24,
+                                      viewBox: '0 0 24 24',
+                                      'aria-hidden': true,
+                                      'data-rating-index': icon.index,
+                                      'data-shape': current.icon,
+                                      'data-focused': String(icon.focused),
+                                      onClick: icon.activate,
+                                  },
+                                  h('path', {
+                                      fill: icon.filled
+                                          ? current.color
+                                          : '#e5e7eb',
+                                      d:
+                                          current.icon === 'heart'
+                                              ? 'M12 21L2 10C-2 2 8 0 12 6C16 0 26 2 22 10Z'
+                                              : 'M12 1L15 8L23 9L17 14L19 23L12 18L5 23L7 14L1 9L9 8Z',
+                                  })
+                              );
+                          },
+                      })
+                    : null
+            ),
+            button('Toggle readonly', () =>
+                setCurrent((old) => ({ ...old, disabled: !old.disabled }))
+            ),
+            button('Toggle grid', () =>
+                setCurrent((old) => ({ ...old, grid: !old.grid }))
+            ),
+            button('Theme heart', () =>
+                setCurrent((old) => ({
+                    ...old,
+                    icon: 'heart',
+                    color: '#DC043B',
+                }))
+            ),
+            button('Lower maximum', () =>
+                setCurrent((old) => ({ ...old, max: 3 }))
+            ),
+            button('Set stale value', () =>
+                setCurrent((old) => ({ ...old, value: 8 }))
+            ),
+            button('Clear externally', () =>
+                setCurrent((old) => ({ ...old, value: null }))
+            ),
+            button('Invoke captured icon', () => retained?.()),
+            button('Unmount rating', () =>
+                setCurrent((old) => ({ ...old, mounted: false }))
+            )
+        );
+    }
+    root.render(h(Host));
+} else if (mode === 'attachment') {
     client.forms.save = async (input) => {
         calls.push({ operation: 'save', input });
         return { type: 'error', formValidationErrors: [], formErrors: {} };
@@ -323,4 +1410,6 @@ if (mode === 'attachment') {
     }
     root.render(h(Host));
 } else throw Error('Unknown native verification mode');
-window.__nativeProbe = Object.freeze({ snapshot });
+window.__nativeProbe = Object.freeze({
+    snapshot: () => ({ ...snapshot(), reactVersion: React.version }),
+});

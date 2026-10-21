@@ -9,9 +9,13 @@ import {
 } from 'react';
 import type { RuntimeFieldSchema } from '../runtime/types.js';
 import type { FieldRendererProps } from '../ui/rendererRegistry.js';
+import { TextareaInput, type TextareaAutoSize } from './TextareaInput.js';
 import { textConfiguration, type TextFieldOptions } from './TextField.js';
 
-export type MultilineTextFieldOptions = TextFieldOptions;
+export type MultilineTextFieldOptions = TextFieldOptions & {
+    /** Opt-in content sizing; the default remains a native four-row textarea. */
+    autoSize?: TextareaAutoSize;
+};
 
 type TextConfig = RuntimeFieldSchema['miniExtConfig'] | null;
 /** These modes need their own accepted presentation contract. Never infer one. */
@@ -183,11 +187,12 @@ export function MultilineTextControl(
         createElement(
             'span',
             { className: 'mx-sdk-text-control' },
-            createElement('textarea', {
+            createElement(TextareaInput, {
                 ref: attach,
                 id,
                 className: 'mx-sdk-text mx-sdk-multiline-text',
                 rows: 4,
+                autoSize: props.autoSize,
                 value,
                 disabled: props.disabled,
                 placeholder: props.placeholder,

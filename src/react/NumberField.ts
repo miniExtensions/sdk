@@ -1,3 +1,4 @@
+import { TextInput } from './TextInput.js';
 import {
     createElement,
     useId,
@@ -81,7 +82,7 @@ export function NumberControl(props: NumberControlProps): ReactNode {
                   props.title
               )
             : null,
-        createElement('input', {
+        createElement(TextInput, {
             id,
             className: 'mx-sdk-number',
             type: props.password ? 'password' : 'text',

@@ -1,4 +1,70 @@
 import {
+    checkPortalSummaryRefreshConsumer,
+    portalSummaryRefreshTypedConsumer,
+} from './portal-summary-refresh-consumer-checks.mjs';
+import {
+    checkDropdownFilterConsumer,
+    dropdownFilterTypedConsumer,
+} from './dropdown-filter-consumer-checks.mjs';
+import {
+    checkAttachmentInputConsumer,
+    attachmentInputTypedConsumer,
+} from './attachment-input-consumer-checks.mjs';
+import {
+    checkSelectPresentationConsumer,
+    selectPresentationTypedConsumer,
+} from './select-presentation-consumer-checks.mjs';
+import {
+    checkRadioInputConsumer,
+    radioInputTypedConsumer,
+} from './radio-input-consumer-checks.mjs';
+import {
+    checkDateInputCompatibilityConsumer,
+    dateInputCompatibilityTypedConsumer,
+} from './date-input-compatibility-consumer-checks.mjs';
+import {
+    checkFileSelectionConsumer,
+    fileSelectionTypedConsumer,
+} from './file-selection-consumer-checks.mjs';
+import {
+    checkRecoverableImageConsumer,
+    recoverableImageTypedConsumer,
+    recoverableImageJsxConsumer,
+} from './recoverable-image-consumer-checks.mjs';
+import { checkNativeEditorReactMatrix } from './native-rich-text-editor-consumer-checks.mjs';
+import {
+    checkRichTextSerializationConsumer,
+    richTextSerializationTypedConsumer,
+} from './rich-text-serialization-consumer-checks.mjs';
+import {
+    checkDurationInputConsumer,
+    durationInputTypedConsumer,
+} from './duration-input-consumer-checks.mjs';
+import {
+    checkSelectChoiceProjectionConsumer,
+    selectProjectionTypedConsumer,
+} from './select-choice-projection-consumer-checks.mjs';
+import {
+    checkPersonBadgeConsumer,
+    personBadgeTypedConsumer,
+    personBadgeJsxConsumer,
+} from './person-badge-consumer-checks.mjs';
+import {
+    checkCalendlyBookingConsumer,
+    calendlyBookingTypedConsumer,
+    calendlyBookingJsxConsumer,
+} from './calendly-booking-consumer-checks.mjs';
+import {
+    checkRatingInputConsumer,
+    ratingInputTypedConsumer,
+    ratingInputJsxConsumer,
+} from './rating-input-consumer-checks.mjs';
+import {
+    checkTextInputConsumer,
+    textInputTypedConsumer,
+    textInputJsxConsumer,
+} from './text-input-consumer-checks.mjs';
+import {
     checkBarcodeConsumer,
     barcodeReactTypedConsumer,
 } from './barcode-consumer-checks.mjs';
@@ -1383,6 +1449,41 @@ new Parser([]).parse({maxDepth:'48'});
         '@types/react@19.2.2',
         '@types/react-dom@19.2.2',
     ]);
+    for (const extension of ['mts', 'cts']) {
+        const filename = `text-input-consumer.${extension}`;
+        writeFileSync(
+            join(temporaryDirectory, filename),
+            textInputTypedConsumer +
+                radioInputTypedConsumer +
+                selectPresentationTypedConsumer +
+                attachmentInputTypedConsumer +
+                dropdownFilterTypedConsumer +
+                portalSummaryRefreshTypedConsumer +
+                ratingInputTypedConsumer +
+                calendlyBookingTypedConsumer +
+                personBadgeTypedConsumer +
+                selectProjectionTypedConsumer +
+                richTextSerializationTypedConsumer +
+                durationInputTypedConsumer +
+                dateInputCompatibilityTypedConsumer +
+                recoverableImageTypedConsumer +
+                fileSelectionTypedConsumer
+        );
+        run(process.execPath, [
+            require.resolve('typescript/bin/tsc'),
+            '--noEmit',
+            '--strict',
+            '--skipLibCheck',
+            'false',
+            '--target',
+            'ES2022',
+            '--module',
+            'NodeNext',
+            '--moduleResolution',
+            'NodeNext',
+            filename,
+        ]);
+    }
     const reactSources = reactRecipes.map(([, code], index) => {
         const filename = `ui-react-${index}.tsx`;
         writeFileSync(join(temporaryDirectory, filename), code);
@@ -1407,6 +1508,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
 `
     );
     reactSources.push('field-bindings-react.tsx');
+    writeFileSync(
+        join(temporaryDirectory, 'text-input-consumer.tsx'),
+        textInputJsxConsumer +
+            ratingInputJsxConsumer +
+            calendlyBookingJsxConsumer +
+            personBadgeJsxConsumer +
+            recoverableImageJsxConsumer
+    );
+    reactSources.push('text-input-consumer.tsx');
     writeFileSync(
         join(temporaryDirectory, 'multiple-select-react-consumer.tsx'),
         multipleSelectReactTypedConsumer
@@ -2824,6 +2934,116 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(reactBindingProof.checks, 1);
+    const nativeEditorMatrix = checkNativeEditorReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(nativeEditorMatrix.versions.length, 2);
+    assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    assert.equal(
+        await checkSelectPresentationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkAttachmentInputConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkPortalSummaryRefreshConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkDropdownFilterConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkRadioInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkDateInputCompatibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkDurationInputConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkFileSelectionConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkRecoverableImageConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkTextInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkRichTextSerializationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkSelectChoiceProjectionConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkPersonBadgeConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    assert.equal(
+        await checkCalendlyBookingConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    console.log(
+        'Installed TextInput/InputClearButton ESM/CommonJS native props/ref/action and strict declaration checks passed.'
+    );
+    assert.equal(
+        await checkRatingInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
+    console.log(
+        'Installed RatingInput ESM/CommonJS native/ref/grid/repair actions and strict declaration checks passed.'
+    );
     const portalOwnerProof = await checkPortalOwnerConsumer({
         consumerDirectory: temporaryDirectory,
         happyDomModulePath: require.resolve('happy-dom'),

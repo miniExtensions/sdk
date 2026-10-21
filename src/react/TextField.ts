@@ -1,3 +1,5 @@
+import { InputClearButton } from './InputClearButton.js';
+import { TextInput } from './TextInput.js';
 import {
     createElement,
     useId,
@@ -151,7 +153,7 @@ export function TextControl(props: TextControlProps): ReactNode {
         createElement(
             'span',
             { className: 'mx-sdk-text-control' },
-            createElement('input', {
+            createElement(TextInput, {
                 ref: input,
                 id,
                 className: 'mx-sdk-text',
@@ -215,33 +217,27 @@ export function TextControl(props: TextControlProps): ReactNode {
                 },
                 onBlur: () => setComposition(null),
             }),
-            createElement(
-                'button',
-                {
-                    type: 'button',
-                    className: 'mx-sdk-text-clear',
-                    'aria-label': props.clearLabel?.trim()
-                        ? props.clearLabel
-                        : `Clear ${props.title}`,
-                    'aria-controls': id,
-                    disabled:
-                        props.disabled || value === '' || composition !== null,
-                    onMouseDown: (event: SyntheticEvent) =>
-                        event.preventDefault(),
-                    onClick: (event: SyntheticEvent) => {
-                        event.stopPropagation();
-                        if (
-                            !props.disabled &&
-                            !pendingComposition.current &&
-                            props.value !== ''
-                        ) {
-                            props.setValue(null);
-                            input.current?.focus();
-                        }
-                    },
+            createElement(InputClearButton, {
+                className: 'mx-sdk-text-clear',
+                label: props.clearLabel?.trim()
+                    ? props.clearLabel
+                    : `Clear ${props.title}`,
+                'aria-controls': id,
+                disabled:
+                    props.disabled || value === '' || composition !== null,
+                onMouseDown: (event: SyntheticEvent) => event.preventDefault(),
+                onClick: (event: SyntheticEvent) => {
+                    event.stopPropagation();
+                    if (
+                        !props.disabled &&
+                        !pendingComposition.current &&
+                        props.value !== ''
+                    ) {
+                        props.setValue(null);
+                        input.current?.focus();
+                    }
                 },
-                createElement('span', { 'aria-hidden': true }, '×')
-            )
+            })
         ),
         props.maxLength !== undefined
             ? createElement(

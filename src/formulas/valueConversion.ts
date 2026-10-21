@@ -1,3 +1,4 @@
+import { formatDateInputValue as getFormattedTimeFieldValue } from './dateInputFormatting.js';
 import moment from 'moment-timezone';
 import { getFormattedDuration } from './durationFormatting.js';
 import {
@@ -6,8 +7,6 @@ import {
     type AirtableValue,
     type AirtableAttachment,
     type AirtableCollaborator,
-    type DateFieldConfig,
-    type DateTimeFieldConfig,
     type CurrencyFieldConfig,
     type TableIdsToLinkedTableLoadingStates,
 } from './types.js';
@@ -814,28 +813,6 @@ const parseNumberToPrecision = (args: {
     precision: number;
 }): string => {
     return parseFloat(`${args.value}`).toFixed(args.precision);
-};
-
-const getFormattedTimeFieldValue = (args: {
-    airtableValue: string | Date | null;
-    airtableFieldConfig: DateFieldConfig | DateTimeFieldConfig;
-}): string => {
-    if (args.airtableValue == null) return '';
-    const config = args.airtableFieldConfig;
-    const value =
-        config.type === AirtableFieldType.DATE
-            ? moment(args.airtableValue)
-            : moment(args.airtableValue).tz(
-                  config.options.timeZone === 'client'
-                      ? moment.tz.guess()
-                      : config.options.timeZone
-              );
-    value.locale('en');
-    return value.format(
-        config.type === AirtableFieldType.DATE
-            ? config.options.dateFormat.format
-            : `${config.options.dateFormat.format} ${config.options.timeFormat.format}`
-    );
 };
 
 const getFormattedValue = (

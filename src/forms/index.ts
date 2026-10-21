@@ -58,6 +58,9 @@ export {
     type FlatScalarFormRecordProjection,
 } from './projection.js';
 export {
+    getEffectiveAttachmentFileLimit,
+    getEffectiveAttachmentSizeLimit,
+    isAttachmentTypeAllowed,
     getFormAttachmentPolicy,
     checkFormAttachmentFiles,
     type AttachmentFileDescriptor,
@@ -153,3 +156,12 @@ export {
     type FormProgressRemovalResult,
     type FormProgressStorage,
 } from './createProgress.js';
+export {
+    convertEditorValueToStoredRichText,
+    normalizeRichTextForComparison,
+    convertStoredRichTextToEditorMarkdown,
+    parseStoredRichTextCheckbox,
+    serializeStoredRichTextCheckbox,
+    type RichTextCheckboxNode,
+    type ParsedRichTextCheckbox,
+} from './richTextSerialization.js';

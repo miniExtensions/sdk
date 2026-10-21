@@ -1,3 +1,41 @@
+export { RadioInput, type RadioInputProps } from './RadioInput.js';
+export {
+    RecoverableImage,
+    type RecoverableImageProps,
+} from './RecoverableImage.js';
+export {
+    NativeRichTextEditor,
+    type NativeRichTextEditorHandle,
+    type NativeRichTextEditorRenderProps,
+    type NativeRichTextEditorProps,
+} from './NativeRichTextEditor.js';
+export { PersonBadge, type PersonBadgeProps } from './PersonBadge.js';
+export {
+    composeCalendlyUrl,
+    useCalendlyBooking,
+    type CalendlyUrlOptions,
+    type CalendlyBookingOptions,
+    type CalendlyBookingSession,
+    type CalendlyBooking,
+} from './CalendlyBooking.js';
+export { ActionButton, type ActionButtonProps } from './ActionButton.js';
+export { LiteralText, type LiteralTextProps } from './LiteralText.js';
+export {
+    RatingInput,
+    type RatingInputProps,
+    type RatingIconState,
+    type RatingWarningState,
+} from './RatingInput.js';
+export {
+    TextareaInput,
+    type TextareaInputProps,
+    type TextareaAutoSize,
+} from './TextareaInput.js';
+export {
+    InputClearButton,
+    type InputClearButtonProps,
+} from './InputClearButton.js';
+export { TextInput, type TextInputProps } from './TextInput.js';
 import {
     createElement,
     Fragment,
@@ -174,6 +212,10 @@ export {
     renderAutoNumberField,
     type AutoNumberFieldOptions,
 } from './AutoNumberField.js';
+import {
+    renderOwnedRatingInput,
+    type RatingFieldOptions,
+} from './RatingField.js';
 export { renderRatingField, type RatingFieldOptions } from './RatingField.js';
 export {
     renderPercentField,
@@ -999,6 +1041,7 @@ export function MultilineTextField({
     render,
     className,
     clearLabel,
+    autoSize,
 }: MultilineTextFieldProps): ReactNode {
     const snapshot = useFieldBinding(binding);
     if (render) return render({ snapshot, binding });
@@ -1024,6 +1067,7 @@ export function MultilineTextField({
         ...config,
         className,
         clearLabel,
+        autoSize,
         source: binding,
         title,
         value: typeof snapshot.value === 'string' ? snapshot.value : '',
@@ -1054,10 +1098,66 @@ export function EmailField(props: EmailFieldProps): ReactNode {
 }
 /** Numeric input uses native units, including fractional percent values. */
 export type NumberFieldProps = FieldProps & NumberFieldOptions;
-export type RatingFieldProps = NumberFieldProps;
+export type RatingFieldProps = NumberFieldProps & RatingFieldOptions;
 /** Native numeric rating drafts stay with the accepted scalar owner. */
 export function RatingField(props: RatingFieldProps): ReactNode {
-    return createElement(NumberField, props);
+    return props.iconInput
+        ? createElement(BoundIconRatingField, props)
+        : createElement(NumberField, props);
+}
+function BoundIconRatingField({
+    binding,
+    render,
+    className,
+    iconInput,
+}: RatingFieldProps): ReactNode {
+    const snapshot = useFieldBinding(binding);
+    if (render) return render({ snapshot, binding });
+    if (
+        snapshot.retired ||
+        snapshot.visibility.type !== 'visible' ||
+        snapshot.field?.schema.fieldType !== 'rating' ||
+        snapshot.scalar?.kind !== 'number' ||
+        snapshot.scalar.retired
+    )
+        return null;
+    const config = numberConfiguration(snapshot.field.schema.miniExtConfig);
+    if (config.password)
+        return createElement(NumberField, { binding, render, className });
+    const title = snapshot.field.title.trim()
+        ? snapshot.field.title
+        : snapshot.field.schema.airtableField.name;
+    return renderOwnedRatingInput({
+        ...iconInput,
+        className: className ?? iconInput?.className,
+        title,
+        showTitle: config.showTitle,
+        value: typeof snapshot.value === 'number' ? snapshot.value : null,
+        max: snapshot.field.schema.airtableField.config.options.max,
+        disabled:
+            config.configuredReadOnly ||
+            !snapshot.canEdit ||
+            !snapshot.scalar.canEdit ||
+            snapshot.pending,
+        inputProps: {
+            ...iconInput?.inputProps,
+            'aria-label': config.showTitle
+                ? iconInput?.inputProps?.['aria-label']
+                : title,
+            'aria-invalid':
+                !snapshot.scalar.valid ||
+                snapshot.error !== null ||
+                snapshot.validation.length > 0,
+            'aria-busy': snapshot.pending,
+            'aria-required': config.required || undefined,
+        },
+        feedback:
+            snapshot.scalar.error ??
+            snapshot.error ??
+            snapshot.validation.map((error) => error.errorMessage).join('\n'),
+        onChange: (value) =>
+            binding.scalar?.setInput(value === null ? '' : String(value)),
+    });
 }
 export type PercentFieldProps = NumberFieldProps;
 export type CurrencyFieldProps = FieldProps & CurrencyFieldOptions;
@@ -2209,3 +2309,8 @@ export function AirtableList(props: AirtableListProps): ReactNode {
 
 export { ButtonField, renderButtonField } from './ButtonField.js';
 export type { ButtonFieldProps, ButtonFieldMessages } from './ButtonField.js';
+
+export {
+    useFileSelection,
+    type FileSelectionOptions,
+} from './useFileSelection.js';

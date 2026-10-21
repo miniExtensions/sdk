@@ -4,6 +4,34 @@
 subset of Airtable-style formulas; it does not promise complete Airtable formula
 compatibility or fetch Airtable records.
 
+## Hosted duration input compatibility
+
+`isDurationInputText` and `parseDurationInputSeconds` share the existing hosted
+clock editor's permissive grammar and conversion. Empty and `-` drafts are
+admitted; colon drafts and overflowing clock segments retain Moment's existing
+normalization. Empty input converts to `null`; bare numbers use minutes for
+`h:mm` and seconds for the other duration formats. Fractions retain up to three
+decimal places at editor admission. Call the validator before conversion: the
+converter alone deliberately preserves legacy zero results for some unsupported
+strings. The strict SDK bound duration model remains unchanged.
+
+```ts
+import {
+    isDurationInputText,
+    parseDurationInputSeconds,
+} from '@miniextensions/sdk/formulas';
+
+const draft = '1:20.125';
+if (isDurationInputText(draft)) {
+    const nativeSeconds = parseDurationInputSeconds(draft, 'h:mm:ss.SSS');
+    // Pass through the existing owner's current write policy.
+}
+```
+
+Focus/blur display drafts, caret, permissions and native write ownership remain
+with the caller. `getFormattedDuration(value, format, true)` formats stored native
+seconds; the final argument must be explicit for that use.
+
 ## Basic use
 
 ```ts

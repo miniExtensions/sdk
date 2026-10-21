@@ -1,3 +1,4 @@
+import { getSelectPresentationLabels } from './selectPresentation.js';
 import { AirtableFieldType } from '../formulas/types.js';
 import type { RuntimeFieldSchema } from '../runtime/types.js';
 import type { SelectionOption } from './types.js';
@@ -109,20 +110,20 @@ export const getSelectFieldPolicy = (
             label: displayName || choice.name,
         };
     });
-    const counts = new Map<string, number>();
-    for (const option of presentations)
-        counts.set(option.label, (counts.get(option.label) ?? 0) + 1);
+    const labels = getSelectPresentationLabels(
+        presentations.map((option) => ({
+            canonicalName: option.value,
+            displayName: option.label,
+        }))
+    );
     const canonicalReadOnly = field.isComputed === true || readOnly === true;
     const allowedOptionIds =
         limited !== undefined && limited.length !== 0 ? [...limited] : null;
     return {
         allowedOptionIds,
-        options: presentations.map((option) => ({
+        options: presentations.map((option, index) => ({
             ...option,
-            label:
-                counts.get(option.label) === 1
-                    ? option.label
-                    : `${option.label} (${option.value})`,
+            label: labels[index]!,
         })),
         readOnly: canonicalReadOnly,
         allowAddingNewOptions:

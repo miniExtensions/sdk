@@ -3661,3 +3661,716 @@ dependencies, start a server or claim browser verification. Serve the fixture on
 loopback for separate native interaction and layout checks. Synthetic controls
 change only fixture-owned data and establish no live-backend, clipboard or
 screen-reader result.
+
+## Stateless native text input
+
+`TextInput` from `@miniextensions/sdk/react` is a native input with a forwarded
+`HTMLInputElement` ref and ordinary native input props. It renders only the
+input: callers retain their labels, form ownership, descriptions, classes,
+events, disabled policy and clear-button layout. Supply a string `value` for
+controlled text, or omit `value` and optionally supply string `defaultValue`
+for an existing native/ref-managed owner such as a combobox. Choose one mode
+for the input lifetime; the type rejects supplying both. Uncontrolled rerenders
+leave native edits and ref-managed selection intact, and native form reset
+retains its normal behavior. There is no internal draft, parser, subscription,
+save or implicit request. Native events bubble normally unless the caller stops
+them.
+
+Use `type="text"` and `inputMode="decimal"` for locale-aware numeric display
+text. Partial values such as `-` or `1,` remain unchanged; the existing owner
+converts them to native numbers at its established commit boundary. Email,
+password, URL and phone entry can retain their native input types. The bound SDK
+text and number renderers use this same input while keeping their existing
+owner/composition policies. This primitive does not add scanner, address lookup,
+formatting or deferred-commit behavior.
+
+```tsx
+import { useRef, useState } from 'react';
+import { TextInput } from '@miniextensions/sdk/react';
+
+export function HostedAmount() {
+    const input = useRef<HTMLInputElement>(null);
+    const [draft, setDraft] = useState('1,');
+    return (
+        <TextInput
+            ref={input}
+            id="amount"
+            form="request"
+            type="text"
+            inputMode="decimal"
+            value={draft}
+            aria-label="Amount"
+            onChange={(event) => setDraft(event.currentTarget.value)}
+        />
+    );
+}
+```
+
+## Shared input clear button
+
+`InputClearButton` from `@miniextensions/sdk/react` renders one native button and
+an inert clear indicator. Supply its localized `label`, native button props and
+an optional `HTMLButtonElement` ref. `indicatorClassName` and `iconClassName`
+customize its presentation alongside the native button `className`. The button
+always uses `type="button"`, so native activation cannot implicitly submit the
+surrounding form. It forwards events without adding focus, draft or save effects.
+
+The owner decides when to display it, whether clearing is currently allowed,
+and what `onClick` does. Pass `disabled` when the input is disabled or read-only.
+SDK bound Text controls keep their existing composition, readonly and focus
+behavior while borrowing this presentation. Hosted immediate/deferred editors
+can share it without moving their commit ownership into the button.
+
+## Native textarea and opt-in autosizing
+
+`TextareaInput` from `@miniextensions/sdk/react` accepts a controlled string
+`value`, native textarea props and the actual `HTMLTextAreaElement` ref. It adds
+no wrapper, draft state, parsing, truncation, persistence or transport. Callers
+retain labels, form/ARIA associations, classes, character counters, caret policy
+and native composition/change/focus handlers. Native events bubble normally.
+
+Sizing is opt-in: `autoSize={{ minRows: 3, maxRows: 30 }}` measures content and
+placeholder text, clamps the height and permits scrolling beyond the maximum.
+It matches the native `wrap` setting and computed `white-space`,
+`overflow-wrap` and `word-break` styles, including horizontal scrolling for
+unwrapped text. It remeasures after committed renders, window resize and font
+loading. Row
+bounds must be positive integers with `maxRows >= minRows` (an omitted maximum
+is unbounded). Use these bounds instead of inline `minHeight`/`maxHeight`.
+Caller CSS still controls width, font, padding, borders and resize affordance.
+A manual vertical resize remains until the measured content height changes.
+Measurement nodes are removed immediately. Sizing emits no edit or Save.
+Disabling sizing preserves the native node/focus/selection and restores an
+SDK-owned height, while preserving a height changed by the caller/user.
+
+Without `autoSize`, ordinary native `rows`/style behavior stays unchanged. The
+bound `MultilineTextField` and `renderMultilineTextField` use this same control
+and accept the optional sizing settings; their default remains four rows.
+Their existing composition buffering, policy and accepted owner setter remain
+in place. DOM composition tests establish forwarding, not OS IME acceptance.
+
+```tsx
+import { useRef, useState } from 'react';
+import { TextareaInput } from '@miniextensions/sdk/react';
+
+export function HostedNotes() {
+    const ref = useRef<HTMLTextAreaElement>(null);
+    const [value, setValue] = useState('');
+    return (
+        <TextareaInput
+            ref={ref}
+            value={value}
+            autoSize={{ minRows: 3, maxRows: 30 }}
+            aria-label="Notes"
+            onChange={(event) => setValue(event.currentTarget.value)}
+        />
+    );
+}
+```
+
+## Controlled rating presentation
+
+`RatingInput` from `@miniextensions/sdk/react` owns the native range, decorative
+icon selection/toggle-clear, focus indication, numeric grid/print summaries and
+explicit maximum repair. Its controlled `value` is a native number or `null`;
+`onChange` proposes a native value without creating a model, request or Save.
+The caller retains record identity, write policy, metadata, styles and persistence.
+A loaded value above `max` stays unchanged until an explicit repair.
+
+The input ref is the actual `HTMLInputElement` (or `null` in grid mode). Use
+`inputProps` for native form/label/ARIA associations and focus callbacks. `max`,
+range type, controlled value and disabled policy are owned by the control.
+Decorative `renderIcon` receives `index`, `filled`, `focused`, `disabled` and
+`activate`; the native range or surrounding grid owns accessible numeric meaning.
+Icon callbacks from replaced props or an unmounted control are retired. This
+presentation lifetime check does not replace the caller's write authority.
+
+Classes, an `empty` node, `warningMessage`, `repairLabel` and class slots let an
+app retain its theme and localization. `grid` omits the range and supplies a
+numeric summary; the caller styles `gridSummaryClassName` for screen readers and
+`printSummaryClassName` for print. Disabled controls never propose edits or show
+an enabled repair. Native absence is not turned into an owner write by the range's
+HTML minimum. The host must retain its native `null`/zero and required policy.
+
+```tsx
+import { useState } from 'react';
+import { RatingInput } from '@miniextensions/sdk/react';
+
+export function CustomRating() {
+    const [value, setValue] = useState<number | null>(2);
+    return (
+        <RatingInput
+            value={value}
+            max={5}
+            onChange={setValue}
+            inputProps={{ 'aria-label': 'Rating' }}
+            renderIcon={({ filled, focused, activate }) => (
+                <span
+                    onClick={activate}
+                    aria-hidden="true"
+                    className={focused ? 'rating-focus' : undefined}
+                >
+                    {filled ? '★' : '☆'}
+                </span>
+            )}
+        />
+    );
+}
+```
+
+`RatingField` and `renderRatingField` accept `iconInput` to opt accepted binding
+and renderer-host owners into this same control. Their existing numeric editor
+remains the default. Accepted read-only/pending/required policy, masking, native
+scalar writes and row-event boundaries remain enforced; appearance cannot grant
+write authority. Provide Airtable icon assets/colors through `renderIcon` when
+that metadata-specific presentation is required. The stock default does not
+infer an icon theme or supply hosted Airtable assets.
+
+## Shared literal text display
+
+`LiteralText` from `@miniextensions/sdk/react` supplies the escaped native output
+used by SDK Rich Text, AI Text and single-collaborator display controls. Callers
+supply already formatted text and retain native value validation, masking and
+field policy. It preserves whitespace and wraps long text by default, forwarding
+native classes, ARIA, events and the actual `HTMLElement` ref.
+
+Choose `as="output"` (default), `span`, `p` or `div` for an established container.
+An explicit `empty` node replaces the entire control for null, undefined or empty
+text; string `0` stays visible. Without that option an empty native element stays
+mounted. `preserveWhitespace={false}` retains caller styles without adding the
+SDK defaults. A `renderText` callback can reuse an existing safe linkifier or
+formatting component while the default renders literal text.
+
+```tsx
+import { LiteralText } from '@miniextensions/sdk/react';
+export const Result = () => (
+    <LiteralText value="0" aria-label="Count" empty={<em>No value</em>} />
+);
+```
+
+### Native actions
+
+`ActionButton` from `@miniextensions/sdk/react` shares native action and pending
+presentation with the SDK Button field. It forwards an
+actual `HTMLButtonElement` ref and native props, always uses `type="button"`,
+and disables activation when `busy` or `disabled`. `busy` also controls
+`aria-busy`; optional `busyContent` replaces children while pending. Without
+replacement content, the original children remain visible.
+
+```tsx
+import { ActionButton } from '@miniextensions/sdk/react';
+
+export function NativeAction({
+    pending,
+    runAction,
+}: {
+    pending: boolean;
+    runAction(): void;
+}) {
+    return (
+        <ActionButton
+            busy={pending}
+            busyContent={<span>Running action</span>}
+            onClick={runAction}
+        >
+            Run action
+        </ActionButton>
+    );
+}
+```
+
+The caller owns action eligibility, singleflight, authentication, source identity,
+requests, errors and retry policy. This presentation does not create a Button
+model or acquire webhook authority. URL actions retain their native link owner.
+
+### Calendly frame lifecycle
+
+`composeCalendlyUrl` and `useCalendlyBooking` from `@miniextensions/sdk/react`
+share the existing HTTPS `calendly.com`/subdomain allowlist and URLSearchParams
+prefill behavior. Existing query values survive; nonempty email/name values and
+embed parameters replace their matching keys. Resolve prefill fields by actual
+field IDs in the caller; the hook does not read records or infer field names.
+
+Pass a stable `ownerKey` derived from the actual session, record and field. A
+change in that identity, composed URL, `enabled` or `booked` retires an open frame.
+Changes to the callback or frame presentation within the same owner use current
+props without retiring it. `open()` returns false while blocked or already open.
+Render `session.frame` directly: the SDK owns its native iframe ref and creates a
+new frame for every open generation. `session.cancel()` closes only that session,
+never a later reopened frame, and never proposes a native write. Unmount retires
+all admission and removes the message listener.
+
+Only the active iframe's exact `contentWindow`, exact composed URL origin and
+`calendly.event_scheduled` data event can invoke `onScheduled`. The session is
+consumed before invoking it, including for duplicate or reentrant events. This
+is local browser event admission, not provider booking verification or server
+write authority. Keep native validation, read-only admission, persistence and
+errors in the caller. No SDK client or network request is created by this hook;
+rendering its iframe navigates to the configured provider.
+
+```tsx
+import { ActionButton, useCalendlyBooking } from '@miniextensions/sdk/react';
+
+export function Schedule({
+    ownerKey,
+    booked,
+    onScheduled,
+}: {
+    ownerKey: string;
+    booked: boolean;
+    onScheduled(): void;
+}) {
+    const booking = useCalendlyBooking({
+        configuredUrl: 'https://calendly.com/example/meeting',
+        email: null,
+        name: null,
+        embedDomain: window.location.origin,
+        ownerKey,
+        booked,
+        onScheduled,
+    });
+    return (
+        <>
+            <ActionButton
+                disabled={!booking.url || booked}
+                onClick={() => booking.open()}
+            >
+                Schedule
+            </ActionButton>
+            {booking.session ? (
+                <section>
+                    <ActionButton onClick={() => booking.session?.cancel()}>
+                        Cancel
+                    </ActionButton>
+                    {booking.session.frame}
+                </section>
+            ) : null}
+        </>
+    );
+}
+```
+
+### Native person badges
+
+`PersonBadge` supplies the native list item, escaped label, optional caller avatar
+and localized non-submit removal presentation used by hosted collaborator badges.
+It forwards the actual `HTMLLIElement` ref and native list-item props. Supply a
+resolved string label; name/email fallback, native collaborator IDs/objects,
+choice allow-lists, duplicate order, read-only admission and writes stay in the
+caller. Omit `remove` for display-only use such as Created By and Last Modified By.
+No picker, collaborator model, identity lookup or network call is created.
+
+`avatar` is a caller-owned React node, so an existing image component and its
+loading/caching policy stay intact. Optional avatar/body/label and removal class
+slots retain the consuming app's theme; the control supplies no theme CSS.
+An explicit null avatar retains an empty avatar slot; omission removes the slot.
+Removal uses `ActionButton`, always `type="button"`, with optional native props
+through `remove.buttonProps`. It uses the current caller callback and preserves
+native bubbling. The caller must retain action admission and persistence policy.
+
+```tsx
+import { PersonBadge } from '@miniextensions/sdk/react';
+
+export function People({
+    people,
+    readOnly,
+    removePerson,
+}: {
+    people: readonly { id: string; name: string; email: string }[];
+    readOnly: boolean;
+    removePerson(id: string): void;
+}) {
+    return (
+        <ul>
+            {people.map((person, index) => (
+                <PersonBadge
+                    key={`${person.id}-${index}`}
+                    label={person.name || person.email}
+                    remove={
+                        readOnly
+                            ? undefined
+                            : {
+                                  label: `Remove ${person.name || person.email}`,
+                                  onClick: () => removePerson(person.id),
+                              }
+                    }
+                />
+            ))}
+        </ul>
+    );
+}
+```
+
+### Projecting native Select choices with an existing evaluator
+
+`projectSelectChoices` from `@miniextensions/sdk/ui` shares native-choice
+availability without replacing a caller's hydrated condition evaluator. It
+preserves original choice objects, order and canonical values, including pending
+choices with empty IDs. `getValue` reads the native canonical name/value; labels
+and DOM identity remain separate. `allowedOptionIds: null` means unlimited;
+provide normalized IDs from the caller's policy. An explicit empty array admits
+no new choices.
+
+Use `retainSelected: true` for list controls that must retain selected choices
+outside current limits or conditions. Dropdown eligibility can exclude those
+choices while the caller retains its current native value/display. Projection
+never edits selection, grants Add Choice/Save authority, normalizes pending IDs,
+loads records or performs I/O. Keep maximum selections, creation, read-only
+admission and writes with their real owners.
+
+`evaluation` is `skip` for preview/disabled evaluation, `unavailable` when the
+real evaluation context is absent, or `evaluate` with a synchronous `matches`
+callback closing over that context. A missing context or evaluator exception
+returns `status: 'retained-selected'`, the selected native choices and a safe
+reason; exception details are not returned. No selection is discarded. The
+callback runs only for eligible unselected choices when list retention applies.
+
+This is separate from `getSelectFieldPolicy` and
+`resolveSelectFieldAvailability`, whose published-metadata validation remains
+strict and still rejects empty/duplicate IDs. The latter uses this projection
+only after its own metadata guards. A native pending choice does not become
+accepted published metadata or mutation authority.
+
+```tsx
+import {
+    projectSelectChoices,
+    type SelectChoiceEvaluation,
+} from '@miniextensions/sdk/ui';
+
+type NativeChoice = { id: string; name: string };
+export function NativeChoiceList({
+    choices,
+    selected,
+    evaluation,
+    readOnly,
+    toggle,
+}: {
+    choices: readonly NativeChoice[];
+    selected: readonly string[];
+    evaluation: SelectChoiceEvaluation<NativeChoice>;
+    readOnly: boolean;
+    toggle(value: string): void;
+}) {
+    const projection = projectSelectChoices({
+        choices,
+        selectedValues: selected,
+        getValue: (choice) => choice.name,
+        allowedOptionIds: null,
+        retainSelected: true,
+        evaluation,
+    });
+    return (
+        <ul>
+            {projection.choices.map((choice) => (
+                <li key={choice.name}>
+                    <label>
+                        <input
+                            type="checkbox"
+                            disabled={readOnly}
+                            checked={selected.includes(choice.name)}
+                            onChange={() => toggle(choice.name)}
+                        />
+                        {choice.name}
+                    </label>
+                </li>
+            ))}
+        </ul>
+    );
+}
+```
+
+### Native Rich Text editor ownership
+
+`NativeRichTextEditor` shares the native editor lifecycle and stored-string
+contract while the application supplies its **real compatible editor** through
+`renderEditor`. The SDK does not bundle an editor vendor, render plain text as a
+substitute, create a Form binding/draft, or acquire persistence permission.
+
+The component owns controlled stored-value comparison, exact serialization,
+semantic external-value remount, focus signals, actual-instance ref forwarding
+and opt-in cleanup of stale sibling editor DOM. Native typing echoes and cosmetic
+newline updates retain the current editor/document/caret. The supplied editor
+receives `defaultValue`, never a controlled `value` echo. Its ref must receive the
+actual editor instance exposing `element` and `view.dom`, not a proxy or snapshot.
+The application keeps the editor library/extensions/styles, paste handling,
+localized empty content, current native writer and Form/session identity. Key the
+component by the application's real editing owner when that owner changes.
+
+Change callbacks bind once to an actual attached editor instance. A same-value
+slot replacement, semantic replacement, the read-only null view or unmount
+retires the old attachment before caller ref cleanup; late callbacks do not read
+the disposed document or write a value. Cosmetic echoes and writer changes retain
+the current editor. A zero-DOM commit boundary publishes current writer/read-only
+policy before the supplied editor's layout/update callbacks. Suspended renders
+do not publish policy or admit their callback snapshots. Forward the supplied
+native ref so changes can be admitted only for the actual current attachment.
+
+```tsx
+import {
+    NativeRichTextEditor,
+    type NativeRichTextEditorProps,
+} from '@miniextensions/sdk/react';
+
+export function RichNotes({
+    value,
+    setNativeValue,
+    renderCompatibleEditor,
+}: {
+    value: string | null;
+    setNativeValue(stored: string): void;
+    renderCompatibleEditor: NativeRichTextEditorProps['renderEditor'];
+}) {
+    return (
+        <NativeRichTextEditor
+            value={value}
+            onValueChange={setNativeValue}
+            placeholder="Write notes"
+            emptyContent={<span>No notes</span>}
+            renderEditor={renderCompatibleEditor}
+        />
+    );
+}
+```
+
+Callback refs may return a cleanup function. The wrapper runs it once on actual
+detach, ref replacement or remount; callbacks returning no cleanup retain their
+legacy null notification. Object refs continue to receive the actual instance
+and null on detach.
+
+DOM cleanup defaults off and follows actual editor attachment, including
+read-only null/empty transitions that retain the normalized document key.
+Set `removeStaleEditorRoots` only when the supplied
+`element` exclusively contains editor-view roots, with no toolbars or other caller
+content. This option removes siblings of the active `view.dom`.
+
+Pass every supplied native prop/ref to the actual editor and apply the focus
+signal to its normal theme classes. Keep its real parser/serializer and paste
+extension integration. Read-only admission and a read-only null empty view are
+presentation; the application/server still owns write authority.
+
+The SDK's React 18/19 declaration, slot ABI and browser checks are separate from
+the chosen editor vendor's compatibility. The existing host fork of
+`rich-markdown-editor` 12.26.8 declares React 16/17 peers: strict installation with
+React 18.3.1 or 19.2.0 rejects that vendor. It remains outside SDK and no peer override
+is added. Real host editor tests establish the existing React 18 runtime's ref,
+caret, formatting, paste and synthetic composition behavior. Synthetic DOM
+composition checks do not certify an operating-system IME; protected deployed
+acceptance remains a separate gate.
+
+### Native image recovery
+
+`RecoverableImage` renders the actual native image and forwards its ref and image
+attributes. Supply caller-authorized `sources` in order and an explicit `alt`
+(use an empty string for decorative images). Empty entries and exact duplicates
+are removed without trimming, rewriting URLs or changing attachment metadata.
+The component owns one failure transition per mounted image attempt, exhaustion
+and retry remounting. Repeated errors in the same React batch cannot skip the
+next source. An equivalent ordered chain retains the current image; a changed
+chain resets immediately and retires its previous retry callback.
+
+```tsx
+import { RecoverableImage, ActionButton } from '@miniextensions/sdk/react';
+
+export function AttachmentPreview({ sources }: { sources: readonly string[] }) {
+    return (
+        <RecoverableImage
+            sources={sources}
+            alt="Attachment preview"
+            loading="lazy"
+            renderFallback={(retry) => (
+                <div role="status" aria-label="Preview unavailable">
+                    <ActionButton
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            retry();
+                        }}
+                    >
+                        Try again
+                    </ActionButton>
+                </div>
+            )}
+        />
+    );
+}
+```
+
+The caller owns source admission, signed URL lifetime, lazy-mount policy, classes,
+localized fallback and retry-event containment. Recovery renders no extra image
+wrapper and performs no explicit fetch, upload, save, URL refresh or attachment
+write. It does not infer privacy permission or resolve unknown upload outcomes.
+Do not supply `src`, `srcSet` or an overriding error handler; the ordered chain
+owns the native image source and error transitions. On failure the image ref is
+released; retry creates a new native image starting at the first source.
+
+### Native file selection
+
+`useFileSelection` shares picker reset and drag/drop intake without owning a queue or upload. Spread `inputProps` onto the real file input and `dropProps` onto its target. Native attributes/ref, localized copy, file validation, asynchronous errors, cancellation, transport, permissions and persistence stay with the caller. Both producers deliver a fresh array of the original `File` objects in native order; empty selections are ignored. Picker intake snapshots files and resets the input before calling `onFiles`, allowing the same file to be selected again after success or failure. Drag events are contained, and nested drag entries do not clear highlighting until the target is left. `disabled` denies both producers and retires drag highlighting; it does not cancel a caller-owned upload already in progress. File `accept` is a browser hint, never an authorization or validation boundary.
+
+```tsx
+import { useFileSelection } from '@miniextensions/sdk/react';
+
+export function DeviceUpload({
+    disabled,
+    onFiles,
+}: {
+    disabled: boolean;
+    onFiles(files: File[]): void;
+}) {
+    const selection = useFileSelection<HTMLDivElement>({ disabled, onFiles });
+    return (
+        <div {...selection.dropProps}>
+            <input
+                {...selection.inputProps}
+                multiple
+                aria-label="Choose files"
+            />
+            <p>
+                {selection.isDragActive
+                    ? 'Drop files here'
+                    : 'Choose or drop files'}
+            </p>
+        </div>
+    );
+}
+```
+
+### Native numeric input compatibility
+
+`formatNumberInputCompatibility`, `parseNumberInputCompatibility` and
+`isNumberInputCompatible` preserve the native host number/percent/currency
+helpers. Config is structural (`type`, `options.precision`); policy contains
+optional `numberSeparator` and `allowNegativeNumbers`. These helpers perform
+no writes and own no focus or draft state. Hosts retain lifecycle and canonical
+write admission.
+
+Validation accepts partial drafts such as `-` (when negatives are enabled) and
+`0.`/`0,`, but rejects exponents and leading decimals. Parsing is deliberately
+separate and keeps parseFloat coercion, first-comma normalization, toFixed
+rounding for numbers/currency, and unrounded division by 100 for percent.
+Do not substitute the scalarModels grammar or treat parsing as validation.
+Formatting preserves Intl rounding for comma-period/period-comma and toFixed
+rounding for space separators, including their distinct rounding edge cases.
+`none` disables grouping by default; an explicit grouping argument wins.
+
+A native editor returned inside a stable wrapper can still replace its inner
+editor on a parent render. Forward the actual inner editor ref as before. Its
+synchronous mount changes must remain admitted, while callbacks captured by the
+disposed predecessor remain retired. Binding snapshots distinguish parent props
+updates from harmless internal bailout renders; a wrapper's element type/key is
+not sufficient ownership evidence.
+
+### Hosted date input compatibility
+
+Existing native picker integrations can use `getDateInputPickerValue`,
+`getDateInputValueOnChange`, `getDateInputValueOnBlur`, `formatDateInputValue`,
+`getDateInputFormat` and `getDateInputTimeZone` from `@miniextensions/sdk/ui`.
+These preserve calendar-date bytes, UTC minute writes on picker change, strict
+localized blur parsing and invalid drafts. The caller retains the vendor picker,
+input draft/caret, readonly policy and actual writer. Locale data remains caller
+loaded. `getDateInputMomentLocale` maps the canonical language contract; English
+returns null and `zh-Hans` maps to `zh-cn`.
+
+`isDateInputWithinRange`, `resolveDateInputRangeTimeZone` and
+`isDateInputValueWithinRange` share existing calendar range behavior. Use the
+optional captured `now` Moment for deterministic range checks. Date ranges use
+UTC; datetime ranges use their configured zone, with a valid supplied client
+zone or UTC fallback. Display-timezone guessing remains separate from the range
+context. `isDateInputRange` checks the supported range literals. These helpers
+neither create a model nor authorize writes. The strict bound date model and
+backend validation retain their existing contracts, including the page client's
+backend-only treatment of client-zone ranges without token-bound provenance.
+Use existing public `TextInput` for a supplied native input; retain picker-specific
+composition and themed wrappers with the host.
+
+### Native radio input
+
+`RadioInput` from `@miniextensions/sdk/react` forwards the native input ref,
+form/name/value, focus/keyboard and ARIA props. Supply controlled `checked` and
+`onCheckedChange(checked, event)`; the caller owns choice identity and accepted
+writes. By default, clicking an already selected radio emits no new intent.
+Opt into `allowDeselect` for hosted click-to-clear behavior. Disabled, read-only
+and cancelled activation emit no selection writes. A refused intent retains the
+controlled checked state. No selection model, pending-name policy or transport
+is created.
+
+For a native choice group, supply a shared nonempty `name` and the intended
+native form owner. Repeated field instances need separate group identities or
+form owners. The control cannot infer that scope. Keyboard activation retains
+the browser's native radio semantics; `allowDeselect` handles repeated click
+activation rather than introducing a custom Space/Arrow handler.
+
+```tsx
+import { useState } from 'react';
+import { RadioInput } from '@miniextensions/sdk/react';
+export function OptionalChoice() {
+    const [selected, setSelected] = useState(false);
+    return (
+        <label>
+            <RadioInput
+                checked={selected}
+                allowDeselect
+                onCheckedChange={setSelected}
+            />
+            Urgent
+        </label>
+    );
+}
+```
+
+### Pending select choice presentation
+
+`makeSelectOptionPresentations` accepts native `{id, name}` choices, including
+new host choices whose Airtable ID is still empty, and optional conditional
+label configuration. It preserves canonical names and IDs, trims configured
+labels and appends canonical names to duplicate visible labels. The first
+matching label rule wins, including the existing empty-ID compatibility case.
+`makeUnavailableSelectOptionPresentation` keeps an unavailable native name.
+
+`getSelectOptionPresentationKey` creates a namespaced UTF-16 key for DOM/React
+presentation. Pending and persisted identity have different namespaces. Keep
+that key out of native values and save payloads; only the existing host save
+reconciliation may replace an empty ID with the assigned Airtable ID.
+
+These helpers own presentation only. They do not validate published metadata,
+evaluate conditions, grant permissions, create choices or write records.
+`getSelectFieldPolicy` keeps its strict canonical-ID and unique-name validation.
+The host retains choice creation, conditional availability, limits, session
+ownership and persistence.
+
+### Hosted attachment input compatibility
+
+`isAttachmentUploadUrlCompatible` preserves the hosted HTTP(S) syntax check.
+It does not sign, fetch or authorize an upload. `getAttachmentFilenameFromUrl`
+uses the last path component, decodes it once, keeps malformed percent-encoding
+unchanged and falls back to the hostname for an empty/trailing-slash path.
+Invalid absolute URLs throw. Query and fragment data do not become filenames.
+
+`getUploadProgressWeight` gives empty files a weight of one;
+`getAggregateUploadProgress` preserves ordered-batch byte weighting, clamping,
+rounding and empty-batch completion. These are the existing numeric arithmetic
+rules, not input validation; callers retain finite native File byte counts.
+The host still owns ordering, progress state, cancellation, partial successes,
+R2/Firebase fallback, signing, object URLs, current writer admission and Save.
+No renderer or upload controller is replaced by these helpers.
+
+### Hosted dropdown filter replacement
+
+`getFiltersAfterDropdownChange` preserves the hosted linked-record dropdown
+compatibility rule: prepend one explicit replacement predicate (or clear it),
+remove all predicates for that target field recursively, and prune empty groups.
+ID references take precedence; name references use the first exact field-name
+match. Preserve unrelated and unresolved predicates, group metadata, root logic
+and predicate order. A missing definition starts as an empty `and` group.
+Inputs are not mutated.
+
+This is an explicit presentation edit, not a condition evaluator or query owner.
+It does not resolve computed field types, project dropdown chips, validate policy,
+read records or save anything. Keep the current accepted criteria/session check
+and explicit apply/read behavior with the caller. Unsupported or stale predicates
+must not disappear merely to fit a narrower editor.
+
+Dropdown filter reconciliation preserves the caller's condition-setting type,
+including nominal host enums, through nested groups and nullable criteria. It
+shares tree edits without converting predicate payloads or replacing the host's
+strict persisted-choice validation.

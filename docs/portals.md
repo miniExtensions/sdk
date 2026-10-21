@@ -860,3 +860,36 @@ remounts. Destroy it on owner/page/criteria replacement or editor cancellation.
 Retained handlers fail closed after observed owner/configuration changes,
 including observed A→B→A; unobserved in-place restoration is not detectable.
 The core subpath has no React dependency.
+
+### Hosted summary refresh bridge
+
+`refreshPortalSummaryFields` and `PortalSummaryRefreshOptions<RecordType>` from
+`/portals` share the hosted Portal's bounded summary-read workflow. Pass
+`fetchRecord`, the captured `generation`, `isLatestGeneration`, synchronous
+`onFresh(record)` and synchronous `onStale()` callbacks. A failed read is retried
+once immediately, preserving the legacy two-read limit. The current owner gets
+one successful record application or one stale-summary notification after two
+failed reads. The helper returns `Promise<void>`.
+
+The host owns generation allocation and an actual accepted owner lease. Its
+predicate must reject replaced or unmounted owners and changed session, record
+or configuration, including observed A→B→A. A counter alone is sufficient only
+when the host advances it on every relevant replacement. Never allocate a new
+current generation from an already-retired handler. The helper checks ownership
+before each read and after settlement; an already-started read is not aborted,
+but its retired result cannot invoke either callback or cause another read.
+
+`fetchRecord` must only read. Signing, authentication, tRPC, backend persistence,
+record identity, Redux/state dispatch and warning/Retry UI stay in the host.
+This function neither replays a save nor interprets a failed read as permission
+to switch accounts or recover authentication. Callbacks and ownership predicates
+must be synchronous. Their exceptions propagate; application failure never
+retries the read or becomes a stale-summary warning.
+
+The existing monorepo adapter is not changed by this SDK addition. Its ordinary
+success/failure and latest-generation behavior is retained, with two deliberate
+hardening differences for future adoption: already-retired invocations do not
+start a read, and a throwing `onFresh` is not treated as a transport failure.
+Host adoption must bind the existing owner's mount/session/record/configuration
+lease and keep its transport, dispatch and warning UI in place. This bridge does
+not replace `createPortalListOwner` or create another persistent Portal owner.

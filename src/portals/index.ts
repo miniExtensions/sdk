@@ -42,3 +42,6 @@ export type {
     PortalFilterEditorModel,
     PortalFilterEditorSnapshot,
 } from './editors.js';
+
+export { refreshPortalSummaryFields } from './summaryRefresh.js';
+export type { PortalSummaryRefreshOptions } from './summaryRefresh.js';

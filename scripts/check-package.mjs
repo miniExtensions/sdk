@@ -1,4 +1,8 @@
 import {
+    checkPortalSummaryRefreshConsumer,
+    portalSummaryRefreshTypedConsumer,
+} from './portal-summary-refresh-consumer-checks.mjs';
+import {
     checkDropdownFilterConsumer,
     dropdownFilterTypedConsumer,
 } from './dropdown-filter-consumer-checks.mjs';
@@ -1454,6 +1458,7 @@ new Parser([]).parse({maxDepth:'48'});
                 selectPresentationTypedConsumer +
                 attachmentInputTypedConsumer +
                 dropdownFilterTypedConsumer +
+                portalSummaryRefreshTypedConsumer +
                 ratingInputTypedConsumer +
                 calendlyBookingTypedConsumer +
                 personBadgeTypedConsumer +
@@ -2944,6 +2949,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     assert.equal(
         await checkAttachmentInputConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkPortalSummaryRefreshConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

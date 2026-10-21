@@ -434,6 +434,37 @@ it('associates plain owner feedback and applies display or write masking, requir
     }
 });
 
+for (const [title, expected] of [
+    ['', 'Score'],
+    [' \t ', 'Score'],
+    ['Custom score', 'Custom score'],
+] as const) {
+    it(`hidden icon rating title ${JSON.stringify(title)} matches the bound and numeric accessible label`, async (t) => {
+        const f = await fixture(t, { title, showTitle: false }, 2);
+        const revision = f.binding.getSnapshot().revision;
+        await f.render(h(RatingField, { binding: f.binding, iconInput: {} }));
+        assert.equal(f.input().type, 'range');
+        assert.equal(f.input().getAttribute('aria-label'), expected);
+        assert.equal(f.input().getAttribute('aria-labelledby'), null);
+        assert.equal(f.container.querySelector('label'), null);
+        const props = {
+            ...f.props(),
+            title,
+            displayConfig: { showTitle: false },
+            writeConfig: { showTitle: false },
+        };
+        await f.render(renderRatingField(props));
+        assert.equal(f.input().getAttribute('aria-label'), expected);
+        await f.render(renderRatingField(props, { iconInput: {} }));
+        assert.equal(f.input().type, 'range');
+        assert.equal(f.input().getAttribute('aria-label'), expected);
+        assert.equal(f.input().getAttribute('aria-labelledby'), null);
+        assert.equal(f.container.querySelector('label'), null);
+        assert.equal(f.binding.getSnapshot().revision, revision);
+        assert.equal(f.binding.getSnapshot().value, 2);
+    });
+}
+
 it('retained rating actions respect configuration and permission changes, then hidden and retired owners remove controls', async (t) => {
     const f = await fixture(t, {}, 0.25);
     const props = f.props();

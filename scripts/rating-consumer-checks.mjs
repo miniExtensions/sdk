@@ -498,6 +498,39 @@ export async function checkRatingConsumer({
                 checks++;
 
                 const props = host.getSnapshot().fields[0];
+                for (const [title, expected] of [
+                    ['', 'Rating'],
+                    [' \t ', 'Rating'],
+                    ['Custom rating', 'Custom rating'],
+                ]) {
+                    const hidden = {
+                        ...props,
+                        title,
+                        displayConfig: { showTitle: false },
+                        writeConfig: { showTitle: false },
+                    };
+                    for (const options of [{}, { iconInput: {} }]) {
+                        await act(async () =>
+                            root.render(
+                                react.renderRatingField(hidden, options)
+                            )
+                        );
+                        assert.equal(
+                            input().getAttribute('aria-label'),
+                            expected
+                        );
+                        assert.equal(
+                            input().getAttribute('aria-labelledby'),
+                            null
+                        );
+                        assert.equal(container.querySelector('label'), null);
+                        assert.equal(
+                            input().type,
+                            options.iconInput ? 'range' : 'text'
+                        );
+                    }
+                    checks++;
+                }
                 for (const capability of [
                     { type: 'readonly' },
                     {

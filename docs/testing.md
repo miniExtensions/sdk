@@ -570,10 +570,10 @@ not a separate hosted CI stage or live backend, OS picker or screen-reader proof
 
 The existing `pnpm check:browser` harness also runs the installed public
 `RadioInput` through `scripts/browser-radio-input-checks.mjs`. Its separate
-`radioInput` receipt contains three native-browser groups: trusted label/Space
+`radioInput` receipt contains four native-browser groups: a plain native-radio reference; trusted label/Space
 activation with opt-in/default repeat behavior; Arrow navigation and identical
 names isolated by native form owners; and controlled refusal plus readonly,
-disabled and cancelled-event admission. Every group checks native refs and zero
+disabled and cancelled-event admission. Space selects an unchecked radio and leaves an already-checked radio unchanged, matching the plain native control. Opt-in repeat mouse/label clicks clear. Every group checks native refs and zero
 form submits. The fixture owns only synthetic checked state and explicit flags.
 
 The normal sandboxed browser and isolated contexts are retained. Source and

@@ -51,7 +51,9 @@ export async function checkRadioInputBrowser({
 import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {RadioInput} from '@miniextensions/sdk/react';
-const refs=new Map(),intents=[];let current,submits=0;
+const refs=new Map(),intents=[],nativeEvents=[];let current,submits=0,nativeSubmits=0;
+document.querySelectorAll('[data-native-radio]').forEach(node=>['click','change'].forEach(type=>node.addEventListener(type,event=>nativeEvents.push({type:event.type,trusted:event.isTrusted,id:node.id,checked:node.checked}))));
+document.getElementById('reference-form').addEventListener('submit',event=>{event.preventDefault();nativeSubmits++;});
 const initial={primary:'a',secondary:'a',accept:true,readOnly:false,disabled:false,cancel:false,allowDeselect:true};
 function App(){
  const [state,setState]=useState(initial);current=state;
@@ -70,7 +72,7 @@ function App(){
   ...[['accept','Toggle writes'],['readOnly','Toggle readonly'],['disabled','Toggle disabled'],['cancel','Toggle cancellation'],['allowDeselect','Toggle repeat clear']].map(([key,label])=>h('button',{key,type:'button',onClick:()=>toggle(key)},label)));
 }
 const app=createRoot(document.querySelector('main'));app.render(h(React.StrictMode,null,h(App)));
-window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...current},intents:[...intents],submits,refCount:refs.size,refsValid:[...refs].every(([id,node])=>node===document.getElementById(id)&&node.tagName==='INPUT'&&node.type==='radio'),checked:Object.fromEntries([...refs].sort(([a],[b])=>a.localeCompare(b)).map(([id,node])=>[id,node.checked])),forms:Object.fromEntries([...refs].map(([id,node])=>[id,node.form?.id])),focused:document.activeElement?.id})};
+window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...current},intents:[...intents],submits,refCount:refs.size,refsValid:[...refs].every(([id,node])=>node===document.getElementById(id)&&node.tagName==='INPUT'&&node.type==='radio'),checked:Object.fromEntries([...refs].sort(([a],[b])=>a.localeCompare(b)).map(([id,node])=>[id,node.checked])),forms:Object.fromEntries([...refs].map(([id,node])=>[id,node.form?.id])),focused:document.activeElement?.id,nativeReference:{a:document.getElementById('reference-a').checked,b:document.getElementById('reference-b').checked,events:[...nativeEvents],submits:nativeSubmits}})};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
         const bundle = await build({
@@ -110,7 +112,7 @@ window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...curr
             } else if (request.url === '/') {
                 response.setHeader('Content-Type', 'text/html');
                 response.end(
-                    '<!doctype html><title>Synthetic native radio proof</title><main></main><script type="module" src="/proof.js"></script>'
+                    '<!doctype html><title>Synthetic native radio proof</title><form id="reference-form"><fieldset><legend>Native reference</legend><input data-native-radio id="reference-a" type="radio" name="native-reference" checked><label for="reference-a">Native reference Alpha</label><input data-native-radio id="reference-b" type="radio" name="native-reference"><label for="reference-b">Native reference Beta</label></fieldset></form><main></main><script type="module" src="/proof.js"></script>'
                 );
             } else {
                 response.statusCode = 404;
@@ -194,6 +196,45 @@ window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...curr
             });
         };
 
+        await start('native-reference');
+        const nativeA = page.getByRole('radio', {
+            name: 'Native reference Alpha',
+            exact: true,
+        });
+        const nativeB = page.getByRole('radio', {
+            name: 'Native reference Beta',
+            exact: true,
+        });
+        await nativeA.focus();
+        await page.keyboard.press('Space');
+        let reference = (await snapshot()).nativeReference;
+        assert.equal(reference.a, true);
+        assert.equal(reference.b, false);
+        assert.deepEqual(reference.events, []);
+        await nativeB.focus();
+        await page.keyboard.press('Space');
+        reference = (await snapshot()).nativeReference;
+        assert.equal(reference.a, false);
+        assert.equal(reference.b, true);
+        assert(
+            reference.events.some(
+                (event) => event.type === 'click' && event.trusted
+            )
+        );
+        const nativeEventCount = reference.events.length;
+        await page.keyboard.press('Space');
+        reference = (await snapshot()).nativeReference;
+        assert.equal(reference.b, true);
+        assert.equal(reference.events.length, nativeEventCount);
+        await page.keyboard.press('ArrowLeft');
+        reference = (await snapshot()).nativeReference;
+        assert.equal(reference.a, true);
+        assert.equal(reference.b, false);
+        assert.equal(reference.submits, 0);
+        assert(reference.events.every((event) => event.trusted));
+        await checked('a', 'a');
+        await finish('native-reference');
+
         await start('label-space');
         const primaryB = page.getByRole('radio', {
             name: 'Primary Beta',
@@ -214,8 +255,16 @@ window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...curr
             true
         );
         await page.keyboard.press('Space');
+        state = await checked('b', 'a');
+        assert.equal(state.intents.length, 1);
+        await page.locator('label[for=primary-b]').click();
         state = await checked(null, 'a');
         assert.equal(state.intents.at(-1).checked, false);
+        assert.equal(state.intents.at(-1).detail, 1);
+        await primaryB.focus();
+        await page.keyboard.press('Space');
+        state = await checked('b', 'a');
+        assert.equal(state.intents.at(-1).checked, true);
         assert.equal(state.intents.at(-1).detail, 0);
         await page
             .getByRole('button', { name: 'Toggle repeat clear', exact: true })
@@ -313,7 +362,7 @@ window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...curr
         await checked('a', 'a');
         assert.equal((await snapshot()).intents.length, 3);
         await finish('refusal-policy');
-        assert.equal(evidence.results.length, 3);
+        assert.equal(evidence.results.length, 4);
         evidence.status = 'passed';
     } catch (error) {
         failure = error;

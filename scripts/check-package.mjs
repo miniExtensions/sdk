@@ -20,6 +20,10 @@ import {
     attachmentMetadataTypedConsumer,
 } from './attachment-input-consumer-checks.mjs';
 import {
+    checkCollaboratorSelectionConsumer,
+    collaboratorSelectionTypedConsumer,
+} from './collaborator-selection-consumer-checks.mjs';
+import {
     checkSelectPresentationConsumer,
     selectPresentationTypedConsumer,
 } from './select-presentation-consumer-checks.mjs';
@@ -1340,6 +1344,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             declarationConsumer +
                 attachmentMetadataTypedConsumer +
                 formulaCompatibilityTypedConsumer +
+                collaboratorSelectionTypedConsumer +
                 `
 const tokenOptions: import('@miniextensions/sdk/formulas').TokenizeOptions = {cache:false,maxTokens:8192};
 const parseOptions: import('@miniextensions/sdk/formulas').ParseOptions = {cache:false,maxDepth:48};
@@ -2967,6 +2972,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         2
+    );
+    assert.equal(
+        await checkCollaboratorSelectionConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    console.log(
+        'Installed collaborator selection: public ESM/CommonJS runtime groups and strict ESM/CJS NodeNext plus Bundler declarations passed.'
     );
     assert.equal(
         await checkPortalSummaryRefreshConsumer({

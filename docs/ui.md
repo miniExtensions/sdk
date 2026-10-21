@@ -4436,3 +4436,19 @@ adapter. A host that always supplies a guarded wrapper must preserve that
 availability even when the underlying creation callback is absent. Permissions,
 creation callbacks, search state, native identities, sentinels and persistence
 remain owned by the caller. Presentation results are never native choice values.
+
+## Hosted collaborator selection compatibility
+
+`getCollaboratorSelectionPresentation({ selectedCount, readOnly,
+limitToOneSelection })` shares the hosted picker's selector, empty-state and
+remove-control admission. A single selection hides its selector only when the
+count is exactly one; existing overfull values keep their original presentation.
+`removeCollaboratorSelection(selected, collaboratorId)` removes every matching
+native ID while preserving the order, duplicate neighbors and original object
+references of the remaining values.
+
+These helpers do not create an editable collaborator renderer, validate an
+allow-list, resolve identities, deduplicate lookup values, or dispatch writes.
+The host retains supplied choices, name/email search, scalar-versus-array
+conversion, permissions, labels, avatars and persistence. Existing bound SDK
+collaborator renderers remain display-only.

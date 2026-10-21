@@ -201,6 +201,19 @@ const makeForm = ({
         type: 'create',
         data: { fld_title: 'Initial title', fld_projects: baseline },
     };
+    form.payload.linkedRecordFieldIdToDetailFields = {
+        fld_projects: [
+            {
+                fieldId: 'fld_project_name',
+                fieldName: 'Project name',
+                titleOverride: null,
+                isHidden: false,
+                fieldIsInEditingChildForm: false,
+                childFormField: null,
+                miniExtConfig: {},
+            },
+        ],
+    };
     form.payload.formFieldIdsWithUnsavedChanges = [];
     form.payload.urlPrefilledFieldIds = [];
     if (secondOuter) {
@@ -211,6 +224,10 @@ const makeForm = ({
         form.payload.fieldIdsToSchemas.fld_other_projects = extra;
         form.payload.fieldNamesToSchemas['Other projects'] = extra;
         form.payload.formRecord.data.fld_other_projects = [];
+        form.payload.linkedRecordFieldIdToDetailFields.fld_other_projects =
+            structuredClone(
+                form.payload.linkedRecordFieldIdToDetailFields.fld_projects
+            );
     }
     return form;
 };

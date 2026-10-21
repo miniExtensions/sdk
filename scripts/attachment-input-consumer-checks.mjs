@@ -115,6 +115,34 @@ export async function checkAttachmentInputConsumer({ consumerDirectory }) {
                 message: 'Expected normalized attachment metadata limits.',
             }
         );
+        const sparseTypes = new Array(2);
+        sparseTypes[1] = 'images';
+        for (const allowedTypes of [new Array(1), sparseTypes])
+            assert.throws(
+                () =>
+                    api.checkAttachmentFileMetadata({ ...input, allowedTypes }),
+                {
+                    name: 'TypeError',
+                    message: 'Expected normalized attachment metadata limits.',
+                }
+            );
+        const single = { ...input, files: [files[0]], currentCount: 0 };
+        assert.deepEqual(
+            api.checkAttachmentFileMetadata({ ...single, allowedTypes: [] }),
+            {
+                acceptedIndexes: [],
+                rejected: [{ index: 0, reason: 'type' }],
+                batchError: null,
+            }
+        );
+        assert.deepEqual(
+            api.checkAttachmentFileMetadata({ ...single, allowedTypes: null }),
+            {
+                acceptedIndexes: [0],
+                rejected: [],
+                batchError: null,
+            }
+        );
     }
     console.log(
         'Installed attachment metadata: public ESM/CommonJS runtime and strict NodeNext/Bundler declarations passed.'

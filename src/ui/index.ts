@@ -23,6 +23,12 @@ export {
     type AddressAutocompleteControl,
 } from './addressAutocomplete.js';
 export {
+    createAddressAutocompleteRequests,
+    type AddressAutocompleteRequests,
+    type AddressAutocompleteRequestOptions,
+    type AddressAutocompleteRequestState,
+} from './addressAutocompleteRequests.js';
+export {
     createSelectControl,
     mountSelectControl,
     mountSelectionControl,

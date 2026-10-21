@@ -1,4 +1,8 @@
 import {
+    checkAddressRequestsConsumer,
+    addressRequestsTypedConsumer,
+} from './address-requests-consumer-checks.mjs';
+import {
     checkPortalSummaryRefreshConsumer,
     portalSummaryRefreshTypedConsumer,
 } from './portal-summary-refresh-consumer-checks.mjs';
@@ -1458,6 +1462,7 @@ new Parser([]).parse({maxDepth:'48'});
                 selectPresentationTypedConsumer +
                 attachmentInputTypedConsumer +
                 dropdownFilterTypedConsumer +
+                addressRequestsTypedConsumer +
                 portalSummaryRefreshTypedConsumer +
                 ratingInputTypedConsumer +
                 calendlyBookingTypedConsumer +
@@ -2964,6 +2969,33 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         2
+    );
+    assert.equal(
+        await checkAddressRequestsConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    writeFileSync(
+        join(temporaryDirectory, 'address-requests-bundler-consumer.ts'),
+        addressRequestsTypedConsumer
+    );
+    run(process.execPath, [
+        require.resolve('typescript/bin/tsc'),
+        '--noEmit',
+        '--strict',
+        '--skipLibCheck',
+        'false',
+        '--target',
+        'ES2022',
+        '--module',
+        'ESNext',
+        '--moduleResolution',
+        'Bundler',
+        'address-requests-bundler-consumer.ts',
+    ]);
+    console.log(
+        'Installed address request lifecycle: ESM/CommonJS runtime and strict NodeNext/Bundler consumers passed.'
     );
     assert.equal(
         await checkRadioInputConsumer({

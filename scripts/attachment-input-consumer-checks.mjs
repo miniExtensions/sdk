@@ -166,6 +166,29 @@ export async function checkAttachmentInputConsumer({ consumerDirectory }) {
         assert.equal(writes, 0);
         assert.equal(make().remove(0), true);
         assert.equal(writes, 1);
+        const cloneDescriptor = Object.getOwnPropertyDescriptor(
+            globalThis,
+            'structuredClone'
+        );
+        try {
+            Reflect.defineProperty(globalThis, 'structuredClone', {
+                configurable: true,
+                writable: true,
+                value: undefined,
+            });
+            assert.deepEqual(make().presentation, {
+                status: 'ready',
+                rows: [{ label: 'Attachment' }],
+            });
+        } finally {
+            if (cloneDescriptor)
+                Reflect.defineProperty(
+                    globalThis,
+                    'structuredClone',
+                    cloneDescriptor
+                );
+            else Reflect.deleteProperty(globalThis, 'structuredClone');
+        }
         authority.configs = [{ obscurePassword: true }];
         const before = reads;
         assert.equal(make().presentation.status, 'masked');

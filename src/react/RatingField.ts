@@ -26,11 +26,12 @@ export function renderRatingField(
     if (candidate?.state.retired) return null;
     const scalar = candidate?.state.kind === 'number' ? candidate : undefined;
     const config = numberConfiguration(props.displayConfig, props.writeConfig);
+    const title = props.title.trim() ? props.title : props.field.name;
     if (options.iconInput && !config.password)
         return renderOwnedRatingInput({
             ...options.iconInput,
             className: options.className ?? options.iconInput.className,
-            title: props.title.trim() ? props.title : props.field.name,
+            title,
             showTitle: config.showTitle,
             value: props.value ?? null,
             max: props.field.config.options.max,
@@ -43,7 +44,7 @@ export function renderRatingField(
                 ...options.iconInput.inputProps,
                 'aria-label': config.showTitle
                     ? options.iconInput.inputProps?.['aria-label']
-                    : props.title,
+                    : title,
                 'aria-invalid':
                     scalar?.state.valid === false ||
                     props.error !== null ||
@@ -61,7 +62,7 @@ export function renderRatingField(
     return createElement(NumberControl, {
         ...config,
         ...options,
-        title: props.title.trim() ? props.title : props.field.name,
+        title,
         input:
             scalar?.state.input ??
             (typeof props.value === 'number' && Number.isFinite(props.value)

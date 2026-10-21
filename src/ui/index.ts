@@ -6,6 +6,11 @@ export {
 } from './selectChoiceProjection.js';
 export { createSelectionModel } from './model.js';
 export {
+    getCollaboratorSelectionPresentation,
+    removeCollaboratorSelection,
+} from './collaboratorSelection.js';
+export type { CollaboratorSelectionPresentation } from './collaboratorSelection.js';
+export {
     getFiltersAfterDropdownChange,
     type DropdownFilterChangeInput,
 } from './dropdownFilterCompatibility.js';

@@ -6,6 +6,10 @@ export {
 } from './selectChoiceProjection.js';
 export { createSelectionModel } from './model.js';
 export {
+    getFiltersAfterDropdownChange,
+    type DropdownFilterChangeInput,
+} from './dropdownFilterCompatibility.js';
+export {
     isAttachmentUploadUrlCompatible,
     getAttachmentFilenameFromUrl,
     getUploadProgressWeight,

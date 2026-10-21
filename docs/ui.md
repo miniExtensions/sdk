@@ -4347,3 +4347,19 @@ rules, not input validation; callers retain finite native File byte counts.
 The host still owns ordering, progress state, cancellation, partial successes,
 R2/Firebase fallback, signing, object URLs, current writer admission and Save.
 No renderer or upload controller is replaced by these helpers.
+
+### Hosted dropdown filter replacement
+
+`getFiltersAfterDropdownChange` preserves the hosted linked-record dropdown
+compatibility rule: prepend one explicit replacement predicate (or clear it),
+remove all predicates for that target field recursively, and prune empty groups.
+ID references take precedence; name references use the first exact field-name
+match. Preserve unrelated and unresolved predicates, group metadata, root logic
+and predicate order. A missing definition starts as an empty `and` group.
+Inputs are not mutated.
+
+This is an explicit presentation edit, not a condition evaluator or query owner.
+It does not resolve computed field types, project dropdown chips, validate policy,
+read records or save anything. Keep the current accepted criteria/session check
+and explicit apply/read behavior with the caller. Unsupported or stale predicates
+must not disappear merely to fit a narrower editor.

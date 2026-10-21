@@ -1,4 +1,8 @@
 import {
+    checkDropdownFilterConsumer,
+    dropdownFilterTypedConsumer,
+} from './dropdown-filter-consumer-checks.mjs';
+import {
     checkAttachmentInputConsumer,
     attachmentInputTypedConsumer,
 } from './attachment-input-consumer-checks.mjs';
@@ -1449,6 +1453,7 @@ new Parser([]).parse({maxDepth:'48'});
                 radioInputTypedConsumer +
                 selectPresentationTypedConsumer +
                 attachmentInputTypedConsumer +
+                dropdownFilterTypedConsumer +
                 ratingInputTypedConsumer +
                 calendlyBookingTypedConsumer +
                 personBadgeTypedConsumer +
@@ -2939,6 +2944,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     assert.equal(
         await checkAttachmentInputConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkDropdownFilterConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

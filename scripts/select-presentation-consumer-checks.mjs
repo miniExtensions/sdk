@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export const selectPresentationTypedConsumer = `
-import {makeSelectOptionPresentations,getSelectOptionPresentationKey,makeUnavailableSelectOptionPresentation,type SelectOptionPresentation,type SelectPresentationConfig} from '@miniextensions/sdk/ui';
+import {getSelectAddOptionPresentation,type SelectAddOptionPresentation,makeSelectOptionPresentations,getSelectOptionPresentationKey,makeUnavailableSelectOptionPresentation,type SelectOptionPresentation,type SelectPresentationConfig} from '@miniextensions/sdk/ui';
 const presentationConfig:SelectPresentationConfig={enableConditionalOptions:true,conditionsForOptions:[{config:{optionForConditions:'',name:'Visible'}}]};
 const pendingPresentations:SelectOptionPresentation[]=makeSelectOptionPresentations({choices:[{id:'',name:'Native'}],miniExtFieldConfig:presentationConfig});
 const pendingKey:string=getSelectOptionPresentationKey(pendingPresentations[0]!);
@@ -13,7 +13,8 @@ const unavailablePresentation:SelectOptionPresentation=makeUnavailableSelectOpti
 makeSelectOptionPresentations({choices:[{id:'',name:1}]});
 // @ts-expect-error presentation keys require canonical native identity
 getSelectOptionPresentationKey({id:'',displayName:'Visible'});
-void pendingKey;void unavailablePresentation;
+const addPresentation:SelectAddOptionPresentation=getSelectAddOptionPresentation({options:pendingPresentations,searchTerm:' visible ',resultCount:0,allowAddingNewOptions:true,hasAddOptionCallback:true,getOptionTextValues:option=>[option.canonicalName,option.displayName]});
+void addPresentation;void pendingKey;void unavailablePresentation;
 `;
 
 export async function checkSelectPresentationConsumer({ consumerDirectory }) {
@@ -84,6 +85,34 @@ export async function checkSelectPresentationConsumer({ consumerDirectory }) {
                 canonicalName: 'Archived',
                 displayName: 'Archived',
             }
+        );
+        assert.deepEqual(
+            api.getSelectAddOptionPresentation({
+                options,
+                searchTerm: ' inspect (review) ',
+                resultCount: 0,
+                allowAddingNewOptions: true,
+                hasAddOptionCallback: true,
+                getOptionTextValues: (option) => [
+                    option.canonicalName,
+                    option.displayName,
+                ],
+            }),
+            {
+                kind: 'no-results',
+                searchTerm: 'inspect (review)',
+                showSeparator: false,
+            }
+        );
+        assert.deepEqual(
+            api.getSelectAddOptionPresentation({
+                options: [],
+                searchTerm: ' New ',
+                resultCount: 2,
+                allowAddingNewOptions: true,
+                hasAddOptionCallback: true,
+            }),
+            { kind: 'add', searchTerm: 'New', showSeparator: true }
         );
         groups++;
     }

@@ -649,7 +649,11 @@ write policy. Either `obscurePassword: true` or
 `maskPasswordOnLoginScreen: true` produces a fixed mask for every native field
 type, including Number and empty values. A defined non-boolean mask flag produces
 `Value unavailable`; absent or null configuration keeps ordinary presentation,
-including the existing attachment-summary rules. The starter checks this policy
+including the existing attachment-summary rules. Enabled or malformed
+`displayAsButton` or `displayAsAttachments` flags use `Value unavailable` without
+reading the native value; a valid password mask keeps priority over those
+presentation flags. Explicit `false` or omitted flags keep ordinary summaries.
+The starter checks this policy
 before reading the value and rechecks accepted ownership and display policy
 after formatting. This changes display only: native values and inline-edit
 admission stay intact. Display names do not resolve physical identity, so

@@ -269,9 +269,10 @@ window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...curr
         await page
             .getByRole('button', { name: 'Toggle repeat clear', exact: true })
             .click();
-        await page.locator('label[for=primary-b]').click();
-        await checked('b', 'a');
         const accepted = (await snapshot()).intents.length;
+        await page.locator('label[for=primary-b]').click();
+        state = await checked('b', 'a');
+        assert.equal(state.intents.length, accepted);
         await primaryB.focus();
         await page.keyboard.press('Space');
         state = await checked('b', 'a');

@@ -1,24 +1,42 @@
 import type {
     RuntimeConditionsDefinition,
-    RuntimeConditionItem,
+    RuntimeConditionSetting,
 } from '../runtime/types.js';
 
-export type DropdownFilterChangeInput = {
+// Preserve caller-owned nominal enum/settings types while sharing only tree
+// reconciliation. The helper never creates or converts a predicate setting.
+type DropdownFilterConditions<Setting extends RuntimeConditionSetting> = {
+    logicalOperator: RuntimeConditionsDefinition['logicalOperator'];
+    conditions: (
+        | { id: string; type: 'singleCondition'; setting: Setting }
+        | ({
+              id: string;
+              type: 'groupCondition';
+          } & DropdownFilterConditions<Setting>)
+    )[];
+};
+
+export type DropdownFilterChangeInput<
+    Setting extends RuntimeConditionSetting = RuntimeConditionSetting,
+> = {
     airtableFields: readonly { id: string; name: string }[];
-    conditionsDefinition: RuntimeConditionsDefinition | null;
+    conditionsDefinition: DropdownFilterConditions<Setting> | null;
     dropdownCondition: Extract<
-        RuntimeConditionItem,
+        DropdownFilterConditions<Setting>['conditions'][number],
         { type: 'singleCondition' }
     > | null;
     fieldId: string;
 };
 
-const removeFieldConditions = (
-    args: Pick<DropdownFilterChangeInput, 'airtableFields' | 'fieldId'> & {
-        conditions: RuntimeConditionsDefinition['conditions'];
+const removeFieldConditions = <Setting extends RuntimeConditionSetting>(
+    args: Pick<
+        DropdownFilterChangeInput<Setting>,
+        'airtableFields' | 'fieldId'
+    > & {
+        conditions: DropdownFilterConditions<Setting>['conditions'];
     }
-): RuntimeConditionsDefinition['conditions'] =>
-    args.conditions.reduce<RuntimeConditionsDefinition['conditions']>(
+): DropdownFilterConditions<Setting>['conditions'] =>
+    args.conditions.reduce<DropdownFilterConditions<Setting>['conditions']>(
         (result, condition) => {
             if (condition.type === 'groupCondition') {
                 const nested = removeFieldConditions({
@@ -43,9 +61,11 @@ const removeFieldConditions = (
     );
 
 /** Explicit dropdown replacement only; no evaluation, permission or query effects. */
-export const getFiltersAfterDropdownChange = (
-    args: DropdownFilterChangeInput
-): RuntimeConditionsDefinition => {
+export const getFiltersAfterDropdownChange = <
+    Setting extends RuntimeConditionSetting = RuntimeConditionSetting,
+>(
+    args: DropdownFilterChangeInput<Setting>
+): DropdownFilterConditions<Setting> => {
     const definition = args.conditionsDefinition ?? {
         logicalOperator: 'and',
         conditions: [],

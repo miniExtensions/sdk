@@ -4369,3 +4369,8 @@ It does not resolve computed field types, project dropdown chips, validate polic
 read records or save anything. Keep the current accepted criteria/session check
 and explicit apply/read behavior with the caller. Unsupported or stale predicates
 must not disappear merely to fit a narrower editor.
+
+Dropdown filter reconciliation preserves the caller's condition-setting type,
+including nominal host enums, through nested groups and nullable criteria. It
+shares tree edits without converting predicate payloads or replacing the host's
+strict persisted-choice validation.

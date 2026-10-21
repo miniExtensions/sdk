@@ -13,6 +13,18 @@ getFiltersAfterDropdownChange({...dropdownFilterInput,fieldId:1});
 // @ts-expect-error the replacement is one explicit predicate, not a group
 getFiltersAfterDropdownChange({...dropdownFilterInput,dropdownCondition:{id:'group',type:'groupCondition',logicalOperator:'and',conditions:[]}});
 void nextDropdownFilters;
+// The host's enum values are assignable to runtime strings, but not vice versa.
+// Preserve their nominal setting type through both nested and nullable criteria.
+enum HostedFieldType { Select = 'singleSelect' }
+enum HostedConditionType { Is = 'is' }
+type HostedSingleCondition={id:string;type:'singleCondition';setting:{fieldType:HostedFieldType;type:HostedConditionType;idOrName:{type:'id';id:string};value:string}};
+type HostedCondition=HostedSingleCondition|{id:string;type:'groupCondition';logicalOperator:'and'|'or';conditions:HostedCondition[]};
+type HostedCriteria={logicalOperator:'and'|'or';conditions:HostedCondition[]};
+declare const hostedCriteria:HostedCriteria|null;
+declare const hostedReplacement:HostedSingleCondition|null;
+const hostedResult:HostedCriteria=getFiltersAfterDropdownChange({airtableFields:[],conditionsDefinition:hostedCriteria,dropdownCondition:hostedReplacement,fieldId:'status'});
+void hostedResult;
+
 `;
 
 export async function checkDropdownFilterConsumer({ consumerDirectory }) {

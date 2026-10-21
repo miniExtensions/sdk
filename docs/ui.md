@@ -252,6 +252,48 @@ This control supplies no map, geocoding, address parser or multi-field address
 model. Installed recipe checks exercise the actual shipped fence and starter;
 they do not establish provider availability or backend persistence.
 
+### Reuse the request lifecycle with an existing renderer
+
+`createAddressAutocompleteRequests` shares the same request lifecycle without
+creating DOM or storing a draft. The native control above delegates to it.
+React and other existing renderers can supply two read closures:
+`reads.listPredictions(query, { signal })` and
+`reads.getFormattedAddress(placeId, { signal })`. Capture the existing token,
+field identity and authorized client or host tRPC query in those closures;
+the coordinator acquires no credentials, chooses no endpoint and never saves.
+
+Supply `isCurrent()` for the captured owner, synchronous `onValue(value, source)`
+for accepting a selected description or formatted detail, and optional
+`onStateChange(state)` for presentation. `source` is `selection` or `detail`.
+Returning `false` declines a value and retires that intent. The caller retains
+its cap, normalization, writer admission, focus, native input and dirty state.
+Snapshots are immutable; `getState()` returns the latest snapshot.
+
+| Existing renderer action                                     | Coordinator operation                                                                                               |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Accept manual text and request suggestions                   | Retire prior intent before the edit callback, then call `schedulePredictions(query)` with the caller-approved query |
+| Accept an option                                             | `select(prediction)` with the exact entry from the current snapshot                                                 |
+| Retry a failed read                                          | `retry(currentQuery)`; failed details retry their selected place, predictions use the supplied current query        |
+| External value replacement, clear, hide or composition start | `retire()` before accepting the replacement or inactive state                                                       |
+| Owner replacement or unmount                                 | `destroy()`; retained commands cannot restart it                                                                    |
+
+Scheduling retires previous work and waits 800 ms. The coordinator does not trim,
+cap or suppress empty queries: the native control retains its nonblank policy,
+while an existing host may preserve its own query policy. Selection immediately
+emits the description before reading details. Failures expose a phase, retain
+the caller's value and offer explicit retry; raw provider errors are not exposed.
+Old predictions, detail results and failures cannot update current state after
+retirement, even when a read adapter ignores abort. A cloned or retired prediction
+entry is not a current selection and is ignored.
+
+State notifications may synchronously retire or destroy the coordinator. Owner
+and intent checks run again before dispatch and value application. Callbacks
+must be synchronous; resolve any external decision before calling these methods.
+An owner predicate alone cannot detect hide/reveal or external-value A-to-B-to-A
+transitions: call `retire()` at those boundaries. Loaded values and the host's own
+capped-value echo tracking remain with the host adapter. This API supplies no
+read-only permission, persistence, provider configuration or automatic retry.
+
 ## Native single and multi-selects
 
 `createSelectControl` renders a labeled native `<select>`. It accepts loaded

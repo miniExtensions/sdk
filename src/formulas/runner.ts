@@ -1,5 +1,8 @@
 import Interpreter from './interpreter/interpreter.js';
-import type { InterpreterContext } from './interpreter/interpreter.js';
+import type {
+    FormulaInterpreterOptions,
+    InterpreterContext,
+} from './interpreter/interpreter.js';
 import Lexer from './lexer/lexer.js';
 import Parser from './parser/parser.js';
 import type { Expr as _Expr } from './parser/ast.js';
@@ -13,13 +16,18 @@ export default class FormulaRunner {
     private interpreter: Interpreter;
     private _expr: _Expr;
 
-    constructor(source: string, doNotThrowForUnknownFields = false) {
+    constructor(
+        source: string,
+        doNotThrowForUnknownFields = false,
+        options: FormulaInterpreterOptions = {}
+    ) {
         const lexer = new Lexer(source);
         const parser = new Parser(lexer.tokenize());
         this._expr = parser.parse();
         this.interpreter = new Interpreter(
             this.expr,
-            doNotThrowForUnknownFields
+            doNotThrowForUnknownFields,
+            options
         );
     }
 

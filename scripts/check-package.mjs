@@ -1,4 +1,8 @@
 import {
+    checkFormulaCompatibilityConsumer,
+    formulaCompatibilityTypedConsumer,
+} from './formula-compatibility-consumer-checks.mjs';
+import {
     checkAddressRequestsConsumer,
     addressRequestsTypedConsumer,
 } from './address-requests-consumer-checks.mjs';
@@ -511,10 +515,12 @@ try {
     );
     run('npm', [
         'install',
+        '--save-exact',
         '--ignore-scripts',
         '--no-audit',
         '--no-fund',
         join(temporaryDirectory, packed.filename),
+        'host-moment@npm:moment@2.30.1',
     ]);
     const installedPackage = join(
         temporaryDirectory,
@@ -1331,6 +1337,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         writeFileSync(
             join(temporaryDirectory, filename),
             declarationConsumer +
+                formulaCompatibilityTypedConsumer +
                 `
 const tokenOptions: import('@miniextensions/sdk/formulas').TokenizeOptions = {cache:false,maxTokens:8192};
 const parseOptions: import('@miniextensions/sdk/formulas').ParseOptions = {cache:false,maxDepth:48};
@@ -2970,6 +2977,15 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             consumerDirectory: temporaryDirectory,
         }),
         2
+    );
+    assert.equal(
+        await checkFormulaCompatibilityConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    console.log(
+        'Installed formula host compatibility: ESM/CommonJS runtime, Moment2.30.1/2.31.0 and strict NodeNext/Bundler declarations passed.'
     );
     assert.equal(
         await checkAddressRequestsConsumer({

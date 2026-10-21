@@ -134,13 +134,15 @@ it('rejects malformed descriptors with the existing Form error contract', () => 
     ]) {
         assert.throws(
             () =>
-                check({
-                    files,
-                    currentCount: 0,
-                    maxFiles: null,
-                    maxFileBytes: null,
-                    allowedTypes: null,
-                }),
+                Reflect.apply(check, undefined, [
+                    {
+                        files,
+                        currentCount: 0,
+                        maxFiles: null,
+                        maxFileBytes: null,
+                        allowedTypes: null,
+                    },
+                ]),
             {
                 name: 'TypeError',
                 message:
@@ -170,9 +172,12 @@ it('does not accept malformed normalized policy metadata', () => {
         { maxFileBytes: -1 },
         { allowedTypes: ['not-a-group'] },
     ]) {
-        assert.throws(() => check({ ...base, ...patch }), {
-            name: 'TypeError',
-            message: 'Expected normalized attachment metadata limits.',
-        });
+        assert.throws(
+            () => Reflect.apply(check, undefined, [{ ...base, ...patch }]),
+            {
+                name: 'TypeError',
+                message: 'Expected normalized attachment metadata limits.',
+            }
+        );
     }
 });

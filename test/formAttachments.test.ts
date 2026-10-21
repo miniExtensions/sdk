@@ -577,6 +577,11 @@ it('shares metadata results without changing the genuine Form policy wrapper', (
         { type: 'image/png', size: 8 },
     ];
     let comparisons = 0;
+    const groups: Config['allowedAttachmentTypes'][] = [
+        undefined,
+        [],
+        ['images'],
+    ];
     for (const allowedFiles of [undefined, 0, 1, 2.5, Number.MAX_VALUE])
         for (const sizeLimit of [
             undefined,
@@ -585,11 +590,7 @@ it('shares metadata results without changing the genuine Form policy wrapper', (
             4 / 1048576,
             Number.MAX_VALUE,
         ])
-            for (const allowedAttachmentTypes of [
-                undefined,
-                [],
-                ['images'] as const,
-            ]) {
+            for (const allowedAttachmentTypes of groups) {
                 const args = input(
                     { allowedFiles, sizeLimit, allowedAttachmentTypes },
                     [stored]

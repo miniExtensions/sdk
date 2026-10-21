@@ -14,6 +14,55 @@ export type SelectPresentationConfig = {
     }[];
 };
 
+export type SelectAddOptionPresentation = {
+    kind: 'loading' | 'add' | 'no-results' | 'none';
+    searchTerm: string;
+    showSeparator: boolean;
+};
+
+/**
+ * Hosted Add Choice compatibility only. Callers retain search, permission
+ * decisions, callback execution, native option identity and persistence.
+ * Object labels are supplied by the caller; no metadata is inferred or validated.
+ */
+export const getSelectAddOptionPresentation = <
+    T extends string | object,
+>(args: {
+    options: readonly T[];
+    searchTerm: string;
+    resultCount: number;
+    getOptionTextValues?: (option: T) => readonly string[];
+    allowAddingNewOptions?: boolean;
+    hasAddOptionCallback: boolean;
+    isLoading?: boolean;
+}): SelectAddOptionPresentation => {
+    const searchTerm = args.searchTerm.trim();
+    const comparableSearchTerm = searchTerm.toLowerCase();
+    const hasEquivalentOption = args.options.some((option) => {
+        const textValues =
+            args.getOptionTextValues?.(option) ??
+            (typeof option === 'string' ? [option] : []);
+        return textValues.some(
+            (text) => text.trim().toLowerCase() === comparableSearchTerm
+        );
+    });
+    const kind = args.isLoading
+        ? 'loading'
+        : args.allowAddingNewOptions &&
+            searchTerm.length > 0 &&
+            !hasEquivalentOption &&
+            args.hasAddOptionCallback
+          ? 'add'
+          : args.resultCount === 0
+            ? 'no-results'
+            : 'none';
+    return {
+        kind,
+        searchTerm,
+        showSeparator: kind === 'add' && args.resultCount !== 0,
+    };
+};
+
 /** Presentation only: pending choices may share an empty native Airtable ID. */
 export const makeSelectOptionPresentations = (args: {
     choices: readonly { id: string; name: string }[];

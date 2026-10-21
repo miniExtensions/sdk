@@ -2731,3 +2731,21 @@ export const nativeRichTextSyntax = {
     serializeCheckbox: serializeStoredRichTextCheckbox,
 };
 ```
+
+### Metadata admission without a Form owner
+
+`checkAttachmentFileMetadata` checks declared MIME, byte size and batch count
+using normalized limits from `getEffectiveAttachmentFileLimit` and
+`getEffectiveAttachmentSizeLimit` (convert MiB to bytes). It returns original
+file indexes, type/size rejections and an atomic count error. Type takes priority
+over size; count includes every native existing row and only metadata-accepted
+new files. A current count already over its cap rejects even an empty batch.
+`null` means no limit; an empty allowed-types array admits no MIME types, so
+normalize an unrestricted configuration to `null`.
+
+This helper supplies no permissions, producer-mode support, accepted privacy
+facet, folder/readability guarantee or upload authority. Hosts retain those
+checks, asynchronous owner retirement, localization, upload/persistence and
+cleanup. If folder checks remove files, enforce count against the remaining
+batch after those checks. `checkFormAttachmentFiles` retains the genuine loaded
+Form policy and shares this metadata stage internally.

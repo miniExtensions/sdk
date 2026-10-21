@@ -514,6 +514,7 @@ try {
     );
     run('npm', [
         'install',
+        '--save-exact',
         '--ignore-scripts',
         '--no-audit',
         '--no-fund',

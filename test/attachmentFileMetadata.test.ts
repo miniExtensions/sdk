@@ -181,3 +181,51 @@ it('does not accept malformed normalized policy metadata', () => {
         );
     }
 });
+
+it('rejects sparse normalized type groups consistently with Form validation', () => {
+    const check = Reflect.get(forms, 'checkAttachmentFileMetadata');
+    const mixed: unknown[] = new Array(2);
+    mixed[1] = 'images';
+    for (const allowedTypes of [new Array(1), mixed])
+        assert.throws(
+            () =>
+                Reflect.apply(check, undefined, [
+                    {
+                        files: [{ type: 'image/png', size: 1 }],
+                        currentCount: 0,
+                        maxFiles: null,
+                        maxFileBytes: null,
+                        allowedTypes,
+                    },
+                ]),
+            {
+                name: 'TypeError',
+                message: 'Expected normalized attachment metadata limits.',
+            }
+        );
+});
+
+it('keeps standalone empty type groups deny-all and null unrestricted', () => {
+    const base = {
+        files: [{ type: 'image/png', size: 1 }],
+        currentCount: 0,
+        maxFiles: null,
+        maxFileBytes: null,
+    };
+    assert.deepEqual(
+        forms.checkAttachmentFileMetadata({ ...base, allowedTypes: [] }),
+        {
+            acceptedIndexes: [],
+            rejected: [{ index: 0, reason: 'type' }],
+            batchError: null,
+        }
+    );
+    assert.deepEqual(
+        forms.checkAttachmentFileMetadata({ ...base, allowedTypes: null }),
+        {
+            acceptedIndexes: [0],
+            rejected: [],
+            batchError: null,
+        }
+    );
+});

@@ -339,7 +339,9 @@ export function checkAttachmentFileMetadata(
                 input.maxFileBytes < 0)) ||
         (input.allowedTypes !== null &&
             (!Array.isArray(input.allowedTypes) ||
-                input.allowedTypes.some((group) => !typeGroups.has(group))))
+                Array.from(input.allowedTypes).some(
+                    (group) => !typeGroups.has(group)
+                )))
     )
         throw new TypeError('Expected normalized attachment metadata limits.');
     return checkValidatedAttachmentFileMetadata(input);

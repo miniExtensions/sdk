@@ -51,7 +51,7 @@ export async function checkRadioInputBrowser({
 import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {RadioInput} from '@miniextensions/sdk/react';
-const refs=new Map(),intents=[],nativeEvents=[];let current,submits=0,nativeSubmits=0;
+const refs=new Map(),intents=[],labelClicks=[],nativeEvents=[];let current,submits=0,nativeSubmits=0;
 document.querySelectorAll('[data-native-radio]').forEach(node=>['click','change'].forEach(type=>node.addEventListener(type,event=>nativeEvents.push({type:event.type,trusted:event.isTrusted,id:node.id,checked:node.checked}))));
 document.getElementById('reference-form').addEventListener('submit',event=>{event.preventDefault();nativeSubmits++;});
 const initial={primary:'a',secondary:'a',accept:true,readOnly:false,disabled:false,cancel:false,allowDeselect:true};
@@ -67,12 +67,12 @@ function App(){
     h(RadioInput,{id,name:'sdk-native-choice',value,form:group+'-form','aria-describedby':'radio-help',checked:state[group]===value,allowDeselect:state.allowDeselect,readOnly:state.readOnly,disabled:state.disabled,
      ref:node=>{if(node)refs.set(id,node);else refs.delete(id);},
      onCheckedChange:(checked,event)=>{intents.push({group,value:event.currentTarget.value,checked,type:event.type,trusted:event.nativeEvent.isTrusted,native:event.currentTarget===refs.get(id),detail:event.detail});if(state.accept)setState(old=>({...old,[group]:checked?value:null}));}}),
-    h('label',{htmlFor:id},(group==='primary'?'Primary ':'Secondary ')+(value==='a'?'Alpha':'Beta')));
+    h('label',{htmlFor:id,onClick:event=>labelClicks.push({id,trusted:event.nativeEvent.isTrusted})},(group==='primary'?'Primary ':'Secondary ')+(value==='a'?'Alpha':'Beta')));
    }))),
   ...[['accept','Toggle writes'],['readOnly','Toggle readonly'],['disabled','Toggle disabled'],['cancel','Toggle cancellation'],['allowDeselect','Toggle repeat clear']].map(([key,label])=>h('button',{key,type:'button',onClick:()=>toggle(key)},label)));
 }
 const app=createRoot(document.querySelector('main'));app.render(h(React.StrictMode,null,h(App)));
-window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...current},intents:[...intents],submits,refCount:refs.size,refsValid:[...refs].every(([id,node])=>node===document.getElementById(id)&&node.tagName==='INPUT'&&node.type==='radio'),checked:Object.fromEntries([...refs].sort(([a],[b])=>a.localeCompare(b)).map(([id,node])=>[id,node.checked])),forms:Object.fromEntries([...refs].map(([id,node])=>[id,node.form?.id])),focused:document.activeElement?.id,nativeReference:{a:document.getElementById('reference-a').checked,b:document.getElementById('reference-b').checked,events:[...nativeEvents],submits:nativeSubmits}})};
+window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...current},intents:[...intents],labelClicks:[...labelClicks],submits,refCount:refs.size,refsValid:[...refs].every(([id,node])=>node===document.getElementById(id)&&node.tagName==='INPUT'&&node.type==='radio'),checked:Object.fromEntries([...refs].sort(([a],[b])=>a.localeCompare(b)).map(([id,node])=>[id,node.checked])),forms:Object.fromEntries([...refs].map(([id,node])=>[id,node.form?.id])),focused:document.activeElement?.id,nativeReference:{a:document.getElementById('reference-a').checked,b:document.getElementById('reference-b').checked,events:[...nativeEvents],submits:nativeSubmits}})};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
         const bundle = await build({
@@ -352,9 +352,29 @@ window.radioInputProbe={snapshot:()=>({reactVersion:React.version,state:{...curr
         await page
             .getByRole('button', { name: 'Toggle disabled', exact: true })
             .click();
-        await page.locator('label[for=primary-b]').click();
+        assert.equal(await primaryB.isDisabled(), true);
+        // A user can hit a label even though its associated input is disabled.
+        // Locator.click resolves that input and stops before dispatch; use an
+        // actual pointer gesture on the label, retaining the disabled policy.
+        const disabledLabel = await page
+            .locator('label[for=primary-b]')
+            .boundingBox();
+        assert(
+            disabledLabel && disabledLabel.width > 0 && disabledLabel.height > 0
+        );
+        const beforeDisabledLabel = (await snapshot()).labelClicks.length;
+        await page.mouse.click(
+            disabledLabel.x + disabledLabel.width / 2,
+            disabledLabel.y + disabledLabel.height / 2
+        );
         assert.equal(await primaryB.isDisabled(), true);
         await checked('a', 'a');
+        state = await snapshot();
+        assert.equal(state.labelClicks.length, beforeDisabledLabel + 1);
+        assert.deepEqual(state.labelClicks.at(-1), {
+            id: 'primary-b',
+            trusted: true,
+        });
         assert.equal((await snapshot()).intents.length, 3);
         await page
             .getByRole('button', { name: 'Toggle disabled', exact: true })

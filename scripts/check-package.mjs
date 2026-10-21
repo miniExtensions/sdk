@@ -1,4 +1,8 @@
 import {
+    checkRadioInputConsumer,
+    radioInputTypedConsumer,
+} from './radio-input-consumer-checks.mjs';
+import {
     checkDateInputCompatibilityConsumer,
     dateInputCompatibilityTypedConsumer,
 } from './date-input-compatibility-consumer-checks.mjs';
@@ -1434,6 +1438,7 @@ new Parser([]).parse({maxDepth:'48'});
         writeFileSync(
             join(temporaryDirectory, filename),
             textInputTypedConsumer +
+                radioInputTypedConsumer +
                 ratingInputTypedConsumer +
                 calendlyBookingTypedConsumer +
                 personBadgeTypedConsumer +
@@ -2916,6 +2921,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(nativeEditorMatrix.versions.length, 2);
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    assert.equal(
+        await checkRadioInputConsumer({
+            consumerDirectory: temporaryDirectory,
+            happyDomModulePath: require.resolve('happy-dom'),
+        }),
+        2
+    );
     assert.equal(
         await checkDateInputCompatibilityConsumer({
             consumerDirectory: temporaryDirectory,

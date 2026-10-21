@@ -1,3 +1,4 @@
+export { RadioInput, type RadioInputProps } from './RadioInput.js';
 export {
     RecoverableImage,
     type RecoverableImageProps,

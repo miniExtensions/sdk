@@ -4282,3 +4282,32 @@ backend validation retain their existing contracts, including the page client's
 backend-only treatment of client-zone ranges without token-bound provenance.
 Use existing public `TextInput` for a supplied native input; retain picker-specific
 composition and themed wrappers with the host.
+
+### Native radio input
+
+`RadioInput` from `@miniextensions/sdk/react` forwards the native input ref,
+form/name/value, focus/keyboard and ARIA props. Supply controlled `checked` and
+`onCheckedChange(checked, event)`; the caller owns choice identity and accepted
+writes. By default, clicking an already selected radio emits no new intent.
+Opt into `allowDeselect` for hosted click-to-clear behavior. Disabled, read-only
+and cancelled activation emit no selection writes. A refused intent retains the
+controlled checked state. No selection model, pending-name policy or transport
+is created.
+
+```tsx
+import { useState } from 'react';
+import { RadioInput } from '@miniextensions/sdk/react';
+export function OptionalChoice() {
+    const [selected, setSelected] = useState(false);
+    return (
+        <label>
+            <RadioInput
+                checked={selected}
+                allowDeselect
+                onCheckedChange={setSelected}
+            />
+            Urgent
+        </label>
+    );
+}
+```

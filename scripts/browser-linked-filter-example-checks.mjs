@@ -102,6 +102,71 @@ const linkedOptions = (offset = 'cursor_next') => ({
     offset,
     tableIdsToLinkedTableStates: metadata(),
 });
+const primaryDetail = () => ({
+    fieldId: 'fld_project_name',
+    fieldName: 'Project name',
+    titleOverride: null,
+    isHidden: false,
+    fieldIsInEditingChildForm: false,
+    childFormField: null,
+    miniExtConfig: {},
+});
+const captionScenarios = [
+    { name: 'visible primary captions', lifecycle: true },
+    {
+        name: 'empty More retires existing captions across visible/hidden/visible display policy',
+        emptyMorePolicyChange: true,
+    },
+    {
+        name: 'hidden primary captions',
+        detail: { isHidden: true },
+        caption: 'Linked record',
+    },
+    {
+        name: 'missing primary display authority',
+        missing: true,
+        caption: 'Linked record',
+    },
+    {
+        name: 'missing returned table metadata',
+        missingTableMap: true,
+        caption: 'Linked record',
+    },
+    {
+        name: 'ambiguous primary display authority',
+        duplicate: true,
+        caption: 'Linked record',
+    },
+    {
+        name: 'malformed primary display authority',
+        detail: { isHidden: 'false' },
+        caption: 'Linked record',
+    },
+    ...['obscurePassword', 'maskPasswordOnLoginScreen'].map((flag) => ({
+        name: `${flag} primary captions`,
+        detail: { miniExtConfig: { [flag]: true } },
+        caption: '••••••••',
+    })),
+    {
+        name: 'malformed primary masking',
+        detail: { miniExtConfig: { obscurePassword: 'false' } },
+        caption: 'Linked record',
+    },
+    {
+        name: 'own blank ID takes precedence over name',
+        value: '',
+        nameValue: 'Must not leak the name fallback',
+        caption: 'Linked record',
+    },
+    { name: 'own unambiguous name fallback', nameOnly: true },
+    { name: 'zero primary caption', value: 0, type: 'number', caption: '0' },
+    {
+        name: 'false primary caption',
+        value: false,
+        type: 'checkbox',
+        caption: 'false',
+    },
+];
 const makeForm = (scenario) => {
     const form = portalRecipeFixtures.makeForm({
         childExtensionInfo: { accessType: { type: 'create' } },
@@ -111,7 +176,7 @@ const makeForm = (scenario) => {
         fieldType: 'multipleRecordLinks',
         airtableField: linkField('fld_projects', 'Projects'),
         miniExtConfig: {
-            dynamicFilteringToggle: true,
+            dynamicFilteringToggle: scenario.captionPolicy == null,
             conditionalLinkedRecordFilteringFieldsType: scenario.ordered
                 ? 'hide'
                 : 'show-in-form',
@@ -141,6 +206,18 @@ const makeForm = (scenario) => {
         type: 'create',
         data: { fld_title: 'Initial title', fld_projects: ['rec_retained'] },
     };
+    form.payload.linkedRecordFieldIdToDetailFields = {
+        fld_projects: [primaryDetail()],
+    };
+    const captionPolicy = scenario.captionPolicy;
+    if (captionPolicy != null) {
+        const details =
+            form.payload.linkedRecordFieldIdToDetailFields.fld_projects;
+        Object.assign(details[0], captionPolicy.detail);
+        if (captionPolicy.missing)
+            delete form.payload.linkedRecordFieldIdToDetailFields.fld_projects;
+        if (captionPolicy.duplicate) details.push(structuredClone(details[0]));
+    }
     form.payload.formFieldIdsWithUnsavedChanges = [];
     form.payload.urlPrefilledFieldIds = [];
     return form;
@@ -214,9 +291,27 @@ export async function checkBrowserLinkedFilterExample({
         outfile,
         logLevel: 'silent',
         metafile: true,
+        plugins: [
+            {
+                name: 'linked-caption-accepted-page-observer',
+                setup(bundle) {
+                    bundle.onLoad({ filter: /\/src\/main\.ts$/ }, (args) => ({
+                        loader: 'ts',
+                        // Observe the real accepted page; client, owner and loaders remain unchanged.
+                        contents:
+                            readFileSync(args.path, 'utf8') +
+                            '\nexport const linkedCaptionPageForTest = () => visitors[activeVisitor].screen;\n',
+                    }));
+                },
+            },
+        ],
     });
     await assertBrowserInputs(bundled.metafile, consumer);
     const scenarios = [
+        ...captionScenarios.map((captionPolicy) => ({
+            name: `${captionPolicy.name} preserve native selection, dirty state, Save and read counts`,
+            captionPolicy,
+        })),
         {
             name: 'hidden selectors resolve three ordered server-prefills, native IDs, inner reads and nested save',
             ordered: true,
@@ -270,6 +365,10 @@ export async function checkBrowserLinkedFilterExample({
         const reads = [];
         const saves = [];
         const unexpected = [];
+        let resolveOptions;
+        const pendingOptions = new Promise((done) => {
+            resolveOptions = done;
+        });
         let resolveFilter;
         const pendingFilter = new Promise((done) => {
             resolveFilter = done;
@@ -341,7 +440,43 @@ export async function checkBrowserLinkedFilterExample({
             }
             if (route === 'fetchRecordsForFormLinkedRecordsSelector') {
                 reads.push(JSON.parse(String(init?.body)));
-                return new Response(JSON.stringify(linkedOptions()));
+                const options = linkedOptions();
+                const policy = scenario.captionPolicy;
+                if (policy != null) {
+                    if (reads.at(-1).offset != null) {
+                        options.records = [
+                            {
+                                id: 'rec_more',
+                                fields: { fld_project_name: 'More project' },
+                            },
+                        ];
+                        options.offset = null;
+                        if (policy.emptyMorePolicyChange) {
+                            options.records = [];
+                            options.offset =
+                                reads.length === 2 ? 'cursor_again' : null;
+                        }
+                    }
+                    if (policy.type)
+                        options.tableIdsToLinkedTableStates.tbl_projects.airtableFields[0].config.type =
+                            policy.type;
+                    for (const record of options.records) {
+                        if (Object.hasOwn(policy, 'value'))
+                            record.fields.fld_project_name = policy.value;
+                        if (policy.nameOnly) {
+                            record.fields['Project name'] =
+                                record.fields.fld_project_name;
+                            delete record.fields.fld_project_name;
+                        }
+                        if (policy.nameValue)
+                            record.fields['Project name'] = policy.nameValue;
+                    }
+                    if (policy.missingTableMap)
+                        delete options.tableIdsToLinkedTableStates;
+                    if (policy.lifecycle && reads.length === 4)
+                        await pendingOptions;
+                }
+                return new Response(JSON.stringify(options));
             }
             if (route === 'saveForm') {
                 saves.push(JSON.parse(String(init?.body)));
@@ -366,6 +501,7 @@ export async function checkBrowserLinkedFilterExample({
         }
         const globals = {
             document: window.document,
+            Node: window.Node,
             location: window.location,
             HTMLElement: window.HTMLElement,
             HTMLInputElement: window.HTMLInputElement,
@@ -381,7 +517,9 @@ export async function checkBrowserLinkedFilterExample({
         ]);
         Object.assign(globalThis, globals);
         try {
-            await import(`${pathToFileURL(outfile).href}?case=${++revision}`);
+            const starter = await import(
+                `${pathToFileURL(outfile).href}?case=${++revision}`
+            );
             window.document.getElementById('api-origin').value =
                 'https://sdk.example.test';
             window.document.getElementById('share-id').value = 'share_example';
@@ -394,7 +532,164 @@ export async function checkBrowserLinkedFilterExample({
             );
             assert.equal(bootstraps.length, 0);
             assert.equal(saves.length, 0);
-            if (scenario.unavailable) {
+            if (scenario.captionPolicy != null) {
+                const policy = scenario.captionPolicy;
+                const choices = () => [
+                    ...outer(window).querySelectorAll('.choice-list label'),
+                ];
+                const captions = () =>
+                    choices().map((label) => label.textContent.trim());
+                const expected = (labels) =>
+                    policy.caption == null
+                        ? labels
+                        : labels.map(() => policy.caption);
+                await searchOptions(window);
+                assert.deepEqual(
+                    captions(),
+                    expected(['Retained project', 'Available project'])
+                );
+                assert.equal(choices()[0].querySelector('input').checked, true);
+                assert.equal(
+                    choices()[1].querySelector('input').checked,
+                    false
+                );
+                assert.deepEqual(rawIds(window), ['rec_retained']);
+                assert.equal(saves.length, 0);
+                const search = outer(window).querySelector(
+                    'input[placeholder="Search available linked records"]'
+                );
+                if (policy.emptyMorePolicyChange) {
+                    const retained = choices()[0].querySelector('input');
+                    const available = choices()[1].querySelector('input');
+                    const accepted = starter.linkedCaptionPageForTest();
+                    assert.notEqual(
+                        accepted,
+                        form,
+                        'Mutate the accepted page, not the serialized fixture'
+                    );
+                    const detail =
+                        accepted.payload.linkedRecordFieldIdToDetailFields
+                            .fld_projects[0];
+                    for (const [index, hidden] of [true, false].entries()) {
+                        detail.isHidden = hidden;
+                        button(outer(window), 'More choices').click();
+                        await waitFor(
+                            () => reads.length === index + 2 && idle(window)
+                        );
+                        assert.deepEqual(
+                            captions(),
+                            ['Linked record', 'Linked record'],
+                            'Empty More must retire earlier captions and restoring display authority must not revive them'
+                        );
+                        assert.equal(
+                            choices()[0].querySelector('input'),
+                            retained
+                        );
+                        assert.equal(
+                            choices()[1].querySelector('input'),
+                            available
+                        );
+                        assert.equal(retained.checked, true);
+                        assert.equal(available.checked, false);
+                        assert.deepEqual(rawIds(window), ['rec_retained']);
+                        assert.equal(saves.length, 0);
+                    }
+                    assert.deepEqual(
+                        reads.map((read) => read.offset),
+                        [null, 'cursor_next', 'cursor_again']
+                    );
+                    assert.equal(
+                        button(outer(window), 'More choices').disabled,
+                        true
+                    );
+                } else {
+                    button(outer(window), 'More choices').click();
+                    await waitFor(() => reads.length === 2 && idle(window));
+                    assert.deepEqual(
+                        captions(),
+                        expected([
+                            'Retained project',
+                            'Available project',
+                            'More project',
+                        ])
+                    );
+                    assert.equal(
+                        button(outer(window), 'More choices').disabled,
+                        true
+                    );
+                    assert.equal(reads[1].offset, 'cursor_next');
+                    const detached = choices()[1].querySelector('input');
+                    search.value = 'Replacement';
+                    input(window, search);
+                    assert.deepEqual(captions(), []);
+                    detached.checked = true;
+                    change(window, detached);
+                    assert.deepEqual(rawIds(window), ['rec_retained']);
+                    await searchOptions(window);
+                    assert.deepEqual(
+                        captions(),
+                        expected(['Retained project', 'Available project'])
+                    );
+                    assert.equal(reads[2].offset, null);
+                    assert.equal(reads[2].filter.searchTerm, 'Replacement');
+                }
+                submit(window, outer(window).closest('form'));
+                await waitFor(() => saves.length === 1 && idle(window));
+                assert.deepEqual(saves[0].formRecord.data.fld_projects, [
+                    'rec_retained',
+                ]);
+                assert.deepEqual(
+                    saves[0].formFieldIdsWithUnsavedChanges,
+                    [],
+                    'Caption reads and replacement must not dirty the native draft'
+                );
+                const available = choices()[1].querySelector('input');
+                available.checked = true;
+                change(window, available);
+                assert.deepEqual(rawIds(window), [
+                    'rec_retained',
+                    'rec_available',
+                ]);
+                submit(window, outer(window).closest('form'));
+                await waitFor(() => saves.length === 2 && idle(window));
+                assert.deepEqual(saves[1].formRecord.data.fld_projects, [
+                    'rec_retained',
+                    'rec_available',
+                ]);
+                assert.deepEqual(saves[1].formFieldIdsWithUnsavedChanges, [
+                    'fld_projects',
+                ]);
+                if (policy.lifecycle) {
+                    search.value = 'Late result';
+                    input(window, search);
+                    button(outer(window), 'Search choices').click();
+                    await waitFor(() => reads.length === 4);
+                    const visitor = window.document.getElementById('visitor');
+                    visitor.value = 'B';
+                    change(window, visitor);
+                    visitor.value = 'A';
+                    change(window, visitor);
+                    resolveOptions();
+                    await settle();
+                    await settle();
+                    assert.equal(available.isConnected, false);
+                    assert.deepEqual(
+                        captions(),
+                        [],
+                        'An A→B→A render must not resurrect retired candidate captions'
+                    );
+                    available.checked = false;
+                    change(window, available);
+                    assert.deepEqual(rawIds(window), [
+                        'rec_retained',
+                        'rec_available',
+                    ]);
+                    assert.equal(reads.length, 4);
+                } else assert.equal(reads.length, 3);
+                assert.equal(bootstraps.length, 0);
+                assert.equal(filters.length, 0);
+                assert.equal(saves.length, 2);
+            } else if (scenario.unavailable) {
                 button(outer(window), 'Load conditional filters').click();
                 await waitFor(() => bootstraps.length === 1 && idle(window));
                 assert.match(
@@ -558,7 +853,7 @@ export async function checkBrowserLinkedFilterExample({
                     assert.equal(saves.length, 0);
                 }
             }
-            if (!scenario.stale) {
+            if (!scenario.stale && scenario.captionPolicy == null) {
                 submit(window, outer(window).closest('form'));
                 await waitFor(() => saves.length === 1 && idle(window));
                 const expectedIds = scenario.ordered

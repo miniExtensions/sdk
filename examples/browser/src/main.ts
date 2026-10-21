@@ -78,6 +78,7 @@ import { createPendingFiles } from './pendingFiles.js';
 import { formAttachmentControl } from './attachmentPresentation.js';
 import { admittedAttachmentValues } from './attachmentUpload.js';
 import { createLinkedReviewPresentation } from './linkedReview.js';
+import { createLinkedPickerPresentation } from './linkedPickerPresentation.js';
 import {
     RecoveryJournal,
     recoveryOwner,
@@ -1654,6 +1655,25 @@ const renderForm = (page: FormLoadedResult): void => {
                 !screenNode.inert &&
                 !fields.inert &&
                 bindingOwner?.field(fieldId).getSnapshot().canEdit === true;
+            const captions = createLinkedPickerPresentation({
+                config: () =>
+                    page.payload.fieldIdsToSchemas[fieldId]?.miniExtConfig,
+                details: () => {
+                    const map = page.payload.linkedRecordFieldIdToDetailFields;
+                    return map != null &&
+                        typeof map === 'object' &&
+                        !Array.isArray(map) &&
+                        Object.hasOwn(map, fieldId)
+                        ? map[fieldId]
+                        : undefined;
+                },
+                current: finderCurrent,
+                onRetire: (caption) => {
+                    for (const label of choices.querySelectorAll('label'))
+                        if (label.firstChild?.nodeType === Node.TEXT_NODE)
+                            label.firstChild.textContent = caption;
+                },
+            });
             const resetChoices = (): void => {
                 if (!finderCurrent()) return;
                 generation += 1;
@@ -1769,6 +1789,8 @@ const renderForm = (page: FormLoadedResult): void => {
                         }
                         if (!accepted()) return;
                         if (result == null) return;
+                        captions.refresh();
+                        if (!accepted()) return;
                         linkedPresentation.acceptOptions(fieldId, result);
                         bindingOwner?.setLinkedOptions(
                             fieldId,
@@ -1836,21 +1858,25 @@ const renderForm = (page: FormLoadedResult): void => {
                                     ? schema.airtableField.config.options
                                           .linkedTableId
                                     : '';
-                            const primary = result.tableIdsToLinkedTableStates[
-                                tableId
-                            ]?.airtableFields.find(
-                                (field) => field.isPrimaryField
+                            const caption = captions.caption(
+                                record,
+                                result.tableIdsToLinkedTableStates != null &&
+                                    typeof result.tableIdsToLinkedTableStates ===
+                                        'object' &&
+                                    !Array.isArray(
+                                        result.tableIdsToLinkedTableStates
+                                    ) &&
+                                    Object.hasOwn(
+                                        result.tableIdsToLinkedTableStates,
+                                        tableId
+                                    )
+                                    ? result.tableIdsToLinkedTableStates[
+                                          tableId
+                                      ]
+                                    : undefined
                             );
-                            choices.append(
-                                labeled(
-                                    primary == null
-                                        ? record.id
-                                        : displayValue(
-                                              record.fields[primary.id]
-                                          ) || record.id,
-                                    choice
-                                )
-                            );
+                            if (!accepted()) return;
+                            choices.append(labeled(caption, choice));
                         }
                         moreButton.disabled = offset == null;
                         status(

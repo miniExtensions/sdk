@@ -408,6 +408,7 @@ const browserStarterFiles = [
     'src/confirmation.ts',
     'src/review.ts',
     'src/linkedReview.ts',
+    'src/linkedPickerPresentation.ts',
     'src/pendingFiles.ts',
     'src/attachmentPresentation.ts',
     'src/attachmentUpload.ts',

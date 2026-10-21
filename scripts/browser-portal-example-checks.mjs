@@ -87,6 +87,40 @@ const kanbanPage = (offset = null) => {
     return result;
 };
 
+const linkedCellFixture = () => {
+    const portal = editablePortal();
+    portal.payload.linkedRecordFieldIdToDetailFields.fld_children = [
+        {
+            fieldId: 'fld_links',
+            fieldName: 'Linked choices',
+            isHidden: false,
+            miniExtConfig: {},
+            childFormField: {
+                idOrName: { type: 'id', id: 'fld_links' },
+                config: { type: 'multipleRecordLinks', config: {} },
+            },
+            fieldIsInEditingChildForm: true,
+        },
+    ];
+    const loaded = page([record('rec_one', 'Original', 1)]);
+    loaded.tableIdsToLinkedTableStates.tbl_children.airtableFields.push({
+        id: 'fld_links',
+        name: 'Linked choices',
+        isComputed: false,
+        config: {
+            type: 'multipleRecordLinks',
+            options: {
+                linkedTableId: 'tbl_targets',
+                isReversed: false,
+                prefersSingleRecordLink: false,
+            },
+        },
+    });
+    loaded.tableIdsToLinkedTableStates.tbl_children.recordIdsToAirtableRecords.rec_one.fields.fld_links =
+        [];
+    return { portal, loaded };
+};
+
 /** Run the copied browser sources with only the installed archive as their SDK. */
 export async function checkBrowserPortalExample({
     consumerDirectory,
@@ -141,6 +175,7 @@ export async function checkBrowserPortalExample({
         const globals = {
             document: window.document,
             location: window.location,
+            Node: window.Node,
             HTMLElement: window.HTMLElement,
             HTMLInputElement: window.HTMLInputElement,
             HTMLSelectElement: window.HTMLSelectElement,
@@ -4131,44 +4166,501 @@ export async function checkBrowserPortalExample({
             );
         }
         await check(
-            'searched linked-cell paging retains page-one native admission and rejects stale owner/criteria actions',
+            'linked-cell candidate captions require current unambiguous display authority and preserve native selections',
             async () => {
-                const linked = {
-                    id: 'fld_links',
-                    name: 'Linked choices',
-                    isComputed: false,
-                    config: {
-                        type: 'multipleRecordLinks',
-                        options: {
-                            linkedTableId: 'tbl_targets',
-                            isReversed: false,
-                            prefersSingleRecordLink: false,
-                        },
-                    },
-                };
-                const details = [
+                const cases = [
+                    { name: 'visible', expected: 'Permitted caption' },
+                    { name: 'zero', type: 'number', value: 0, expected: '0' },
                     {
-                        fieldId: 'fld_links',
-                        fieldName: 'Linked choices',
+                        name: 'false',
+                        type: 'checkbox',
+                        value: false,
+                        expected: 'false',
+                    },
+                    {
+                        name: 'obscurePassword',
+                        expected: '••••••••',
+                        unread: true,
+                    },
+                    {
+                        name: 'maskPasswordOnLoginScreen',
+                        expected: '••••••••',
+                        unread: true,
+                    },
+                    {
+                        name: 'outer obscurePassword',
+                        outerFlag: 'obscurePassword',
+                        expected: '••••••••',
+                        unread: true,
+                    },
+                    {
+                        name: 'outer maskPasswordOnLoginScreen',
+                        outerFlag: 'maskPasswordOnLoginScreen',
+                        expected: '••••••••',
+                        unread: true,
+                    },
+                    {
+                        name: 'malformed outer mask',
+                        outerFlag: 'obscurePassword',
+                        outerValue: 'false',
+                        unread: true,
+                    },
+                    { name: 'hidden', unread: true },
+                    { name: 'missing', unread: true },
+                    { name: 'malformed', unread: true },
+                    { name: 'ambiguous', unread: true },
+                    { name: 'ambiguous-primary', unread: true },
+                    { name: 'missing-view-policy', unread: true },
+                    { name: 'malformed-view-policy', unread: true },
+                    { name: 'own-undefined' },
+                    { name: 'own-blank' },
+                ];
+                for (const scenario of cases) {
+                    const { portal, loaded } = linkedCellFixture();
+                    const primary = {
+                        id: 'fld_name',
+                        name: 'Name',
+                        isPrimaryField: true,
+                        isComputed: false,
+                        config: { type: scenario.type ?? 'singleLineText' },
+                    };
+                    const detail = {
+                        fieldId: primary.id,
+                        fieldName: primary.name,
                         isHidden: false,
                         miniExtConfig: {},
-                        childFormField: {
-                            idOrName: { type: 'id', id: 'fld_links' },
-                            config: { type: 'multipleRecordLinks', config: {} },
+                        childFormField: null,
+                        fieldIsInEditingChildForm: false,
+                    };
+                    portal.payload.linkedRecordFieldIdToDetailFields.fld_links =
+                        [detail];
+                    if (
+                        [
+                            'obscurePassword',
+                            'maskPasswordOnLoginScreen',
+                        ].includes(scenario.name)
+                    )
+                        detail.miniExtConfig[scenario.name] = true;
+                    if (scenario.outerFlag)
+                        portal.payload.linkedRecordFieldIdToDetailFields.fld_children[0].miniExtConfig[
+                            scenario.outerFlag
+                        ] = scenario.outerValue ?? true;
+                    if (scenario.name === 'hidden') detail.isHidden = true;
+                    if (scenario.name === 'missing')
+                        delete portal.payload.linkedRecordFieldIdToDetailFields
+                            .fld_links;
+                    if (scenario.name === 'malformed')
+                        detail.isHidden = 'false';
+                    if (scenario.name === 'ambiguous')
+                        portal.payload.linkedRecordFieldIdToDetailFields.fld_links.push(
+                            { ...detail }
+                        );
+                    if (scenario.name === 'missing-view-policy')
+                        loaded.customViewDetailFields = {
+                            fld_children:
+                                portal.payload.linkedRecordFieldIdToDetailFields
+                                    .fld_children,
+                        };
+                    if (scenario.name === 'malformed-view-policy')
+                        loaded.customViewDetailFields = {
+                            fld_children:
+                                portal.payload.linkedRecordFieldIdToDetailFields
+                                    .fld_children,
+                            fld_links: [
+                                {
+                                    ...detail,
+                                    miniExtConfig: { obscurePassword: 'false' },
+                                },
+                            ],
+                        };
+                    let valueReads = 0;
+                    const fields = { Name: 'Forbidden name fallback' };
+                    Object.defineProperty(fields, 'fld_name', {
+                        enumerable: true,
+                        get: () => {
+                            valueReads += 1;
+                            if (scenario.unread)
+                                throw new Error(
+                                    'Private caption value was read.'
+                                );
+                            if (scenario.name === 'own-undefined')
+                                return undefined;
+                            if (scenario.name === 'own-blank') return '';
+                            return scenario.value ?? 'Permitted caption';
                         },
-                        fieldIsInEditingChildForm: true,
-                    },
-                ];
-                for (const stale of [null, 'owner', 'criteria']) {
-                    const portal = editablePortal();
-                    portal.payload.linkedRecordFieldIdToDetailFields.fld_children =
-                        details;
-                    const loaded = page([record('rec_one', 'Original', 1)]);
-                    loaded.tableIdsToLinkedTableStates.tbl_children.airtableFields.push(
-                        linked
+                    });
+                    const h = await mount({
+                        portal,
+                        handlers: {
+                            list: () => loaded,
+                            grid: ({ input }) => ({
+                                record: {
+                                    id: input.recordId,
+                                    fields: { fld_links: input.value },
+                                },
+                                auditTrail: null,
+                                auditTrails: [],
+                            }),
+                        },
+                    });
+                    let optionReads = 0;
+                    h.client.linkedRecords.listPortalOptions = async () => {
+                        optionReads += 1;
+                        return {
+                            records: [{ id: 'rec_candidate', fields }],
+                            offset: null,
+                            tableIdsToLinkedTableStates: {
+                                tbl_targets: {
+                                    airtableFields:
+                                        scenario.name === 'ambiguous-primary'
+                                            ? [
+                                                  primary,
+                                                  {
+                                                      ...primary,
+                                                      id: 'fld_other',
+                                                  },
+                                              ]
+                                            : [primary],
+                                    recordIdsToAirtableRecords: {},
+                                },
+                            },
+                        };
+                    };
+                    await h.click('Load records');
+                    button(h.view.node, 'Edit cell').click();
+                    const native = h.view.node.querySelector(
+                        'textarea[data-field-id="fld_links"]'
                     );
-                    loaded.tableIdsToLinkedTableStates.tbl_children.recordIdsToAirtableRecords.rec_one.fields.fld_links =
-                        [];
+                    const initialNative = native.value;
+                    await h.click('Search choices');
+                    const choice = h.view.node.querySelector(
+                        '.choice-list input[type=checkbox]'
+                    );
+                    assert(choice, scenario.name);
+                    assert.equal(
+                        choice.closest('label').textContent.trim(),
+                        scenario.expected ?? 'Linked record',
+                        scenario.name
+                    );
+                    assert.equal(native.value, initialNative, scenario.name);
+                    assert.equal(choice.checked, false, scenario.name);
+                    assert.equal(optionReads, 1, scenario.name);
+                    if (scenario.unread)
+                        assert.equal(valueReads, 0, scenario.name);
+                    assert.deepEqual(
+                        h.calls.map((call) => call.operation),
+                        ['list'],
+                        scenario.name
+                    );
+                    choice.checked = true;
+                    change(h.window, choice);
+                    assert.deepEqual(
+                        JSON.parse(native.value),
+                        ['rec_candidate'],
+                        scenario.name
+                    );
+                    submit(h.window, choice.closest('form'));
+                    await h.settle();
+                    assert.deepEqual(
+                        h.calls
+                            .filter((call) => call.operation === 'grid')
+                            .map((call) => call.input.value),
+                        [['rec_candidate']],
+                        scenario.name
+                    );
+                    assert.equal(optionReads, 1, scenario.name);
+                    assert.deepEqual(h.failures, [], scenario.name);
+                    await h.dispose();
+                }
+            }
+        );
+        await check(
+            'linked-cell More retires mounted captions after observed display-policy changes without changing selection',
+            async () => {
+                for (const emptyMore of [false, true]) {
+                    const { portal, loaded } = linkedCellFixture();
+                    const detail = {
+                        fieldId: 'fld_name',
+                        fieldName: 'Name',
+                        isHidden: false,
+                        miniExtConfig: {},
+                        childFormField: null,
+                        fieldIsInEditingChildForm: false,
+                    };
+                    portal.payload.linkedRecordFieldIdToDetailFields.fld_links =
+                        [detail];
+                    // Observe the actual detached page accepted by the starter;
+                    // keep structuredClone's behavior and restore it before actions.
+                    const clone = globalThis.structuredClone;
+                    let acceptedDetail;
+                    let h;
+                    globalThis.structuredClone = (value, options) => {
+                        const copy = clone(value, options);
+                        if (value === portal)
+                            acceptedDetail =
+                                copy.payload.linkedRecordFieldIdToDetailFields
+                                    .fld_links[0];
+                        return copy;
+                    };
+                    try {
+                        h = await mount({
+                            portal,
+                            handlers: {
+                                list: () => loaded,
+                                grid: ({ input }) => ({
+                                    record: {
+                                        id: input.recordId,
+                                        fields: { fld_links: input.value },
+                                    },
+                                    auditTrail: null,
+                                    auditTrails: [],
+                                }),
+                            },
+                        });
+                    } finally {
+                        globalThis.structuredClone = clone;
+                    }
+                    assert(acceptedDetail);
+                    assert.notEqual(acceptedDetail, detail);
+                    const optionCalls = [];
+                    let valueReads = 0;
+                    h.client.linkedRecords.listPortalOptions = async (
+                        input
+                    ) => {
+                        optionCalls.push(structuredClone(input));
+                        const number = optionCalls.length;
+                        return {
+                            records:
+                                emptyMore && number === 2
+                                    ? []
+                                    : [
+                                          {
+                                              id: `rec_caption_${number}`,
+                                              fields: {
+                                                  get fld_name() {
+                                                      valueReads += 1;
+                                                      return `Permitted caption ${number}`;
+                                                  },
+                                              },
+                                          },
+                                      ],
+                            offset: number < 3 ? `offset_${number}` : null,
+                            tableIdsToLinkedTableStates: {
+                                tbl_targets: {
+                                    airtableFields: [
+                                        {
+                                            id: 'fld_name',
+                                            name: 'Name',
+                                            isPrimaryField: true,
+                                            isComputed: false,
+                                            config: { type: 'singleLineText' },
+                                        },
+                                    ],
+                                    recordIdsToAirtableRecords: {},
+                                },
+                            },
+                        };
+                    };
+                    await h.click('Load records');
+                    button(h.view.node, 'Edit cell').click();
+                    const native = h.view.node.querySelector(
+                        'textarea[data-field-id="fld_links"]'
+                    );
+                    const captions = () =>
+                        [
+                            ...h.view.node.querySelectorAll(
+                                '.choice-list label'
+                            ),
+                        ].map((label) => label.textContent.trim());
+                    await h.click('Search choices');
+                    const first = h.view.node.querySelector(
+                        '.choice-list input[type=checkbox]'
+                    );
+                    assert.deepEqual(captions(), ['Permitted caption 1']);
+                    first.checked = true;
+                    change(h.window, first);
+                    const selectedNative = native.value;
+                    assert.deepEqual(JSON.parse(selectedNative), [
+                        'rec_caption_1',
+                    ]);
+                    acceptedDetail.isHidden = true;
+                    await h.click('More choices');
+                    assert.deepEqual(
+                        captions(),
+                        Array(emptyMore ? 1 : 2).fill('Linked record'),
+                        'Both empty and nonempty More must retire mounted captions.'
+                    );
+                    assert.equal(
+                        h.view.node.querySelector(
+                            '.choice-list input[type=checkbox]'
+                        ),
+                        first
+                    );
+                    assert.equal(first.checked, true);
+                    assert.equal(native.value, selectedNative);
+                    acceptedDetail.isHidden = false;
+                    await h.click('More choices');
+                    assert.deepEqual(
+                        captions(),
+                        Array(emptyMore ? 2 : 3).fill('Linked record'),
+                        'Later nonempty More must not revive retired captions.'
+                    );
+                    assert.equal(
+                        h.view.node.querySelector(
+                            '.choice-list input[type=checkbox]'
+                        ),
+                        first
+                    );
+                    assert.equal(first.checked, true);
+                    assert.equal(native.value, selectedNative);
+                    assert.equal(
+                        valueReads,
+                        1,
+                        'Observed A→B→A must not restore retired caption authority.'
+                    );
+                    assert.deepEqual(
+                        optionCalls.map((call) => call.offset),
+                        [null, 'offset_1', 'offset_2']
+                    );
+                    assert.deepEqual(
+                        h.calls.map((call) => call.operation),
+                        ['list']
+                    );
+                    submit(h.window, first.closest('form'));
+                    await h.settle();
+                    assert.deepEqual(
+                        h.calls
+                            .filter((call) => call.operation === 'grid')
+                            .map((call) => call.input.value),
+                        [['rec_caption_1']]
+                    );
+                    assert.equal(optionCalls.length, 3);
+                    assert.deepEqual(h.failures, []);
+                    await h.dispose();
+                }
+            }
+        );
+        await check(
+            'linked-cell captions discard late and reentrant results after Cancel, replacement, search, and owner return',
+            async () => {
+                for (const retirement of [
+                    'cancel',
+                    'replacement',
+                    'search',
+                    'owner-return',
+                    'format-close',
+                ]) {
+                    const { portal, loaded } = linkedCellFixture();
+                    portal.payload.linkedRecordFieldIdToDetailFields.fld_links =
+                        [
+                            {
+                                fieldId: 'fld_name',
+                                fieldName: 'Name',
+                                isHidden: false,
+                                miniExtConfig: {},
+                                childFormField: null,
+                                fieldIsInEditingChildForm: false,
+                            },
+                        ];
+                    const pending = deferred();
+                    const h = await mount({
+                        portal,
+                        handlers: { list: () => loaded },
+                    });
+                    let reads = 0;
+                    let valueReads = 0;
+                    h.client.linkedRecords.listPortalOptions = async () => {
+                        reads += 1;
+                        return pending.promise;
+                    };
+                    await h.click('Load records');
+                    button(h.view.node, 'Edit cell').click();
+                    const search = h.view.node.querySelector(
+                        'input[placeholder="Search permitted linked records"]'
+                    );
+                    const oldChoices =
+                        h.view.node.querySelector('.choice-list');
+                    button(h.view.node, 'Search choices').click();
+                    await waitFor(() => reads === 1);
+                    if (
+                        retirement === 'cancel' ||
+                        retirement === 'replacement'
+                    ) {
+                        button(h.view.node, 'Cancel').click();
+                        if (retirement === 'replacement')
+                            button(h.view.node, 'Edit cell').click();
+                    } else if (retirement === 'search') {
+                        search.value = 'replacement query';
+                        change(h.window, search, 'input');
+                    } else if (retirement === 'owner-return') {
+                        h.switchOwner('visitor_B');
+                        h.switchOwner('visitor_A');
+                    }
+                    const fields = {};
+                    Object.defineProperty(fields, 'fld_name', {
+                        enumerable: true,
+                        get: () => {
+                            valueReads += 1;
+                            if (retirement === 'format-close')
+                                button(h.view.node, 'Cancel').click();
+                            return 'Retired private candidate';
+                        },
+                    });
+                    pending.resolve({
+                        records: [{ id: 'rec_retired_candidate', fields }],
+                        offset: null,
+                        tableIdsToLinkedTableStates: {
+                            tbl_targets: {
+                                airtableFields: [
+                                    {
+                                        id: 'fld_name',
+                                        name: 'Name',
+                                        isPrimaryField: true,
+                                        isComputed: false,
+                                        config: { type: 'singleLineText' },
+                                    },
+                                ],
+                                recordIdsToAirtableRecords: {},
+                            },
+                        },
+                    });
+                    await h.settle();
+                    assert.equal(oldChoices.textContent, '', retirement);
+                    assert.equal(
+                        h.view.node.textContent.includes(
+                            'Retired private candidate'
+                        ),
+                        false,
+                        retirement
+                    );
+                    assert.equal(
+                        valueReads,
+                        retirement === 'format-close' ? 1 : 0,
+                        retirement
+                    );
+                    assert.equal(reads, 1, retirement);
+                    assert.deepEqual(
+                        h.calls.map((call) => call.operation),
+                        ['list'],
+                        retirement
+                    );
+                    assert.deepEqual(h.failures, [], retirement);
+                    await h.dispose();
+                }
+            }
+        );
+        await check(
+            'searched linked-cell paging retains page-one native admission and rejects stale owner/criteria actions',
+            async () => {
+                for (const stale of [
+                    null,
+                    'owner',
+                    'owner-return',
+                    'criteria',
+                    'cancel',
+                    'replacement',
+                ]) {
+                    const { portal, loaded } = linkedCellFixture();
                     const h = await mount({
                         portal,
                         handlers: {
@@ -4226,13 +4718,37 @@ export async function checkBrowserPortalExample({
                     assert(search);
                     search.value = 'Acme';
                     change(h.window, search, 'input');
+                    const native = h.view.node.querySelector(
+                        'textarea[data-field-id="fld_links"]'
+                    );
+                    assert(native);
+                    const initialNative = native.value;
                     await h.click('Search choices');
+                    assert.equal(native.value, initialNative);
                     const first = h.view.node.querySelector(
                         '.choice-list input[type=checkbox]'
                     );
                     assert(first);
                     assert.equal(first.checked, false);
+                    assert.equal(
+                        first.closest('label').textContent.trim(),
+                        'Linked record'
+                    );
                     await h.click('More choices');
+                    assert.equal(native.value, initialNative);
+                    assert.deepEqual(
+                        [
+                            ...h.view.node.querySelectorAll(
+                                '.choice-list label'
+                            ),
+                        ].map((label) => label.textContent.trim()),
+                        ['Linked record', 'Linked record']
+                    );
+                    assert.deepEqual(
+                        h.calls.map((call) => call.operation),
+                        ['list'],
+                        'Caption rendering must not hydrate, write, or refresh the parent.'
+                    );
                     assert.equal(
                         h.view.node.querySelectorAll(
                             '.choice-list input[type=checkbox]'
@@ -4247,8 +4763,21 @@ export async function checkBrowserPortalExample({
                         ]
                     );
                     const form = first.closest('form');
-                    if (stale === 'owner') h.switchOwner('visitor_B');
-                    else if (stale === 'criteria') {
+                    if (stale === 'owner' || stale === 'owner-return') {
+                        h.switchOwner('visitor_B');
+                        if (stale === 'owner-return')
+                            h.switchOwner('visitor_A');
+                    } else if (stale === 'cancel' || stale === 'replacement') {
+                        await h.click('Cancel');
+                        if (stale === 'replacement') {
+                            button(h.view.node, 'Edit cell').click();
+                            assert.equal(
+                                h.view.node.querySelector('.choice-list')
+                                    .textContent,
+                                ''
+                            );
+                        }
+                    } else if (stale === 'criteria') {
                         const view = [
                             ...h.view.node.querySelectorAll('select'),
                         ].find((s) =>
@@ -4280,6 +4809,12 @@ export async function checkBrowserPortalExample({
                                 },
                             ]
                         );
+                    assert.equal(optionCalls.length, 2);
+                    assert.equal(
+                        h.calls.filter((call) => call.operation === 'list')
+                            .length,
+                        1
+                    );
                     await h.dispose();
                 }
             }

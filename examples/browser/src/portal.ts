@@ -31,6 +31,7 @@ import {
     type PortalOwnerScope,
 } from '@miniextensions/sdk/portals';
 import { button, element, labeled } from './dom.js';
+import { createLinkedPickerPresentation } from './linkedPickerPresentation.js';
 import {
     displayValue,
     mountBoundFormField,
@@ -1137,6 +1138,29 @@ export const createPortalView = (options: {
             let optionGeneration = 0;
             // Paging admission uses the accepted unfiltered list, never a searched snapshot.
             let loadedOptions: { value: string; label: string }[] = [];
+            const captions = createLinkedPickerPresentation({
+                config: () => displayConfig,
+                details: () => {
+                    const map =
+                        acceptedData.customViewDetailFields === null
+                            ? page.payload.linkedRecordFieldIdToDetailFields
+                            : acceptedData.customViewDetailFields;
+                    return map != null &&
+                        typeof map === 'object' &&
+                        !Array.isArray(map) &&
+                        Object.hasOwn(map, recordField.id)
+                        ? map[recordField.id]
+                        : undefined;
+                },
+                current: editorIsCurrent,
+                // Portal candidates retain the canonical physical primary.
+                useCustomPrimary: false,
+                onRetire: (caption) => {
+                    for (const label of choices.querySelectorAll('label'))
+                        if (label.firstChild?.nodeType === Node.TEXT_NODE)
+                            label.firstChild.textContent = caption;
+                },
+            });
             const fetchOptions = (more: boolean): void => {
                 const expectedGeneration = ++optionGeneration;
                 const query = search.value;
@@ -1166,6 +1190,14 @@ export const createPortalView = (options: {
                                 },
                                 { signal }
                             );
+                        if (
+                            !current() ||
+                            !editorIsCurrent() ||
+                            optionGeneration !== expectedGeneration ||
+                            search.value !== query
+                        )
+                            return;
+                        captions.refresh();
                         if (
                             !current() ||
                             !editorIsCurrent() ||
@@ -1215,21 +1247,31 @@ export const createPortalView = (options: {
                                 AirtableFieldType.MULTIPLE_RECORD_LINKS
                                     ? recordField.config.options.linkedTableId
                                     : '';
-                            const primary = result.tableIdsToLinkedTableStates[
-                                linkedTableId
-                            ]?.airtableFields.find(
-                                (column) => column.isPrimaryField
+                            const caption = captions.caption(
+                                option,
+                                result.tableIdsToLinkedTableStates != null &&
+                                    typeof result.tableIdsToLinkedTableStates ===
+                                        'object' &&
+                                    !Array.isArray(
+                                        result.tableIdsToLinkedTableStates
+                                    ) &&
+                                    Object.hasOwn(
+                                        result.tableIdsToLinkedTableStates,
+                                        linkedTableId
+                                    )
+                                    ? result.tableIdsToLinkedTableStates[
+                                          linkedTableId
+                                      ]
+                                    : undefined
                             );
-                            choices.append(
-                                labeled(
-                                    primary == null
-                                        ? option.id
-                                        : displayValue(
-                                              option.fields[primary.id]
-                                          ) || option.id,
-                                    checkbox
-                                )
-                            );
+                            if (
+                                !current() ||
+                                !editorIsCurrent() ||
+                                optionGeneration !== expectedGeneration ||
+                                search.value !== query
+                            )
+                                return;
+                            choices.append(labeled(caption, checkbox));
                         }
                         moreButton.disabled = offset == null;
                         status(

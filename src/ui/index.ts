@@ -6,6 +6,13 @@ export {
 } from './selectChoiceProjection.js';
 export { createSelectionModel } from './model.js';
 export {
+    isAttachmentUploadUrlCompatible,
+    getAttachmentFilenameFromUrl,
+    getUploadProgressWeight,
+    getAggregateUploadProgress,
+    type AttachmentUploadProgressInput,
+} from './attachmentInputCompatibility.js';
+export {
     createAddressAutocompleteControl,
     AddressAutocompleteConfigurationError,
     type AddressAutocompleteOptions,

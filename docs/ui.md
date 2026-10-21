@@ -4331,3 +4331,19 @@ evaluate conditions, grant permissions, create choices or write records.
 `getSelectFieldPolicy` keeps its strict canonical-ID and unique-name validation.
 The host retains choice creation, conditional availability, limits, session
 ownership and persistence.
+
+### Hosted attachment input compatibility
+
+`isAttachmentUploadUrlCompatible` preserves the hosted HTTP(S) syntax check.
+It does not sign, fetch or authorize an upload. `getAttachmentFilenameFromUrl`
+uses the last path component, decodes it once, keeps malformed percent-encoding
+unchanged and falls back to the hostname for an empty/trailing-slash path.
+Invalid absolute URLs throw. Query and fragment data do not become filenames.
+
+`getUploadProgressWeight` gives empty files a weight of one;
+`getAggregateUploadProgress` preserves ordered-batch byte weighting, clamping,
+rounding and empty-batch completion. These are the existing numeric arithmetic
+rules, not input validation; callers retain finite native File byte counts.
+The host still owns ordering, progress state, cancellation, partial successes,
+R2/Firebase fallback, signing, object URLs, current writer admission and Save.
+No renderer or upload controller is replaced by these helpers.

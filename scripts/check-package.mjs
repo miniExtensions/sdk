@@ -1,4 +1,8 @@
 import {
+    checkAttachmentInputConsumer,
+    attachmentInputTypedConsumer,
+} from './attachment-input-consumer-checks.mjs';
+import {
     checkSelectPresentationConsumer,
     selectPresentationTypedConsumer,
 } from './select-presentation-consumer-checks.mjs';
@@ -1444,6 +1448,7 @@ new Parser([]).parse({maxDepth:'48'});
             textInputTypedConsumer +
                 radioInputTypedConsumer +
                 selectPresentationTypedConsumer +
+                attachmentInputTypedConsumer +
                 ratingInputTypedConsumer +
                 calendlyBookingTypedConsumer +
                 personBadgeTypedConsumer +
@@ -2928,6 +2933,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkAttachmentInputConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

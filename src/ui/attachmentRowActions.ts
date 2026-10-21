@@ -135,6 +135,8 @@ export function captureAttachmentRowActions(options: {
                     )
                         return null;
                     last = nativeIndex;
+                    // A hidden occurrence must never dereference native metadata.
+                    if (!visible) continue;
                     copied.push({
                         nativeIndex,
                         visible,

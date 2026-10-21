@@ -89,6 +89,57 @@ it('suppresses all lazy rows when hidden, masked, malformed or retired', () => {
     }
 });
 
+for (const behavior of ['counting', 'throwing'] as const) {
+    it(`skips a ${behavior} hidden attachment getter while retaining its visible sibling`, () => {
+        let hiddenReads = 0;
+        const removed: number[] = [];
+        const authority: AttachmentRowAuthority = {
+            owner: 'actual',
+            revision: 1,
+            visible: true,
+            editable: true,
+            configs: [{ hideAttachmentName: false }],
+        };
+        const facet = captureAttachmentRowActions({
+            getAuthority: () => authority,
+            readRows: () => [
+                {
+                    nativeIndex: 0,
+                    visible: false,
+                    removeAllowed: false,
+                    get attachment() {
+                        hiddenReads++;
+                        if (behavior === 'throwing')
+                            throw new Error('PRIVATE_HIDDEN');
+                        return { filename: 'PRIVATE_HIDDEN' };
+                    },
+                },
+                {
+                    nativeIndex: 1,
+                    visible: true,
+                    removeAllowed: true,
+                    attachment: { filename: 'Visible sibling' },
+                },
+            ],
+            isCurrent: () => true,
+            remove: (index) => {
+                removed.push(index);
+                return true;
+            },
+        });
+        assert.equal(hiddenReads, 0);
+        assert.deepEqual(facet.presentation, {
+            status: 'ready',
+            rows: [{ label: 'Visible sibling' }],
+        });
+        assert.deepEqual(facet.rows, [{ nativeIndex: 1, removeAllowed: true }]);
+        assert.equal(facet.remove(0), false);
+        assert.equal(facet.remove(1), true);
+        assert.equal(hiddenReads, 0);
+        assert.deepEqual(removed, [1]);
+    });
+}
+
 it('uses generic names without inspecting hidden filename metadata or exposing native URLs', () => {
     let nameReads = 0;
     const native = {

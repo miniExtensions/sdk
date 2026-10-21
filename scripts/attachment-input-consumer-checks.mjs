@@ -154,6 +154,56 @@ export async function checkAttachmentInputConsumer({ consumerDirectory }) {
     );
     const rowEsm = await import(pathToFileURL(rowLoader).href);
     for (const api of [rowEsm, consumer('@miniextensions/sdk/ui')]) {
+        for (const behavior of ['counting', 'throwing']) {
+            let hiddenReads = 0;
+            const removed = [];
+            const mixedAuthority = {
+                owner: 'installed',
+                revision: 1,
+                visible: true,
+                editable: true,
+                configs: [{ hideAttachmentName: false }],
+            };
+            const mixed = api.captureAttachmentRowActions({
+                getAuthority: () => mixedAuthority,
+                readRows: () => [
+                    {
+                        nativeIndex: 0,
+                        visible: false,
+                        removeAllowed: false,
+                        get attachment() {
+                            hiddenReads++;
+                            if (behavior === 'throwing')
+                                throw new Error('PRIVATE_HIDDEN');
+                            return { filename: 'PRIVATE_HIDDEN' };
+                        },
+                    },
+                    {
+                        nativeIndex: 1,
+                        visible: true,
+                        removeAllowed: true,
+                        attachment: { filename: 'Visible sibling' },
+                    },
+                ],
+                isCurrent: () => true,
+                remove: (index) => {
+                    removed.push(index);
+                    return true;
+                },
+            });
+            assert.equal(hiddenReads, 0, behavior);
+            assert.deepEqual(mixed.presentation, {
+                status: 'ready',
+                rows: [{ label: 'Visible sibling' }],
+            });
+            assert.deepEqual(mixed.rows, [
+                { nativeIndex: 1, removeAllowed: true },
+            ]);
+            assert.equal(mixed.remove(0), false);
+            assert.equal(mixed.remove(1), true);
+            assert.equal(hiddenReads, 0, behavior);
+            assert.deepEqual(removed, [1]);
+        }
         const authority = {
             owner: 'actual',
             revision: 1,

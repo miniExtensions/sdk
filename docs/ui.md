@@ -4311,3 +4311,23 @@ export function OptionalChoice() {
     );
 }
 ```
+
+### Pending select choice presentation
+
+`makeSelectOptionPresentations` accepts native `{id, name}` choices, including
+new host choices whose Airtable ID is still empty, and optional conditional
+label configuration. It preserves canonical names and IDs, trims configured
+labels and appends canonical names to duplicate visible labels. The first
+matching label rule wins, including the existing empty-ID compatibility case.
+`makeUnavailableSelectOptionPresentation` keeps an unavailable native name.
+
+`getSelectOptionPresentationKey` creates a namespaced UTF-16 key for DOM/React
+presentation. Pending and persisted identity have different namespaces. Keep
+that key out of native values and save payloads; only the existing host save
+reconciliation may replace an empty ID with the assigned Airtable ID.
+
+These helpers own presentation only. They do not validate published metadata,
+evaluate conditions, grant permissions, create choices or write records.
+`getSelectFieldPolicy` keeps its strict canonical-ID and unique-name validation.
+The host retains choice creation, conditional availability, limits, session
+ownership and persistence.

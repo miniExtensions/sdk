@@ -19,6 +19,13 @@ export {
 export { getSelectFieldPolicy } from './selectPolicy.js';
 export type { SelectFieldPolicy } from './selectPolicy.js';
 export {
+    makeSelectOptionPresentations,
+    getSelectOptionPresentationKey,
+    makeUnavailableSelectOptionPresentation,
+    type SelectOptionPresentation,
+    type SelectPresentationConfig,
+} from './selectPresentation.js';
+export {
     resolveSelectFieldAvailability,
     type SelectFieldAvailability,
     type SelectFieldAvailabilityInput,

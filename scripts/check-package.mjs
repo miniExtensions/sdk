@@ -1,4 +1,8 @@
 import {
+    checkSelectPresentationConsumer,
+    selectPresentationTypedConsumer,
+} from './select-presentation-consumer-checks.mjs';
+import {
     checkRadioInputConsumer,
     radioInputTypedConsumer,
 } from './radio-input-consumer-checks.mjs';
@@ -1439,6 +1443,7 @@ new Parser([]).parse({maxDepth:'48'});
             join(temporaryDirectory, filename),
             textInputTypedConsumer +
                 radioInputTypedConsumer +
+                selectPresentationTypedConsumer +
                 ratingInputTypedConsumer +
                 calendlyBookingTypedConsumer +
                 personBadgeTypedConsumer +
@@ -2921,6 +2926,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(nativeEditorMatrix.versions.length, 2);
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    assert.equal(
+        await checkSelectPresentationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
     assert.equal(
         await checkRadioInputConsumer({
             consumerDirectory: temporaryDirectory,

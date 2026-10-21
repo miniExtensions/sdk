@@ -37,6 +37,8 @@ export { getSelectFieldPolicy } from './selectPolicy.js';
 export type { SelectFieldPolicy } from './selectPolicy.js';
 export {
     makeSelectOptionPresentations,
+    getSelectAddOptionPresentation,
+    type SelectAddOptionPresentation,
     getSelectOptionPresentationKey,
     makeUnavailableSelectOptionPresentation,
     type SelectOptionPresentation,

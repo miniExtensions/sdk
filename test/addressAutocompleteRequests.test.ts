@@ -396,4 +396,46 @@ describe('headless address requests', { concurrency: false }, () => {
         assert.equal(h.phases.length, stateCalls);
         assert.deepEqual(h.values, []);
     });
+    for (const replacement of ['retire', 'newer-query'] as const)
+        it(`does not revive a query when its initial idle notification requests ${replacement}`, async (test) => {
+            let model!: AddressAutocompleteRequests;
+            let armed = false;
+            const queries: string[] = [];
+            const h = fixture(
+                test,
+                {
+                    listPredictions: async (query) => {
+                        queries.push(query);
+                        return [prediction];
+                    },
+                    getFormattedAddress: async () => 'Unused',
+                },
+                {
+                    onStateChange: (state) => {
+                        if (armed && state.phase === 'idle') {
+                            armed = false;
+                            if (replacement === 'retire') model.retire();
+                            else model.schedulePredictions('Newer query');
+                        }
+                    },
+                }
+            );
+            model = h.model;
+            await h.load('Initial query');
+            armed = true;
+            model.schedulePredictions('Obsolete query');
+            test.mock.timers.tick(800);
+            await settle();
+            assert.deepEqual(
+                queries,
+                replacement === 'retire'
+                    ? ['Initial query']
+                    : ['Initial query', 'Newer query']
+            );
+            assert.equal(
+                model.getState().phase,
+                replacement === 'retire' ? 'idle' : 'predictions'
+            );
+            assert.deepEqual(h.values, []);
+        });
 });

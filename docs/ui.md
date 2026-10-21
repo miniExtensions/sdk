@@ -4416,3 +4416,23 @@ Dropdown filter reconciliation preserves the caller's condition-setting type,
 including nominal host enums, through nested groups and nullable criteria. It
 shares tree edits without converting predicate payloads or replacing the host's
 strict persisted-choice validation.
+
+## Hosted Add Choice compatibility
+
+`getSelectAddOptionPresentation` from `@miniextensions/sdk/ui` returns a
+`SelectAddOptionPresentation`: `kind` (`loading`, `add`, `no-results`, or `none`),
+the trimmed `searchTerm`, and `showSeparator`. Loading wins; otherwise an allowed
+nonempty, non-equivalent addition with an available callback wins over no results.
+The separator is shown only for Add alongside existing search results.
+
+Pass all options, the actual search result count, and the caller's text extractor
+for canonical names and aliases. Comparisons trim and lowercase; display text
+retains case and internal whitespace. Strings fall back to their own text;
+objects have no inferred labels. An explicit empty extractor result suppresses
+the fallback. This helper does not filter options or validate canonical metadata.
+
+`hasAddOptionCallback` describes the callback available to the presentation
+adapter. A host that always supplies a guarded wrapper must preserve that
+availability even when the underlying creation callback is absent. Permissions,
+creation callbacks, search state, native identities, sentinels and persistence
+remain owned by the caller. Presentation results are never native choice values.

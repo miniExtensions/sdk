@@ -140,6 +140,70 @@ export async function checkAddressRequestsConsumer({ consumerDirectory }) {
             clearTimeout(deadline);
             model.destroy();
         }
+        for (const replacement of ['retire', 'newer-query']) {
+            const ready = deferred();
+            const queries = [];
+            let armed = false;
+            let reentryDeadline;
+            const timeout = new Promise((_, reject) => {
+                reentryDeadline = setTimeout(
+                    () =>
+                        reject(new Error('Installed idle reentry timed out.')),
+                    10000
+                );
+            });
+            const reentrant = api.createAddressAutocompleteRequests({
+                reads: {
+                    listPredictions: async (query) => {
+                        queries.push(query);
+                        return [
+                            {
+                                description: 'Synthetic address',
+                                placeId: 'one',
+                            },
+                        ];
+                    },
+                    getFormattedAddress: async () => 'Unused',
+                },
+                isCurrent: () => true,
+                onValue: () => {
+                    throw new Error(
+                        'Prediction scheduling cannot accept a value.'
+                    );
+                },
+                onStateChange: (state) => {
+                    if (state.phase === 'predictions') ready.resolve();
+                    if (armed && state.phase === 'idle') {
+                        armed = false;
+                        if (replacement === 'retire') reentrant.retire();
+                        else reentrant.schedulePredictions('Newer query');
+                    }
+                },
+            });
+            try {
+                await Promise.race([
+                    (async () => {
+                        reentrant.schedulePredictions('Initial query');
+                        await ready.promise;
+                        armed = true;
+                        reentrant.schedulePredictions('Obsolete query');
+                        await new Promise((resolve) =>
+                            setTimeout(resolve, 850)
+                        );
+                        assert.deepEqual(
+                            queries,
+                            replacement === 'retire'
+                                ? ['Initial query']
+                                : ['Initial query', 'Newer query']
+                        );
+                    })(),
+                    timeout,
+                ]);
+            } finally {
+                clearTimeout(reentryDeadline);
+                reentrant.destroy();
+            }
+        }
     }
     return groups;
 }

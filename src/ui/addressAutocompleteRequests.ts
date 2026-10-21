@@ -184,9 +184,10 @@ export const createAddressAutocompleteRequests = (
         getState: () => state,
         schedulePredictions: (query) => {
             if (!current()) return;
+            // An idle notification can retire this intent or schedule a successor.
+            const generation = predictionGeneration + 1;
             retire();
-            if (!current()) return;
-            const generation = predictionGeneration;
+            if (!current() || generation !== predictionGeneration) return;
             timer = setTimeout(() => {
                 timer = undefined;
                 void readPredictions(query, generation);

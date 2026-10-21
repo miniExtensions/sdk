@@ -108,13 +108,15 @@ const portalCellSummary = (
             if (displayConfig == null)
                 return {
                     type: 'plain',
-                    flags: [undefined, undefined, undefined],
+                    flags: Array(5).fill(undefined),
                 };
             if (!isObject(displayConfig)) return null;
             const flags = [
                 displayConfig.obscurePassword,
                 displayConfig.maskPasswordOnLoginScreen,
                 displayConfig.hideAttachmentName,
+                displayConfig.displayAsButton,
+                displayConfig.displayAsAttachments,
             ];
             if (
                 flags
@@ -128,16 +130,26 @@ const portalCellSummary = (
                 return null;
             return {
                 type:
-                    flags[0] === true || flags[1] === true ? 'masked' : 'plain',
+                    flags[0] === true || flags[1] === true
+                        ? 'masked'
+                        : flags
+                                .slice(3)
+                                .some(
+                                    (flag) =>
+                                        flag !== undefined && flag !== false
+                                )
+                          ? 'unavailable'
+                          : 'plain',
                 flags,
             };
         };
         const before = policy();
-        if (before === null) return unavailable;
+        if (before === null || before.type === 'unavailable')
+            return unavailable;
         if (before.type === 'masked') return mask;
         const text = format();
         const after = policy();
-        if (after === null) return unavailable;
+        if (after === null || after.type === 'unavailable') return unavailable;
         if (after.type === 'masked') return mask;
         if (
             !before.flags.every((flag, index) =>

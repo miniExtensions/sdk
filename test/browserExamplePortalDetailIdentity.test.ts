@@ -675,6 +675,14 @@ describe('Portal row summaries use returned display policy', () => {
     });
 });
 
+for (const flag of ['displayAsButton', 'displayAsAttachments']) {
+    it(`keeps native Grid editing and saving with ${flag} on the returned detail`, async (test) => {
+        const returned = listPage();
+        details(returned)[0]!.miniExtConfig = { [flag]: true };
+        await editAndSave(test, returned);
+    });
+}
+
 describe('Portal row summaries guard native reads and formatting lifetime', () => {
     const neighborId = 'fld_summary_neighbor';
     const neighborName = 'Visible summary neighbor';
@@ -835,6 +843,50 @@ describe('Portal row summaries guard native reads and formatting lifetime', () =
     ]) {
         it(`never reads the native value during summary construction under ${example.name}`, async (test) => {
             await exerciseGetter(test, example.config, example.expected, 0);
+        });
+    }
+
+    for (const flag of ['displayAsButton', 'displayAsAttachments']) {
+        for (const value of [true, null, 'false', 0, [], {}]) {
+            it(`never reads or publishes the raw sentinel for ${flag}=${JSON.stringify(value)}`, async (test) => {
+                await exerciseGetter(
+                    test,
+                    { [flag]: value },
+                    'Value unavailable',
+                    0
+                );
+            });
+        }
+        for (const maskFlag of [
+            'obscurePassword',
+            'maskPasswordOnLoginScreen',
+        ]) {
+            it(`keeps ${maskFlag} priority over ${flag} without a native read`, async (test) => {
+                await exerciseGetter(
+                    test,
+                    { [maskFlag]: true, [flag]: true },
+                    '••••••••',
+                    0
+                );
+            });
+        }
+        it(`keeps false ${flag} ordinary and lazy`, async (test) => {
+            await exerciseGetter(test, { [flag]: false }, permittedValue, 1);
+        });
+        it(`rejects a ${flag} change made by the native getter`, async (test) => {
+            await exerciseGetter(test, {}, 'Value unavailable', 1, {
+                onRead: (snapshot) => {
+                    Object.assign(snapshot.detailFields[0]!.miniExtConfig!, {
+                        [flag]: true,
+                    });
+                },
+            });
+        });
+    }
+
+    for (const config of [undefined, null]) {
+        it(`keeps ${String(config)} configuration ordinary with one native read`, async (test) => {
+            await exerciseGetter(test, config, permittedValue, 1);
         });
     }
 

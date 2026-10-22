@@ -7,6 +7,10 @@ import {
     borrowedNativeLinkedReadTypedConsumer,
 } from './borrowed-native-linked-read-consumer-checks.mjs';
 import {
+    checkBorrowedLinkedChildConsumer,
+    borrowedLinkedChildTypedConsumer,
+} from './borrowed-linked-child-consumer-checks.mjs';
+import {
     checkBorrowedButtonActionConsumer,
     borrowedButtonActionTypedConsumer,
 } from './borrowed-button-action-consumer-checks.mjs';
@@ -1383,6 +1387,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 nativeLinkedRecordRowsTypedConsumer +
                 collaboratorSelectionTypedConsumer +
                 childNavigationTypedConsumer +
+                borrowedLinkedChildTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
                 `
@@ -3039,6 +3044,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     assert.equal(
         await checkButtonDispatchGateConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkBorrowedLinkedChildConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

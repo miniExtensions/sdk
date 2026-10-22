@@ -1414,7 +1414,9 @@ test('packed tail rejects a zero-exit worker with an owned live grandchild and p
     const fixture = await packedTailFixture(t, {
         attachment: { mode: 'survivor' },
     });
+    let drainFailure;
     await assert.rejects(runPackedTailChecks(fixture.options), (error) => {
+        drainFailure = error;
         assertTailFailure(error, 'attachment');
         assert.match(
             error.errors.map((item) => item.message).join('\n'),
@@ -1430,7 +1432,11 @@ test('packed tail rejects a zero-exit worker with an owned live grandchild and p
         await readFile(
             join(fixture.root, 'attachment.grandchild.term'),
             'utf8'
-        ),
+        ).catch((error) => {
+            // Preserve the actual signal/refusal evidence if the marker is absent.
+            error.cause = drainFailure;
+            throw error;
+        }),
         'SIGTERM'
     );
     const grandchildPid = Number(
@@ -1438,6 +1444,91 @@ test('packed tail rejects a zero-exit worker with an owned live grandchild and p
     );
     await fixture.assertPidDrained(grandchildPid);
     await fixture.assertGroupsGone();
+});
+
+test('packed tail retries transient TERM admission and preserves fail-closed escalation', async (t) => {
+    for (const permanent of [false, true]) {
+        await t.test(
+            permanent ? 'persistent refusal' : 'transient refusal',
+            async (t) => {
+                const fixture = await packedTailFixture(t, {
+                    attachment: { mode: 'survivor' },
+                });
+                const attempts = [];
+                const createObserver = (options) => {
+                    const observer = fixture.options.createObserver(options);
+                    let refused = false;
+                    return {
+                        ...observer,
+                        async signal(name) {
+                            if (name === 'SIGTERM' && (permanent || !refused)) {
+                                refused = true;
+                                attempts.push({ name, admitted: false });
+                                return {
+                                    state: 'unresolved',
+                                    reason: 'Transient proc stat disappeared during ownership proof',
+                                    pid: options.pid,
+                                    members: [],
+                                };
+                            }
+                            const state = await observer.signal(name);
+                            attempts.push({
+                                name,
+                                admitted: state.state === 'live',
+                            });
+                            return state;
+                        },
+                    };
+                };
+                await assert.rejects(
+                    runPackedTailChecks({ ...fixture.options, createObserver }),
+                    (error) => {
+                        assertTailFailure(error, 'attachment');
+                        assert.match(
+                            error.errors.map((item) => item.message).join('\n'),
+                            /Cannot safely send SIGTERM/
+                        );
+                        return true;
+                    }
+                );
+                const marker = readFile(
+                    join(fixture.root, 'attachment.grandchild.term'),
+                    'utf8'
+                );
+                if (permanent) {
+                    await assert.rejects(marker, { code: 'ENOENT' });
+                    assert.equal(
+                        attempts.filter(
+                            (event) =>
+                                event.name === 'SIGTERM' && event.admitted
+                        ).length,
+                        0
+                    );
+                    assert.equal(
+                        attempts.filter(
+                            (event) =>
+                                event.name === 'SIGKILL' && event.admitted
+                        ).length,
+                        1
+                    );
+                } else {
+                    assert.equal(await marker, 'SIGTERM');
+                    assert.deepEqual(attempts, [
+                        { name: 'SIGTERM', admitted: false },
+                        { name: 'SIGTERM', admitted: true },
+                    ]);
+                }
+                const grandchildPid = Number(
+                    await readFile(
+                        join(fixture.root, 'attachment.grandchild.pid'),
+                        'utf8'
+                    )
+                );
+                await fixture.assertPidDrained(grandchildPid);
+                await fixture.assertGroupsGone();
+            }
+        );
+    }
 });
 
 test('packed tail rejects missing or repeated finish acknowledgement before accepting a result', async (t) => {

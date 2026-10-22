@@ -190,3 +190,10 @@ export type {
     DateInputRange,
     DateInputBlurResult,
 } from './dateInputCompatibility.js';
+
+export {
+    captureAttachmentRowActions,
+    type AttachmentRowAuthority,
+    type AttachmentActionRow,
+    type AttachmentRowActions,
+} from './attachmentRowActions.js';

@@ -138,6 +138,67 @@ export function getEffectiveAttachmentSizeLimit(
     return configuredLimit;
 }
 
+export type AttachmentRowPolicyInput = {
+    /** Native URLs in original order, never display-proxy aliases. */
+    urls: readonly string[];
+    /** Missing means no authoritative baseline; it is not an empty baseline. */
+    persistedUrls?: readonly string[];
+    readOnly: boolean;
+    addOnly: boolean;
+    showExistingValues: boolean;
+    hidePersistedValues: boolean;
+};
+export type AttachmentRowPolicy =
+    | { status: 'unavailable'; reason: 'missing-persisted-baseline' }
+    | {
+          status: 'ready';
+          rows: readonly {
+              nativeIndex: number;
+              persisted: boolean;
+              visible: boolean;
+              removeAllowed: boolean;
+          }[];
+      };
+
+/** Native row admission only. No metadata, upload authority, writer or cleanup. */
+export function getAttachmentRowPolicy(
+    input: AttachmentRowPolicyInput
+): AttachmentRowPolicy {
+    const validUrls = (value: readonly string[]) =>
+        Array.isArray(value) &&
+        Array.from(value).every((url) => typeof url === 'string' && url !== '');
+    if (
+        !validUrls(input.urls) ||
+        (input.persistedUrls !== undefined &&
+            !validUrls(input.persistedUrls)) ||
+        [
+            input.readOnly,
+            input.addOnly,
+            input.showExistingValues,
+            input.hidePersistedValues,
+        ].some((flag) => typeof flag !== 'boolean')
+    )
+        throw new TypeError('Attachment row policy is malformed.');
+    const addOnly = !input.readOnly && input.addOnly;
+    if (addOnly && input.persistedUrls === undefined)
+        return { status: 'unavailable', reason: 'missing-persisted-baseline' };
+    const persisted = new Set(input.persistedUrls ?? []);
+    return {
+        status: 'ready',
+        rows: input.urls.map((url, nativeIndex) => {
+            const stored = addOnly && persisted.has(url);
+            return {
+                nativeIndex,
+                persisted: stored,
+                visible:
+                    !stored ||
+                    (input.showExistingValues && !input.hidePersistedValues),
+                removeAllowed: !input.readOnly && !stored,
+            };
+        }),
+    };
+}
+
 /** Opt-in presentation/admission helper; never writes, uploads or authorizes. */
 export function getFormAttachmentPolicy(
     input: FormAttachmentPolicyInput
@@ -218,19 +279,23 @@ export function getFormAttachmentPolicy(
         addOnly,
         openAllowed: config?.disableOpenFiles !== true,
         downloadAllowed: config?.disableDownloadFiles !== true,
-        rows: values.map((attachment, nativeIndex) => {
-            const persisted = addOnly && persistedUrls.has(attachment.url);
-            return {
-                nativeIndex,
-                attachment,
-                persisted,
-                visible:
-                    !persisted ||
-                    (config?.showExistingValuesForAddOnlyMode === true &&
-                        input.hidePersistedAddOnlyValues !== true),
-                removeAllowed: !readOnly && !persisted,
-            };
-        }),
+        rows: (() => {
+            const policy = getAttachmentRowPolicy({
+                urls: values.map((value) => value.url),
+                persistedUrls: [...persistedUrls],
+                readOnly,
+                addOnly,
+                showExistingValues:
+                    config?.showExistingValuesForAddOnlyMode === true,
+                hidePersistedValues: input.hidePersistedAddOnlyValues === true,
+            });
+            if (policy.status !== 'ready')
+                throw new Error('Unavailable attachment baseline.');
+            return policy.rows.map((row) => ({
+                ...row,
+                attachment: values[row.nativeIndex]!,
+            }));
+        })(),
         upload: {
             mode,
             status: uploadStatus,

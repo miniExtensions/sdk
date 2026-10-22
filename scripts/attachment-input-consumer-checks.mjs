@@ -30,6 +30,17 @@ checkAttachmentFileMetadata({files:[]});
 checkAttachmentFileMetadata({...metadataInput,files:[{type:'image/png',size:'4'}]});
 // @ts-expect-error type groups remain canonical
 checkAttachmentFileMetadata({...metadataInput,allowedTypes:['unknown']});
+import {getAttachmentRowPolicy,type AttachmentRowPolicy} from '@miniextensions/sdk/forms';
+import {captureAttachmentRowActions,type AttachmentRowAuthority,type AttachmentRowActions} from '@miniextensions/sdk/ui';
+const nativeRowPolicy:AttachmentRowPolicy=getAttachmentRowPolicy({urls:['native'],persistedUrls:[],readOnly:false,addOnly:true,showExistingValues:false,hidePersistedValues:false});
+const rowAuthority:AttachmentRowAuthority={owner:'actual',revision:1,visible:true,editable:true,configs:[{}]};
+const rowFacet:AttachmentRowActions=captureAttachmentRowActions({getAuthority:()=>rowAuthority,readRows:()=>[{nativeIndex:0,attachment:{filename:'Current'},visible:true,removeAllowed:true}],isCurrent:()=>true,remove:index=>index===0});
+const admittedRow:boolean=rowFacet.remove(0);
+// @ts-expect-error native indexes remain numeric
+rowFacet.remove('0');
+// @ts-expect-error row authority requires a real scoped owner/revision
+captureAttachmentRowActions({getAuthority:()=>({visible:true,editable:true,configs:[{}]}),readRows:()=>[],isCurrent:()=>true,remove:()=>true});
+void nativeRowPolicy;void admittedRow;
 void metadataAccepted;
 `;
 
@@ -49,7 +60,7 @@ export async function checkAttachmentInputConsumer({ consumerDirectory }) {
     );
     writeFileSync(
         metadataLoader,
-        "export {checkAttachmentFileMetadata} from '@miniextensions/sdk/forms';\n"
+        "export {checkAttachmentFileMetadata,getAttachmentRowPolicy} from '@miniextensions/sdk/forms';\n"
     );
     const metadataEsm = await import(pathToFileURL(metadataLoader).href);
     for (const api of [metadataEsm, consumer('@miniextensions/sdk/forms')]) {
@@ -135,6 +146,157 @@ export async function checkAttachmentInputConsumer({ consumerDirectory }) {
     }
     console.log(
         'Installed attachment metadata: public ESM/CommonJS runtime and strict NodeNext/Bundler declarations passed.'
+    );
+    const rowLoader = join(consumerDirectory, 'attachment-row-public.mjs');
+    writeFileSync(
+        rowLoader,
+        "export {captureAttachmentRowActions} from '@miniextensions/sdk/ui';\n"
+    );
+    const rowEsm = await import(pathToFileURL(rowLoader).href);
+    for (const api of [rowEsm, consumer('@miniextensions/sdk/ui')]) {
+        for (const behavior of ['counting', 'throwing']) {
+            let hiddenReads = 0;
+            const removed = [];
+            const mixedAuthority = {
+                owner: 'installed',
+                revision: 1,
+                visible: true,
+                editable: true,
+                configs: [{ hideAttachmentName: false }],
+            };
+            const mixed = api.captureAttachmentRowActions({
+                getAuthority: () => mixedAuthority,
+                readRows: () => [
+                    {
+                        nativeIndex: 0,
+                        visible: false,
+                        removeAllowed: false,
+                        get attachment() {
+                            hiddenReads++;
+                            if (behavior === 'throwing')
+                                throw new Error('PRIVATE_HIDDEN');
+                            return { filename: 'PRIVATE_HIDDEN' };
+                        },
+                    },
+                    {
+                        nativeIndex: 1,
+                        visible: true,
+                        removeAllowed: true,
+                        attachment: { filename: 'Visible sibling' },
+                    },
+                ],
+                isCurrent: () => true,
+                remove: (index) => {
+                    removed.push(index);
+                    return true;
+                },
+            });
+            assert.equal(hiddenReads, 0, behavior);
+            assert.deepEqual(mixed.presentation, {
+                status: 'ready',
+                rows: [{ label: 'Visible sibling' }],
+            });
+            assert.deepEqual(mixed.rows, [
+                { nativeIndex: 1, removeAllowed: true },
+            ]);
+            assert.equal(mixed.remove(0), false);
+            assert.equal(mixed.remove(1), true);
+            assert.equal(hiddenReads, 0, behavior);
+            assert.deepEqual(removed, [1]);
+        }
+        const authority = {
+            owner: 'actual',
+            revision: 1,
+            visible: true,
+            editable: true,
+            configs: [{}],
+        };
+        let writes = 0,
+            reads = 0;
+        const make = () =>
+            api.captureAttachmentRowActions({
+                getAuthority: () => authority,
+                readRows: () => {
+                    reads++;
+                    return [
+                        {
+                            nativeIndex: 0,
+                            attachment: { filename: 'Current', url: 'PRIVATE' },
+                            visible: true,
+                            removeAllowed: true,
+                        },
+                    ];
+                },
+                isCurrent: () => true,
+                remove: () => {
+                    writes++;
+                    return true;
+                },
+            });
+        const facet = make();
+        assert.deepEqual(facet.presentation, {
+            status: 'ready',
+            rows: [{ label: 'Attachment' }],
+        });
+        assert.equal(JSON.stringify(facet).includes('PRIVATE'), false);
+        authority.revision = 2;
+        assert.equal(facet.remove(0), false);
+        assert.equal(writes, 0);
+        assert.equal(make().remove(0), true);
+        assert.equal(writes, 1);
+        const cloneDescriptor = Object.getOwnPropertyDescriptor(
+            globalThis,
+            'structuredClone'
+        );
+        try {
+            Reflect.defineProperty(globalThis, 'structuredClone', {
+                configurable: true,
+                writable: true,
+                value: undefined,
+            });
+            assert.deepEqual(make().presentation, {
+                status: 'ready',
+                rows: [{ label: 'Attachment' }],
+            });
+        } finally {
+            if (cloneDescriptor)
+                Reflect.defineProperty(
+                    globalThis,
+                    'structuredClone',
+                    cloneDescriptor
+                );
+            else Reflect.deleteProperty(globalThis, 'structuredClone');
+        }
+        authority.configs = [{ obscurePassword: true }];
+        const before = reads;
+        assert.equal(make().presentation.status, 'masked');
+        assert.equal(reads, before);
+    }
+    for (const api of [metadataEsm, consumer('@miniextensions/sdk/forms')]) {
+        const policy = api.getAttachmentRowPolicy({
+            urls: ['native', 'pending', 'native'],
+            persistedUrls: ['native'],
+            readOnly: false,
+            addOnly: true,
+            showExistingValues: false,
+            hidePersistedValues: false,
+        });
+        assert.equal(policy.status, 'ready');
+        assert.deepEqual(
+            policy.rows.map((row) => [
+                row.nativeIndex,
+                row.visible,
+                row.removeAllowed,
+            ]),
+            [
+                [0, false, false],
+                [1, true, true],
+                [2, false, false],
+            ]
+        );
+    }
+    console.log(
+        'Installed attachment row bridge: public ESM/CommonJS privacy, native admission and revision actions plus strict NodeNext/Bundler declarations passed.'
     );
     let groups = 0;
     for (const api of [esm, consumer('@miniextensions/sdk/ui')]) {

@@ -2768,3 +2768,42 @@ The mounted lease is an additional action guard; snapshot construction is pure.
 No Form envelope, draft store, client, File queue or cleanup owner is created.
 Host revisions must advance on relevant changes including observed ABA; this
 bridge does not manufacture authoritative generations or verify remote writes.
+
+## Borrowing a native configured child lifecycle
+
+`createBorrowedLinkedChildController` is a separate host compatibility contract.
+It never creates a client, accepted SDK Form, draft store, recovery journal, read
+or Save. `readScope` borrows actual native source/publication identities and the
+native draft identity/revision; advance publication for observed replacement/ABA
+and revision for every accepted edit, including equal-value intent. Do not put
+draft values in this metadata or log source identities (they can include tokens).
+
+Capture a read ticket before the native request. At the actual native acceptance
+boundary call `acceptRead(ticket, isCurrent => ...)`; the callback must check
+`isCurrent()` immediately before its synchronous native publication and return
+whether the native owner accepted it. An explicit active-draft preservation
+decision is admissible only for the same already-accepted source. Keeping A's
+dirty draft after replacement by B is not B read acceptance; return false and
+retain A's native data for an explicit host recovery decision. `canPresent` fences obsolete results independently of
+that admission and retains subsequent edits after an accepted publication.
+Tickets are consumed before observing host scope so same-ticket callback reentry
+cannot publish or delegate twice. Disposal during scope callbacks, getters or
+tuple iteration refuses new admission; presentation also rechecks ticket state
+after observing scope.
+The host still owns request/cache cancellation, fresh reads, mounted presentation
+and all draft values. This does not confer server authority or SDK load acceptance.
+
+For an explicit native Save, capture a Save intent, then call
+`save(intent, () => canonicalNativeSave())`. It checks source and draft revision
+before delegating once. A native draft alone cannot establish Save admission:
+this controller must first observe actual read acceptance for that current source.
+Retaining an old source's draft does not admit a new source's Save. The callback
+remains the sole owner of singleflight,
+validation, transport allocation, explicit retry, feedback, cleanup and parent
+relationship reconciliation. Once delegated, its original result or rejection
+settles unchanged after replacement or disposal. No new reconciliation fence,
+automatic replay, abort or ownership redirect is introduced. A retry requires
+an explicit new native intent; the native owner decides whether retry is safe.
+`dispose()` retires new admission and presentation without destroying the draft
+or changing an allocated Save. This is not `FormFieldBindings.linkedChild`, whose
+accepted-client and child-draft ownership contract remains separate.

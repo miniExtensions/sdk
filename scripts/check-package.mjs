@@ -369,6 +369,7 @@ import {
     checkBrowserAddressCompositionExample,
 } from './address-autocomplete-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
+import { checkBorrowedNativeFormRecipe } from './borrowed-native-form-recipe-checks.mjs';
 import { checkFormAttachmentRecipe } from './form-attachment-recipe-checks.mjs';
 import { checkFormLinkedFilterRecipe } from './form-linked-filter-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
@@ -692,6 +693,13 @@ try {
         guideSources: formsGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    const borrowedNativeFormRecipe = await checkBorrowedNativeFormRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: formsGuideSources,
+    });
+    console.log(
+        `Borrowed native Form recipe: ${borrowedNativeFormRecipe.checks} installed checks passed.`
+    );
     const attachmentRecipe = await checkFormAttachmentRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: formsGuideSources,

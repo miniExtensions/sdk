@@ -82,6 +82,7 @@ export function createBorrowedButtonActionController<Request, Result, Receipt>(
         settleAllocated,
     } = options;
     let observing = 0;
+    let publication = {};
     const call = <T>(callback: () => T): T => {
         observing++;
         try {
@@ -91,8 +92,9 @@ export function createBorrowedButtonActionController<Request, Result, Receipt>(
         }
     };
     const read = (): BorrowedButtonContext | null => {
+        const before = publication;
         try {
-            return call(() => {
+            const sample = call(() => {
                 const raw = readContext();
                 if (raw == null) return null;
                 const owner = raw.owner,
@@ -118,6 +120,9 @@ export function createBorrowedButtonActionController<Request, Result, Receipt>(
                     return null;
                 return { owner, revision, visible, available };
             });
+            // A publication crossing this copy invalidates it, including ABA.
+            // Never recursively resample and accidentally rebase this owner.
+            return publication === before ? sample : null;
         } catch {
             return null;
         }
@@ -153,8 +158,10 @@ export function createBorrowedButtonActionController<Request, Result, Receipt>(
         }
     };
     const current = (): BorrowedButtonContext | null => {
-        if (retired || observing !== 0) return null;
+        if (retired || disposed || observing !== 0) return null;
         const scope = read();
+        // readContext and every metadata getter may synchronously dispose.
+        if (retired || disposed) return null;
         if (
             scope == null ||
             scope.owner !== origin?.owner ||
@@ -196,13 +203,15 @@ export function createBorrowedButtonActionController<Request, Result, Receipt>(
         };
     };
     const notify = () => {
-        if (notifying || disposed) return;
+        if (notifying || disposed || retired) return;
         notifying = true;
         try {
             for (const listener of [...listeners]) {
-                if (disposed) break;
+                if (disposed || retired) break;
                 try {
-                    ignoreNotificationResult(listener(snapshot()));
+                    const state = snapshot();
+                    if (disposed || retired) break;
+                    ignoreNotificationResult(listener(state));
                 } catch {
                     /* Presentation cannot alter allocated work. */
                 }
@@ -212,6 +221,8 @@ export function createBorrowedButtonActionController<Request, Result, Receipt>(
         }
     };
     const observe = () => {
+        // Preserve notification evidence even while getters/callbacks run.
+        publication = {};
         if (retired || observing !== 0) return;
         current();
         revision++;

@@ -746,3 +746,249 @@ it('contains an observed async cleanup rejection without aborting allocated work
         assert.equal(result.outcome.error, error);
     else assert.fail('Expected original rejection');
 });
+
+// Calibrate the actual final metadata observation rather than guessing a read count.
+const reentrantReadFixture = (
+    target: number,
+    change: (
+        model: BorrowedButtonActionController<object>,
+        publish: () => void,
+        setRevision: (value: number) => void
+    ) => void
+) => {
+    let reads = 0,
+        allocated = 0,
+        settled = 0,
+        observed = 0,
+        publications = 0,
+        lastAllocationRead = 0,
+        nativeRevision = 1,
+        changed = () => {};
+    const owner = {};
+    let model!: BorrowedButtonActionController<object>;
+    model = createBorrowedButtonActionController({
+        readContext() {
+            const index = ++reads,
+                revision = nativeRevision;
+            return {
+                owner,
+                revision,
+                visible: true,
+                get available() {
+                    if (index === target) {
+                        change(
+                            model,
+                            () => {
+                                publications++;
+                                changed();
+                            },
+                            (value) => {
+                                nativeRevision = value;
+                            }
+                        );
+                        observed++;
+                    }
+                    return true;
+                },
+            };
+        },
+        subscribe: (notify) => {
+            changed = notify;
+            return () => {};
+        },
+        mayStartNewIntent: () => true,
+        captureIntent: () => ({ request: {}, receipt: {} }),
+        allocate: async () => {
+            allocated++;
+            lastAllocationRead = reads;
+            return {};
+        },
+        settleAllocated: () => {
+            settled++;
+        },
+    });
+    return {
+        model,
+        get allocated() {
+            return allocated;
+        },
+        get settled() {
+            return settled;
+        },
+        get observed() {
+            return observed;
+        },
+        get publications() {
+            return publications;
+        },
+        get lastAllocationRead() {
+            return lastAllocationRead;
+        },
+    };
+};
+for (const change of ['dispose', 'publication', 'publication ABA'] as const)
+    it(`rejects final-read ${change} before new allocation with an observed callback`, async () => {
+        const control = reentrantReadFixture(-1, () => {});
+        await control.model.trigger();
+        assert.equal(control.allocated, 1);
+        const target = control.lastAllocationRead;
+        assert.ok(target > 0);
+        control.model.dispose();
+        const f = reentrantReadFixture(
+            target,
+            (model, publish, setRevision) => {
+                if (change === 'dispose') model.dispose();
+                else {
+                    setRevision(2);
+                    publish();
+                    if (change === 'publication ABA') {
+                        setRevision(1);
+                        publish();
+                    }
+                }
+            }
+        );
+        const answer = await f.model.trigger();
+        assert.equal(
+            f.observed,
+            1,
+            'The final getter callback must actually execute'
+        );
+        assert.equal(
+            f.publications,
+            change === 'dispose' ? 0 : change === 'publication' ? 1 : 2
+        );
+        assert.equal(f.allocated, 0);
+        assert.equal(f.settled, 0);
+        assert.equal(answer.type, 'refused');
+        f.model.dispose();
+    });
+for (const change of ['dispose', 'publication', 'publication ABA'] as const)
+    for (const rejected of [false, true])
+        it(`denies stale feedback during observed ${change} read and preserves allocated ${rejected ? 'rejection' : 'success'}`, async () => {
+            const owner = {},
+                value = {},
+                error = {};
+            let armed = false,
+                observed = 0,
+                publications = 0,
+                nativeRevision = 1,
+                changed = () => {},
+                settled = 0,
+                feedbackValue: boolean | undefined;
+            let model!: BorrowedButtonActionController<object>;
+            model = createBorrowedButtonActionController({
+                readContext() {
+                    const revision = nativeRevision;
+                    return {
+                        owner,
+                        revision,
+                        visible: true,
+                        get available() {
+                            if (armed) {
+                                armed = false;
+                                if (change === 'dispose') model.dispose();
+                                else {
+                                    nativeRevision = 2;
+                                    publications++;
+                                    changed();
+                                    if (change === 'publication ABA') {
+                                        nativeRevision = 1;
+                                        publications++;
+                                        changed();
+                                    }
+                                }
+                                observed++;
+                            }
+                            return true;
+                        },
+                    };
+                },
+                subscribe: (notify) => {
+                    changed = notify;
+                    return () => {};
+                },
+                mayStartNewIntent: () => true,
+                captureIntent: () => ({ request: {}, receipt: {} }),
+                allocate: () =>
+                    rejected ? Promise.reject(error) : Promise.resolve(value),
+                settleAllocated: (_receipt, outcome, feedback) => {
+                    settled++;
+                    armed = true;
+                    feedbackValue = feedback.isCurrent();
+                    if (outcome.type === 'resolved')
+                        assert.equal(outcome.value, value);
+                    else assert.equal(outcome.error, error);
+                },
+            });
+            const answer = await model.trigger();
+            assert.equal(observed, 1, 'Feedback getter must actually run');
+            assert.equal(
+                publications,
+                change === 'dispose' ? 0 : change === 'publication' ? 1 : 2
+            );
+            assert.equal(feedbackValue, false);
+            assert.equal(settled, 1);
+            assert.equal(answer.type, 'settled');
+            if (answer.type === 'settled') {
+                assert.equal(answer.settlementFailure, null);
+                if (answer.outcome.type === 'resolved')
+                    assert.equal(answer.outcome.value, value);
+                else assert.equal(answer.outcome.error, error);
+            }
+            model.dispose();
+        });
+for (const rejected of [false, true])
+    it(`never invokes a selected listener after its snapshot read disposes the controller; native ${rejected ? 'rejection' : 'success'} settles`, async () => {
+        const pending = held<object>(),
+            value = {},
+            error = {},
+            owner = {};
+        let armed = false,
+            disposedInRead = false,
+            observed = 0,
+            lateNotifications = 0,
+            settled = 0;
+        let model!: BorrowedButtonActionController<object>;
+        model = createBorrowedButtonActionController({
+            readContext: () => ({
+                owner,
+                revision: 1,
+                visible: true,
+                get available() {
+                    if (armed) {
+                        armed = false;
+                        disposedInRead = true;
+                        model.dispose();
+                        observed++;
+                    }
+                    return true;
+                },
+            }),
+            subscribe: () => () => {},
+            mayStartNewIntent: () => true,
+            captureIntent: () => ({ request: {}, receipt: {} }),
+            allocate: () => pending.promise,
+            settleAllocated: (_receipt, outcome) => {
+                settled++;
+                if (outcome.type === 'resolved')
+                    assert.equal(outcome.value, value);
+                else assert.equal(outcome.error, error);
+            },
+        });
+        model.subscribe(() => {
+            if (disposedInRead) lateNotifications++;
+        });
+        const running = model.trigger();
+        armed = true;
+        if (rejected) pending.reject(error);
+        else pending.resolve(value);
+        const answer = await running;
+        assert.equal(observed, 1, 'Snapshot disposal getter must actually run');
+        assert.equal(lateNotifications, 0);
+        assert.equal(settled, 1);
+        assert.equal(answer.type, 'settled');
+        if (answer.type === 'settled')
+            assert.equal(answer.settlementFailure, null);
+        model.dispose();
+    });

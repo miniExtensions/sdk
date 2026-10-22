@@ -1083,7 +1083,11 @@ source/mode/context revision, `mayStartNewIntent` for the existing retry policy,
 `captureIntent` for lazy native request/private receipt capture, `allocate` for
 the exact native Promise, and `settleAllocated` for original-outcome handling.
 Requests, receipts, results and errors retain identity and are never in public
-snapshots. Hidden/unavailable/recovery-refused activity does not capture input.
+snapshots. A synchronous authority publication during a metadata copy
+invalidates that sample and retires the controller, including a publication ABA.
+The controller does not recursively re-read/rebase an unstable owner. Metadata
+reads and notification snapshot evaluation recheck retirement before allocation,
+feedback admission or listener invocation. Allocated settlement remains intact. Hidden/unavailable/recovery-refused activity does not capture input.
 A changed owner/revision permanently retires the controller; the host creates a
 new one for its current context. Include observed ABA in that real revision.
 

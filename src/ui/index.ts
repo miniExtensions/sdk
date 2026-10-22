@@ -1,3 +1,7 @@
+export {
+    projectNativeLinkedRecordRows,
+    type NativeLinkedRecordRow,
+} from './nativeLinkedRecordRows.js';
 export { findAdjacentChildSession } from './childNavigationCompatibility.js';
 export type {
     AdjacentChildNavigationContext,

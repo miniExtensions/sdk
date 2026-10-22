@@ -3,6 +3,10 @@ import {
     borrowedNativeLinkedReadTypedConsumer,
 } from './borrowed-native-linked-read-consumer-checks.mjs';
 import {
+    checkBorrowedButtonActionConsumer,
+    borrowedButtonActionTypedConsumer,
+} from './borrowed-button-action-consumer-checks.mjs';
+import {
     checkButtonDispatchGateConsumer,
     buttonDispatchGateTypedConsumer,
 } from './button-dispatch-gate-consumer-checks.mjs';
@@ -1370,6 +1374,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 collaboratorSelectionTypedConsumer +
                 childNavigationTypedConsumer +
                 buttonDispatchGateTypedConsumer +
+                borrowedButtonActionTypedConsumer +
                 `
 const tokenOptions: import('@miniextensions/sdk/formulas').TokenizeOptions = {cache:false,maxTokens:8192};
 const parseOptions: import('@miniextensions/sdk/formulas').ParseOptions = {cache:false,maxDepth:48};
@@ -3006,6 +3011,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     assert.equal(
         await checkAttachmentInputConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkBorrowedButtonActionConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

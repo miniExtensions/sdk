@@ -1070,6 +1070,78 @@ package boundaries. They do not prove a particular staging deployment accepts
 your published extension. Server compatibility remains a separate
 validation step with its own authorized environment and fixtures.
 
+## Borrowed native Button action activity
+
+`createBorrowedButtonActionController` from `/ui` is a separate clientless API for
+hosts that already own their native configured webhook transport and explicit
+retry/recovery policy. The existing dispatch gate and accepted Form/Portal Button
+models retain their behavior. This API creates no client, accepted page, draft,
+recovery journal or server authorization.
+
+Supply actual host ports: `readContext`/`subscribe` for private owner and observed
+source/mode/context revision, `mayStartNewIntent` for the existing retry policy,
+`captureIntent` for lazy native request/private receipt capture, `allocate` for
+the exact native Promise, and `settleAllocated` for original-outcome handling.
+Requests, receipts, results and errors retain identity and are never in public
+snapshots. A synchronous authority publication during a metadata copy
+invalidates that sample and retires the controller, including a publication ABA.
+The controller does not recursively re-read/rebase an unstable owner. Metadata
+reads and notification snapshot evaluation recheck retirement before allocation,
+feedback admission or listener invocation. Allocated settlement remains intact. Hidden/unavailable/recovery-refused activity does not capture input.
+A changed owner/revision permanently retires the controller; the host creates a
+new one for its current context. Include observed ABA in that real revision.
+
+```ts
+import {
+    createBorrowedButtonActionController,
+    type BorrowedButtonActionOptions,
+} from '@miniextensions/sdk/ui';
+
+// Supplied by your actual host. These declarations are integration placeholders.
+type NativePorts = BorrowedButtonActionOptions<
+    { fieldId: string; source: object },
+    { success: boolean },
+    { owner: object }
+>;
+declare const readActualNativeButtonContext: NativePorts['readContext'];
+declare const subscribeToNativeButtonContext: NativePorts['subscribe'];
+declare const mayStartExistingExplicitIntent: NativePorts['mayStartNewIntent'];
+declare const captureNativeRequestAndOutcomeReceipt: NativePorts['captureIntent'];
+declare const existingNativeButtonTransport: NativePorts['allocate'];
+declare const settleExistingNativeButtonOutcome: NativePorts['settleAllocated'];
+
+const action = createBorrowedButtonActionController({
+    readContext: readActualNativeButtonContext,
+    subscribe: subscribeToNativeButtonContext,
+    mayStartNewIntent: mayStartExistingExplicitIntent,
+    captureIntent: captureNativeRequestAndOutcomeReceipt,
+    allocate: existingNativeButtonTransport,
+    settleAllocated: settleExistingNativeButtonOutcome,
+});
+// Only an explicit user action invokes trigger().
+const answer = await action.trigger();
+```
+
+Calling `allocate` is the settlement boundary, including a synchronous throw.
+After invocation, exactly one `settleAllocated(receipt, outcome, feedback)` call
+runs even after retirement/disposal or metadata/notification faults. The host
+retains canonical persistence, business success/error interpretation and cleanup.
+`feedback.isCurrent()` is only a current-presentation probe. A false probe cannot
+cancel settlement. Settlement failure is returned separately and never replaces
+the original native result/error. A resolved `{success:false}` remains opaque.
+Synchronous notification/cleanup exceptions and rejected async notification/cleanup
+results are contained without waiting. They cannot veto or stall settlement.
+Context, recovery admission and capture ports are synchronous; the native
+allocation and allocated-settlement ports expose their actual Promises.
+
+The singleflight slot remains held through asynchronous settlement and final
+notifications. `dispose()` stops new admission/observation, never aborts or
+replays allocated work. No cancellation or journal-acknowledgment method exists.
+Only the host's `mayStartNewIntent` policy permits the next explicit click; the
+controller never retries automatically. Configured links remain with the host.
+Full accepted Button contexts/recovery have a different contract; see
+[configured Button actions](field-bindings.md#configured-button-actions).
+
 ## React Button presentation
 
 The optional `/react` entry exports `ButtonField`, `ButtonFieldProps`,

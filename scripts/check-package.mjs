@@ -1,4 +1,8 @@
 import {
+    checkBorrowedNativeLinkedReadConsumer,
+    borrowedNativeLinkedReadTypedConsumer,
+} from './borrowed-native-linked-read-consumer-checks.mjs';
+import {
     checkButtonDispatchGateConsumer,
     buttonDispatchGateTypedConsumer,
 } from './button-dispatch-gate-consumer-checks.mjs';
@@ -1356,6 +1360,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             declarationConsumer +
                 attachmentMetadataTypedConsumer +
                 orderedAttachmentUploadTypedConsumer +
+                borrowedNativeLinkedReadTypedConsumer +
                 formulaCompatibilityTypedConsumer +
                 collaboratorSelectionTypedConsumer +
                 childNavigationTypedConsumer +
@@ -2978,6 +2983,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkBorrowedNativeLinkedReadConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

@@ -4517,3 +4517,52 @@ current-owner and confirmation-lifetime admission, canonical open/inline-field
 writes, Save/recovery/allocated settlement and all transport. No Form, client,
 cache, request, permission or alternate draft is constructed. Full configured
 child integration still needs the genuine accepted Form/client/revision owner.
+
+## Borrowed native linked reads
+
+`createBorrowedNativeLinkedReadSource(port)` coordinates read lifetimes over a
+host's existing linked-record values and cache. The explicit `host-native`
+source is separate from accepted SDK Form/Portal facets and linked-option page
+provenance. It requires no runtime client, loaded Form, draft, canonical writer,
+Save operation or recovery journal. Existing client-backed APIs are unchanged.
+
+The host supplies the following read-only boundary:
+
+- `capture()` returns a readable stamp or no admission. The stamp must cover
+  actual native instance, field/table, policy, configuration, filter provenance
+  and relevant cache publications, including same-identity reload and ABA.
+- `isCurrent(stamp)` checks authoritative native state and current privacy before
+  any selected-value access, request allocation or publication. This is local
+  freshness admission; backend authorization remains hosted.
+- `selected(stamp)` borrows the exact native selected array (or null/undefined), rich row projections
+  and unresolved native positions. The SDK does not normalize duplicate IDs,
+  invent labels, clone native File/Date objects or inspect opaque projections.
+  The returned snapshot belongs to the host and consumers must not mutate it.
+- `query(stamp, request)` and `hydrateSelected(stamp, signal)` retain hosted
+  transport, native filter provenance, selected hydration and error identities.
+  Query and hydration have independent latest-read-wins lifetimes per lease.
+- `publishIfCurrent(stamp, kind, page)` performs the final **synchronous** host
+  fence and native cache merge, returning whether it accepted the page. The SDK
+  stores no second cache and does not manufacture accepted SDK page authority.
+- `subscribe(listener)` notifies relevant read-authority changes. An unchanged
+  stamp stays current; the host must advance monotonic stamps for observed ABA.
+
+Capture one lease for the actual mounted field owner and retire it on unmount or
+scope replacement. Destroy the source to unsubscribe and retire all its leases.
+Read abort signals are logical cancellation hints to hosted read transport;
+this module never cancels a previously allocated mutation or changes its
+settlement. The host's permissions, queue, uploads, cleanup and writers remain
+outside this contract, including the separate Portal draft/queue/recovery lane.
+
+Reads return `{status: 'published', page}` only after the host admits publication;
+`page`, its native records, metadata and query filter retain their exact object
+identities. Retired, superseded or externally aborted reads return
+`{status: 'retired'}` and cannot call the host publication callback. A current
+transport or publication exception propagates its original identity. An accepted
+host publication may itself notify a new native revision: its accepted result is
+still reported as published. A retired result never clears canonical selections.
+
+This is a compatibility contract for an adapter to real native state. It does
+not by itself complete host adoption or make arbitrary raw pages acceptable to
+`FormFieldBindings.linkedRecords` or the private SDK read cache. The native host
+adapter and its authoritative store regressions must be qualified separately.

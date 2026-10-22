@@ -1,3 +1,12 @@
+export {
+    createBorrowedNativeLinkedReadSource,
+    type BorrowedNativeLinkedPage,
+    type BorrowedNativeLinkedSelection,
+    type BorrowedNativeLinkedReadResult,
+    type BorrowedNativeLinkedReadPort,
+    type BorrowedNativeLinkedReadLease,
+    type BorrowedNativeLinkedReadSource,
+} from './borrowedNativeLinkedReads.js';
 export { findAdjacentChildSession } from './childNavigationCompatibility.js';
 export type {
     AdjacentChildNavigationContext,

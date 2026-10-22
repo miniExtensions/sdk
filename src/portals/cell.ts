@@ -247,6 +247,10 @@ export const createPortalCellBinding = (
         if (!snapshot().canEdit)
             return { accepted: false as const, reason: 'blocked' as const };
         gridValue(value);
+        // Injected draft reads can retire the binding while snapshotting.
+        // Recheck immediately before delegating to the canonical writer.
+        if (!current())
+            return { accepted: false as const, reason: 'retired' as const };
         if (!draft.write(value))
             return { accepted: false as const, reason: 'retired' as const };
         notify();

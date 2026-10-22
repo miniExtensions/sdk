@@ -82,9 +82,6 @@ export function createPortalInlineEditQueue<Value, Request, Result>(
             let result: Result;
             try {
                 result = await options.commit(edit.request);
-                draft.committedValue = structuredClone(
-                    options.committedValue(result, edit.cell)
-                );
             } catch (error) {
                 feedback(() => edit.onError(error));
                 // Do not use value equality: a newer A after B is still newer.
@@ -94,6 +91,17 @@ export function createPortalInlineEditQueue<Value, Request, Result>(
                     );
                 if (!pending.has(key)) discard(key);
                 continue;
+            }
+            // Transport has committed. Retain the submitted native value if
+            // projecting the canonical receipt fails; feedback cannot roll it
+            // back or leave a stale baseline for a later explicit edit.
+            draft.committedValue = edit.value;
+            try {
+                draft.committedValue = structuredClone(
+                    options.committedValue(result, edit.cell)
+                );
+            } catch (error) {
+                feedback(() => edit.onError(error));
             }
             feedback(() => edit.onCommitted(result));
             if (!pending.has(key)) discard(key);
@@ -125,6 +133,7 @@ export function createPortalInlineEditQueue<Value, Request, Result>(
                 edit: {
                     ...edit,
                     cell: { ...edit.cell },
+                    value: structuredClone(edit.value),
                     request: structuredClone(edit.request),
                 },
                 revision: draft.revision,

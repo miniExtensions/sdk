@@ -171,3 +171,11 @@ export {
     type RichTextCheckboxNode,
     type ParsedRichTextCheckbox,
 } from './richTextSerialization.js';
+
+export {
+    createBorrowedLinkedChildController,
+    type BorrowedLinkedChildScope,
+    type BorrowedLinkedChildRead,
+    type BorrowedLinkedChildSave,
+    type BorrowedLinkedChildController,
+} from './borrowedLinkedChild.js';

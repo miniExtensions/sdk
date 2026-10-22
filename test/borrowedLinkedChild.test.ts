@@ -58,6 +58,10 @@ for (const replacement of [
         const { owner, set } = fixture();
         const draft = {};
         set({ source: ['parent-A', 1], draft: [draft, 1] });
+        assert.equal(
+            owner.acceptRead(owner.captureRead()!, (current) => current()),
+            true
+        );
         const read = owner.captureRead()!;
         const save = owner.captureSave()!;
         if (replacement === 'unmount') owner.dispose();
@@ -96,6 +100,10 @@ test('draft revisions including equal-value edits retire pending reads and Save 
     const { owner, set } = fixture();
     const draft = {};
     set({ source: ['parent-A', 1], draft: [draft, 1] });
+    assert.equal(
+        owner.acceptRead(owner.captureRead()!, (current) => current()),
+        true
+    );
     const read = owner.captureRead()!;
     const save = owner.captureSave()!;
     set({ source: ['parent-A', 1], draft: [draft, 2] });
@@ -124,6 +132,10 @@ for (const outcome of ['success', 'failure'] as const) {
             reject = no;
         });
         let allocations = 0;
+        assert.equal(
+            owner.acceptRead(owner.captureRead()!, (current) => current()),
+            true
+        );
         const save = owner.captureSave()!;
         const pending = owner.save(save, () => {
             allocations++;
@@ -153,6 +165,10 @@ test('failed explicit Save never replays; an explicit fresh intent delegates the
     const { owner, set } = fixture();
     set({ source: ['parent-A', 1], draft: [{}, 1] });
     let calls = 0;
+    assert.equal(
+        owner.acceptRead(owner.captureRead()!, (current) => current()),
+        true
+    );
     const intent = owner.captureSave()!;
     await assert.rejects(
         owner.save(intent, async () => {
@@ -234,10 +250,51 @@ test('foreign Save tickets cannot delegate another native owner', async () => {
     const b = fixture();
     a.set({ source: ['same', 1], draft: [{}, 1] });
     b.set({ source: ['same', 1], draft: [{}, 1] });
+    assert.equal(
+        a.owner.acceptRead(a.owner.captureRead()!, (current) => current()),
+        true
+    );
+    assert.equal(
+        b.owner.acceptRead(b.owner.captureRead()!, (current) => current()),
+        true
+    );
     assert.deepEqual(
         await b.owner.save(a.owner.captureSave()!, async () => {
             throw new Error('foreign allocation');
         }),
         { type: 'retired' }
+    );
+});
+
+test('a retained A draft cannot allocate a B Save before actual B read acceptance', async () => {
+    const { owner, set } = fixture();
+    const draft = {};
+    set({ source: ['parent-A', 1], draft: [draft, 1] });
+    assert.equal(owner.captureSave(), null);
+    assert.equal(
+        owner.acceptRead(owner.captureRead()!, (current) => current()),
+        true
+    );
+    assert.ok(owner.captureSave());
+    set({ source: ['parent-B', 2], draft: [draft, 1] });
+    assert.equal(owner.captureSave(), null);
+    const retained = owner.captureRead()!;
+    assert.equal(
+        owner.acceptRead(retained, () => false),
+        false
+    );
+    assert.equal(owner.captureSave(), null);
+    const fresh = owner.captureRead()!;
+    assert.equal(
+        owner.acceptRead(fresh, (current) => {
+            if (!current()) return false;
+            set({ source: ['parent-B', 2], draft: [{}, 2] });
+            return true;
+        }),
+        true
+    );
+    assert.deepEqual(
+        await owner.save(owner.captureSave()!, async () => 'native B'),
+        { type: 'settled', value: 'native B' }
     );
 });

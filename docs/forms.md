@@ -2781,15 +2781,20 @@ draft values in this metadata or log source identities (they can include tokens)
 Capture a read ticket before the native request. At the actual native acceptance
 boundary call `acceptRead(ticket, isCurrent => ...)`; the callback must check
 `isCurrent()` immediately before its synchronous native publication and return
-whether the native owner accepted it (including its explicit active-draft
-preservation decision). `canPresent` fences obsolete results independently of
+whether the native owner accepted it. An explicit active-draft preservation
+decision is admissible only for the same already-accepted source. Keeping A's
+dirty draft after replacement by B is not B read acceptance; return false and
+retain A's native data for an explicit host recovery decision. `canPresent` fences obsolete results independently of
 that admission and retains subsequent edits after an accepted publication.
 The host still owns request/cache cancellation, fresh reads, mounted presentation
 and all draft values. This does not confer server authority or SDK load acceptance.
 
 For an explicit native Save, capture a Save intent, then call
 `save(intent, () => canonicalNativeSave())`. It checks source and draft revision
-before delegating once. The callback remains the sole owner of singleflight,
+before delegating once. A native draft alone cannot establish Save admission:
+this controller must first observe actual read acceptance for that current source.
+Retaining an old source's draft does not admit a new source's Save. The callback
+remains the sole owner of singleflight,
 validation, transport allocation, explicit retry, feedback, cleanup and parent
 relationship reconciliation. Once delegated, its original result or rejection
 settles unchanged after replacement or disposal. No new reconciliation fence,

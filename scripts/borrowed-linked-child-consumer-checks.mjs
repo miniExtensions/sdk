@@ -38,6 +38,7 @@ export async function checkBorrowedLinkedChildConsumer({ consumerDirectory }) {
                 draft: [draft, revision],
             }),
         });
+        assert.equal(owner.captureSave(), null);
         const read = owner.captureRead();
         assert.equal(
             owner.acceptRead(read, (current) => current()),
@@ -54,6 +55,15 @@ export async function checkBorrowedLinkedChildConsumer({ consumerDirectory }) {
                 allocations++;
             }),
             { type: 'retired' }
+        );
+        assert.equal(owner.captureSave(), null);
+        assert.equal(
+            owner.acceptRead(owner.captureRead(), (current) => {
+                if (!current()) return false;
+                revision++;
+                return true;
+            }),
+            true
         );
         let settle;
         const response = new Promise((resolve) => {

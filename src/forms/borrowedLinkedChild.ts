@@ -18,7 +18,7 @@ export type BorrowedLinkedChildController = {
     /** An accepted read can present subsequent edits to that same native draft. */
     canPresent(read: BorrowedLinkedChildRead): boolean;
     captureSave(): BorrowedLinkedChildSave | null;
-    /** Explicit delegation only. The native callback owns allocation, retry and settlement. */
+    /** Only an actually accepted current read admits delegation. Native Save owns allocation/retry/settlement. */
     save<T>(
         intent: BorrowedLinkedChildSave,
         allocate: () => Promise<T>
@@ -39,6 +39,7 @@ export function createBorrowedLinkedChildController(options: {
     readScope(): BorrowedLinkedChildScope | null;
 }): BorrowedLinkedChildController {
     let disposed = false;
+    let acceptedSource: readonly unknown[] | null = null;
     const reads = new WeakMap<
         BorrowedLinkedChildRead,
         { scope: BorrowedLinkedChildScope; used: boolean; accepted: boolean }
@@ -92,7 +93,9 @@ export function createBorrowedLinkedChildController(options: {
             const guard = () => current(read.scope, true);
             // A synchronous native publication may itself install the draft.
             read.accepted = publish(guard) === true;
-            return read.accepted && current(read.scope, false);
+            const accepted = read.accepted && current(read.scope, false);
+            if (accepted) acceptedSource = read.scope.source;
+            return accepted;
         },
         canPresent(ticket) {
             const read = reads.get(ticket);
@@ -104,7 +107,13 @@ export function createBorrowedLinkedChildController(options: {
         },
         captureSave() {
             const scope = capture();
-            if (!scope || scope.draft === null) return null;
+            if (
+                !scope ||
+                scope.draft === null ||
+                acceptedSource === null ||
+                !same(scope.source, acceptedSource)
+            )
+                return null;
             const ticket = { [saveBrand]: true } as const;
             saves.set(ticket, { scope, used: false });
             return ticket;

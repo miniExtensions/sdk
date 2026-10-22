@@ -4481,9 +4481,16 @@ There is no clone, field read, fallback label, await or persistent cache.
 ```ts
 import { projectNativeLinkedRecordRows } from '@miniextensions/sdk/ui';
 
+const nativeRecord = { id: 'rec_one', fields: { Name: 'Selected title' } };
+const hostDisplayData = new Map([
+    [
+        nativeRecord.id,
+        { record: nativeRecord, selectedLabel: 'Selected title' },
+    ],
+]);
 const displayedRows = projectNativeLinkedRecordRows(
-    clientFilteredAndSortedRecordsIds,
-    getRecordDisplayData
+    [nativeRecord.id, nativeRecord.id],
+    (id) => hostDisplayData.get(id) ?? null
 );
 ```
 

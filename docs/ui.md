@@ -1088,7 +1088,23 @@ A changed owner/revision permanently retires the controller; the host creates a
 new one for its current context. Include observed ABA in that real revision.
 
 ```ts
-import { createBorrowedButtonActionController } from '@miniextensions/sdk/ui';
+import {
+    createBorrowedButtonActionController,
+    type BorrowedButtonActionOptions,
+} from '@miniextensions/sdk/ui';
+
+// Supplied by your actual host. These declarations are integration placeholders.
+type NativePorts = BorrowedButtonActionOptions<
+    { fieldId: string; source: object },
+    { success: boolean },
+    { owner: object }
+>;
+declare const readActualNativeButtonContext: NativePorts['readContext'];
+declare const subscribeToNativeButtonContext: NativePorts['subscribe'];
+declare const mayStartExistingExplicitIntent: NativePorts['mayStartNewIntent'];
+declare const captureNativeRequestAndOutcomeReceipt: NativePorts['captureIntent'];
+declare const existingNativeButtonTransport: NativePorts['allocate'];
+declare const settleExistingNativeButtonOutcome: NativePorts['settleAllocated'];
 
 const action = createBorrowedButtonActionController({
     readContext: readActualNativeButtonContext,

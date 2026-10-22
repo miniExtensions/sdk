@@ -20,7 +20,11 @@ export type {
 } from './types.js';
 
 export { createPortalCellBinding } from './cell.js';
-export type { PortalCellBinding, PortalCellBindingOptions } from './cell.js';
+export type {
+    PortalCellBinding,
+    PortalCellBindingOptions,
+    PortalCellDraft,
+} from './cell.js';
 
 export { createPortalListOwner } from './listOwner.js';
 export type {
@@ -45,3 +49,11 @@ export type {
 
 export { refreshPortalSummaryFields } from './summaryRefresh.js';
 export type { PortalSummaryRefreshOptions } from './summaryRefresh.js';
+
+export { createPortalInlineEditQueue } from './inlineEditQueue.js';
+export type {
+    PortalInlineEditCell,
+    PortalInlineEdit,
+    PortalInlineEditQueueOptions,
+    PortalInlineEditQueue,
+} from './inlineEditQueue.js';

@@ -678,7 +678,15 @@ it('an injected cell draft belongs to its caller across binding teardown', () =>
     );
     const cell = createPortalCellBinding({
         ...f.options,
-        draft: { store, handle },
+        draft: {
+            read: () => store.read(handle, 'fld_title'),
+            write: (value) => store.write(handle, 'fld_title', value),
+            revision: () => store.revision(handle),
+            dirty: () =>
+                store.snapshot(handle)?.dirtyFieldIds.includes('fld_title') ??
+                false,
+            markSaved: (revision) => store.markSaved(handle, revision),
+        },
     });
     assert.equal(cell.binding.getSnapshot().value, 'External');
     cell.binding.setValue('Owned by caller');
@@ -686,11 +694,21 @@ it('an injected cell draft belongs to its caller across binding teardown', () =>
     assert.equal(store.read(handle, 'fld_title'), 'Owned by caller');
     const successor = createPortalCellBinding({
         ...f.options,
-        draft: { store, handle },
+        draft: {
+            read: () => store.read(handle, 'fld_title'),
+            write: (value) => store.write(handle, 'fld_title', value),
+            revision: () => store.revision(handle),
+            dirty: () =>
+                store.snapshot(handle)?.dirtyFieldIds.includes('fld_title') ??
+                false,
+            markSaved: (revision) => store.markSaved(handle, revision),
+        },
     });
     assert.equal(successor.binding.getSnapshot().value, 'Owned by caller');
-    successor.destroy();
     store.clear();
+    assert.equal(successor.binding.getSnapshot().retired, true);
+    assert.equal(successor.binding.setValue('Retired').accepted, false);
+    successor.destroy();
 });
 
 it('refuses a retired caller draft before binding or transport admission', () => {
@@ -703,7 +721,19 @@ it('refuses a retired caller draft before binding or transport admission', () =>
     );
     store.discard(handle);
     assert.throws(() =>
-        createPortalCellBinding({ ...f.options, draft: { store, handle } })
+        createPortalCellBinding({
+            ...f.options,
+            draft: {
+                read: () => store.read(handle, 'fld_title'),
+                write: (value) => store.write(handle, 'fld_title', value),
+                revision: () => store.revision(handle),
+                dirty: () =>
+                    store
+                        .snapshot(handle)
+                        ?.dirtyFieldIds.includes('fld_title') ?? false,
+                markSaved: (revision) => store.markSaved(handle, revision),
+            },
+        })
     );
     assert.equal(f.calls.length, 0);
 });

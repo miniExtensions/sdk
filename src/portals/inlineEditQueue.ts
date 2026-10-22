@@ -1,5 +1,3 @@
-import { FormDraftStore, type FormDraftHandle } from '../forms/drafts.js';
-
 export type PortalInlineEditCell = {
     tableId: string;
     recordId: string;
@@ -17,8 +15,6 @@ export type PortalInlineEdit<Value, Request, Result> = {
     onIdle(): void;
 };
 export type PortalInlineEditQueueOptions<Value, Request, Result> = {
-    /** One store per session owner. It may be shared with cell bindings. */
-    store?: FormDraftStore<Value>;
     commit(request: Request): Promise<Result>;
     committedValue(result: Result, cell: PortalInlineEditCell): Value;
 };
@@ -31,7 +27,7 @@ export type PortalInlineEditQueue<Value, Request, Result> = {
     dispose(): void;
 };
 
-type Draft<Value> = { handle: FormDraftHandle; committedValue: Value };
+type Draft<Value> = { committedValue: Value; revision: number };
 const cellKey = (cell: PortalInlineEditCell) =>
     JSON.stringify([cell.tableId, cell.recordId, cell.fieldId]);
 // Presentation failures must not reclassify an accepted mutation or stop draining.
@@ -43,14 +39,14 @@ const feedback = (callback: () => void) => {
     }
 };
 
-/** Session-owned native drafts and conditional recovery, with injected transport.
+/** Session-owned pending drafts and conditional recovery, with injected transport.
+ * Native optimistic values live in the injected host writer, never a second store.
  * A new enqueue is a new explicit intent, including A → B → A. An error never
  * schedules its failed request again. Host authorization and feedback stay host-owned.
  */
 export function createPortalInlineEditQueue<Value, Request, Result>(
     options: PortalInlineEditQueueOptions<Value, Request, Result>
 ): PortalInlineEditQueue<Value, Request, Result> {
-    const store = options.store ?? new FormDraftStore<Value>();
     const drafts = new Map<string, Draft<Value>>();
     const pending = new Map<
         string,
@@ -60,8 +56,6 @@ export function createPortalInlineEditQueue<Value, Request, Result>(
     let flight: Promise<void> | null = null;
     let disposed = false;
     const discard = (key: string) => {
-        const draft = drafts.get(key);
-        if (draft) store.discard(draft.handle);
         drafts.delete(key);
     };
     const clearTimer = () => {
@@ -95,10 +89,7 @@ export function createPortalInlineEditQueue<Value, Request, Result>(
                 } catch (error) {
                     feedback(() => edit.onError(error));
                     // Do not use value equality: a newer A after B is still newer.
-                    if (
-                        !pending.has(key) &&
-                        store.revision(draft.handle) === revision
-                    )
+                    if (!pending.has(key) && draft.revision === revision)
                         feedback(() =>
                             edit.applyValue(
                                 structuredClone(draft.committedValue)
@@ -107,7 +98,6 @@ export function createPortalInlineEditQueue<Value, Request, Result>(
                     if (!pending.has(key)) discard(key);
                     continue;
                 }
-                store.markSaved(draft.handle, revision);
                 feedback(() => edit.onCommitted(result));
                 if (!pending.has(key)) discard(key);
             }
@@ -128,31 +118,21 @@ export function createPortalInlineEditQueue<Value, Request, Result>(
             let draft = drafts.get(key);
             if (!draft) {
                 draft = {
-                    handle: store.open(
-                        {
-                            extensionId: key,
-                            recordId: edit.cell.recordId,
-                            parent: null,
-                        },
-                        { [edit.cell.fieldId]: edit.committedValue },
-                        []
-                    ),
                     committedValue: structuredClone(edit.committedValue),
+                    revision: 0,
                 };
                 drafts.set(key, draft);
             }
-            store.write(draft.handle, edit.cell.fieldId, edit.value);
+            draft.revision += 1;
             pending.set(key, {
                 edit: {
                     ...edit,
                     cell: { ...edit.cell },
                     request: structuredClone(edit.request),
                 },
-                revision: store.revision(draft.handle)!,
+                revision: draft.revision,
             });
-            feedback(() =>
-                edit.applyValue(store.read(draft.handle, edit.cell.fieldId)!)
-            );
+            feedback(() => edit.applyValue(structuredClone(edit.value)));
             if (!disposed && !flight) schedule();
             return true;
         },

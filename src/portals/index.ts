@@ -20,7 +20,11 @@ export type {
 } from './types.js';
 
 export { createPortalCellBinding } from './cell.js';
-export type { PortalCellBinding, PortalCellBindingOptions } from './cell.js';
+export type {
+    PortalCellBinding,
+    PortalCellBindingOptions,
+    PortalCellDraft,
+} from './cell.js';
 
 export { createPortalListOwner } from './listOwner.js';
 export type {

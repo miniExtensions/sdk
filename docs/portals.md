@@ -901,7 +901,7 @@ not replace `createPortalListOwner` or create another persistent Portal owner.
 ## Session-owned inline edits in an existing host
 
 `createPortalInlineEditQueue<Value, Request, Result>` owns native in-memory
-`FormDraftStore` drafts, debounce, per-cell coalescing, sequential transport and
+pending intents, debounce, per-cell coalescing, sequential transport and
 conditional rollback. Create one queue per visitor session and inject the real
 host `commit(request)` and `committedValue(result, cell)` functions. Each
 `enqueue` supplies the native value, captured request and existing host writer,
@@ -919,11 +919,14 @@ admission and undispatched entries while allowing already-started transport and
 its callbacks to settle. Keep those callbacks bound to their original session;
 shorter-lived presentation/read callbacks must independently guard replacement.
 `flush()` explicitly drains queued intents. `hasPending()` is false inside the
-final `onIdle` callback. Optional `store` injection is caller-owned: only the
-queue's cell handles are discarded, never unrelated drafts.
+final `onIdle` callback. Native optimistic values stay in the injected host
+writer. The queue retains only pending requests, generations and committed
+baselines; it creates no parallel Form store.
 
-`createPortalCellBinding` also accepts an optional `draft: { store, handle }`.
-The caller owns that handle's lifetime across renderer teardown. Its default
+`createPortalCellBinding` also accepts an optional `PortalCellDraft` interface
+(`read`, `write`, `revision`, `dirty`, `markSaved`). The caller owns its lifetime
+across renderer teardown. It can adapt an existing store without fabricating
+a Form or SDK client. Its default
 standalone direct-Save, schema admission and `RecoveryJournal` policy remain in
 force; injecting a draft does not opt a host into those restrictions or grant a
 mutation capability. Existing hosts use the queue directly to preserve their

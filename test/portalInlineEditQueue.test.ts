@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { createPortalInlineEditQueue } from '../src/portals/index.js';
-import { FormDraftStore } from '../src/forms/drafts.js';
 
 const deferred = <Value>() => {
     let resolve!: (value: Value) => void;
@@ -16,9 +15,7 @@ const cell = { tableId: 'table', recordId: 'record', fieldId: 'field' };
 const fixture = (
     commit: (request: { value: string; view: string }) => Promise<string>
 ) => {
-    const store = new FormDraftStore<string>();
     const queue = createPortalInlineEditQueue({
-        store,
         commit,
         committedValue: (result: string) => result,
     });
@@ -42,7 +39,7 @@ const fixture = (
         onBatchSettled: () => {},
         onIdle: () => {},
     });
-    return { queue, store, edit, errors, committed, visible: () => visible };
+    return { queue, edit, errors, committed, visible: () => visible };
 };
 
 describe('injectable Portal inline edit draft queue', () => {

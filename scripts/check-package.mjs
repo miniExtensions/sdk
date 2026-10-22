@@ -1,4 +1,8 @@
 import {
+    checkFormProgressConsumer,
+    formProgressTypedConsumer,
+} from './form-progress-consumer-checks.mjs';
+import {
     checkBorrowedAttachmentControllerConsumer,
     borrowedAttachmentControllerTypedConsumer,
 } from './borrowed-attachment-controller-consumer-checks.mjs';
@@ -1396,6 +1400,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 collaboratorSelectionTypedConsumer +
                 childNavigationTypedConsumer +
                 borrowedLinkedChildTypedConsumer +
+                formProgressTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
                 `
@@ -3052,6 +3057,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     assert.equal(
         await checkButtonDispatchGateConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkFormProgressConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

@@ -26,6 +26,11 @@ export {
     getAggregateUploadProgress,
     type AttachmentUploadProgressInput,
 } from './attachmentInputCompatibility.js';
+export { iterateOrderedAttachmentUploads } from './orderedAttachmentUploads.js';
+export type {
+    OrderedAttachmentUpload,
+    OrderedAttachmentUploadOptions,
+} from './orderedAttachmentUploads.js';
 export {
     createAddressAutocompleteControl,
     AddressAutocompleteConfigurationError,

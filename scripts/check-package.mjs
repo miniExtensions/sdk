@@ -28,6 +28,10 @@ import {
     attachmentMetadataTypedConsumer,
 } from './attachment-input-consumer-checks.mjs';
 import {
+    checkOrderedAttachmentUploadConsumer,
+    orderedAttachmentUploadTypedConsumer,
+} from './ordered-attachment-upload-consumer-checks.mjs';
+import {
     checkCollaboratorSelectionConsumer,
     collaboratorSelectionTypedConsumer,
 } from './collaborator-selection-consumer-checks.mjs';
@@ -1351,6 +1355,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             join(temporaryDirectory, filename),
             declarationConsumer +
                 attachmentMetadataTypedConsumer +
+                orderedAttachmentUploadTypedConsumer +
                 formulaCompatibilityTypedConsumer +
                 collaboratorSelectionTypedConsumer +
                 childNavigationTypedConsumer +
@@ -2973,6 +2978,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkOrderedAttachmentUploadConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

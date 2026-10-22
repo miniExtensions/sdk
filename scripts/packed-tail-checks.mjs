@@ -54,6 +54,7 @@ export async function runPackedTailChecks({
                         record,
                         `Cannot safely send ${name}: ${state.reason}`
                     );
+                return state;
             })
             .catch((error) => problem(record, `Cannot send ${name}`, error));
         return record.signalWork;
@@ -78,7 +79,7 @@ export async function runPackedTailChecks({
             }, terminationGraceMs + drainTimeoutMs);
         }
     };
-    const waitGone = async (record, milliseconds) => {
+    const waitGone = async (record, milliseconds, retrySignal) => {
         const deadline = performance.now() + milliseconds;
         do {
             if (record.settled) return false;
@@ -93,6 +94,7 @@ export async function runPackedTailChecks({
             record.observation = state;
             if (drained(state)) return true;
             if (performance.now() >= deadline) return false;
+            await retrySignal?.();
             await delay(
                 Math.min(25, Math.max(1, deadline - performance.now()))
             );
@@ -102,8 +104,16 @@ export async function runPackedTailChecks({
     const drain = async (record) => {
         if (await waitGone(record, terminationGraceMs)) return;
         problem(record, 'Process group survived worker close');
-        await signal(record, 'SIGTERM');
-        if (await waitGone(record, terminationGraceMs)) return;
+        let termState = await signal(record, 'SIGTERM');
+        if (
+            await waitGone(record, terminationGraceMs, async () => {
+                // Proc churn may refuse a signal without sending it. Retry only
+                // after a fresh proof, within the existing cooperative window.
+                if (termState?.state === 'unresolved')
+                    termState = await signal(record, 'SIGTERM');
+            })
+        )
+            return;
         await signal(record, 'SIGKILL');
         assert(
             await waitGone(record, drainTimeoutMs),

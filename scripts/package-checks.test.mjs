@@ -991,9 +991,9 @@ function assertTailGroupGone(pid) {
 async function packedTailFixture(t, plan = {}) {
     const root = await mkdtemp(join(tmpdir(), 'sdk-package-tail-guard-'));
     const observers = new Map();
-    const createObserver = ({ pid }) => {
-        const observer = createProcessGroupObserver({ pid });
-        observers.set(pid, observer);
+    const createObserver = (options) => {
+        const observer = createProcessGroupObserver(options);
+        observers.set(options.pid, observer);
         return observer;
     };
     const groupState = async (pid) => {
@@ -1414,7 +1414,9 @@ test('packed tail rejects a zero-exit worker with an owned live grandchild and p
     const fixture = await packedTailFixture(t, {
         attachment: { mode: 'survivor' },
     });
+    let drainFailure;
     await assert.rejects(runPackedTailChecks(fixture.options), (error) => {
+        drainFailure = error;
         assertTailFailure(error, 'attachment');
         assert.match(
             error.errors.map((item) => item.message).join('\n'),
@@ -1430,7 +1432,11 @@ test('packed tail rejects a zero-exit worker with an owned live grandchild and p
         await readFile(
             join(fixture.root, 'attachment.grandchild.term'),
             'utf8'
-        ),
+        ).catch((error) => {
+            // Preserve the actual signal/refusal evidence if the marker is absent.
+            error.cause = drainFailure;
+            throw error;
+        }),
         'SIGTERM'
     );
     const grandchildPid = Number(
@@ -1438,6 +1444,167 @@ test('packed tail rejects a zero-exit worker with an owned live grandchild and p
     );
     await fixture.assertPidDrained(grandchildPid);
     await fixture.assertGroupsGone();
+});
+
+test('packed tail retries transient TERM admission and preserves fail-closed escalation', async (t) => {
+    for (const mode of [
+        'transient',
+        'transient-delayed-observation',
+        'persistent',
+    ]) {
+        const permanent = mode === 'persistent';
+        const delayedObservation = mode === 'transient-delayed-observation';
+        await t.test(
+            delayedObservation
+                ? 'transient refusal with delayed observation'
+                : permanent
+                  ? 'persistent refusal'
+                  : 'transient refusal',
+            async (t) => {
+                const fixture = await packedTailFixture(t, {
+                    attachment: { mode: 'survivor' },
+                });
+                const attempts = [];
+                const outcomes = [];
+                const syscalls = [];
+                const createObserver = (options) => {
+                    const observer = fixture.options.createObserver({
+                        ...options,
+                        kill(target, name) {
+                            process.kill(target, name);
+                            if (name !== 0) syscalls.push({ target, name });
+                        },
+                    });
+                    let refused = false;
+                    let termSent = false;
+                    let killAttempted = false;
+                    return {
+                        ...observer,
+                        async inspect() {
+                            if (
+                                delayedObservation &&
+                                termSent &&
+                                !killAttempted
+                            )
+                                return {
+                                    state: 'unresolved',
+                                    reason: 'Injected observation churn after cooperative TERM',
+                                    pid: options.pid,
+                                    members: [],
+                                };
+                            return observer.inspect();
+                        },
+                        async signal(name) {
+                            if (name === 'SIGKILL') killAttempted = true;
+                            if (name === 'SIGTERM' && (permanent || !refused)) {
+                                refused = true;
+                                attempts.push({ name, admitted: false });
+                                const state = {
+                                    state: 'unresolved',
+                                    reason: permanent
+                                        ? 'Injected persistent ownership refusal'
+                                        : 'Injected transient ownership refusal',
+                                    pid: options.pid,
+                                    members: [],
+                                };
+                                outcomes.push({ name, result: state });
+                                return state;
+                            }
+                            const state = await observer.signal(name);
+                            outcomes.push({ name, result: state });
+                            if (name === 'SIGTERM' && state.state === 'live')
+                                termSent = true;
+                            attempts.push({
+                                name,
+                                admitted: state.state === 'live',
+                            });
+                            return state;
+                        },
+                    };
+                };
+                await assert.rejects(
+                    runPackedTailChecks({ ...fixture.options, createObserver }),
+                    (error) => {
+                        assertTailFailure(error, 'attachment');
+                        assert.match(
+                            error.errors.map((item) => item.message).join('\n'),
+                            /Cannot safely send SIGTERM/
+                        );
+                        return true;
+                    }
+                );
+                t.diagnostic(
+                    JSON.stringify({ mode, attempts, outcomes, syscalls })
+                );
+                const marker = () =>
+                    readFile(
+                        join(fixture.root, 'attachment.grandchild.term'),
+                        'utf8'
+                    );
+                const ownedPid = Number(
+                    await readFile(join(fixture.root, 'attachment.pid'), 'utf8')
+                );
+                if (permanent) {
+                    await assert.rejects(marker, { code: 'ENOENT' });
+                    assert.equal(
+                        attempts.filter(
+                            (event) =>
+                                event.name === 'SIGTERM' && event.admitted
+                        ).length,
+                        0
+                    );
+                    assert.equal(
+                        attempts.filter(
+                            (event) =>
+                                event.name === 'SIGKILL' && event.admitted
+                        ).length,
+                        1
+                    );
+                } else {
+                    assert.equal(await marker(), 'SIGTERM');
+                    assert.deepEqual(attempts[0], {
+                        name: 'SIGTERM',
+                        admitted: false,
+                    });
+                    assert.equal(
+                        attempts.filter(
+                            (event) =>
+                                event.name === 'SIGTERM' && event.admitted
+                        ).length,
+                        1
+                    );
+                    assert.ok(
+                        attempts
+                            .filter((event) => event.name === 'SIGKILL')
+                            .every((event) => !event.admitted)
+                    );
+                    if (delayedObservation)
+                        assert.ok(
+                            attempts.some(
+                                (event) =>
+                                    event.name === 'SIGKILL' && !event.admitted
+                            )
+                        );
+                }
+                // A signal attempt can return gone/exited without a syscall.
+                // Prove physical delivery, not scheduler-dependent attempt count.
+                assert.deepEqual(syscalls, [
+                    {
+                        target: -ownedPid,
+                        name: permanent ? 'SIGKILL' : 'SIGTERM',
+                    },
+                ]);
+                const grandchildPid = Number(
+                    await readFile(
+                        join(fixture.root, 'attachment.grandchild.pid'),
+                        'utf8'
+                    )
+                );
+                await fixture.assertPidDrained(grandchildPid);
+                await fixture.assertGroupsGone();
+            }
+        );
+    }
 });
 
 test('packed tail rejects missing or repeated finish acknowledgement before accepting a result', async (t) => {

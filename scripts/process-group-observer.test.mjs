@@ -171,6 +171,7 @@ test('Linux proves an owned orphan zombie only with two complete stable scans an
         'killpg(0) remains positive in this fixture.'
     );
     assert.equal((await observer.signal('SIGTERM')).state, 'exited');
+    assert.equal((await observer.signal('SIGKILL')).state, 'exited');
     assert.deepEqual(f.signals, []);
     const evidence = observer.getEvidence();
     const expected = structuredClone(evidence);

@@ -93,7 +93,9 @@ export async function checkChildNavigationConsumer({ consumerDirectory }) {
                         },
                     },
                 ]) {
-                    const foreign = { ...target, ...patch };
+                    // Build owner metadata directly; spreading target would itself
+                    // invoke the intentionally throwing private-payload getter.
+                    const foreign = { ...child(direction, type), ...patch };
                     assert.equal(
                         api.findAdjacentChildSession(
                             { origin, target, foreign },

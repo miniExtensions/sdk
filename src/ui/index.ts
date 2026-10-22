@@ -1,3 +1,23 @@
+export { createBorrowedButtonActionController } from './borrowedButtonActionController.js';
+export type {
+    BorrowedButtonContext,
+    BorrowedButtonIntent,
+    BorrowedButtonTransportOutcome,
+    BorrowedButtonActionOptions,
+    BorrowedButtonActionSnapshot,
+    BorrowedButtonActionResult,
+    BorrowedButtonActionController,
+} from './borrowedButtonActionController.js';
+export {
+    createBorrowedNativeLinkedReadSource,
+    type BorrowedNativeLinkedPage,
+    type BorrowedNativeLinkedSelection,
+    type BorrowedNativeLinkedReadResult,
+    type BorrowedNativeLinkedReadPort,
+    type BorrowedNativeLinkedReadLease,
+    type BorrowedNativeLinkedReadSource,
+} from './borrowedNativeLinkedReads.js';
+
 export {
     projectNativeLinkedRecordRows,
     type NativeLinkedRecordRow,
@@ -217,6 +237,19 @@ export {
     type AttachmentActionRow,
     type AttachmentRowActions,
 } from './attachmentRowActions.js';
+
+export { createBorrowedAttachmentController } from './borrowedAttachmentController.js';
+export type {
+    BorrowedAttachmentField,
+    BorrowedAttachmentProgress,
+    BorrowedAttachmentAllocation,
+    BorrowedAttachmentAdmission,
+    BorrowedAttachmentFailure,
+    BorrowedAttachmentBatchResult,
+    BorrowedAttachmentSnapshot,
+    BorrowedAttachmentControllerOptions,
+    BorrowedAttachmentController,
+} from './borrowedAttachmentController.js';
 
 export { captureAttachmentUploadAdmission } from './attachmentUploadAdmission.js';
 export type {

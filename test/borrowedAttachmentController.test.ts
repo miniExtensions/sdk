@@ -585,3 +585,59 @@ it('a throwing receipt getter fails before transport with its original error', a
     assert.equal(f.settled.length, 0);
     f.controller.dispose();
 });
+
+for (const probe of [
+    { key: 'revision', throwOn: 1 },
+    { key: 'visible', throwOn: 3 },
+    { key: 'valueReadable', throwOn: 2 },
+    { key: 'owner', throwOn: 3 },
+    { key: 'editable', throwOn: 1 },
+    { key: 'visible', throwOn: 1 },
+] as const) {
+    for (const rejected of [false, true]) {
+        it(`settles allocated ${rejected ? 'rejection' : 'success'} once despite ${probe.key} getter fault at read ${probe.throwOn}`, async () => {
+            const held = deferred<object>();
+            const transportError = {},
+                presentationError = {},
+                accepted = {};
+            const f = fixture({
+                allocate: () => ({ completion: held.promise }),
+            });
+            let armed = false;
+            f.options.readField = () => {
+                const field = { ...f.field };
+                const original = field[probe.key];
+                let reads = 0;
+                Object.defineProperty(field, probe.key, {
+                    enumerable: true,
+                    get() {
+                        if (armed && ++reads >= probe.throwOn)
+                            throw presentationError;
+                        return original;
+                    },
+                });
+                return field;
+            };
+            const pending = f.controller.start([file()]);
+            armed = true;
+            if (rejected) held.reject(transportError);
+            else held.resolve(accepted);
+            const outcome = await pending;
+            assert.equal(f.settled.length, 1);
+            assert.equal(outcome.allocatedCount, 1);
+            assert.equal(outcome.settlementFailure, null);
+            if (rejected) {
+                assert.equal(outcome.outcome, 'failed');
+                assert.equal(outcome.failure?.phase, 'completion');
+                assert.equal(outcome.failure?.error, transportError);
+                assert.deepEqual(outcome.completed, []);
+            } else {
+                assert.equal(outcome.outcome, 'completed');
+                assert.equal(outcome.failure, null);
+                assert.equal(outcome.completed[0].attachment, accepted);
+                assert.equal(f.canonical[1], accepted);
+            }
+            f.controller.dispose();
+        });
+    }
+}

@@ -205,9 +205,79 @@ export async function checkBorrowedAttachmentControllerConsumer({
         assert.equal(hidden.getSnapshot().value, null);
         assert.equal((await hidden.start([first])).allocatedCount, 0);
         hidden.dispose();
+
+        for (const [key, throwOn] of [
+            ['revision', 1],
+            ['visible', 3],
+            ['valueReadable', 2],
+            ['owner', 3],
+            ['editable', 1],
+            ['visible', 1],
+        ])
+            for (const rejected of [false, true]) {
+                let armed = false,
+                    release,
+                    reject,
+                    settlements = 0;
+                const nativeResult = {},
+                    nativeError = {},
+                    getterError = {};
+                const completion = new Promise((yes, no) => {
+                    release = yes;
+                    reject = no;
+                });
+                const metadata = api.createBorrowedAttachmentController({
+                    ...options,
+                    readField() {
+                        const field = {
+                            owner,
+                            revision: 1,
+                            visible: true,
+                            editable: true,
+                            valueReadable: true,
+                            value: [native],
+                        };
+                        const original = field[key];
+                        let reads = 0;
+                        Object.defineProperty(field, key, {
+                            enumerable: true,
+                            get() {
+                                if (armed && ++reads >= throwOn)
+                                    throw getterError;
+                                return original;
+                            },
+                        });
+                        return field;
+                    },
+                    allocate: () => ({ completion }),
+                    settleCompleted(_receipt, result) {
+                        settlements++;
+                        if (rejected)
+                            assert.equal(result.failure.error, nativeError);
+                        else
+                            assert.equal(
+                                result.completed[0].attachment,
+                                nativeResult
+                            );
+                    },
+                });
+                const pending = metadata.start([first]);
+                armed = true;
+                if (rejected) reject(nativeError);
+                else release(nativeResult);
+                const result = await pending;
+                assert.equal(settlements, 1);
+                assert.equal(result.settlementFailure, null);
+                if (rejected) assert.equal(result.failure.error, nativeError);
+                else {
+                    assert.equal(result.failure, null);
+                    assert.equal(result.completed[0].attachment, nativeResult);
+                }
+                metadata.dispose();
+            }
     }
     console.log(
-        'Installed borrowed attachment controller: ESM/CJS identity/concurrency, policy ABA, partial error/cleanup, cancellation/disposal and reentrancy passed; strict NodeNext/Bundler consumers included.'
+        'Installed borrowed attachment controller: ESM/CJS identity/concurrency, policy ABA, partial error/cleanup, cancellation/disposal reentrancy and metadata-getter success/rejection settlement passed; strict NodeNext/Bundler consumers included.'
     );
     return 2;
 }

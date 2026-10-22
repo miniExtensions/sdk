@@ -155,43 +155,56 @@ export function createBorrowedAttachmentController<T, Receipt>(
             reading = false;
         }
     };
+    const unavailable = (): BorrowedAttachmentSnapshot<T> => ({
+        phase: disposed ? 'disposed' : phase,
+        busy: active !== null,
+        files: [],
+        value: null,
+        fieldRevision: null,
+        progress: null,
+        result: null,
+    });
     const snapshot = (): BorrowedAttachmentSnapshot<T> => {
-        let field: BorrowedAttachmentField<T> | null = null;
-        let value: readonly T[] | null = null;
         try {
-            field = read();
-            if (
-                field?.visible &&
-                field.valueReadable &&
-                (active?.owner == null ||
-                    Object.is(active.owner, field.owner)) &&
+            const field = read();
+            if (field == null) return unavailable();
+            // Every host-owned metadata/native getter belongs to this guarded
+            // presentation projection. Nothing outside it may veto settlement.
+            const visible = field.visible === true;
+            if (!visible) return unavailable();
+            const readable = field.valueReadable === true;
+            const owner = readable ? field.owner : null;
+            const fieldRevision = visible ? field.revision : null;
+            const ownerMatches =
+                (active?.owner == null || Object.is(active.owner, owner)) &&
                 (last == null ||
                     lastOwner == null ||
-                    Object.is(lastOwner, field.owner))
-            )
-                value = field.value;
+                    Object.is(lastOwner, owner));
+            const value = readable && ownerMatches ? field.value : null;
+            const activityVisible =
+                readable &&
+                (active == null ||
+                    (!active.retired && Object.is(active.owner, owner))) &&
+                (last == null ||
+                    (last.outcome !== 'retired' &&
+                        Object.is(lastOwner, owner)));
+            if (disposed) return unavailable();
+            return {
+                phase,
+                busy: active !== null,
+                files: activityVisible ? [...files] : [],
+                value,
+                fieldRevision,
+                progress:
+                    !activityVisible || progress == null
+                        ? null
+                        : { ...progress },
+                result: !activityVisible || last == null ? null : { ...last },
+            };
         } catch {
-            // Presentation getter failure must never skip allocated settlement.
-            field = null;
+            // Includes revision/visibility/owner metadata, not just field.value.
+            return unavailable();
         }
-        const activityVisible =
-            field?.visible === true &&
-            field.valueReadable &&
-            (active == null ||
-                (!active.retired && Object.is(active.owner, field.owner))) &&
-            (last == null ||
-                (last.outcome !== 'retired' &&
-                    Object.is(lastOwner, field.owner)));
-        return {
-            phase: disposed ? 'disposed' : phase,
-            busy: active !== null,
-            files: activityVisible ? [...files] : [],
-            value,
-            fieldRevision: field?.visible ? field.revision : null,
-            progress:
-                !activityVisible || progress == null ? null : { ...progress },
-            result: !activityVisible || last == null ? null : { ...last },
-        };
     };
     const emit = () => {
         if (disposed) return;

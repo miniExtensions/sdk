@@ -31,6 +31,10 @@ import {
     portalSummaryRefreshTypedConsumer,
 } from './portal-summary-refresh-consumer-checks.mjs';
 import {
+    checkPortalInlineEditQueueConsumer,
+    portalInlineEditQueueTypedConsumer,
+} from './portal-inline-edit-queue-consumer-checks.mjs';
+import {
     checkDropdownFilterConsumer,
     dropdownFilterTypedConsumer,
 } from './dropdown-filter-consumer-checks.mjs';
@@ -1374,6 +1378,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 orderedAttachmentUploadTypedConsumer +
                 borrowedAttachmentControllerTypedConsumer +
                 borrowedNativeLinkedReadTypedConsumer +
+                portalInlineEditQueueTypedConsumer +
                 formulaCompatibilityTypedConsumer +
                 nativeLinkedRecordRowsTypedConsumer +
                 collaboratorSelectionTypedConsumer +
@@ -3050,6 +3055,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         }),
         2
     );
+    await checkPortalInlineEditQueueConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
     assert.equal(
         await checkCollaboratorSelectionConsumer({
             consumerDirectory: temporaryDirectory,

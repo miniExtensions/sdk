@@ -4396,6 +4396,55 @@ The host still owns ordering, progress state, cancellation, partial successes,
 R2/Firebase fallback, signing, object URLs, current writer admission and Save.
 No renderer or upload controller is replaced by these helpers.
 
+### Ordered attachment upload iteration
+
+`iterateOrderedAttachmentUploads` shares a serial loop for an already-admitted
+host batch. It preserves original `File` references, duplicate occurrences,
+indexes and returned attachment identity. The host supplies `shouldContinue`
+before each next allocation and `upload(file,index)` for its exact existing
+per-file operation. Neither callback is a server authorization grant.
+
+```ts
+import {
+    iterateOrderedAttachmentUploads,
+    type OrderedAttachmentUpload,
+    type OrderedAttachmentUploadOptions,
+} from '@miniextensions/sdk/ui';
+
+// The calling host keeps this array for its existing partial-recovery catch.
+export async function collectIntoHostPrefix<T>(
+    options: OrderedAttachmentUploadOptions<T>,
+    completed: T[],
+    afterRetain?: (entry: OrderedAttachmentUpload<T>) => void
+): Promise<void> {
+    for await (const entry of iterateOrderedAttachmentUploads(options)) {
+        completed.push(entry.attachment);
+        afterRetain?.(entry);
+    }
+}
+```
+
+Allocation is demand-driven: it starts only when the consumer requests a next
+item. After an allocated upload resolves, its original result is yielded even
+if the cancellation decision changed during that await. The next request checks
+cancellation before allocating another file. Calling the native iterator's
+`return` stops future work, but does not abort an outstanding host promise or
+erase its pending `next` completion; the host must still consume and settle it.
+Errors propagate unchanged, including primitive rejections. There is no retry,
+error normalization, File/result cloning, metadata reading or deduplication.
+
+Keep native validation, folder checks, R2/Firebase fallback/signing, progress,
+PDF object URLs and cancellation confirmation/abort with the host. Preserve its
+before-retain validation/PDF work, completed-prefix push, after-retain progress,
+original partial-error append and finalizers. The host's canonical writer and
+allocated-settlement ownership remain unchanged. Empty/stopped iteration adds
+no write: the caller retains its existing empty-batch and stopped-batch behavior.
+
+This iterator has no client, accepted Form/Portal owner, draft store, journal or
+transport cancellation capability. It does not replace the SDK attachment
+controller's one-file explicit action and uncertainty semantics, and does not
+claim that completing an upload proves an Airtable Save or hosted acceptance.
+
 ### Hosted dropdown filter replacement
 
 `getFiltersAfterDropdownChange` preserves the hosted linked-record dropdown

@@ -9,6 +9,16 @@ export type {
     BorrowedButtonActionController,
 } from './borrowedButtonActionController.js';
 export {
+    createBorrowedNativeLinkedReadSource,
+    type BorrowedNativeLinkedPage,
+    type BorrowedNativeLinkedSelection,
+    type BorrowedNativeLinkedReadResult,
+    type BorrowedNativeLinkedReadPort,
+    type BorrowedNativeLinkedReadLease,
+    type BorrowedNativeLinkedReadSource,
+} from './borrowedNativeLinkedReads.js';
+
+export {
     projectNativeLinkedRecordRows,
     type NativeLinkedRecordRow,
 } from './nativeLinkedRecordRows.js';

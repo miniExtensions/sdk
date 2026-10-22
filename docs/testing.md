@@ -582,3 +582,19 @@ snapshots, screenshots, unexpected requests, page errors and cleanup are saved.
 A launch/access denial means no acceptance evidence. These actual Chromium
 checks supplement source/Happy DOM checks and do not claim hosted persistence,
 manual dogfooding, other browser engines or a screen-reader session.
+
+## Installed Form progress storage
+
+`pnpm check:package` runs `scripts/form-progress-consumer-checks.mjs` through
+public installed `/forms` ESM and CommonJS imports, asserting each resolved
+archive path. Both formats cover inert construction, scalar round-trip and
+snapshot/input detachment, competing owners, exact-token cross-format
+continuation, stale replacement/removal preserving successor bytes, queued
+retirement, missing/denied cooperating locks, malformed bytes and storage
+failures. Strict ESM/CJS NodeNext and Bundler consumers check public declarations
+and reject non-scalar values. Existing package checks remain registered.
+
+All storage and locks are synthetic, in-memory adapters. Throwing storage cases
+fail before mutation; they do not establish the outcome of a host that mutates
+and then throws. These checks do not certify real browser Web Locks, cross-tab
+coordination, hosted persistence, restoration authority or Save behavior.

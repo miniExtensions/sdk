@@ -14,7 +14,18 @@ import type { SelectionModel } from '../ui/types.js';
 import { RecoveryJournal, type RecoveryScope } from '../forms/recovery.js';
 import type { PortalOwnerScope } from './types.js';
 
+/** Native draft ownership can be supplied by an existing canonical host. */
+export type PortalCellDraft = {
+    read(): AirtableValue | undefined;
+    write(value: AirtableValue): boolean;
+    revision(): number | null;
+    dirty(): boolean;
+    markSaved(revision: number): boolean;
+};
+
 export type PortalCellBindingOptions = {
+    /** Caller-owned native draft; binding teardown must not discard it. */
+    draft?: PortalCellDraft;
     getClientTimeZone?(): string;
     client: MiniExtensionsClient;
     input: Omit<UpdateGridCellInput, 'value'>;
@@ -128,19 +139,33 @@ export const createPortalCellBinding = (
         scope: structuredClone(options.recovery.scope),
     };
     const store = new FormDraftStore<AirtableValue>();
-    const handle = store.open(
-        {
-            extensionId: input.portalExtensionAccessToken,
-            recordId: input.recordId,
-            parent: {
-                portalId: input.portalExtensionAccessToken,
-                recordId: input.recordId,
-                portalFieldId: input.portalFieldId,
-            },
-        },
-        { [input.recordFieldId]: options.value },
-        []
-    );
+    const handle = options.draft
+        ? null
+        : store.open(
+              {
+                  extensionId: input.portalExtensionAccessToken,
+                  recordId: input.recordId,
+                  parent: {
+                      portalId: input.portalExtensionAccessToken,
+                      recordId: input.recordId,
+                      portalFieldId: input.portalFieldId,
+                  },
+              },
+              { [input.recordFieldId]: options.value },
+              []
+          );
+    const draft: PortalCellDraft = options.draft ?? {
+        read: () => store.read(handle!, input.recordFieldId),
+        write: (value) => store.write(handle!, input.recordFieldId, value),
+        revision: () => store.revision(handle!),
+        dirty: () =>
+            store
+                .snapshot(handle!)
+                ?.dirtyFieldIds.includes(input.recordFieldId) ?? false,
+        markSaved: (revision) => store.markSaved(handle!, revision),
+    };
+    if (draft.revision() === null)
+        throw new Error('The cell draft owner has been retired.');
     const listeners = new Set<(state: FormFieldSnapshot) => void>();
     let retired = false;
     let busy = false;
@@ -156,6 +181,7 @@ export const createPortalCellBinding = (
             (next.ownerId !== scope.ownerId ||
                 next.revision !== scope.revision ||
                 !options.isCurrent() ||
+                draft.revision() === null ||
                 Object.keys(now).length !== Object.keys(session).length ||
                 Object.keys(session).some(
                     (key) =>
@@ -184,14 +210,9 @@ export const createPortalCellBinding = (
                       schema,
                   }
                 : null,
-            value: live ? store.read(handle, input.recordFieldId) : undefined,
-            dirty:
-                live &&
-                (store
-                    .snapshot(handle)
-                    ?.dirtyFieldIds.includes(input.recordFieldId) ??
-                    false),
-            revision: live ? store.revision(handle) : null,
+            value: live ? draft.read() : undefined,
+            dirty: live && draft.dirty(),
+            revision: live ? draft.revision() : null,
             visibility: live
                 ? { type: 'visible', diagnostics: [] }
                 : { type: 'blocked', code: 'invalid', diagnostics: [] },
@@ -226,7 +247,11 @@ export const createPortalCellBinding = (
         if (!snapshot().canEdit)
             return { accepted: false as const, reason: 'blocked' as const };
         gridValue(value);
-        if (!store.write(handle, input.recordFieldId, value))
+        // Injected draft reads can retire the binding while snapshotting.
+        // Recheck immediately before delegating to the canonical writer.
+        if (!current())
+            return { accepted: false as const, reason: 'retired' as const };
+        if (!draft.write(value))
             return { accepted: false as const, reason: 'retired' as const };
         notify();
         return { accepted: true as const };
@@ -237,14 +262,14 @@ export const createPortalCellBinding = (
     )
         model = createSelectFieldModel({
             field: schema,
-            value: options.value,
+            value: draft.read(),
             readOnly,
             onChange: (value) => {
                 write(value);
             },
         });
     else if (schema.fieldType === 'multipleRecordLinks') {
-        const native = gridValue(options.value) as string[] | null;
+        const native = gridValue(draft.read()) as string[] | null;
         if (native !== null && !Array.isArray(native))
             throw new Error('Invalid linked value.');
         model = createSelectionModel({
@@ -290,9 +315,9 @@ export const createPortalCellBinding = (
                 binding.date?.getState().valid === false
             )
                 throw new Error('Load a fresh Portal before saving this cell.');
-            const value = gridValue(store.read(handle, input.recordFieldId));
+            const value = gridValue(draft.read());
             request.signal?.throwIfAborted();
-            const revision = store.revision(handle)!;
+            const revision = draft.revision()!;
             let attempt: ReturnType<typeof recovery.journal.begin> | undefined;
             busy = true;
             error = null;
@@ -345,11 +370,11 @@ export const createPortalCellBinding = (
                     attempt.outcome !== 'unknown' ||
                     attempt.acknowledgment !== 'none' ||
                     !attempt.flight ||
-                    store.revision(handle) !== revision
+                    draft.revision() !== revision
                 )
                     throw new Error('The cell outcome is unknown.');
                 recovery.journal.accepted(attempt, 'saved');
-                store.markSaved(handle, revision);
+                draft.markSaved(revision);
                 return result;
             } catch (cause) {
                 if (current())
@@ -376,7 +401,7 @@ export const createPortalCellBinding = (
             stop?.();
             model?.destroy();
             binding.date?.destroy();
-            store.clear();
+            if (handle) store.discard(handle);
             notify();
             listeners.clear();
         },

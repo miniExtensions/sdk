@@ -897,3 +897,38 @@ start a read, and a throwing `onFresh` is not treated as a transport failure.
 Host adoption must bind the existing owner's mount/session/record/configuration
 lease and keep its transport, dispatch and warning UI in place. This bridge does
 not replace `createPortalListOwner` or create another persistent Portal owner.
+
+## Session-owned inline edits in an existing host
+
+`createPortalInlineEditQueue<Value, Request, Result>` owns native in-memory
+pending intents, debounce, per-cell coalescing, sequential transport and
+conditional rollback. Create one queue per visitor session and inject the real
+host `commit(request)` and `committedValue(result, cell)` functions. Each
+`enqueue` supplies the native value, captured request and existing host writer,
+success, error, batch-settled and idle callbacks. No SDK client or fabricated Form
+is needed. Authorization remains in the canonical mutation.
+
+New edits remain admissible during an earlier request, including A → B → A.
+A failed request never overwrites a newer pending intent, and never replays
+itself. Once a cell settles, its baseline is discarded; the next explicit edit
+uses the caller's current committed value. A later explicit edit is a new
+intent, not a claim that an unknown transport outcome did not commit.
+
+Grid unmount alone must not dispose a session queue. `dispose()` retires new
+admission and undispatched entries while allowing already-started transport and
+its callbacks to settle. Keep those callbacks bound to their original session;
+shorter-lived presentation/read callbacks must independently guard replacement.
+`flush()` explicitly dispatches the current batch; newer intents retain their
+own zero-delay batch. `hasPending()` is false inside the
+final `onIdle` callback. Native optimistic values stay in the injected host
+writer. The queue retains only pending requests, generations and committed
+baselines; it creates no parallel Form store.
+
+`createPortalCellBinding` also accepts an optional `PortalCellDraft` interface
+(`read`, `write`, `revision`, `dirty`, `markSaved`). The caller owns its lifetime
+across renderer teardown. It can adapt an existing store without fabricating
+a Form or SDK client. Its default
+standalone direct-Save, schema admission and `RecoveryJournal` policy remain in
+force; injecting a draft does not opt a host into those restrictions or grant a
+mutation capability. Existing hosts use the queue directly to preserve their
+supported field policies and native transport.

@@ -4,6 +4,8 @@ import {
     createPortalCellBinding,
     type PortalCellBindingOptions,
 } from '../src/portals/index.js';
+import { FormDraftStore } from '../src/forms/drafts.js';
+import type { AirtableValue } from '../src/runtime/types.js';
 import { RecoveryJournal } from '../src/forms/recovery.js';
 import { createMiniExtensionsClient } from '../src/runtime/index.js';
 import type {
@@ -75,6 +77,45 @@ const fixture = (respond?: () => Promise<UpdateGridCellResult>) => {
 };
 
 describe('Portal cell shared binding and journal', () => {
+    it('refuses the canonical write when the second injected draft read disposes the binding', () => {
+        const f = fixture();
+        let reads = 0;
+        let writes = 0;
+        let observed = false;
+        let armed = false;
+        let cell!: ReturnType<typeof createPortalCellBinding>;
+        cell = createPortalCellBinding({
+            ...f.options,
+            draft: {
+                read: () => {
+                    if (armed && ++reads === 2) {
+                        armed = false;
+                        observed = true;
+                        cell.destroy();
+                    }
+                    return 'Initial';
+                },
+                dirty: () => false,
+                revision: () => 0,
+                write: () => {
+                    writes++;
+                    return true;
+                },
+                markSaved: () => true,
+            },
+        });
+        try {
+            armed = true;
+            const result = cell.binding.setValue('Edited');
+            assert.equal(observed, true);
+            assert.equal(writes, 0);
+            assert.equal(result.accepted, false);
+            assert.equal(cell.binding.getSnapshot().retired, true);
+            assert.equal(f.calls.length, 0);
+        } finally {
+            cell.destroy();
+        }
+    });
     it('subscribed stock/custom remount retains native draft and sends exactly one canonical cell write', async () => {
         const f = fixture();
         const cell = createPortalCellBinding(f.options);
@@ -665,3 +706,154 @@ describe('Portal cell custom-response snapshot boundary', () => {
         });
     }
 });
+
+it('an injected cell draft belongs to its caller across binding teardown', () => {
+    const f = fixture();
+    const store = new FormDraftStore<AirtableValue>();
+    const handle = store.open(
+        { extensionId: 'portal', recordId: 'rec_one', parent: null },
+        { fld_title: 'External' },
+        []
+    );
+    const cell = createPortalCellBinding({
+        ...f.options,
+        draft: {
+            read: () => store.read(handle, 'fld_title'),
+            write: (value) => store.write(handle, 'fld_title', value),
+            revision: () => store.revision(handle),
+            dirty: () =>
+                store.snapshot(handle)?.dirtyFieldIds.includes('fld_title') ??
+                false,
+            markSaved: (revision) => store.markSaved(handle, revision),
+        },
+    });
+    assert.equal(cell.binding.getSnapshot().value, 'External');
+    cell.binding.setValue('Owned by caller');
+    cell.destroy();
+    assert.equal(store.read(handle, 'fld_title'), 'Owned by caller');
+    const successor = createPortalCellBinding({
+        ...f.options,
+        draft: {
+            read: () => store.read(handle, 'fld_title'),
+            write: (value) => store.write(handle, 'fld_title', value),
+            revision: () => store.revision(handle),
+            dirty: () =>
+                store.snapshot(handle)?.dirtyFieldIds.includes('fld_title') ??
+                false,
+            markSaved: (revision) => store.markSaved(handle, revision),
+        },
+    });
+    assert.equal(successor.binding.getSnapshot().value, 'Owned by caller');
+    store.clear();
+    assert.equal(successor.binding.getSnapshot().retired, true);
+    assert.equal(successor.binding.setValue('Retired').accepted, false);
+    successor.destroy();
+});
+
+it('refuses a retired caller draft before binding or transport admission', () => {
+    const f = fixture();
+    const store = new FormDraftStore<AirtableValue>();
+    const handle = store.open(
+        { extensionId: 'portal', recordId: 'rec_one', parent: null },
+        { fld_title: 'Initial' },
+        []
+    );
+    store.discard(handle);
+    assert.throws(() =>
+        createPortalCellBinding({
+            ...f.options,
+            draft: {
+                read: () => store.read(handle, 'fld_title'),
+                write: (value) => store.write(handle, 'fld_title', value),
+                revision: () => store.revision(handle),
+                dirty: () =>
+                    store
+                        .snapshot(handle)
+                        ?.dirtyFieldIds.includes('fld_title') ?? false,
+                markSaved: (revision) => store.markSaved(handle, revision),
+            },
+        })
+    );
+    assert.equal(f.calls.length, 0);
+});
+
+for (const outcome of [
+    'saved',
+    'failed',
+    'newer A-B-A draft',
+    'retired',
+] as const) {
+    it(`settles Save through the injected caller draft: ${outcome}`, async () => {
+        const gate = deferred<void>();
+        const result = cellResult({ fld_title: 'Server-normalized' });
+        const f = wireFixture(async () => {
+            await gate.promise;
+            if (outcome === 'failed') throw new Error('Synthetic HTTP failure');
+            return result;
+        });
+        const store = new FormDraftStore<AirtableValue>();
+        const handle = store.open(
+            { extensionId: 'portal', recordId: 'rec_one', parent: null },
+            { fld_title: 'Caller initial' },
+            []
+        );
+        const cell = createPortalCellBinding({
+            ...f.options,
+            draft: {
+                read: () => store.read(handle, 'fld_title'),
+                write: (value) => store.write(handle, 'fld_title', value),
+                revision: () => store.revision(handle),
+                dirty: () =>
+                    store
+                        .snapshot(handle)
+                        ?.dirtyFieldIds.includes('fld_title') ?? false,
+                markSaved: (revision) => store.markSaved(handle, revision),
+            },
+        });
+        try {
+            assert.equal(cell.binding.getSnapshot().value, 'Caller initial');
+            assert.equal(cell.binding.setValue('Caller edited').accepted, true);
+            const submittedRevision = store.revision(handle);
+            const saving = cell.save();
+            await f.started;
+            assert.deepEqual(f.calls, [
+                { ...f.options.input, value: 'Caller edited' },
+            ]);
+            assert.deepEqual(store.snapshot(handle)?.dirtyFieldIds, [
+                'fld_title',
+            ]);
+            assert.equal(cell.binding.getSnapshot().pending, true);
+            if (outcome === 'newer A-B-A draft') {
+                store.write(handle, 'fld_title', 'B');
+                store.write(handle, 'fld_title', 'Caller edited');
+            } else if (outcome === 'retired') f.retire();
+            gate.resolve();
+            if (outcome === 'saved') {
+                assert.deepEqual(await saving, result);
+                assert.deepEqual(store.snapshot(handle)?.dirtyFieldIds, []);
+                assert.equal(store.revision(handle), submittedRevision);
+            } else {
+                await assert.rejects(saving);
+                assert.deepEqual(store.snapshot(handle)?.dirtyFieldIds, [
+                    'fld_title',
+                ]);
+                if (outcome === 'newer A-B-A draft')
+                    assert.notEqual(store.revision(handle), submittedRevision);
+            }
+            assert.equal(store.read(handle, 'fld_title'), 'Caller edited');
+            assert.equal(
+                f.attempts[0].outcome,
+                outcome === 'saved' ? 'saved' : 'unknown'
+            );
+            assert.equal(f.attempts[0].flight, false);
+            assert.equal(f.attempts[0].acknowledgment, 'none');
+            await assert.rejects(cell.save());
+            assert.equal(f.calls.length, 1);
+        } finally {
+            cell.destroy();
+        }
+        // Save settlement and binding teardown never clear caller ownership.
+        assert.equal(store.read(handle, 'fld_title'), 'Caller edited');
+        store.clear();
+    });
+}

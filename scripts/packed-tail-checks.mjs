@@ -83,6 +83,10 @@ export async function runPackedTailChecks({
         const deadline = performance.now() + milliseconds;
         do {
             if (record.settled) return false;
+            // A refused signal already has an unresolved fresh observation.
+            // Retry its own ownership proof before another full inspection can
+            // consume the cooperative window. Never extend that window.
+            if (performance.now() < deadline) await retrySignal?.();
             const state = record.observer
                 ? await record.observer.inspect()
                 : record.pid
@@ -94,7 +98,6 @@ export async function runPackedTailChecks({
             record.observation = state;
             if (drained(state)) return true;
             if (performance.now() >= deadline) return false;
-            await retrySignal?.();
             await delay(
                 Math.min(25, Math.max(1, deadline - performance.now()))
             );

@@ -1070,6 +1070,78 @@ package boundaries. They do not prove a particular staging deployment accepts
 your published extension. Server compatibility remains a separate
 validation step with its own authorized environment and fixtures.
 
+## Borrowed native Button action activity
+
+`createBorrowedButtonActionController` from `/ui` is a separate clientless API for
+hosts that already own their native configured webhook transport and explicit
+retry/recovery policy. The existing dispatch gate and accepted Form/Portal Button
+models retain their behavior. This API creates no client, accepted page, draft,
+recovery journal or server authorization.
+
+Supply actual host ports: `readContext`/`subscribe` for private owner and observed
+source/mode/context revision, `mayStartNewIntent` for the existing retry policy,
+`captureIntent` for lazy native request/private receipt capture, `allocate` for
+the exact native Promise, and `settleAllocated` for original-outcome handling.
+Requests, receipts, results and errors retain identity and are never in public
+snapshots. A synchronous authority publication during a metadata copy
+invalidates that sample and retires the controller, including a publication ABA.
+The controller does not recursively re-read/rebase an unstable owner. Metadata
+reads and notification snapshot evaluation recheck retirement before allocation,
+feedback admission or listener invocation. Allocated settlement remains intact. Hidden/unavailable/recovery-refused activity does not capture input.
+A changed owner/revision permanently retires the controller; the host creates a
+new one for its current context. Include observed ABA in that real revision.
+
+```ts
+import {
+    createBorrowedButtonActionController,
+    type BorrowedButtonActionOptions,
+} from '@miniextensions/sdk/ui';
+
+// Supplied by your actual host. These declarations are integration placeholders.
+type NativePorts = BorrowedButtonActionOptions<
+    { fieldId: string; source: object },
+    { success: boolean },
+    { owner: object }
+>;
+declare const readActualNativeButtonContext: NativePorts['readContext'];
+declare const subscribeToNativeButtonContext: NativePorts['subscribe'];
+declare const mayStartExistingExplicitIntent: NativePorts['mayStartNewIntent'];
+declare const captureNativeRequestAndOutcomeReceipt: NativePorts['captureIntent'];
+declare const existingNativeButtonTransport: NativePorts['allocate'];
+declare const settleExistingNativeButtonOutcome: NativePorts['settleAllocated'];
+
+const action = createBorrowedButtonActionController({
+    readContext: readActualNativeButtonContext,
+    subscribe: subscribeToNativeButtonContext,
+    mayStartNewIntent: mayStartExistingExplicitIntent,
+    captureIntent: captureNativeRequestAndOutcomeReceipt,
+    allocate: existingNativeButtonTransport,
+    settleAllocated: settleExistingNativeButtonOutcome,
+});
+// Only an explicit user action invokes trigger().
+const answer = await action.trigger();
+```
+
+Calling `allocate` is the settlement boundary, including a synchronous throw.
+After invocation, exactly one `settleAllocated(receipt, outcome, feedback)` call
+runs even after retirement/disposal or metadata/notification faults. The host
+retains canonical persistence, business success/error interpretation and cleanup.
+`feedback.isCurrent()` is only a current-presentation probe. A false probe cannot
+cancel settlement. Settlement failure is returned separately and never replaces
+the original native result/error. A resolved `{success:false}` remains opaque.
+Synchronous notification/cleanup exceptions and rejected async notification/cleanup
+results are contained without waiting. They cannot veto or stall settlement.
+Context, recovery admission and capture ports are synchronous; the native
+allocation and allocated-settlement ports expose their actual Promises.
+
+The singleflight slot remains held through asynchronous settlement and final
+notifications. `dispose()` stops new admission/observation, never aborts or
+replays allocated work. No cancellation or journal-acknowledgment method exists.
+Only the host's `mayStartNewIntent` policy permits the next explicit click; the
+controller never retries automatically. Configured links remain with the host.
+Full accepted Button contexts/recovery have a different contract; see
+[configured Button actions](field-bindings.md#configured-button-actions).
+
 ## React Button presentation
 
 The optional `/react` entry exports `ButtonField`, `ButtonFieldProps`,
@@ -4517,6 +4589,55 @@ current-owner and confirmation-lifetime admission, canonical open/inline-field
 writes, Save/recovery/allocated settlement and all transport. No Form, client,
 cache, request, permission or alternate draft is constructed. Full configured
 child integration still needs the genuine accepted Form/client/revision owner.
+
+## Borrowed native linked reads
+
+`createBorrowedNativeLinkedReadSource(port)` coordinates read lifetimes over a
+host's existing linked-record values and cache. The explicit `host-native`
+source is separate from accepted SDK Form/Portal facets and linked-option page
+provenance. It requires no runtime client, loaded Form, draft, canonical writer,
+Save operation or recovery journal. Existing client-backed APIs are unchanged.
+
+The host supplies the following read-only boundary:
+
+- `capture()` returns a readable stamp or no admission. The stamp must cover
+  actual native instance, field/table, policy, configuration, filter provenance
+  and relevant cache publications, including same-identity reload and ABA.
+- `isCurrent(stamp)` checks authoritative native state and current privacy before
+  any selected-value access, request allocation or publication. This is local
+  freshness admission; backend authorization remains hosted.
+- `selected(stamp)` borrows the exact native selected array (or null/undefined), rich row projections
+  and unresolved native positions. The SDK does not normalize duplicate IDs,
+  invent labels, clone native File/Date objects or inspect opaque projections.
+  The returned snapshot belongs to the host and consumers must not mutate it.
+- `query(stamp, request)` and `hydrateSelected(stamp, signal)` retain hosted
+  transport, native filter provenance, selected hydration and error identities.
+  Query and hydration have independent latest-read-wins lifetimes per lease.
+- `publishIfCurrent(stamp, kind, page)` performs the final **synchronous** host
+  fence and native cache merge, returning whether it accepted the page. The SDK
+  stores no second cache and does not manufacture accepted SDK page authority.
+- `subscribe(listener)` notifies relevant read-authority changes. An unchanged
+  stamp stays current; the host must advance monotonic stamps for observed ABA.
+
+Capture one lease for the actual mounted field owner and retire it on unmount or
+scope replacement. Destroy the source to unsubscribe and retire all its leases.
+Read abort signals are logical cancellation hints to hosted read transport;
+this module never cancels a previously allocated mutation or changes its
+settlement. The host's permissions, queue, uploads, cleanup and writers remain
+outside this contract, including the separate Portal draft/queue/recovery lane.
+
+Reads return `{status: 'published', page}` only after the host admits publication;
+`page`, its native records, metadata and query filter retain their exact object
+identities. Retired, superseded or externally aborted reads return
+`{status: 'retired'}` and cannot call the host publication callback. A current
+transport or publication exception propagates its original identity. An accepted
+host publication may itself notify a new native revision: its accepted result is
+still reported as published. A retired result never clears canonical selections.
+
+This is a compatibility contract for an adapter to real native state. It does
+not by itself complete host adoption or make arbitrary raw pages acceptable to
+`FormFieldBindings.linkedRecords` or the private SDK read cache. The native host
+adapter and its authoritative store regressions must be qualified separately.
 
 ## Hosted native linked-row projection
 

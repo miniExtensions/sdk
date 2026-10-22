@@ -208,6 +208,220 @@ test('ESRCH remains sufficient without Linux procfs access', async () => {
     }
 });
 
+test('an enumerated PID disappearing discards the pair and requires two complete fresh scans', async (t) => {
+    for (const mode of ['capture', 'live', 'exited']) {
+        for (const vanishedScan of [1, 2]) {
+            await t.test(`${mode}, scan ${vanishedScan}`, async (t) => {
+                const f = await fixture(t);
+                const foreignPid = childPid + 50;
+                await f.writeProcess(
+                    row(foreignPid, {
+                        pgid: 9000,
+                        sid: 9000,
+                        startTime: '51',
+                    })
+                );
+                let active = false;
+                let scans = 0;
+                let namespaces = 0;
+                const observer = f.observer({
+                    readdir: async (path, options) => {
+                        const entries = await readdir(path, options);
+                        if (
+                            active &&
+                            path === f.procRoot &&
+                            ++scans === vanishedScan
+                        ) {
+                            assert.ok(entries.includes(String(foreignPid)));
+                            await rm(join(f.procRoot, String(foreignPid)), {
+                                recursive: true,
+                            });
+                        }
+                        return entries;
+                    },
+                    readFile: async (path, options) => {
+                        if (active && path === join(f.procRoot, 'self/status'))
+                            namespaces++;
+                        return readFile(path, options);
+                    },
+                });
+                if (mode !== 'capture') await capture(observer);
+                if (mode === 'exited') await f.zombies();
+                active = true;
+                const result =
+                    await observer[
+                        mode === 'capture' ? 'capture' : 'inspect'
+                    ]();
+                assert.equal(
+                    result.state,
+                    mode === 'exited' ? 'exited' : 'live',
+                    JSON.stringify(result)
+                );
+                assert.equal(result.mode, 'linux-proc');
+                assert.equal(
+                    scans,
+                    vanishedScan + 2,
+                    'Both complete scans must restart after the partial pair.'
+                );
+                assert.equal(
+                    namespaces,
+                    scans,
+                    'Every scan revalidates namespace visibility.'
+                );
+                assert.deepEqual(f.signals, []);
+            });
+        }
+    }
+});
+
+test('a disappearing owned member cannot discard the remaining cohort or zombie task proof', async (t) => {
+    const f = await fixture(t);
+    const neighbor = row(childPid + 1, { startTime: '9007199254740996' });
+    await f.writeProcess(neighbor);
+    let active = false;
+    let scans = 0;
+    const observer = f.observer({
+        readdir: async (path, options) => {
+            const entries = await readdir(path, options);
+            if (active && path === f.procRoot && ++scans === 1)
+                await rm(join(f.procRoot, String(childPid)), {
+                    recursive: true,
+                });
+            return entries;
+        },
+    });
+    await capture(observer);
+    await f.zombies();
+    await f.writeProcess({ ...neighbor, state: 'Z', ppid: 1 });
+    active = true;
+    const result = await observer.inspect();
+    assert.equal(result.state, 'exited', JSON.stringify(result));
+    assert.deepEqual(
+        result.members.map((member) => member.pid),
+        [neighbor.pid]
+    );
+    assert.equal(scans, 3);
+    assert.deepEqual(f.signals, []);
+});
+
+test('persistent enumeration disappearance remains unresolved after bounded fresh attempts', async (t) => {
+    const f = await fixture(t);
+    let active = false;
+    let scans = 0;
+    const observer = f.observer({
+        readdir: async (path, options) => {
+            const entries = await readdir(path, options);
+            if (active && path === f.procRoot) {
+                scans++;
+                return [...entries, String(childPid + 50)];
+            }
+            return entries;
+        },
+    });
+    await capture(observer);
+    await f.zombies();
+    active = true;
+    const result = await observer.inspect();
+    assert.equal(result.state, 'unresolved');
+    assert.match(result.reason, /ENOENT/);
+    assert.equal(
+        scans,
+        3,
+        'Retry budget is finite and does not bypass the proof.'
+    );
+    assert.deepEqual(f.signals, []);
+});
+
+test('fresh scan restart preserves accepted cohort identity and visibility checks', async (t) => {
+    for (const defect of ['reused-member', 'namespace-change']) {
+        await t.test(defect, async (t) => {
+            const f = await fixture(t);
+            const foreignPid = childPid + 50;
+            await f.writeProcess(
+                row(foreignPid, { pgid: 9000, sid: 9000, startTime: '51' })
+            );
+            let active = false;
+            let scans = 0;
+            const observer = f.observer({
+                readdir: async (path, options) => {
+                    const entries = await readdir(path, options);
+                    if (active && path === f.procRoot && ++scans === 1) {
+                        await rm(join(f.procRoot, String(foreignPid)), {
+                            recursive: true,
+                        });
+                        if (defect === 'reused-member')
+                            await f.zombies({
+                                startTime: '9007199254740995',
+                            });
+                        else
+                            await writeFile(
+                                join(f.procRoot, 'self/status'),
+                                'NSpid:\t9999\n'
+                            );
+                    }
+                    return entries;
+                },
+            });
+            await capture(observer);
+            await f.zombies();
+            active = true;
+            const result = await observer.inspect();
+            assert.equal(result.state, 'unresolved');
+            assert.deepEqual(f.signals, []);
+        });
+    }
+});
+
+test('non-enumeration errors do not receive a snapshot retry or become drain proof', async (t) => {
+    for (const defect of [
+        'EACCES',
+        'malformed',
+        'namespace-ENOENT',
+        'task-ENOENT',
+    ]) {
+        await t.test(defect, async (t) => {
+            const f = await fixture(t);
+            let active = false;
+            let refused = 0;
+            const memberPath = join(f.procRoot, String(childPid), 'stat');
+            const faultPath =
+                defect === 'namespace-ENOENT'
+                    ? join(f.procRoot, 'self/status')
+                    : defect === 'task-ENOENT'
+                      ? join(
+                            f.procRoot,
+                            String(childPid),
+                            'task',
+                            String(childPid),
+                            'stat'
+                        )
+                      : memberPath;
+            const observer = f.observer({
+                readFile: async (path, options) => {
+                    if (active && path === faultPath && refused++ === 0) {
+                        if (defect === 'malformed') return 'not a process stat';
+                        throw Object.assign(
+                            new Error('Unproven process data'),
+                            { code: defect === 'EACCES' ? 'EACCES' : 'ENOENT' }
+                        );
+                    }
+                    return readFile(path, options);
+                },
+            });
+            await capture(observer);
+            await f.zombies();
+            active = true;
+            assert.equal((await observer.inspect()).state, 'unresolved');
+            assert.equal(
+                refused,
+                1,
+                'Do not turn a different error into a successful rescan.'
+            );
+            assert.deepEqual(f.signals, []);
+        });
+    }
+});
+
 test('macOS keeps ordinary live POSIX group signals and never consults Linux procfs', async () => {
     const signals = [];
     const unexpected = async () => {

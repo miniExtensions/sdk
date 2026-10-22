@@ -181,7 +181,9 @@ for (const change of ['dispose', 'owner', 'availability'] as const) {
 }
 
 it('disposal before admission invokes no host callback', async () => {
+    let callbacks = 0;
     const unexpected = (): never => {
+        callbacks++;
         throw Error('unexpected callback');
     };
     const gate = createButtonDispatchGate({
@@ -193,6 +195,7 @@ it('disposal before admission invokes no host callback', async () => {
     gate.dispose();
     gate.dispose();
     assert.equal(await gate.run(), false);
+    assert.equal(callbacks, 0);
 });
 
 for (const ending of ['success', 'error'] as const) {

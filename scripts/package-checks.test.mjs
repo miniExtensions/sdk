@@ -1450,16 +1450,20 @@ test('packed tail retries transient TERM admission and preserves fail-closed esc
     for (const mode of [
         'transient',
         'transient-delayed-observation',
+        'transient-slow-observation',
         'persistent',
     ]) {
         const permanent = mode === 'persistent';
         const delayedObservation = mode === 'transient-delayed-observation';
+        const slowObservation = mode === 'transient-slow-observation';
         await t.test(
             delayedObservation
                 ? 'transient refusal with delayed observation'
-                : permanent
-                  ? 'persistent refusal'
-                  : 'transient refusal',
+                : slowObservation
+                  ? 'transient refusal before slow observation'
+                  : permanent
+                    ? 'persistent refusal'
+                    : 'transient refusal',
             async (t) => {
                 const fixture = await packedTailFixture(t, {
                     attachment: { mode: 'survivor' },
@@ -1478,9 +1482,27 @@ test('packed tail retries transient TERM admission and preserves fail-closed esc
                     let refused = false;
                     let termSent = false;
                     let killAttempted = false;
+                    let slowInspection = false;
                     return {
                         ...observer,
                         async inspect() {
+                            if (
+                                slowObservation &&
+                                refused &&
+                                !termSent &&
+                                !killAttempted &&
+                                !slowInspection
+                            ) {
+                                slowInspection = true;
+                                // A redundant observation must not consume the
+                                // cooperative window before a fresh TERM proof.
+                                await new Promise((resolve) =>
+                                    setTimeout(
+                                        resolve,
+                                        fixture.options.terminationGraceMs + 25
+                                    )
+                                );
+                            }
                             if (
                                 delayedObservation &&
                                 termSent &&

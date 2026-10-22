@@ -102,6 +102,12 @@ export {
     type DateFieldModelOptions,
 } from './dateModel.js';
 
+export { createButtonDispatchGate } from './buttonDispatchGate.js';
+export type {
+    ButtonDispatchGate,
+    ButtonDispatchGateOptions,
+} from './buttonDispatchGate.js';
+
 export { createButtonFieldModel } from './buttonModel.js';
 export type * from './buttonModel.js';
 export {

@@ -4552,3 +4552,19 @@ client or parallel draft. Resolver errors propagate unchanged. Existing
 Array.reduce sparse-hole and initial-length behavior is retained; blank IDs are
 not trimmed or reinterpreted. This is a compatibility projection facet, not the
 complete accepted linked-record owner.
+
+### Borrowed host attachment upload admission
+
+`captureAttachmentUploadAdmission` captures an actual host owner and its observed
+native/policy revision for one pending file-selection intent. Supply read-only
+`getAuthority` and mounted `isCurrent` callbacks; advance the host revision for
+observed policy or native replacement, including A→B→A. Hidden, read-only, replaced
+or retired intents cannot allocate new work. `isCurrent()` can guard asynchronous
+host validation; `admit(() => existingHostUpload(files))` consumes the intent at
+the synchronous allocation boundary. A fresh explicit selection gets a new intent.
+
+This facet owns no File queue, accepted Form/client, draft, transport, journal or
+permission. It returns the exact host value/promise and propagates original
+errors. After allocation, the host keeps success, cancellation and completed-prefix
+partial recovery even if the captured policy retires. Never use this admission
+lease to filter an already allocated completion or to replace backend authorization.

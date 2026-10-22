@@ -1,4 +1,8 @@
 import {
+    checkAttachmentUploadAdmissionConsumer,
+    attachmentUploadAdmissionTypedConsumer,
+} from './attachment-upload-admission-consumer-checks.mjs';
+import {
     checkButtonDispatchGateConsumer,
     buttonDispatchGateTypedConsumer,
 } from './button-dispatch-gate-consumer-checks.mjs';
@@ -1360,6 +1364,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
             declarationConsumer +
                 attachmentMetadataTypedConsumer +
                 orderedAttachmentUploadTypedConsumer +
+                attachmentUploadAdmissionTypedConsumer +
                 formulaCompatibilityTypedConsumer +
                 nativeLinkedRecordRowsTypedConsumer +
                 collaboratorSelectionTypedConsumer +
@@ -2983,6 +2988,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkAttachmentUploadAdmissionConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

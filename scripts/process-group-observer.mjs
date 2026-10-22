@@ -15,6 +15,11 @@ const decodeMount = (value) =>
     value.replace(/\\([0-7]{3})/g, (_, digits) =>
         String.fromCharCode(Number.parseInt(digits, 8))
     );
+class ProcSnapshotChangedError extends Error {
+    constructor(cause) {
+        super(cause.message, { cause });
+    }
+}
 const parseStat = (text, expectedPid) => {
     const end = text.lastIndexOf(')');
     const begin = text.indexOf('(');
@@ -177,8 +182,16 @@ export function createProcessGroupObserver({
             .sort()) {
             if (String(Number(name)) !== name)
                 throw new Error('Malformed numeric proc entry');
-            // Even an unrelated unreadable/vanishing PID can hide a member.
-            const current = await stat(Number(name));
+            // Never skip an unreadable entry: it may hide an owned member.
+            // A vanished enumerated PID invalidates the entire snapshot pair.
+            let current;
+            try {
+                current = await stat(Number(name));
+            } catch (error) {
+                if (error.code === 'ENOENT')
+                    throw new ProcSnapshotChangedError(error);
+                throw error;
+            }
             if (current.sid === pid && current.pgid !== pid)
                 throw new Error('Owned session contains another process group');
             if (current.pgid !== pid) continue;
@@ -189,11 +202,26 @@ export function createProcessGroupObserver({
         return members.sort((left, right) => left.pid - right.pid);
     };
     const stable = async () => {
-        const first = await scan();
-        const second = await scan();
-        if (!first.length || identities(first) !== identities(second))
-            throw new Error('Empty or unstable process-group observation');
-        return { first, second };
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const first = await scan();
+                const second = await scan();
+                if (!first.length || identities(first) !== identities(second))
+                    throw new Error(
+                        'Empty or unstable process-group observation'
+                    );
+                return { first, second };
+            } catch (error) {
+                // Retry only this enumeration race, with fresh namespace and
+                // two complete scans. No cached proof, skipped PID or inferred
+                // absence authorizes a signal/drain; persistent churn refuses.
+                if (
+                    !(error instanceof ProcSnapshotChangedError) ||
+                    attempt === 2
+                )
+                    throw error;
+            }
+        }
     };
     const exited = async (members) => {
         for (const member of members) {

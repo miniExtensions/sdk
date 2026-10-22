@@ -1,3 +1,23 @@
+export { createBorrowedButtonActionController } from './borrowedButtonActionController.js';
+export type {
+    BorrowedButtonContext,
+    BorrowedButtonIntent,
+    BorrowedButtonTransportOutcome,
+    BorrowedButtonActionOptions,
+    BorrowedButtonActionSnapshot,
+    BorrowedButtonActionResult,
+    BorrowedButtonActionController,
+} from './borrowedButtonActionController.js';
+export {
+    createBorrowedNativeLinkedReadSource,
+    type BorrowedNativeLinkedPage,
+    type BorrowedNativeLinkedSelection,
+    type BorrowedNativeLinkedReadResult,
+    type BorrowedNativeLinkedReadPort,
+    type BorrowedNativeLinkedReadLease,
+    type BorrowedNativeLinkedReadSource,
+} from './borrowedNativeLinkedReads.js';
+
 export {
     createBorrowedNativeLinkedHydrationBatch,
     type BorrowedNativeLinkedBatchField,

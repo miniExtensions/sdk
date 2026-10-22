@@ -588,9 +588,9 @@ it('a throwing receipt getter fails before transport with its original error', a
 
 for (const probe of [
     { key: 'revision', throwOn: 1 },
-    { key: 'visible', throwOn: 3 },
-    { key: 'valueReadable', throwOn: 2 },
-    { key: 'owner', throwOn: 3 },
+    { key: 'visible', throwOn: 2 },
+    { key: 'valueReadable', throwOn: 1 },
+    { key: 'owner', throwOn: 2 },
     { key: 'editable', throwOn: 1 },
     { key: 'visible', throwOn: 1 },
 ] as const) {
@@ -604,6 +604,7 @@ for (const probe of [
                 allocate: () => ({ completion: held.promise }),
             });
             let armed = false;
+            let observedFaults = 0;
             f.options.readField = () => {
                 const field = { ...f.field };
                 const original = field[probe.key];
@@ -611,18 +612,32 @@ for (const probe of [
                 Object.defineProperty(field, probe.key, {
                     enumerable: true,
                     get() {
-                        if (armed && ++reads >= probe.throwOn)
+                        if (armed && ++reads >= probe.throwOn) {
+                            observedFaults++;
                             throw presentationError;
+                        }
                         return original;
                     },
                 });
                 return field;
+            };
+            const settle = f.options.settleCompleted;
+            f.options.settleCompleted = (receipt, outcome) => {
+                assert.ok(
+                    observedFaults > 0,
+                    'Expected a real getter fault before allocated settlement'
+                );
+                return settle.call(f.options, receipt, outcome);
             };
             const pending = f.controller.start([file()]);
             armed = true;
             if (rejected) held.reject(transportError);
             else held.resolve(accepted);
             const outcome = await pending;
+            assert.ok(
+                observedFaults > 0,
+                `Expected actual ${probe.key} getter fault at read ${probe.throwOn}`
+            );
             assert.equal(f.settled.length, 1);
             assert.equal(outcome.allocatedCount, 1);
             assert.equal(outcome.settlementFailure, null);

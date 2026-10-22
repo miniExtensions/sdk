@@ -43,7 +43,9 @@ export async function checkBorrowedAttachmentControllerConsumer({
     );
     const esm = await import(pathToFileURL(loader).href);
     const require = createRequire(join(consumerDirectory, 'package.json'));
+    const faultObservations = [];
     for (const api of [esm, require('@miniextensions/sdk/ui')]) {
+        const format = api === esm ? 'ESM' : 'CommonJS';
         const owner = {},
             native = {},
             first = new File(['a'], 'same.txt'),
@@ -208,9 +210,9 @@ export async function checkBorrowedAttachmentControllerConsumer({
 
         for (const [key, throwOn] of [
             ['revision', 1],
-            ['visible', 3],
-            ['valueReadable', 2],
-            ['owner', 3],
+            ['visible', 2],
+            ['valueReadable', 1],
+            ['owner', 2],
             ['editable', 1],
             ['visible', 1],
         ])
@@ -218,7 +220,8 @@ export async function checkBorrowedAttachmentControllerConsumer({
                 let armed = false,
                     release,
                     reject,
-                    settlements = 0;
+                    settlements = 0,
+                    observedFaults = 0;
                 const nativeResult = {},
                     nativeError = {},
                     getterError = {};
@@ -242,8 +245,10 @@ export async function checkBorrowedAttachmentControllerConsumer({
                         Object.defineProperty(field, key, {
                             enumerable: true,
                             get() {
-                                if (armed && ++reads >= throwOn)
+                                if (armed && ++reads >= throwOn) {
+                                    observedFaults++;
                                     throw getterError;
+                                }
                                 return original;
                             },
                         });
@@ -251,6 +256,10 @@ export async function checkBorrowedAttachmentControllerConsumer({
                     },
                     allocate: () => ({ completion }),
                     settleCompleted(_receipt, result) {
+                        assert.ok(
+                            observedFaults > 0,
+                            'Expected a real getter fault before allocated settlement'
+                        );
                         settlements++;
                         if (rejected)
                             assert.equal(result.failure.error, nativeError);
@@ -266,6 +275,10 @@ export async function checkBorrowedAttachmentControllerConsumer({
                 if (rejected) reject(nativeError);
                 else release(nativeResult);
                 const result = await pending;
+                assert.ok(
+                    observedFaults > 0,
+                    `Expected actual ${key} getter fault at read ${throwOn}`
+                );
                 assert.equal(settlements, 1);
                 assert.equal(result.settlementFailure, null);
                 if (rejected) assert.equal(result.failure.error, nativeError);
@@ -273,9 +286,22 @@ export async function checkBorrowedAttachmentControllerConsumer({
                     assert.equal(result.failure, null);
                     assert.equal(result.completed[0].attachment, nativeResult);
                 }
+                faultObservations.push({
+                    format,
+                    key,
+                    throwOn,
+                    rejected,
+                    observedFaults,
+                });
                 metadata.dispose();
             }
     }
+    assert.equal(faultObservations.length, 24);
+    assert.ok(faultObservations.every((probe) => probe.observedFaults > 0));
+    console.log(
+        'Installed borrowed metadata fault observations:',
+        JSON.stringify(faultObservations)
+    );
     console.log(
         'Installed borrowed attachment controller: ESM/CJS identity/concurrency, policy ABA, partial error/cleanup, cancellation/disposal reentrancy and metadata-getter success/rejection settlement passed; strict NodeNext/Bundler consumers included.'
     );

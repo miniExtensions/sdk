@@ -4,6 +4,8 @@ import {
     createPortalCellBinding,
     type PortalCellBindingOptions,
 } from '../src/portals/index.js';
+import { FormDraftStore } from '../src/forms/drafts.js';
+import type { AirtableValue } from '../src/runtime/types.js';
 import { RecoveryJournal } from '../src/forms/recovery.js';
 import { createMiniExtensionsClient } from '../src/runtime/index.js';
 import type {
@@ -664,4 +666,44 @@ describe('Portal cell custom-response snapshot boundary', () => {
             }
         });
     }
+});
+
+it('an injected cell draft belongs to its caller across binding teardown', () => {
+    const f = fixture();
+    const store = new FormDraftStore<AirtableValue>();
+    const handle = store.open(
+        { extensionId: 'portal', recordId: 'rec_one', parent: null },
+        { fld_title: 'External' },
+        []
+    );
+    const cell = createPortalCellBinding({
+        ...f.options,
+        draft: { store, handle },
+    });
+    assert.equal(cell.binding.getSnapshot().value, 'External');
+    cell.binding.setValue('Owned by caller');
+    cell.destroy();
+    assert.equal(store.read(handle, 'fld_title'), 'Owned by caller');
+    const successor = createPortalCellBinding({
+        ...f.options,
+        draft: { store, handle },
+    });
+    assert.equal(successor.binding.getSnapshot().value, 'Owned by caller');
+    successor.destroy();
+    store.clear();
+});
+
+it('refuses a retired caller draft before binding or transport admission', () => {
+    const f = fixture();
+    const store = new FormDraftStore<AirtableValue>();
+    const handle = store.open(
+        { extensionId: 'portal', recordId: 'rec_one', parent: null },
+        { fld_title: 'Initial' },
+        []
+    );
+    store.discard(handle);
+    assert.throws(() =>
+        createPortalCellBinding({ ...f.options, draft: { store, handle } })
+    );
+    assert.equal(f.calls.length, 0);
 });

@@ -52,17 +52,19 @@ export function createBorrowedLinkedChildController(options: {
         if (disposed) return null;
         try {
             const scope = options.readScope();
-            if (
-                !scope ||
-                !Array.isArray(scope.source) ||
-                scope.source.length === 0 ||
-                (scope.draft !== null && !Array.isArray(scope.draft))
-            )
+            if (disposed || !scope) return null;
+            const source = scope.source;
+            if (disposed || !Array.isArray(source) || source.length === 0)
                 return null;
-            return {
-                source: [...scope.source],
-                draft: scope.draft === null ? null : [...scope.draft],
+            const draft = scope.draft;
+            if (disposed || (draft !== null && !Array.isArray(draft)))
+                return null;
+            const captured = {
+                source: [...source],
+                draft: draft === null ? null : [...draft],
             };
+            // Host callbacks, property getters and tuple iterators may retire us.
+            return disposed ? null : captured;
         } catch {
             return null;
         }
@@ -88,21 +90,27 @@ export function createBorrowedLinkedChildController(options: {
         },
         acceptRead(ticket, publish) {
             const read = reads.get(ticket);
-            if (!read || read.used || !current(read.scope, true)) return false;
+            if (!read || read.used) return false;
+            // Claim before reading host scope: that callback can reenter us.
             read.used = true;
+            if (!current(read.scope, true)) return false;
             const guard = () => current(read.scope, true);
             // A synchronous native publication may itself install the draft.
-            read.accepted = publish(guard) === true;
-            const accepted = read.accepted && current(read.scope, false);
+            const published = publish(guard) === true;
+            const accepted = published && current(read.scope, false);
+            read.accepted = accepted;
             if (accepted) acceptedSource = read.scope.source;
             return accepted;
         },
         canPresent(ticket) {
             const read = reads.get(ticket);
+            if (!read || (read.used && !read.accepted)) return false;
+            const { used, accepted } = read;
             return (
-                read !== undefined &&
-                (!read.used || read.accepted) &&
-                current(read.scope, !read.accepted)
+                current(read.scope, !accepted) &&
+                // Observing scope may consume/refuse this formerly unused ticket.
+                read.used === used &&
+                read.accepted === accepted
             );
         },
         captureSave() {
@@ -120,9 +128,9 @@ export function createBorrowedLinkedChildController(options: {
         },
         async save(ticket, allocate) {
             const save = saves.get(ticket);
-            if (!save || save.used || !current(save.scope, true))
-                return { type: 'retired' };
+            if (!save || save.used) return { type: 'retired' };
             save.used = true;
+            if (!current(save.scope, true)) return { type: 'retired' };
             // Do not check current/disposed after handing off. The original
             // native operation owns its outcome, parent reconciliation and cleanup.
             return { type: 'settled', value: await allocate() };

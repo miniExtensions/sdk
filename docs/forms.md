@@ -2786,6 +2786,10 @@ decision is admissible only for the same already-accepted source. Keeping A's
 dirty draft after replacement by B is not B read acceptance; return false and
 retain A's native data for an explicit host recovery decision. `canPresent` fences obsolete results independently of
 that admission and retains subsequent edits after an accepted publication.
+Tickets are consumed before observing host scope so same-ticket callback reentry
+cannot publish or delegate twice. Disposal during scope callbacks, getters or
+tuple iteration refuses new admission; presentation also rechecks ticket state
+after observing scope.
 The host still owns request/cache cancellation, fresh reads, mounted presentation
 and all draft values. This does not confer server authority or SDK load acceptance.
 

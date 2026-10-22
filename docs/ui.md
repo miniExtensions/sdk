@@ -4673,3 +4673,36 @@ client or parallel draft. Resolver errors propagate unchanged. Existing
 Array.reduce sparse-hole and initial-length behavior is retained; blank IDs are
 not trimmed or reinterpreted. This is a compatibility projection facet, not the
 complete accepted linked-record owner.
+
+### Borrowed-native attachment batch controller
+
+`createBorrowedAttachmentController<T, Receipt>` is an explicit alternative to
+an SDK-owned Form attachment controller. It requires four genuine host ports:
+`readField`/`subscribe`, `captureBatch`, `allocate`, and `settleCompleted`. It
+constructs no Form/client, native draft or recovery journal and grants no server
+authorization. Default Form attachment/recovery APIs keep their existing behavior.
+
+The host supplies actual private owner identity and policy history. An observed
+owner/visible/editable replacement permanently retires new allocation for that
+batch, including ABA; `canAllocate(file, originalIndex, completedPrefix)` must
+also check unobserved host generations and current capacity. Native File and
+attachment objects are borrowed unchanged. `valueReadable` is a separate actual
+host privacy gate: masked/hidden native getters are not read and old-owner File,
+progress or completion activity is not exposed by snapshots. A field revision alone does not
+retire allocated settlement or discard concurrent native values.
+
+`start(files)` owns a serial batch immediately, including synchronous port and
+subscriber callbacks. A competing/reentrant start is `not-started`. There is no
+automatic replay: retry is a fresh explicit host-admitted start. Progress and
+canonical native writes remain hosted. `cancel()` requests only the current
+host allocation's optional cancel handle, once, and stops the next allocation;
+late success is still delivered. `dispose()` releases observation and prevents
+new dispatch without aborting allocated work.
+
+After any allocator invocation, `settleCompleted(receipt, result)` runs exactly
+once even after policy change or disposal. It receives the ordered completed
+prefix and original failure. The host-held allocation receipt retains existing
+canonical append/partial recovery and cleanup ownership; it must not consult a
+consumed new-intake lease to discard an allocated result. Settlement failure is
+reported separately without replacing a transport error or replaying cleanup.
+A completed transport batch does not establish Form Save/persistence success.

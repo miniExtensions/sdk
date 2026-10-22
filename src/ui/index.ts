@@ -237,3 +237,16 @@ export {
     type AttachmentActionRow,
     type AttachmentRowActions,
 } from './attachmentRowActions.js';
+
+export { createBorrowedAttachmentController } from './borrowedAttachmentController.js';
+export type {
+    BorrowedAttachmentField,
+    BorrowedAttachmentProgress,
+    BorrowedAttachmentAllocation,
+    BorrowedAttachmentAdmission,
+    BorrowedAttachmentFailure,
+    BorrowedAttachmentBatchResult,
+    BorrowedAttachmentSnapshot,
+    BorrowedAttachmentControllerOptions,
+    BorrowedAttachmentController,
+} from './borrowedAttachmentController.js';

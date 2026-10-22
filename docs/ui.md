@@ -4468,3 +4468,31 @@ current-owner and confirmation-lifetime admission, canonical open/inline-field
 writes, Save/recovery/allocated settlement and all transport. No Form, client,
 cache, request, permission or alternate draft is constructed. Full configured
 child integration still needs the genuine accepted Form/client/revision owner.
+
+## Hosted native linked-row projection
+
+`projectNativeLinkedRecordRows(recordIds, readDisplayData)` projects an already
+filtered and sorted hosted subset into `{ recordId, data }` rows. It keeps the
+first occurrence of each displayed ID and invokes the caller's resolver once per
+unique ID. The returned `data` is the exact caller object, including native rich
+records, selected labels, nested dates/files, loading and unavailable projections.
+There is no clone, field read, fallback label, await or persistent cache.
+
+```ts
+import { projectNativeLinkedRecordRows } from '@miniextensions/sdk/ui';
+
+const displayedRows = projectNativeLinkedRecordRows(
+    clientFilteredAndSortedRecordsIds,
+    getRecordDisplayData
+);
+```
+
+The native selected value is not rewritten. Manual/barcode/calendar filters,
+conditional visibility, custom primary/locale formatting, permissions, hydration,
+requests and canonical writer/recovery ownership remain with the host. Pass only
+the current displayable subset; this helper does not establish privacy, accepted
+Form/page provenance, read authority or a field binding. It never constructs a
+client or parallel draft. Resolver errors propagate unchanged. Existing
+Array.reduce sparse-hole and initial-length behavior is retained; blank IDs are
+not trimmed or reinterpreted. This is a compatibility projection facet, not the
+complete accepted linked-record owner.

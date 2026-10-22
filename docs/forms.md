@@ -2807,3 +2807,117 @@ an explicit new native intent; the native owner decides whether retry is safe.
 `dispose()` retires new admission and presentation without destroying the draft
 or changing an allocated Save. This is not `FormFieldBindings.linkedChild`, whose
 accepted-client and child-draft ownership contract remains separate.
+
+### Runnable borrowed native Form composition
+
+This adapter borrows two independent native boundaries: linked-option cache reads
+and configured-child load/Save ownership. A published option page is not child
+load acceptance. Supply ports from the real native owner; the recipe creates no
+SDK client, accepted Form or draft. All values and recovery decisions stay native.
+
+```ts
+import {
+    createBorrowedLinkedChildController,
+    type BorrowedLinkedChildScope,
+} from '@miniextensions/sdk/forms';
+import {
+    createBorrowedNativeLinkedReadSource,
+    type BorrowedNativeLinkedReadPort,
+} from '@miniextensions/sdk/ui';
+
+export interface NativeChildFormPort<Page, SaveResult> {
+    readScope(): BorrowedLinkedChildScope | null;
+    load(signal: AbortSignal): Promise<Page>;
+    // Synchronous native acceptance: check current immediately before publishing.
+    // Refuse B acceptance when preserving A's dirty draft in the same native slot.
+    accept(page: Page, current: () => boolean): boolean;
+    // Use the existing native queue. Invoke allocate once, at the actual snapshot
+    // boundary AFTER pending Compute/Save waits, with no further wait before it.
+    atSaveAllocation<T>(allocate: () => Promise<T>): Promise<T>;
+    // Synchronously snapshot the native draft/context and allocate its request.
+    // Native Save retains validation, singleflight, reconciliation and cleanup.
+    allocateSave(): Promise<SaveResult>;
+}
+
+export function attachBorrowedNativeForm<
+    Row,
+    Filter,
+    Projection,
+    Stamp,
+    Metadata,
+    ChildPage,
+    SaveResult,
+>(ports: {
+    linked: BorrowedNativeLinkedReadPort<
+        Row,
+        Filter,
+        Projection,
+        Stamp,
+        Metadata
+    >;
+    child: NativeChildFormPort<ChildPage, SaveResult>;
+}) {
+    const linked = createBorrowedNativeLinkedReadSource(ports.linked);
+    const child = createBorrowedLinkedChildController({
+        readScope: () => ports.child.readScope(),
+    });
+    return {
+        // Capture per mounted field; retire the lease on scope replacement.
+        linked,
+        async loadChild(signal: AbortSignal) {
+            const ticket = child.captureRead();
+            if (!ticket || signal.aborted) return { type: 'retired' } as const;
+            const page = await ports.child.load(signal);
+            const accepted = child.acceptRead(ticket, (current) => {
+                if (signal.aborted || !current()) return false;
+                return ports.child.accept(
+                    page,
+                    () => !signal.aborted && current()
+                );
+            });
+            return accepted
+                ? {
+                      type: 'accepted' as const,
+                      page,
+                      canPresent: () => child.canPresent(ticket),
+                  }
+                : ({ type: 'retired' } as const);
+        },
+        save() {
+            // Capture explicit intent BEFORE queueing, never after a wait.
+            const intent = child.captureSave();
+            if (!intent) return Promise.resolve({ type: 'retired' } as const);
+            return ports.child.atSaveAllocation(() =>
+                child.save(intent, () => ports.child.allocateSave())
+            );
+        },
+        destroy() {
+            child.dispose();
+            linked.destroy();
+        },
+    };
+}
+```
+
+Call `attachBorrowedNativeForm({ linked: nativeLinkedPort, child: nativeChildPort })`
+for the actual mounted owner. Use `linked.capture()` for native query/selected
+hydration; consume its published page only while the host request/presentation
+owner is still current. An accepted cache merge can retire its own lease, so
+`lease.isCurrent()` is not a post-publication acceptance test. `loadChild(signal)`
+captures before dispatch and returns the exact native page only after actual
+acceptance. Use `canPresent()` for mounted child presentation after awaits/edits.
+Retired reads never clear selections or discard a preserved draft.
+
+Call `save()` only for explicit user intent. `atSaveAllocation` adapts the existing
+native scheduling boundary; it must not introduce a second queue or move native
+snapshotting earlier. Ownership is checked after either pending Compute or active
+Save waits. A source replacement/ABA or accepted edit retires queued intent before
+allocation. Once `allocateSave()` has snapshotted a request, replacement and
+`destroy()` do not cancel, replay, redirect or replace its result/error. A settled
+wrapper contains the original native result by identity; rejection is the original
+native error. Retrying requires explicit new intent and native recovery policy.
+
+The package check executes this exact shipped fence with synthetic host ports.
+It establishes composition behavior, not real host adoption, browser acceptance
+or live persistence. Lead-owned native integration must implement and qualify
+these ports against its existing store, queue and request snapshot boundary.

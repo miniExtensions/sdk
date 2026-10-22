@@ -918,7 +918,8 @@ Grid unmount alone must not dispose a session queue. `dispose()` retires new
 admission and undispatched entries while allowing already-started transport and
 its callbacks to settle. Keep those callbacks bound to their original session;
 shorter-lived presentation/read callbacks must independently guard replacement.
-`flush()` explicitly drains queued intents. `hasPending()` is false inside the
+`flush()` explicitly dispatches the current batch; newer intents retain their
+own zero-delay batch. `hasPending()` is false inside the
 final `onIdle` callback. Native optimistic values stay in the injected host
 writer. The queue retains only pending requests, generations and committed
 baselines; it creates no parallel Form store.

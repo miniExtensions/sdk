@@ -59,6 +59,10 @@ describe('injectable Portal inline edit draft queue', () => {
             if (outcome === 'success') held.resolve('Server A');
             else held.reject(new Error('request failed'));
             await saving;
+            assert.equal(calls.length, 1);
+            assert.equal(f.visible(), 'A');
+            assert.equal(f.queue.hasPending(), true);
+            await f.queue.flush();
             assert.deepEqual(calls, [
                 { value: 'A', view: 'view-A' },
                 { value: 'A', view: 'view-B' },
@@ -84,6 +88,7 @@ describe('injectable Portal inline edit draft queue', () => {
         f.queue.enqueue(f.edit('B'));
         held.resolve('Canonical A');
         await saving;
+        await f.queue.flush();
         assert.equal(f.visible(), 'Canonical A');
         assert.deepEqual(requests, ['A', 'B']);
         await f.queue.flush();

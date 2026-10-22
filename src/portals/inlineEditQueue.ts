@@ -20,7 +20,7 @@ export type PortalInlineEditQueueOptions<Value, Request, Result> = {
 };
 export type PortalInlineEditQueue<Value, Request, Result> = {
     enqueue(edit: PortalInlineEdit<Value, Request, Result>): boolean;
-    /** Dispatch explicit pending intents; never replay a failed request. */
+    /** Dispatch the current batch; later intents retain their own zero-delay batch. */
     flush(): Promise<void>;
     hasPending(): boolean;
     /** Retire admission and undispatched work. Started writes still settle. */
@@ -62,54 +62,51 @@ export function createPortalInlineEditQueue<Value, Request, Result>(
         if (timer !== null) clearTimeout(timer);
         timer = null;
     };
-    const schedule = () => {
+    const schedule = (delay = 1_000) => {
         clearTimer();
         timer = setTimeout(() => {
             void queue.flush();
-        }, 1_000);
+        }, delay);
     };
     const drain = async () => {
-        while (pending.size > 0 && !disposed) {
-            const edits = [...pending.entries()];
-            pending.clear();
-            let finalEdit: PortalInlineEdit<Value, Request, Result> | undefined;
-            for (const [key, { edit, revision }] of edits) {
-                if (disposed) {
-                    discard(key);
-                    continue;
-                }
-                finalEdit = edit;
-                const draft = drafts.get(key)!;
-                let result: Result;
-                try {
-                    result = await options.commit(edit.request);
-                    draft.committedValue = structuredClone(
-                        options.committedValue(result, edit.cell)
+        const edits = [...pending.entries()];
+        pending.clear();
+        let finalEdit: PortalInlineEdit<Value, Request, Result> | undefined;
+        for (const [key, { edit, revision }] of edits) {
+            if (disposed) {
+                discard(key);
+                continue;
+            }
+            finalEdit = edit;
+            const draft = drafts.get(key)!;
+            let result: Result;
+            try {
+                result = await options.commit(edit.request);
+                draft.committedValue = structuredClone(
+                    options.committedValue(result, edit.cell)
+                );
+            } catch (error) {
+                feedback(() => edit.onError(error));
+                // Do not use value equality: a newer A after B is still newer.
+                if (!pending.has(key) && draft.revision === revision)
+                    feedback(() =>
+                        edit.applyValue(structuredClone(draft.committedValue))
                     );
-                } catch (error) {
-                    feedback(() => edit.onError(error));
-                    // Do not use value equality: a newer A after B is still newer.
-                    if (!pending.has(key) && draft.revision === revision)
-                        feedback(() =>
-                            edit.applyValue(
-                                structuredClone(draft.committedValue)
-                            )
-                        );
-                    if (!pending.has(key)) discard(key);
-                    continue;
-                }
-                feedback(() => edit.onCommitted(result));
                 if (!pending.has(key)) discard(key);
+                continue;
             }
-            if (finalEdit) feedback(() => finalEdit.onBatchSettled());
-            if (pending.size === 0 || disposed) {
-                // hasPending must be false inside onIdle, as in the host queue.
-                if (disposed) for (const key of drafts.keys()) discard(key);
-                flight = null;
-                if (finalEdit) feedback(() => finalEdit.onIdle());
-                return;
-            }
+            feedback(() => edit.onCommitted(result));
+            if (!pending.has(key)) discard(key);
         }
+        if (finalEdit) feedback(() => finalEdit.onBatchSettled());
+        flight = null;
+        if (pending.size > 0 && !disposed) {
+            schedule(0);
+            return;
+        }
+        // hasPending must be false inside onIdle, as in the host queue.
+        if (disposed) for (const key of drafts.keys()) discard(key);
+        if (finalEdit) feedback(() => finalEdit.onIdle());
     };
     const queue: PortalInlineEditQueue<Value, Request, Result> = {
         enqueue: (edit) => {

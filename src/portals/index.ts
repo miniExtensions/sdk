@@ -45,3 +45,11 @@ export type {
 
 export { refreshPortalSummaryFields } from './summaryRefresh.js';
 export type { PortalSummaryRefreshOptions } from './summaryRefresh.js';
+
+export { createPortalInlineEditQueue } from './inlineEditQueue.js';
+export type {
+    PortalInlineEditCell,
+    PortalInlineEdit,
+    PortalInlineEditQueueOptions,
+    PortalInlineEditQueue,
+} from './inlineEditQueue.js';

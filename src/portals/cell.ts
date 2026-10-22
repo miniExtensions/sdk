@@ -5,7 +5,7 @@ import type {
     UpdateGridCellInput,
     UpdateGridCellResult,
 } from '../runtime/types.js';
-import { FormDraftStore } from '../forms/drafts.js';
+import { FormDraftStore, type FormDraftHandle } from '../forms/drafts.js';
 import { createFieldBinding } from '../forms/fieldBinding.js';
 import type { FormFieldBinding, FormFieldSnapshot } from '../forms/bindings.js';
 import { createSelectFieldModel } from '../ui/selectModel.js';
@@ -15,6 +15,8 @@ import { RecoveryJournal, type RecoveryScope } from '../forms/recovery.js';
 import type { PortalOwnerScope } from './types.js';
 
 export type PortalCellBindingOptions = {
+    /** Caller-owned native draft; binding teardown must not discard it. */
+    draft?: { store: FormDraftStore<AirtableValue>; handle: FormDraftHandle };
     getClientTimeZone?(): string;
     client: MiniExtensionsClient;
     input: Omit<UpdateGridCellInput, 'value'>;
@@ -127,20 +129,24 @@ export const createPortalCellBinding = (
         ...options.recovery,
         scope: structuredClone(options.recovery.scope),
     };
-    const store = new FormDraftStore<AirtableValue>();
-    const handle = store.open(
-        {
-            extensionId: input.portalExtensionAccessToken,
-            recordId: input.recordId,
-            parent: {
-                portalId: input.portalExtensionAccessToken,
+    const store = options.draft?.store ?? new FormDraftStore<AirtableValue>();
+    const handle =
+        options.draft?.handle ??
+        store.open(
+            {
+                extensionId: input.portalExtensionAccessToken,
                 recordId: input.recordId,
-                portalFieldId: input.portalFieldId,
+                parent: {
+                    portalId: input.portalExtensionAccessToken,
+                    recordId: input.recordId,
+                    portalFieldId: input.portalFieldId,
+                },
             },
-        },
-        { [input.recordFieldId]: options.value },
-        []
-    );
+            { [input.recordFieldId]: options.value },
+            []
+        );
+    if (store.snapshot(handle) === null)
+        throw new Error('The cell draft owner has been retired.');
     const listeners = new Set<(state: FormFieldSnapshot) => void>();
     let retired = false;
     let busy = false;
@@ -237,14 +243,16 @@ export const createPortalCellBinding = (
     )
         model = createSelectFieldModel({
             field: schema,
-            value: options.value,
+            value: store.read(handle, input.recordFieldId),
             readOnly,
             onChange: (value) => {
                 write(value);
             },
         });
     else if (schema.fieldType === 'multipleRecordLinks') {
-        const native = gridValue(options.value) as string[] | null;
+        const native = gridValue(store.read(handle, input.recordFieldId)) as
+            | string[]
+            | null;
         if (native !== null && !Array.isArray(native))
             throw new Error('Invalid linked value.');
         model = createSelectionModel({
@@ -376,7 +384,7 @@ export const createPortalCellBinding = (
             stop?.();
             model?.destroy();
             binding.date?.destroy();
-            store.clear();
+            if (!options.draft) store.discard(handle);
             notify();
             listeners.clear();
         },

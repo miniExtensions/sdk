@@ -7,7 +7,10 @@ export type AttachmentUploadAuthority = {
     editable: boolean;
 };
 export type AttachmentUploadAdmission = {
-    /** Validation may consult this repeatedly; refusal permanently retires the intent. */
+    /**
+     * Validation may consult this repeatedly. Failed authoritative validation
+     * permanently retires the intent; recursive checks refuse only the nested invocation.
+     */
     isCurrent(): boolean;
     /** Single synchronous handoff. The host retains the returned value/promise and its settlement. */
     admit<T>(

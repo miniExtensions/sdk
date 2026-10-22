@@ -4563,6 +4563,12 @@ or retired intents cannot allocate new work. `isCurrent()` can guard asynchronou
 host validation; `admit(() => existingHostUpload(files))` consumes the intent at
 the synchronous allocation boundary. A fresh explicit selection gets a new intent.
 
+Failed authoritative validation permanently retires the intent, even if the
+previous owner or revision later returns. Recursive `isCurrent()` or `admit()`
+calls during validation refuse only that nested invocation and never allocate
+nested work. Recursion alone does not retire or consume the intent: with unchanged
+authority, the outer validation and later non-recursive validation can succeed.
+
 This facet owns no File queue, accepted Form/client, draft, transport, journal or
 permission. It returns the exact host value/promise and propagates original
 errors. After allocation, the host keeps success, cancellation and completed-prefix

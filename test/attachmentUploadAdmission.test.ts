@@ -127,6 +127,94 @@ it('preserves equivalent host snapshots and exactly one reentrant handoff', () =
     );
     assert.equal(nested, 0);
 });
+for (const method of ['isCurrent', 'admit'] as const) {
+    it(`suppresses recursive ${method} without retiring unchanged upload authority`, async () => {
+        const stable = Object.freeze(authority());
+        let admission!: AttachmentUploadAdmission,
+            recurse = true,
+            allocations = 0,
+            nestedAllocations = 0;
+        const nestedResults: boolean[] = [];
+        admission = captureAttachmentUploadAdmission({
+            getAuthority: () => stable,
+            isCurrent() {
+                if (recurse) {
+                    nestedResults.push(
+                        method === 'isCurrent'
+                            ? admission.isCurrent()
+                            : admission.admit(() => ++nestedAllocations)
+                                  .accepted
+                    );
+                }
+                return true;
+            },
+        });
+        assert.equal(admission.isCurrent(), true);
+        assert.ok(nestedResults.length > 0);
+        assert.ok(nestedResults.every((result) => result === false));
+        assert.equal(nestedAllocations, 0);
+        recurse = false;
+        assert.equal(admission.isCurrent(), true);
+
+        let finish!: (value: object) => void;
+        const pending = new Promise<object>((resolve) => {
+            finish = resolve;
+        });
+        recurse = true;
+        const previousNestedChecks = nestedResults.length;
+        const allocated = admission.admit(() => {
+            allocations++;
+            return pending;
+        });
+        assert.equal(allocated.accepted, true);
+        if (!allocated.accepted) throw Error('allocation refused');
+        assert.equal(allocated.value, pending);
+        assert.ok(nestedResults.length > previousNestedChecks);
+        assert.ok(nestedResults.every((result) => result === false));
+        assert.equal(nestedAllocations, 0);
+        admission.retire();
+        assert.deepEqual(
+            admission.admit(() => ++allocations),
+            { accepted: false }
+        );
+        const native = { url: 'native' };
+        finish(native);
+        assert.equal(await allocated.value, native);
+        assert.equal(allocations, 1);
+    });
+}
+for (const change of ['owner', 'revision'] as const) {
+    it(`permanently refuses genuine ${change} loss despite recursive validation`, () => {
+        const original = authority();
+        let now = original,
+            admission!: AttachmentUploadAdmission,
+            recurse = true,
+            allocations = 0;
+        const nestedResults: boolean[] = [];
+        admission = captureAttachmentUploadAdmission({
+            getAuthority: () => now,
+            isCurrent() {
+                if (recurse) nestedResults.push(admission.isCurrent());
+                return true;
+            },
+        });
+        now =
+            change === 'owner'
+                ? { ...original, owner: 'successor' }
+                : { ...original, revision: 2 };
+        assert.equal(admission.isCurrent(), false);
+        assert.ok(nestedResults.length > 0);
+        assert.ok(nestedResults.every((result) => result === false));
+        now = original;
+        recurse = false;
+        assert.equal(admission.isCurrent(), false);
+        assert.deepEqual(
+            admission.admit(() => ++allocations),
+            { accepted: false }
+        );
+        assert.equal(allocations, 0);
+    });
+}
 it('fails closed on throwing authority and reentrant retirement before allocation', () => {
     let throwing = false;
     const admission = captureAttachmentUploadAdmission({

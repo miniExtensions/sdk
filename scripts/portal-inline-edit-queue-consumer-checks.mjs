@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { checkPortalDraftReviewConsumer } from './portal-draft-review-consumer-checks.mjs';
 
 export const portalInlineEditQueueTypedConsumer = `
 import {createPortalInlineEditQueue, createPortalCellBinding, type PortalInlineEditQueue, type PortalCellDraft, type PortalCellBindingOptions} from '@miniextensions/sdk/portals';
@@ -130,4 +131,5 @@ export async function checkPortalInlineEditQueueConsumer({
     console.log(
         'Installed Portal inline queue: ESM/CommonJS ABA success/failure, conditional rollback, explicit retry and allocated settlement passed; native draft declarations included.'
     );
+    await checkPortalDraftReviewConsumer({ consumerDirectory });
 }

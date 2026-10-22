@@ -43,6 +43,46 @@ const fixture = (
 };
 
 describe('injectable Portal inline edit draft queue', () => {
+    it('keeps a successful write and original completion when committed-value projection throws', async () => {
+        const receipt = { value: 'Canonical A' };
+        const projection = new Error('Projection failed');
+        const committed: unknown[] = [];
+        const errors: unknown[] = [];
+        let visible = 'Initial';
+        let batches = 0;
+        let idle = 0;
+        const queue = createPortalInlineEditQueue({
+            commit: async () => receipt,
+            committedValue: (): string => {
+                throw projection;
+            },
+        });
+        queue.enqueue({
+            cell,
+            committedValue: visible,
+            value: 'A',
+            request: {},
+            applyValue: (value) => {
+                visible = value;
+            },
+            onCommitted: (result) => committed.push(result),
+            onError: (error) => errors.push(error),
+            onBatchSettled: () => {
+                batches++;
+            },
+            onIdle: () => {
+                idle++;
+            },
+        });
+        await queue.flush();
+        assert.equal(visible, 'A');
+        assert.equal(committed[0], receipt);
+        assert.deepEqual(errors, [projection]);
+        assert.equal(batches, 1);
+        assert.equal(idle, 1);
+        assert.equal(queue.hasPending(), false);
+        queue.dispose();
+    });
     for (const outcome of ['success', 'failure'] as const) {
         it(`keeps A → B → A generations while the first A settles with ${outcome}`, async () => {
             const held = deferred<string>();

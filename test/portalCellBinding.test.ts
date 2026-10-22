@@ -77,6 +77,45 @@ const fixture = (respond?: () => Promise<UpdateGridCellResult>) => {
 };
 
 describe('Portal cell shared binding and journal', () => {
+    it('refuses the canonical write when the second injected draft read disposes the binding', () => {
+        const f = fixture();
+        let reads = 0;
+        let writes = 0;
+        let observed = false;
+        let armed = false;
+        let cell!: ReturnType<typeof createPortalCellBinding>;
+        cell = createPortalCellBinding({
+            ...f.options,
+            draft: {
+                read: () => {
+                    if (armed && ++reads === 2) {
+                        armed = false;
+                        observed = true;
+                        cell.destroy();
+                    }
+                    return 'Initial';
+                },
+                dirty: () => false,
+                revision: () => 0,
+                write: () => {
+                    writes++;
+                    return true;
+                },
+                markSaved: () => true,
+            },
+        });
+        try {
+            armed = true;
+            const result = cell.binding.setValue('Edited');
+            assert.equal(observed, true);
+            assert.equal(writes, 0);
+            assert.equal(result.accepted, false);
+            assert.equal(cell.binding.getSnapshot().retired, true);
+            assert.equal(f.calls.length, 0);
+        } finally {
+            cell.destroy();
+        }
+    });
     it('subscribed stock/custom remount retains native draft and sends exactly one canonical cell write', async () => {
         const f = fixture();
         const cell = createPortalCellBinding(f.options);

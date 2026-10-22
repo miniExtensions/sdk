@@ -1,3 +1,13 @@
+export { createBorrowedButtonActionController } from './borrowedButtonActionController.js';
+export type {
+    BorrowedButtonContext,
+    BorrowedButtonIntent,
+    BorrowedButtonTransportOutcome,
+    BorrowedButtonActionOptions,
+    BorrowedButtonActionSnapshot,
+    BorrowedButtonActionResult,
+    BorrowedButtonActionController,
+} from './borrowedButtonActionController.js';
 export {
     projectNativeLinkedRecordRows,
     type NativeLinkedRecordRow,

@@ -298,3 +298,175 @@ test('a retained A draft cannot allocate a B Save before actual B read acceptanc
         { type: 'settled', value: 'native B' }
     );
 });
+
+const observedScope = () => {
+    const scope = { source: ['parent-A', 1], draft: [{}, 1] };
+    let observe: (() => void) | null = null;
+    const owner = createBorrowedLinkedChildController({
+        readScope: () => {
+            const callback = observe;
+            observe = null;
+            callback?.();
+            return scope;
+        },
+    });
+    return {
+        owner,
+        nextRead(callback: () => void) {
+            observe = callback;
+        },
+        accept() {
+            assert.equal(
+                owner.acceptRead(owner.captureRead()!, (current) => current()),
+                true
+            );
+        },
+    };
+};
+
+test('same-ticket observed read reentry delegates only the outer publication', () => {
+    const f = observedScope();
+    const read = f.owner.captureRead()!;
+    let publications = 0;
+    let inner: boolean | undefined;
+    f.nextRead(() => {
+        inner = f.owner.acceptRead(read, () => {
+            publications++;
+            return true;
+        });
+    });
+    const outer = f.owner.acceptRead(read, () => {
+        publications++;
+        return true;
+    });
+    assert.equal(publications, 1);
+    assert.equal(inner, false);
+    assert.equal(outer, true);
+});
+
+test('same-ticket observed Save reentry allocates only the outer native promise', async () => {
+    const f = observedScope();
+    f.accept();
+    const save = f.owner.captureSave()!;
+    const receipt = {};
+    const native = Promise.resolve(receipt);
+    let allocations = 0;
+    const allocate = () => {
+        allocations++;
+        return native;
+    };
+    let inner: ReturnType<typeof f.owner.save> | undefined;
+    f.nextRead(() => {
+        inner = f.owner.save(save, allocate);
+    });
+    const outer = await f.owner.save(save, allocate);
+    assert.equal(allocations, 1);
+    assert.deepEqual(await inner, { type: 'retired' });
+    assert.equal(outer.type, 'settled');
+    if (outer.type === 'settled') assert.equal(outer.value, receipt);
+});
+
+test('observed refusal cannot resurrect an unused read presentation', () => {
+    const f = observedScope();
+    const read = f.owner.captureRead()!;
+    let publications = 0;
+    f.nextRead(() => {
+        assert.equal(
+            f.owner.acceptRead(read, () => {
+                publications++;
+                return false;
+            }),
+            false
+        );
+    });
+    const outer = f.owner.canPresent(read);
+    assert.equal(publications, 1);
+    assert.equal(outer, false);
+    assert.equal(f.owner.canPresent(read), false);
+});
+
+test('disposal observed by the final Save scope prevents native allocation', async () => {
+    const f = observedScope();
+    f.accept();
+    const save = f.owner.captureSave()!;
+    f.nextRead(() => f.owner.dispose());
+    let allocations = 0;
+    const result = await f.owner.save(save, async () => {
+        allocations++;
+    });
+    assert.equal(allocations, 0);
+    assert.deepEqual(result, { type: 'retired' });
+});
+
+test('disposal observed during read admission prevents publication and presentation', () => {
+    const f = observedScope();
+    const read = f.owner.captureRead()!;
+    f.nextRead(() => f.owner.dispose());
+    let publications = 0;
+    const accepted = f.owner.acceptRead(read, () => {
+        publications++;
+        return true;
+    });
+    assert.equal(publications, 0);
+    assert.equal(accepted, false);
+    assert.equal(f.owner.canPresent(read), false);
+});
+
+test('disposal observed during presentation retires the current observation', () => {
+    const f = observedScope();
+    const read = f.owner.captureRead()!;
+    f.nextRead(() => f.owner.dispose());
+    assert.equal(f.owner.canPresent(read), false);
+});
+
+for (const boundary of [
+    'readScope',
+    'source getter',
+    'draft getter',
+    'source iteration',
+    'draft iteration',
+] as const) {
+    for (const capture of ['captureRead', 'captureSave'] as const) {
+        test(`disposal during ${boundary} refuses ${capture}`, () => {
+            let armed = false;
+            const retire = () => {
+                if (armed) owner.dispose();
+            };
+            const source: unknown[] = ['parent-A', 1];
+            const draft: unknown[] = [{}, 1];
+            for (const [name, tuple] of [
+                ['source iteration', source],
+                ['draft iteration', draft],
+            ] as const) {
+                const iterator = tuple[Symbol.iterator].bind(tuple);
+                tuple[Symbol.iterator] = () => {
+                    if (boundary === name) retire();
+                    return iterator();
+                };
+            }
+            const owner = createBorrowedLinkedChildController({
+                readScope: () => {
+                    if (boundary === 'readScope') retire();
+                    return {
+                        get source() {
+                            if (boundary === 'source getter') retire();
+                            return source;
+                        },
+                        get draft() {
+                            if (boundary === 'draft getter') retire();
+                            return draft;
+                        },
+                    };
+                },
+            });
+            assert.equal(
+                owner.acceptRead(owner.captureRead()!, (current) => current()),
+                true
+            );
+            armed = true;
+            assert.equal(owner[capture](), null);
+            assert.equal(owner.captureRead(), null);
+            assert.equal(owner.captureSave(), null);
+        });
+    }
+}

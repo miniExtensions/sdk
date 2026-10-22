@@ -4452,3 +4452,19 @@ allow-list, resolve identities, deduplicate lookup values, or dispatch writes.
 The host retains supplied choices, name/email search, scalar-versus-array
 conversion, permissions, labels, avatars and persistence. Existing bound SDK
 collaborator renderers remain display-only.
+
+## Hosted adjacent-child context lookup
+
+`findAdjacentChildSession(contexts, input)` is a synchronous compatibility
+helper for an existing hosted context owner. Pass the actual readonly context
+map plus source session, `next`/`previous` direction and the requested record ID.
+It returns one declared sibling session in the same parent/field/table/child
+extension/token/surface/reverse-link scope, or `null` for missing, changed,
+foreign, malformed or ambiguous candidates. Original contexts and native data
+are never mutated; unrelated payload/label properties are not inspected.
+
+This is not `FormLinkedChildOwner` or server authorization. The host retains
+current-owner and confirmation-lifetime admission, canonical open/inline-field
+writes, Save/recovery/allocated settlement and all transport. No Form, client,
+cache, request, permission or alternate draft is constructed. Full configured
+child integration still needs the genuine accepted Form/client/revision owner.

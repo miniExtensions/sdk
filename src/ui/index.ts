@@ -1,3 +1,8 @@
+export { findAdjacentChildSession } from './childNavigationCompatibility.js';
+export type {
+    AdjacentChildNavigationContext,
+    AdjacentChildNavigationInput,
+} from './childNavigationCompatibility.js';
 export {
     projectSelectChoices,
     type SelectChoiceEvaluation,

@@ -28,6 +28,10 @@ import {
     attachmentMetadataTypedConsumer,
 } from './attachment-input-consumer-checks.mjs';
 import {
+    checkNativeLinkedRecordRowsConsumer,
+    nativeLinkedRecordRowsTypedConsumer,
+} from './native-linked-record-row-consumer-checks.mjs';
+import {
     checkOrderedAttachmentUploadConsumer,
     orderedAttachmentUploadTypedConsumer,
 } from './ordered-attachment-upload-consumer-checks.mjs';
@@ -1357,6 +1361,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 attachmentMetadataTypedConsumer +
                 orderedAttachmentUploadTypedConsumer +
                 formulaCompatibilityTypedConsumer +
+                nativeLinkedRecordRowsTypedConsumer +
                 collaboratorSelectionTypedConsumer +
                 childNavigationTypedConsumer +
                 buttonDispatchGateTypedConsumer +
@@ -3002,6 +3007,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     assert.equal(
         await checkChildNavigationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkNativeLinkedRecordRowsConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

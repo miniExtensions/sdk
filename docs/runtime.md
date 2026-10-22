@@ -892,3 +892,61 @@ export type PortalDetailDisplayConfig =
 ```
 
 These payload types cover native data. The [typed renderer hosts](field-bindings.md#typed-renderer-hosts-and-named-slots) combine them with correlated per-kind action props. [Form composition](field-bindings.md#form-composition-with-app-owned-layout) and [Portal Grid/List composition](field-bindings.md#portal-composition-with-app-owned-layout) reuse the existing SDK owners and capabilities; a native `readOnly` or computed flag alone does not authorize a Button action. Applications supply layout and visual field renderers.
+
+## Clientless hosted Button dispatch gate
+
+`createButtonDispatchGate` from `@miniextensions/sdk/ui` shares only new-click
+admission and one-flight-at-a-time behavior when an application already owns its
+Button transport, feedback and recovery policy. It requires no client, accepted
+Form/Portal model or recovery journal and does not authorize a server operation.
+
+```ts
+import { createButtonDispatchGate } from '@miniextensions/sdk/ui';
+
+export function bindHostedButton(host: {
+    ownerIsCurrent(): boolean;
+    sourceAndModeAreAvailable(): boolean;
+    invoke(): Promise<void>;
+    setPending(pending: boolean): void;
+}) {
+    const gate = createButtonDispatchGate({
+        isCurrent: () => host.ownerIsCurrent(),
+        canTrigger: () => host.sourceAndModeAreAvailable(),
+        dispatch: async () => {
+            // Existing host transport, feedback and error handling.
+            await host.invoke();
+        },
+        pendingChanged: (pending) => host.setPending(pending),
+    });
+    return {
+        // `true` means host callback completion, not webhook success.
+        onClick: () => gate.run(),
+        dispose: () => gate.dispose(),
+    };
+}
+```
+
+Create one gate per committed Button owner/policy lease. A false or throwing
+`isCurrent` observation permanently retires it; a temporary false/throwing
+`canTrigger` observation refuses only that intent. The gate reserves its flight
+before any host callback and rechecks current ownership and availability after
+pending presentation. Reentrant or concurrent activations are refused. A
+computed/read-only Button can still have a configured action: supply the actual
+Button source/mode predicate, not Form value editability.
+
+A dispatch rejection propagates unchanged after releasing its own flight; the
+host decides feedback and whether a later explicit click is a retry. Presentation
+exceptions do not cancel dispatch. Disposal suppresses new clicks and later
+pending notifications; it never aborts, replays or discards an allocated host
+promise. Host continuations must retain their existing current-owner checks for
+feedback and settlement. The gate observes only an action's admission/flight,
+never its native record data, token, source, success or uncertain outcome.
+
+This additive compatibility facet does not change `createButtonFieldModel`,
+`createFormButtonFieldModel` or `createPortalButtonFieldModel`: those accepted SDK
+models retain their own client, journal and explicit uncertainty acknowledgement.
+It also does not replace hosted canonical cell queues or ordered attachment
+batches/partial recovery with the SDK's private drafts or one-file upload model.
+The synthetic host baseline permits an explicit next click after a reported or
+transport failure; the gate preserves it without automatically acknowledging an
+unknown journal attempt or inventing accepted client authority.

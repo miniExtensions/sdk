@@ -8,6 +8,14 @@ import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import { childForm, parentForm } from './formLinkedChildFixtures.js';
 
+type MouseCheckpoint = {
+    focusedBefore: boolean;
+    focusedAfter: boolean;
+    changes: number;
+    childTitle: string;
+    saves: number;
+    reads: number;
+};
 type RoutingInput = {
     extensionAccessToken: string;
     formRecord: {
@@ -42,11 +50,16 @@ const {
     assertFailedConfirmation,
     assertEditedMultiPageReview,
     assertChildSaveRouting,
+    assertMouseBlurCommit,
 } = (await import(
     pathToFileURL(
         resolve('scripts/browser-linked-child-confirmation-native.mjs')
     ).href
 )) as {
+    assertMouseBlurCommit(
+        actual: MouseCheckpoint,
+        expected: Pick<MouseCheckpoint, 'childTitle' | 'reads'>
+    ): void;
     assertChildSaveRouting(input: RoutingInput, mode: 'create' | 'edit'): void;
     assertFailedConfirmation(
         actual: Checkpoint,
@@ -373,4 +386,35 @@ describe('installed starter child Save routing proof acceptance', () => {
                 });
             });
     }
+});
+
+describe('installed starter mouse-blur proof acceptance', () => {
+    const expected = { childTitle: 'Current required answer', reads: 0 };
+    const checkpoint = (): MouseCheckpoint => ({
+        ...expected,
+        focusedBefore: true,
+        focusedAfter: false,
+        changes: 1,
+        saves: 0,
+    });
+    it('accepts one mouse-blur change without transport', () => {
+        assertMouseBlurCommit(checkpoint(), expected);
+    });
+    const invalid: Array<[string, (actual: MouseCheckpoint) => void]> = [
+        ['already blurred', (actual) => (actual.focusedBefore = false)],
+        ['still focused', (actual) => (actual.focusedAfter = true)],
+        ['change never committed', (actual) => (actual.changes = 0)],
+        ['duplicate change', (actual) => (actual.changes = 2)],
+        ['stale answer', (actual) => (actual.childTitle = 'Previous answer')],
+        ['autosave', (actual) => (actual.saves = 1)],
+        ['extra read', (actual) => actual.reads++],
+    ];
+    for (const [name, mutate] of invalid)
+        it(`rejects false mouse-blur proof: ${name}`, () => {
+            const actual = checkpoint();
+            mutate(actual);
+            assert.throws(() => assertMouseBlurCommit(actual, expected), {
+                code: 'ERR_ASSERTION',
+            });
+        });
 });

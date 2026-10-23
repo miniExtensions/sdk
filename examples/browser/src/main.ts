@@ -63,8 +63,10 @@ import {
 import { flatChoiceConditionRecord } from './choiceAvailability.js';
 import { hasMaskedValuePolicy } from './privacy.js';
 import { createPortalView, type PortalView } from './portal.js';
-import { createLinkedChildPanel } from './linkedChildPanel.js';
-import { createLinkedChildReview } from './linkedChildReview.js';
+import {
+    createLinkedChildPanel,
+    createLinkedChildReview,
+} from './linkedChildPanel.js';
 import {
     createConditionalLinkedFilters,
     type ConditionalLinkedFilters,

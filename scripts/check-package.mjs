@@ -1,4 +1,8 @@
 import {
+    checkBorrowedNativeLinkedBatchConsumer,
+    borrowedNativeLinkedBatchTypedConsumer,
+} from './borrowed-native-linked-batch-consumer-checks.mjs';
+import {
     checkFormProgressConsumer,
     formProgressTypedConsumer,
 } from './form-progress-consumer-checks.mjs';
@@ -1390,6 +1394,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
         writeFileSync(
             join(temporaryDirectory, filename),
             declarationConsumer +
+                borrowedNativeLinkedBatchTypedConsumer +
                 attachmentMetadataTypedConsumer +
                 orderedAttachmentUploadTypedConsumer +
                 borrowedAttachmentControllerTypedConsumer +
@@ -3012,6 +3017,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         happyDomModulePath: require.resolve('happy-dom'),
     });
     assert.equal(reactBindingProof.checks, 1);
+    assert.equal(
+        await checkBorrowedNativeLinkedBatchConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
     const nativeEditorMatrix = checkNativeEditorReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

@@ -39,6 +39,28 @@ export function assertEditedMultiPageReview(actual, expected) {
     assert.deepEqual(actual.parentLinks, expected.parentLinks);
 }
 
+export function assertMouseBlurCommit(actual, expected) {
+    assert.equal(actual.focusedBefore, true);
+    assert.equal(actual.focusedAfter, false);
+    assert.equal(actual.changes, 1);
+    assert.equal(actual.childTitle, expected.childTitle);
+    assert.equal(actual.saves, 0);
+    assert.equal(actual.reads, expected.reads);
+}
+
+export function assertChildSaveRouting(input, mode) {
+    assert.equal(input.extensionAccessToken, 'synthetic_child_token');
+    assert.equal(input.formRecord.type, mode);
+    if (mode === 'edit') {
+        assert.equal(input.formRecord.tableId, 'tbl_child');
+        assert.equal(input.formRecord.recordId, 'rec_existing');
+    } else {
+        // Create is routed by the child token, not a caller-supplied identity.
+        assert.equal('tableId' in input.formRecord, false);
+        assert.equal('recordId' in input.formRecord, false);
+    }
+}
+
 /** Build the unmodified, copied installed starter without launching a browser. */
 export async function prepareStarterConfirmationProof({
     consumer,
@@ -144,14 +166,17 @@ export async function checkStarterConfirmationRecovery({
     });
     const origin = `http://127.0.0.1:${server.address().port}`;
     try {
-        for (const { mode, multiPage } of [
+        for (const { mode, multiPage, mouseBlur } of [
             { mode: 'create', multiPage: false },
             { mode: 'edit', multiPage: false },
             { mode: 'create', multiPage: true },
+            { mode: 'create', multiPage: false, mouseBlur: true },
         ]) {
-            const label = multiPage
-                ? 'multi-page Review'
-                : 'confirmation recovery';
+            const label = mouseBlur
+                ? 'mouse-blur confirmation recovery'
+                : multiPage
+                  ? 'multi-page Review'
+                  : 'confirmation recovery';
             console.log(`Installed starter ${mode} ${label}: starting`);
             const calls = { reads: 0, saves: [] };
             const parent = fixtures.parentForm('edit');
@@ -190,6 +215,8 @@ export async function checkStarterConfirmationRecovery({
                                     : structuredClone(parent);
                             if ('childExtensionInfo' in input) {
                                 loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
+                                if (mouseBlur)
+                                    loaded.payload.fieldIdsToSchemas.fld_title.miniExtConfig.required = true;
                                 if (mode === 'edit')
                                     loaded.payload.formRecord = {
                                         ...loaded.payload.formRecord,
@@ -321,9 +348,35 @@ export async function checkStarterConfirmationRecovery({
                 const childTitle = page.locator(
                     '[data-linked-child-pane] [data-field-id="fld_title"]'
                 );
-                await childTitle.fill(expected.childTitle);
-                await childTitle.press('Tab');
                 expected.reads = calls.reads;
+                await childTitle.fill(expected.childTitle);
+                let mouseCommitted;
+                if (mouseBlur) {
+                    const focusedBefore = await childTitle.evaluate((node) => {
+                        window.childMouseChanges = 0;
+                        node.addEventListener(
+                            'change',
+                            () => window.childMouseChanges++
+                        );
+                        return document.activeElement === node;
+                    });
+                    // A real mouse click outside the child commits native change.
+                    // Resolve Review only afterward: change replaces its controls.
+                    await parentTitle.click();
+                    mouseCommitted = {
+                        focusedBefore,
+                        focusedAfter: await childTitle.evaluate(
+                            (node) => document.activeElement === node
+                        ),
+                        changes: await page.evaluate(
+                            () => window.childMouseChanges
+                        ),
+                        childTitle: await childTitle.inputValue(),
+                        saves: calls.saves.length,
+                        reads: calls.reads,
+                    };
+                    assertMouseBlurCommit(mouseCommitted, expected);
+                } else await childTitle.press('Tab');
                 const review = () =>
                     page.getByRole('button', {
                         name: 'Review child',
@@ -479,11 +532,7 @@ export async function checkStarterConfirmationRecovery({
                     .click();
                 await idle();
                 assert.equal(calls.saves.length, 1);
-                assert.equal(
-                    calls.saves[0].extensionAccessToken,
-                    'synthetic_child_token'
-                );
-                assert.equal(calls.saves[0].formRecord.type, mode);
+                assertChildSaveRouting(calls.saves[0], mode);
                 assert.equal(
                     calls.saves[0].formRecord.data.fld_title,
                     expected.childTitle
@@ -509,10 +558,13 @@ export async function checkStarterConfirmationRecovery({
                 assert.deepEqual(unexpectedRequests, []);
                 report.cases.push({
                     mode,
-                    scenario: multiPage
-                        ? 'multi-page-edit-then-explicit-confirm'
-                        : 'show-modal-failure-then-explicit-confirm',
+                    scenario: mouseBlur
+                        ? 'mouse-blur-then-recovery-and-explicit-confirm'
+                        : multiPage
+                          ? 'multi-page-edit-then-explicit-confirm'
+                          : 'show-modal-failure-then-explicit-confirm',
                     ...(multiPage ? { edited } : { failed }),
+                    ...(mouseBlur ? { mouseCommitted } : {}),
                     recoveredSaves: calls.saves.length,
                     parentRetained: true,
                 });

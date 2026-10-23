@@ -336,16 +336,23 @@ const confirmCurrent = async (
     const client = visitor.client;
     const revision = visitor.revision;
     const screen = visitor.screen;
-    const accepted = await requestConfirmation(options);
-    return (
-        accepted &&
+    const current = () =>
         request == null &&
         activeVisitor === identity &&
         visitors[identity] === visitor &&
         visitor.client === client &&
         visitor.revision === revision &&
-        visitor.screen === screen
-    );
+        visitor.screen === screen;
+    try {
+        return (await requestConfirmation(options)) && current();
+    } catch {
+        if (current())
+            status(
+                'The confirmation could not be displayed. No action was taken.',
+                true
+            );
+        return false;
+    }
 };
 const invalidate = (visitor: Visitor): void => {
     for (const [identity, owned] of Object.entries(visitors))

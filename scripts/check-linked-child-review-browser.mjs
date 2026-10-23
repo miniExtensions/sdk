@@ -17,6 +17,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 import { chromium } from 'playwright';
+import { checkStarterConfirmationRecovery } from './browser-linked-child-confirmation-native.mjs';
 const root = resolve(import.meta.dirname, '..');
 const output = process.argv[2]
     ? resolve(process.argv[2])
@@ -300,6 +301,15 @@ try {
             await page.close();
         }
     }
+    report.starterConfirmationRecovery = await checkStarterConfirmationRecovery(
+        {
+            browser,
+            consumer,
+            output,
+            fixtures,
+            root,
+        }
+    );
     report.passed = true;
 } catch (error) {
     report.error = String(error.stack ?? error);

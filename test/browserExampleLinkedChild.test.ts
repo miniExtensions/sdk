@@ -1057,13 +1057,23 @@ describe('actual starter root versus nested linked-child admission', () => {
                         screen.getAttribute('aria-busy') === 'false'
                 );
                 if (scenario === 'unsupported') {
-                    const action = buttons(body, 'Review child')[0];
-                    if (action && !action.disabled) {
-                        action.click();
-                        await waitFor(
-                            () => screen.getAttribute('aria-busy') === 'false'
-                        );
-                    }
+                    const action = button(body, 'Review child');
+                    assert.equal(action.disabled, false);
+                    action.click();
+                    await waitFor(
+                        () => screen.getAttribute('aria-busy') === 'false'
+                    );
+                    const banner = window.document.getElementById('status')!;
+                    assert.deepEqual(
+                        {
+                            text: banner.textContent,
+                            error: banner.classList.contains('error'),
+                        },
+                        {
+                            text: 'Child Save was not accepted. Retry only after checking its state.',
+                            error: true,
+                        }
+                    );
                     assert.equal(body.querySelector('dialog'), null);
                     assert.equal(saves.length, 0);
                     assert.equal(

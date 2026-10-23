@@ -13,6 +13,71 @@ export async function assertPortalChildSave({
     core,
     forms,
 }) {
+    const assertSaveCount = (actual, expected) =>
+        assert.equal(actual, expected, 'Only explicit Save may dispatch');
+    const assertRecovery = (attempt, expected) =>
+        assert.deepEqual(
+            {
+                outcome: attempt.outcome,
+                flight: attempt.flight,
+                acknowledgment: attempt.acknowledgment,
+                associatedRecordId: attempt.associatedRecordId,
+            },
+            expected,
+            'Acknowledgment must preserve uncertainty and exact association'
+        );
+    const assertActiveRefusal = (operation) =>
+        assert.throws(operation, /Wait for the browser action to stop/);
+    const assertSuccessorDraft = (actual, expected) =>
+        assert.deepEqual(
+            actual,
+            expected,
+            'Late Save must preserve successor draft'
+        );
+    // Oracle controls corrupt observations/ports only; no installed runtime mutation.
+    const settled = {
+        outcome: 'unknown',
+        flight: false,
+        acknowledgment: 'existing-request',
+        associatedRecordId: 'rec_inspected',
+    };
+    for (const patch of [
+        { outcome: 'saved' },
+        { flight: true },
+        { acknowledgment: 'none' },
+        { associatedRecordId: 'rec_wrong' },
+    ]) {
+        assert.throws(() => assertRecovery({ ...settled, ...patch }, settled), {
+            code: 'ERR_ASSERTION',
+            message: /Acknowledgment must preserve uncertainty/,
+        });
+    }
+    for (const [actual, expected] of [
+        [2, 1],
+        [1, 2],
+    ]) {
+        assert.throws(() => assertSaveCount(actual, expected), {
+            code: 'ERR_ASSERTION',
+            message: /Only explicit Save may dispatch/,
+        });
+    }
+    assert.throws(() => assertActiveRefusal(() => {}), {
+        code: 'ERR_ASSERTION',
+    });
+    assert.throws(
+        () =>
+            assertSuccessorDraft(
+                { fld_title: 'late' },
+                { fld_title: 'successor' }
+            ),
+        {
+            code: 'ERR_ASSERTION',
+            message: /Late Save must preserve successor draft/,
+        }
+    );
+    console.log(
+        'Portal oracle controls: four recovery-state faults, extra/missing dispatch, absent refusal and successor corruption rejected (no runtime mutation).'
+    );
     async function fixture(access = { type: 'edit', recordId: 'rec_one' }) {
         const calls = { load: [], list: [], save: [] };
         const client = core.createMiniExtensionsClient({
@@ -199,25 +264,110 @@ export async function assertPortalChildSave({
         validation.destroy();
     }
 
-    const uncertain = await fixture({ type: 'create' });
-    try {
-        const a = await uncertain.open();
-        uncertain.respond(() => {
-            throw Error('Synthetic lost response');
-        });
-        await assert.rejects(a.save());
-        const attempt = uncertain.attempts[0];
-        assert.equal(attempt.outcome, 'unknown');
-        assert.equal(attempt.flight, false);
-        a.destroy();
-        const fresh = await uncertain.open();
-        await assert.rejects(fresh.save());
-        assert.equal(uncertain.calls.save.length, 1); // fresh load alone cannot bypass unknown
-        uncertain.journal.acknowledgeNewIntent(attempt);
-        assert.equal(attempt.outcome, 'unknown');
-        assert.equal(uncertain.calls.save.length, 1); // acknowledgement does not dispatch
-    } finally {
-        uncertain.destroy();
+    for (const access of [
+        { type: 'create' },
+        { type: 'edit', recordId: 'rec_one' },
+    ]) {
+        for (const acknowledgment of ['existing-request', 'new-intent']) {
+            const f = await fixture(access);
+            const pending = fixtures.deferred();
+            try {
+                const a = await f.open();
+                f.respond(() =>
+                    pending.promise.then(() => {
+                        throw Error('Synthetic lost response');
+                    })
+                );
+                const flight = assert.rejects(
+                    a.save(),
+                    /Synthetic lost response/
+                );
+                const attempt = f.attempts[0];
+                const active = {
+                    outcome: 'unknown',
+                    flight: true,
+                    acknowledgment: 'none',
+                    associatedRecordId: null,
+                };
+                assertRecovery(attempt, active);
+                for (const acknowledge of [
+                    () =>
+                        f.journal.acknowledgeExisting(attempt, 'rec_inspected'),
+                    () => f.journal.acknowledgeNewIntent(attempt),
+                ]) {
+                    assertActiveRefusal(acknowledge);
+                    assertRecovery(attempt, active);
+                    assertSaveCount(f.calls.save.length, 1);
+                }
+                await assert.rejects(a.save());
+                assert.equal(f.attempts.length, 1);
+                assertSaveCount(f.calls.save.length, 1);
+                pending.resolve();
+                await flight;
+                assertRecovery(attempt, { ...active, flight: false });
+                a.destroy();
+                const fresh = await f.open();
+                await assert.rejects(fresh.save());
+                assertSaveCount(f.calls.save.length, 1); // fresh load cannot bypass unknown
+                if (acknowledgment === 'existing-request')
+                    f.journal.acknowledgeExisting(attempt, 'rec_inspected');
+                else f.journal.acknowledgeNewIntent(attempt);
+                const acknowledged = {
+                    outcome: 'unknown',
+                    flight: false,
+                    acknowledgment,
+                    associatedRecordId:
+                        acknowledgment === 'existing-request'
+                            ? 'rec_inspected'
+                            : null,
+                };
+                assertRecovery(attempt, acknowledged);
+                assert.equal(f.attempts.length, 1);
+                assertSaveCount(f.calls.save.length, 1); // acknowledgment never dispatches
+                assert(
+                    fresh.controller.write('fld_title', 'Explicit new intent')
+                );
+                assertSaveCount(f.calls.save.length, 1);
+                f.respond((input) => ({
+                    type: 'saved',
+                    record: {
+                        id:
+                            access.type === 'create'
+                                ? 'rec_new'
+                                : access.recordId,
+                        fields: input.formRecord.data,
+                    },
+                    tableId: 'tbl_children',
+                    loggedInUserRecord: { id: 'rec_user', fields: {} },
+                    context: {
+                        type: 'modal',
+                        newTableIdsToLinkedTableStates: {},
+                    },
+                }));
+                assert.equal((await fresh.save()).type, 'saved');
+                assertSaveCount(f.calls.save.length, 2);
+                assert.equal(f.attempts.length, 2);
+                assert.notEqual(f.attempts[1], attempt);
+                assert.equal(f.attempts[1].outcome, 'saved');
+                assert.equal(f.attempts[1].flight, false);
+                assert(f.attempts[1].loadVersion > attempt.loadVersion);
+                assertRecovery(attempt, acknowledged); // old unknown is never rewritten
+                const input = f.calls.save[1].input;
+                assert.equal(input.formRecord.type, access.type);
+                if (access.type === 'edit')
+                    assert.equal(input.formRecord.recordId, access.recordId);
+                assert.equal(
+                    input.formRecord.data.fld_title,
+                    'Explicit new intent'
+                );
+                assert.deepEqual(input.formRecord.data.fld_parent, [
+                    'rec_user',
+                ]);
+            } finally {
+                pending.resolve();
+                f.destroy();
+            }
+        }
     }
 
     for (const retirement of ['owner-ABA', 'new-child', 'cancel']) {
@@ -230,12 +380,18 @@ export async function assertPortalChildSave({
             const flight = a.save();
             const rejection = assert.rejects(flight);
             assert.equal(f.calls.save.length, 1);
+            let successor;
+            let successorDraft;
             if (retirement === 'owner-ABA') {
                 f.owner.changeOwner('B');
                 f.owner.changeOwner('synthetic-visitor');
             } else if (retirement === 'new-child') {
                 const next = await f.open();
                 next.controller.write('fld_title', 'Successor input');
+                successor = next;
+                successorDraft = structuredClone(
+                    next.controller.getState().draft
+                );
                 assert.equal(
                     next.controller.getState().draft.data.fld_title,
                     'Successor input'
@@ -249,6 +405,11 @@ export async function assertPortalChildSave({
                 context: { type: 'modal', newTableIdsToLinkedTableStates: {} },
             });
             await rejection;
+            if (successor)
+                assertSuccessorDraft(
+                    successor.controller.getState().draft,
+                    successorDraft
+                );
             assert.equal(f.attempts[0].outcome, 'unknown');
             assert.equal(f.attempts[0].flight, false);
             assert.equal(f.calls.save.length, 1);

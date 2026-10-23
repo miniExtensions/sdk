@@ -1,3 +1,4 @@
+import { safeAttachmentPhaseMarker } from './attachment-phase-receipts.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -507,7 +508,9 @@ const settled = async () => {
 export async function checkAttachmentReviewRecipe({
     consumerDirectory: consumer,
     happyDomModulePath,
+    onTeardownPhase,
 }) {
+    const markTeardown = safeAttachmentPhaseMarker(onTeardownPhase);
     for (const name of [
         'main.ts',
         'review.ts',
@@ -1652,13 +1655,51 @@ export async function checkAttachmentReviewRecipe({
             await settled();
             console.log(`Packed attachment Review: ${scenario} passed`);
         } finally {
+            markTeardown(
+                index + 1,
+                scenarios.length,
+                'upload-release',
+                'start'
+            );
             releaseUpload();
+            markTeardown(
+                index + 1,
+                scenarios.length,
+                'upload-release',
+                'complete'
+            );
+            markTeardown(index + 1, scenarios.length, 'settlement', 'start');
             await settled();
+            markTeardown(index + 1, scenarios.length, 'settlement', 'complete');
+            markTeardown(
+                index + 1,
+                scenarios.length,
+                'global-restoration',
+                'start'
+            );
             for (const [key, descriptor] of previous)
                 if (descriptor === undefined)
                     Reflect.deleteProperty(globalThis, key);
                 else Object.defineProperty(globalThis, key, descriptor);
+            markTeardown(
+                index + 1,
+                scenarios.length,
+                'global-restoration',
+                'complete'
+            );
+            markTeardown(
+                index + 1,
+                scenarios.length,
+                'happydom-close',
+                'start'
+            );
             await window.happyDOM.close();
+            markTeardown(
+                index + 1,
+                scenarios.length,
+                'happydom-close',
+                'complete'
+            );
         }
     }
     if (process.env.SDK_ATTACHMENT_NATIVE_PLAYWRIGHT) {

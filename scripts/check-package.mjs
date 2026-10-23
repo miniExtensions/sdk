@@ -382,6 +382,7 @@ import { checkBorrowedNativeFormRecipe } from './borrowed-native-form-recipe-che
 import { checkFormAttachmentRecipe } from './form-attachment-recipe-checks.mjs';
 import { checkFormLinkedFilterRecipe } from './form-linked-filter-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
+import { checkPortalChildSaveRecipe } from './portal-child-save-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 import { checkSessionRestoration } from './session-restoration-checks.mjs';
 import { checkAdditionalRuntimeOperations } from './additional-runtime-recipe-checks.mjs';
@@ -780,6 +781,13 @@ try {
         consumerDirectory: temporaryDirectory,
         guideSources: portalsGuideSources,
     });
+    assert.equal(
+        await checkPortalChildSaveRecipe({
+            consumerDirectory: temporaryDirectory,
+            guideSources: portalsGuideSources,
+        }),
+        2
+    );
 
     const formulasGuide = readFileSync(
         join(installedPackage, 'docs/formulas.md'),

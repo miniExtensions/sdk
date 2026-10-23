@@ -10,6 +10,7 @@ import {
     checkFormProgressConsumer,
     formProgressTypedConsumer,
 } from './form-progress-consumer-checks.mjs';
+import { checkFormProgressRecipe } from './form-progress-recipe-checks.mjs';
 import {
     checkBorrowedAttachmentControllerConsumer,
     borrowedAttachmentControllerTypedConsumer,
@@ -389,6 +390,7 @@ import { checkBorrowedNativeFormRecipe } from './borrowed-native-form-recipe-che
 import { checkFormAttachmentRecipe } from './form-attachment-recipe-checks.mjs';
 import { checkFormLinkedFilterRecipe } from './form-linked-filter-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
+import { checkPortalChildSaveRecipe } from './portal-child-save-recipe-checks.mjs';
 import { checkAuthRecipe } from './auth-recipe-checks.mjs';
 import { checkSessionRestoration } from './session-restoration-checks.mjs';
 import { checkAdditionalRuntimeOperations } from './additional-runtime-recipe-checks.mjs';
@@ -709,6 +711,14 @@ try {
         guideSources: formsGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    assert.equal(
+        await checkFormProgressRecipe({
+            consumerDirectory: temporaryDirectory,
+            guideSources: formsGuideSources,
+            typescriptBin: require.resolve('typescript/bin/tsc'),
+        }),
+        2
+    );
     const borrowedNativeFormRecipe = await checkBorrowedNativeFormRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: formsGuideSources,
@@ -779,6 +789,13 @@ try {
         consumerDirectory: temporaryDirectory,
         guideSources: portalsGuideSources,
     });
+    assert.equal(
+        await checkPortalChildSaveRecipe({
+            consumerDirectory: temporaryDirectory,
+            guideSources: portalsGuideSources,
+        }),
+        2
+    );
 
     const formulasGuide = readFileSync(
         join(installedPackage, 'docs/formulas.md'),

@@ -2641,6 +2641,130 @@ server response only for the same current configuration. Its returned native
 values and rules are authoritative; stored answers are never merged over that
 response locally. This introduces no backend endpoint or new permission.
 
+### Bounded application Restore and Discard
+
+This copyable adapter owns explicit actions only. Bind it to one accepted root
+publication and configuration. `state()` is a synchronous in-memory observation:
+replace `owner` on every observed owner/visitor/session transition, including
+A→B→A, replace `configuration` on configuration replacement, and advance
+`revision` for every input intent, including edit-away-and-back and pending files.
+`eligible` means the anonymous direct-create gates and field policy above still
+hold, with no child presentation, pending request or uncertain operation.
+
+`select` must project explicitly selected, currently eligible scalar fields and
+recheck eligibility against the proposed answers as the starter does. `load`
+must call the existing client's `loadExtension` with captured root input,
+`context: { type: 'direct-url', localStorageRecord: values }` and anonymous
+session; return only a `form_loaded` response. `accepts` checks that response's
+root/create identity, publication and current configuration. The synchronous
+`accept` and `discard` ports check the supplied fence immediately before normal
+host publication/reset. They must not await, Save, replay or merge stored values.
+
+```ts
+import type { FormLoadedResult } from '@miniextensions/sdk';
+import {
+    createFormProgressStorage,
+    type FormProgressStorageOptions,
+    type FormProgressValues,
+} from '@miniextensions/sdk/forms';
+
+type ProgressActionState = {
+    owner: object;
+    configuration: object;
+    revision: number;
+    kind: 'root-create' | 'root-edit' | 'child-create' | 'child-edit';
+    eligible: boolean;
+    pristine: boolean;
+};
+
+export function createRootProgressActions(options: {
+    owner: object;
+    configuration: object;
+    storage: Omit<FormProgressStorageOptions, 'isCurrent'>;
+    state(): ProgressActionState;
+    select(values: FormProgressValues): FormProgressValues;
+    load(values: FormProgressValues): Promise<FormLoadedResult | null>;
+    accepts(page: FormLoadedResult): boolean;
+    accept(page: FormLoadedResult, current: () => boolean): boolean;
+    discard(current: () => boolean): boolean;
+}) {
+    const { owner, configuration } = options;
+    const storageOptions = { ...options.storage };
+    let busy = false;
+    async function act(restore: boolean): Promise<boolean> {
+        if (busy) return false;
+        busy = true;
+        let storage: ReturnType<typeof createFormProgressStorage> | undefined;
+        try {
+            const start = { ...options.state() };
+            const current = () => {
+                const now = options.state();
+                return (
+                    now.owner === owner &&
+                    now.configuration === configuration &&
+                    now.owner === start.owner &&
+                    now.configuration === start.configuration &&
+                    now.revision === start.revision &&
+                    now.kind === 'root-create' &&
+                    now.eligible &&
+                    (!restore || now.pristine)
+                );
+            };
+            if (!current()) return false;
+            storage = createFormProgressStorage({
+                ...storageOptions,
+                isCurrent: current,
+            });
+            const read = storage.read();
+            if (read.status !== 'read' || !current()) return false;
+            const captured = read.snapshot;
+            let page: FormLoadedResult | null = null;
+            if (restore) {
+                if (!captured) return false;
+                const values = options.select(captured.values);
+                if (!current() || Object.keys(values).length === 0)
+                    return false;
+                page = await options.load(values);
+                if (!current() || !page || !options.accepts(page)) return false;
+            }
+            if (captured) {
+                const removed = await storage.remove(captured.token);
+                if (
+                    !current() ||
+                    (removed.status !== 'removed' &&
+                        removed.status !== 'absent')
+                )
+                    return false;
+            }
+            if (!current()) return false;
+            if (!restore) return options.discard(current);
+            return (
+                page !== null &&
+                options.accepts(page) &&
+                current() &&
+                options.accept(page, current)
+            );
+        } catch {
+            // Fixed failure feedback belongs to the host; retain its current draft.
+            return false;
+        } finally {
+            storage?.destroy();
+            busy = false;
+        }
+    }
+    return { restore: () => act(true), discard: () => act(false) };
+}
+```
+
+Construction performs no I/O. A false result retains the current draft and must
+not trigger an automatic retry. Cleanup can already have succeeded before a
+later fence refuses publication; that is not restoration or a Save receipt.
+Use a scope captured for this root; never derive it from a newly active child.
+Keep [configured child Create/Edit](#configured-linked-child-create-and-edit)
+with its existing `createLinkedChildPanel` owner. Opening either child retires
+the root action epoch; presenting it performs no progress read or cleanup.
+Create a new root adapter only after explicit accepted root publication.
+
 The Form's **Discard draft** also inspects its matching progress slot from a
 previous page, even when remembering is currently unchecked. It removes only
 the captured exact token before discarding the in-memory draft. **Clear this

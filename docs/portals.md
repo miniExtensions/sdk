@@ -710,6 +710,127 @@ and dirty IDs are preserved. Creating an input does not save; dispatch only
 from an explicit Save handler while the child remains current. Use the Form
 controller for validation/success warnings and fresh-load requirements.
 
+### Explicit child Save and recovery composition
+
+The owner above intentionally stops at input construction. This application
+adapter connects that captured child to the shipped Form controller and the same
+journal lifecycle used by the browser starter. Keep one journal per visitor
+across child remounts and fresh loads. Supply a stable recovery relationship
+owner (for example `recoveryOwner(apiOrigin, shareId, acceptedPortal)`), the actual
+linked table and a monotonically advancing accepted `loadVersion`. Scope
+revisions must advance on every visitor/session/configuration transition,
+including A→B→A. Neither the journal nor its local IDs grant server authority.
+
+```ts
+import type { MiniExtensionsClient } from '@miniextensions/sdk';
+import {
+    createFormController,
+    RecoveryJournal,
+    type FormOwnerScope,
+    type FormSaveOptions,
+} from '@miniextensions/sdk/forms';
+import type { createPortalScreenOwner } from './portal-owner.js';
+
+type PortalChild = NonNullable<
+    Awaited<ReturnType<ReturnType<typeof createPortalScreenOwner>['openChild']>>
+>;
+
+export function createPortalChildSave(options: {
+    client: MiniExtensionsClient;
+    child: PortalChild;
+    journal: RecoveryJournal;
+    recoveryOwner: string;
+    linkedTableId: string;
+    loadVersion: number;
+    getScope(): FormOwnerScope;
+    saveOptions: Omit<
+        FormSaveOptions,
+        'context' | 'searchQuery' | 'deviceFingerprint'
+    >;
+}) {
+    const { child, journal, loadVersion } = options;
+    const input = child.makeSaveInput(
+        { data: child.loaded.payload.formRecord.data, dirtyFieldIds: [] },
+        options.saveOptions
+    );
+    const {
+        extensionAccessToken: _token,
+        formRecord: _record,
+        formFieldIdsWithUnsavedChanges: _dirty,
+        ...saveOptions
+    } = input;
+    const scope = {
+        owner: options.recoveryOwner,
+        parentFieldId: child.parent.portalFieldId,
+        tableId: options.linkedTableId,
+        childExtensionId: child.loaded.extensionId,
+        context: input.context.type,
+    };
+    const recordId =
+        input.formRecord.type === 'edit' ? input.formRecord.recordId : null;
+    const controller = createFormController({
+        client: options.client,
+        loaded: child.loaded,
+        parent: child.parent,
+        saveOptions,
+        getScope: options.getScope,
+        isCurrent: child.isCurrent,
+    });
+    return {
+        controller, // Reuse its write/getState/subscribe; Save goes through save below.
+        save: () =>
+            controller.save({
+                isCurrent: child.isCurrent,
+                lifecycle: {
+                    dispatch: () => {
+                        const attempt = journal.begin(
+                            scope,
+                            recordId,
+                            'save',
+                            loadVersion
+                        );
+                        return {
+                            accepted: (result) =>
+                                journal.accepted(
+                                    attempt,
+                                    result.type === 'saved'
+                                        ? 'saved'
+                                        : 'validation-error'
+                                ),
+                            finish: (disposition) => {
+                                if (disposition === 'not-dispatched')
+                                    journal.notDispatched(attempt);
+                                else journal.finishFlight(attempt);
+                            },
+                        };
+                    },
+                },
+            }),
+        destroy: () => controller.destroy(),
+    };
+}
+```
+
+Construction performs no request or journal write. Mount existing controls using
+the returned controller; call the adapter's `save()` only from deliberate Save.
+This headless composition does not add Review or browser-starter wiring.
+Validation retains the draft for correction and another explicit Save. A known
+saved response, including post-submission warnings, is not permission to submit
+again: explicitly reload the parent Portal and open a fresh child before another
+operation. Do not merge a late response into a successor's parent or child.
+
+Transport failure, dispatched cancellation or retirement after dispatch leaves
+the attempt unknown, even if a late response says saved. Keep that journal after
+destroying the UI. Inspect the server outcome before deciding what to load next;
+fresh loading alone does not clear its blocker. Only a settled, explicitly
+inspected unknown attempt can be associated through `acknowledgeExisting`, or
+acknowledged as a genuinely new intent with `acknowledgeNewIntent`. These actions
+retain its unknown outcome and do not replay it, establish idempotency or Save.
+Do not treat an acknowledgment as an automatic retry. The adapter retains no
+reference input; the in-memory journal is lost on document reload and is not
+persistent recovery. All receipt checks use synthetic local ports, not live
+persistence or authorization evidence.
+
 The manual `unlink` method retires the collection and child plans before
 calling the existing core operation. The Airtable record itself remains.
 After success, failure or cancellation, inspect the outcome and explicitly

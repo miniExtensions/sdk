@@ -2,6 +2,7 @@ import {
     checkFormProgressConsumer,
     formProgressTypedConsumer,
 } from './form-progress-consumer-checks.mjs';
+import { checkFormProgressRecipe } from './form-progress-recipe-checks.mjs';
 import {
     checkBorrowedAttachmentControllerConsumer,
     borrowedAttachmentControllerTypedConsumer,
@@ -701,6 +702,14 @@ try {
         guideSources: formsGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    assert.equal(
+        await checkFormProgressRecipe({
+            consumerDirectory: temporaryDirectory,
+            guideSources: formsGuideSources,
+            typescriptBin: require.resolve('typescript/bin/tsc'),
+        }),
+        2
+    );
     const borrowedNativeFormRecipe = await checkBorrowedNativeFormRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: formsGuideSources,

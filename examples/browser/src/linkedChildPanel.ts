@@ -542,7 +542,8 @@ export const createLinkedChildReview =
                     'Review is unavailable for this child Form. No Save was sent.',
                     true
                 );
-            return { type: 'edit' };
+            // A refused presentation is a failure, not an Edit/Escape decision.
+            throw new FormPageError('blocked');
         } finally {
             if (!confirmed) {
                 request.signal.removeEventListener('abort', abort);

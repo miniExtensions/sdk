@@ -1,3 +1,4 @@
+import { createAttachmentPhaseReceipt } from './attachment-phase-receipts.mjs';
 import assert from 'node:assert/strict';
 import { stop } from 'esbuild';
 
@@ -71,9 +72,16 @@ try {
     started = true;
     const [path, name] = suites[suite];
     const helper = await import(new URL(path, import.meta.url).href);
+    const teardownReceipt =
+        suite === 'attachment'
+            ? createAttachmentPhaseReceipt({
+                  outputDirectory: process.env.SDK_ATTACHMENT_PHASE_RECEIPT_DIR,
+              })
+            : null;
     result = await helper[name]({
         consumerDirectory: args[1],
         happyDomModulePath: args[2],
+        ...(teardownReceipt ? { onTeardownPhase: teardownReceipt.mark } : {}),
     });
 } catch (error) {
     console.error(error);

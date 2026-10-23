@@ -23,6 +23,7 @@ import { assertPublicDistribution } from './distribution-checks.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
 import { createProcessGroupObserver } from './process-group-observer.mjs';
 import './process-group-observer.test.mjs';
+import './attachment-phase-receipts.test.mjs';
 import {
     assertPrivacyProofInventory,
     privacyScenarioInventory,

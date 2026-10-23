@@ -39,6 +39,19 @@ export function assertEditedMultiPageReview(actual, expected) {
     assert.deepEqual(actual.parentLinks, expected.parentLinks);
 }
 
+export function assertChildSaveRouting(input, mode) {
+    assert.equal(input.extensionAccessToken, 'synthetic_child_token');
+    assert.equal(input.formRecord.type, mode);
+    if (mode === 'edit') {
+        assert.equal(input.formRecord.tableId, 'tbl_child');
+        assert.equal(input.formRecord.recordId, 'rec_existing');
+    } else {
+        // Create is routed by the child token, not a caller-supplied identity.
+        assert.equal('tableId' in input.formRecord, false);
+        assert.equal('recordId' in input.formRecord, false);
+    }
+}
+
 /** Build the unmodified, copied installed starter without launching a browser. */
 export async function prepareStarterConfirmationProof({
     consumer,
@@ -479,11 +492,7 @@ export async function checkStarterConfirmationRecovery({
                     .click();
                 await idle();
                 assert.equal(calls.saves.length, 1);
-                assert.equal(
-                    calls.saves[0].extensionAccessToken,
-                    'synthetic_child_token'
-                );
-                assert.equal(calls.saves[0].formRecord.type, mode);
+                assertChildSaveRouting(calls.saves[0], mode);
                 assert.equal(
                     calls.saves[0].formRecord.data.fld_title,
                     expected.childTitle

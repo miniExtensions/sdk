@@ -1259,6 +1259,14 @@ describe('actual starter root versus nested linked-child admission', () => {
                     'synthetic_child_token'
                 );
                 assert.equal(saves[0]!.formRecord.type, mode);
+                const savedRecord = saves[0]!.formRecord;
+                if (savedRecord.type === 'edit') {
+                    assert.equal(savedRecord.tableId, 'tbl_child');
+                    assert.equal(savedRecord.recordId, 'rec_existing');
+                } else {
+                    assert.equal('tableId' in savedRecord, false);
+                    assert.equal('recordId' in savedRecord, false);
+                }
                 assert.equal(saves[0]!.formRecord.data.fld_title, answer);
                 assert.equal(parentTitle.value, 'Parent draft stays');
                 assert.equal(reads.length, readCount);
@@ -1908,6 +1916,14 @@ describe('actual starter root versus nested linked-child admission', () => {
                         : before
                 );
                 assert.equal(saves[0]!.formRecord.type, mode);
+                const savedRecord = saves[0]!.formRecord;
+                if (savedRecord.type === 'edit') {
+                    assert.equal(savedRecord.tableId, 'tbl_child');
+                    assert.equal(savedRecord.recordId, 'rec_existing');
+                } else {
+                    assert.equal('tableId' in savedRecord, false);
+                    assert.equal('recordId' in savedRecord, false);
+                }
                 assert.equal(
                     saves[0]!.extensionAccessToken,
                     'synthetic_child_token'

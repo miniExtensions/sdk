@@ -8,6 +8,15 @@ import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import { childForm, parentForm } from './formLinkedChildFixtures.js';
 
+type RoutingInput = {
+    extensionAccessToken: string;
+    formRecord: {
+        type: 'create' | 'edit';
+        data: Record<string, string>;
+        tableId?: string;
+        recordId?: string;
+    };
+};
 type Checkpoint = {
     attempts: number;
     saves: number;
@@ -29,11 +38,16 @@ type MultiPageCheckpoint = {
     parentTitle: string;
     parentLinks: string[];
 };
-const { assertFailedConfirmation, assertEditedMultiPageReview } = (await import(
+const {
+    assertFailedConfirmation,
+    assertEditedMultiPageReview,
+    assertChildSaveRouting,
+} = (await import(
     pathToFileURL(
         resolve('scripts/browser-linked-child-confirmation-native.mjs')
     ).href
 )) as {
+    assertChildSaveRouting(input: RoutingInput, mode: 'create' | 'edit'): void;
     assertFailedConfirmation(
         actual: Checkpoint,
         expected: Pick<
@@ -293,4 +307,70 @@ it('commits native text change before resolving a fresh child action', async (te
         )
     );
     assert.equal(title.value, 'Parent draft retained');
+});
+
+describe('installed starter child Save routing proof acceptance', () => {
+    for (const mode of ['create', 'edit'] as const) {
+        const input = (): RoutingInput => ({
+            extensionAccessToken: 'synthetic_child_token',
+            formRecord: {
+                type: mode,
+                data: { fld_title: 'Retained child answer' },
+                ...(mode === 'edit'
+                    ? { tableId: 'tbl_child', recordId: 'rec_existing' }
+                    : {}),
+            },
+        });
+        it(`accepts correct ${mode} routing`, () => {
+            assertChildSaveRouting(input(), mode);
+        });
+        const invalid: Array<[string, (actual: RoutingInput) => void]> = [
+            [
+                'parent token',
+                (actual) =>
+                    (actual.extensionAccessToken = 'synthetic_parent_token'),
+            ],
+            [
+                'wrong mode',
+                (actual) =>
+                    (actual.formRecord.type =
+                        mode === 'edit' ? 'create' : 'edit'),
+            ],
+            [
+                'parent table',
+                (actual) => (actual.formRecord.tableId = 'tbl_parent'),
+            ],
+            [
+                'parent record',
+                (actual) => (actual.formRecord.recordId = 'rec_parent'),
+            ],
+        ];
+        if (mode === 'edit')
+            invalid.push(
+                [
+                    'missing table',
+                    (actual) => {
+                        delete actual.formRecord.tableId;
+                    },
+                ],
+                [
+                    'missing record',
+                    (actual) => {
+                        delete actual.formRecord.recordId;
+                    },
+                ],
+                [
+                    'sibling record',
+                    (actual) => (actual.formRecord.recordId = 'rec_sibling'),
+                ]
+            );
+        for (const [name, mutate] of invalid)
+            it(`rejects ${mode} routing: ${name}`, () => {
+                const actual = input();
+                mutate(actual);
+                assert.throws(() => assertChildSaveRouting(actual, mode), {
+                    code: 'ERR_ASSERTION',
+                });
+            });
+    }
 });

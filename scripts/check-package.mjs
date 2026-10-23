@@ -3,9 +3,21 @@ import {
     borrowedNativeLinkedBatchTypedConsumer,
 } from './borrowed-native-linked-batch-consumer-checks.mjs';
 import {
+    checkFormProgressConsumer,
+    formProgressTypedConsumer,
+} from './form-progress-consumer-checks.mjs';
+import {
+    checkBorrowedAttachmentControllerConsumer,
+    borrowedAttachmentControllerTypedConsumer,
+} from './borrowed-attachment-controller-consumer-checks.mjs';
+import {
     checkBorrowedNativeLinkedReadConsumer,
     borrowedNativeLinkedReadTypedConsumer,
 } from './borrowed-native-linked-read-consumer-checks.mjs';
+import {
+    checkBorrowedLinkedChildConsumer,
+    borrowedLinkedChildTypedConsumer,
+} from './borrowed-linked-child-consumer-checks.mjs';
 import {
     checkBorrowedButtonActionConsumer,
     borrowedButtonActionTypedConsumer,
@@ -30,6 +42,10 @@ import {
     checkPortalSummaryRefreshConsumer,
     portalSummaryRefreshTypedConsumer,
 } from './portal-summary-refresh-consumer-checks.mjs';
+import {
+    checkPortalInlineEditQueueConsumer,
+    portalInlineEditQueueTypedConsumer,
+} from './portal-inline-edit-queue-consumer-checks.mjs';
 import {
     checkDropdownFilterConsumer,
     dropdownFilterTypedConsumer,
@@ -365,6 +381,7 @@ import {
     checkBrowserAddressCompositionExample,
 } from './address-autocomplete-recipe-checks.mjs';
 import { checkFormRecipe } from './form-recipe-checks.mjs';
+import { checkBorrowedNativeFormRecipe } from './borrowed-native-form-recipe-checks.mjs';
 import { checkFormAttachmentRecipe } from './form-attachment-recipe-checks.mjs';
 import { checkFormLinkedFilterRecipe } from './form-linked-filter-recipe-checks.mjs';
 import { checkPortalRecipe } from './portal-recipe-checks.mjs';
@@ -688,6 +705,13 @@ try {
         guideSources: formsGuideSources,
         happyDomModulePath: require.resolve('happy-dom'),
     });
+    const borrowedNativeFormRecipe = await checkBorrowedNativeFormRecipe({
+        consumerDirectory: temporaryDirectory,
+        guideSources: formsGuideSources,
+    });
+    console.log(
+        `Borrowed native Form recipe: ${borrowedNativeFormRecipe.checks} installed checks passed.`
+    );
     const attachmentRecipe = await checkFormAttachmentRecipe({
         consumerDirectory: temporaryDirectory,
         guideSources: formsGuideSources,
@@ -1373,11 +1397,15 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 borrowedNativeLinkedBatchTypedConsumer +
                 attachmentMetadataTypedConsumer +
                 orderedAttachmentUploadTypedConsumer +
+                borrowedAttachmentControllerTypedConsumer +
                 borrowedNativeLinkedReadTypedConsumer +
+                portalInlineEditQueueTypedConsumer +
                 formulaCompatibilityTypedConsumer +
                 nativeLinkedRecordRowsTypedConsumer +
                 collaboratorSelectionTypedConsumer +
                 childNavigationTypedConsumer +
+                borrowedLinkedChildTypedConsumer +
+                formProgressTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
                 `
@@ -3015,6 +3043,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         2
     );
     assert.equal(
+        await checkBorrowedAttachmentControllerConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
         await checkOrderedAttachmentUploadConsumer({
             consumerDirectory: temporaryDirectory,
         }),
@@ -3039,6 +3073,18 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         2
     );
     assert.equal(
+        await checkFormProgressConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkBorrowedLinkedChildConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
         await checkChildNavigationConsumer({
             consumerDirectory: temporaryDirectory,
         }),
@@ -3050,6 +3096,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         }),
         2
     );
+    await checkPortalInlineEditQueueConsumer({
+        consumerDirectory: temporaryDirectory,
+    });
     assert.equal(
         await checkCollaboratorSelectionConsumer({
             consumerDirectory: temporaryDirectory,

@@ -27,7 +27,7 @@ import {
     parentForm,
     validationError,
 } from './formLinkedChildFixtures.js';
-import { formSaveOptions } from './formsFixtures.js';
+import { formSaveOptions, loadedForm } from './formsFixtures.js';
 
 type Element = InstanceType<Window['HTMLElement']>;
 // The bundle executes the shipped helper. Describe its adapter boundary here so
@@ -226,6 +226,37 @@ const environment = async (
         await window.happyDOM.close();
     });
     return window;
+};
+
+const failConfirmationPresentation = (
+    window: Window,
+    failure: 'show-modal' | 'initial-focus'
+) => {
+    const dialog = window.HTMLDialogElement.prototype;
+    const element = window.HTMLElement.prototype;
+    const showModal = dialog.showModal;
+    const focus = element.focus;
+    let attempts = 0;
+    if (failure === 'show-modal')
+        dialog.showModal = () => {
+            attempts++;
+            throw Error('Synthetic private presentation detail');
+        };
+    else
+        element.focus = function (...args) {
+            if (this.closest('dialog')) {
+                attempts++;
+                throw Error('Synthetic private presentation detail');
+            }
+            return focus.apply(this, args);
+        };
+    return {
+        attempts: () => attempts,
+        restore: () => {
+            dialog.showModal = showModal;
+            element.focus = focus;
+        },
+    };
 };
 
 const fixture = async (
@@ -931,6 +962,314 @@ describe('browser starter standalone linked-child integration', () => {
 });
 
 describe('actual starter root versus nested linked-child admission', () => {
+    for (const scenario of [
+        'one-page',
+        'multi-page',
+        'cancel',
+        'escape',
+        'unsupported',
+        'show-modal',
+        'initial-focus',
+    ] as const)
+        for (const mode of ['create', 'edit'] as const)
+            it(`actual ${mode} ${scenario} child Review preserves parent edits and deliberate Save`, async (test) => {
+                const parent = configuredParent();
+                const loads: LoadExtensionInput[] = [];
+                const saves: SaveFormInput[] = [];
+                const reads: LoadSelectedRecordsInput[] = [];
+                const fetch: typeof globalThis.fetch = async (
+                    resource,
+                    init
+                ) => {
+                    const url = new URL(String(resource));
+                    assert.equal(url.origin, 'https://sdk.example.test');
+                    const route = url.searchParams.get('route');
+                    if (route === 'fetchExtensionForEndUser') {
+                        const input: LoadExtensionInput = JSON.parse(
+                            String(init?.body)
+                        );
+                        loads.push(input);
+                        const loaded =
+                            'childExtensionInfo' in input
+                                ? loadedChild(input, scenario === 'multi-page')
+                                : parent;
+                        if ('childExtensionInfo' in input) {
+                            loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
+                            if (scenario === 'unsupported') {
+                                const computed =
+                                    loadedForm().payload.fieldIdsToSchemas
+                                        .fld_computed;
+                                assert.ok(computed);
+                                loaded.payload.fieldIdsToSchemas.fld_computed =
+                                    computed;
+                                loaded.payload.fieldIdsInForm.push(
+                                    'fld_computed'
+                                );
+                                loaded.payload.formRecord.data.fld_computed =
+                                    'PRIVATE_FORMULA_ANSWER';
+                            }
+                        }
+                        return new Response(JSON.stringify(loaded));
+                    }
+                    if (
+                        url.pathname ===
+                        '/api/trpc/publicExtensions.fetchInitialTableIdsToLinkedTableStates'
+                    ) {
+                        reads.push(
+                            JSON.parse(url.searchParams.get('input') ?? 'null')
+                        );
+                        return new Response(
+                            JSON.stringify({
+                                result: { data: selectedRecords(parent) },
+                            })
+                        );
+                    }
+                    if (route === 'saveForm') {
+                        const input: SaveFormInput = JSON.parse(
+                            String(init?.body)
+                        );
+                        saves.push(input);
+                        return new Response(JSON.stringify(savedChild(input)));
+                    }
+                    assert.fail(
+                        `Unexpected synthetic route: ${url.pathname} ${route}`
+                    );
+                };
+                const window = await environment(test, fetch, true);
+                await import(
+                    `${pathToFileURL(join(directory, 'main.mjs')).href}?case=${++moduleRevision}`
+                );
+                const origin = window.document.getElementById('api-origin');
+                const share = window.document.getElementById('share-id');
+                const record = window.document.getElementById('record-id');
+                assert.ok(origin instanceof window.HTMLInputElement);
+                assert.ok(share instanceof window.HTMLInputElement);
+                assert.ok(record instanceof window.HTMLInputElement);
+                origin.value = 'https://sdk.example.test';
+                share.value = 'share_synthetic_parent';
+                record.value = 'rec_parent';
+                window.document
+                    .getElementById('connection-form')!
+                    .dispatchEvent(
+                        new window.Event('submit', {
+                            bubbles: true,
+                            cancelable: true,
+                        })
+                    );
+                const body = window.document.body;
+                const screen = window.document.getElementById('screen')!;
+                await waitFor(
+                    () =>
+                        loads.length === 1 &&
+                        screen.getAttribute('aria-busy') === 'false'
+                );
+                const parentTitle = edit(
+                    window,
+                    body,
+                    'fld_title',
+                    'Parent draft stays'
+                );
+                const parentLinks = body.querySelector(
+                    `[data-field-id="${fieldId}"]`
+                );
+                assert.ok(parentLinks instanceof window.HTMLTextAreaElement);
+                const originalLinks = JSON.parse(parentLinks.value);
+                if (mode === 'edit') {
+                    button(body, 'Load selected records').click();
+                    await waitFor(
+                        () =>
+                            buttons(body, 'Edit linked record rec_existing')
+                                .length === 1 &&
+                            screen.getAttribute('aria-busy') === 'false'
+                    );
+                    button(body, 'Edit linked record rec_existing').click();
+                } else button(body, 'Create linked record').click();
+                await waitFor(
+                    () =>
+                        loads.length === 2 &&
+                        screen.getAttribute('aria-busy') === 'false'
+                );
+                if (scenario === 'unsupported') {
+                    const action = button(body, 'Review child');
+                    assert.equal(action.disabled, false);
+                    action.click();
+                    await waitFor(
+                        () => screen.getAttribute('aria-busy') === 'false'
+                    );
+                    const banner = window.document.getElementById('status')!;
+                    assert.deepEqual(
+                        {
+                            text: banner.textContent,
+                            error: banner.classList.contains('error'),
+                        },
+                        {
+                            text: 'Child Save was not accepted. Retry only after checking its state.',
+                            error: true,
+                        }
+                    );
+                    assert.equal(body.querySelector('dialog'), null);
+                    assert.equal(saves.length, 0);
+                    assert.equal(
+                        body.textContent?.includes('PRIVATE_FORMULA_ANSWER'),
+                        false
+                    );
+                    assert.equal(parentTitle.value, 'Parent draft stays');
+                    return;
+                }
+                const pane = body.querySelector('[data-linked-child-pane]');
+                assert.ok(pane instanceof window.HTMLElement);
+                const answer = '<img src=x onerror=alert(1)> Child answer';
+                edit(window, pane, 'fld_title', answer);
+                if (scenario === 'multi-page') {
+                    assert.equal(button(body, 'Review child').disabled, true);
+                    button(body, 'Child Next').click();
+                    await waitFor(
+                        () =>
+                            pane
+                                .querySelector(
+                                    '[data-child-field-id="fld_note"]'
+                                )
+                                ?.hasAttribute('hidden') === false
+                    );
+                    assert.equal(button(body, 'Review child').disabled, true);
+                    button(body, 'Child Next').click();
+                    await waitFor(() => !button(body, 'Review child').disabled);
+                    assert.equal(saves.length, 0);
+                    assert.equal(body.querySelector('dialog'), null);
+                }
+                const readCount = reads.length;
+                if (scenario === 'show-modal' || scenario === 'initial-focus') {
+                    const fault = failConfirmationPresentation(
+                        window,
+                        scenario
+                    );
+                    test.after(fault.restore);
+                    button(body, 'Review child').click();
+                    await waitFor(
+                        () => screen.getAttribute('aria-busy') === 'false'
+                    );
+                    assert.equal(fault.attempts(), 1);
+                    assert.equal(saves.length, 0);
+                    assert.equal(reads.length, readCount);
+                    assert.equal(body.querySelector('dialog'), null);
+                    assert.equal(parentTitle.value, 'Parent draft stays');
+                    assert.deepEqual(
+                        JSON.parse(parentLinks.value),
+                        originalLinks
+                    );
+                    const banner = window.document.getElementById('status')!;
+                    assert.deepEqual(
+                        {
+                            text: banner.textContent,
+                            error: banner.classList.contains('error'),
+                        },
+                        {
+                            text: 'Child Save was not accepted. Retry only after checking its state.',
+                            error: true,
+                        }
+                    );
+                    assert.equal(
+                        body.textContent?.includes(
+                            'Synthetic private presentation detail'
+                        ),
+                        false
+                    );
+                    fault.restore();
+                }
+                button(body, 'Review child').click();
+                await waitFor(
+                    () =>
+                        body.querySelector('dialog[data-form-review]') !== null
+                );
+                let dialog = body.querySelector('dialog[data-form-review]');
+                assert.ok(dialog instanceof window.HTMLElement);
+                assert.ok(dialog.textContent?.includes(answer));
+                assert.equal(dialog.querySelector('img'), null);
+                assert.equal(saves.length, 0);
+                assert.equal(reads.length, readCount);
+                if (scenario === 'escape')
+                    dialog.dispatchEvent(
+                        new window.Event('cancel', { cancelable: true })
+                    );
+                else button(dialog, 'Edit').click();
+                await waitFor(
+                    () =>
+                        body.querySelector('dialog') === null &&
+                        screen.getAttribute('aria-busy') === 'false'
+                );
+                assert.equal(saves.length, 0);
+                const banner = window.document.getElementById('status')!;
+                assert.deepEqual(
+                    {
+                        text: banner.textContent,
+                        error: banner.classList.contains('error'),
+                    },
+                    {
+                        text: 'Review cancelled. Continue editing the child Form.',
+                        error: false,
+                    }
+                );
+                const childTitle = pane.querySelector(
+                    '[data-field-id="fld_title"]'
+                );
+                assert.ok(childTitle instanceof window.HTMLInputElement);
+                assert.equal(childTitle.value, answer);
+                assert.equal(parentTitle.value, 'Parent draft stays');
+                button(body, 'Review child').click();
+                await waitFor(
+                    () =>
+                        body.querySelector('dialog[data-form-review]') !== null
+                );
+                dialog = body.querySelector('dialog[data-form-review]');
+                assert.ok(dialog instanceof window.HTMLElement);
+                if (scenario === 'cancel') {
+                    const staleConfirm = button(dialog, 'Confirm');
+                    const cancel = window.document.getElementById('cancel');
+                    assert.ok(cancel instanceof window.HTMLButtonElement);
+                    cancel.click();
+                    await waitFor(
+                        () =>
+                            body.querySelector('dialog') === null &&
+                            screen.getAttribute('aria-busy') === 'false'
+                    );
+                    fire(window, staleConfirm);
+                    await settle();
+                    assert.equal(saves.length, 0);
+                    assert.equal(parentTitle.value, 'Parent draft stays');
+                    button(body, 'Review child').click();
+                    await waitFor(
+                        () =>
+                            body.querySelector('dialog[data-form-review]') !==
+                            null
+                    );
+                    dialog = body.querySelector('dialog[data-form-review]');
+                    assert.ok(dialog instanceof window.HTMLElement);
+                }
+                const confirm = button(dialog, 'Confirm');
+                confirm.click();
+                fire(window, confirm);
+                await waitFor(
+                    () =>
+                        saves.length === 1 &&
+                        screen.getAttribute('aria-busy') === 'false'
+                );
+                assert.equal(saves.length, 1);
+                assert.equal(
+                    saves[0]!.extensionAccessToken,
+                    'synthetic_child_token'
+                );
+                assert.equal(saves[0]!.formRecord.type, mode);
+                assert.equal(saves[0]!.formRecord.data.fld_title, answer);
+                assert.equal(parentTitle.value, 'Parent draft stays');
+                assert.equal(reads.length, readCount);
+                assert.deepEqual(
+                    JSON.parse(parentLinks.value),
+                    mode === 'edit'
+                        ? originalLinks
+                        : [...originalLinks, 'rec_created']
+                );
+            });
+
     for (const mode of ['root', 'readonly-root', 'nested'] as const)
         it(`${mode} Form keeps child actions within the configured owner boundary`, async (test) => {
             const nested = mode === 'nested';
@@ -1395,14 +1734,16 @@ describe('actual starter root versus nested linked-child admission', () => {
             assert.equal(saves.length, 0);
         });
 
-    for (const mode of ['create', 'edit'] as const)
+    for (const [mode, review] of (['create', 'edit'] as const).flatMap((mode) =>
+        [false, true].map((review) => [mode, review] as const)
+    ))
         for (const outcome of [
             'reconciled',
             'validation-error',
             'unknown',
             'saved-not-reconciled',
         ] as const)
-            it(`actual ${mode} child Save replaces its busy banner with ${outcome} status`, async (test) => {
+            it(`actual ${mode} child ${review ? 'Review Confirm' : 'Save'} replaces its busy banner with ${outcome} status`, async (test) => {
                 const parent = configuredParent();
                 const requests: LoadExtensionInput[] = [];
                 const saves: SaveFormInput[] = [];
@@ -1419,13 +1760,14 @@ describe('actual starter root versus nested linked-child admission', () => {
                             String(init?.body)
                         );
                         requests.push(input);
-                        return new Response(
-                            JSON.stringify(
-                                'childExtensionInfo' in input
-                                    ? loadedChild(input)
-                                    : parent
-                            )
-                        );
+                        const loaded =
+                            'childExtensionInfo' in input
+                                ? loadedChild(input)
+                                : parent;
+                        if ('childExtensionInfo' in input)
+                            loaded.payload.publicFields.state.promptUserBeforeSubmission =
+                                review;
+                        return new Response(JSON.stringify(loaded));
                     }
                     if (
                         url.pathname ===
@@ -1505,7 +1847,8 @@ describe('actual starter root versus nested linked-child admission', () => {
                 await waitFor(
                     () =>
                         requests.length === 2 &&
-                        buttons(body, 'Save child').length === 1 &&
+                        buttons(body, review ? 'Review child' : 'Save child')
+                            .length === 1 &&
                         screen.getAttribute('aria-busy') === 'false'
                 );
                 const pane = body.querySelector('[data-linked-child-pane]');
@@ -1516,8 +1859,24 @@ describe('actual starter root versus nested linked-child admission', () => {
                     'fld_title',
                     `Synthetic ${mode} terminal outcome`
                 );
-                const action = button(body, 'Save child');
+                const action = button(
+                    body,
+                    review ? 'Review child' : 'Save child'
+                );
                 action.click();
+                if (review) {
+                    await waitFor(
+                        () =>
+                            body.querySelector('dialog[data-form-review]') !==
+                            null
+                    );
+                    const dialog = body.querySelector(
+                        'dialog[data-form-review]'
+                    );
+                    assert.ok(dialog instanceof window.HTMLElement);
+                    assert.equal(saves.length, 0);
+                    button(dialog, 'Confirm').click();
+                }
                 await waitFor(() => saves.length === 1);
                 assert.equal(banner.textContent, 'Saving the linked child…');
                 assert.equal(screen.getAttribute('aria-busy'), 'true');

@@ -19,7 +19,17 @@ type Checkpoint = {
     parentTitle: string;
     parentLinks: string[];
 };
-const { assertFailedConfirmation } = (await import(
+type MultiPageCheckpoint = {
+    reviewEnabled: boolean[];
+    saves: number;
+    reads: number;
+    dialogs: number;
+    banner: { text: string; error: boolean };
+    answers: Record<string, string>;
+    parentTitle: string;
+    parentLinks: string[];
+};
+const { assertFailedConfirmation, assertEditedMultiPageReview } = (await import(
     pathToFileURL(
         resolve('scripts/browser-linked-child-confirmation-native.mjs')
     ).href
@@ -29,6 +39,13 @@ const { assertFailedConfirmation } = (await import(
         expected: Pick<
             Checkpoint,
             'reads' | 'childTitle' | 'parentTitle' | 'parentLinks'
+        >
+    ): void;
+    assertEditedMultiPageReview(
+        actual: MultiPageCheckpoint,
+        expected: Pick<
+            MultiPageCheckpoint,
+            'reads' | 'answers' | 'parentTitle' | 'parentLinks'
         >
     ): void;
 };
@@ -77,6 +94,59 @@ describe('installed starter confirmation proof acceptance', () => {
             const actual = checkpoint();
             mutate(actual);
             assert.throws(() => assertFailedConfirmation(actual, expected), {
+                code: 'ERR_ASSERTION',
+            });
+        });
+});
+
+describe('installed starter multi-page Review proof acceptance', () => {
+    const expected = {
+        reads: 0,
+        answers: {
+            fld_title: '<strong>Child draft retained</strong>',
+            fld_note: 'Second page answer retained',
+            fld_last: 'Final page answer retained',
+        },
+        parentTitle: 'Parent draft retained',
+        parentLinks: ['rec_existing', 'rec_existing', 'rec_sibling'],
+    };
+    const checkpoint = (): MultiPageCheckpoint => ({
+        ...structuredClone(expected),
+        reviewEnabled: [false, false, true],
+        saves: 0,
+        dialogs: 0,
+        banner: {
+            text: 'Review cancelled. Continue editing the child Form.',
+            error: false,
+        },
+    });
+    it('accepts final-page-only admission and Edit with every answer retained', () => {
+        assertEditedMultiPageReview(checkpoint(), expected);
+    });
+    const invalid: Array<[string, (actual: MultiPageCheckpoint) => void]> = [
+        ['Review on first page', (actual) => (actual.reviewEnabled[0] = true)],
+        ['Review on middle page', (actual) => (actual.reviewEnabled[1] = true)],
+        [
+            'Review refused on final page',
+            (actual) => (actual.reviewEnabled[2] = false),
+        ],
+        ['page checkpoint omitted', (actual) => actual.reviewEnabled.pop()],
+        ['Edit allocated a Save', (actual) => (actual.saves = 1)],
+        ['Edit caused a read', (actual) => actual.reads++],
+        ['dialog leaked after Edit', (actual) => (actual.dialogs = 1)],
+        ['Edit reported an error', (actual) => (actual.banner.error = true)],
+        ['Edit feedback missing', (actual) => (actual.banner.text = '')],
+        ['first-page answer lost', (actual) => (actual.answers.fld_title = '')],
+        ['middle-page answer lost', (actual) => (actual.answers.fld_note = '')],
+        ['final-page answer lost', (actual) => (actual.answers.fld_last = '')],
+        ['parent edit lost', (actual) => (actual.parentTitle = '')],
+        ['parent relationship changed', (actual) => actual.parentLinks.pop()],
+    ];
+    for (const [name, mutate] of invalid)
+        it(`rejects false proof: ${name}`, () => {
+            const actual = checkpoint();
+            mutate(actual);
+            assert.throws(() => assertEditedMultiPageReview(actual, expected), {
                 code: 'ERR_ASSERTION',
             });
         });

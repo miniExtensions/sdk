@@ -25,6 +25,20 @@ export function assertFailedConfirmation(actual, expected) {
     assert.deepEqual(actual.parentLinks, expected.parentLinks);
 }
 
+export function assertEditedMultiPageReview(actual, expected) {
+    assert.deepEqual(actual.reviewEnabled, [false, false, true]);
+    assert.equal(actual.saves, 0);
+    assert.equal(actual.reads, expected.reads);
+    assert.equal(actual.dialogs, 0);
+    assert.deepEqual(actual.banner, {
+        text: 'Review cancelled. Continue editing the child Form.',
+        error: false,
+    });
+    assert.deepEqual(actual.answers, expected.answers);
+    assert.equal(actual.parentTitle, expected.parentTitle);
+    assert.deepEqual(actual.parentLinks, expected.parentLinks);
+}
+
 /** Build the unmodified, copied installed starter without launching a browser. */
 export async function prepareStarterConfirmationProof({
     consumer,
@@ -92,7 +106,7 @@ export async function prepareStarterConfirmationProof({
     };
 }
 
-/** One presentation-failure/recovery path, for Create and Edit, in the real app. */
+/** Bounded Review paths in the copied installed app, with synthetic responses. */
 export async function checkStarterConfirmationRecovery({
     browser,
     consumer,
@@ -130,10 +144,15 @@ export async function checkStarterConfirmationRecovery({
     });
     const origin = `http://127.0.0.1:${server.address().port}`;
     try {
-        for (const mode of ['create', 'edit']) {
-            console.log(
-                `Installed starter ${mode} confirmation recovery: starting`
-            );
+        for (const { mode, multiPage } of [
+            { mode: 'create', multiPage: false },
+            { mode: 'edit', multiPage: false },
+            { mode: 'create', multiPage: true },
+        ]) {
+            const label = multiPage
+                ? 'multi-page Review'
+                : 'confirmation recovery';
+            console.log(`Installed starter ${mode} ${label}: starting`);
             const calls = { reads: 0, saves: [] };
             const parent = fixtures.parentForm('edit');
             parent.payload.fieldIdsInForm = ['fld_title', 'fld_children_a'];
@@ -165,7 +184,9 @@ export async function checkStarterConfirmationRecovery({
                             const input = request.postDataJSON();
                             const loaded =
                                 'childExtensionInfo' in input
-                                    ? fixtures.childForm('edit')
+                                    ? multiPage
+                                        ? fixtures.pagedChildForm()
+                                        : fixtures.childForm('edit')
                                     : structuredClone(parent);
                             if ('childExtensionInfo' in input) {
                                 loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
@@ -303,63 +324,142 @@ export async function checkStarterConfirmationRecovery({
                 await childTitle.fill(expected.childTitle);
                 await childTitle.press('Tab');
                 expected.reads = calls.reads;
-                await page.evaluate((message) => {
-                    const prototype = HTMLDialogElement.prototype;
-                    const descriptor = Object.getOwnPropertyDescriptor(
-                        prototype,
-                        'showModal'
-                    );
-                    window.confirmationFailureProbe = {
-                        attempts: 0,
-                        restore: () =>
-                            Object.defineProperty(
-                                prototype,
-                                'showModal',
-                                descriptor
-                            ),
-                    };
-                    Object.defineProperty(prototype, 'showModal', {
-                        ...descriptor,
-                        value() {
-                            window.confirmationFailureProbe.attempts++;
-                            throw new Error(message);
-                        },
-                    });
-                }, privateFailure);
                 const review = () =>
                     page.getByRole('button', {
                         name: 'Review child',
                         exact: true,
                     });
-                await review().click();
-                await idle();
-                const failed = {
-                    ...(await page.evaluate(
-                        (message) => ({
-                            attempts: window.confirmationFailureProbe.attempts,
-                            dialogs: document.querySelectorAll('dialog').length,
-                            banner: {
-                                text: document.querySelector('#status')
-                                    .textContent,
-                                error: document
-                                    .querySelector('#status')
-                                    .classList.contains('error'),
+                let failed;
+                let edited;
+                const answers = { fld_title: expected.childTitle };
+                if (multiPage) {
+                    const reviewEnabled = [];
+                    const checkPage = async (available) => {
+                        const enabled = await review().isEnabled();
+                        reviewEnabled.push(enabled);
+                        assert.equal(enabled, available);
+                        assert.equal(await page.locator('dialog').count(), 0);
+                        assert.equal(calls.saves.length, 0);
+                    };
+                    await checkPage(false);
+                    for (const [fieldId, answer, final] of [
+                        ['fld_note', 'Second page answer retained', false],
+                        ['fld_last', 'Final page answer retained', true],
+                    ]) {
+                        await page
+                            .getByRole('button', {
+                                name: 'Child Next',
+                                exact: true,
+                            })
+                            .click();
+                        const field = page.locator(
+                            `[data-linked-child-pane] [data-field-id="${fieldId}"]`
+                        );
+                        await field.waitFor({ state: 'visible' });
+                        await field.fill(answer);
+                        await field.press('Tab');
+                        answers[fieldId] = answer;
+                        await checkPage(final);
+                    }
+                    await review().click();
+                    const dialog = page.getByRole('dialog', {
+                        name: 'Review child answers',
+                    });
+                    await dialog.waitFor();
+                    assert.equal(calls.saves.length, 0);
+                    assert.equal(await dialog.locator('strong').count(), 0);
+                    for (const answer of Object.values(answers))
+                        assert((await dialog.innerText()).includes(answer));
+                    await dialog
+                        .getByRole('button', { name: 'Edit', exact: true })
+                        .click();
+                    await idle();
+                    edited = {
+                        reviewEnabled,
+                        saves: calls.saves.length,
+                        reads: calls.reads,
+                        dialogs: await page.locator('dialog').count(),
+                        banner: await page
+                            .locator('#status')
+                            .evaluate((node) => ({
+                                text: node.textContent,
+                                error: node.classList.contains('error'),
+                            })),
+                        answers: Object.fromEntries(
+                            await Promise.all(
+                                Object.keys(answers).map(async (fieldId) => [
+                                    fieldId,
+                                    await page
+                                        .locator(
+                                            `[data-linked-child-pane] [data-field-id="${fieldId}"]`
+                                        )
+                                        .inputValue(),
+                                ])
+                            )
+                        ),
+                        parentTitle: await parentTitle.inputValue(),
+                        parentLinks: JSON.parse(await parentLinks.inputValue()),
+                    };
+                    assertEditedMultiPageReview(edited, {
+                        ...expected,
+                        answers,
+                    });
+                } else {
+                    await page.evaluate((message) => {
+                        const prototype = HTMLDialogElement.prototype;
+                        const descriptor = Object.getOwnPropertyDescriptor(
+                            prototype,
+                            'showModal'
+                        );
+                        window.confirmationFailureProbe = {
+                            attempts: 0,
+                            restore: () =>
+                                Object.defineProperty(
+                                    prototype,
+                                    'showModal',
+                                    descriptor
+                                ),
+                        };
+                        Object.defineProperty(prototype, 'showModal', {
+                            ...descriptor,
+                            value() {
+                                window.confirmationFailureProbe.attempts++;
+                                throw new Error(message);
                             },
-                            privateDetailVisible:
-                                document.body.textContent.includes(message),
-                        }),
-                        privateFailure
-                    )),
-                    saves: calls.saves.length,
-                    reads: calls.reads,
-                    childTitle: await childTitle.inputValue(),
-                    parentTitle: await parentTitle.inputValue(),
-                    parentLinks: JSON.parse(await parentLinks.inputValue()),
-                };
-                assertFailedConfirmation(failed, expected);
-                await page.evaluate(() =>
-                    window.confirmationFailureProbe.restore()
-                );
+                        });
+                    }, privateFailure);
+                    await review().click();
+                    await idle();
+                    failed = {
+                        ...(await page.evaluate(
+                            (message) => ({
+                                attempts:
+                                    window.confirmationFailureProbe.attempts,
+                                dialogs:
+                                    document.querySelectorAll('dialog').length,
+                                banner: {
+                                    text: document.querySelector('#status')
+                                        .textContent,
+                                    error: document
+                                        .querySelector('#status')
+                                        .classList.contains('error'),
+                                },
+                                privateDetailVisible:
+                                    document.body.textContent.includes(message),
+                            }),
+                            privateFailure
+                        )),
+                        saves: calls.saves.length,
+                        reads: calls.reads,
+                        childTitle: await childTitle.inputValue(),
+                        parentTitle: await parentTitle.inputValue(),
+                        parentLinks: JSON.parse(await parentLinks.inputValue()),
+                    };
+                    assertFailedConfirmation(failed, expected);
+                    await page.evaluate(() =>
+                        window.confirmationFailureProbe.restore()
+                    );
+                }
                 // Only a new deliberate Review and Confirm may allocate Save.
                 await review().click();
                 const dialog = page.getByRole('dialog', {
@@ -371,6 +471,9 @@ export async function checkStarterConfirmationRecovery({
                 assert(
                     (await dialog.innerText()).includes(expected.childTitle)
                 );
+                if (multiPage)
+                    for (const answer of Object.values(answers))
+                        assert((await dialog.innerText()).includes(answer));
                 await dialog
                     .getByRole('button', { name: 'Confirm', exact: true })
                     .click();
@@ -385,6 +488,12 @@ export async function checkStarterConfirmationRecovery({
                     calls.saves[0].formRecord.data.fld_title,
                     expected.childTitle
                 );
+                if (multiPage)
+                    for (const [fieldId, answer] of Object.entries(answers))
+                        assert.equal(
+                            calls.saves[0].formRecord.data[fieldId],
+                            answer
+                        );
                 assert.equal(
                     await parentTitle.inputValue(),
                     expected.parentTitle
@@ -400,14 +509,14 @@ export async function checkStarterConfirmationRecovery({
                 assert.deepEqual(unexpectedRequests, []);
                 report.cases.push({
                     mode,
-                    scenario: 'show-modal-failure-then-explicit-confirm',
-                    failed,
+                    scenario: multiPage
+                        ? 'multi-page-edit-then-explicit-confirm'
+                        : 'show-modal-failure-then-explicit-confirm',
+                    ...(multiPage ? { edited } : { failed }),
                     recoveredSaves: calls.saves.length,
                     parentRetained: true,
                 });
-                console.log(
-                    `Installed starter ${mode} confirmation recovery: passed`
-                );
+                console.log(`Installed starter ${mode} ${label}: passed`);
             } finally {
                 await context.close();
             }

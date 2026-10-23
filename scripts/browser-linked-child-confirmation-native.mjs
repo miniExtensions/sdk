@@ -131,6 +131,9 @@ export async function checkStarterConfirmationRecovery({
     const origin = `http://127.0.0.1:${server.address().port}`;
     try {
         for (const mode of ['create', 'edit']) {
+            console.log(
+                `Installed starter ${mode} confirmation recovery: starting`
+            );
             const calls = { reads: 0, saves: [] };
             const parent = fixtures.parentForm('edit');
             parent.payload.fieldIdsInForm = ['fld_title', 'fld_children_a'];
@@ -261,6 +264,9 @@ export async function checkStarterConfirmationRecovery({
                     .locator('#screen [data-field-id="fld_title"]')
                     .first();
                 await parentTitle.fill('Parent draft retained');
+                // Native change on blur refreshes the action controls. Commit
+                // the edit before Playwright resolves the next action button.
+                await parentTitle.press('Tab');
                 const parentLinks = page
                     .locator('#screen [data-field-id="fld_children_a"]')
                     .first();
@@ -295,6 +301,7 @@ export async function checkStarterConfirmationRecovery({
                     '[data-linked-child-pane] [data-field-id="fld_title"]'
                 );
                 await childTitle.fill(expected.childTitle);
+                await childTitle.press('Tab');
                 expected.reads = calls.reads;
                 await page.evaluate((message) => {
                     const prototype = HTMLDialogElement.prototype;
@@ -398,6 +405,9 @@ export async function checkStarterConfirmationRecovery({
                     recoveredSaves: calls.saves.length,
                     parentRetained: true,
                 });
+                console.log(
+                    `Installed starter ${mode} confirmation recovery: passed`
+                );
             } finally {
                 await context.close();
             }

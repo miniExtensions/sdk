@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { resolve } from 'node:path';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { build } from 'esbuild';
+import { Window } from 'happy-dom';
+import { childForm, parentForm } from './formLinkedChildFixtures.js';
 
 type Checkpoint = {
     attempts: number;
@@ -75,4 +80,147 @@ describe('installed starter confirmation proof acceptance', () => {
                 code: 'ERR_ASSERTION',
             });
         });
+});
+
+it('commits native text change before resolving a fresh child action', async (test) => {
+    const root = process.cwd();
+    const directory = await mkdtemp(join(tmpdir(), 'sdk-confirmation-setup-'));
+    test.after(() => rm(directory, { recursive: true, force: true }));
+    await build({
+        entryPoints: [join(root, 'examples/browser/src/main.ts')],
+        bundle: true,
+        platform: 'node',
+        format: 'esm',
+        alias: Object.fromEntries(
+            ['auth', 'ui', 'forms', 'portals', 'formulas']
+                .map((name) => [
+                    `@miniextensions/sdk/${name}`,
+                    join(root, `src/${name}/index.ts`),
+                ])
+                .concat([
+                    ['@miniextensions/sdk', join(root, 'src/runtime/index.ts')],
+                ])
+        ),
+        outfile: join(directory, 'main.mjs'),
+    });
+    const window = new Window({
+        url: 'https://app.example.test/',
+        settings: {
+            disableCSSFileLoading: true,
+            disableJavaScriptFileLoading: true,
+        },
+    });
+    window.document.write(
+        (
+            await readFile(join(root, 'examples/browser/index.html'), 'utf8')
+        ).replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '')
+    );
+    const parent = parentForm('edit');
+    parent.payload.fieldIdsInForm = ['fld_title', 'fld_children_a'];
+    const linked = parent.payload.fieldIdsToSchemas.fld_children_a!;
+    assert.ok(linked.fieldType === 'multipleRecordLinks');
+    linked.miniExtConfig = {
+        ...linked.miniExtConfig,
+        recordFinderMode: 'hide-finder',
+    };
+    let loads = 0;
+    const fetch: typeof globalThis.fetch = async (resource, init) => {
+        assert.equal(
+            new URL(String(resource)).searchParams.get('route'),
+            'fetchExtensionForEndUser'
+        );
+        loads++;
+        const input = JSON.parse(String(init?.body));
+        const loaded =
+            'childExtensionInfo' in input ? childForm('edit') : parent;
+        if ('childExtensionInfo' in input)
+            loaded.payload.publicFields.state.promptUserBeforeSubmission = true;
+        return new Response(JSON.stringify(loaded));
+    };
+    function Option(text = '', value = '') {
+        const option = window.document.createElement('option');
+        option.textContent = text;
+        option.value = value;
+        return option;
+    }
+    const globals = {
+        document: window.document,
+        location: window.location,
+        HTMLElement: window.HTMLElement,
+        HTMLInputElement: window.HTMLInputElement,
+        HTMLSelectElement: window.HTMLSelectElement,
+        HTMLButtonElement: window.HTMLButtonElement,
+        HTMLTextAreaElement: window.HTMLTextAreaElement,
+        Option,
+        fetch,
+    };
+    const previous = Object.keys(globals).map(
+        (key) =>
+            [key, Object.getOwnPropertyDescriptor(globalThis, key)] as const
+    );
+    Object.assign(globalThis, globals);
+    test.after(async () => {
+        await window.happyDOM.close();
+        for (const [key, descriptor] of previous)
+            if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+            else Reflect.deleteProperty(globalThis, key);
+    });
+    const tick = () => new Promise<void>((done) => setImmediate(done));
+    const waitFor = async (predicate: () => boolean) => {
+        for (let turn = 0; turn < 120; turn++) {
+            if (predicate()) return;
+            await tick();
+        }
+        assert.fail('Starter setup did not settle');
+    };
+    await import(pathToFileURL(join(directory, 'main.mjs')).href);
+    for (const [id, value] of [
+        ['api-origin', 'https://synthetic-sdk.invalid'],
+        ['share-id', 'share_synthetic_parent'],
+        ['record-id', 'rec_parent'],
+    ] as const) {
+        const control = window.document.getElementById(id);
+        assert.ok(control instanceof window.HTMLInputElement);
+        control.value = value;
+    }
+    window.document
+        .getElementById('connection-form')!
+        .dispatchEvent(
+            new window.Event('submit', { bubbles: true, cancelable: true })
+        );
+    const screen = window.document.getElementById('screen')!;
+    await waitFor(
+        () => loads === 1 && screen.getAttribute('aria-busy') === 'false'
+    );
+    const title = screen.querySelector('[data-field-id="fld_title"]');
+    assert.ok(title instanceof window.HTMLInputElement);
+    title.focus();
+    title.value = 'Parent draft retained';
+    title.dispatchEvent(new window.Event('input', { bubbles: true }));
+    const create = () => {
+        const button = Array.from(screen.querySelectorAll('button')).find(
+            (node) => node.textContent?.trim() === 'Create linked record'
+        );
+        assert.ok(button);
+        return button;
+    };
+    const beforeCommit = create();
+    title.dispatchEvent(new window.Event('change', { bubbles: true }));
+    title.blur();
+    assert.equal(beforeCommit.isConnected, false);
+    beforeCommit.click();
+    await tick();
+    assert.equal(loads, 1, 'The replaced action must not open a child');
+    const fresh = create();
+    assert.notEqual(fresh, beforeCommit);
+    fresh.click();
+    await waitFor(
+        () => loads === 2 && screen.getAttribute('aria-busy') === 'false'
+    );
+    assert.ok(
+        screen.querySelector(
+            '[data-linked-child-pane] [data-field-id="fld_title"]'
+        )
+    );
+    assert.equal(title.value, 'Parent draft retained');
 });

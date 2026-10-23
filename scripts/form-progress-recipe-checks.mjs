@@ -17,6 +17,27 @@ export async function assertRootProgressActions(
     createRootProgressActions,
     createStorage
 ) {
+    const assertSuccessorDraft = (actual, expected) =>
+        assert.deepEqual(
+            actual,
+            expected,
+            'Late Restore must preserve successor draft'
+        );
+    // Oracle control only: corrupted observation, not a runtime/recipe mutation.
+    assert.throws(
+        () =>
+            assertSuccessorDraft(
+                { title: 'late server value' },
+                { title: 'successor draft' }
+            ),
+        {
+            code: 'ERR_ASSERTION',
+            message: /Late Restore must preserve successor draft/,
+        }
+    );
+    console.log(
+        'Form oracle control: corrupted successor draft rejected (no runtime mutation).'
+    );
     function fixture() {
         const bytes = new Map();
         const calls = {
@@ -127,6 +148,7 @@ export async function assertRootProgressActions(
                 if ('failLoad' in patch) failLoad = patch.failLoad;
                 if ('accepted' in patch) accepted = patch.accepted;
                 if ('afterRemove' in patch) afterRemove = patch.afterRemove;
+                if ('draft' in patch) draft = patch.draft;
             },
             async seed() {
                 const result = await writer.write({
@@ -232,11 +254,15 @@ export async function assertRootProgressActions(
                 // load has entered synchronously; its resolved continuation reaches cleanup.
                 await Promise.resolve();
                 change(f.state);
+                const successor = { title: 'successor draft' };
+                f.set({ draft: successor });
+                const successorSnapshot = structuredClone(successor);
+                assertSuccessorDraft(f.draft(), successorSnapshot);
                 const before = [...f.bytes];
                 gate.release();
                 assert.equal(await pending, false);
                 assert.deepEqual([...f.bytes], before);
-                assert.deepEqual(f.draft(), { title: 'current draft' });
+                assertSuccessorDraft(f.draft(), successorSnapshot);
                 assert.equal(
                     f.calls.accepts + f.calls.discards + f.calls.removes,
                     0

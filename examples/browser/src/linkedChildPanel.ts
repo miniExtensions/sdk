@@ -1,4 +1,5 @@
 import { AirtableFieldType } from '@miniextensions/sdk';
+import { FormPageError } from '@miniextensions/sdk/forms';
 import type {
     FormFieldBindings,
     FormLinkedChildRecovery,
@@ -96,12 +97,17 @@ export function createLinkedChildPanel(options: Options) {
         options.request(description, async (signal, accepted) => {
             if (!current() || !accepted()) return;
             const before = owner.getSnapshot().completion;
+            let cancelledReview = false;
             try {
                 await work(signal);
-            } catch {
+            } catch (failure) {
+                cancelledReview =
+                    report === 'save' &&
+                    failure instanceof FormPageError &&
+                    failure.reason === 'review-cancelled';
                 // Owner state distinguishes validation, unknown dispatch and
                 // known saves; never turn an exception into a retry or success.
-                if (current() && accepted())
+                if (!cancelledReview && current() && accepted())
                     options.status(
                         'The child action was not accepted. Inspect its current status before continuing.',
                         true
@@ -111,12 +117,20 @@ export function createLinkedChildPanel(options: Options) {
                     refresh();
                     if (report === 'save' && current() && accepted()) {
                         const state = owner.getSnapshot();
+                        const editingAfterReview =
+                            cancelledReview &&
+                            state.phase === 'ready' &&
+                            state.error === null &&
+                            state.completion === 'none';
                         options.status(
-                            state.completion === 'reconciled'
-                                ? 'Child saved and reconciled with the parent draft.'
-                                : childNotice(state) ||
-                                      'The child Save did not complete. Inspect its current status before continuing.',
-                            state.completion !== 'reconciled'
+                            editingAfterReview
+                                ? 'Review cancelled. Continue editing the child Form.'
+                                : state.completion === 'reconciled'
+                                  ? 'Child saved and reconciled with the parent draft.'
+                                  : childNotice(state) ||
+                                    'The child Save did not complete. Inspect its current status before continuing.',
+                            !editingAfterReview &&
+                                state.completion !== 'reconciled'
                         );
                     }
                     if (

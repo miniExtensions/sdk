@@ -2480,26 +2480,39 @@ they demonstrate the recipe and native reconciliation, not live persistence.
 
 ### Configured linked-child Review
 
-Custom applications can supply the same explicit Review adapter used by
-`createFormPageOwner` when acquiring the child owner:
+The standalone direct-URL Form starter supplies Review for supported configured
+child Create and Edit. **Review child** opens a plain-text dialog on the final
+visible page of a one-page or manual multipage child. **Edit** or Escape returns
+to the current child answers without a Save; a fresh explicit Review opens the
+dialog again. **Confirm** validates all pages and delegates one Save through the
+existing child owner. Parent edits remain in the shared draft, and saving the
+parent is a separate action.
+
+Applications using the copied starter can reuse its presenter when acquiring the
+child owner. The relative import below targets the copied
+`src/linkedChildPanel.ts`. Supply the existing accepted parent binding, recovery
+journal, load version, render lease and status presenter:
 
 ```ts
-import {
+import type {
+    FormFieldBindings,
     RecoveryJournal,
-    type FormFieldBindings,
-    type FormPageReviewRequest,
-    type FormPageReviewDecision,
 } from '@miniextensions/sdk/forms';
+import { createLinkedChildReview } from './src/linkedChildPanel.js';
 
 declare const parent: FormFieldBindings;
+declare const journal: RecoveryJournal;
 declare const fieldId: string;
 declare const acceptedLoadVersion: number;
-declare function reviewChild(
-    request: FormPageReviewRequest
-): Promise<FormPageReviewDecision>;
+declare function ownsParentRender(): boolean;
+declare function showStatus(message: string, error?: boolean): void;
 
+const reviewChild = createLinkedChildReview({
+    isCurrent: ownsParentRender,
+    status: showStatus,
+});
 const childOwner = parent.linkedChild(fieldId, {
-    journal: new RecoveryJournal(),
+    journal,
     loadVersion: acceptedLoadVersion,
     review: reviewChild,
 });
@@ -2507,8 +2520,12 @@ const childOwner = parent.linkedChild(fieldId, {
 
 Keep the adapter identity stable while reusing an owner. Changing it, the journal,
 or the load version retires the previous owner and any open Review. This is a
-headless composition hook, not a new renderer; the browser starter does not yet
-provide a child Review adapter.
+headless composition hook with the starter's own presentation adapter. Use the
+actual accepted parent/render lease for `isCurrent`, independently of an action's
+busy state. The presenter uses the existing prepared-answer formatting and
+privacy checks; it performs no hydration, upload or Save itself. The existing
+package check typechecks this snippet against the installed SDK and copied
+starter source.
 
 For configured Review, enable the final action from `snapshot.pages`'s
 `canReview` rather than `canSubmit`, and always invoke
@@ -2521,7 +2538,10 @@ may be inspected; Confirm still requires all-page validation before dispatch.
 Reuse the prepared Review presentation recipe and its supported-answer/privacy
 checks. An adapter must reject unsupported answers rather than confirm an
 incomplete presentation; computed-field Review remains unsupported by that
-recipe. Detached request copies are presentation-only. Confirm must return the
+recipe. The starter's configured-child pane is limited to standalone root Forms:
+Portal-parent and nested child actions remain outside it. Compute, captcha,
+automatic submission, unsupported page modes and dynamic child linked-filter
+settings remain refused; Review does not add those workflows. Detached request copies are presentation-only. Confirm must return the
 fresh presentation guard and abort signal required by the page-owner contract.
 Edit and Escape return `{ type: 'edit' }`; Close cancels the child owner. Observe
 the request signal to dismiss stale presentation. These cancellations, parent

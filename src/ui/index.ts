@@ -19,6 +19,16 @@ export {
 } from './borrowedNativeLinkedReads.js';
 
 export {
+    createBorrowedNativeLinkedHydrationBatch,
+    type BorrowedNativeLinkedBatchField,
+    type BorrowedNativeLinkedBatchSelection,
+    type BorrowedNativeLinkedBatchPort,
+    type BorrowedNativeLinkedBatchResult,
+    type BorrowedNativeLinkedBatchLease,
+    type BorrowedNativeLinkedBatch,
+} from './borrowedNativeLinkedHydrationBatch.js';
+
+export {
     projectNativeLinkedRecordRows,
     type NativeLinkedRecordRow,
 } from './nativeLinkedRecordRows.js';
@@ -250,3 +260,9 @@ export type {
     BorrowedAttachmentControllerOptions,
     BorrowedAttachmentController,
 } from './borrowedAttachmentController.js';
+
+export { captureAttachmentUploadAdmission } from './attachmentUploadAdmission.js';
+export type {
+    AttachmentUploadAdmission,
+    AttachmentUploadAuthority,
+} from './attachmentUploadAdmission.js';

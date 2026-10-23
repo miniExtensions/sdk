@@ -4711,3 +4711,57 @@ canonical append/partial recovery and cleanup ownership; it must not consult a
 consumed new-intake lease to discard an allocated result. Settlement failure is
 reported separately without replacing a transport error or replaying cleanup.
 A completed transport batch does not establish Form Save/persistence success.
+
+## Borrowed native multi-field and lookup hydration
+
+`createBorrowedNativeLinkedHydrationBatch` coordinates one host-native batch for
+its real field/table set. It does not choose a first-field owner or issue a read
+for each field. Each lease borrows per-field selections as opaque typed values: a
+lookup can retain nested arrays, repeated native positions, unresolved paths and
+exact rich/File/Date identities. Available null/undefined values stay distinct
+from unavailable fields. Metadata descriptors are immutable snapshots; native
+selection and page data are neither traversed nor copied.
+
+The host supplies capture/current ownership, synchronous field readability, its
+selected snapshots, one batch loader, a final synchronous `publishIfCurrent`
+cache fence and a revision subscription. The stamp must cover observed native
+instance/field/lookup-dependency/privacy/cache publication and A-to-B-to-A changes.
+Per-field readability is checked before that field's native reader; unavailable
+fields have no raw read. The host loader and backend retain authorization, returned
+page filtering, transport and cache publication. This API provides no client,
+accepted linked-page brand, draft, writer, Save or recovery queue.
+
+Hydration is latest-read-wins within a lease, and initiating-turn retirement
+precedes allocation. Aborting or destroying a lease retires only its read; it
+does not cancel allocated mutations. Stale results/errors never reach cache
+publication; current original errors retain identity. An accepted own cache merge
+may advance the native generation without discarding its accepted result. Hosts
+choose their existing retry/feedback policy; no retry or parallel cache is added.
+
+Use a captured lease's `selected()` for an atomic batch of available/unavailable
+field snapshots and `hydrateSelected()` for one host loader/publication. Retire
+that lease on caller cleanup, and destroy the batch subscription on owner cleanup.
+Changes to the real field set require a new batch owner; they cannot be represented
+by inventing table IDs or client/draft authority.
+
+### Borrowed host attachment upload admission
+
+`captureAttachmentUploadAdmission` captures an actual host owner and its observed
+native/policy revision for one pending file-selection intent. Supply read-only
+`getAuthority` and mounted `isCurrent` callbacks; advance the host revision for
+observed policy or native replacement, including A→B→A. Hidden, read-only, replaced
+or retired intents cannot allocate new work. `isCurrent()` can guard asynchronous
+host validation; `admit(() => existingHostUpload(files))` consumes the intent at
+the synchronous allocation boundary. A fresh explicit selection gets a new intent.
+
+Failed authoritative validation permanently retires the intent, even if the
+previous owner or revision later returns. Recursive `isCurrent()` or `admit()`
+calls during validation refuse only that nested invocation and never allocate
+nested work. Recursion alone does not retire or consume the intent: with unchanged
+authority, the outer validation and later non-recursive validation can succeed.
+
+This facet owns no File queue, accepted Form/client, draft, transport, journal or
+permission. It returns the exact host value/promise and propagates original
+errors. After allocation, the host keeps success, cancellation and completed-prefix
+partial recovery even if the captured policy retires. Never use this admission
+lease to filter an already allocated completion or to replace backend authorization.

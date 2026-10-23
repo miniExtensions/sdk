@@ -4592,6 +4592,11 @@ child integration still needs the genuine accepted Form/client/revision owner.
 
 ## Borrowed native linked reads
 
+For a runnable composition with native configured-child load acceptance and Save
+allocation, see [Runnable borrowed native Form composition](./forms.md#runnable-borrowed-native-form-composition).
+Its typed host ports keep option-page publication separate from child acceptance
+and check queued intent at the native request snapshot boundary.
+
 `createBorrowedNativeLinkedReadSource(port)` coordinates read lifetimes over a
 host's existing linked-record values and cache. The explicit `host-native`
 source is separate from accepted SDK Form/Portal facets and linked-option page

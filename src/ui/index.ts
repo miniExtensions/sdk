@@ -260,3 +260,9 @@ export type {
     BorrowedAttachmentControllerOptions,
     BorrowedAttachmentController,
 } from './borrowedAttachmentController.js';
+
+export { captureAttachmentUploadAdmission } from './attachmentUploadAdmission.js';
+export type {
+    AttachmentUploadAdmission,
+    AttachmentUploadAuthority,
+} from './attachmentUploadAdmission.js';

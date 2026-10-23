@@ -1,4 +1,8 @@
 import {
+    checkAttachmentUploadAdmissionConsumer,
+    attachmentUploadAdmissionTypedConsumer,
+} from './attachment-upload-admission-consumer-checks.mjs';
+import {
     checkBorrowedNativeLinkedBatchConsumer,
     borrowedNativeLinkedBatchTypedConsumer,
 } from './borrowed-native-linked-batch-consumer-checks.mjs';
@@ -1397,6 +1401,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 borrowedNativeLinkedBatchTypedConsumer +
                 attachmentMetadataTypedConsumer +
                 orderedAttachmentUploadTypedConsumer +
+                attachmentUploadAdmissionTypedConsumer +
                 borrowedAttachmentControllerTypedConsumer +
                 borrowedNativeLinkedReadTypedConsumer +
                 portalInlineEditQueueTypedConsumer +
@@ -3032,6 +3037,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkAttachmentUploadAdmissionConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

@@ -359,6 +359,37 @@ const mount = async (
     };
 };
 
+const failConfirmationPresentation = (
+    window: Window,
+    failure: 'show-modal' | 'initial-focus'
+) => {
+    const dialog = window.HTMLDialogElement.prototype;
+    const element = window.HTMLElement.prototype;
+    const showModal = dialog.showModal;
+    const focus = element.focus;
+    let attempts = 0;
+    if (failure === 'show-modal')
+        dialog.showModal = () => {
+            attempts++;
+            throw Error('Synthetic private presentation detail');
+        };
+    else
+        element.focus = function (...args) {
+            if (this.closest('dialog')) {
+                attempts++;
+                throw Error('Synthetic private presentation detail');
+            }
+            return focus.apply(this, args);
+        };
+    return {
+        attempts: () => attempts,
+        restore: () => {
+            dialog.showModal = showModal;
+            element.focus = focus;
+        },
+    };
+};
+
 const navigationForm = (): FormLoadedResult => {
     const form = reviewForm();
     const template = form.payload.fieldIdsToSchemas.fld_title;
@@ -1009,56 +1040,97 @@ describe('actual browser starter prepared review', () => {
         );
     });
 
-    it('keeps the child Form and cached Portal when Delete confirmation is cancelled', async (test) => {
-        const child = deletableChild();
-        let reads = 0;
-        let deletes = 0;
-        const childLoads: LoadExtensionInput[] = [];
-        const fixture = await mount(test, child, {
-            initialPortal: portalPage(),
-            childLoads,
-            read: async (url) => {
-                if (url.pathname === '/api/trpc/airtable.deleteRecord')
-                    deletes++;
-                assert.equal(
-                    url.searchParams.get('route'),
-                    'fetchRecordsForLinkedTableOnPortal',
-                    'A cancelled confirmation must not dispatch Delete.'
+    for (const dismissal of [
+        'cancelled',
+        'show-modal',
+        'initial-focus',
+    ] as const)
+        it(`keeps the child Form and cached Portal when Delete confirmation is ${dismissal}`, async (test) => {
+            const child = deletableChild();
+            let reads = 0;
+            let deletes = 0;
+            const childLoads: LoadExtensionInput[] = [];
+            const fixture = await mount(test, child, {
+                initialPortal: portalPage(),
+                childLoads,
+                read: async (url) => {
+                    if (url.pathname === '/api/trpc/airtable.deleteRecord')
+                        deletes++;
+                    assert.equal(
+                        url.searchParams.get('route'),
+                        'fetchRecordsForLinkedTableOnPortal',
+                        'A cancelled confirmation must not dispatch Delete.'
+                    );
+                    reads++;
+                    return new Response(JSON.stringify(deletionRecords(child)));
+                },
+            });
+            const { document } = fixture.window;
+            const idle = () =>
+                document.getElementById('screen')?.getAttribute('aria-busy') ===
+                'false';
+            fixture.button('Load records').click();
+            await waitFor(() => reads === 1 && idle());
+            const portal = fixture.button('Load records').closest('section');
+            fixture.button('Open Form').click();
+            await waitFor(() => childLoads.length === 1 && idle());
+            fixture.edit('fld_title', 'Unsaved child answer');
+            const fault =
+                dismissal === 'cancelled'
+                    ? null
+                    : failConfirmationPresentation(fixture.window, dismissal);
+            if (fault) test.after(fault.restore);
+            fixture.button('Delete this record').click();
+            if (!fault) {
+                await waitFor(
+                    () => document.querySelector('dialog[open]') !== null
                 );
-                reads++;
-                return new Response(JSON.stringify(deletionRecords(child)));
-            },
+                fixture
+                    .button('Cancel', document.querySelector('dialog[open]')!)
+                    .click();
+            }
+            await settled();
+            if (fault) {
+                assert.equal(fault.attempts(), 1);
+                assert.equal(document.querySelector('dialog'), null);
+                assert.equal(deletes, 0);
+                assert.equal(fixture.saves.length, 0);
+                const banner = document.getElementById('status')!;
+                assert.deepEqual(
+                    {
+                        text: banner.textContent,
+                        error: banner.classList.contains('error'),
+                    },
+                    {
+                        text: 'The confirmation could not be displayed. No action was taken.',
+                        error: true,
+                    }
+                );
+                assert.equal(
+                    document.body.textContent?.includes(
+                        'Synthetic private presentation detail'
+                    ),
+                    false
+                );
+                fault.restore();
+            }
+            assert.equal(
+                fixture.field('fld_title').value,
+                'Unsaved child answer'
+            );
+            fixture.button('Back to Portal').click();
+            assert.equal(portal?.isConnected, true);
+            assert.deepEqual(
+                Array.from(document.querySelectorAll('tbody tr'), (row) =>
+                    row.getAttribute('data-record-id')
+                ),
+                ['record_deleted', 'record_remaining']
+            );
+            assert.equal(reads, 1);
+            assert.equal(deletes, 0);
+            assert.equal(fixture.loads(), 2);
+            assert.equal(fixture.saves.length, 0);
         });
-        const { document } = fixture.window;
-        const idle = () =>
-            document.getElementById('screen')?.getAttribute('aria-busy') ===
-            'false';
-        fixture.button('Load records').click();
-        await waitFor(() => reads === 1 && idle());
-        const portal = fixture.button('Load records').closest('section');
-        fixture.button('Open Form').click();
-        await waitFor(() => childLoads.length === 1 && idle());
-        fixture.edit('fld_title', 'Unsaved child answer');
-        fixture.button('Delete this record').click();
-        await waitFor(() => document.querySelector('dialog[open]') !== null);
-        fixture
-            .button('Cancel', document.querySelector('dialog[open]')!)
-            .click();
-        await settled();
-        assert.equal(fixture.field('fld_title').value, 'Unsaved child answer');
-        fixture.button('Back to Portal').click();
-        assert.equal(portal?.isConnected, true);
-        assert.deepEqual(
-            Array.from(document.querySelectorAll('tbody tr'), (row) =>
-                row.getAttribute('data-record-id')
-            ),
-            ['record_deleted', 'record_remaining']
-        );
-        assert.equal(reads, 1);
-        assert.equal(deletes, 0);
-        assert.equal(fixture.loads(), 2);
-        assert.equal(fixture.saves.length, 0);
-    });
 
     for (const replacement of [
         'visitor round trip',
@@ -1171,6 +1243,54 @@ describe('actual browser starter prepared review', () => {
             }
         });
     }
+
+    for (const mode of ['one-page', 'multi-page'] as const)
+        for (const failure of ['show-modal', 'initial-focus'] as const)
+            it(`keeps ${mode} parent Review presentation ${failure} failures explicit without Save`, async (test) => {
+                const form =
+                    mode === 'multi-page' ? navigationForm() : reviewForm();
+                form.payload.publicFields.state.promptUserBeforeSubmission = true;
+                const fixture = await mount(test, form);
+                fixture.edit('fld_title', 'Retained after failed presentation');
+                if (mode === 'multi-page') {
+                    fixture.button('Next').click();
+                    await settled();
+                    fixture.button('Next').click();
+                    await settled();
+                }
+                const fault = failConfirmationPresentation(
+                    fixture.window,
+                    failure
+                );
+                test.after(fault.restore);
+                fixture.submit();
+                await settled();
+                const { document } = fixture.window;
+                assert.equal(fault.attempts(), 1);
+                assert.equal(fixture.saves.length, 0);
+                assert.equal(document.querySelector('dialog'), null);
+                assert.equal(
+                    fixture.field('fld_title').value,
+                    'Retained after failed presentation'
+                );
+                const banner = document.getElementById('status')!;
+                assert.deepEqual(
+                    {
+                        text: banner.textContent,
+                        error: banner.classList.contains('error'),
+                    },
+                    {
+                        text: 'The confirmation could not be displayed. No action was taken.',
+                        error: true,
+                    }
+                );
+                assert.equal(
+                    document.body.textContent?.includes(
+                        'Synthetic private presentation detail'
+                    ),
+                    false
+                );
+            });
 
     it('reviews ordered plain values and fixed password masks, then saves the complete native draft once', async (test) => {
         const form = reviewForm();

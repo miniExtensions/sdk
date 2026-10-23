@@ -228,6 +228,37 @@ const environment = async (
     return window;
 };
 
+const failConfirmationPresentation = (
+    window: Window,
+    failure: 'show-modal' | 'initial-focus'
+) => {
+    const dialog = window.HTMLDialogElement.prototype;
+    const element = window.HTMLElement.prototype;
+    const showModal = dialog.showModal;
+    const focus = element.focus;
+    let attempts = 0;
+    if (failure === 'show-modal')
+        dialog.showModal = () => {
+            attempts++;
+            throw Error('Synthetic private presentation detail');
+        };
+    else
+        element.focus = function (...args) {
+            if (this.closest('dialog')) {
+                attempts++;
+                throw Error('Synthetic private presentation detail');
+            }
+            return focus.apply(this, args);
+        };
+    return {
+        attempts: () => attempts,
+        restore: () => {
+            dialog.showModal = showModal;
+            element.focus = focus;
+        },
+    };
+};
+
 const fixture = async (
     test: TestContext,
     options: {
@@ -937,6 +968,8 @@ describe('actual starter root versus nested linked-child admission', () => {
         'cancel',
         'escape',
         'unsupported',
+        'show-modal',
+        'initial-focus',
     ] as const)
         for (const mode of ['create', 'edit'] as const)
             it(`actual ${mode} ${scenario} child Review preserves parent edits and deliberate Save`, async (test) => {
@@ -1105,6 +1138,44 @@ describe('actual starter root versus nested linked-child admission', () => {
                     assert.equal(body.querySelector('dialog'), null);
                 }
                 const readCount = reads.length;
+                if (scenario === 'show-modal' || scenario === 'initial-focus') {
+                    const fault = failConfirmationPresentation(
+                        window,
+                        scenario
+                    );
+                    test.after(fault.restore);
+                    button(body, 'Review child').click();
+                    await waitFor(
+                        () => screen.getAttribute('aria-busy') === 'false'
+                    );
+                    assert.equal(fault.attempts(), 1);
+                    assert.equal(saves.length, 0);
+                    assert.equal(reads.length, readCount);
+                    assert.equal(body.querySelector('dialog'), null);
+                    assert.equal(parentTitle.value, 'Parent draft stays');
+                    assert.deepEqual(
+                        JSON.parse(parentLinks.value),
+                        originalLinks
+                    );
+                    const banner = window.document.getElementById('status')!;
+                    assert.deepEqual(
+                        {
+                            text: banner.textContent,
+                            error: banner.classList.contains('error'),
+                        },
+                        {
+                            text: 'Child Save was not accepted. Retry only after checking its state.',
+                            error: true,
+                        }
+                    );
+                    assert.equal(
+                        body.textContent?.includes(
+                            'Synthetic private presentation detail'
+                        ),
+                        false
+                    );
+                    fault.restore();
+                }
                 button(body, 'Review child').click();
                 await waitFor(
                     () =>

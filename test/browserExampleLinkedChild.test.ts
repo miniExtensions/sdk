@@ -935,6 +935,7 @@ describe('actual starter root versus nested linked-child admission', () => {
         'one-page',
         'multi-page',
         'cancel',
+        'escape',
         'unsupported',
     ] as const)
         for (const mode of ['create', 'edit'] as const)
@@ -1105,13 +1106,28 @@ describe('actual starter root versus nested linked-child admission', () => {
                 assert.equal(dialog.querySelector('img'), null);
                 assert.equal(saves.length, 0);
                 assert.equal(reads.length, readCount);
-                button(dialog, 'Edit').click();
+                if (scenario === 'escape')
+                    dialog.dispatchEvent(
+                        new window.Event('cancel', { cancelable: true })
+                    );
+                else button(dialog, 'Edit').click();
                 await waitFor(
                     () =>
                         body.querySelector('dialog') === null &&
                         screen.getAttribute('aria-busy') === 'false'
                 );
                 assert.equal(saves.length, 0);
+                const banner = window.document.getElementById('status')!;
+                assert.deepEqual(
+                    {
+                        text: banner.textContent,
+                        error: banner.classList.contains('error'),
+                    },
+                    {
+                        text: 'Review cancelled. Continue editing the child Form.',
+                        error: false,
+                    }
+                );
                 const childTitle = pane.querySelector(
                     '[data-field-id="fld_title"]'
                 );
@@ -1637,14 +1653,16 @@ describe('actual starter root versus nested linked-child admission', () => {
             assert.equal(saves.length, 0);
         });
 
-    for (const mode of ['create', 'edit'] as const)
+    for (const [mode, review] of (['create', 'edit'] as const).flatMap((mode) =>
+        [false, true].map((review) => [mode, review] as const)
+    ))
         for (const outcome of [
             'reconciled',
             'validation-error',
             'unknown',
             'saved-not-reconciled',
         ] as const)
-            it(`actual ${mode} child Save replaces its busy banner with ${outcome} status`, async (test) => {
+            it(`actual ${mode} child ${review ? 'Review Confirm' : 'Save'} replaces its busy banner with ${outcome} status`, async (test) => {
                 const parent = configuredParent();
                 const requests: LoadExtensionInput[] = [];
                 const saves: SaveFormInput[] = [];
@@ -1661,13 +1679,14 @@ describe('actual starter root versus nested linked-child admission', () => {
                             String(init?.body)
                         );
                         requests.push(input);
-                        return new Response(
-                            JSON.stringify(
-                                'childExtensionInfo' in input
-                                    ? loadedChild(input)
-                                    : parent
-                            )
-                        );
+                        const loaded =
+                            'childExtensionInfo' in input
+                                ? loadedChild(input)
+                                : parent;
+                        if ('childExtensionInfo' in input)
+                            loaded.payload.publicFields.state.promptUserBeforeSubmission =
+                                review;
+                        return new Response(JSON.stringify(loaded));
                     }
                     if (
                         url.pathname ===
@@ -1747,7 +1766,8 @@ describe('actual starter root versus nested linked-child admission', () => {
                 await waitFor(
                     () =>
                         requests.length === 2 &&
-                        buttons(body, 'Save child').length === 1 &&
+                        buttons(body, review ? 'Review child' : 'Save child')
+                            .length === 1 &&
                         screen.getAttribute('aria-busy') === 'false'
                 );
                 const pane = body.querySelector('[data-linked-child-pane]');
@@ -1758,8 +1778,24 @@ describe('actual starter root versus nested linked-child admission', () => {
                     'fld_title',
                     `Synthetic ${mode} terminal outcome`
                 );
-                const action = button(body, 'Save child');
+                const action = button(
+                    body,
+                    review ? 'Review child' : 'Save child'
+                );
                 action.click();
+                if (review) {
+                    await waitFor(
+                        () =>
+                            body.querySelector('dialog[data-form-review]') !==
+                            null
+                    );
+                    const dialog = body.querySelector(
+                        'dialog[data-form-review]'
+                    );
+                    assert.ok(dialog instanceof window.HTMLElement);
+                    assert.equal(saves.length, 0);
+                    button(dialog, 'Confirm').click();
+                }
                 await waitFor(() => saves.length === 1);
                 assert.equal(banner.textContent, 'Saving the linked child…');
                 assert.equal(screen.getAttribute('aria-busy'), 'true');

@@ -64,6 +64,7 @@ import { flatChoiceConditionRecord } from './choiceAvailability.js';
 import { hasMaskedValuePolicy } from './privacy.js';
 import { createPortalView, type PortalView } from './portal.js';
 import { createLinkedChildPanel } from './linkedChildPanel.js';
+import { createLinkedChildReview } from './linkedChildReview.js';
 import {
     createConditionalLinkedFilters,
     type ConditionalLinkedFilters,
@@ -1421,7 +1422,14 @@ const renderForm = (page: FormLoadedResult): void => {
             const panel = createLinkedChildPanel({
                 fields: bindingOwner,
                 fieldId,
-                recovery: { journal: recovery, loadVersion },
+                recovery: {
+                    journal: recovery,
+                    loadVersion,
+                    review: createLinkedChildReview({
+                        isCurrent: childCurrent,
+                        status,
+                    }),
+                },
                 isCurrent: childCurrent,
                 isVisible: () =>
                     inCurrentPage(fieldId) &&

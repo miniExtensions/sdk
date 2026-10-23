@@ -228,27 +228,37 @@ export function createLinkedChildPanel(options: Options) {
             )
         )
             childActions.append(button('Child Next', () => move('next')));
-        const save = button('Save child', () => {
-            if (
-                !renderedCurrent(revision) ||
-                !childCurrent(child) ||
-                !available
-            )
-                return;
-            try {
-                readChild();
-            } catch {
-                options.status('Review the child fields before saving.', true);
-                return;
+        const reviewRequired =
+            child.getLoaded().payload.publicFields.state
+                .promptUserBeforeSubmission === true;
+        const save = button(
+            reviewRequired ? 'Review child' : 'Save child',
+            () => {
+                if (
+                    !renderedCurrent(revision) ||
+                    !childCurrent(child) ||
+                    !available
+                )
+                    return;
+                try {
+                    readChild();
+                } catch {
+                    options.status(
+                        'Review the child fields before saving.',
+                        true
+                    );
+                    return;
+                }
+                request(
+                    'Saving the linked child…',
+                    revision,
+                    (signal) => owner.save(revision, { signal }),
+                    'save'
+                );
             }
-            request(
-                'Saving the linked child…',
-                revision,
-                (signal) => owner.save(revision, { signal }),
-                'save'
-            );
-        });
-        save.disabled = !available || !page.canSubmit;
+        );
+        save.disabled =
+            !available || !(reviewRequired ? page.canReview : page.canSubmit);
         childActions.append(save);
         for (const button of childActions.querySelectorAll('button'))
             button.disabled ||= !available || !options.canStart();

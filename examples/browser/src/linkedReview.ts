@@ -1,5 +1,4 @@
 import type {
-    AirtableRecord,
     FormLoadedResult,
     ListLinkedRecordOptionsResult,
     RuntimeTableStates,
@@ -10,6 +9,72 @@ import { hasMaskedValuePolicy } from './privacy.js';
 export const unavailableLinkedAnswer = 'Selected record — details unavailable';
 const object = (value: unknown): value is Record<string, unknown> =>
     value != null && typeof value === 'object' && !Array.isArray(value);
+// Cloning and JSON erase prototypes and invoke accessors. Accept policy data
+// only before either operation, and repeat this check for live invalidation.
+const plainData = (value: unknown, seen = new Set<object>()): boolean => {
+    if (value === null || value === undefined) return true;
+    if (typeof value !== 'object')
+        return ['string', 'number', 'boolean'].includes(typeof value);
+    if (seen.has(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    if (
+        Array.isArray(value)
+            ? prototype !== Array.prototype
+            : prototype !== Object.prototype && prototype !== null
+    )
+        return false;
+    seen.add(value);
+    const valid = Reflect.ownKeys(value).every((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+        return (
+            typeof key === 'string' &&
+            (descriptor.enumerable ||
+                (Array.isArray(value) && key === 'length')) &&
+            'value' in descriptor &&
+            plainData(descriptor.value, seen)
+        );
+    });
+    seen.delete(value);
+    return valid;
+};
+
+const invalidData = Symbol('invalid policy data');
+const ownData = (owner: unknown, key: string): unknown => {
+    if (!object(owner)) return invalidData;
+    const prototype = Object.getPrototypeOf(owner);
+    if (prototype !== Object.prototype && prototype !== null)
+        return invalidData;
+    const descriptor = Object.getOwnPropertyDescriptor(owner, key);
+    if (!descriptor) return undefined;
+    return descriptor.enumerable && 'value' in descriptor
+        ? descriptor.value
+        : invalidData;
+};
+
+// Snapshot array slots without invoking a custom iterator or indexed getter.
+// Raw field values are deliberately not traversed before masking decisions.
+const ownArray = (value: unknown): unknown[] | undefined => {
+    if (
+        !Array.isArray(value) ||
+        Object.getPrototypeOf(value) !== Array.prototype
+    )
+        return undefined;
+    const length = Object.getOwnPropertyDescriptor(value, 'length')!
+        .value as number;
+    if (Reflect.ownKeys(value).length !== length + 1) return undefined;
+    const result: unknown[] = [];
+    for (let index = 0; index < length; index++) {
+        const descriptor = Object.getOwnPropertyDescriptor(
+            value,
+            String(index)
+        );
+        if (!descriptor?.enumerable || !('value' in descriptor))
+            return undefined;
+        result.push(descriptor.value);
+    }
+    return result;
+};
+
 const plainTypes = new Set([
     'singleLineText',
     'multilineText',
@@ -36,23 +101,59 @@ export function createLinkedReviewPresentation(
             original: Set<string>;
         }
     >();
-    for (const fieldId of page.payload.fieldIdsInForm) {
-        const schema = page.payload.fieldIdsToSchemas[fieldId];
+    const readPolicy = () => {
+        const payload = ownData(page, 'payload');
+        const ids = ownData(payload, 'fieldIdsInForm');
+        const schemas = ownData(payload, 'fieldIdsToSchemas');
+        const details = ownData(payload, 'linkedRecordFieldIdToDetailFields');
         if (
+            !object(payload) ||
+            !Array.isArray(ids) ||
+            !plainData(ids) ||
+            !ids.every((id) => typeof id === 'string') ||
+            !object(schemas) ||
+            !plainData([ids, schemas, details])
+        )
+            return undefined;
+        return {
+            payload: payload as unknown as FormLoadedResult['payload'],
+            ids,
+            schemas,
+            details,
+        };
+    };
+    const initial = readPolicy();
+    for (const fieldId of initial?.ids ?? []) {
+        const schema = initial!.schemas[
+            fieldId
+        ] as FormLoadedResult['payload']['fieldIdsToSchemas'][string];
+        if (
+            !plainData(schema) ||
             schema?.fieldType !== 'multipleRecordLinks' ||
-            schema.airtableField.config.type !== 'multipleRecordLinks'
+            !object(schema.airtableField) ||
+            !object(schema.airtableField.config) ||
+            schema.airtableField.config.type !== 'multipleRecordLinks' ||
+            !object(schema.airtableField.config.options) ||
+            typeof schema.airtableField.config.options.linkedTableId !==
+                'string'
         )
             continue;
-        const value = page.payload.formRecord.data[fieldId];
+        const value = ownArray(
+            ownData(
+                ownData(ownData(initial!.payload, 'formRecord'), 'data'),
+                fieldId
+            )
+        );
+        const config = schema.miniExtConfig ?? {};
+        const details = object(initial!.details)
+            ? ownData(initial!.details, fieldId)
+            : undefined;
         policies.set(fieldId, {
             tableId: schema.airtableField.config.options.linkedTableId,
-            config: structuredClone(schema.miniExtConfig ?? {}) as Record<
-                string,
-                unknown
-            >,
-            details: structuredClone(
-                page.payload.linkedRecordFieldIdToDetailFields?.[fieldId]
-            ),
+            config: plainData(config)
+                ? (structuredClone(config) as Record<string, unknown>)
+                : {},
+            details: plainData(config) ? structuredClone(details) : undefined,
             original: new Set(
                 Array.isArray(value)
                     ? value.filter(
@@ -63,20 +164,26 @@ export function createLinkedReviewPresentation(
             ),
         });
     }
-    const policyBytes = (): string =>
-        JSON.stringify([
-            page.payload.linkedRecordFieldIdToDetailFields,
-            [...policies.keys()].map(
-                (id) => page.payload.fieldIdsToSchemas[id]
-            ),
+    const policyBytes = (): string | undefined => {
+        const policy = readPolicy();
+        if (!policy) return undefined;
+        return JSON.stringify([
+            policy.details,
+            policy.ids,
+            [...policies.keys()].map((id) => policy.schemas[id]),
         ]);
+    };
     const capturedPolicy = policyBytes();
     const labels = new Map<string, Map<string, string>>();
     let invalidation = new AbortController();
     let epoch = 0,
         retired = false;
     const active = (): boolean => {
-        if (!retired && policyBytes() !== capturedPolicy) retire();
+        if (
+            !retired &&
+            (capturedPolicy === undefined || policyBytes() !== capturedPolicy)
+        )
+            retire();
         return !retired && current();
     };
     const retire = () => {
@@ -93,22 +200,24 @@ export function createLinkedReviewPresentation(
         invalidation = new AbortController();
         previous.abort();
     };
-    const build = (
-        fieldId: string,
-        records: readonly AirtableRecord[],
-        table: Pick<RuntimeTableStates[string], 'airtableFields'> | undefined
-    ) => {
+    const build = (fieldId: string, inputRecords: unknown, table: unknown) => {
         const next = new Map<string, string>();
         const policy = policies.get(fieldId);
+        const metadata = ownData(table, 'airtableFields');
+        const records = ownArray(inputRecords);
         if (
             !policy ||
-            !object(table) ||
-            !Array.isArray(table.airtableFields) ||
-            !Array.isArray(records) ||
+            !Array.isArray(metadata) ||
+            !plainData(metadata) ||
+            !records ||
             !Array.isArray(policy.details)
         )
             return next;
-        const fields = table.airtableFields;
+        // Capture validated own metadata once; later record access cannot change
+        // the authorized field identity or redirect its name fallback.
+        const fields = structuredClone(
+            metadata
+        ) as RuntimeTableStates[string]['airtableFields'];
         const fieldIds = new Set<string>();
         for (const field of fields) {
             if (
@@ -168,18 +277,19 @@ export function createLinkedReviewPresentation(
             return next;
         const recordIds = new Set<string>();
         for (const record of records) {
+            const recordId = ownData(record, 'id');
+            const recordFields = ownData(record, 'fields');
             if (
-                !object(record) ||
-                typeof record.id !== 'string' ||
-                record.id.trim() === '' ||
-                recordIds.has(record.id) ||
-                !object(record.fields)
+                typeof recordId !== 'string' ||
+                recordId.trim() === '' ||
+                recordIds.has(recordId) ||
+                !object(recordFields)
             )
                 return new Map<string, string>();
-            recordIds.add(record.id);
+            recordIds.add(recordId);
             // Never retain raw values; privacy decisions precede value access.
             if (hasMaskedValuePolicy(config)) {
-                next.set(record.id, '••••••••');
+                next.set(recordId, '••••••••');
                 continue;
             }
             // Masking has priority; rich presentation never reads a raw URL.
@@ -188,7 +298,28 @@ export function createLinkedReviewPresentation(
                 config.displayAsButton === true
             )
                 continue;
-            const value = record.fields[primary.id];
+            // An own ID is authoritative even when its value is unavailable.
+            // Name fallback is permitted only for a unique, non-colliding name.
+            const idValue = Object.getOwnPropertyDescriptor(
+                recordFields,
+                primary.id
+            );
+            const nameIsUnique =
+                fields.filter((field) => field.name === primary.name).length ===
+                1;
+            const nameCollides = fields.some(
+                (field) => field.id !== primary.id && field.id === primary.name
+            );
+            const selected =
+                idValue ??
+                (nameIsUnique && !nameCollides
+                    ? Object.getOwnPropertyDescriptor(
+                          recordFields,
+                          primary.name
+                      )
+                    : undefined);
+            if (!selected || !('value' in selected)) continue;
+            const value = selected.value;
             if (
                 value == null ||
                 (typeof value === 'string' && value.trim() === '') ||
@@ -218,7 +349,7 @@ export function createLinkedReviewPresentation(
                     doNotRemoveMarkdownFormatting: true,
                 });
                 if (typeof text === 'string' && text.trim() !== '')
-                    next.set(record.id, text);
+                    next.set(recordId, text);
             } catch {
                 /* Generic fallback, without raw diagnostic content. */
             }
@@ -232,13 +363,12 @@ export function createLinkedReviewPresentation(
             if (!active()) return;
             for (const [fieldId, policy] of policies) {
                 if (retired) return;
-                const table = result?.[policy.tableId];
-                const records = object(table?.recordIdsToAirtableRecords)
-                    ? [...policy.original].flatMap((id) => {
-                          const record = table.recordIdsToAirtableRecords[id];
-                          return record?.id === id ? [record] : [];
-                      })
-                    : [];
+                const table = ownData(result, policy.tableId);
+                const recordMap = ownData(table, 'recordIdsToAirtableRecords');
+                const records = [...policy.original].flatMap((id) => {
+                    const record = ownData(recordMap, id);
+                    return ownData(record, 'id') === id ? [record] : [];
+                });
                 replace(fieldId, build(fieldId, records, table));
             }
         },
@@ -250,8 +380,11 @@ export function createLinkedReviewPresentation(
                 fieldId,
                 build(
                     fieldId,
-                    result.records,
-                    result.tableIdsToLinkedTableStates?.[policy.tableId]
+                    ownData(result, 'records'),
+                    ownData(
+                        ownData(result, 'tableIdsToLinkedTableStates'),
+                        policy.tableId
+                    )
                 )
             );
         },

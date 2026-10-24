@@ -1,4 +1,8 @@
 import {
+    checkNativeFormProgressConsumer,
+    nativeFormProgressTypedConsumer,
+} from './native-form-progress-consumer-checks.mjs';
+import {
     checkAttachmentUploadAdmissionConsumer,
     attachmentUploadAdmissionTypedConsumer,
 } from './attachment-upload-admission-consumer-checks.mjs';
@@ -1428,6 +1432,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 childNavigationTypedConsumer +
                 borrowedLinkedChildTypedConsumer +
                 formProgressTypedConsumer +
+                nativeFormProgressTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
                 `
@@ -3096,6 +3101,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     assert.equal(
         await checkButtonDispatchGateConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkNativeFormProgressConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

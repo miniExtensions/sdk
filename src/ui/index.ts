@@ -193,6 +193,7 @@ export type {
     FormRenderScope,
     FormRenderSnapshot,
     FormRenderField,
+    FormRenderSubmitResult,
 } from './formRenderScope.js';
 export type {
     FormFieldRendererHostOptions,
@@ -277,3 +278,11 @@ export type {
     BorrowedPortalRenderSnapshot,
     BorrowedPortalRenderScope,
 } from './borrowedPortalRenderScope.js';
+export { createBorrowedFormRenderScope } from './borrowedFormRenderScope.js';
+export type {
+    BorrowedFormOwner,
+    BorrowedFormField,
+    BorrowedFormRead,
+    BorrowedFormRenderPort,
+    BorrowedFormRenderScope,
+} from './borrowedFormRenderScope.js';

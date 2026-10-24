@@ -24,6 +24,25 @@ For subscribed stock or app-supplied text/select/linked rendering, see the
 [headless field-binding usage guide](field-bindings.md). Renderer unmount preserves
 the native draft; owner replacement retires actions and requests.
 
+## URL syntax validation
+
+`checkIfFormUrlIsValid(value: string): boolean` exposes the existing Form URL
+syntax check. It accepts supported HTTP(S), bare-host and `mailto:` values and
+rejects invalid hosts, credentials, unsupported schemes, whitespace, backslashes
+and literal or percent-encoded control characters.
+
+```ts
+import { checkIfFormUrlIsValid } from '@miniextensions/sdk/forms';
+
+const answer = 'example.test:8080/path';
+const valid: boolean = checkIfFormUrlIsValid(answer);
+// Keep answer unchanged when storing it; valid is only a syntax decision.
+```
+
+Callers own empty/required, read-only, bypass, hidden-field and `allowInvalidUrls`
+policy, and their localized errors. This predicate does not apply page admission
+policy or return a normalized URL for storage or navigation.
+
 ## Headless conditional linked-filter cascades
 
 `createFormLinkedFilterModel` provides one network-free cascade per returned

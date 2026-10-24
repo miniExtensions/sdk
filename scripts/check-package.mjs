@@ -1,4 +1,8 @@
 import {
+    checkNativeFormProgressConsumer,
+    nativeFormProgressTypedConsumer,
+} from './native-form-progress-consumer-checks.mjs';
+import {
     checkAttachmentUploadAdmissionConsumer,
     attachmentUploadAdmissionTypedConsumer,
 } from './attachment-upload-admission-consumer-checks.mjs';
@@ -1121,8 +1125,9 @@ selection.destroy();\n`
     run(process.execPath, ['ui-consumer.cjs']);
 
     const formsConsumer = `
-import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController } from '@miniextensions/sdk/forms';
+import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController, checkIfFormUrlIsValid } from '@miniextensions/sdk/forms';
 if ([openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController].some(value => typeof value !== 'function')) throw new Error('Missing Form helper export');
+if (checkIfFormUrlIsValid('example.test:8080/path') !== true || checkIfFormUrlIsValid('https://person@example.test') !== false) throw new Error('Packed Form URL predicate failed');
 const store = new FormDraftStore();
 const draft = store.open({extensionId:'extExample',recordId:null,parent:null},{fldExample:['Design']},[]);
 store.write(draft,'fldExample',['Design','Support']);
@@ -1137,8 +1142,9 @@ if (store.snapshot(draft) !== null) throw new Error('Packed Form draft did not e
     run(process.execPath, ['forms-consumer.mjs']);
     writeFileSync(
         join(temporaryDirectory, 'forms-consumer.cjs'),
-        `const { FormDraftStore, createFormController } = require('@miniextensions/sdk/forms');
+        `const { FormDraftStore, createFormController, checkIfFormUrlIsValid } = require('@miniextensions/sdk/forms');
 if (typeof createFormController !== 'function') throw new Error('Missing CommonJS Form controller export');
+if (checkIfFormUrlIsValid('mailto:person@example.test') !== true || checkIfFormUrlIsValid('javascript:alert(1)') !== false) throw new Error('CommonJS Form URL predicate failed');
 const store = new FormDraftStore();
 const draft = store.open({extensionId:'extExample',recordId:null,parent:null},{fldExample:'Draft'},[]);
 if (store.snapshot(draft)?.data.fldExample !== 'Draft') throw new Error('CommonJS Form draft failed');
@@ -1264,7 +1270,13 @@ export function checkUiTypes(field: RuntimeFieldSchema, host: HTMLElement, clien
     linked.destroy(); model.destroy(); native.destroy();
 }
 import type { FormLoadedResult, RuntimeFieldSchema } from '@miniextensions/sdk';
-import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController, type FormSaveOptions, type FormOwnerScope } from '@miniextensions/sdk/forms';
+import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController, checkIfFormUrlIsValid, type FormSaveOptions, type FormOwnerScope } from '@miniextensions/sdk/forms';
+const formUrlValid: boolean = checkIfFormUrlIsValid('example.test');
+// @ts-expect-error URL syntax predicate requires a string
+checkIfFormUrlIsValid(null);
+// @ts-expect-error URL syntax predicate returns a boolean, not a replacement href
+const formUrlHref: string = checkIfFormUrlIsValid('example.test');
+void [formUrlValid, formUrlHref];
 export function checkFormHelpers(loaded: FormLoadedResult, client: MiniExtensionsClient, options: FormSaveOptions, getScope: () => FormOwnerScope) {
     const store = new FormDraftStore<AirtableValue>();
     const draft = openLoadedFormDraft({store, loaded});
@@ -1428,6 +1440,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 childNavigationTypedConsumer +
                 borrowedLinkedChildTypedConsumer +
                 formProgressTypedConsumer +
+                nativeFormProgressTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
                 `
@@ -3096,6 +3109,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     );
     assert.equal(
         await checkButtonDispatchGateConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
+        await checkNativeFormProgressConsumer({
             consumerDirectory: temporaryDirectory,
         }),
         2

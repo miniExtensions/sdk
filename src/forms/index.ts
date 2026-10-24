@@ -148,6 +148,7 @@ export {
     type FormPageErrorReason,
 } from './pages.js';
 export type { FormPageProblem } from './pageValidation.js';
+export { checkIfPageUrlIsValid as checkIfFormUrlIsValid } from './pageUrlValidation.js';
 
 export {
     createFormProgressStorage,
@@ -179,3 +180,16 @@ export {
     type BorrowedLinkedChildSave,
     type BorrowedLinkedChildController,
 } from './borrowedLinkedChild.js';
+
+export {
+    createNativeFormProgressStorage,
+    makeNativeFormProgressKey,
+    parseNativeFormProgressValue,
+    type NativeFormProgressSnapshot,
+    type NativeFormProgressWriteResult,
+    type NativeFormProgressRemovalResult,
+    type NativeFormProgressStorageAdapter,
+    type NativeFormProgressLockManager,
+    type NativeFormProgressStorageOptions,
+    type NativeFormProgressStorage,
+} from './nativeProgressStorage.js';

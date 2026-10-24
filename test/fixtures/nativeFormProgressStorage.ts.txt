@@ -1,0 +1,256 @@
+import type { AirtableFieldSet } from '@type-system/airtable/types';
+
+const formProgressEnvelopeKind = 'miniExtensions-form-progress';
+const formProgressEnvelopeVersion = 1;
+
+type FormProgressEnvelope = {
+    kind: typeof formProgressEnvelopeKind;
+    schemaVersion: typeof formProgressEnvelopeVersion;
+    revision: number;
+    writerId: string;
+    record: AirtableFieldSet;
+};
+
+export type StoredFormProgressSnapshot = {
+    record: AirtableFieldSet;
+    revision: number;
+    writerId: string | null;
+};
+
+export type FormProgressWriteResult =
+    | { status: 'written'; revision: number }
+    | { status: 'conflict' }
+    | { status: 'unavailable' };
+
+export type FormProgressRemovalResult =
+    | { status: 'removed' }
+    | { status: 'preserved-newer-progress' }
+    | { status: 'unavailable' };
+
+const fallbackWriterIds = new Map<string, string>();
+
+export const makeFormProgressKey = (shareId: string) =>
+    `form-progress-${shareId}`;
+
+const makeFormProgressWriterKey = (shareId: string) =>
+    `form-progress-writer-${shareId}`;
+
+const makeFormProgressLockName = (shareId: string) =>
+    `form-progress-lock-${shareId}`;
+
+const warnAboutFormProgressStorage = (
+    operation: 'read' | 'remove' | 'write'
+) => {
+    console.warn(
+        `Unable to ${operation} browser-local Form progress; continuing without it.`
+    );
+};
+
+const isAirtableFieldSetShape = (value: unknown): value is AirtableFieldSet =>
+    typeof value === 'object' && value != null && !Array.isArray(value);
+
+const isFormProgressEnvelope = (
+    value: unknown
+): value is FormProgressEnvelope => {
+    if (!isAirtableFieldSetShape(value)) return false;
+
+    return (
+        value.kind === formProgressEnvelopeKind &&
+        value.schemaVersion === formProgressEnvelopeVersion &&
+        typeof value.revision === 'number' &&
+        Number.isInteger(value.revision) &&
+        value.revision > 0 &&
+        typeof value.writerId === 'string' &&
+        value.writerId.length > 0 &&
+        isAirtableFieldSetShape(value.record)
+    );
+};
+
+export const parseStoredFormProgressValue = (
+    storedValue: string | null
+): StoredFormProgressSnapshot | undefined => {
+    if (storedValue == null) return undefined;
+
+    try {
+        const parsedValue: unknown = JSON.parse(storedValue);
+        if (isFormProgressEnvelope(parsedValue)) {
+            return {
+                record: parsedValue.record,
+                revision: parsedValue.revision,
+                writerId: parsedValue.writerId,
+            };
+        }
+
+        if (
+            isAirtableFieldSetShape(parsedValue) &&
+            parsedValue.kind !== formProgressEnvelopeKind
+        ) {
+            // Progress written before the concurrency protocol remains
+            // restorable. Revision zero makes the first new writer upgrade it
+            // atomically instead of discarding a customer's draft.
+            return {
+                record: parsedValue,
+                revision: 0,
+                writerId: null,
+            };
+        }
+    } catch {
+        return undefined;
+    }
+
+    return undefined;
+};
+
+export const removeStoredFormProgress = (shareId: string): boolean => {
+    try {
+        localStorage.removeItem(makeFormProgressKey(shareId));
+        return true;
+    } catch {
+        warnAboutFormProgressStorage('remove');
+        return false;
+    }
+};
+
+export const readStoredFormProgressSnapshot = (
+    shareId: string
+): StoredFormProgressSnapshot | undefined => {
+    let storedValue: string | null;
+    try {
+        storedValue = localStorage.getItem(makeFormProgressKey(shareId));
+    } catch {
+        warnAboutFormProgressStorage('read');
+        return undefined;
+    }
+
+    if (storedValue == null) return undefined;
+
+    const snapshot = parseStoredFormProgressValue(storedValue);
+    if (snapshot != null) return snapshot;
+
+    removeStoredFormProgress(shareId);
+    return undefined;
+};
+
+export const readStoredFormProgress = (
+    shareId: string
+): AirtableFieldSet | undefined =>
+    readStoredFormProgressSnapshot(shareId)?.record;
+
+const getLockManager = (): LockManager | undefined => {
+    if (typeof navigator === 'undefined') return undefined;
+    return navigator.locks;
+};
+
+const makeWriterId = (): string => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID != null) {
+        return crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+export const getFormProgressWriterId = (shareId: string): string => {
+    const fallbackWriterId = fallbackWriterIds.get(shareId);
+
+    try {
+        const key = makeFormProgressWriterKey(shareId);
+        const storedWriterId = sessionStorage.getItem(key);
+        if (storedWriterId != null) return storedWriterId;
+
+        const writerId = fallbackWriterId ?? makeWriterId();
+        sessionStorage.setItem(key, writerId);
+        fallbackWriterIds.set(shareId, writerId);
+        return writerId;
+    } catch {
+        if (fallbackWriterId != null) return fallbackWriterId;
+
+        const writerId = makeWriterId();
+        fallbackWriterIds.set(shareId, writerId);
+        return writerId;
+    }
+};
+
+export const writeStoredFormProgress = async (args: {
+    expectedRevision: number | null;
+    record: AirtableFieldSet;
+    shareId: string;
+    writerId: string;
+}): Promise<FormProgressWriteResult> => {
+    const lockManager = getLockManager();
+    const writeIfCurrent = (): FormProgressWriteResult => {
+        const currentSnapshot = readStoredFormProgressSnapshot(args.shareId);
+        const currentRevision = currentSnapshot?.revision ?? null;
+
+        if (currentRevision !== args.expectedRevision) {
+            return { status: 'conflict' };
+        }
+
+        const revision = (currentRevision ?? 0) + 1;
+        const envelope: FormProgressEnvelope = {
+            kind: formProgressEnvelopeKind,
+            schemaVersion: formProgressEnvelopeVersion,
+            revision,
+            writerId: args.writerId,
+            record: args.record,
+        };
+
+        try {
+            localStorage.setItem(
+                makeFormProgressKey(args.shareId),
+                JSON.stringify(envelope)
+            );
+            return { status: 'written', revision };
+        } catch {
+            warnAboutFormProgressStorage('write');
+            return { status: 'unavailable' };
+        }
+    };
+
+    // Web Locks make the compare-and-set atomic across tabs. Older browsers
+    // retain the same revision protocol and storage-event conflict detection;
+    // they just cannot serialize the tiny read/write critical section.
+    if (lockManager == null) return writeIfCurrent();
+
+    try {
+        return await lockManager.request(
+            makeFormProgressLockName(args.shareId),
+            writeIfCurrent
+        );
+    } catch {
+        warnAboutFormProgressStorage('write');
+        return { status: 'unavailable' };
+    }
+};
+
+export const removeStoredFormProgressIfOwned = async (args: {
+    shareId: string;
+    writerId: string;
+}): Promise<FormProgressRemovalResult> => {
+    const lockManager = getLockManager();
+    const removeIfCurrentOwner = (): FormProgressRemovalResult => {
+        const currentSnapshot = readStoredFormProgressSnapshot(args.shareId);
+
+        if (
+            currentSnapshot?.writerId != null &&
+            currentSnapshot.writerId !== args.writerId
+        ) {
+            return { status: 'preserved-newer-progress' };
+        }
+
+        return removeStoredFormProgress(args.shareId)
+            ? { status: 'removed' }
+            : { status: 'unavailable' };
+    };
+
+    if (lockManager == null) return removeIfCurrentOwner();
+
+    try {
+        return await lockManager.request(
+            makeFormProgressLockName(args.shareId),
+            removeIfCurrentOwner
+        );
+    } catch {
+        warnAboutFormProgressStorage('remove');
+        return { status: 'unavailable' };
+    }
+};

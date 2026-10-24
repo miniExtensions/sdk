@@ -9,6 +9,7 @@ import {
     createBorrowedPortalRenderScope,
     type BorrowedPortalPort,
     type BorrowedPortalTarget,
+    type BorrowedPortalRenderSnapshot,
 } from '../src/ui/borrowedPortalRenderScope.js';
 
 function fixture() {
@@ -198,4 +199,60 @@ it('an earlier snapshot read does not consume the subscription notification; ret
     scope.destroy();
     assert.equal(seen.length, 3);
     assert.equal(f.stops, 1);
+});
+
+it('zero accepted rows retain accepted headers independently of values; withheld and empty details retain none', () => {
+    const f = fixture();
+    f.replace({ ...f.projection, records: [] });
+    const scope = createBorrowedPortalRenderScope(f.port);
+    assert.deepEqual(scope.getSnapshot().columns, [
+        { fieldId: 'fld_title', title: 'Accepted title' },
+    ]);
+    assert.deepEqual(scope.getSnapshot().rows, []);
+    for (const Shell of [
+        AirtableList<BorrowedPortalRenderSnapshot>,
+        AirtableGrid<BorrowedPortalRenderSnapshot>,
+    ]) {
+        let slots = 0;
+        const html = renderToStaticMarkup(
+            createElement(Shell, {
+                scope,
+                renderers: {
+                    renderSingleLineTextField: () => {
+                        slots++;
+                        return 'unexpected cell';
+                    },
+                },
+                children: (state) =>
+                    createElement(
+                        'div',
+                        null,
+                        state.columns.map((column) =>
+                            createElement(
+                                'h2',
+                                { key: column.fieldId },
+                                column.title
+                            )
+                        ),
+                        state.rows.map((row) =>
+                            row.cells.map((cell) => cell.node)
+                        )
+                    ),
+            })
+        );
+        assert.equal(html, '<div><h2>Accepted title</h2></div>');
+        assert.equal(slots, 0);
+    }
+    for (const detailProjection of ['present', 'missing', 'null'] as const) {
+        f.replace({
+            ...f.projection,
+            records: [],
+            detailProjection,
+            detailFields:
+                detailProjection === 'present' ? [] : f.projection.detailFields,
+        });
+        assert.deepEqual(scope.getSnapshot().columns, []);
+        assert.deepEqual(scope.getSnapshot().rows, []);
+    }
+    scope.destroy();
 });

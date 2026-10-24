@@ -44,7 +44,10 @@ export type BorrowedPortalPort<Stamp> = {
         isCurrent: () => boolean
     ): boolean | Promise<boolean>;
 };
+export type BorrowedPortalColumn = { fieldId: string; title: string };
 export type BorrowedPortalRenderSnapshot = PortalPresentationSnapshot & {
+    /** Accepted policy metadata; independent of row existence and values. */
+    columns: readonly BorrowedPortalColumn[];
     actions: {
         openRow(recordId: string): Promise<boolean>;
         openChild(recordId: string, fieldId?: string): Promise<boolean>;
@@ -151,47 +154,62 @@ export function createBorrowedPortalRenderScope<Stamp>(
             hosts.clear();
             const expected = revision;
             const rows: PortalRenderRow[] = [];
+            let columns: BorrowedPortalColumn[] = [];
             const projection = next?.projection;
             if (next && projection && current(next.stamp, expected)) {
+                const details =
+                    projection.detailProjection === 'present'
+                        ? projection.detailFields
+                        : [];
+                const prepared = [];
+                for (const detail of details) {
+                    if (
+                        detail.isHidden ||
+                        details.filter((d) => d.fieldId === detail.fieldId)
+                            .length !== 1
+                    )
+                        continue;
+                    const schemas = projection.table.airtableFields.filter(
+                        (f) => f.id === detail.fieldId
+                    );
+                    if (schemas.length !== 1) continue;
+                    const schema = schemas[0];
+                    // Validate presentation metadata with a null value; headers
+                    // must not depend on a first row or any cached row value.
+                    const props = createRendererProps({
+                        physicalKind: schema.config.type,
+                        fieldId: detail.fieldId,
+                        title: detail.titleOverride ?? detail.fieldName,
+                        field: schema,
+                        displayConfig: detail.miniExtConfig,
+                        value: null,
+                        context: 'portal-detail',
+                        computed: schema.isComputed === true,
+                        dirty: false,
+                        pending: false,
+                        validation: [],
+                        error: null,
+                        capability: { type: 'readonly' },
+                    });
+                    if (props) prepared.push(props);
+                }
+                columns = prepared.map(({ fieldId, title }) => ({
+                    fieldId,
+                    title,
+                }));
                 const seen = new Set<string>();
                 for (const record of projection.records) {
                     if (seen.has(record.id)) continue;
                     seen.add(record.id);
                     const cells: PortalRenderRow['cells'][number][] = [];
-                    const details =
-                        projection.detailProjection === 'present'
-                            ? projection.detailFields
-                            : [];
-                    for (const detail of details) {
-                        if (
-                            detail.isHidden ||
-                            details.filter((d) => d.fieldId === detail.fieldId)
-                                .length !== 1
-                        )
-                            continue;
-                        const schemas = projection.table.airtableFields.filter(
-                            (f) => f.id === detail.fieldId
-                        );
-                        if (schemas.length !== 1) continue;
-                        const schema = schemas[0];
+                    for (const column of prepared) {
                         const props = createRendererProps({
-                            physicalKind: schema.config.type,
-                            fieldId: detail.fieldId,
-                            title: detail.titleOverride ?? detail.fieldName,
-                            field: schema,
-                            displayConfig: detail.miniExtConfig,
-                            value: record.fields[detail.fieldId],
-                            context: 'portal-detail',
-                            computed: schema.isComputed === true,
-                            dirty: false,
-                            pending: false,
-                            validation: [],
-                            error: null,
-                            capability: { type: 'readonly' },
+                            ...column,
+                            value: record.fields[column.fieldId],
                         });
                         if (props)
                             cells.push({
-                                fieldId: detail.fieldId,
+                                fieldId: column.fieldId,
                                 host: buildHost(next.stamp, expected, props),
                             });
                     }
@@ -226,6 +244,7 @@ export function createBorrowedPortalRenderScope<Stamp>(
                 revision,
                 retired: destroyed || !next || !current(next.stamp, expected),
                 rows,
+                columns,
                 actions: {
                     openRow: (recordId) =>
                         invoke({ action: 'open-row', recordId }),
@@ -233,13 +252,17 @@ export function createBorrowedPortalRenderScope<Stamp>(
                         invoke({ action: 'open-child', recordId, fieldId }),
                 },
             };
-            if (snapshot.retired) snapshot.rows = [];
+            if (snapshot.retired) {
+                snapshot.rows = [];
+                snapshot.columns = [];
+            }
         } finally {
             refreshing = false;
         }
     };
     const copy = (): BorrowedPortalRenderSnapshot => ({
         ...snapshot,
+        columns: snapshot.columns.map((column) => ({ ...column })),
         rows: snapshot.rows.map((row) => ({
             ...row,
             cells: row.cells.map((cell) => ({ ...cell })),

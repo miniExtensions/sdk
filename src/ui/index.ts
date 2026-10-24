@@ -273,6 +273,7 @@ export type {
     PortalPresentationSource,
     BorrowedPortalPort,
     BorrowedPortalTarget,
+    BorrowedPortalColumn,
     BorrowedPortalRenderSnapshot,
     BorrowedPortalRenderScope,
 } from './borrowedPortalRenderScope.js';

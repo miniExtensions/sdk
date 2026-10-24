@@ -4795,3 +4795,8 @@ The React shell types accept a generic `PortalPresentationSource<S>` and preserv
 `PortalRenderSnapshot`. Borrowed callers can explicitly use
 `AirtableListProps<BorrowedPortalRenderSnapshot>` (likewise Grid) when annotating
 props rather than relying on JSX inference.
+
+Borrowed snapshots also expose detached `columns: { fieldId, title }[]` from
+the same accepted visible detail/schema policy as cells. Headers preserve accepted
+order even with zero rows; no first-row values or cached records are consulted.
+Explicit empty, missing or null detail projections expose no columns.

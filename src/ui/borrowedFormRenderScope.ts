@@ -207,12 +207,26 @@ export function createBorrowedFormRenderScope<Submit>(
     const notify = () => {
         revision++;
         read();
-        for (const changed of [...listeners]) changed(snapshot());
+        for (const changed of [...listeners]) {
+            const next = snapshot();
+            try {
+                changed(next);
+            } catch {
+                /* Rendering never owns state. */
+            }
+        }
     };
-    const acquired = port.subscribe(notify);
-    if (retired) acquired();
-    else stop = acquired;
-    read();
+    try {
+        const acquired = port.subscribe(notify);
+        if (retired) acquired();
+        else stop = acquired;
+        read();
+    } catch (error) {
+        retired = true;
+        stop?.();
+        stop = undefined;
+        throw error;
+    }
     return {
         getSnapshot: snapshot,
         subscribe,

@@ -6,7 +6,15 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 
 export const borrowedFormRenderTypedConsumer = `
 import { createBorrowedFormRenderScope, type BorrowedFormRenderPort } from '@miniextensions/sdk/ui';
-import { AirtableForm } from '@miniextensions/sdk/react';
+import { AirtableForm, type AirtableFormProps } from '@miniextensions/sdk/react';
+import type { FormRenderScope } from '@miniextensions/sdk/ui';
+export function legacyFormProps(props: AirtableFormProps) {
+    const scope: FormRenderScope = props.scope;
+    const pages = props.scope.pages;
+    const ownsPages: boolean = props.scope.ownsPages;
+    const destroy: () => void = props.scope.destroy;
+    return {scope, pages, ownsPages, destroy};
+}
 export function nativeVoidForm(port: BorrowedFormRenderPort<void>) {
     const scope = createBorrowedFormRenderScope(port);
     const done: Promise<void> = scope.getSnapshot().actions.submit();

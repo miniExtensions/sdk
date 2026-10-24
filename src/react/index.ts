@@ -248,7 +248,10 @@ export {
     renderDateTimeField,
     type DateTimeFieldOptions,
 } from './DateTimeField.js';
-import type { FormRenderSnapshot } from '../ui/formRenderScope.js';
+import type {
+    FormRenderScope,
+    FormRenderSnapshot,
+} from '../ui/formRenderScope.js';
 import type {
     PortalRenderScope,
     PortalRenderSnapshot,
@@ -2168,9 +2171,7 @@ export type AirtableFormRenderState<
 > = Omit<FormRenderSnapshot<Submit>, 'fields'> & {
     fields: readonly { fieldId: string; node: ReactNode }[];
 };
-export type AirtableFormProps<
-    Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
-> = {
+type AirtableFormSourceProps<Submit> = {
     scope: {
         getSnapshot(): FormRenderSnapshot<Submit>;
         subscribe(
@@ -2183,6 +2184,16 @@ export type AirtableFormProps<
     children(state: AirtableFormRenderState<Submit>): ReactNode;
 };
 
+/** Default props retain the complete legacy scope; native Submit types are additive. */
+export type AirtableFormProps<
+    Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+> = AirtableFormSourceProps<Submit> &
+    ([Submit] extends [
+        Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+    ]
+        ? { scope: FormRenderScope }
+        : unknown);
+
 /** A subscription shell: unmount never disposes the supplied rendering scope. */
 export function AirtableForm<
     Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
@@ -2191,7 +2202,7 @@ export function AirtableForm<
     renderers,
     fallback,
     children,
-}: AirtableFormProps<Submit>): ReactNode {
+}: AirtableFormSourceProps<Submit>): ReactNode {
     const store = useMemo(() => {
         let value = scope.getSnapshot();
         const read = () => {

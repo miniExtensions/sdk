@@ -167,3 +167,120 @@ it('refuses queued allocation after configuration ABA and unsubscribe does not r
     assert.equal(scope.getSnapshot().retired, true);
     scope.destroy();
 });
+
+for (const ending of ['replacement', 'destroy'] as const) {
+    it(`delivers ${ending} retirement to later scope and field observers despite a throwing presentation listener`, () => {
+        const port = native();
+        const scope = createBorrowedFormRenderScope<void>({
+            ...port,
+            submit: async () => {},
+        });
+        const host = scope.getSnapshot().fields[0]!.host;
+        const scopeStates: boolean[] = [];
+        const fieldStates: string[] = [];
+        scope.subscribe(() => {
+            throw new Error('Presentation failed');
+        });
+        scope.subscribe((state) => scopeStates.push(state.retired));
+        host.subscribe((state) => fieldStates.push(state.status));
+        assert.doesNotThrow(() =>
+            ending === 'destroy' ? scope.destroy() : port.replace('B')
+        );
+        assert.deepEqual(scopeStates, [true]);
+        assert.deepEqual(fieldStates, ['retired']);
+        scope.destroy();
+    });
+}
+
+it('returns accepted for a committed native write even when presentation observers throw', () => {
+    const port = native();
+    const scope = createBorrowedFormRenderScope<void>({
+        ...port,
+        submit: async () => {},
+    });
+    const field = scope.getSnapshot().fields[0]!.host.getSnapshot();
+    if (field.status !== 'ready') throw Error('Expected field');
+    const props = field.fields[0]!;
+    if (
+        props.physicalKind !== 'singleLineText' ||
+        props.capability.type !== 'editable'
+    )
+        throw Error('Expected editable text field');
+    const delivered: string[] = [];
+    scope.subscribe(() => {
+        throw new Error('Presentation failed');
+    });
+    scope.subscribe(() => delivered.push(port.value()));
+    assert.deepEqual(props.capability.setValue('Committed'), {
+        accepted: true,
+    });
+    assert.equal(port.value(), 'Committed');
+    assert.equal(port.writes(), 1);
+    assert.deepEqual(delivered, ['Committed']);
+    scope.destroy();
+});
+
+it('releases the acquired native subscription when the post-subscription read throws', () => {
+    const port = native();
+    const failure = new Error('Post-subscription read failed');
+    let reads = 0,
+        unsubscribes = 0;
+    const active = new Set<() => void>();
+    assert.throws(
+        () =>
+            createBorrowedFormRenderScope<void>({
+                ...port,
+                read: () => {
+                    if (++reads > 1) throw failure;
+                    return port.read();
+                },
+                subscribe: (changed) => {
+                    active.add(changed);
+                    return () => {
+                        unsubscribes++;
+                        active.delete(changed);
+                    };
+                },
+                submit: async () => {},
+            }),
+        (error) => error === failure
+    );
+    assert.equal(reads, 2);
+    assert.equal(unsubscribes, 1);
+    assert.equal(active.size, 0);
+});
+
+it('preserves native write and Save failures rather than treating them as observer faults', async () => {
+    const port = native();
+    const writeFailure = new Error('Native write failed');
+    const saveFailure = new Error('Native Save failed');
+    const scope = createBorrowedFormRenderScope<void>({
+        ...port,
+        write: () => {
+            throw writeFailure;
+        },
+        submit: async (_owner, admit) => {
+            assert.equal(admit(), true);
+            throw saveFailure;
+        },
+    });
+    const field = scope.getSnapshot().fields[0]!.host.getSnapshot();
+    if (field.status !== 'ready') throw Error('Expected field');
+    const props = field.fields[0]!;
+    if (
+        props.physicalKind !== 'singleLineText' ||
+        props.capability.type !== 'editable'
+    )
+        throw Error('Expected editable text field');
+    const setValue = props.capability.setValue;
+    assert.throws(
+        () => setValue('Rejected'),
+        (error) => error === writeFailure
+    );
+    assert.equal(port.writes(), 0);
+    await assert.rejects(
+        scope.getSnapshot().actions.submit(),
+        (error) => error === saveFailure
+    );
+    scope.destroy();
+});

@@ -193,6 +193,7 @@ export type {
     FormRenderScope,
     FormRenderSnapshot,
     FormRenderField,
+    FormRenderSubmitResult,
 } from './formRenderScope.js';
 export type {
     FormFieldRendererHostOptions,
@@ -266,3 +267,11 @@ export type {
     AttachmentUploadAdmission,
     AttachmentUploadAuthority,
 } from './attachmentUploadAdmission.js';
+export { createBorrowedFormRenderScope } from './borrowedFormRenderScope.js';
+export type {
+    BorrowedFormOwner,
+    BorrowedFormField,
+    BorrowedFormRead,
+    BorrowedFormRenderPort,
+    BorrowedFormRenderScope,
+} from './borrowedFormRenderScope.js';

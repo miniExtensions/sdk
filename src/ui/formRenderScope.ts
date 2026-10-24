@@ -29,7 +29,10 @@ export type FormRenderField = {
     fieldId: string;
     host: FieldRendererHost;
 };
-export type FormRenderSnapshot = {
+export type FormRenderSubmitResult = Awaited<
+    ReturnType<FormFieldBindings['save']>
+>;
+export type FormRenderSnapshot<Submit = FormRenderSubmitResult> = {
     revision: number;
     retired: boolean;
     page: FormPageSnapshot;
@@ -42,9 +45,7 @@ export type FormRenderSnapshot = {
     actions: {
         back(): FormPageAction;
         next(): FormPageAction;
-        submit(
-            options?: FormControllerSaveOptions
-        ): ReturnType<FormFieldBindings['save']>;
+        submit(options?: FormControllerSaveOptions): Promise<Submit>;
     };
 };
 export type FormRenderScope = {

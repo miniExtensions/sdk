@@ -2166,24 +2166,43 @@ export function FieldRenderer({
     );
 }
 
-export type AirtableFormRenderState = Omit<FormRenderSnapshot, 'fields'> & {
+export type AirtableFormRenderState<
+    Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+> = Omit<FormRenderSnapshot<Submit>, 'fields'> & {
     fields: readonly { fieldId: string; node: ReactNode }[];
 };
-export type AirtableFormProps = {
-    scope: FormRenderScope;
+type AirtableFormSourceProps<Submit> = {
+    scope: {
+        getSnapshot(): FormRenderSnapshot<Submit>;
+        subscribe(
+            listener: (snapshot: FormRenderSnapshot<Submit>) => void
+        ): () => void;
+    };
     renderers: import('../ui/rendererRegistry.js').FieldRendererSlots<ReactNode>;
     fallback?(state: FieldRendererFallback): ReactNode;
     /** Layout only; actions retain the revision that produced this render. */
-    children(state: AirtableFormRenderState): ReactNode;
+    children(state: AirtableFormRenderState<Submit>): ReactNode;
 };
 
+/** Default props retain the complete legacy scope; native Submit types are additive. */
+export type AirtableFormProps<
+    Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+> = AirtableFormSourceProps<Submit> &
+    ([Submit] extends [
+        Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+    ]
+        ? { scope: FormRenderScope }
+        : unknown);
+
 /** A subscription shell: unmount never disposes the supplied rendering scope. */
-export function AirtableForm({
+export function AirtableForm<
+    Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+>({
     scope,
     renderers,
     fallback,
     children,
-}: AirtableFormProps): ReactNode {
+}: AirtableFormSourceProps<Submit>): ReactNode {
     const store = useMemo(() => {
         let value = scope.getSnapshot();
         const read = () => {

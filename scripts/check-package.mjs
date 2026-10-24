@@ -1441,6 +1441,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 borrowedLinkedChildTypedConsumer +
                 formProgressTypedConsumer +
                 nativeFormProgressTypedConsumer +
+                borrowedFormRenderTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
                 `
@@ -1499,6 +1500,10 @@ new Parser([]).parse({maxDepth:'48'});
             ...formulasGuideSources,
         ]);
     }
+
+    console.log(
+        'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent.'
+    );
 
     const bundled = await build({
         entryPoints: [join(temporaryDirectory, 'consumer.mjs')],
@@ -1585,7 +1590,8 @@ new Parser([]).parse({maxDepth:'48'});
                 durationInputTypedConsumer +
                 dateInputCompatibilityTypedConsumer +
                 recoverableImageTypedConsumer +
-                fileSelectionTypedConsumer
+                fileSelectionTypedConsumer +
+                borrowedFormRenderReactTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -1632,7 +1638,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             ratingInputJsxConsumer +
             calendlyBookingJsxConsumer +
             personBadgeJsxConsumer +
-            recoverableImageJsxConsumer
+            recoverableImageJsxConsumer +
+            borrowedFormRenderReactTypedConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(
@@ -2024,6 +2031,10 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'react-jsx',
         ...reactSources,
     ]);
+
+    console.log(
+        'Installed React declarations: NodeNext .mts/.cts and Bundler passed.'
+    );
 
     assert.equal(
         await checkPortalEditorConsumer({
@@ -3114,6 +3125,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         2
     );
     assert.equal(
+        await checkBorrowedFormRenderConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
         await checkNativeFormProgressConsumer({
             consumerDirectory: temporaryDirectory,
         }),
@@ -3820,3 +3837,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         );
     }
 }
+import {
+    checkBorrowedFormRenderConsumer,
+    borrowedFormRenderTypedConsumer,
+    borrowedFormRenderReactTypedConsumer,
+} from './borrowed-form-render-consumer-checks.mjs';

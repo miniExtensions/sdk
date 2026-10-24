@@ -285,6 +285,517 @@ export function checkLinkedReviewMasking({
     return { checks };
 }
 
+/** Provenance checks shared by source and archive-installed recipe consumers. */
+export function checkLinkedReviewProvenance({ create, generic }) {
+    let checks = 0;
+    const boundaries = [
+        (page) => [page, 'payload'],
+        (page) => [page.payload, 'linkedRecordFieldIdToDetailFields'],
+        (page) => [page.payload, 'fieldIdsToSchemas'],
+        (page) => [page.payload.fieldIdsToSchemas, 'fld_review_link'],
+    ];
+    const cases = [
+        ...['airtableField', 'config', 'options'].map((key) => [
+            'malformed linked schema shape',
+            ({ page }) => {
+                const schema = page.payload.fieldIdsToSchemas.fld_review_link;
+                if (key === 'airtableField') schema.airtableField = null;
+                else if (key === 'config') schema.airtableField.config = null;
+                else schema.airtableField.config.options = null;
+            },
+            generic,
+        ]),
+        [
+            'record collection getter',
+            ({ fixture }) => {
+                for (const [owner, key] of [
+                    [fixture.options, 'records'],
+                    [fixture.table, 'recordIdsToAirtableRecords'],
+                ])
+                    Object.defineProperty(owner, key, {
+                        enumerable: true,
+                        get() {
+                            assert.fail('record collection getter read');
+                        },
+                    });
+            },
+            generic,
+        ],
+        [
+            'transport table entry getter',
+            ({ fixture }) => {
+                for (const owner of [
+                    fixture.tables,
+                    fixture.options.tableIdsToLinkedTableStates,
+                ])
+                    Object.defineProperty(owner, 'tbl_review_link', {
+                        enumerable: true,
+                        get() {
+                            assert.fail('transport table getter read');
+                        },
+                    });
+            },
+            generic,
+        ],
+        [
+            'transport table map getter',
+            ({ fixture }) => {
+                Object.defineProperty(
+                    fixture.options,
+                    'tableIdsToLinkedTableStates',
+                    {
+                        enumerable: true,
+                        get() {
+                            assert.fail('transport map getter read');
+                        },
+                    }
+                );
+                Object.defineProperty(fixture.tables, 'tbl_review_link', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('hydration table getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'record map entry getter',
+            ({ fixture }) => {
+                Object.defineProperty(
+                    fixture.table.recordIdsToAirtableRecords,
+                    'rec_original',
+                    {
+                        enumerable: true,
+                        get() {
+                            assert.fail('record map entry getter read');
+                        },
+                    }
+                );
+            },
+            { hydration: generic, options: '<b>Authorized name</b>' },
+        ],
+        [
+            'options indexed record getter',
+            ({ fixture }) => {
+                Object.defineProperty(fixture.options.records, '0', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('indexed record getter read');
+                    },
+                });
+            },
+            { hydration: '<b>Authorized name</b>', options: generic },
+        ],
+        [
+            'options custom iterator',
+            ({ fixture }) => {
+                Object.defineProperty(
+                    fixture.options.records,
+                    Symbol.iterator,
+                    {
+                        get() {
+                            assert.fail('custom iterator read');
+                        },
+                    }
+                );
+            },
+            { hydration: '<b>Authorized name</b>', options: generic },
+        ],
+        [
+            'record identity getter',
+            ({ record }) => {
+                Object.defineProperty(record, 'id', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('record identity getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'record fields getter',
+            ({ record }) => {
+                Object.defineProperty(record, 'fields', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('record fields getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'table metadata getter',
+            ({ fixture }) => {
+                Object.defineProperty(fixture.table, 'airtableFields', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('table metadata getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'absent optional detail map',
+            ({ page }) => {
+                delete page.payload.linkedRecordFieldIdToDetailFields;
+            },
+            generic,
+        ],
+        ...boundaries.flatMap((boundary) =>
+            [false, true].map((throws) => [
+                'outer policy accessor',
+                ({ page }) => {
+                    const [owner, key] = boundary(page);
+                    const original = owner[key];
+                    Object.defineProperty(owner, key, {
+                        enumerable: true,
+                        get() {
+                            if (throws)
+                                assert.fail('outer policy getter executed');
+                            return original;
+                        },
+                    });
+                },
+                generic,
+            ])
+        ),
+        [
+            'changing primary name getter',
+            ({ primary, record, fixture }) => {
+                const publicName = primary.name;
+                const hiddenName = fixture.table.airtableFields[1].name;
+                record.fields = { [hiddenName]: 'SECONDARY_SECRET' };
+                let reads = 0;
+                Object.defineProperty(primary, 'name', {
+                    enumerable: true,
+                    get() {
+                        return ++reads <= 6 ? publicName : hiddenName;
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'inherited primary metadata',
+            ({ primary }) => {
+                const name = primary.name;
+                delete primary.name;
+                Object.setPrototypeOf(primary, { name });
+            },
+            generic,
+        ],
+        [
+            'schema config getter',
+            ({ page }) => {
+                Object.defineProperty(
+                    page.payload.fieldIdsToSchemas.fld_review_link,
+                    'miniExtConfig',
+                    {
+                        enumerable: true,
+                        get() {
+                            assert.fail('schema config getter read');
+                        },
+                    }
+                );
+            },
+            generic,
+        ],
+        [
+            'inherited login mask',
+            ({ detail }) => {
+                detail.miniExtConfig = Object.create({
+                    maskPasswordOnLoginScreen: true,
+                });
+            },
+            generic,
+        ],
+        [
+            'non-enumerable mask',
+            ({ detail }) => {
+                Object.defineProperty(detail.miniExtConfig, 'obscurePassword', {
+                    value: true,
+                });
+            },
+            generic,
+        ],
+        [
+            'detail config getter',
+            ({ detail }) => {
+                Object.defineProperty(detail, 'miniExtConfig', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('detail getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'cyclic policy',
+            ({ detail }) => {
+                detail.miniExtConfig.self = detail.miniExtConfig;
+            },
+            generic,
+        ],
+        [
+            'symbol policy',
+            ({ detail }) => {
+                detail.miniExtConfig[Symbol('mask')] = true;
+            },
+            generic,
+        ],
+        [
+            'null-prototype own name',
+            ({ record, primary }) => {
+                record.fields = Object.assign(Object.create(null), {
+                    [primary.name]: 'Own name',
+                });
+            },
+            'Own name',
+        ],
+        [
+            'mask before name getter',
+            ({ record, primary, detail }) => {
+                detail.miniExtConfig.obscurePassword = true;
+                record.fields = {};
+                Object.defineProperty(record.fields, primary.name, {
+                    get() {
+                        assert.fail('masked name read');
+                    },
+                });
+            },
+            '••••••••',
+        ],
+        [
+            'own ID despite duplicate name',
+            ({ record, primary, fixture }) => {
+                fixture.table.airtableFields[1].name = primary.name;
+                record.fields = {
+                    [primary.id]: 'Own ID',
+                    [primary.name]: 'Ambiguous',
+                };
+            },
+            'Own ID',
+        ],
+        [
+            'inherited mask',
+            ({ detail }) => {
+                detail.miniExtConfig = Object.create({ obscurePassword: true });
+            },
+            generic,
+        ],
+        [
+            'inherited ID',
+            ({ record, primary }) => {
+                record.fields = Object.create({
+                    [primary.id]: 'INHERITED_SECRET',
+                });
+            },
+            generic,
+        ],
+        [
+            'own name',
+            ({ record, primary }) => {
+                record.fields = { [primary.name]: 'Own name' };
+            },
+            'Own name',
+        ],
+        [
+            'own ID wins',
+            ({ record, primary }) => {
+                record.fields = {
+                    [primary.id]: 'Own ID',
+                    [primary.name]: 'Other name',
+                };
+            },
+            'Own ID',
+        ],
+        ...[undefined, null, '', ' ', {}, 0, false].map((value) => [
+            'present invalid ID never falls back',
+            ({ record, primary }) => {
+                record.fields = {
+                    [primary.id]: value,
+                    [primary.name]: 'Do not use',
+                };
+            },
+            generic,
+        ]),
+        [
+            'inherited name',
+            ({ record, primary }) => {
+                record.fields = Object.create({
+                    [primary.name]: 'INHERITED_SECRET',
+                });
+            },
+            generic,
+        ],
+        [
+            'duplicate name',
+            ({ record, primary, fixture }) => {
+                record.fields = { [primary.name]: 'AMBIGUOUS_SECRET' };
+                fixture.table.airtableFields[1].name = primary.name;
+            },
+            generic,
+        ],
+        [
+            'name collides with another ID',
+            ({ record, primary, detail, fixture }) => {
+                primary.name = fixture.table.airtableFields[1].id;
+                detail.fieldName = primary.name;
+                record.fields = { [primary.name]: 'COLLISION_SECRET' };
+            },
+            generic,
+        ],
+        [
+            'ID getter',
+            ({ record, primary }) => {
+                Object.defineProperty(record.fields, primary.id, {
+                    get() {
+                        assert.fail('ID getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'name getter',
+            ({ record, primary }) => {
+                record.fields = {};
+                Object.defineProperty(record.fields, primary.name, {
+                    get() {
+                        assert.fail('name getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'policy getter',
+            ({ detail }) => {
+                Object.defineProperty(detail.miniExtConfig, 'obscurePassword', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('policy getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'inherited detail visibility',
+            ({ detail }) => {
+                delete detail.isHidden;
+                Object.setPrototypeOf(detail, { isHidden: false });
+            },
+            generic,
+        ],
+    ];
+    for (const source of ['hydration', 'options']) {
+        for (const boundary of boundaries)
+            for (const throws of [false, true]) {
+                const page = createReviewFixture('review-answers').page();
+                const fixture = addLinkedReviewAnswers(page);
+                const scope = create(page, () => true);
+                if (source === 'hydration')
+                    scope.acceptHydration(fixture.tables);
+                else scope.acceptOptions('fld_review_link', fixture.options);
+                const held = scope.snapshot();
+                const [owner, key] = boundary(page);
+                const original = owner[key];
+                let reads = 0;
+                Object.defineProperty(owner, key, {
+                    enumerable: true,
+                    get() {
+                        reads++;
+                        if (throws) assert.fail('live policy getter executed');
+                        return original;
+                    },
+                });
+                assert.equal(
+                    held.current(),
+                    false,
+                    'outer accessor retires even unchanged policy bytes'
+                );
+                assert.equal(
+                    held.label('fld_review_link', 'rec_original'),
+                    generic
+                );
+                assert.equal(reads, 0);
+                assert.equal(held.signal.aborted, true);
+                checks++;
+            }
+        for (const [name, mutate, expected] of cases) {
+            const page = createReviewFixture('review-answers').page();
+            const fixture = addLinkedReviewAnswers(page);
+            const fieldId = 'fld_review_link';
+            const primary = fixture.table.airtableFields[0];
+            const detail =
+                page.payload.linkedRecordFieldIdToDetailFields[fieldId][0];
+            primary.name = detail.fieldName = 'Public title';
+            const record = fixture.records[0];
+            mutate({ page, fixture, primary, detail, record });
+            const scope = create(page, () => true);
+            if (source === 'hydration') scope.acceptHydration(fixture.tables);
+            else scope.acceptOptions(fieldId, fixture.options);
+            assert.equal(
+                scope.snapshot().label(fieldId, 'rec_original'),
+                typeof expected === 'object' ? expected[source] : expected,
+                `${source}: ${name}`
+            );
+            checks++;
+        }
+        for (const key of [
+            'fieldIdsToSchemas',
+            'linkedRecordFieldIdToDetailFields',
+        ]) {
+            const page = createReviewFixture('review-answers').page();
+            const fixture = addLinkedReviewAnswers(page);
+            const scope = create(page, () => true);
+            if (source === 'hydration') scope.acceptHydration(fixture.tables);
+            else scope.acceptOptions('fld_review_link', fixture.options);
+            const held = scope.snapshot();
+            const map = page.payload[key];
+            const schema = map.fld_review_link;
+            delete map.fld_review_link;
+            Object.setPrototypeOf(map, { fld_review_link: schema });
+            assert.equal(
+                held.current(),
+                false,
+                'own policy moved to prototype retires held labels'
+            );
+            assert.equal(held.signal.aborted, true);
+            assert.equal(
+                held.label('fld_review_link', 'rec_original'),
+                generic
+            );
+            checks++;
+        }
+        const page = createReviewFixture('review-answers').page();
+        const fixture = addLinkedReviewAnswers(page);
+        const scope = create(page, () => true);
+        if (source === 'hydration') scope.acceptHydration(fixture.tables);
+        else scope.acceptOptions('fld_review_link', fixture.options);
+        const held = scope.snapshot();
+        Object.setPrototypeOf(
+            page.payload.linkedRecordFieldIdToDetailFields.fld_review_link[0]
+                .miniExtConfig,
+            { obscurePassword: true }
+        );
+        assert.equal(
+            held.current(),
+            false,
+            'prototype-only policy changes retire accepted labels'
+        );
+        assert.equal(held.label('fld_review_link', 'rec_original'), generic);
+        checks++;
+    }
+    return { checks };
+}
+
 /** Executes the archive-installed presentation recipe; no fetch or transport. */
 export async function checkLinkedReviewRecipe({ consumerDirectory }) {
     const consumer = consumerDirectory;
@@ -680,6 +1191,7 @@ export async function checkLinkedReviewRecipe({ consumerDirectory }) {
     return {
         checks:
             checks +
+            checkLinkedReviewProvenance({ create, generic }).checks +
             5 +
             checkLinkedReviewMasking({
                 create,

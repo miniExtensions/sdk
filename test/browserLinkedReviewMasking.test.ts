@@ -69,6 +69,6 @@ it('rejects lost policy provenance and uses only unambiguous own primary values'
             create: presentation.createLinkedReviewPresentation,
             generic: presentation.unavailableLinkedAnswer,
         }).checks,
-        56
+        122
     );
 });

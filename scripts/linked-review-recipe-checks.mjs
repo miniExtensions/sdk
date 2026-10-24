@@ -288,7 +288,206 @@ export function checkLinkedReviewMasking({
 /** Provenance checks shared by source and archive-installed recipe consumers. */
 export function checkLinkedReviewProvenance({ create, generic }) {
     let checks = 0;
+    const boundaries = [
+        (page) => [page, 'payload'],
+        (page) => [page.payload, 'linkedRecordFieldIdToDetailFields'],
+        (page) => [page.payload, 'fieldIdsToSchemas'],
+        (page) => [page.payload.fieldIdsToSchemas, 'fld_review_link'],
+    ];
     const cases = [
+        ...['airtableField', 'config', 'options'].map((key) => [
+            'malformed linked schema shape',
+            ({ page }) => {
+                const schema = page.payload.fieldIdsToSchemas.fld_review_link;
+                if (key === 'airtableField') schema.airtableField = null;
+                else if (key === 'config') schema.airtableField.config = null;
+                else schema.airtableField.config.options = null;
+            },
+            generic,
+        ]),
+        [
+            'record collection getter',
+            ({ fixture }) => {
+                for (const [owner, key] of [
+                    [fixture.options, 'records'],
+                    [fixture.table, 'recordIdsToAirtableRecords'],
+                ])
+                    Object.defineProperty(owner, key, {
+                        enumerable: true,
+                        get() {
+                            assert.fail('record collection getter read');
+                        },
+                    });
+            },
+            generic,
+        ],
+        [
+            'transport table entry getter',
+            ({ fixture }) => {
+                for (const owner of [
+                    fixture.tables,
+                    fixture.options.tableIdsToLinkedTableStates,
+                ])
+                    Object.defineProperty(owner, 'tbl_review_link', {
+                        enumerable: true,
+                        get() {
+                            assert.fail('transport table getter read');
+                        },
+                    });
+            },
+            generic,
+        ],
+        [
+            'transport table map getter',
+            ({ fixture }) => {
+                Object.defineProperty(
+                    fixture.options,
+                    'tableIdsToLinkedTableStates',
+                    {
+                        enumerable: true,
+                        get() {
+                            assert.fail('transport map getter read');
+                        },
+                    }
+                );
+                Object.defineProperty(fixture.tables, 'tbl_review_link', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('hydration table getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'record map entry getter',
+            ({ fixture }) => {
+                Object.defineProperty(
+                    fixture.table.recordIdsToAirtableRecords,
+                    'rec_original',
+                    {
+                        enumerable: true,
+                        get() {
+                            assert.fail('record map entry getter read');
+                        },
+                    }
+                );
+            },
+            { hydration: generic, options: '<b>Authorized name</b>' },
+        ],
+        [
+            'options indexed record getter',
+            ({ fixture }) => {
+                Object.defineProperty(fixture.options.records, '0', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('indexed record getter read');
+                    },
+                });
+            },
+            { hydration: '<b>Authorized name</b>', options: generic },
+        ],
+        [
+            'options custom iterator',
+            ({ fixture }) => {
+                Object.defineProperty(
+                    fixture.options.records,
+                    Symbol.iterator,
+                    {
+                        get() {
+                            assert.fail('custom iterator read');
+                        },
+                    }
+                );
+            },
+            { hydration: '<b>Authorized name</b>', options: generic },
+        ],
+        [
+            'record identity getter',
+            ({ record }) => {
+                Object.defineProperty(record, 'id', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('record identity getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'record fields getter',
+            ({ record }) => {
+                Object.defineProperty(record, 'fields', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('record fields getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'table metadata getter',
+            ({ fixture }) => {
+                Object.defineProperty(fixture.table, 'airtableFields', {
+                    enumerable: true,
+                    get() {
+                        assert.fail('table metadata getter read');
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'absent optional detail map',
+            ({ page }) => {
+                delete page.payload.linkedRecordFieldIdToDetailFields;
+            },
+            generic,
+        ],
+        ...boundaries.flatMap((boundary) =>
+            [false, true].map((throws) => [
+                'outer policy accessor',
+                ({ page }) => {
+                    const [owner, key] = boundary(page);
+                    const original = owner[key];
+                    Object.defineProperty(owner, key, {
+                        enumerable: true,
+                        get() {
+                            if (throws)
+                                assert.fail('outer policy getter executed');
+                            return original;
+                        },
+                    });
+                },
+                generic,
+            ])
+        ),
+        [
+            'changing primary name getter',
+            ({ primary, record, fixture }) => {
+                const publicName = primary.name;
+                const hiddenName = fixture.table.airtableFields[1].name;
+                record.fields = { [hiddenName]: 'SECONDARY_SECRET' };
+                let reads = 0;
+                Object.defineProperty(primary, 'name', {
+                    enumerable: true,
+                    get() {
+                        return ++reads <= 6 ? publicName : hiddenName;
+                    },
+                });
+            },
+            generic,
+        ],
+        [
+            'inherited primary metadata',
+            ({ primary }) => {
+                const name = primary.name;
+                delete primary.name;
+                Object.setPrototypeOf(primary, { name });
+            },
+            generic,
+        ],
         [
             'schema config getter',
             ({ page }) => {
@@ -496,6 +695,39 @@ export function checkLinkedReviewProvenance({ create, generic }) {
         ],
     ];
     for (const source of ['hydration', 'options']) {
+        for (const boundary of boundaries)
+            for (const throws of [false, true]) {
+                const page = createReviewFixture('review-answers').page();
+                const fixture = addLinkedReviewAnswers(page);
+                const scope = create(page, () => true);
+                if (source === 'hydration')
+                    scope.acceptHydration(fixture.tables);
+                else scope.acceptOptions('fld_review_link', fixture.options);
+                const held = scope.snapshot();
+                const [owner, key] = boundary(page);
+                const original = owner[key];
+                let reads = 0;
+                Object.defineProperty(owner, key, {
+                    enumerable: true,
+                    get() {
+                        reads++;
+                        if (throws) assert.fail('live policy getter executed');
+                        return original;
+                    },
+                });
+                assert.equal(
+                    held.current(),
+                    false,
+                    'outer accessor retires even unchanged policy bytes'
+                );
+                assert.equal(
+                    held.label('fld_review_link', 'rec_original'),
+                    generic
+                );
+                assert.equal(reads, 0);
+                assert.equal(held.signal.aborted, true);
+                checks++;
+            }
         for (const [name, mutate, expected] of cases) {
             const page = createReviewFixture('review-answers').page();
             const fixture = addLinkedReviewAnswers(page);
@@ -510,16 +742,43 @@ export function checkLinkedReviewProvenance({ create, generic }) {
             if (source === 'hydration') scope.acceptHydration(fixture.tables);
             else scope.acceptOptions(fieldId, fixture.options);
             assert.equal(
-                scope.snapshot().label(fieldId, record.id),
-                expected,
+                scope.snapshot().label(fieldId, 'rec_original'),
+                typeof expected === 'object' ? expected[source] : expected,
                 `${source}: ${name}`
+            );
+            checks++;
+        }
+        for (const key of [
+            'fieldIdsToSchemas',
+            'linkedRecordFieldIdToDetailFields',
+        ]) {
+            const page = createReviewFixture('review-answers').page();
+            const fixture = addLinkedReviewAnswers(page);
+            const scope = create(page, () => true);
+            if (source === 'hydration') scope.acceptHydration(fixture.tables);
+            else scope.acceptOptions('fld_review_link', fixture.options);
+            const held = scope.snapshot();
+            const map = page.payload[key];
+            const schema = map.fld_review_link;
+            delete map.fld_review_link;
+            Object.setPrototypeOf(map, { fld_review_link: schema });
+            assert.equal(
+                held.current(),
+                false,
+                'own policy moved to prototype retires held labels'
+            );
+            assert.equal(held.signal.aborted, true);
+            assert.equal(
+                held.label('fld_review_link', 'rec_original'),
+                generic
             );
             checks++;
         }
         const page = createReviewFixture('review-answers').page();
         const fixture = addLinkedReviewAnswers(page);
         const scope = create(page, () => true);
-        scope.acceptHydration(fixture.tables);
+        if (source === 'hydration') scope.acceptHydration(fixture.tables);
+        else scope.acceptOptions('fld_review_link', fixture.options);
         const held = scope.snapshot();
         Object.setPrototypeOf(
             page.payload.linkedRecordFieldIdToDetailFields.fld_review_link[0]

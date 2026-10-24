@@ -256,3 +256,45 @@ it('zero accepted rows retain accepted headers independently of values; withheld
     }
     scope.destroy();
 });
+
+it('destroy inside a subscriber delivers one terminal revision to every remaining subscriber and tears down once', () => {
+    const f = fixture();
+    const scope = createBorrowedPortalRenderScope(f.port);
+    const seen: { revision: number; retired: boolean }[][] = [[], [], []];
+    let armed = false;
+    seen.forEach((events, index) =>
+        scope.subscribe((snapshot) => {
+            events.push({
+                revision: snapshot.revision,
+                retired: snapshot.retired,
+            });
+            if (armed && index === 0 && !snapshot.retired) scope.destroy();
+        })
+    );
+    armed = true;
+    f.replace();
+    f.notify();
+    const terminal = scope.getSnapshot();
+    assert.equal(terminal.retired, true);
+    assert.deepEqual(terminal.rows, []);
+    assert.deepEqual(terminal.columns, []);
+    assert.equal(f.stops, 1);
+    for (const events of seen) {
+        assert.deepEqual(
+            events.filter((event) => event.retired),
+            [{ revision: terminal.revision, retired: true }]
+        );
+        assert.deepEqual(events.at(-1), {
+            revision: terminal.revision,
+            retired: true,
+        });
+    }
+    const counts = seen.map((events) => events.length);
+    scope.destroy();
+    f.notify();
+    assert.equal(f.stops, 1);
+    assert.deepEqual(
+        seen.map((events) => events.length),
+        counts
+    );
+});

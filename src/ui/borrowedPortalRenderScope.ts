@@ -273,7 +273,9 @@ export function createBorrowedPortalRenderScope<Stamp>(
         if (notifying) return;
         notifying = true;
         try {
-            for (let pass = 0; pass < 16; pass++) {
+            // A terminal revision is immutable: allow its final delivery even
+            // when destruction occurs on the last bounded refresh pass.
+            for (let pass = 0; pass < 16 || destroyed; pass++) {
                 const before = revision;
                 for (const [listener, delivered] of [...listeners]) {
                     if (delivered === revision || !listeners.has(listener))
@@ -289,6 +291,7 @@ export function createBorrowedPortalRenderScope<Stamp>(
             }
         } finally {
             notifying = false;
+            if (destroyed) listeners.clear();
         }
     };
     refresh();
@@ -324,8 +327,8 @@ export function createBorrowedPortalRenderScope<Stamp>(
             destroyed = true;
             stop();
             refresh();
+            // A reentrant destroy leaves listeners for the active notifier.
             notify();
-            listeners.clear();
         },
     };
 }

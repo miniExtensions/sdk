@@ -1501,6 +1501,10 @@ new Parser([]).parse({maxDepth:'48'});
         ]);
     }
 
+    console.log(
+        'Installed headless declarations: NodeNext .mts/.cts and Bundler passed with React absent.'
+    );
+
     const bundled = await build({
         entryPoints: [join(temporaryDirectory, 'consumer.mjs')],
         bundle: true,
@@ -1586,7 +1590,8 @@ new Parser([]).parse({maxDepth:'48'});
                 durationInputTypedConsumer +
                 dateInputCompatibilityTypedConsumer +
                 recoverableImageTypedConsumer +
-                fileSelectionTypedConsumer
+                fileSelectionTypedConsumer +
+                borrowedFormRenderReactTypedConsumer
         );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
@@ -1633,7 +1638,8 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             ratingInputJsxConsumer +
             calendlyBookingJsxConsumer +
             personBadgeJsxConsumer +
-            recoverableImageJsxConsumer
+            recoverableImageJsxConsumer +
+            borrowedFormRenderReactTypedConsumer
     );
     reactSources.push('text-input-consumer.tsx');
     writeFileSync(
@@ -2025,6 +2031,10 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         'react-jsx',
         ...reactSources,
     ]);
+
+    console.log(
+        'Installed React declarations: NodeNext .mts/.cts and Bundler passed.'
+    );
 
     assert.equal(
         await checkPortalEditorConsumer({
@@ -3830,4 +3840,5 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
 import {
     checkBorrowedFormRenderConsumer,
     borrowedFormRenderTypedConsumer,
+    borrowedFormRenderReactTypedConsumer,
 } from './borrowed-form-render-consumer-checks.mjs';

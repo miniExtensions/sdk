@@ -108,6 +108,6 @@ const getValidUrlHref = (url: string): string | null => {
     }
 };
 
-// Internal page admission only; never replace the native answer with an href.
+// Syntax predicate only; callers retain field policy and the original answer.
 export const checkIfPageUrlIsValid = (value: string): boolean =>
     getValidUrlHref(value) != null;

@@ -248,10 +248,7 @@ export {
     renderDateTimeField,
     type DateTimeFieldOptions,
 } from './DateTimeField.js';
-import type {
-    FormRenderScope,
-    FormRenderSnapshot,
-} from '../ui/formRenderScope.js';
+import type { FormRenderSnapshot } from '../ui/formRenderScope.js';
 import type {
     PortalRenderScope,
     PortalRenderSnapshot,
@@ -2166,24 +2163,35 @@ export function FieldRenderer({
     );
 }
 
-export type AirtableFormRenderState = Omit<FormRenderSnapshot, 'fields'> & {
+export type AirtableFormRenderState<
+    Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+> = Omit<FormRenderSnapshot<Submit>, 'fields'> & {
     fields: readonly { fieldId: string; node: ReactNode }[];
 };
-export type AirtableFormProps = {
-    scope: FormRenderScope;
+export type AirtableFormProps<
+    Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+> = {
+    scope: {
+        getSnapshot(): FormRenderSnapshot<Submit>;
+        subscribe(
+            listener: (snapshot: FormRenderSnapshot<Submit>) => void
+        ): () => void;
+    };
     renderers: import('../ui/rendererRegistry.js').FieldRendererSlots<ReactNode>;
     fallback?(state: FieldRendererFallback): ReactNode;
     /** Layout only; actions retain the revision that produced this render. */
-    children(state: AirtableFormRenderState): ReactNode;
+    children(state: AirtableFormRenderState<Submit>): ReactNode;
 };
 
 /** A subscription shell: unmount never disposes the supplied rendering scope. */
-export function AirtableForm({
+export function AirtableForm<
+    Submit = Awaited<ReturnType<FormRenderSnapshot['actions']['submit']>>,
+>({
     scope,
     renderers,
     fallback,
     children,
-}: AirtableFormProps): ReactNode {
+}: AirtableFormProps<Submit>): ReactNode {
     const store = useMemo(() => {
         let value = scope.getSnapshot();
         const read = () => {

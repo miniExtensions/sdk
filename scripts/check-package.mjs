@@ -1441,6 +1441,7 @@ void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDate
                 borrowedLinkedChildTypedConsumer +
                 formProgressTypedConsumer +
                 nativeFormProgressTypedConsumer +
+                borrowedFormRenderTypedConsumer +
                 buttonDispatchGateTypedConsumer +
                 borrowedButtonActionTypedConsumer +
                 `
@@ -3114,6 +3115,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         2
     );
     assert.equal(
+        await checkBorrowedFormRenderConsumer({
+            consumerDirectory: temporaryDirectory,
+        }),
+        2
+    );
+    assert.equal(
         await checkNativeFormProgressConsumer({
             consumerDirectory: temporaryDirectory,
         }),
@@ -3820,3 +3827,7 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
         );
     }
 }
+import {
+    checkBorrowedFormRenderConsumer,
+    borrowedFormRenderTypedConsumer,
+} from './borrowed-form-render-consumer-checks.mjs';

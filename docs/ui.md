@@ -35,6 +35,27 @@ private repository checkout. Its application code connects selection drafts
 and labels to visitor changes, save recovery, uploads, and Portal pagination.
 Custom layouts and advanced presentation remain application-owned.
 
+## Borrowed native Form rendering
+
+`createBorrowedFormRenderScope<Submit>` is a separate host-native presentation
+adapter for ordinary text and number slots. It does not acquire SDK accepted
+owner provenance, create a client/controller/store, or copy a canonical draft.
+The native `read` and `subscribe` ports supply committed owner/configuration
+epochs and field presentation; `write` must fence that expected owner at the
+native mutation boundary. Publish from committed host state, not a React render.
+Observed owner/configuration replacement permanently retires old callbacks,
+including A-to-B-to-A. Unsubscribing or remounting presentation does not reset
+the host draft. Specialized controls remain the host's fallback responsibility.
+
+The native `submit(expected, admitAllocation)` port retains its exact generic
+result, including `void`. It must invoke the one-use admission callback after
+its existing compute/coordinator waits and immediately before allocating Save.
+Refused admission must not allocate. Once allocated, native ownership and
+settlement continue even if presentation retires; the scope never fabricates
+an SDK Save result, cancels native work, or automatically retries. Native page,
+validation and Save UI remain native responsibilities. `AirtableForm` can also
+present this generic scope without converting its submit result.
+
 ## Prepared Form review in the browser starter
 
 The packaged starter's `src/review.ts` and existing DOM confirmation dialog

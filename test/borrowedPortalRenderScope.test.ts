@@ -298,3 +298,40 @@ it('destroy inside a subscriber delivers one terminal revision to every remainin
         counts
     );
 });
+
+it('destroy from an accepted cell retirement publishes terminal state without replaying the old active snapshot', () => {
+    const f = fixture();
+    const scope = createBorrowedPortalRenderScope(f.port);
+    const seen: { revision: number; retired: boolean }[][] = [[], []];
+    for (const events of seen)
+        scope.subscribe(({ revision, retired }) =>
+            events.push({ revision, retired })
+        );
+    const host = scope.getSnapshot().rows[0].cells[0].host;
+    let retirements = 0;
+    host.subscribe((snapshot) => {
+        if (snapshot.status === 'retired') {
+            retirements++;
+            scope.destroy();
+        }
+    });
+    f.replace();
+    f.notify();
+    const terminal = scope.getSnapshot();
+    assert.equal(terminal.retired, true);
+    assert.deepEqual(terminal.rows, []);
+    assert.deepEqual(terminal.columns, []);
+    for (const events of seen)
+        assert.deepEqual(events, [
+            { revision: 1, retired: false },
+            { revision: terminal.revision, retired: true },
+        ]);
+    scope.destroy();
+    f.notify();
+    assert.equal(retirements, 1);
+    assert.equal(f.stops, 1);
+    assert.deepEqual(
+        seen.map((events) => events.length),
+        [2, 2]
+    );
+});

@@ -258,6 +258,12 @@ export function createBorrowedPortalRenderScope<Stamp>(
             }
         } finally {
             refreshing = false;
+            // Host retirement can destroy the scope during this refresh. Finish
+            // its terminal snapshot before delivering or clearing listeners.
+            if (destroyed) {
+                if (accepted !== null) refresh();
+                notify();
+            }
         }
     };
     const copy = (): BorrowedPortalRenderSnapshot => ({
@@ -270,7 +276,7 @@ export function createBorrowedPortalRenderScope<Stamp>(
         actions: { ...snapshot.actions },
     });
     const notify = () => {
-        if (notifying) return;
+        if (notifying || refreshing) return;
         notifying = true;
         try {
             // A terminal revision is immutable: allow its final delivery even

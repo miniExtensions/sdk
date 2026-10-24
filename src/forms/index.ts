@@ -148,6 +148,7 @@ export {
     type FormPageErrorReason,
 } from './pages.js';
 export type { FormPageProblem } from './pageValidation.js';
+export { checkIfPageUrlIsValid as checkIfFormUrlIsValid } from './pageUrlValidation.js';
 
 export {
     createFormProgressStorage,

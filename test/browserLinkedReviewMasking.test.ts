@@ -14,7 +14,7 @@ let presentation: {
     unavailableLinkedAnswer: string;
     createFormSaveInput: unknown;
 };
-const { checkLinkedReviewMasking } = await import(
+const { checkLinkedReviewMasking, checkLinkedReviewProvenance } = await import(
     pathToFileURL(join(root, 'scripts/linked-review-recipe-checks.mjs')).href
 );
 
@@ -61,4 +61,14 @@ describe('linked Review accepted primary masking', () => {
             104
         );
     });
+});
+
+it('rejects lost policy provenance and uses only unambiguous own primary values', () => {
+    assert.equal(
+        checkLinkedReviewProvenance({
+            create: presentation.createLinkedReviewPresentation,
+            generic: presentation.unavailableLinkedAnswer,
+        }).checks,
+        56
+    );
 });

@@ -10,6 +10,35 @@ import { hasMaskedValuePolicy } from './privacy.js';
 export const unavailableLinkedAnswer = 'Selected record — details unavailable';
 const object = (value: unknown): value is Record<string, unknown> =>
     value != null && typeof value === 'object' && !Array.isArray(value);
+// Cloning and JSON erase prototypes and invoke accessors. Accept policy data
+// only before either operation, and repeat this check for live invalidation.
+const plainData = (value: unknown, seen = new Set<object>()): boolean => {
+    if (value === null || value === undefined) return true;
+    if (typeof value !== 'object')
+        return ['string', 'number', 'boolean'].includes(typeof value);
+    if (seen.has(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    if (
+        Array.isArray(value)
+            ? prototype !== Array.prototype
+            : prototype !== Object.prototype && prototype !== null
+    )
+        return false;
+    seen.add(value);
+    const valid = Reflect.ownKeys(value).every((key) => {
+        const descriptor = Object.getOwnPropertyDescriptor(value, key)!;
+        return (
+            typeof key === 'string' &&
+            (descriptor.enumerable ||
+                (Array.isArray(value) && key === 'length')) &&
+            'value' in descriptor &&
+            plainData(descriptor.value, seen)
+        );
+    });
+    seen.delete(value);
+    return valid;
+};
+
 const plainTypes = new Set([
     'singleLineText',
     'multilineText',
@@ -39,20 +68,21 @@ export function createLinkedReviewPresentation(
     for (const fieldId of page.payload.fieldIdsInForm) {
         const schema = page.payload.fieldIdsToSchemas[fieldId];
         if (
+            !plainData(schema) ||
             schema?.fieldType !== 'multipleRecordLinks' ||
             schema.airtableField.config.type !== 'multipleRecordLinks'
         )
             continue;
         const value = page.payload.formRecord.data[fieldId];
+        const config = schema.miniExtConfig ?? {};
+        const detailMap = page.payload.linkedRecordFieldIdToDetailFields;
+        const details = plainData(detailMap) ? detailMap?.[fieldId] : undefined;
         policies.set(fieldId, {
             tableId: schema.airtableField.config.options.linkedTableId,
-            config: structuredClone(schema.miniExtConfig ?? {}) as Record<
-                string,
-                unknown
-            >,
-            details: structuredClone(
-                page.payload.linkedRecordFieldIdToDetailFields?.[fieldId]
-            ),
+            config: plainData(config)
+                ? (structuredClone(config) as Record<string, unknown>)
+                : {},
+            details: plainData(config) ? structuredClone(details) : undefined,
             original: new Set(
                 Array.isArray(value)
                     ? value.filter(
@@ -63,20 +93,26 @@ export function createLinkedReviewPresentation(
             ),
         });
     }
-    const policyBytes = (): string =>
-        JSON.stringify([
+    const policyBytes = (): string | undefined => {
+        const values = [
             page.payload.linkedRecordFieldIdToDetailFields,
             [...policies.keys()].map(
                 (id) => page.payload.fieldIdsToSchemas[id]
             ),
-        ]);
+        ];
+        return plainData(values) ? JSON.stringify(values) : undefined;
+    };
     const capturedPolicy = policyBytes();
     const labels = new Map<string, Map<string, string>>();
     let invalidation = new AbortController();
     let epoch = 0,
         retired = false;
     const active = (): boolean => {
-        if (!retired && policyBytes() !== capturedPolicy) retire();
+        if (
+            !retired &&
+            (capturedPolicy === undefined || policyBytes() !== capturedPolicy)
+        )
+            retire();
         return !retired && current();
     };
     const retire = () => {
@@ -188,7 +224,28 @@ export function createLinkedReviewPresentation(
                 config.displayAsButton === true
             )
                 continue;
-            const value = record.fields[primary.id];
+            // An own ID is authoritative even when its value is unavailable.
+            // Name fallback is permitted only for a unique, non-colliding name.
+            const idValue = Object.getOwnPropertyDescriptor(
+                record.fields,
+                primary.id
+            );
+            const nameIsUnique =
+                fields.filter((field) => field.name === primary.name).length ===
+                1;
+            const nameCollides = fields.some(
+                (field) => field.id !== primary.id && field.id === primary.name
+            );
+            const selected =
+                idValue ??
+                (nameIsUnique && !nameCollides
+                    ? Object.getOwnPropertyDescriptor(
+                          record.fields,
+                          primary.name
+                      )
+                    : undefined);
+            if (!selected || !('value' in selected)) continue;
+            const value = selected.value;
             if (
                 value == null ||
                 (typeof value === 'string' && value.trim() === '') ||

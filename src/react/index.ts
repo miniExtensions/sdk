@@ -1,3 +1,7 @@
+import type {
+    PortalPresentationSnapshot,
+    PortalPresentationSource,
+} from '../ui/borrowedPortalRenderScope.js';
 export { RadioInput, type RadioInputProps } from './RadioInput.js';
 export {
     RecoverableImage,
@@ -252,10 +256,7 @@ import type {
     FormRenderScope,
     FormRenderSnapshot,
 } from '../ui/formRenderScope.js';
-import type {
-    PortalRenderScope,
-    PortalRenderSnapshot,
-} from '../ui/portalRenderScope.js';
+import type { PortalRenderSnapshot } from '../ui/portalRenderScope.js';
 import type { FormFieldBinding, FormFieldSnapshot } from '../forms/bindings.js';
 import type {
     FormAttachmentController,
@@ -2247,27 +2248,33 @@ export function AirtableForm<
     });
 }
 
-export type AirtablePortalRenderState = Omit<PortalRenderSnapshot, 'rows'> & {
+export type AirtablePortalRenderState<
+    S extends PortalPresentationSnapshot = PortalRenderSnapshot,
+> = Omit<S, 'rows'> & {
     rows: readonly {
         recordId: string;
         cells: readonly { fieldId: string; node: ReactNode }[];
     }[];
 };
-export type AirtableGridProps = {
-    scope: PortalRenderScope;
+export type AirtableGridProps<
+    S extends PortalPresentationSnapshot = PortalRenderSnapshot,
+> = {
+    scope: PortalPresentationSource<S>;
     renderers: import('../ui/rendererRegistry.js').FieldRendererSlots<ReactNode>;
     fallback?(state: FieldRendererFallback): ReactNode;
     /** App-owned layout; every action retains this accepted render's revision. */
-    children(state: AirtablePortalRenderState): ReactNode;
+    children(state: AirtablePortalRenderState<S>): ReactNode;
 };
-export type AirtableListProps = AirtableGridProps;
+export type AirtableListProps<
+    S extends PortalPresentationSnapshot = PortalRenderSnapshot,
+> = AirtableGridProps<S>;
 
-function AirtablePortal({
+function AirtablePortal<S extends PortalPresentationSnapshot>({
     scope,
     renderers,
     fallback,
     children,
-}: AirtableGridProps): ReactNode {
+}: AirtableGridProps<S>): ReactNode {
     const store = useMemo(() => {
         let value = scope.getSnapshot();
         const read = () => {
@@ -2317,13 +2324,17 @@ function AirtablePortal({
 }
 
 /** Grid layout shell only. Unmount never disposes the supplied scope or owner. */
-export function AirtableGrid(props: AirtableGridProps): ReactNode {
-    return createElement(AirtablePortal, props);
+export function AirtableGrid<
+    S extends PortalPresentationSnapshot = PortalRenderSnapshot,
+>(props: AirtableGridProps<S>): ReactNode {
+    return createElement(AirtablePortal<S>, props);
 }
 
 /** List layout shell over the same accepted records, hosts and action authority. */
-export function AirtableList(props: AirtableListProps): ReactNode {
-    return createElement(AirtablePortal, props);
+export function AirtableList<
+    S extends PortalPresentationSnapshot = PortalRenderSnapshot,
+>(props: AirtableListProps<S>): ReactNode {
+    return createElement(AirtablePortal<S>, props);
 }
 
 export { ButtonField, renderButtonField } from './ButtonField.js';

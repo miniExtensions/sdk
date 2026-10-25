@@ -267,6 +267,17 @@ export type {
     AttachmentUploadAdmission,
     AttachmentUploadAuthority,
 } from './attachmentUploadAdmission.js';
+
+export { createBorrowedPortalRenderScope } from './borrowedPortalRenderScope.js';
+export type {
+    PortalPresentationSnapshot,
+    PortalPresentationSource,
+    BorrowedPortalPort,
+    BorrowedPortalTarget,
+    BorrowedPortalColumn,
+    BorrowedPortalRenderSnapshot,
+    BorrowedPortalRenderScope,
+} from './borrowedPortalRenderScope.js';
 export { createBorrowedFormRenderScope } from './borrowedFormRenderScope.js';
 export type {
     BorrowedFormOwner,

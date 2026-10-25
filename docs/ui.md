@@ -4786,3 +4786,38 @@ permission. It returns the exact host value/promise and propagates original
 errors. After allocation, the host keeps success, cancellation and completed-prefix
 partial recovery even if the captured policy retires. Never use this admission
 lease to filter an already allocated completion or to replace backend authorization.
+
+### Borrowed native Portal presentation
+
+`createBorrowedPortalRenderScope` accepts a `BorrowedPortalPort<Stamp>` and
+creates read-only field renderer hosts for `AirtableList` and `AirtableGrid`.
+It does not register native data as private SDK owner provenance. Existing
+`createPortalRenderScope` owners and their provenance checks are unchanged.
+
+The native `capture()` supplies only the accepted `PortalRecordPresentation`,
+not a cache. Its opaque stamp must change on owner/session/token/view/config,
+policy, row or value publication, including equal-value A→B→A. Accepted record
+and detail order is preserved. Hidden details are omitted; present-empty,
+missing and null detail projections never fall back to schema or cached values.
+All generated field capabilities are read-only. The snapshot contains rendered
+rows and guarded `openRow`/`openChild` actions, not an SDK collection owner.
+
+`invokeIfCurrent(stamp, target, isCurrent)` is optional and remains a native
+admission boundary. It must check live native policy and the supplied fence
+immediately before acting, including after any wait. SDK checks before invocation
+and after completion cannot undo an improperly admitted native side effect.
+Absent callbacks and stale row/field capabilities refuse. Backend authorization
+remains native; this contract does not authorize scalar writes or manufacture
+SDK child-request provenance. `destroy()` releases presentation subscriptions
+only. Shell unmount never calls it or disposes native resources.
+
+The React shell types accept a generic `PortalPresentationSource<S>` and preserve
+`S`'s additional render-state properties; existing callers default to
+`PortalRenderSnapshot`. Borrowed callers can explicitly use
+`AirtableListProps<BorrowedPortalRenderSnapshot>` (likewise Grid) when annotating
+props rather than relying on JSX inference.
+
+Borrowed snapshots also expose detached `columns: { fieldId, title }[]` from
+the same accepted visible detail/schema policy as cells. Headers preserve accepted
+order even with zero rows; no first-row values or cached records are consulted.
+Explicit empty, missing or null detail projections expose no columns.

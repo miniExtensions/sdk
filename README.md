@@ -135,6 +135,14 @@ compiler failure, and is not shipped. No source package settings are rewritten.
 
 ## Obtain the actual runtime configuration
 
+Public SDK integrations are intended to use published extensions, not unpublished
+builder drafts. Maker preview is a separate server-authorized use case requiring
+current workspace permission checks; membership or login alone is not an exception
+for an external SDK integration, and client flags or Origin do not grant authority.
+Confirm the supported maker-preview path with the deployment owner before using it.
+This intended boundary does not define a new SDK API; its corresponding enforcement
+implementation and deployment verification remain pending.
+
 - Publish the Form or Portal through the existing miniExtensions workspace,
   including permitted child create/edit Forms. The SDK's top-level `shareId`
   input requires the stored `extension.shareId`. It is not an admin extension,

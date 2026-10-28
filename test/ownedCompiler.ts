@@ -16,6 +16,7 @@ export type TrackedCompilerChild = {
     terminated: Promise<Error>;
     isClosed(): boolean;
     isExited(): boolean;
+    onError(listener: (error: Error) => void): void;
     ref(): void;
 };
 
@@ -23,6 +24,8 @@ export type TrackedCompilerChild = {
 // back to esbuild. In particular, an error is not a substitute for close.
 export function trackCompilerChild(child: ChildProcess): TrackedCompilerChild {
     let error: Error | undefined;
+    const errors: Error[] = [];
+    let listener: ((error: Error) => void) | undefined;
     let closed = false;
     let exited = false;
     let reportError!: (error: Error) => void;
@@ -35,6 +38,10 @@ export function trackCompilerChild(child: ChildProcess): TrackedCompilerChild {
     });
     const terminal = new Promise<CompilerClose>((resolve) => {
         const remember = (next: Error) => {
+            if (!errors.includes(next)) {
+                errors.push(next);
+                listener?.(next);
+            }
             if (!error) {
                 error = next;
                 reportError(next);
@@ -59,6 +66,10 @@ export function trackCompilerChild(child: ChildProcess): TrackedCompilerChild {
         terminated,
         isClosed: () => closed,
         isExited: () => exited,
+        onError: (next) => {
+            listener = next;
+            for (const error of errors) next(error);
+        },
         ref: () => child.ref(),
     };
 }
@@ -267,6 +278,16 @@ function nativeBinary(esbuildPath: string): string {
     return realpathSync(binary);
 }
 
+// Internal aggregates can be flattened when a later stage also fails. An
+// AggregateError supplied by a caller remains an opaque original failure.
+const internalAggregates = new WeakSet<AggregateError>();
+function combinedFailures(errors: unknown[]): unknown {
+    if (errors.length === 1) return errors[0];
+    const combined = new AggregateError(errors, 'Owned compiler encountered multiple failures');
+    internalAggregates.add(combined);
+    return combined;
+}
+
 type EsbuildModule = typeof import('esbuild');
 
 function nativeDriver(): CompilerDriver {
@@ -308,8 +329,26 @@ function nativeDriver(): CompilerDriver {
             try {
                 fence.child()?.ref();
             } catch (error) {
-                fence.restore();
-                throw error;
+                const failures: unknown[] = [error];
+                try {
+                    fence.restore();
+                } catch (restoreError) {
+                    if (!failures.includes(restoreError)) failures.push(restoreError);
+                }
+                // Ownership remains unsafe and no stop is attempted. Observe
+                // initialization too, so its rejection cannot be masked by ref.
+                return {
+                    child: fence.child(),
+                    ambiguous: true,
+                    ready: ready.then(
+                        () => { throw combinedFailures(failures); },
+                        (readyError: unknown) => {
+                            if (!failures.includes(readyError)) failures.push(readyError);
+                            throw combinedFailures(failures);
+                        }
+                    ),
+                    isAmbiguous: fence.isAmbiguous,
+                };
             }
             return {
                 child: fence.child(),
@@ -390,19 +429,38 @@ export function createOwnedCompiler(
         active = true;
         let child: TrackedCompilerChild | undefined;
         let confirmedClosed = false;
-        let firstError: unknown;
-        let failed = false;
-        let firstBuildError: unknown;
-        let buildFailed = false;
+        const errors: unknown[] = [];
+        const seen = new Set<unknown>();
         let started: ReturnType<CompilerDriver['start']> | undefined;
-        const record = (error: unknown) => {
-            if (!failed) {
-                failed = true;
-                firstError = error;
+        let terminationObserved = false;
+        const ambiguity = new Error('Compiler ownership became ambiguous');
+        const record = (error: unknown): void => {
+            if (error instanceof AggregateError && internalAggregates.has(error)) {
+                for (const nested of error.errors) record(nested);
+            } else if (!seen.has(error)) {
+                seen.add(error);
+                errors.push(error);
             }
         };
+        const ownershipLost = async () => {
+            unsafe = true;
+            // A real tracked child resolves terminated when either event is
+            // observed, even if an earlier stream error won the race.
+            if (!terminationObserved && child) record(await child.terminated);
+        };
+        const recordTerminal = (terminal: CompilerClose) => {
+            if (terminal.error) record(terminal.error);
+            if (
+                (terminal.signal && terminal.signal !== 'SIGTERM') ||
+                (!terminal.signal && terminal.code !== 0)
+            )
+                record(
+                    new Error(
+                        `Compiler closed unexpectedly (code ${terminal.code}, signal ${terminal.signal})`
+                    )
+                );
+        };
         try {
-            let drainFailure: unknown;
             let drainFailed = false;
             try {
                 started = driver.start();
@@ -411,27 +469,26 @@ export function createOwnedCompiler(
                 throw error;
             }
             child = started.child;
+            child?.onError(record);
             if (!child || started.ambiguous || started.isAmbiguous?.()) {
                 unsafe = true;
+                record(new Error('Compiler child ownership was not established'));
                 // Avoid an unhandled rejection while refusing to stop an
                 // unowned service or start any builds.
                 await started.ready;
-                throw new Error('Compiler child ownership was not established');
+                return;
             }
             try {
                 await started.ready;
                 if (started.isAmbiguous?.())
-                    throw new Error('Compiler ownership became ambiguous');
+                    throw ambiguity;
                 if (child.isClosed() || child.isExited())
                     throw new Error('Compiler exited before building');
                 const builds = actions.map((action) =>
                     Promise.resolve()
                         .then(action)
                         .catch((error: unknown) => {
-                            if (!buildFailed) {
-                                buildFailed = true;
-                                firstBuildError = error;
-                            }
+                            record(error);
                             throw error;
                         })
                 );
@@ -439,9 +496,10 @@ export function createOwnedCompiler(
                 const outcome = await Promise.race([
                     settled.then(() => ({ kind: 'settled' as const })),
                     child.errored.then((error) => ({ kind: 'error' as const, error })),
-                    child.terminated.then((error) => ({ kind: 'error' as const, error })),
+                    child.terminated.then((error) => ({ kind: 'termination' as const, error })),
                 ]);
-                if (outcome.kind === 'error') {
+                if (outcome.kind !== 'settled') {
+                    terminationObserved = outcome.kind === 'termination';
                     record(outcome.error);
                     try {
                         await observeDrain(settled, outcome.error);
@@ -450,46 +508,35 @@ export function createOwnedCompiler(
                         await settled;
                     } catch (error) {
                         drainFailed = true;
-                        drainFailure = new AggregateError(
-                            [
-                                ...(buildFailed ? [firstBuildError] : []),
-                                outcome.error,
-                                error,
-                            ].filter((value, index, values) => values.indexOf(value) === index),
-                            'Compiler builds did not settle after compiler failure'
-                        );
+                        record(error);
                     }
                 }
             } catch (error) {
                 record(error);
             }
-            if (drainFailed) throw drainFailure;
+            if (drainFailed) return;
             if (started.isAmbiguous?.()) {
                 unsafe = true;
-                if (buildFailed) throw firstBuildError;
-                throw new Error('Compiler ownership became ambiguous');
+                record(ambiguity);
+                return;
             }
             if (child.isClosed() || child.isExited()) {
                 // The cached global service may no longer refer to this child.
                 // Do not stop it or release the fixture without ownership proof.
-                unsafe = true;
-                if (buildFailed) throw firstBuildError;
-                if (failed) throw firstError;
-                throw new Error('Compiler exited before owned shutdown');
+                await ownershipLost();
+                return;
             }
             // The service may unref itself when builds finish. Keep the process
             // referenced while waiting for close, including after stop errors.
             child.ref();
             if (started.isAmbiguous?.()) {
                 unsafe = true;
-                if (buildFailed) throw firstBuildError;
-                throw new Error('Compiler ownership became ambiguous');
+                record(ambiguity);
+                return;
             }
             if (child.isClosed() || child.isExited()) {
-                unsafe = true;
-                if (buildFailed) throw firstBuildError;
-                if (failed) throw firstError;
-                throw new Error('Compiler exited before owned shutdown');
+                await ownershipLost();
+                return;
             }
             try {
                 await driver.stop();
@@ -502,45 +549,54 @@ export function createOwnedCompiler(
                 if (!child.isClosed())
                     throw new Error('Compiler observer returned before terminal close');
             } catch (error) {
-                if (buildFailed || failed)
-                    throw new AggregateError(
-                        [
-                            ...(buildFailed ? [firstBuildError] : []),
-                            ...(failed ? [firstError] : []),
-                            error,
-                        ].filter((value, index, values) => values.indexOf(value) === index),
-                        'Compiler close was not confirmed after build failure'
-                    );
-                throw error;
+                record(error);
+                return;
             }
             confirmedClosed = true;
+            recordTerminal(terminal);
             if (started.isAmbiguous?.()) {
                 unsafe = true;
-                if (buildFailed) throw firstBuildError;
-                throw new Error('Compiler ownership became ambiguous');
+                record(ambiguity);
             }
-            if (terminal.error) record(terminal.error);
-            if (
-                (terminal.signal && terminal.signal !== 'SIGTERM') ||
-                (!terminal.signal && terminal.code !== 0)
-            )
-                record(
-                    new Error(
-                        `Compiler closed unexpectedly (code ${terminal.code}, signal ${terminal.signal})`
-                    )
-                );
-            if (buildFailed) throw firstBuildError;
-            if (failed) throw firstError;
+        } catch (error) {
+            record(error);
         } finally {
-            if (started?.isAmbiguous?.()) unsafe = true;
+            // An already closed child has a resolved terminal result. Inspect
+            // it without changing the unsafe/cleanup decision or waiting for
+            // a child whose close has not been observed.
+            try {
+                if (child && !confirmedClosed && child.isClosed())
+                    recordTerminal(await child.closed);
+            } catch (error) {
+                record(error);
+            }
+            try {
+                if (started?.isAmbiguous?.()) {
+                    unsafe = true;
+                    record(ambiguity);
+                }
+            } catch (error) {
+                unsafe = true;
+                record(error);
+            }
             try {
                 started?.restore?.();
             } catch (error) {
                 unsafe = true;
-                throw error;
+                record(error);
+            }
+            try {
+                if (started?.isAmbiguous?.()) {
+                    unsafe = true;
+                    record(ambiguity);
+                }
+            } catch (error) {
+                unsafe = true;
+                record(error);
             }
             if (!confirmedClosed) unsafe = true;
             active = false;
+            if (errors.length) throw combinedFailures(errors);
         }
     }
 

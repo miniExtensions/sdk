@@ -606,6 +606,126 @@ describe('owned compiler lifecycle', () => {
         assert.equal(compiler.canCleanup(), false);
     });
 
+    it('reports distinct sibling, lifecycle, stop, terminal and restore failures together', async () => {
+        const fake = fakeChild();
+        const tracked = trackCompilerChild(fake.child);
+        const first = deferred<unknown>();
+        const sibling = deferred<unknown>();
+        const buildFailure = new Error('first build failed');
+        const processFailure = new Error('child failed');
+        const streamFailure = new Error('stdin failed');
+        const nestedFailure = new AggregateError([processFailure], 'sibling failed');
+        const stopFailure = new Error('stop failed');
+        const restoreFailure = new Error('restore failed');
+        let builds = 0;
+        let stops = 0;
+        const compiler = createOwnedCompiler({
+            start: () => ({
+                child: tracked,
+                ready: Promise.resolve(),
+                restore: () => { throw restoreFailure; },
+            }),
+            build: () => (++builds === 1 ? first.promise : sibling.promise),
+            stop: () => {
+                stops++;
+                throw stopFailure;
+            },
+        });
+        const result = compiler.buildAll([
+            { entryPoints: ['first.ts'] },
+            { entryPoints: ['second.ts'] },
+        ]);
+        const settled = settledState(result);
+        await turn();
+        first.reject(buildFailure);
+        fake.error(processFailure);
+        fake.stdin.emit('error', streamFailure);
+        await turn();
+        assert.equal(stops, 0);
+        sibling.reject(nestedFailure);
+        await turn();
+        assert.equal(stops, 1);
+        assert.equal(settled(), false);
+        assert.equal(compiler.canCleanup(), false);
+        fake.close(1);
+        await assert.rejects(result, (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            for (const original of [
+                buildFailure, nestedFailure, processFailure, streamFailure,
+                stopFailure, restoreFailure,
+            ]) assert.ok(error.errors.includes(original));
+            assert.deepEqual(nestedFailure.errors, [processFailure]);
+            const terminalIndex = error.errors.findIndex((entry: unknown) =>
+                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+            );
+            assert.ok(terminalIndex >= 0);
+            assert.ok(error.errors.indexOf(streamFailure) < error.errors.indexOf(stopFailure));
+            assert.ok(error.errors.indexOf(stopFailure) < terminalIndex);
+            assert.ok(terminalIndex < error.errors.indexOf(restoreFailure));
+            assert.equal(new Set(error.errors).size, error.errors.length);
+            return true;
+        });
+        assert.equal(compiler.canCleanup(), false);
+    });
+
+    it('deduplicates the same failure object across builds, streams, stop and restore', async () => {
+        const fake = fakeChild();
+        const tracked = trackCompilerChild(fake.child);
+        const pending = deferred<unknown>();
+        const shared = new Error('shared failure');
+        let builds = 0;
+        const compiler = createOwnedCompiler({
+            start: () => ({
+                child: tracked,
+                ready: Promise.resolve(),
+                restore: () => { throw shared; },
+            }),
+            build: () => (++builds === 1 ? Promise.reject(shared) : pending.promise),
+            stop: () => { throw shared; },
+        });
+        const result = compiler.buildAll([
+            { entryPoints: ['first.ts'] },
+            { entryPoints: ['second.ts'] },
+        ]);
+        void settledState(result);
+        await turn();
+        fake.error(shared);
+        fake.stdin.emit('error', shared);
+        fake.stdout.emit('error', shared);
+        pending.reject(shared);
+        await turn();
+        fake.close(0);
+        await assert.rejects(result, (error: unknown) => error === shared);
+        assert.equal(compiler.canCleanup(), false);
+    });
+
+    it('reports unconfirmed close and restore failures without releasing output', async () => {
+        const fake = fakeChild();
+        const tracked = trackCompilerChild(fake.child);
+        const closeFailure = new Error('close not confirmed');
+        const restoreFailure = new Error('restore failed');
+        const compiler = createOwnedCompiler(
+            {
+                start: () => ({
+                    child: tracked,
+                    ready: Promise.resolve(),
+                    restore: () => { throw restoreFailure; },
+                }),
+                build: async () => {},
+                stop: () => {},
+            },
+            async () => { throw closeFailure; }
+        );
+        await assert.rejects(compiler.build({ entryPoints: ['example.ts'] }), (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.deepEqual(error.errors, [closeFailure, restoreFailure]);
+            return true;
+        });
+        assert.equal(compiler.canCleanup(), false);
+        fake.close(0);
+        assert.equal(compiler.canCleanup(), false);
+    });
+
     it('rejects a pre-existing esbuild module instead of claiming its service', () => {
         assert.doesNotThrow(() => assertFreshEsbuild(undefined));
         assert.throws(() => assertFreshEsbuild({ exports: {} }));
@@ -926,7 +1046,14 @@ describe('owned compiler lifecycle', () => {
             await turn();
             assert.equal(settled(), false);
             fake.close(terminal.code, terminal.signal);
-            await assert.rejects(result, (error: unknown) => error === failure);
+            await assert.rejects(result, (error: unknown) => {
+                assert.ok(error instanceof AggregateError);
+                assert.ok(error.errors.includes(failure));
+                assert.ok(error.errors.some((entry: unknown) =>
+                    entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+                ));
+                return true;
+            });
             assert.equal(compiler.canCleanup(), true);
         });
     }
@@ -998,7 +1125,14 @@ describe('owned compiler lifecycle', () => {
         assert.equal(settled(), false);
         assert.equal(compiler.canCleanup(), false);
         fake.close(1);
-        await assert.rejects(result, failure);
+        await assert.rejects(result, (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.ok(error.errors.includes(failure));
+            assert.ok(error.errors.some((entry: unknown) =>
+                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+            ));
+            return true;
+        });
         assert.equal(compiler.canCleanup(), true);
     });
 
@@ -1025,7 +1159,14 @@ describe('owned compiler lifecycle', () => {
         assert.equal(settled(), false);
         assert.equal(compiler.canCleanup(), false);
         fake.close(1);
-        await assert.rejects(result, failure);
+        await assert.rejects(result, (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.ok(error.errors.includes(failure));
+            assert.ok(error.errors.some((entry: unknown) =>
+                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+            ));
+            return true;
+        });
         assert.equal(compiler.canCleanup(), true);
     });
 
@@ -1046,7 +1187,14 @@ describe('owned compiler lifecycle', () => {
         assert.equal(settled(), false);
         assert.equal(compiler.canCleanup(), false);
         fake.close(1);
-        await assert.rejects(result, failure);
+        await assert.rejects(result, (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.ok(error.errors.includes(failure));
+            assert.ok(error.errors.some((entry: unknown) =>
+                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+            ));
+            return true;
+        });
         assert.equal(compiler.canCleanup(), true);
     });
 
@@ -1317,7 +1465,13 @@ describe('owned compiler lifecycle', () => {
         assert.equal(settled(), false);
         assert.equal(compiler.canCleanup(), false);
         fake.close(0);
-        await assert.rejects(result, (error: unknown) => error === buildFailure);
+        await assert.rejects(result, (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.ok(error.errors.includes(buildFailure));
+            assert.ok(error.errors.includes(processFailure));
+            assert.equal(error.errors.length, 2);
+            return true;
+        });
         assert.equal(compiler.canCleanup(), true);
     });
 
@@ -1416,13 +1570,82 @@ describe('owned compiler lifecycle', () => {
             assert.equal(stops, ownershipLost ? 0 : 1);
             assert.equal(settled(), ownershipLost);
             if (source !== 'close') fake.close(1);
-            await assert.rejects(
-                result,
-                (error: unknown) => error === buildFailure
-            );
+            await assert.rejects(result, (error: unknown) => {
+                assert.ok(error instanceof AggregateError);
+                assert.ok(error.errors.includes(buildFailure));
+                if (ownershipLost) {
+                    assert.ok(error.errors.some((entry: unknown) =>
+                        entry instanceof Error && /Compiler (exited|closed) before owned shutdown/.test(entry.message)
+                    ));
+                    if (source === 'close') {
+                        assert.ok(error.errors.some((entry: unknown) =>
+                            entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+                        ));
+                    }
+                } else {
+                    assert.ok(error.errors.includes(lifecycleFailure));
+                    assert.ok(error.errors.some((entry: unknown) =>
+                        entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+                    ));
+                }
+                assert.equal(new Set(error.errors).size, error.errors.length);
+                return true;
+            });
             assert.equal(compiler.canCleanup(), !ownershipLost);
         });
     }
+
+    it('retains termination after a child error wins the race during sibling drain', async () => {
+        const fake = fakeChild();
+        const tracked = trackCompilerChild(fake.child);
+        const first = deferred<unknown>();
+        const sibling = deferred<unknown>();
+        const processFailure = new Error('child failed first');
+        const buildFailure = new Error('sibling build failed');
+        let builds = 0;
+        let stops = 0;
+        let observed: Error | undefined;
+        const compiler = createOwnedCompiler(
+            {
+                start: () => ({ child: tracked, ready: Promise.resolve() }),
+                build: () => (++builds === 1 ? first.promise : sibling.promise),
+                stop: () => { stops++; },
+            },
+            undefined,
+            async (settled, error) => {
+                observed = error;
+                await settled;
+            }
+        );
+        const result = compiler.buildAll([
+            { entryPoints: ['first.ts'] },
+            { entryPoints: ['second.ts'] },
+        ]);
+        const settled = settledState(result);
+        await turn();
+        fake.error(processFailure);
+        await turn();
+        assert.equal(observed, processFailure);
+        assert.equal(settled(), false);
+        fake.exit(1);
+        fake.close(1);
+        const termination = await tracked.terminated;
+        first.resolve(undefined);
+        sibling.reject(buildFailure);
+        await assert.rejects(result, (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.ok(error.errors.includes(processFailure));
+            assert.ok(error.errors.includes(termination));
+            assert.ok(error.errors.includes(buildFailure));
+            assert.ok(error.errors.some((entry: unknown) =>
+                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+            ));
+            assert.equal(new Set(error.errors).size, error.errors.length);
+            return true;
+        });
+        assert.equal(stops, 0);
+        assert.equal(compiler.canCleanup(), false);
+    });
 
     for (const event of ['exit', 'close'] as const) {
         it(`drains siblings after unexpected ${event} without stopping`, async () => {
@@ -1471,7 +1694,15 @@ describe('owned compiler lifecycle', () => {
                 assert.equal(compiler.canCleanup(), false);
                 fake.close(1);
             }
-            await assert.rejects(result, (error: unknown) => error === termination);
+            await assert.rejects(result, (error: unknown) => {
+                if (event === 'exit') return error === termination;
+                assert.ok(error instanceof AggregateError);
+                assert.ok(error.errors.includes(termination));
+                assert.ok(error.errors.some((entry: unknown) =>
+                    entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+                ));
+                return true;
+            });
             assert.equal(compiler.canCleanup(), false);
         });
 
@@ -1521,11 +1752,13 @@ describe('owned compiler lifecycle', () => {
             deadline.reject(deadlineFailure);
             await assert.rejects(result, (error: unknown) => {
                 assert.ok(error instanceof AggregateError);
-                assert.deepEqual(error.errors, [
-                    buildFailure,
-                    termination,
-                    deadlineFailure,
-                ]);
+                assert.ok(error.errors.includes(buildFailure));
+                assert.ok(error.errors.includes(termination));
+                assert.ok(error.errors.includes(deadlineFailure));
+                assert.ok(error.errors.some((entry: unknown) =>
+                    entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+                ));
+                assert.equal(new Set(error.errors).size, error.errors.length);
                 return true;
             });
             assert.equal(stops, 0);
@@ -1561,7 +1794,14 @@ describe('owned compiler lifecycle', () => {
         assert.equal(compiler.canCleanup(), false);
         assert.equal(settled(), false);
         fake.close(1);
-        await assert.rejects(result, failure);
+        await assert.rejects(result, (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.ok(error.errors.includes(failure));
+            assert.ok(error.errors.some((entry: unknown) =>
+                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+            ));
+            return true;
+        });
         assert.equal(compiler.canCleanup(), true);
     });
 
@@ -1585,11 +1825,12 @@ describe('owned compiler lifecycle', () => {
     });
 
     it('fails closed without stopping after an uncaptured startup rejection', async () => {
+        const failure = new Error('startup failed');
         let builds = 0;
         let stops = 0;
         const driver: CompilerDriver = {
             start: () => ({
-                ready: Promise.reject(new Error('startup failed')),
+                ready: Promise.reject(failure),
             }),
             build: async () => {
                 builds++;
@@ -1599,7 +1840,14 @@ describe('owned compiler lifecycle', () => {
             },
         };
         const compiler = createOwnedCompiler(driver);
-        await assert.rejects(compiler.build({ entryPoints: ['example.ts'] }));
+        await assert.rejects(compiler.build({ entryPoints: ['example.ts'] }), (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.ok(error.errors.includes(failure));
+            assert.ok(error.errors.some((entry: unknown) =>
+                entry instanceof Error && /ownership was not established/.test(entry.message)
+            ));
+            return true;
+        });
         assert.equal(builds, 0);
         assert.equal(stops, 0);
         assert.equal(compiler.canCleanup(), false);
@@ -1624,10 +1872,14 @@ describe('owned compiler lifecycle', () => {
                 stops++;
             },
         });
-        await assert.rejects(
-            compiler.build({ entryPoints: ['example.ts'] }),
-            failure
-        );
+        await assert.rejects(compiler.build({ entryPoints: ['example.ts'] }), (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.ok(error.errors.includes(failure));
+            assert.ok(error.errors.some((entry: unknown) =>
+                entry instanceof Error && /ownership was not established/.test(entry.message)
+            ));
+            return true;
+        });
         assert.equal(builds, 0);
         assert.equal(stops, 0);
         assert.equal(compiler.canCleanup(), false);

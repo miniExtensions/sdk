@@ -508,6 +508,13 @@ export function createOwnedCompiler(
                         await settled;
                     } catch (error) {
                         drainFailed = true;
+                        // Only inspect termination already observed by the
+                        // tracker; do not wait for a future event on timeout.
+                        try {
+                            if (child.isClosed() || child.isExited()) await ownershipLost();
+                        } catch (terminationError) {
+                            record(terminationError);
+                        }
                         record(error);
                     }
                 }

@@ -1648,6 +1648,63 @@ describe('owned compiler lifecycle', () => {
     });
 
     for (const event of ['exit', 'close'] as const) {
+        it(`retains ${event} after a child error when sibling drainage times out`, async () => {
+            const fake = fakeChild();
+            const tracked = trackCompilerChild(fake.child);
+            const first = deferred<unknown>();
+            const sibling = deferred<unknown>();
+            const deadline = deferred<void>();
+            const processFailure = new Error('child failed first');
+            const deadlineFailure = new Error('builds did not drain');
+            let builds = 0;
+            let stops = 0;
+            let observed: Error | undefined;
+            const compiler = createOwnedCompiler(
+                {
+                    start: () => ({ child: tracked, ready: Promise.resolve() }),
+                    build: () => (++builds === 1 ? first.promise : sibling.promise),
+                    stop: () => { stops++; },
+                },
+                undefined,
+                (_settled, error) => {
+                    observed = error;
+                    return deadline.promise;
+                }
+            );
+            const result = compiler.buildAll([
+                { entryPoints: ['first.ts'] },
+                { entryPoints: ['second.ts'] },
+            ]);
+            const settled = settledState(result);
+            await turn();
+            fake.error(processFailure);
+            await turn();
+            assert.equal(observed, processFailure);
+            fake[event](1);
+            const termination = await tracked.terminated;
+            assert.equal(settled(), false);
+            deadline.reject(deadlineFailure);
+            await assert.rejects(result, (error: unknown) => {
+                assert.ok(error instanceof AggregateError);
+                assert.ok(error.errors.includes(processFailure));
+                assert.ok(error.errors.includes(termination));
+                assert.ok(error.errors.includes(deadlineFailure));
+                assert.ok(error.errors.indexOf(processFailure) < error.errors.indexOf(termination));
+                assert.ok(error.errors.indexOf(termination) < error.errors.indexOf(deadlineFailure));
+                if (event === 'close') {
+                    assert.ok(error.errors.some((entry: unknown) =>
+                        entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+                    ));
+                }
+                assert.equal(new Set(error.errors).size, error.errors.length);
+                return true;
+            });
+            assert.equal(stops, 0);
+            assert.equal(compiler.canCleanup(), false);
+        });
+    }
+
+    for (const event of ['exit', 'close'] as const) {
         it(`drains siblings after unexpected ${event} without stopping`, async () => {
             const fake = fakeChild();
             const tracked = trackCompilerChild(fake.child);

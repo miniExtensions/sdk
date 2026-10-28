@@ -414,6 +414,74 @@ test('public distribution accepts captured contracts and complete notices', asyn
     await fixture.check();
 });
 
+async function capturedSdkDependencyFixture(t) {
+    const fixture = await distributionFixture(t);
+    const digest = createHash('sha256')
+        .update('captured SDK field-kind declaration')
+        .digest('hex');
+    fixture.internal.dependencies.push({
+        path: '@miniextensions/sdk/dist/esm/formulas/types.d.ts',
+        sha256: digest,
+    });
+    fixture.provenance.dependencies.push({
+        package: '@miniextensions/sdk',
+        inputSha256: [digest],
+    });
+    for (const format of ['esm', 'cjs']) {
+        await write(
+            fixture.root,
+            `dist/${format}/runtime/contracts/generated.provenance.json`,
+            JSON.stringify(fixture.provenance)
+        );
+    }
+    return fixture;
+}
+
+test('public distribution accepts captured SDK field-kind provenance', async (t) => {
+    const fixture = await capturedSdkDependencyFixture(t);
+    await fixture.check();
+});
+
+test('public distribution rejects other SDK declaration paths', async (t) => {
+    for (const path of [
+        '@miniextensions/sdk/dist/cjs/formulas/types.d.ts',
+        '@miniextensions/sdk/dist/esm/runtime/index.d.ts',
+        '@miniextensions/sdk/dist/esm/formulas/../runtime/types.d.ts',
+        '@miniextensions/sdk-extra/dist/esm/formulas/types.d.ts',
+    ]) {
+        await t.test(path, async (t) => {
+            const fixture = await capturedSdkDependencyFixture(t);
+            fixture.internal.dependencies.at(-1).path = path;
+            await assert.rejects(
+                fixture.check(),
+                /Unrecognized recorded contract dependency/
+            );
+        });
+    }
+});
+
+test('public distribution rejects a changed captured SDK declaration hash', async (t) => {
+    const fixture = await capturedSdkDependencyFixture(t);
+    fixture.provenance.dependencies.at(-1).inputSha256 = ['0'.repeat(64)];
+    await write(
+        fixture.root,
+        'dist/esm/runtime/contracts/generated.provenance.json',
+        JSON.stringify(fixture.provenance)
+    );
+    await assert.rejects(fixture.check(), /differs from captured inputs/);
+});
+
+test('public distribution rejects omitted SDK declaration provenance', async (t) => {
+    const fixture = await capturedSdkDependencyFixture(t);
+    fixture.provenance.dependencies.pop();
+    await write(
+        fixture.root,
+        'dist/esm/runtime/contracts/generated.provenance.json',
+        JSON.stringify(fixture.provenance)
+    );
+    await assert.rejects(fixture.check(), /differs from captured inputs/);
+});
+
 test('public distribution rejects unrecorded backend paths and accepts public helper descriptions', async (t) => {
     const fixture = await distributionFixture(t);
     const original = await readFile(

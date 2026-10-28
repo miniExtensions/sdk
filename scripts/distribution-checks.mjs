@@ -38,6 +38,27 @@ const publicModuleHashes = {
 };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
+// Canonical field kinds come through the SDK's field-types re-export. Admit
+// only its captured enum declaration, not arbitrary SDK or node_modules files.
+export function publicContractDependencies(dependencies) {
+    const hashes = new Map(dependencyPackages.map((name) => [name, new Set()]));
+    for (const { path, sha256 } of dependencies) {
+        const name =
+            path === '@miniextensions/sdk/dist/esm/formulas/types.d.ts'
+                ? '@miniextensions/sdk'
+                : dependencyPackages.find((name) =>
+                      path.startsWith(name + '/')
+                  );
+        assert(name, 'Unrecognized recorded contract dependency');
+        if (!hashes.has(name)) hashes.set(name, new Set());
+        hashes.get(name).add(sha256);
+    }
+    return [...hashes].map(([name, values]) => ({
+        package: name,
+        inputSha256: [...values].sort(),
+    }));
+}
+
 function exactKeys(value, keys) {
     return (
         value !== null &&
@@ -90,21 +111,8 @@ export async function assertPublicDistribution(
         'Customer module formats have different contract declarations'
     );
     const declarationDigest = sha256(declarations);
-    const expectedDependencies = dependencyPackages.map((name) => ({
-        package: name,
-        inputSha256: [
-            ...new Set(
-                internal.dependencies
-                    .filter(({ path }) => path.startsWith(name + '/'))
-                    .map(({ sha256 }) => sha256)
-            ),
-        ].sort(),
-    }));
-    assert(
-        internal.dependencies.every(({ path }) =>
-            dependencyPackages.some((name) => path.startsWith(name + '/'))
-        ),
-        'Unrecognized recorded contract dependency'
+    const expectedDependencies = publicContractDependencies(
+        internal.dependencies
     );
     for (const format of ['esm', 'cjs']) {
         const prefix = `dist/${format}/runtime/contracts/generated`;

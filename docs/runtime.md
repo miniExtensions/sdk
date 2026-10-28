@@ -359,7 +359,7 @@ the client does not convert field names, dates, or record values.
 the client does not validate them with another runtime schema.
 
 The packaged declaration snapshot has SHA256
-`e011d3f20568d29f6909a96e10bcc8b3378adf95b90b8ef34a71bdeb0a02afe0`.
+`fc21700cf0399a556aa5d874847e589d6907199726785cc0df717bc90f6af275`.
 Both module formats ship the same `runtime/contracts/generated.d.ts` bytes;
 their public provenance includes this `contractDeclarationsSha256` for direct
 verification. Its `generatedSha256` separately identifies the generator's

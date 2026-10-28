@@ -1419,6 +1419,15 @@ const unknownFormulaKind: FormulaField['config'] = {type: 'futureField'};
 void [enumFormulaConfig, literalFormulaConfig, missingNumberOptions, missingDateFormat, missingLinkedTable, missingComputedResult, missingNestedSymbol, unknownFormulaKind];
 `;
 
+    const sourceEnvelopeFixture = readFileSync(
+        'test/runtimeSourceEnvelope.types.ts',
+        'utf8'
+    );
+    assert(sourceEnvelopeFixture.includes("'../src/runtime/index.js'"));
+    const sourceEnvelopeConsumer = sourceEnvelopeFixture.replace(
+        "'../src/runtime/index.js'",
+        "'@miniextensions/sdk'"
+    );
     for (const [filename, module, moduleResolution] of [
         ['consumer.mts', 'NodeNext', 'NodeNext'],
         ['consumer.cts', 'NodeNext', 'NodeNext'],
@@ -1479,6 +1488,11 @@ new Parser([]).parse({maxDepth:'48'});
             join(temporaryDirectory, pageFilename),
             formPageTypedConsumer
         );
+        const sourceEnvelopeFilename = `source-envelope-${filename}`;
+        writeFileSync(
+            join(temporaryDirectory, sourceEnvelopeFilename),
+            sourceEnvelopeConsumer
+        );
         run(process.execPath, [
             require.resolve('typescript/bin/tsc'),
             '--noEmit',
@@ -1497,6 +1511,7 @@ new Parser([]).parse({maxDepth:'48'});
             linkedChildFilename,
             linkedChildEditFilename,
             pageFilename,
+            sourceEnvelopeFilename,
             ...formulasGuideSources,
         ]);
     }

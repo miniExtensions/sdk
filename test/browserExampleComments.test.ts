@@ -304,6 +304,115 @@ describe('actual browser starter comment pagination', () => {
         assert.equal(f.reads.length, 2);
     });
 
+    it('admits only one request for rapid initial and older-page double clicks', async (test) => {
+        const initial = deferred<ListRecordCommentsResult>();
+        const older = deferred<ListRecordCommentsResult>();
+        const f = await mount(test, {
+            read: (_, index) =>
+                index === 0
+                    ? initial.promise
+                    : index === 1
+                      ? older.promise
+                      : nativePage([1]),
+        });
+        f.click('Load comments');
+        f.click('Load comments');
+        await waitFor(() => f.reads.length === 1);
+        await settle();
+        assert.equal(f.reads.length, 1);
+        assert.equal(f.idle(), false);
+        assert.deepEqual(f.reads[0]!.input, {
+            childExtensionAccessToken: 'child_access_A',
+        });
+        assert.deepEqual(f.texts(), []);
+        f.exhausted();
+        initial.resolve(nativePage([4, 5], cursor1));
+        await waitFor(f.idle);
+        await settle();
+        assert.equal(f.reads.length, 1, 'No queued duplicate initial read.');
+        assert.deepEqual(f.texts(), texts(4, 5));
+
+        f.click('Load older comments');
+        f.click('Load older comments');
+        await waitFor(() => f.reads.length === 2);
+        await settle();
+        assert.equal(f.reads.length, 2);
+        assert.equal(f.idle(), false);
+        assert.deepEqual(f.reads[1]!.input, {
+            childExtensionAccessToken: 'child_access_A',
+            cursor: cursor1,
+        });
+        assert.deepEqual(f.texts(), texts(4, 5));
+        older.resolve(nativePage([2, 3], cursor2));
+        await waitFor(f.idle);
+        await settle();
+        assert.equal(f.reads.length, 2, 'No queued duplicate older read.');
+        assert.deepEqual(f.texts(), texts(2, 3, 4, 5));
+        assert.equal(
+            f.window.document.getElementById('status')!.textContent,
+            'Loaded 4 comments.'
+        );
+        await f.read('Load older comments');
+        assert.equal(f.reads[2]!.input.cursor, cursor2);
+        assert.deepEqual(f.texts(), texts(1, 2, 3, 4, 5));
+        assert.equal(f.reads.length, 3);
+        f.exhausted();
+    });
+
+    it('retains empty or existing history after an initial-page failure and waits for explicit retry', async (test) => {
+        const f = await mount(test, {
+            read: (_, index) => {
+                if (index === 0 || index === 2)
+                    throw Error('Synthetic private initial-page failure');
+                return index === 1
+                    ? nativePage([3, 4], cursor1)
+                    : nativePage([1, 2]);
+            },
+        });
+        await f.read();
+        assert.deepEqual(f.texts(), []);
+        f.exhausted();
+        assert.equal(f.idle(), true);
+        assert.equal(f.button('Load comments').disabled, false);
+        const status = f.window.document.getElementById('status')!.textContent;
+        assert.match(status ?? '', /The request failed/);
+        assert.doesNotMatch(status ?? '', /Synthetic private/);
+        await settle();
+        assert.equal(f.reads.length, 1, 'No automatic initial-page retry.');
+
+        await f.read();
+        assert.deepEqual(
+            f.reads.slice(0, 2).map((call) => call.input),
+            [
+                { childExtensionAccessToken: 'child_access_A' },
+                { childExtensionAccessToken: 'child_access_A' },
+            ]
+        );
+        assert.deepEqual(f.texts(), texts(3, 4));
+        assert.equal(
+            f.window.document.getElementById('status')!.textContent,
+            'Loaded 2 comments.'
+        );
+
+        // A failed refresh also leaves the accepted history and cursor intact.
+        await f.read();
+        assert.equal('cursor' in f.reads[2]!.input, false);
+        assert.deepEqual(f.texts(), texts(3, 4));
+        assert.equal(f.idle(), true);
+        assert.equal(f.button('Load older comments').disabled, false);
+        await settle();
+        assert.equal(f.reads.length, 3, 'No automatic refresh retry.');
+        await f.read('Load older comments');
+        assert.equal(f.reads[3]!.input.cursor, cursor1);
+        assert.deepEqual(f.texts(), texts(1, 2, 3, 4));
+        assert.equal(
+            f.window.document.getElementById('status')!.textContent,
+            'Loaded 4 comments.'
+        );
+        assert.equal(f.reads.length, 4);
+        f.exhausted();
+    });
+
     it('advances multiple opaque cursors and stops at exhaustion without automatic requests', async (test) => {
         const pages = [
             nativePage([5, 6], cursor1),

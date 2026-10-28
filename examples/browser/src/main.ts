@@ -3410,7 +3410,9 @@ const renderComments = (
     card.append(element('h2', 'Record comments'));
     const output = element('div');
     let sendingDisabled = false;
-    const load = button('Load comments', () => {
+    let nextCursor: string | undefined;
+    let displayedCount = 0;
+    const loadPage = (cursor?: string): void => {
         if (!isCurrent()) return;
         void run(
             'Loading record comments…',
@@ -3421,20 +3423,36 @@ const renderComments = (
                     {
                         childExtensionAccessToken:
                             page.payload.extensionAccessToken,
+                        ...(cursor === undefined ? {} : { cursor }),
                     },
                     { signal }
                 );
                 if (!current() || !isCurrent()) return;
-                output.replaceChildren();
-                for (const comment of result.comments)
-                    output.append(element('p', comment.text, 'comment'));
+                const comments = result.comments.map((comment) =>
+                    element('p', comment.text, 'comment')
+                );
+                if (cursor === undefined) {
+                    output.replaceChildren(...comments);
+                    displayedCount = comments.length;
+                } else {
+                    output.prepend(...comments);
+                    displayedCount += comments.length;
+                }
+                nextCursor = result.nextCursor;
                 sendingDisabled = result.disableSending === true;
                 update();
-                status(`Loaded ${result.comments.length} comments.`);
-            }
+                status(`Loaded ${displayedCount} comments.`);
+            },
+            isCurrent,
+            // Release the global busy lease even if this Form has retired.
+            () => true
         );
+    };
+    const load = button('Load comments', () => loadPage());
+    const older = button('Load older comments', () => {
+        if (nextCursor !== undefined) loadPage(nextCursor);
     });
-    card.append(load, output);
+    card.append(load, older, output);
     const text = element('textarea');
     text.placeholder = 'Write a comment';
     const add = button('Add comment', () => {
@@ -3466,6 +3484,8 @@ const renderComments = (
     screenNode.append(card);
     const update = (): void => {
         load.disabled = !isCurrent();
+        older.hidden = nextCursor === undefined;
+        older.disabled = nextCursor === undefined || !isCurrent();
         add.disabled = sendingDisabled || !isCurrent();
         text.disabled = !isCurrent();
     };

@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
 import { Window } from 'happy-dom';
 import {
     createFormFieldBindings,
@@ -55,6 +55,7 @@ type PanelModule = {
     };
 };
 const root = resolve(process.cwd());
+const compiler = createOwnedCompiler();
 const fieldId = 'fld_children_a';
 let directory: string;
 let moduleRevision = 0;
@@ -71,7 +72,7 @@ before(async () => {
         '@miniextensions/sdk': join(root, 'src/runtime/index.ts'),
     };
     for (const name of ['main', 'linkedChildPanel'])
-        await build({
+        await compiler.build({
             entryPoints: [join(root, `examples/browser/src/${name}.ts`)],
             alias,
             bundle: true,
@@ -84,7 +85,14 @@ before(async () => {
         pathToFileURL(join(directory, 'linkedChildPanel.mjs')).href
     )) as PanelModule;
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup()) {
+        throw new Error(
+            'Cannot clean up while compiler children may still be running.'
+        );
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 const settle = () => new Promise<void>((done) => setImmediate(done));
 const waitFor = async (predicate: () => boolean) => {

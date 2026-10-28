@@ -4,7 +4,6 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import {
     createFormFieldBindings,
@@ -17,12 +16,15 @@ import {
     type SaveFormInput,
 } from '../src/runtime/index.js';
 import { formSaveOptions, loadedForm } from './formsFixtures.js';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 let directory: string;
 before(async () => {
     const root = resolve(process.cwd());
     directory = await mkdtemp(join(tmpdir(), 'sdk-computed-mask-'));
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/fields.ts')],
         alias: {
             '@miniextensions/sdk/ui': join(root, 'src/ui/index.ts'),
@@ -36,7 +38,11 @@ before(async () => {
         logLevel: 'silent',
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup())
+        throw new Error('Compiler did not close; output directory retained.');
+    await rm(directory, { recursive: true, force: true });
+});
 
 const schema = (
     kind: 'formula' | 'rollup',

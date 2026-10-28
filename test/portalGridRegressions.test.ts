@@ -4,7 +4,6 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
@@ -20,6 +19,9 @@ import {
     type PortalCollectionCriteria,
 } from '../src/portals/index.js';
 import { portalFixture, portalListPage, portalPage } from './portalFixtures.js';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 const criteria: PortalCollectionCriteria = {
     selectedCustomViewId: 'view_example',
@@ -171,7 +173,7 @@ let directory: string;
 let moduleRevision = 0;
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-deep-review-portals-'));
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/portal.ts')],
         alias: {
             '@miniextensions/sdk/ui': sdkEntry('ui'),
@@ -188,7 +190,11 @@ before(async () => {
         logLevel: 'silent',
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup())
+        throw new Error('Compiler did not close; output directory retained.');
+    await rm(directory, { recursive: true, force: true });
+});
 
 const mountPortal = async (test: TestContext, page = editablePage()) => {
     const window = new Window({ url: 'https://app.example.test' });

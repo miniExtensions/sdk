@@ -1001,10 +1001,18 @@ if (mode === 'file-selection') {
         mounted: true,
         icon: 'star',
         color: '#FFBA05',
+        cancelKey: false,
+        holdValue: false,
     };
     let state = initial;
     /** @type {(number|null)[]} */
     const changes = [];
+    /** @type {{key: string, trusted: boolean, repeat: boolean}[]} */
+    const keys = [];
+    /** @type {{key: string, trusted: boolean, repeat: boolean, prevented: boolean}[]} */
+    const bubbledKeys = [];
+    /** @type {boolean[]} */
+    const submitClicks = [];
     let submits = 0;
     /** @type {(()=>void)|undefined} */
     let retained;
@@ -1016,6 +1024,9 @@ if (mode === 'file-selection') {
         disabled: state.disabled,
         grid: state.grid,
         changes: [...changes],
+        keys: [...keys],
+        bubbledKeys: [...bubbledKeys],
+        submitClicks: [...submitClicks],
         submits,
         refCurrent:
             input.current === document.querySelector('input[type=range]'),
@@ -1038,6 +1049,15 @@ if (mode === 'file-selection') {
                         event.preventDefault();
                         submits++;
                     },
+                    onKeyDown: (event) => {
+                        if (event.target !== input.current) return;
+                        bubbledKeys.push({
+                            key: event.key,
+                            trusted: event.nativeEvent.isTrusted,
+                            repeat: event.repeat,
+                            prevented: event.defaultPrevented,
+                        });
+                    },
                 },
                 current.mounted
                     ? h(RatingInput, {
@@ -1048,7 +1068,8 @@ if (mode === 'file-selection') {
                           grid: current.grid,
                           onChange: (value) => {
                               changes.push(value);
-                              setCurrent((old) => ({ ...old, value }));
+                              if (!current.holdValue)
+                                  setCurrent((old) => ({ ...old, value }));
                           },
                           className: 'rating-root',
                           iconsClassName: 'rating-icons',
@@ -1069,6 +1090,14 @@ if (mode === 'file-selection') {
                               form: 'rating-form',
                               'aria-label': 'Synthetic rating',
                               'aria-describedby': 'rating-help',
+                              onKeyDown: (event) => {
+                                  keys.push({
+                                      key: event.key,
+                                      trusted: event.nativeEvent.isTrusted,
+                                      repeat: event.repeat,
+                                  });
+                                  if (current.cancelKey) event.preventDefault();
+                              },
                           },
                           renderIcon: (icon) => {
                               if (icon.index === 4 && !retained)
@@ -1097,7 +1126,22 @@ if (mode === 'file-selection') {
                               );
                           },
                       })
-                    : null
+                    : null,
+                h(
+                    'button',
+                    {
+                        type: 'submit',
+                        onClick: (event) =>
+                            submitClicks.push(event.nativeEvent.isTrusted),
+                    },
+                    'Submit synthetic rating'
+                )
+            ),
+            button('Toggle key cancellation', () =>
+                setCurrent((old) => ({ ...old, cancelKey: !old.cancelKey }))
+            ),
+            button('Toggle value refusal', () =>
+                setCurrent((old) => ({ ...old, holdValue: !old.holdValue }))
             ),
             button('Toggle readonly', () =>
                 setCurrent((old) => ({ ...old, disabled: !old.disabled }))

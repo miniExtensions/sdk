@@ -2480,6 +2480,135 @@ try {
         };
         const ratingState = (page) =>
             page.evaluate(() => window.__nativeProbe.snapshot());
+        await run('rating-trusted-keyboard-clear', async (page, origin) => {
+            for (const key of ['Backspace', 'Delete']) {
+                await openRating(page, origin);
+                await page
+                    .getByRole('button', {
+                        name: 'Submit synthetic rating',
+                        exact: true,
+                    })
+                    .click();
+                assert.deepEqual((await ratingState(page)).submitClicks, [true]);
+                assert.equal((await ratingState(page)).submits, 1);
+
+                // A fresh document separates the positive submit witness from
+                // each no-submit assertion.
+                await openRating(page, origin);
+                const slider = page.getByRole('slider', {
+                    name: 'Synthetic rating',
+                });
+                await slider.focus();
+                assert(
+                    await slider.evaluate(
+                        (node) => node === document.activeElement
+                    )
+                );
+                await page.keyboard.press(key);
+                let state = await ratingState(page);
+                assert.equal(state.value, null);
+                assert.deepEqual(state.changes, [null]);
+                assert.deepEqual(state.keys, [
+                    { key, trusted: true, repeat: false },
+                ]);
+                assert.deepEqual(state.bubbledKeys, [
+                    { key, trusted: true, repeat: false, prevented: true },
+                ]);
+                assert.equal(state.submits, 0);
+                assert.deepEqual(state.submitClicks, []);
+                assert(
+                    await slider.evaluate(
+                        (node) => node === document.activeElement
+                    )
+                );
+                await page.keyboard.press(key);
+                state = await ratingState(page);
+                assert.deepEqual(state.changes, [null]);
+                assert.deepEqual(state.keys[1], {
+                    key,
+                    trusted: true,
+                    repeat: false,
+                });
+                assert.deepEqual(state.bubbledKeys[1], {
+                    key,
+                    trusted: true,
+                    repeat: false,
+                    prevented: false,
+                });
+                assert.equal(state.submits, 0);
+
+                await openRating(page, origin);
+                await page
+                    .getByRole('button', {
+                        name: 'Toggle key cancellation',
+                        exact: true,
+                    })
+                    .click();
+                await slider.focus();
+                await page.keyboard.press(key);
+                state = await ratingState(page);
+                assert.equal(state.value, 2);
+                assert.deepEqual(state.changes, []);
+                assert.deepEqual(state.keys, [
+                    { key, trusted: true, repeat: false },
+                ]);
+                assert.deepEqual(state.bubbledKeys, [
+                    { key, trusted: true, repeat: false, prevented: true },
+                ]);
+                assert.equal(state.submits, 0);
+
+                await openRating(page, origin);
+                await page
+                    .getByRole('button', {
+                        name: 'Toggle value refusal',
+                        exact: true,
+                    })
+                    .click();
+                await slider.focus();
+                await page.keyboard.down(key);
+                await page.keyboard.down(key);
+                await page.keyboard.up(key);
+                state = await ratingState(page);
+                assert.equal(state.value, 2);
+                assert.deepEqual(state.changes, [null]);
+                assert.deepEqual(state.keys, [
+                    { key, trusted: true, repeat: false },
+                    { key, trusted: true, repeat: true },
+                ]);
+                assert.deepEqual(state.bubbledKeys, [
+                    { key, trusted: true, repeat: false, prevented: true },
+                    { key, trusted: true, repeat: true, prevented: true },
+                ]);
+                assert.equal(state.submits, 0);
+                assert(
+                    await slider.evaluate(
+                        (node) => node === document.activeElement
+                    )
+                );
+
+                await openRating(page, origin);
+                await page
+                    .getByRole('button', {
+                        name: 'Toggle readonly',
+                        exact: true,
+                    })
+                    .click();
+                assert(await slider.isDisabled());
+                await slider.focus();
+                assert(
+                    !(await slider.evaluate(
+                        (node) => node === document.activeElement
+                    ))
+                );
+                await page.keyboard.press(key);
+                state = await ratingState(page);
+                assert.equal(state.value, 2);
+                assert.deepEqual(state.changes, []);
+                assert.deepEqual(state.keys, []);
+                assert.deepEqual(state.bubbledKeys, []);
+                assert.equal(state.submits, 0);
+            }
+        });
         await run('rating-keyboard-icons-grid', async (page, origin) => {
             await openRating(page, origin);
             const slider = page.getByRole('slider', {
@@ -3124,7 +3253,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 19 + storageEventCases.length);
+        assert.equal(results.length, 20 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

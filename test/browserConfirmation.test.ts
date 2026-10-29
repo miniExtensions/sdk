@@ -4,8 +4,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Window } from 'happy-dom';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 type Confirmation = {
     requestConfirmation(options: {
@@ -23,7 +25,7 @@ let directory: string;
 let revision = 0;
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-confirmation-'));
-    await build({
+    await compiler.build({
         entryPoints: [resolve('examples/browser/src/confirmation.ts')],
         bundle: true,
         platform: 'node',
@@ -31,7 +33,11 @@ before(async () => {
         outfile: join(directory, 'confirmation.mjs'),
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup())
+        throw new Error('Compiler did not close; output directory retained.');
+    await rm(directory, { recursive: true, force: true });
+});
 const flush = () => new Promise<void>((done) => setImmediate(done));
 const observe = (promise: Promise<boolean>) => {
     let result: unknown = 'pending';

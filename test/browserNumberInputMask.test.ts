@@ -4,7 +4,6 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
@@ -14,6 +13,9 @@ import {
     type SaveFormInput,
 } from '../src/runtime/index.js';
 import { loadedForm, formSaveOptions } from './formsFixtures.js';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 const root = resolve(process.cwd());
 let directory: string;
@@ -29,7 +31,7 @@ before(async () => {
         '@miniextensions/sdk': join(root, 'src/runtime/index.ts'),
     };
     for (const entry of ['main', 'fields'])
-        await build({
+        await compiler.build({
             entryPoints: [join(root, `examples/browser/src/${entry}.ts`)],
             alias,
             bundle: true,
@@ -38,7 +40,7 @@ before(async () => {
             outfile: join(directory, `${entry}.mjs`),
             logLevel: 'silent',
         });
-    await build({
+    await compiler.build({
         stdin: {
             contents:
                 "export {createFormFieldBindings} from './src/forms/index.ts'; export {createMiniExtensionsClient} from './src/runtime/index.ts';",
@@ -52,7 +54,11 @@ before(async () => {
         logLevel: 'silent',
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup())
+        throw new Error('Compiler did not close; output directory retained.');
+    await rm(directory, { recursive: true, force: true });
+});
 const example = (name: string) =>
     import(
         `${pathToFileURL(join(directory, `${name}.mjs`)).href}?case=${++revision}`

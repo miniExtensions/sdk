@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
 import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
@@ -18,12 +18,13 @@ import { invalidForm, loadedForm, savedForm } from './formsFixtures.js';
 import { portalField, portalListPage, portalPage } from './portalFixtures.js';
 
 const root = resolve(process.cwd());
+const compiler = createOwnedCompiler();
 let directory: string;
 let moduleRevision = 0;
 
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-browser-review-'));
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/main.ts')],
         alias: {
             '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),
@@ -41,7 +42,14 @@ before(async () => {
     });
 });
 
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup()) {
+        throw new Error(
+            'Cannot clean up while compiler children may still be running.'
+        );
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 const waitFor = async (predicate: () => boolean): Promise<void> => {
     for (let turn = 0; turn < 30; turn++) {

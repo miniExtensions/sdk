@@ -4,7 +4,6 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import type {
     AddRecordCommentInput,
@@ -13,13 +12,17 @@ import type {
     ListRecordCommentsResult,
 } from '../src/runtime/index.js';
 import { loadedForm } from './formsFixtures.js';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 const root = resolve(process.cwd());
 let directory: string;
+let prepared = false;
 let moduleRevision = 0;
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-browser-comments-'));
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/main.ts')],
         alias: {
             '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),
@@ -35,8 +38,16 @@ before(async () => {
         outfile: join(directory, 'main.mjs'),
         logLevel: 'silent',
     });
+    prepared = true;
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (directory === undefined) return;
+    if (!prepared || !compiler.canCleanup()) {
+        console.error(`Compiler output directory retained: ${directory}`);
+        return;
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 const settle = () => new Promise<void>((done) => setImmediate(done));
 const waitFor = async (predicate: () => boolean) => {

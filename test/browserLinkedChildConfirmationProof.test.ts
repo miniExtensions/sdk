@@ -4,9 +4,11 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import { childForm, parentForm } from './formLinkedChildFixtures.js';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 type MouseCheckpoint = {
     focusedBefore: boolean;
@@ -51,10 +53,13 @@ const {
     assertEditedMultiPageReview,
     assertChildSaveRouting,
     assertMouseBlurCommit,
-} = (await import(
-    pathToFileURL(
-        resolve('scripts/browser-linked-child-confirmation-native.mjs')
-    ).href
+} = (await compiler.withService(
+    () =>
+        import(
+            pathToFileURL(
+                resolve('scripts/browser-linked-child-confirmation-native.mjs')
+            ).href
+        )
 )) as {
     assertMouseBlurCommit(
         actual: MouseCheckpoint,
@@ -182,8 +187,14 @@ describe('installed starter multi-page Review proof acceptance', () => {
 it('commits native text change before resolving a fresh child action', async (test) => {
     const root = process.cwd();
     const directory = await mkdtemp(join(tmpdir(), 'sdk-confirmation-setup-'));
-    test.after(() => rm(directory, { recursive: true, force: true }));
-    await build({
+    test.after(async () => {
+        if (!compiler.canCleanup())
+            throw new Error(
+                'Compiler did not close; output directory retained.'
+            );
+        await rm(directory, { recursive: true, force: true });
+    });
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/main.ts')],
         bundle: true,
         platform: 'node',

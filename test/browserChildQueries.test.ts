@@ -4,13 +4,16 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { it } from 'node:test';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 it('starter child query snapshots preserve canonical Save and conservative cascade boundaries', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'sdk-child-query-test-'));
+    let succeeded = false;
     try {
         const file = join(dir, 'queries.mjs');
-        await build({
+        await compiler.build({
             entryPoints: [resolve('examples/browser/src/childQueries.ts')],
             bundle: true,
             platform: 'node',
@@ -90,7 +93,12 @@ it('starter child query snapshots preserve canonical Save and conservative casca
         loaded.payload.publicFields.state.prefillURLParamsForAddingRecords =
             'prefill_Country=Mutated';
         assert.equal(captured.cascade.prefill_Country, 'Static');
+        succeeded = true;
     } finally {
-        await rm(dir, { recursive: true, force: true });
+        if (succeeded && compiler.canCleanup()) {
+            await rm(dir, { recursive: true, force: true });
+        } else {
+            console.error(`Child query fixture retained: ${dir}`);
+        }
     }
 });

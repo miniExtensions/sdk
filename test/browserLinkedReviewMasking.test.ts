@@ -4,24 +4,30 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
 
 const root = resolve(process.cwd());
-let directory: string;
+const compiler = createOwnedCompiler();
+let directory: string | undefined;
+let prepared = false;
 let presentation: {
     createLinkedReviewPresentation: unknown;
     prepareFormReviewRows: unknown;
     unavailableLinkedAnswer: string;
     createFormSaveInput: unknown;
 };
-const { checkLinkedReviewMasking, checkLinkedReviewProvenance } = await import(
-    pathToFileURL(join(root, 'scripts/linked-review-recipe-checks.mjs')).href
-);
+const { checkLinkedReviewMasking, checkLinkedReviewProvenance } =
+    await compiler.withService(() =>
+        import(
+            pathToFileURL(join(root, 'scripts/linked-review-recipe-checks.mjs'))
+                .href
+        )
+    );
 
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-linked-review-masking-'));
     const outfile = join(directory, 'presentation.mjs');
-    await build({
+    await compiler.build({
         stdin: {
             contents: [
                 "export { createLinkedReviewPresentation, unavailableLinkedAnswer } from './examples/browser/src/linkedReview.ts';",
@@ -45,9 +51,17 @@ before(async () => {
         logLevel: 'silent',
     });
     presentation = await import(pathToFileURL(outfile).href);
+    prepared = true;
 });
 
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (directory === undefined) return;
+    if (!prepared || !compiler.canCleanup()) {
+        console.error(`Linked Review masking fixture retained: ${directory}`);
+        return;
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 describe('linked Review accepted primary masking', () => {
     it('protects both flags before reading every supported primary type across options and hydration', () => {

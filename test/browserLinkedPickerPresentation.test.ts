@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
 import {
     AirtableFieldType,
     createMiniExtensionsClient,
@@ -29,13 +29,15 @@ let create: (options: {
     useCustomPrimary?: boolean;
     onRetire?(caption: string): void;
 }) => Projection;
-let directory: string;
+const compiler = createOwnedCompiler();
+let directory: string | undefined;
+let prepared = false;
 
 before(async () => {
     const root = resolve(process.cwd());
     directory = await mkdtemp(join(tmpdir(), 'sdk-linked-picker-caption-'));
     const outfile = join(directory, 'presentation.mjs');
-    await build({
+    await compiler.build({
         entryPoints: [
             join(root, 'examples/browser/src/linkedPickerPresentation.ts'),
         ],
@@ -53,9 +55,17 @@ before(async () => {
     });
     create = (await import(pathToFileURL(outfile).href))
         .createLinkedPickerPresentation;
+    prepared = true;
 });
 
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (directory === undefined) return;
+    if (!prepared || !compiler.canCleanup()) {
+        console.error(`Linked picker caption fixture retained: ${directory}`);
+        return;
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 const neutral = 'Linked record';
 const mask = '••••••••';

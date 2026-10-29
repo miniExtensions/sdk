@@ -2489,7 +2489,9 @@ try {
                         exact: true,
                     })
                     .click();
-                assert.deepEqual((await ratingState(page)).submitClicks, [true]);
+                assert.deepEqual((await ratingState(page)).submitClicks, [
+                    true,
+                ]);
                 assert.equal((await ratingState(page)).submits, 1);
 
                 // A fresh document separates the positive submit witness from

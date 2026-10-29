@@ -17,11 +17,13 @@ let presentation: {
     createFormSaveInput: unknown;
 };
 const { checkLinkedReviewMasking, checkLinkedReviewProvenance } =
-    await compiler.withService(() =>
-        import(
-            pathToFileURL(join(root, 'scripts/linked-review-recipe-checks.mjs'))
-                .href
-        )
+    await compiler.withService(
+        () =>
+            import(
+                pathToFileURL(
+                    join(root, 'scripts/linked-review-recipe-checks.mjs')
+                ).href
+            )
     );
 
 before(async () => {

@@ -112,7 +112,11 @@ describe('owned compiler lifecycle', () => {
         );
         const unrelatedArgs = ['--ordinary'];
         const unrelatedOptions: SpawnOptions = { cwd: '/different' };
-        const unrelated = fake.slot.get()('other-command', unrelatedArgs, unrelatedOptions);
+        const unrelated = fake.slot.get()(
+            'other-command',
+            unrelatedArgs,
+            unrelatedOptions
+        );
         assert.equal(unrelated, fake.children[0]!.child);
         assert.equal(fake.calls[0]![1], unrelatedArgs);
         assert.equal(fake.calls[0]![2], unrelatedOptions);
@@ -121,12 +125,20 @@ describe('owned compiler lifecycle', () => {
         assert.equal(service, fake.children[1]!.child);
         assert.ok(fence.child());
         fence.finishStartup();
-        const secondUnrelated = fake.slot.get()('other-command', unrelatedArgs, unrelatedOptions);
+        const secondUnrelated = fake.slot.get()(
+            'other-command',
+            unrelatedArgs,
+            unrelatedOptions
+        );
         assert.equal(secondUnrelated, fake.children[2]!.child);
         assert.equal(fake.calls[2]![1], unrelatedArgs);
         assert.equal(fake.calls[2]![2], unrelatedOptions);
         const redisArgs = ['--service=redis'];
-        const redis = fake.slot.get()('other-command', redisArgs, unrelatedOptions);
+        const redis = fake.slot.get()(
+            'other-command',
+            redisArgs,
+            unrelatedOptions
+        );
         assert.equal(redis, fake.children[3]!.child);
         assert.equal(fake.calls[3]![1], redisArgs);
         assert.equal(fake.calls[3]![2], unrelatedOptions);
@@ -170,15 +182,26 @@ describe('owned compiler lifecycle', () => {
             stdio: ['pipe', 'pipe', 'inherit'],
         };
         const fence = installCompilerSpawnFence(
-            '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+            '/trusted/esbuild',
+            '/checkout',
+            fake.slot,
+            (path) => path
         );
         const otherArgs = ['--service=1.2.3', '--ping'];
-        const startupOther = fake.slot.get()('other-server', otherArgs, options);
+        const startupOther = fake.slot.get()(
+            'other-server',
+            otherArgs,
+            options
+        );
         assert.equal(startupOther, fake.children[0]!.child);
         assert.equal(fake.calls[0]![1], otherArgs);
         assert.equal(fake.calls[0]![2], options);
         assert.equal(fence.isAmbiguous(), false);
-        fake.slot.get()('/trusted/esbuild', ['--service=0.25.10', '--ping'], options);
+        fake.slot.get()(
+            '/trusted/esbuild',
+            ['--service=0.25.10', '--ping'],
+            options
+        );
         fence.finishStartup();
         const laterOther = fake.slot.get()('other-server', otherArgs, options);
         assert.equal(laterOther, fake.children[2]!.child);
@@ -199,10 +222,17 @@ describe('owned compiler lifecycle', () => {
             stdio: ['pipe', 'pipe', 'inherit'],
         };
         const fence = installCompilerSpawnFence(
-            '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+            '/trusted/esbuild',
+            '/checkout',
+            fake.slot,
+            (path) => path
         );
         assert.throws(() =>
-            fake.slot.get()('/untrusted/esbuild', ['--service=1.2.3', '--ping'], options)
+            fake.slot.get()(
+                '/untrusted/esbuild',
+                ['--service=1.2.3', '--ping'],
+                options
+            )
         );
         assert.equal(fake.calls.length, 0);
         assert.equal(fence.isAmbiguous(), true);
@@ -218,12 +248,23 @@ describe('owned compiler lifecycle', () => {
             stdio: ['pipe', 'pipe', 'inherit'],
         };
         const fence = installCompilerSpawnFence(
-            '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+            '/trusted/esbuild',
+            '/checkout',
+            fake.slot,
+            (path) => path
         );
-        fake.slot.get()('/trusted/esbuild', ['--service=0.25.10', '--ping'], options);
+        fake.slot.get()(
+            '/trusted/esbuild',
+            ['--service=0.25.10', '--ping'],
+            options
+        );
         fence.finishStartup();
         const mismatchArgs = ['--service=1.2.3', '--ping'];
-        const other = fake.slot.get()('/untrusted/esbuild', mismatchArgs, options);
+        const other = fake.slot.get()(
+            '/untrusted/esbuild',
+            mismatchArgs,
+            options
+        );
         assert.equal(other, fake.children[1]!.child);
         assert.equal(fake.calls[1]![1], mismatchArgs);
         assert.equal(fake.calls[1]![2], options);
@@ -245,7 +286,9 @@ describe('owned compiler lifecycle', () => {
             fake.slot,
             (path) => path
         );
-        const replacement = (() => fakeChild().child) as unknown as ReturnType<SpawnSlot['get']>;
+        const replacement = (() => fakeChild().child) as unknown as ReturnType<
+            SpawnSlot['get']
+        >;
         fake.slot.set(replacement);
         assert.equal(fence.isAmbiguous(), true);
         fence.restore();
@@ -316,7 +359,10 @@ describe('owned compiler lifecycle', () => {
         const compiler = createOwnedCompiler({
             start: () => {
                 fence = installCompilerSpawnFence(
-                    '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+                    '/trusted/esbuild',
+                    '/checkout',
+                    fake.slot,
+                    (path) => path
                 );
                 fake.slot.get()('/trusted/esbuild', args, options);
                 fence.finishStartup();
@@ -362,7 +408,10 @@ describe('owned compiler lifecycle', () => {
         const compiler = createOwnedCompiler({
             start: () => {
                 const fence = installCompilerSpawnFence(
-                    '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+                    '/trusted/esbuild',
+                    '/checkout',
+                    fake.slot,
+                    (path) => path
                 );
                 fake.slot.get()('/trusted/esbuild', args, options);
                 fence.finishStartup();
@@ -410,7 +459,10 @@ describe('owned compiler lifecycle', () => {
         const compiler = createOwnedCompiler({
             start: () => {
                 const fence = installCompilerSpawnFence(
-                    '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+                    '/trusted/esbuild',
+                    '/checkout',
+                    fake.slot,
+                    (path) => path
                 );
                 fake.slot.get()('/trusted/esbuild', args, options);
                 fence.finishStartup();
@@ -451,7 +503,10 @@ describe('owned compiler lifecycle', () => {
             stdio: ['pipe', 'pipe', 'inherit'],
         };
         const fence = installCompilerSpawnFence(
-            '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+            '/trusted/esbuild',
+            '/checkout',
+            fake.slot,
+            (path) => path
         );
         fake.slot.get()('/trusted/esbuild', args, options);
         fence.finishStartup();
@@ -482,7 +537,10 @@ describe('owned compiler lifecycle', () => {
             {
                 start: () => {
                     const fence = installCompilerSpawnFence(
-                        '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+                        '/trusted/esbuild',
+                        '/checkout',
+                        fake.slot,
+                        (path) => path
                     );
                     fake.slot.get()('/trusted/esbuild', args, options);
                     fence.finishStartup();
@@ -525,12 +583,16 @@ describe('owned compiler lifecycle', () => {
                 windowsHide: true,
                 stdio: ['pipe', 'pipe', 'inherit'],
             };
-            const replacement = (() => fakeChild().child) as unknown as ReturnType<SpawnSlot['get']>;
+            const replacement = (() =>
+                fakeChild().child) as unknown as ReturnType<SpawnSlot['get']>;
             let stops = 0;
             const compiler = createOwnedCompiler({
                 start: () => {
                     const fence = installCompilerSpawnFence(
-                        '/trusted/esbuild', '/checkout', fake.slot, (path) => path
+                        '/trusted/esbuild',
+                        '/checkout',
+                        fake.slot,
+                        (path) => path
                     );
                     fake.slot.get()('/trusted/esbuild', args, options);
                     fence.finishStartup();
@@ -581,7 +643,10 @@ describe('owned compiler lifecycle', () => {
         const compiler = createOwnedCompiler({
             start: () => {
                 const fence = installCompilerSpawnFence(
-                    '/trusted/esbuild', '/checkout', slot, (path) => path
+                    '/trusted/esbuild',
+                    '/checkout',
+                    slot,
+                    (path) => path
                 );
                 slot.get()('/trusted/esbuild', args, options);
                 fence.finishStartup();
@@ -614,7 +679,10 @@ describe('owned compiler lifecycle', () => {
         const buildFailure = new Error('first build failed');
         const processFailure = new Error('child failed');
         const streamFailure = new Error('stdin failed');
-        const nestedFailure = new AggregateError([processFailure], 'sibling failed');
+        const nestedFailure = new AggregateError(
+            [processFailure],
+            'sibling failed'
+        );
         const stopFailure = new Error('stop failed');
         const restoreFailure = new Error('restore failed');
         let builds = 0;
@@ -623,7 +691,9 @@ describe('owned compiler lifecycle', () => {
             start: () => ({
                 child: tracked,
                 ready: Promise.resolve(),
-                restore: () => { throw restoreFailure; },
+                restore: () => {
+                    throw restoreFailure;
+                },
             }),
             build: () => (++builds === 1 ? first.promise : sibling.promise),
             stop: () => {
@@ -651,15 +721,25 @@ describe('owned compiler lifecycle', () => {
         await assert.rejects(result, (error: unknown) => {
             assert.ok(error instanceof AggregateError);
             for (const original of [
-                buildFailure, nestedFailure, processFailure, streamFailure,
-                stopFailure, restoreFailure,
-            ]) assert.ok(error.errors.includes(original));
+                buildFailure,
+                nestedFailure,
+                processFailure,
+                streamFailure,
+                stopFailure,
+                restoreFailure,
+            ])
+                assert.ok(error.errors.includes(original));
             assert.deepEqual(nestedFailure.errors, [processFailure]);
-            const terminalIndex = error.errors.findIndex((entry: unknown) =>
-                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
+            const terminalIndex = error.errors.findIndex(
+                (entry: unknown) =>
+                    entry instanceof Error &&
+                    /Compiler closed unexpectedly/.test(entry.message)
             );
             assert.ok(terminalIndex >= 0);
-            assert.ok(error.errors.indexOf(streamFailure) < error.errors.indexOf(stopFailure));
+            assert.ok(
+                error.errors.indexOf(streamFailure) <
+                    error.errors.indexOf(stopFailure)
+            );
             assert.ok(error.errors.indexOf(stopFailure) < terminalIndex);
             assert.ok(terminalIndex < error.errors.indexOf(restoreFailure));
             assert.equal(new Set(error.errors).size, error.errors.length);
@@ -678,10 +758,15 @@ describe('owned compiler lifecycle', () => {
             start: () => ({
                 child: tracked,
                 ready: Promise.resolve(),
-                restore: () => { throw shared; },
+                restore: () => {
+                    throw shared;
+                },
             }),
-            build: () => (++builds === 1 ? Promise.reject(shared) : pending.promise),
-            stop: () => { throw shared; },
+            build: () =>
+                ++builds === 1 ? Promise.reject(shared) : pending.promise,
+            stop: () => {
+                throw shared;
+            },
         });
         const result = compiler.buildAll([
             { entryPoints: ['first.ts'] },
@@ -709,18 +794,25 @@ describe('owned compiler lifecycle', () => {
                 start: () => ({
                     child: tracked,
                     ready: Promise.resolve(),
-                    restore: () => { throw restoreFailure; },
+                    restore: () => {
+                        throw restoreFailure;
+                    },
                 }),
                 build: async () => {},
                 stop: () => {},
             },
-            async () => { throw closeFailure; }
+            async () => {
+                throw closeFailure;
+            }
         );
-        await assert.rejects(compiler.build({ entryPoints: ['example.ts'] }), (error: unknown) => {
-            assert.ok(error instanceof AggregateError);
-            assert.deepEqual(error.errors, [closeFailure, restoreFailure]);
-            return true;
-        });
+        await assert.rejects(
+            compiler.build({ entryPoints: ['example.ts'] }),
+            (error: unknown) => {
+                assert.ok(error instanceof AggregateError);
+                assert.deepEqual(error.errors, [closeFailure, restoreFailure]);
+                return true;
+            }
+        );
         assert.equal(compiler.canCleanup(), false);
         fake.close(0);
         assert.equal(compiler.canCleanup(), false);
@@ -940,7 +1032,10 @@ describe('owned compiler lifecycle', () => {
         let starts = 0;
         let stops = 0;
         const compiler = createOwnedCompiler({
-            start: () => ({ child: children[starts++], ready: Promise.resolve() }),
+            start: () => ({
+                child: children[starts++],
+                ready: Promise.resolve(),
+            }),
             build: async () => {},
             stop: () => {
                 stops++;
@@ -1049,9 +1144,13 @@ describe('owned compiler lifecycle', () => {
             await assert.rejects(result, (error: unknown) => {
                 assert.ok(error instanceof AggregateError);
                 assert.ok(error.errors.includes(failure));
-                assert.ok(error.errors.some((entry: unknown) =>
-                    entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-                ));
+                assert.ok(
+                    error.errors.some(
+                        (entry: unknown) =>
+                            entry instanceof Error &&
+                            /Compiler closed unexpectedly/.test(entry.message)
+                    )
+                );
                 return true;
             });
             assert.equal(compiler.canCleanup(), true);
@@ -1128,9 +1227,13 @@ describe('owned compiler lifecycle', () => {
         await assert.rejects(result, (error: unknown) => {
             assert.ok(error instanceof AggregateError);
             assert.ok(error.errors.includes(failure));
-            assert.ok(error.errors.some((entry: unknown) =>
-                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-            ));
+            assert.ok(
+                error.errors.some(
+                    (entry: unknown) =>
+                        entry instanceof Error &&
+                        /Compiler closed unexpectedly/.test(entry.message)
+                )
+            );
             return true;
         });
         assert.equal(compiler.canCleanup(), true);
@@ -1162,9 +1265,13 @@ describe('owned compiler lifecycle', () => {
         await assert.rejects(result, (error: unknown) => {
             assert.ok(error instanceof AggregateError);
             assert.ok(error.errors.includes(failure));
-            assert.ok(error.errors.some((entry: unknown) =>
-                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-            ));
+            assert.ok(
+                error.errors.some(
+                    (entry: unknown) =>
+                        entry instanceof Error &&
+                        /Compiler closed unexpectedly/.test(entry.message)
+                )
+            );
             return true;
         });
         assert.equal(compiler.canCleanup(), true);
@@ -1190,9 +1297,13 @@ describe('owned compiler lifecycle', () => {
         await assert.rejects(result, (error: unknown) => {
             assert.ok(error instanceof AggregateError);
             assert.ok(error.errors.includes(failure));
-            assert.ok(error.errors.some((entry: unknown) =>
-                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-            ));
+            assert.ok(
+                error.errors.some(
+                    (entry: unknown) =>
+                        entry instanceof Error &&
+                        /Compiler closed unexpectedly/.test(entry.message)
+                )
+            );
             return true;
         });
         assert.equal(compiler.canCleanup(), true);
@@ -1203,7 +1314,7 @@ describe('owned compiler lifecycle', () => {
         const tracked = trackCompilerChild(fake.child);
         const failure = new Error('close was not confirmed');
         let stops = 0;
-        const observed: typeof tracked[] = [];
+        const observed: (typeof tracked)[] = [];
         const compiler = createOwnedCompiler(
             {
                 start: () => ({ child: tracked, ready: Promise.resolve() }),
@@ -1368,7 +1479,10 @@ describe('owned compiler lifecycle', () => {
             deadline.reject(deadlineFailure);
             await assert.rejects(result, (error: unknown) => {
                 assert.ok(error instanceof AggregateError);
-                assert.deepEqual(error.errors, [processFailure, deadlineFailure]);
+                assert.deepEqual(error.errors, [
+                    processFailure,
+                    deadlineFailure,
+                ]);
                 return true;
             });
             assert.equal(stops, 0);
@@ -1522,7 +1636,13 @@ describe('owned compiler lifecycle', () => {
         assert.equal(compiler.canCleanup(), true);
     });
 
-    for (const source of ['child', 'stdin', 'stdout', 'exit', 'close'] as const) {
+    for (const source of [
+        'child',
+        'stdin',
+        'stdout',
+        'exit',
+        'close',
+    ] as const) {
         it(`preserves a build failure after an earlier ${source} event`, async () => {
             const fake = fakeChild();
             const tracked = trackCompilerChild(fake.child);
@@ -1536,7 +1656,8 @@ describe('owned compiler lifecycle', () => {
             const compiler = createOwnedCompiler(
                 {
                     start: () => ({ child: tracked, ready: Promise.resolve() }),
-                    build: () => (++builds === 1 ? first.promise : sibling.promise),
+                    build: () =>
+                        ++builds === 1 ? first.promise : sibling.promise,
                     stop: () => {
                         stops++;
                     },
@@ -1574,19 +1695,37 @@ describe('owned compiler lifecycle', () => {
                 assert.ok(error instanceof AggregateError);
                 assert.ok(error.errors.includes(buildFailure));
                 if (ownershipLost) {
-                    assert.ok(error.errors.some((entry: unknown) =>
-                        entry instanceof Error && /Compiler (exited|closed) before owned shutdown/.test(entry.message)
-                    ));
+                    assert.ok(
+                        error.errors.some(
+                            (entry: unknown) =>
+                                entry instanceof Error &&
+                                /Compiler (exited|closed) before owned shutdown/.test(
+                                    entry.message
+                                )
+                        )
+                    );
                     if (source === 'close') {
-                        assert.ok(error.errors.some((entry: unknown) =>
-                            entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-                        ));
+                        assert.ok(
+                            error.errors.some(
+                                (entry: unknown) =>
+                                    entry instanceof Error &&
+                                    /Compiler closed unexpectedly/.test(
+                                        entry.message
+                                    )
+                            )
+                        );
                     }
                 } else {
                     assert.ok(error.errors.includes(lifecycleFailure));
-                    assert.ok(error.errors.some((entry: unknown) =>
-                        entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-                    ));
+                    assert.ok(
+                        error.errors.some(
+                            (entry: unknown) =>
+                                entry instanceof Error &&
+                                /Compiler closed unexpectedly/.test(
+                                    entry.message
+                                )
+                        )
+                    );
                 }
                 assert.equal(new Set(error.errors).size, error.errors.length);
                 return true;
@@ -1609,7 +1748,9 @@ describe('owned compiler lifecycle', () => {
             {
                 start: () => ({ child: tracked, ready: Promise.resolve() }),
                 build: () => (++builds === 1 ? first.promise : sibling.promise),
-                stop: () => { stops++; },
+                stop: () => {
+                    stops++;
+                },
             },
             undefined,
             async (settled, error) => {
@@ -1637,9 +1778,13 @@ describe('owned compiler lifecycle', () => {
             assert.ok(error.errors.includes(processFailure));
             assert.ok(error.errors.includes(termination));
             assert.ok(error.errors.includes(buildFailure));
-            assert.ok(error.errors.some((entry: unknown) =>
-                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-            ));
+            assert.ok(
+                error.errors.some(
+                    (entry: unknown) =>
+                        entry instanceof Error &&
+                        /Compiler closed unexpectedly/.test(entry.message)
+                )
+            );
             assert.equal(new Set(error.errors).size, error.errors.length);
             return true;
         });
@@ -1662,8 +1807,11 @@ describe('owned compiler lifecycle', () => {
             const compiler = createOwnedCompiler(
                 {
                     start: () => ({ child: tracked, ready: Promise.resolve() }),
-                    build: () => (++builds === 1 ? first.promise : sibling.promise),
-                    stop: () => { stops++; },
+                    build: () =>
+                        ++builds === 1 ? first.promise : sibling.promise,
+                    stop: () => {
+                        stops++;
+                    },
                 },
                 undefined,
                 (_settled, error) => {
@@ -1689,12 +1837,24 @@ describe('owned compiler lifecycle', () => {
                 assert.ok(error.errors.includes(processFailure));
                 assert.ok(error.errors.includes(termination));
                 assert.ok(error.errors.includes(deadlineFailure));
-                assert.ok(error.errors.indexOf(processFailure) < error.errors.indexOf(termination));
-                assert.ok(error.errors.indexOf(termination) < error.errors.indexOf(deadlineFailure));
+                assert.ok(
+                    error.errors.indexOf(processFailure) <
+                        error.errors.indexOf(termination)
+                );
+                assert.ok(
+                    error.errors.indexOf(termination) <
+                        error.errors.indexOf(deadlineFailure)
+                );
                 if (event === 'close') {
-                    assert.ok(error.errors.some((entry: unknown) =>
-                        entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-                    ));
+                    assert.ok(
+                        error.errors.some(
+                            (entry: unknown) =>
+                                entry instanceof Error &&
+                                /Compiler closed unexpectedly/.test(
+                                    entry.message
+                                )
+                        )
+                    );
                 }
                 assert.equal(new Set(error.errors).size, error.errors.length);
                 return true;
@@ -1716,7 +1876,8 @@ describe('owned compiler lifecycle', () => {
             const compiler = createOwnedCompiler(
                 {
                     start: () => ({ child: tracked, ready: Promise.resolve() }),
-                    build: () => (++builds === 1 ? first.promise : sibling.promise),
+                    build: () =>
+                        ++builds === 1 ? first.promise : sibling.promise,
                     stop: () => {
                         stops++;
                     },
@@ -1755,9 +1916,13 @@ describe('owned compiler lifecycle', () => {
                 if (event === 'exit') return error === termination;
                 assert.ok(error instanceof AggregateError);
                 assert.ok(error.errors.includes(termination));
-                assert.ok(error.errors.some((entry: unknown) =>
-                    entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-                ));
+                assert.ok(
+                    error.errors.some(
+                        (entry: unknown) =>
+                            entry instanceof Error &&
+                            /Compiler closed unexpectedly/.test(entry.message)
+                    )
+                );
                 return true;
             });
             assert.equal(compiler.canCleanup(), false);
@@ -1777,7 +1942,8 @@ describe('owned compiler lifecycle', () => {
             const compiler = createOwnedCompiler(
                 {
                     start: () => ({ child: tracked, ready: Promise.resolve() }),
-                    build: () => (++builds === 1 ? first.promise : sibling.promise),
+                    build: () =>
+                        ++builds === 1 ? first.promise : sibling.promise,
                     stop: () => {
                         stops++;
                     },
@@ -1812,9 +1978,13 @@ describe('owned compiler lifecycle', () => {
                 assert.ok(error.errors.includes(buildFailure));
                 assert.ok(error.errors.includes(termination));
                 assert.ok(error.errors.includes(deadlineFailure));
-                assert.ok(error.errors.some((entry: unknown) =>
-                    entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-                ));
+                assert.ok(
+                    error.errors.some(
+                        (entry: unknown) =>
+                            entry instanceof Error &&
+                            /Compiler closed unexpectedly/.test(entry.message)
+                    )
+                );
                 assert.equal(new Set(error.errors).size, error.errors.length);
                 return true;
             });
@@ -1854,9 +2024,13 @@ describe('owned compiler lifecycle', () => {
         await assert.rejects(result, (error: unknown) => {
             assert.ok(error instanceof AggregateError);
             assert.ok(error.errors.includes(failure));
-            assert.ok(error.errors.some((entry: unknown) =>
-                entry instanceof Error && /Compiler closed unexpectedly/.test(entry.message)
-            ));
+            assert.ok(
+                error.errors.some(
+                    (entry: unknown) =>
+                        entry instanceof Error &&
+                        /Compiler closed unexpectedly/.test(entry.message)
+                )
+            );
             return true;
         });
         assert.equal(compiler.canCleanup(), true);
@@ -1897,14 +2071,21 @@ describe('owned compiler lifecycle', () => {
             },
         };
         const compiler = createOwnedCompiler(driver);
-        await assert.rejects(compiler.build({ entryPoints: ['example.ts'] }), (error: unknown) => {
-            assert.ok(error instanceof AggregateError);
-            assert.ok(error.errors.includes(failure));
-            assert.ok(error.errors.some((entry: unknown) =>
-                entry instanceof Error && /ownership was not established/.test(entry.message)
-            ));
-            return true;
-        });
+        await assert.rejects(
+            compiler.build({ entryPoints: ['example.ts'] }),
+            (error: unknown) => {
+                assert.ok(error instanceof AggregateError);
+                assert.ok(error.errors.includes(failure));
+                assert.ok(
+                    error.errors.some(
+                        (entry: unknown) =>
+                            entry instanceof Error &&
+                            /ownership was not established/.test(entry.message)
+                    )
+                );
+                return true;
+            }
+        );
         assert.equal(builds, 0);
         assert.equal(stops, 0);
         assert.equal(compiler.canCleanup(), false);
@@ -1929,14 +2110,21 @@ describe('owned compiler lifecycle', () => {
                 stops++;
             },
         });
-        await assert.rejects(compiler.build({ entryPoints: ['example.ts'] }), (error: unknown) => {
-            assert.ok(error instanceof AggregateError);
-            assert.ok(error.errors.includes(failure));
-            assert.ok(error.errors.some((entry: unknown) =>
-                entry instanceof Error && /ownership was not established/.test(entry.message)
-            ));
-            return true;
-        });
+        await assert.rejects(
+            compiler.build({ entryPoints: ['example.ts'] }),
+            (error: unknown) => {
+                assert.ok(error instanceof AggregateError);
+                assert.ok(error.errors.includes(failure));
+                assert.ok(
+                    error.errors.some(
+                        (entry: unknown) =>
+                            entry instanceof Error &&
+                            /ownership was not established/.test(entry.message)
+                    )
+                );
+                return true;
+            }
+        );
         assert.equal(builds, 0);
         assert.equal(stops, 0);
         assert.equal(compiler.canCleanup(), false);

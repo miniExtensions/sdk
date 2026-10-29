@@ -1,4 +1,7 @@
-import childProcess, { type ChildProcess, type SpawnOptions } from 'node:child_process';
+import childProcess, {
+    type ChildProcess,
+    type SpawnOptions,
+} from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, join } from 'node:path';
@@ -52,11 +55,15 @@ export function trackCompilerChild(child: ChildProcess): TrackedCompilerChild {
         child.stdout?.on('error', remember);
         child.on('exit', () => {
             exited = true;
-            reportTermination(new Error('Compiler exited before owned shutdown'));
+            reportTermination(
+                new Error('Compiler exited before owned shutdown')
+            );
         });
         child.on('close', (code, signal) => {
             closed = true;
-            reportTermination(new Error('Compiler closed before owned shutdown'));
+            reportTermination(
+                new Error('Compiler closed before owned shutdown')
+            );
             resolve(error ? { code, signal, error } : { code, signal });
         });
     });
@@ -139,7 +146,9 @@ export function installCompilerSpawnFence(
     cwd: string,
     slot: SpawnSlot = {
         get: () => childProcess.spawn,
-        set: (value) => { childProcess.spawn = value; },
+        set: (value) => {
+            childProcess.spawn = value;
+        },
     },
     resolvePath: (path: string) => string = realpathSync
 ) {
@@ -172,7 +181,8 @@ export function installCompilerSpawnFence(
         const [command, args, options] = callArgs;
         const argumentsList = Array.isArray(args) ? args : [];
         const serviceFlag = argumentsList.some(
-            (arg: unknown) => typeof arg === 'string' && arg.startsWith('--service=')
+            (arg: unknown) =>
+                typeof arg === 'string' && arg.startsWith('--service=')
         );
         let expectedCommand = false;
         if (serviceFlag && typeof command === 'string') {
@@ -182,14 +192,19 @@ export function installCompilerSpawnFence(
                 // Unrelated commands need not exist at fence-inspection time.
             }
         }
-        const service = serviceFlag && (
-            expectedCommand ||
-            (typeof command === 'string' &&
-            ['esbuild', 'esbuild.exe'].includes(basename(command).toLowerCase()) &&
-            argumentsList.includes('--ping') && argumentsList.some(
-                (arg: unknown) => typeof arg === 'string' && /^--service=\d+\.\d+\.\d+$/.test(arg)
-            ))
-        );
+        const service =
+            serviceFlag &&
+            (expectedCommand ||
+                (typeof command === 'string' &&
+                    ['esbuild', 'esbuild.exe'].includes(
+                        basename(command).toLowerCase()
+                    ) &&
+                    argumentsList.includes('--ping') &&
+                    argumentsList.some(
+                        (arg: unknown) =>
+                            typeof arg === 'string' &&
+                            /^--service=\d+\.\d+\.\d+$/.test(arg)
+                    )));
         if (!service) return spawn(...callArgs);
         if (!startup) {
             ambiguous = true;
@@ -198,7 +213,8 @@ export function installCompilerSpawnFence(
             return child;
         }
         try {
-            if (typeof command !== 'string') throw new Error('Invalid compiler command');
+            if (typeof command !== 'string')
+                throw new Error('Invalid compiler command');
             assertCompilerSpawn(
                 command,
                 args as string[],
@@ -228,7 +244,9 @@ export function installCompilerSpawnFence(
     slot.set(wrapper);
     return {
         child: () => tracked,
-        finishStartup: () => { startup = false; },
+        finishStartup: () => {
+            startup = false;
+        },
         isAmbiguous: () => ambiguous || (!restored && slot.get() !== wrapper),
         restore: () => {
             if (restored) return;
@@ -250,14 +268,26 @@ function nativeBinary(esbuildPath: string): string {
         android: ['arm64'],
         darwin: ['arm64', 'x64'],
         freebsd: ['arm64', 'x64'],
-        linux: ['arm', 'arm64', 'ia32', 'loong64', 'mips64el', 'ppc64', 'riscv64', 's390x', 'x64'],
+        linux: [
+            'arm',
+            'arm64',
+            'ia32',
+            'loong64',
+            'mips64el',
+            'ppc64',
+            'riscv64',
+            's390x',
+            'x64',
+        ],
         netbsd: ['arm64', 'x64'],
         openbsd: ['arm64', 'x64'],
         sunos: ['x64'],
         win32: ['arm64', 'ia32', 'x64'],
     };
     if (!nativePlatforms[process.platform]?.includes(process.arch))
-        throw new Error('Owned compiler has no verified native package for this platform');
+        throw new Error(
+            'Owned compiler has no verified native package for this platform'
+        );
     const packageName = `@esbuild/${process.platform}-${process.arch}`;
     const fromEsbuild = createRequire(esbuildPath);
     const packageJson = fromEsbuild.resolve(`${packageName}/package.json`);
@@ -283,7 +313,10 @@ function nativeBinary(esbuildPath: string): string {
 const internalAggregates = new WeakSet<AggregateError>();
 function combinedFailures(errors: unknown[]): unknown {
     if (errors.length === 1) return errors[0];
-    const combined = new AggregateError(errors, 'Owned compiler encountered multiple failures');
+    const combined = new AggregateError(
+        errors,
+        'Owned compiler encountered multiple failures'
+    );
     internalAggregates.add(combined);
     return combined;
 }
@@ -298,7 +331,9 @@ function nativeDriver(): CompilerDriver {
     return {
         start() {
             if (defaultOwner && defaultOwner !== owner)
-                throw new Error('An owned compiler already has exclusive ownership');
+                throw new Error(
+                    'An owned compiler already has exclusive ownership'
+                );
             defaultOwner = owner;
             const esbuildPath = require.resolve('esbuild');
             if (!compiler) {
@@ -316,7 +351,9 @@ function nativeDriver(): CompilerDriver {
                 if (!compiler) {
                     compiler = require(esbuildPath) as EsbuildModule;
                     if (compiler.version !== version)
-                        throw new Error(`Owned compiler requires esbuild@${version}`);
+                        throw new Error(
+                            `Owned compiler requires esbuild@${version}`
+                        );
                 }
                 ready = compiler.initialize({});
             } catch (error) {
@@ -333,7 +370,8 @@ function nativeDriver(): CompilerDriver {
                 try {
                     fence.restore();
                 } catch (restoreError) {
-                    if (!failures.includes(restoreError)) failures.push(restoreError);
+                    if (!failures.includes(restoreError))
+                        failures.push(restoreError);
                 }
                 // Ownership remains unsafe and no stop is attempted. Observe
                 // initialization too, so its rejection cannot be masked by ref.
@@ -341,9 +379,12 @@ function nativeDriver(): CompilerDriver {
                     child: fence.child(),
                     ambiguous: true,
                     ready: ready.then(
-                        () => { throw combinedFailures(failures); },
+                        () => {
+                            throw combinedFailures(failures);
+                        },
                         (readyError: unknown) => {
-                            if (!failures.includes(readyError)) failures.push(readyError);
+                            if (!failures.includes(readyError))
+                                failures.push(readyError);
                             throw combinedFailures(failures);
                         }
                     ),
@@ -368,7 +409,9 @@ function nativeDriver(): CompilerDriver {
     };
 }
 
-export type CloseObserver = (child: TrackedCompilerChild) => Promise<CompilerClose>;
+export type CloseObserver = (
+    child: TrackedCompilerChild
+) => Promise<CompilerClose>;
 export type ErrorDrainObserver = (
     settled: Promise<unknown>,
     error: Error
@@ -379,7 +422,12 @@ export type ErrorDrainObserver = (
 export const observeCompilerClose: CloseObserver = (child) =>
     new Promise((resolve, reject) => {
         const timer = setTimeout(
-            () => reject(new Error('Compiler close was not confirmed within 30 seconds')),
+            () =>
+                reject(
+                    new Error(
+                        'Compiler close was not confirmed within 30 seconds'
+                    )
+                ),
             30_000
         );
         child.closed.then(
@@ -400,7 +448,12 @@ export const observeCompilerClose: CloseObserver = (child) =>
 export const observeErrorDrain: ErrorDrainObserver = (settled) =>
     new Promise((resolve, reject) => {
         const timer = setTimeout(
-            () => reject(new Error('Compiler builds did not settle within 30 seconds after compiler failure')),
+            () =>
+                reject(
+                    new Error(
+                        'Compiler builds did not settle within 30 seconds after compiler failure'
+                    )
+                ),
             30_000
         );
         settled.then(
@@ -423,7 +476,9 @@ export function createOwnedCompiler(
     let unsafe = false;
     let active = false;
 
-    async function runActions(actions: Array<() => Promise<unknown>>): Promise<void> {
+    async function runActions(
+        actions: Array<() => Promise<unknown>>
+    ): Promise<void> {
         if (active) throw new Error('Owned compiler is already running');
         if (unsafe) throw new Error('Compiler ownership is unconfirmed');
         active = true;
@@ -435,7 +490,10 @@ export function createOwnedCompiler(
         let terminationObserved = false;
         const ambiguity = new Error('Compiler ownership became ambiguous');
         const record = (error: unknown): void => {
-            if (error instanceof AggregateError && internalAggregates.has(error)) {
+            if (
+                error instanceof AggregateError &&
+                internalAggregates.has(error)
+            ) {
                 for (const nested of error.errors) record(nested);
             } else if (!seen.has(error)) {
                 seen.add(error);
@@ -472,7 +530,9 @@ export function createOwnedCompiler(
             child?.onError(record);
             if (!child || started.ambiguous || started.isAmbiguous?.()) {
                 unsafe = true;
-                record(new Error('Compiler child ownership was not established'));
+                record(
+                    new Error('Compiler child ownership was not established')
+                );
                 // Avoid an unhandled rejection while refusing to stop an
                 // unowned service or start any builds.
                 await started.ready;
@@ -480,8 +540,7 @@ export function createOwnedCompiler(
             }
             try {
                 await started.ready;
-                if (started.isAmbiguous?.())
-                    throw ambiguity;
+                if (started.isAmbiguous?.()) throw ambiguity;
                 if (child.isClosed() || child.isExited())
                     throw new Error('Compiler exited before building');
                 const builds = actions.map((action) =>
@@ -495,8 +554,14 @@ export function createOwnedCompiler(
                 const settled = Promise.allSettled(builds);
                 const outcome = await Promise.race([
                     settled.then(() => ({ kind: 'settled' as const })),
-                    child.errored.then((error) => ({ kind: 'error' as const, error })),
-                    child.terminated.then((error) => ({ kind: 'termination' as const, error })),
+                    child.errored.then((error) => ({
+                        kind: 'error' as const,
+                        error,
+                    })),
+                    child.terminated.then((error) => ({
+                        kind: 'termination' as const,
+                        error,
+                    })),
                 ]);
                 if (outcome.kind !== 'settled') {
                     terminationObserved = outcome.kind === 'termination';
@@ -511,7 +576,8 @@ export function createOwnedCompiler(
                         // Only inspect termination already observed by the
                         // tracker; do not wait for a future event on timeout.
                         try {
-                            if (child.isClosed() || child.isExited()) await ownershipLost();
+                            if (child.isClosed() || child.isExited())
+                                await ownershipLost();
                         } catch (terminationError) {
                             record(terminationError);
                         }
@@ -554,7 +620,9 @@ export function createOwnedCompiler(
             try {
                 terminal = await observeClose(child);
                 if (!child.isClosed())
-                    throw new Error('Compiler observer returned before terminal close');
+                    throw new Error(
+                        'Compiler observer returned before terminal close'
+                    );
             } catch (error) {
                 record(error);
                 return;
@@ -608,14 +676,19 @@ export function createOwnedCompiler(
     }
 
     return {
-        build: (options: BuildOptions) => runActions([() => driver.build(options)]),
+        build: (options: BuildOptions) =>
+            runActions([() => driver.build(options)]),
         buildAll: (options: BuildOptions[]) =>
             runActions(options.map((option) => () => driver.build(option))),
         // Only for importing assertion modules that themselves import esbuild;
         // the callback must not invoke esbuild outside this owner's build API.
         withService: async <T>(action: () => Promise<T>): Promise<T> => {
             let result!: T;
-            await runActions([async () => { result = await action(); }]);
+            await runActions([
+                async () => {
+                    result = await action();
+                },
+            ]);
             return result;
         },
         canCleanup: () => !unsafe && !active,

@@ -53,12 +53,13 @@ const {
     assertEditedMultiPageReview,
     assertChildSaveRouting,
     assertMouseBlurCommit,
-} = (await compiler.withService(() =>
-    import(
-        pathToFileURL(
-            resolve('scripts/browser-linked-child-confirmation-native.mjs')
-        ).href
-    )
+} = (await compiler.withService(
+    () =>
+        import(
+            pathToFileURL(
+                resolve('scripts/browser-linked-child-confirmation-native.mjs')
+            ).href
+        )
 )) as {
     assertMouseBlurCommit(
         actual: MouseCheckpoint,
@@ -188,7 +189,9 @@ it('commits native text change before resolving a fresh child action', async (te
     const directory = await mkdtemp(join(tmpdir(), 'sdk-confirmation-setup-'));
     test.after(async () => {
         if (!compiler.canCleanup())
-            throw new Error('Compiler did not close; output directory retained.');
+            throw new Error(
+                'Compiler did not close; output directory retained.'
+            );
         await rm(directory, { recursive: true, force: true });
     });
     await compiler.build({

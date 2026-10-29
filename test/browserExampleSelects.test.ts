@@ -32,8 +32,8 @@ before(async () => {
     // Exercise the real example modules without requiring its separately
     // installed archive or copying any renderer into these regressions.
     await compiler.buildAll(
-        ['fields', 'main', 'portal'].map((name): BuildOptions =>
-            ({
+        ['fields', 'main', 'portal'].map(
+            (name): BuildOptions => ({
                 entryPoints: [join(root, 'examples/browser/src', `${name}.ts`)],
                 alias: {
                     '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),

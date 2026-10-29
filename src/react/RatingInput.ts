@@ -127,6 +127,23 @@ export const RatingInput = forwardRef<HTMLInputElement, RatingInputProps>(
                       min: 1,
                       disabled,
                       'aria-describedby': describedBy,
+                      onKeyDown: (
+                          event: import('react').KeyboardEvent<HTMLInputElement>
+                      ) => {
+                          props.inputProps?.onKeyDown?.(event);
+                          if (
+                              !current() ||
+                              disabled ||
+                              props.value === null ||
+                              event.defaultPrevented ||
+                              event.nativeEvent.isComposing ||
+                              (event.key !== 'Backspace' &&
+                                  event.key !== 'Delete')
+                          )
+                              return;
+                          event.preventDefault();
+                          if (!event.repeat) commit(null);
+                      },
                       onChange: (
                           event: import('react').ChangeEvent<HTMLInputElement>
                       ) => {

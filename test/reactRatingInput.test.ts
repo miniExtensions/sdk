@@ -124,6 +124,7 @@ async function fixture(
         render: async (node: ReactNode) => {
             await act(async () => root.render(h(StrictMode, null, node)));
         },
+        replace: (node: ReactNode) => root.render(h(StrictMode, null, node)),
         tree: () =>
             h(FieldRenderer, {
                 host,
@@ -228,6 +229,234 @@ it('reuses controlled native range/ref/form/ARIA and decorative icons for select
     assert.equal(values.at(-1), null);
     await f.render(null);
     assert.equal(ref.current, null);
+});
+
+it('clears the focused native range once for each clear key while forwarding keyboard events without submitting', async (t) => {
+    const f = await fixture(t);
+    const values: (number | null)[] = [];
+    const keys: string[] = [];
+    const bubbled: string[] = [];
+    let submits = 0;
+    const view = (value: number | null) =>
+        h(
+            'form',
+            {
+                onSubmit: (event: import('react').FormEvent) => {
+                    event.preventDefault();
+                    submits++;
+                },
+                onKeyDown: (event: import('react').KeyboardEvent) => {
+                    bubbled.push(event.key);
+                },
+            },
+            h(RatingInput, {
+                value,
+                max: 5,
+                onChange: (next) => values.push(next),
+                inputProps: { onKeyDown: (event) => keys.push(event.key) },
+            })
+        );
+
+    for (const key of ['Backspace', 'Delete'] as const) {
+        await f.render(view(3));
+        await act(async () => f.input().focus());
+        const event = new f.window.KeyboardEvent('keydown', {
+            key,
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => f.input().dispatchEvent(event));
+        assert.equal(event.defaultPrevented, true);
+        assert.equal(f.window.document.activeElement, f.input());
+        assert.equal(f.input().getAttribute('min'), '1');
+        assert.equal(f.input().getAttribute('max'), '5');
+        assert.ok(f.input().form);
+    }
+    assert.deepEqual(values, [null, null]);
+
+    const arrow = new f.window.KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => f.input().dispatchEvent(arrow));
+    assert.equal(arrow.defaultPrevented, false);
+    assert.deepEqual(values, [null, null]);
+    assert.deepEqual(keys, ['Backspace', 'Delete', 'ArrowRight']);
+    assert.deepEqual(bubbled, keys);
+    assert.equal(submits, 0);
+});
+
+it('honors caller cancellation and does not clear empty, disabled, repeating, or composing ratings', async (t) => {
+    const f = await fixture(t);
+    const values: (number | null)[] = [];
+    const keys: string[] = [];
+    let cancel = false;
+    const view = (value: number | null, disabled = false) =>
+        h(RatingInput, {
+            value,
+            max: 5,
+            disabled,
+            onChange: (next) => values.push(next),
+            inputProps: {
+                onKeyDown: (event) => {
+                    keys.push(event.key);
+                    if (cancel) event.preventDefault();
+                },
+            },
+        });
+    const keyDown = async (
+        options: Pick<KeyboardEventInit, 'key' | 'repeat' | 'isComposing'>
+    ) => {
+        const event = new f.window.KeyboardEvent('keydown', {
+            bubbles: true,
+            cancelable: true,
+            ...options,
+        });
+        await act(async () => f.input().dispatchEvent(event));
+        return event;
+    };
+
+    await f.render(view(3));
+    cancel = true;
+    assert.equal((await keyDown({ key: 'Delete' })).defaultPrevented, true);
+    assert.deepEqual(values, []);
+    assert.deepEqual(keys, ['Delete']);
+    cancel = false;
+    assert.equal(
+        (await keyDown({ key: 'Backspace', repeat: true })).defaultPrevented,
+        true
+    );
+    assert.equal(
+        (await keyDown({ key: 'Delete', isComposing: true })).defaultPrevented,
+        false
+    );
+    await f.render(view(null));
+    await keyDown({ key: 'Backspace' });
+    await f.render(view(3, true));
+    assert.equal(f.input().disabled, true);
+    await keyDown({ key: 'Delete' });
+    assert.deepEqual(values, []);
+});
+
+for (const key of ['Backspace', 'Delete'] as const) {
+    it(`clears an editable rating binding with ${key} without submitting`, async (t) => {
+        const f = await fixture(t, {}, 2);
+        let submits = 0;
+        await f.render(
+            h(
+                'form',
+                {
+                    onSubmit: (event: import('react').FormEvent) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                },
+                h(RatingField, {
+                    binding: f.binding,
+                    iconInput: { renderIcon: icon },
+                })
+            )
+        );
+        assert.equal(f.input().disabled, false);
+        await act(async () => f.input().focus());
+        await act(async () =>
+            f.input().dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key,
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(f.binding.getSnapshot().value, null);
+        assert.equal(f.binding.getSnapshot().dirty, true);
+        assert.equal(f.window.document.activeElement, f.input());
+        assert.equal(submits, 0);
+    });
+}
+
+it('rejects an in-flight clear when the caller replaces or retires the presentation', async (t) => {
+    const f = await fixture(t);
+    const { flushSync } = await import('react-dom');
+    const retired: (number | null)[] = [];
+    const replacement: (number | null)[] = [];
+    let forwarded = 0;
+
+    for (const disposition of ['replace', 'retire'] as const) {
+        await f.render(
+            h(RatingInput, {
+                value: 2,
+                max: 5,
+                onChange: (value) => retired.push(value),
+                inputProps: {
+                    onKeyDown: () => {
+                        forwarded++;
+                        flushSync(() =>
+                            f.replace(
+                                disposition === 'replace'
+                                    ? h(RatingInput, {
+                                          value: 4,
+                                          max: 5,
+                                          onChange: (value) =>
+                                              replacement.push(value),
+                                      })
+                                    : null
+                            )
+                        );
+                    },
+                },
+            })
+        );
+        const input = f.input();
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: 'Delete',
+            bubbles: true,
+            cancelable: true,
+        });
+        await act(async () => input.dispatchEvent(event));
+        assert.equal(event.defaultPrevented, false);
+        assert.deepEqual(retired, []);
+        if (disposition === 'retire') {
+            assert.equal(f.container.querySelector('input'), null);
+        } else {
+            assert.equal(f.input().value, '4');
+            await act(async () =>
+                f.input().dispatchEvent(
+                    new f.window.KeyboardEvent('keydown', {
+                        key: 'Delete',
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
+            );
+            assert.deepEqual(replacement, [null]);
+        }
+    }
+    assert.equal(forwarded, 2);
+});
+
+it('keeps read-only rating bindings unchanged when clear keys reach the range', async (t) => {
+    const f = await fixture(t, {}, 2);
+    f.scope.writable = false;
+    await f.render(
+        h(RatingField, {
+            binding: f.binding,
+            iconInput: { renderIcon: icon },
+        })
+    );
+    assert.equal(f.input().disabled, true);
+    for (const key of ['Backspace', 'Delete'] as const)
+        await act(async () =>
+            f.input().dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key,
+                    bubbles: true,
+                })
+            )
+        );
+    assert.equal(f.binding.getSnapshot().value, 2);
+    assert.equal(f.binding.getSnapshot().dirty, false);
 });
 
 it('keeps explicit maximum repair and feedback descriptive, never submits a parent form or repairs on mount', async (t) => {

@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
 import { compilerMetadata, fingerprint } from './build-metadata.mjs';
 import { withCommonJsSource } from './commonjs-source.mjs';
+import { publicContractDependencies } from './distribution-checks.mjs';
 import {
     assertModuleFormats,
     moduleFormatReceiptPath,
@@ -87,15 +88,6 @@ const publicOperationFields = [
     'kind',
     'transport',
 ];
-const dependencyPackages = ['@trpc/server', 'airtable', 'zod', '@types/node'];
-const dependencyHashes = new Map(
-    dependencyPackages.map((name) => [name, new Set()])
-);
-for (const { path, sha256 } of internal.dependencies) {
-    const name = dependencyPackages.find((name) => path.startsWith(name + '/'));
-    assert(name, 'Unrecognized generated contract dependency');
-    dependencyHashes.get(name).add(sha256);
-}
 const publicProvenance = {
     schemaVersion: 1,
     compilerVersion: internal.compilerVersion,
@@ -111,10 +103,7 @@ const publicProvenance = {
             publicOperationFields.map((field) => [field, operation[field]])
         )
     ),
-    dependencies: dependencyPackages.map((name) => ({
-        package: name,
-        inputSha256: [...dependencyHashes.get(name)].sort(),
-    })),
+    dependencies: publicContractDependencies(internal.dependencies),
 };
 for (const format of ['esm', 'cjs']) {
     const modulePath = `dist/${format}/runtime/contracts/generated.js`;

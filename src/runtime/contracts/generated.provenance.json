@@ -1,8 +1,13 @@
 {
     "sourceRepository": "miniExtensions/monorepo",
-    "sourceRevision": "fc1f8b05eff9658741cb797428d50ffe384b89e0",
+    "sourceRevision": "bd353fb1abd6c1c229d1ee3bd90bdfbbc6746836",
     "compilerVersion": "5.9.3",
-    "generatorSha256": "818b8954293f501f7fb4e80d1357c0f5fb10f83eca246d77d9f6bb5c1241179e",
+    "generatorSha256": "1176b41e6d8937786285d36d88bbe4d3b03dcefb1f3f333af0116cce29d276c5",
+    "corsValidation": {
+        "publicOperations": 13,
+        "probes": 234,
+        "guardSha256": "2a6a73ff8c7b3532f40ff1bd447da2ec26236737a9a5dae29870798726eedcda"
+    },
     "transport": "plain JSON; canonical enum literals; no runtime code or imports",
     "operations": [
         {
@@ -203,7 +208,7 @@
     "sources": [
         {
             "path": "backend-src/trpc/airtable/addAirtableCommentForRecord/index.ts",
-            "sha256": "fed7e65781c54047baffab05e2a44ab87fc1e2d786db887cddf48bb39404055b"
+            "sha256": "6bf3cf611633e64840548db631e174faabb39c70a5fe7bb625cd90be59ac66b5"
         },
         {
             "path": "backend-src/trpc/airtable/addAirtableCommentForRecord/validators.ts",
@@ -211,7 +216,7 @@
         },
         {
             "path": "backend-src/trpc/airtable/addNewAirtableOptionForFormField/index.ts",
-            "sha256": "a3bb5d4c4fdc295f69b228e3d7bd8c29a6241f999c83888cc9da432c68e88f76"
+            "sha256": "e9be9ffd817f4fc2ba67748b28705b72826060a14fd0dc5c29aa2d99b214fe99"
         },
         {
             "path": "backend-src/trpc/airtable/addNewAirtableOptionForFormField/validators.ts",
@@ -219,7 +224,7 @@
         },
         {
             "path": "backend-src/trpc/airtable/deleteRecord/index.ts",
-            "sha256": "94fa43f5673c88e69b446c113d5fc20547de1ad9a110949955c4fdc9bb73abd1"
+            "sha256": "3266dd6c724c2295c25e5e9d053c4a23ce3afd3f73b5e1d0a0235a0dc6e2ca24"
         },
         {
             "path": "backend-src/trpc/airtable/deleteRecord/validators.ts",
@@ -227,15 +232,15 @@
         },
         {
             "path": "backend-src/trpc/airtable/getAirtableCommentsForRecord/index.ts",
-            "sha256": "a33e018abf10445599e84748844dfc19dc86a4d41ca82fffb74517264a68f6f0"
+            "sha256": "9915a00a3063ced8e91e8a59e2a2722655531cedea17426f5159ca17283ced78"
         },
         {
             "path": "backend-src/trpc/airtable/getAirtableCommentsForRecord/validators.ts",
-            "sha256": "c58eecf55e1ec252e9e6000a81ba65ef8f1813e6f27eeeb97606785a743e2a4e"
+            "sha256": "a3186eb3f7e28212019ff17473e2a73e1ac06e46941899ab92c1763b71a5eca3"
         },
         {
             "path": "backend-src/trpc/airtable/getUserRecord.ts",
-            "sha256": "49163a9c3c536d6896db2ae10c48d2e3e1f9cf86049f738fefe2e7e808ff82c5"
+            "sha256": "8b0ff51ddfcc2f4a82124a53c6650b7b3b4dc37476484ad26983bcabf06a899c"
         },
         {
             "path": "backend-src/trpc/airtable/trpcRoute.ts",
@@ -243,11 +248,11 @@
         },
         {
             "path": "backend-src/trpc/airtable/unlinkPortalRecord/index.ts",
-            "sha256": "d89f500969941627346046d85cbfdc107c2c9ebf46fcdae2131c607271cb7f96"
+            "sha256": "ed6e06de885f578c08f0236a7f0b6f1dfaed3ac9e50a2ee5570aece7306cff0b"
         },
         {
             "path": "backend-src/trpc/airtable/updatePortalRecord/index.ts",
-            "sha256": "e39ceeaec51b7e95613f85d22943c505d7cafd093fa41a7a22b9917462297f78"
+            "sha256": "ebb6984ce778fd2a4644bf2c7d6d3026d99e5706c86233d9a8f371595aa1867d"
         },
         {
             "path": "backend-src/trpc/airtable/updatePortalRecord/validator.ts",
@@ -255,7 +260,7 @@
         },
         {
             "path": "backend-src/trpc/airtable/updateRecordKanbanCategory/index.ts",
-            "sha256": "ac6d528602b21f5ba8958594b9c820eed37a7f0fa18750794d3c379c8f796f44"
+            "sha256": "20fa6c7d4b1994be86cd9d7d664ab24af9e3c68b68b81561c82999fd1a479fd3"
         },
         {
             "path": "backend-src/trpc/airtable/updateRecordKanbanCategory/validators.ts",
@@ -263,7 +268,7 @@
         },
         {
             "path": "backend-src/trpc/index.ts",
-            "sha256": "8151529192bcb318c50ab0c3c73669e638d22724a25923a7fbf89c7f343ff4d2"
+            "sha256": "f6c203ca19938badaf1c10bb8ab2691b9399e0a0156c6b6d73d739a182b1a6f7"
         },
         {
             "path": "backend-src/trpc/publicExtensions/autoCompleteAddressField/index.ts",
@@ -275,15 +280,15 @@
         },
         {
             "path": "backend-src/trpc/publicExtensions/createUploadLink.ts",
-            "sha256": "11dcf891fd65268c7a7509710080b30f4cf6aafd8a80b41a9e2278e93927f950"
+            "sha256": "bafd68819c112a2dbfa9b5b372ebb4184de4d947e485f02d0d1582290a2d9454"
         },
         {
             "path": "backend-src/trpc/publicExtensions/fetchInitialTableIdsToLinkedTableStates/index.ts",
-            "sha256": "d6892a270cc2828ffe77c8cf674a1d569b36895f33c165a479ae40a70c2820c3"
+            "sha256": "eb4b7138ad8618ebfe17d1b4c22bf3afd69124923a1bc015b387a199cf7f22ed"
         },
         {
             "path": "backend-src/trpc/publicExtensions/triggerWebhook/index.ts",
-            "sha256": "003b87a41632a325c5b6b6f605567aea44255a31ca1baa656ac45d454ba34989"
+            "sha256": "136eb4d38d71cad8c5672c825dc88c7ff8767e65360323fa745caef91dfc9f3c"
         },
         {
             "path": "backend-src/trpc/publicExtensions/triggerWebhook/validators.ts",
@@ -294,12 +299,16 @@
             "sha256": "0678a571c0431438959f0db66615845da8f38a31d87dbdf35c18ef21d4f1cf91"
         },
         {
+            "path": "backend-src/trpc/publicRuntimeCors.ts",
+            "sha256": "3cb66cca091e7307a46fd5fdc1d8e0260b41783748461548ffb27bc2d86027d5"
+        },
+        {
             "path": "backend-src/trpc/routers.ts",
-            "sha256": "1ac55e307868a240739658da8097adf1de5d8b53b864fc0b5d9dfb9f6781aeb4"
+            "sha256": "07455616f872508506b7171d05e420c25f23b995c590756b9571ecc06d7704fd"
         },
         {
             "path": "components/PublicExtension/redux/types.ts",
-            "sha256": "503e43171038264aac426b3f3e5b30fdcffb695b5603914091814642ba7633f2"
+            "sha256": "98c85b0975b7b23a9cf111804cf172f1d7c30cf9b2fad19fde70ace93628ab8f"
         },
         {
             "path": "types/airtable/linked-record-detail-fields-types.ts",
@@ -307,7 +316,7 @@
         },
         {
             "path": "types/airtable/types.ts",
-            "sha256": "6426f0039a1dd4876c8dda07fd93e919c763b1418e3b2c4c75e1628c8d0726a4"
+            "sha256": "bc7e24d9b0c12231f69e8018179c68434162146c5415f68ca96c2cd17fbb8416"
         },
         {
             "path": "types/airtable/viewHelpers.ts",
@@ -335,7 +344,7 @@
         },
         {
             "path": "types/api/types/fetchPrimaryValuesForConditionalLinkedRecordFilterField.ts",
-            "sha256": "416f94523a561730cbab748095cb05057319fe276baa4c554bf39a7582c59cbd"
+            "sha256": "9b8f6828fd71dbae770739306d343e37ba9349876ffd09aa31b2f8bba67302b8"
         },
         {
             "path": "types/api/types/fetchRecordsForLinkedRecordsSelector.ts",
@@ -347,7 +356,7 @@
         },
         {
             "path": "types/api/types/loadExtension.ts",
-            "sha256": "f08904fc9b54c6b26d240d0fdf6ed233816d6cd081893c9c27a9885429c322bf"
+            "sha256": "3fe91174101b0ef039c56bdee79c7d758aa8c0941c2c15c7ef3e66bfd0028320"
         },
         {
             "path": "types/api/types/loginIntoExtensionUsingLoginPageExtension.ts",
@@ -371,7 +380,7 @@
         },
         {
             "path": "types/constants/extensionType.ts",
-            "sha256": "870b3693cbdce4decbdc58aeed9b37bae0947ff4e7723e2994d368fd59d5fb09"
+            "sha256": "29dff29cf743624920698ae87410cb7e7d2469974c2c32ec5de76a0c4842e942"
         },
         {
             "path": "types/extensions/PublicExtensionContext.ts",
@@ -383,15 +392,19 @@
         },
         {
             "path": "types/extensions/types.ts",
-            "sha256": "64821a981a1b1d61cc9c0a53c8ac1baafc181ee87333f52b9942e14c8ab1386a"
+            "sha256": "d0a774912d994cbbf9984e297d91485fdf57102cb3f3aae7e5e8548a7c539757"
         },
         {
-            "path": "types/generated/extension-versions/all/v105/index.ts",
-            "sha256": "5d6e8648f736149398cdbcd786bba22357afae052e355cae39d5f44c82f1863c"
+            "path": "types/firestore/table-extension.ts",
+            "sha256": "fe48a93651f3eac93ed1e9fdce10f0688f7721534d67f881cdeda3028ada3584"
+        },
+        {
+            "path": "types/generated/extension-versions/all/v106/index.ts",
+            "sha256": "3d08f504d2557825992662c6069af85a04b05b539d9a74d2f6b44c2517941ba2"
         },
         {
             "path": "types/generated/extension-versions/current/PublicFields.ts",
-            "sha256": "6652d8fa45ed4206bf8fa68cf631431ae413cf05bb6d52415eecc2f493e18232"
+            "sha256": "b11e209c3e921f6efc8eb292c81b2d1ab7c8b6c8d7b9bb171f791ac1ed25b7ca"
         },
         {
             "path": "types/helpers/EditOrCreateRecords.ts",
@@ -408,9 +421,17 @@
         {
             "path": "types/types/linkedRecordsIdsToPrimaryValues.ts",
             "sha256": "c4c52e5c27892fb16ca580bfa9ce45b6bad6f596f11b9dbb5a88eb5bae6ccd0b"
+        },
+        {
+            "path": "types/types/record-comments.ts",
+            "sha256": "6f0d3cb48721a833a68d23f3a8951cf745c79adb30bda2e77636a711da24634b"
         }
     ],
     "dependencies": [
+        {
+            "path": "@miniextensions/sdk/dist/esm/formulas/types.d.ts",
+            "sha256": "432ca1dd72e8aa661d8d2db0463fa903ea37babb7c8d55ee14ab10b0c096bf92"
+        },
         {
             "path": "@trpc/server/dist/unstable-core-do-not-import/types.d.ts",
             "sha256": "f9f954bebef858e63b5d1b6dc6102f62dc3f061d548e8eca5e035840e99b3840"
@@ -436,6 +457,6 @@
             "sha256": "808069bba06b6768b62fd22429b53362e7af342da4a236ed2d2e1c89fcca3b4a"
         }
     ],
-    "declarationCount": 1595,
-    "generatedSha256": "1c3d56c0f18cc362bf6207198c8afbd612444dcd6e63060af44403d173f28855"
+    "declarationCount": 1626,
+    "generatedSha256": "0c62a9c33af72b0fa3b60501f06c844ca97489a453d36547d9496d36308c72ab"
 }

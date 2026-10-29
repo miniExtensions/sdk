@@ -359,7 +359,7 @@ the client does not convert field names, dates, or record values.
 the client does not validate them with another runtime schema.
 
 The packaged declaration snapshot has SHA256
-`e011d3f20568d29f6909a96e10bcc8b3378adf95b90b8ef34a71bdeb0a02afe0`.
+`fc21700cf0399a556aa5d874847e589d6907199726785cc0df717bc90f6af275`.
 Both module formats ship the same `runtime/contracts/generated.d.ts` bytes;
 their public provenance includes this `contractDeclarationsSha256` for direct
 verification. Its `generatedSha256` separately identifies the generator's
@@ -818,15 +818,59 @@ async function readAndAddChildComment(
 ```
 
 The list returns `{comments, readableVersionOfRecordPrimaryValue,
-disableSending?}`. Each comment includes its text, author, and timestamps.
+disableSending?, nextCursor?, includeCommenterPrefix?}`. Comments share `id`,
+`text`, `createdTime`, and nullable `lastUpdatedTime`. Narrow the comment union
+before reading source-specific attribution: Airtable comments have `author`
+and `mentioned`; native Table comments have `actor` and `authorLabel`.
+The helper below selects raw Airtable account attribution or the native label.
+Legacy Airtable text may contain a `{{label}}: ` prefix used as a display alias;
+handle that separately when rendering Airtable comments, without deriving
+native attribution from comment text.
+
+```ts
+import type { ListRecordCommentsResult } from '@miniextensions/sdk';
+
+function childCommentAuthor(
+    comment: ListRecordCommentsResult['comments'][number]
+): string {
+    if ('author' in comment) {
+        return comment.author.name ?? comment.author.email;
+    }
+    return comment.authorLabel;
+}
+
+async function readChildCommentPage(
+    child: FormLoadedResult,
+    cursor?: string
+): Promise<ListRecordCommentsResult> {
+    return client.comments.listForRecord({
+        childExtensionAccessToken: child.payload.extensionAccessToken,
+        cursor,
+    });
+}
+```
+
+Omit `cursor` for the initial page. If the response includes `nextCursor`,
+retain that opaque value and pass it as `cursor` for an explicit request for
+older comments on the same child Form. Each page is ordered oldest to newest;
+prepend an older page to the displayed history. Stop when `nextCursor` is
+absent. Airtable responses currently omit it. The SDK does not automatically
+fetch further pages or retry a failed read. Retain the displayed history and
+cursor on failure, and discard them when the child or visitor changes.
+
 `readableVersionOfRecordPrimaryValue` labels the parent visitor using its
 configured `commenterNameField`, the first login field for a login Form or
-Portal, or the parent's Airtable primary field otherwise. It may be `null`.
+Portal, or the parent's primary field otherwise. It may be `null`.
 Read a child record's title from that child's Form record and field schema.
+When `includeCommenterPrefix` is `false`, do not prefix new comment text with
+that visitor label; native Table attribution is supplied by the server.
+When the flag is omitted or `true`, the existing Airtable interface retains
+the legacy `{{label}}: ` prefix when a visitor label is available.
 Respect `disableSending` in your interface. Adding a comment resolves with no
-value; load the list again if your app wants to refresh it. The server derives
-the actual child record and author from the current visitor and published
-parent configuration.
+value; load the initial page again if your app wants to refresh it, replacing
+the displayed history and cursor after a successful read. The server derives
+the actual child record and author from the current visitor, verified token,
+and parent configuration.
 
 ## Designing your custom interface
 

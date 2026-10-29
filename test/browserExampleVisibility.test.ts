@@ -4,7 +4,6 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
@@ -13,6 +12,9 @@ import {
     type SaveFormInput,
 } from '../src/runtime/index.js';
 import { loadedForm } from './formsFixtures.js';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 const root = resolve(process.cwd());
 let directory: string;
@@ -20,7 +22,7 @@ let moduleRevision = 0;
 
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-browser-visibility-'));
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/main.ts')],
         alias: {
             '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),
@@ -38,7 +40,11 @@ before(async () => {
     });
 });
 
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup())
+        throw new Error('Compiler did not close; output directory retained.');
+    await rm(directory, { recursive: true, force: true });
+});
 
 const waitFor = async (predicate: () => boolean) => {
     for (let turn = 0; turn < 30; turn++) {

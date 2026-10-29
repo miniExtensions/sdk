@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
 import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
@@ -19,6 +19,7 @@ import type { PortalCollectionSnapshot } from '../src/portals/index.js';
 import { portalListPage, portalPage } from './portalFixtures.js';
 
 const root = resolve(process.cwd());
+const compiler = createOwnedCompiler();
 // Exact synthetic identities/values from the peer's seven diagnostic fixtures.
 const fieldId = 'fld_synthetic_title';
 const tableId = 'table_children';
@@ -65,7 +66,7 @@ export function createPortalCollection(...args) {
     );
     // Run the actual starter/SDK with a synthetic HTTP boundary and this
     // test-only observation seam; all other collection methods stay actual.
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/portal.ts')],
         alias: {
             '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),
@@ -82,7 +83,14 @@ export function createPortalCollection(...args) {
         logLevel: 'silent',
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup()) {
+        throw new Error(
+            'Cannot clean up while compiler children may still be running.'
+        );
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 const physicalField = (): RuntimeAirtableField => ({
     id: fieldId,

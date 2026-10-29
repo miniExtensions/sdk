@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
 import { Window } from 'happy-dom';
 import {
     AirtableFieldType,
@@ -23,6 +23,7 @@ import { loadedForm } from './formsFixtures.js';
 // Exercise the actual browser example and optionally its installed SDK archive.
 // All responses are synthetic; no external request is possible.
 const root = resolve(process.cwd());
+const compiler = createOwnedCompiler();
 const packedRoot = process.env.SDK_REVIEW_PACKED_ROOT;
 let directory: string;
 let moduleRevision = 0;
@@ -33,7 +34,7 @@ before(async () => {
         packedRoot === undefined
             ? join(root, 'src', name, 'index.ts')
             : join(packedRoot, 'dist/esm', name, 'index.js');
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/main.ts')],
         alias: {
             '@miniextensions/sdk/auth': entry('auth'),
@@ -50,7 +51,14 @@ before(async () => {
         logLevel: 'silent',
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup()) {
+        throw new Error(
+            'Cannot clean up while compiler children may still be running.'
+        );
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 const environment = async (
     test: TestContext,

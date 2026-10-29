@@ -3,7 +3,6 @@ import { after, before, describe, it, type TestContext } from 'node:test';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
 import { Window } from 'happy-dom';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -17,6 +16,9 @@ import {
     type PortalCollectionCriteria,
 } from '../src/portals/index.js';
 import { portalListPage, portalPage } from './portalFixtures.js';
+import { createOwnedCompiler } from './ownedCompiler.js';
+
+const compiler = createOwnedCompiler();
 
 const root = resolve(process.cwd());
 const privateMarker = 'PRIVATE_SYNTHETIC_READ_FAILURE';
@@ -62,7 +64,7 @@ before(async () => {
         1,
         'Missing actual shipped read-failure recipe'
     );
-    await build({
+    await compiler.build({
         stdin: {
             contents: recipes[0]![1]!,
             loader: 'ts',
@@ -80,7 +82,7 @@ before(async () => {
         outfile: join(directory, 'recipe.mjs'),
         logLevel: 'silent',
     });
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/portal.ts')],
         alias,
         bundle: true,
@@ -90,7 +92,11 @@ before(async () => {
         logLevel: 'silent',
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup())
+        throw new Error('Compiler did not close; output directory retained.');
+    await rm(directory, { recursive: true, force: true });
+});
 
 const dom = (test: TestContext) => {
     const window = new Window({

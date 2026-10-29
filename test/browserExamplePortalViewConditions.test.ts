@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
 import { Window } from 'happy-dom';
 import {
     createMiniExtensionsClient,
@@ -24,6 +24,7 @@ import { formResult } from './runtimeFixtures.js';
 import { RecoveryJournal, type RecoveryAttempt } from '../src/forms/index.js';
 
 const root = resolve(process.cwd());
+const compiler = createOwnedCompiler();
 const driver: RuntimeAirtableField = {
     id: 'fld_eligible',
     name: 'Synthetic eligibility',
@@ -83,7 +84,7 @@ let directory: string;
 let sequence = 0;
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-portal-view-conditions-'));
-    await build({
+    await compiler.build({
         entryPoints: [join(root, 'examples/browser/src/portal.ts')],
         alias: {
             '@miniextensions/sdk/auth': join(root, 'src/auth/index.ts'),
@@ -100,7 +101,14 @@ before(async () => {
         logLevel: 'silent',
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup()) {
+        throw new Error(
+            'Cannot clean up while compiler children may still be running.'
+        );
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 const mount = async (
     test: TestContext,

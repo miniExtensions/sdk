@@ -5,13 +5,14 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { createOwnedCompiler } from './ownedCompiler.js';
 import { Window } from 'happy-dom';
 import type { FormLoadedResult, SaveFormInput } from '../src/runtime/index.js';
 import type { RecoveryAttempt } from '../src/forms/index.js';
 import { invalidForm, loadedForm } from './formsFixtures.js';
 
 const root = resolve(process.cwd());
+const compiler = createOwnedCompiler();
 const progressPrefix = 'miniExtensions-sdk:create-progress:v1:';
 const ownerPrefix = 'sdk-create-progress-owner:v1:';
 const rememberedTitle = 'Synthetic remembered answer';
@@ -21,7 +22,7 @@ let moduleRevision = 0;
 
 before(async () => {
     directory = await mkdtemp(join(tmpdir(), 'sdk-create-progress-browser-'));
-    await build({
+    await compiler.build({
         entryPoints: [
             join(root, 'test/fixtures/browserCreateProgressEntry.mjs'),
         ],
@@ -40,7 +41,14 @@ before(async () => {
         logLevel: 'silent',
     });
 });
-after(async () => rm(directory, { recursive: true, force: true }));
+after(async () => {
+    if (!compiler.canCleanup()) {
+        throw new Error(
+            'Cannot clean up while compiler children may still be running.'
+        );
+    }
+    await rm(directory, { recursive: true, force: true });
+});
 
 const nextTurn = () => new Promise<void>((done) => setImmediate(done));
 const waitFor = async (predicate: () => boolean) => {

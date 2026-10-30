@@ -17,6 +17,7 @@ import {
     formResult,
     loadInput as fixtureLoadInput,
 } from './runtimeFixtures.js';
+import { portalPage } from './portalFixtures.js';
 if (!('shareId' in fixtureLoadInput)) throw new Error('Root fixture required');
 const loadInput = fixtureLoadInput;
 
@@ -88,6 +89,358 @@ const remember = async (fixture: ReturnType<typeof setup>) => {
 };
 
 describe('explicit canonical-scoped session restoration', () => {
+    it('keeps a retired handoff inert without reading caller inputs', () => {
+        const fixture = setup();
+        fixture.owner.destroy();
+        let reads = 0;
+        const scope = {
+            get ownerId() {
+                reads++;
+                return 'visitor-a';
+            },
+            get revision() {
+                reads++;
+                return 2;
+            },
+        };
+        const page = structuredClone(formResult);
+        Object.defineProperty(page, 'extensionScreen', {
+            get: () => {
+                reads++;
+                return 'form_loaded';
+            },
+        });
+        assert.equal(
+            fixture.owner.handoff(page, scope, () => {
+                reads++;
+                return true;
+            }),
+            null
+        );
+        assert.equal(reads, 0);
+    });
+    for (const accepted of [
+        { name: 'Form', page: () => structuredClone(formResult) },
+        { name: 'Portal', page: () => portalPage() },
+    ]) {
+        for (const trigger of ['unsubscribe', 'retired-listener'] as const) {
+            it(`${accepted.name} handoff rejects retirement reentry via ${trigger}`, async () => {
+                for (const scenario of [
+                    'cancel',
+                    'replace',
+                    'scope-advance',
+                    'same-owner-revision-advance',
+                    'captured-scope-mutation',
+                    'session-change',
+                    'guard-throw',
+                    'scope-throw',
+                    'session-throw',
+                    'callback-throw',
+                    'retired-successor',
+                    'pre-adoption-event',
+                ] as const) {
+                    const fixture = authFixture();
+                    const store = memory('persistent');
+                    let scope = { ownerId: 'visitor-a', revision: 0 };
+                    let failScopeOnce = false;
+                    let current = true;
+                    let fired = 0;
+                    let provisionalListener:
+                        | ((key: string | null) => void)
+                        | undefined;
+                    let onRetirement = () => {};
+                    const subscribe = store.storage.subscribe;
+                    if (subscribe == null) throw new Error();
+                    let subscription = 0;
+                    store.storage.subscribe = (listener) => {
+                        const index = ++subscription;
+                        const detach = subscribe(listener);
+                        if (index === 2) provisionalListener = listener;
+                        return () => {
+                            detach();
+                            if (index === 1 && trigger === 'unsubscribe')
+                                onRetirement();
+                        };
+                    };
+                    const owner = createSessionRestoration({
+                        client: fixture.client,
+                        page: loginPage(),
+                        loadInput,
+                        apiOrigin: 'https://sdk.example.test',
+                        context: 'share_example',
+                        storage: store.storage,
+                        getScope: () => {
+                            if (failScopeOnce) {
+                                failScopeOnce = false;
+                                throw new Error('synthetic scope failure');
+                            }
+                            return scope;
+                        },
+                    });
+                    if (owner.flow.screen !== 'login_page') throw new Error();
+                    const login = await owner.flow.login({
+                        loginCredentials: { Password: 'SYNTHETIC' },
+                    });
+                    if (login.type !== 'found-record') throw new Error();
+                    owner.applySession(login.grant);
+                    const originalSession = fixture.client.getSession();
+                    const key = [...store.data.keys()][0];
+                    const originalStored = store.data.get(key);
+                    const newerStored = JSON.stringify({
+                        version: 1,
+                        credential: 'SYNTHETIC_NEWER',
+                    });
+                    const newerSession = { successor: 'SYNTHETIC_NEWER' };
+                    const calls = fixture.calls.length;
+                    const loads = fixture.loads;
+                    const applied = fixture.applied.length;
+                    scope = { ownerId: 'visitor-a', revision: 1 };
+                    const captured = { ...scope };
+                    onRetirement = () => {
+                        fired++;
+                        if (scenario === 'cancel') current = false;
+                        if (scenario === 'replace') {
+                            scope = { ownerId: 'visitor-b', revision: 2 };
+                            store.data.set(key, newerStored);
+                            fixture.client.setSession(newerSession);
+                        }
+                        if (scenario === 'scope-advance')
+                            scope = { ownerId: 'visitor-b', revision: 2 };
+                        if (scenario === 'same-owner-revision-advance')
+                            scope = { ownerId: 'visitor-a', revision: 2 };
+                        if (scenario === 'captured-scope-mutation') {
+                            scope = { ownerId: 'visitor-b', revision: 2 };
+                            captured.ownerId = scope.ownerId;
+                            captured.revision = scope.revision;
+                        }
+                        if (scenario === 'session-change')
+                            fixture.client.setSession(newerSession);
+                        if (scenario === 'scope-throw') failScopeOnce = true;
+                        if (scenario === 'session-throw') {
+                            const getSession = fixture.client.getSession;
+                            fixture.client.getSession = () => {
+                                fixture.client.getSession = getSession;
+                                throw new Error('synthetic session failure');
+                            };
+                        }
+                        if (scenario === 'callback-throw')
+                            throw new Error('synthetic retirement failure');
+                        if (scenario === 'retired-successor') {
+                            if (provisionalListener == null) throw new Error();
+                            provisionalListener(null);
+                        }
+                        if (scenario === 'pre-adoption-event') {
+                            if (provisionalListener == null) throw new Error();
+                            provisionalListener(key);
+                        }
+                    };
+                    if (trigger === 'retired-listener') {
+                        owner.subscribe(() => {
+                            if (owner.getSnapshot().phase === 'retired')
+                                onRetirement();
+                        });
+                    }
+                    const lease = owner.handoff(
+                        accepted.page(),
+                        captured,
+                        () => {
+                            if (fired && scenario === 'guard-throw')
+                                throw new Error('synthetic guard failure');
+                            return current;
+                        }
+                    );
+                    assert.equal(lease, null, `${trigger}: ${scenario}`);
+                    assert.equal(fired, 1);
+                    assert.equal(owner.getSnapshot().phase, 'retired');
+                    assert.equal(store.listenerCount(), 0);
+                    assert.equal(
+                        store.data.get(key),
+                        scenario === 'replace' ? newerStored : originalStored
+                    );
+                    assert.deepEqual(
+                        fixture.client.getSession(),
+                        scenario === 'replace' || scenario === 'session-change'
+                            ? newerSession
+                            : originalSession
+                    );
+                    assert.equal(fixture.calls.length, calls);
+                    assert.equal(fixture.loads, loads);
+                    assert.equal(
+                        fixture.applied.length,
+                        applied +
+                            (scenario === 'replace' ||
+                            scenario === 'session-change'
+                                ? 1
+                                : 0)
+                    );
+                }
+            });
+        }
+        it(`${accepted.name} handoff refuses a failed provisional subscription`, async () => {
+            for (const replace of [false, true]) {
+                const fixture = authFixture();
+                const store = memory('persistent');
+                const subscribe = store.storage.subscribe;
+                if (subscribe == null) throw new Error();
+                let scope = { ownerId: 'visitor-a', revision: 0 };
+                let subscription = 0;
+                let key = '';
+                const newerStored = JSON.stringify({
+                    version: 1,
+                    credential: 'SYNTHETIC_NEWER',
+                });
+                const newerSession = { successor: 'SYNTHETIC_NEWER' };
+                store.storage.subscribe = (listener) => {
+                    if (++subscription === 2) {
+                        if (replace) {
+                            scope = { ownerId: 'visitor-b', revision: 2 };
+                            store.data.set(key, newerStored);
+                            fixture.client.setSession(newerSession);
+                        }
+                        throw new Error('synthetic subscription failure');
+                    }
+                    return subscribe(listener);
+                };
+                const owner = createSessionRestoration({
+                    client: fixture.client,
+                    page: loginPage(),
+                    loadInput,
+                    apiOrigin: 'https://sdk.example.test',
+                    context: 'share_example',
+                    storage: store.storage,
+                    getScope: () => scope,
+                });
+                if (owner.flow.screen !== 'login_page') throw new Error();
+                const login = await owner.flow.login({ loginCredentials: {} });
+                if (login.type !== 'found-record') throw new Error();
+                owner.applySession(login.grant);
+                key = [...store.data.keys()][0];
+                const originalStored = store.data.get(key);
+                const originalSession = fixture.client.getSession();
+                const calls = fixture.calls.length;
+                const loads = fixture.loads;
+                const applied = fixture.applied.length;
+                scope = { ownerId: 'visitor-a', revision: 1 };
+                const lease = owner.handoff(
+                    accepted.page(),
+                    { ...scope },
+                    () => true
+                );
+                assert.equal(lease, null);
+                assert.equal(subscription, 2);
+                assert.equal(
+                    store.listenerCount(),
+                    owner.getSnapshot().phase === 'retired' ? 0 : 1
+                );
+                assert.equal(
+                    store.data.get(key),
+                    replace ? newerStored : originalStored
+                );
+                assert.deepEqual(
+                    fixture.client.getSession(),
+                    replace ? newerSession : originalSession
+                );
+                assert.equal(fixture.calls.length, calls);
+                assert.equal(fixture.loads, loads);
+                assert.equal(
+                    fixture.applied.length,
+                    applied + (replace ? 1 : 0)
+                );
+                owner.destroy();
+                assert.equal(store.listenerCount(), 0);
+                assert.equal(
+                    store.data.get(key),
+                    replace ? newerStored : originalStored
+                );
+                assert.deepEqual(
+                    fixture.client.getSession(),
+                    replace ? newerSession : originalSession
+                );
+            }
+        });
+        it(`${accepted.name} handoff adopts a live successor after retirement`, async () => {
+            const fixture = authFixture();
+            const store = memory('persistent');
+            let scope = { ownerId: 'visitor-a', revision: 0 };
+            const owner = createSessionRestoration({
+                client: fixture.client,
+                page: loginPage(),
+                loadInput,
+                apiOrigin: 'https://sdk.example.test',
+                context: 'share_example',
+                storage: store.storage,
+                getScope: () => scope,
+            });
+            if (owner.flow.screen !== 'login_page') throw new Error();
+            const login = await owner.flow.login({ loginCredentials: {} });
+            if (login.type !== 'found-record') throw new Error();
+            owner.applySession(login.grant);
+            const calls = fixture.calls.length;
+            const loads = fixture.loads;
+            scope = { ownerId: 'visitor-a', revision: 1 };
+            const lease = owner.handoff(
+                accepted.page(),
+                { ...scope },
+                () => true
+            );
+            assert.ok(lease);
+            assert.equal(owner.getSnapshot().phase, 'retired');
+            assert.equal(lease.getSnapshot().phase, 'idle');
+            assert.equal(store.listenerCount(), 1);
+            owner.clear();
+            owner.destroy();
+            assert.equal(store.data.size, 1);
+            lease.clear();
+            assert.equal(store.listenerCount(), 0);
+            assert.equal(store.data.size, 0);
+            assert.deepEqual(fixture.client.getSession(), {
+                previous: 'encrypted_previous',
+            });
+            assert.equal(fixture.calls.length, calls);
+            assert.equal(fixture.loads, loads);
+        });
+        it(`${accepted.name} adopted successor retains storage-event ownership`, async () => {
+            const fixture = authFixture();
+            const store = memory('persistent');
+            let scope = { ownerId: 'visitor-a', revision: 0 };
+            const owner = createSessionRestoration({
+                client: fixture.client,
+                page: loginPage(),
+                loadInput,
+                apiOrigin: 'https://sdk.example.test',
+                context: 'share_example',
+                storage: store.storage,
+                getScope: () => scope,
+            });
+            if (owner.flow.screen !== 'login_page') throw new Error();
+            const login = await owner.flow.login({ loginCredentials: {} });
+            if (login.type !== 'found-record') throw new Error();
+            owner.applySession(login.grant);
+            const calls = fixture.calls.length;
+            const loads = fixture.loads;
+            const key = [...store.data.keys()][0];
+            const stored = store.data.get(key);
+            scope = { ownerId: 'visitor-a', revision: 1 };
+            const lease = owner.handoff(
+                accepted.page(),
+                { ...scope },
+                () => true
+            );
+            assert.ok(lease);
+            store.emit('unrelated-key');
+            assert.equal(lease.getSnapshot().phase, 'idle');
+            assert.equal(store.listenerCount(), 1);
+            store.emit(key);
+            assert.equal(lease.getSnapshot().phase, 'retired');
+            assert.equal(store.listenerCount(), 0);
+            assert.equal(store.data.get(key), stored);
+            assert.deepEqual(fixture.client.getSession(), {
+                previous: 'encrypted_previous',
+            });
+            assert.equal(fixture.calls.length, calls);
+            assert.equal(fixture.loads, loads);
+        });
+    }
     it('remembers and freshly validates the explicit root context without using global', async () => {
         const root = setup(memory(), loginPage(), '');
         await remember(root);

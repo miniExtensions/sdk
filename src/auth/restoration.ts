@@ -52,6 +52,7 @@ export type SessionRestorationLease = {
     subscribe(listener: () => void): () => void;
     clear(): void;
     destroy(): void;
+    /** The guard describes accepted-load freshness, including after retirement. */
     handoff(
         page: LoadExtensionResult,
         scope: AuthOwnerScope,
@@ -68,7 +69,10 @@ export type SessionRestoration = {
     restore(): Promise<LoadExtensionResult | null>;
     /** Logout/disconnect: remove the scoped stored credential and its still-owned memory entry. */
     clear(): void;
-    /** Explicit accepted-root-load ownership transfer; old methods become inert. */
+    /**
+     * Transfer an accepted root load; old methods become inert. The freshness
+     * guard must describe the accepted load even after retirement.
+     */
     handoff(
         page: LoadExtensionResult,
         scope: AuthOwnerScope,
@@ -84,7 +88,12 @@ const sameSession = (a: RuntimeSession, b: RuntimeSession) =>
 
 const createSessionRestorationInternal = (
     options: SessionRestorationOptions,
-    inheritedStored?: { observed: string | null; attempted: string | null }
+    inheritedStored?: { observed: string | null; attempted: string | null },
+    captureProvisional?: (controls: {
+        current(): boolean;
+        live(): boolean;
+        adopt(): void;
+    }) => void
 ): SessionRestoration => {
     const { client, storage, getScope } = options;
     const context = options.context;
@@ -158,6 +167,8 @@ const createSessionRestorationInternal = (
     let writing = false;
     let storageReady = true;
     let checkingFreshness = false;
+    let provisional = captureProvisional != null;
+    let retirementCallbackFailed = false;
     let unsubscribe = () => {};
     let snapshot: SessionRestorationSnapshot = { phase: 'idle', message: null };
     const listeners = new Set<() => void>();
@@ -184,6 +195,7 @@ const createSessionRestorationInternal = (
             try {
                 listener();
             } catch {
+                if (phase === 'retired') retirementCallbackFailed = true;
                 /* Rendering cannot change credential acceptance. */
             }
         }
@@ -200,6 +212,7 @@ const createSessionRestorationInternal = (
         try {
             detach();
         } catch {
+            retirementCallbackFailed = true;
             /* Retirement must still abort the old read. */
         }
         old?.abort();
@@ -282,12 +295,13 @@ const createSessionRestorationInternal = (
     if (storage.subscribe) {
         try {
             unsubscribe = storage.subscribe((key) => {
-                if (
-                    writing ||
-                    (key !== null && key !== storageKey) ||
-                    !current()
-                )
+                if (writing || (key !== null && key !== storageKey)) return;
+                if (provisional) {
+                    // A not-yet-adopted owner must not clear session state.
+                    retire();
                     return;
+                }
+                if (!current()) return;
                 // Any external replacement retires this visitor, even a same-value rewrite.
                 clearOwnedMemory();
                 retire();
@@ -300,6 +314,13 @@ const createSessionRestorationInternal = (
     }
     const encode = (credential: string) =>
         JSON.stringify({ version: 1, credential });
+    captureProvisional?.({
+        current: () => storageReady && current(),
+        live: () => storageReady && !retired,
+        adopt: () => {
+            provisional = false;
+        },
+    });
     return {
         flow,
         getSnapshot: () => ({ ...snapshot }),
@@ -472,27 +493,50 @@ const createSessionRestorationInternal = (
                 checkingFreshness ||
                 (acceptedPage.extensionScreen !== 'form_loaded' &&
                     acceptedPage.extensionScreen !== 'portal_loaded') ||
-                acceptedPage.extensionId !== page.extensionId ||
-                capturedScope.ownerId !== initialScope.ownerId ||
-                capturedScope.revision <= initialScope.revision
+                acceptedPage.extensionId !== page.extensionId
+            )
+                return null;
+            let acceptedScope: AuthOwnerScope;
+            try {
+                acceptedScope = {
+                    ownerId: capturedScope.ownerId,
+                    revision: capturedScope.revision,
+                };
+            } catch {
+                return null;
+            }
+            if (
+                retired ||
+                request ||
+                checkingFreshness ||
+                acceptedScope.ownerId !== initialScope.ownerId ||
+                acceptedScope.revision <= initialScope.revision
             )
                 return null;
             const ticket = generation;
             const matches = () => {
                 const scope = { ...getScope() };
                 return (
-                    scope.ownerId === capturedScope.ownerId &&
-                    scope.revision === capturedScope.revision
+                    scope.ownerId === acceptedScope.ownerId &&
+                    scope.revision === acceptedScope.revision
                 );
             };
             let successor: SessionRestoration | null = null;
+            const provisionalState: {
+                controls?: {
+                    current(): boolean;
+                    live(): boolean;
+                    adopt(): void;
+                };
+            } = {};
             let adopted = false;
             try {
+                const acceptedSession = copyVisitorSession(expectedSession);
                 if (
                     !isCurrent() ||
                     !matches() ||
                     !sameSession(
-                        expectedSession,
+                        acceptedSession,
                         copyVisitorSession(client.getSession())
                     ) ||
                     !matches() ||
@@ -511,7 +555,10 @@ const createSessionRestorationInternal = (
                         page,
                         loadInput: input,
                     },
-                    { observed: observedStored, attempted: attemptedStored }
+                    { observed: observedStored, attempted: attemptedStored },
+                    (controls) => {
+                        provisionalState.controls = controls;
+                    }
                 );
                 if (
                     retired ||
@@ -524,6 +571,23 @@ const createSessionRestorationInternal = (
                 )
                     return null;
                 retire();
+                const provisionalControls = provisionalState.controls;
+                if (
+                    retirementCallbackFailed ||
+                    provisionalControls == null ||
+                    !isCurrent() ||
+                    !matches() ||
+                    !sameSession(
+                        acceptedSession,
+                        copyVisitorSession(client.getSession())
+                    ) ||
+                    !matches() ||
+                    !provisionalControls.current() ||
+                    !isCurrent() ||
+                    !provisionalControls.live()
+                )
+                    return null;
+                provisionalControls.adopt();
                 adopted = true;
                 return {
                     getSnapshot: successor.getSnapshot,
@@ -535,7 +599,13 @@ const createSessionRestorationInternal = (
             } catch {
                 return null;
             } finally {
-                if (!adopted) successor?.destroy();
+                if (!adopted) {
+                    try {
+                        successor?.destroy();
+                    } catch {
+                        /* Do not let provisional cleanup mask a failed handoff. */
+                    }
+                }
             }
         },
         destroy: retire,

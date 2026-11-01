@@ -6,10 +6,26 @@ import { join } from 'node:path';
 export const attachmentPhaseCapacity = 64;
 export const attachmentPhaseMaxBytes = 16384;
 const phases = new Set([
+    'fixture-window-setup',
+    'unique-import',
+    'initialization',
+    'scenario-assertions',
     'upload-release',
     'settlement',
     'global-restoration',
     'happydom-close',
+]);
+const checkpoints = new Set([
+    'connect-submit-start',
+    'connect-submit-end',
+    'synthetic-response-start',
+    'synthetic-response-ready',
+    'response-consumed',
+    'root-accept-start',
+    'root-render-start',
+    'root-render-end',
+    'readiness-poll-start',
+    'readiness-observed',
 ]);
 const events = new Set(['start', 'complete']);
 
@@ -87,8 +103,10 @@ export function createAttachmentPhaseReceipt({
             caseIndex < 1 ||
             total < caseIndex ||
             total > 10000 ||
-            !phases.has(phase) ||
-            !events.has(event)
+            !(
+                (phases.has(phase) && events.has(event)) ||
+                (checkpoints.has(phase) && event === 'point')
+            )
         ) {
             rejected++;
             return;
@@ -107,7 +125,8 @@ export function createAttachmentPhaseReceipt({
             event,
             atMs: Math.round(time * 1000) / 1000,
         };
-        active = event === 'start' ? record : null;
+        if (event === 'start') active = record;
+        else if (event === 'complete') active = null;
         if (records.length === attachmentPhaseCapacity) {
             records.shift();
             evicted++;

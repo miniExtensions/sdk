@@ -12,6 +12,7 @@ import {
     safeAttachmentPhaseMarker,
 } from './attachment-phase-receipts.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
+import { addAttachmentRootLoadCheckpoints } from './attachment-review-recipe-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
@@ -21,6 +22,24 @@ const phaseNames = [
     'settlement',
     'global-restoration',
     'happydom-close',
+];
+const scenarioPhaseNames = [
+    'fixture-window-setup',
+    'unique-import',
+    'initialization',
+    'scenario-assertions',
+];
+const pointPhaseNames = [
+    'connect-submit-start',
+    'connect-submit-end',
+    'synthetic-response-start',
+    'synthetic-response-ready',
+    'response-consumed',
+    'root-accept-start',
+    'root-render-start',
+    'root-render-end',
+    'readiness-poll-start',
+    'readiness-observed',
 ];
 const recordKeys = ['sequence', 'caseIndex', 'total', 'phase', 'event', 'atMs'];
 function assertValueFree(receipt) {
@@ -47,8 +66,14 @@ function assertValueFree(receipt) {
         ...(receipt.active ? [receipt.active] : []),
     ]) {
         assert.deepEqual(Object.keys(record).sort(), [...recordKeys].sort());
-        assert(phaseNames.includes(record.phase));
-        assert(['start', 'complete'].includes(record.event));
+        if (pointPhaseNames.includes(record.phase)) {
+            assert.equal(record.event, 'point');
+        } else {
+            assert(
+                [...phaseNames, ...scenarioPhaseNames].includes(record.phase)
+            );
+            assert(['start', 'complete'].includes(record.event));
+        }
         for (const key of ['sequence', 'caseIndex', 'total', 'atMs'])
             assert(Number.isFinite(record[key]));
     }
@@ -117,8 +142,18 @@ test('attachment teardown markers retain original calls and awaits in order', as
         ts.ScriptKind.JS
     );
     const printer = ts.createPrinter({ removeComments: true });
+    const isDiagnosticStop = (node) =>
+        ts.isExpressionStatement(node) &&
+        ts.isBinaryExpression(node.expression) &&
+        node.expression.left.getText(ast) === 'recordingInitialization' &&
+        node.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        node.expression.right.kind === ts.SyntaxKind.FalseKeyword;
+    const diagnosticStops = ast.statements.filter(isDiagnosticStop);
+    assert.equal(diagnosticStops.length, 1);
+    assert.equal(ast.statements[0], diagnosticStops[0]);
     const withoutMarkers = ast.statements.filter(
         (node) =>
+            !isDiagnosticStop(node) &&
             !(
                 ts.isExpressionStatement(node) &&
                 ts.isCallExpression(node.expression) &&
@@ -147,7 +182,8 @@ test('attachment teardown markers retain original calls and awaits in order', as
         'markTeardown',
         'index',
         'scenarios',
-        body
+        'recordingInitialization',
+        `${body}\nreturn recordingInitialization;`
     );
     const calls = [];
     const recorder = createAttachmentPhaseReceipt({
@@ -163,7 +199,7 @@ test('attachment teardown markers retain original calls and awaits in order', as
             },
         }
     );
-    await run(
+    const recordingAfterTeardown = await run(
         () => calls.push('release'),
         async () => calls.push('settle'),
         [['fixture', { value: sentinel }]],
@@ -171,8 +207,10 @@ test('attachment teardown markers retain original calls and awaits in order', as
         { happyDOM: { close: async () => calls.push('close') } },
         recorder.mark,
         72,
-        Array(90)
+        Array(90),
+        true
     );
+    assert.equal(recordingAfterTeardown, false);
     assert.deepEqual(calls, ['release', 'settle', 'restore', 'close']);
     const receipt = recorder.snapshot();
     assertValueFree(receipt);
@@ -198,7 +236,8 @@ test('attachment teardown markers retain original calls and awaits in order', as
                 throw Error(sentinel);
             }),
             72,
-            Array(90)
+            Array(90),
+            true
         ),
         (error) => error === originalError
     );
@@ -244,6 +283,529 @@ test('attachment receipt storage is bounded, value-free and stops after failure'
         TypeError
     );
     assert.equal(createAttachmentPhaseReceipt().snapshot().records.length, 0);
+});
+
+test('detailed scenario phases are ordered, bounded and value-free', () => {
+    let latest;
+    let clock = 0;
+    const receipt = createAttachmentPhaseReceipt({
+        persist: (text) => {
+            latest = text;
+        },
+        now: () => ++clock,
+    });
+    const events = scenarioPhaseNames.flatMap((phase) => [
+        [phase, 'start'],
+        [phase, 'complete'],
+    ]);
+    for (const [phase, event] of events) receipt.mark(73, 90, phase, event);
+    let snapshot = JSON.parse(latest);
+    assertValueFree(snapshot);
+    assert.deepEqual(
+        snapshot.records.map(({ phase, event }) => [phase, event]),
+        events
+    );
+    assert.deepEqual(
+        snapshot.records.map(({ atMs }) => atMs),
+        [1, 2, 3, 4, 5, 6, 7, 8]
+    );
+    assert.equal(snapshot.active, null);
+    assert.equal(snapshot.rejected, 0);
+    for (let i = 0; i < 80; i++)
+        receipt.mark(73, 90, scenarioPhaseNames[i % 4], 'complete');
+    receipt.mark(sentinel, 90, 'unique-import', 'start');
+    receipt.mark(73, 90, sentinel, 'start');
+    snapshot = receipt.snapshot();
+    assertValueFree(snapshot);
+    assert.equal(snapshot.records.length, attachmentPhaseCapacity);
+    assert.equal(snapshot.evicted, 88 - attachmentPhaseCapacity);
+    assert.equal(snapshot.rejected, 2);
+    assert(Buffer.byteLength(latest) <= attachmentPhaseMaxBytes);
+});
+
+test('point checkpoints are bounded, value-free and preserve active phase', () => {
+    let latest;
+    let clock = 0;
+    const receipt = createAttachmentPhaseReceipt({
+        persist: (text) => {
+            latest = text;
+        },
+        now: () => ++clock,
+    });
+    receipt.mark(73, 90, 'initialization', 'start');
+    const active = receipt.snapshot().active;
+    for (const phase of pointPhaseNames) {
+        receipt.mark(73, 90, phase, 'point');
+        assert.deepEqual(receipt.snapshot().active, active);
+    }
+    assertValueFree(receipt.snapshot());
+    assert.deepEqual(
+        receipt
+            .snapshot()
+            .records.slice(1)
+            .map(({ phase, event }) => [phase, event]),
+        pointPhaseNames.map((phase) => [phase, 'point'])
+    );
+    receipt.mark(73, 90, 'connect-submit-start', 'start');
+    receipt.mark(73, 90, 'connect-submit-start', 'complete');
+    receipt.mark(73, 90, 'initialization', 'point');
+    assert.equal(receipt.snapshot().rejected, 3);
+    assert.deepEqual(receipt.snapshot().active, active);
+    receipt.mark(73, 90, 'initialization', 'complete');
+    assert.equal(receipt.snapshot().active, null);
+    for (let i = 0; i < 80; i++)
+        receipt.mark(
+            73,
+            90,
+            pointPhaseNames[i % pointPhaseNames.length],
+            'point'
+        );
+    const snapshot = receipt.snapshot();
+    assertValueFree(snapshot);
+    assert.equal(snapshot.records.length, attachmentPhaseCapacity);
+    assert.equal(snapshot.evicted, 92 - attachmentPhaseCapacity);
+    assert.equal(snapshot.rejected, 3);
+    assert(Buffer.byteLength(latest) <= attachmentPhaseMaxBytes);
+});
+
+test('bounded ring retains two complete checkpointed cases and loses earlier events', () => {
+    const receipt = createAttachmentPhaseReceipt({ persist: () => {} });
+    const events = [
+        ...scenarioPhaseNames.flatMap((phase) => [
+            [phase, 'start'],
+            [phase, 'complete'],
+        ]),
+        ...pointPhaseNames.map((phase) => [phase, 'point']),
+        ...phaseNames.flatMap((phase) => [
+            [phase, 'start'],
+            [phase, 'complete'],
+        ]),
+    ];
+    assert.equal(events.length, 26);
+    for (const index of [1, 2, 3])
+        for (const [phase, event] of events)
+            receipt.mark(index, 90, phase, event);
+    const snapshot = receipt.snapshot();
+    assertValueFree(snapshot);
+    assert.equal(snapshot.records.length, attachmentPhaseCapacity);
+    assert.equal(snapshot.evicted, 78 - attachmentPhaseCapacity);
+    assert(
+        snapshot.records.filter(({ caseIndex }) => caseIndex === 1).length <
+            events.length
+    );
+    for (const index of [2, 3])
+        assert.deepEqual(
+            snapshot.records
+                .filter(({ caseIndex }) => caseIndex === index)
+                .map(({ phase, event }) => [phase, event]),
+            events
+        );
+});
+
+test('disabled detailed recording avoids clock and storage work', () => {
+    let clockCalls = 0;
+    let warnings = 0;
+    const receipt = createAttachmentPhaseReceipt({
+        now: () => {
+            clockCalls++;
+            throw Error(sentinel);
+        },
+        warn: () => warnings++,
+    });
+    for (const phase of scenarioPhaseNames) {
+        receipt.mark(73, 90, phase, 'start');
+        receipt.mark(73, 90, phase, 'complete');
+    }
+    for (const phase of pointPhaseNames) receipt.mark(73, 90, phase, 'point');
+    assert.equal(clockCalls, 0);
+    assert.equal(warnings, 0);
+    assert.equal(receipt.snapshot().sequence, 0);
+    assert.deepEqual(receipt.snapshot().records, []);
+    assert.equal(receipt.snapshot().writeFailures, 0);
+});
+
+test('detailed marker failures cannot replace the original error', () => {
+    const originalError = { synthetic: sentinel };
+    let attempts = 0;
+    let warnings = 0;
+    const receipt = createAttachmentPhaseReceipt({
+        persist: () => {
+            attempts++;
+            throw Error(sentinel);
+        },
+        warn: () => {
+            warnings++;
+            throw Error(sentinel);
+        },
+    });
+    for (const phase of scenarioPhaseNames)
+        assert.doesNotThrow(() => receipt.mark(73, 90, phase, 'start'));
+    assert.equal(attempts, 1);
+    assert.equal(warnings, 1);
+    assert.equal(receipt.snapshot().writeFailures, 1);
+    const marker = safeAttachmentPhaseMarker(() => {
+        throw Error(sentinel);
+    });
+    assert.throws(
+        () => {
+            marker(73, 90, 'unique-import', 'start');
+            throw originalError;
+        },
+        (error) => error === originalError
+    );
+});
+
+test('detailed worker port requires the explicit opt-in', async () => {
+    const source = await readFile(
+        new URL('./packed-tail-worker.mjs', import.meta.url),
+        'utf8'
+    );
+    const ast = ts.createSourceFile(
+        'worker.mjs',
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.JS
+    );
+    const spreads = [];
+    const visit = (node) => {
+        if (
+            ts.isSpreadAssignment(node) &&
+            node.getText(ast).includes('SDK_ATTACHMENT_PHASE_DETAIL')
+        )
+            spreads.push(node.expression.getText(ast));
+        ts.forEachChild(node, visit);
+    };
+    visit(ast);
+    assert.equal(spreads.length, 1);
+    const port = new Function(
+        'teardownReceipt',
+        'process',
+        `return (${spreads[0]});`
+    );
+    const mark = () => {};
+    for (const value of [undefined, '', '0', 'true'])
+        assert.deepEqual(
+            port(
+                { mark },
+                {
+                    env: {
+                        SDK_ATTACHMENT_PHASE_RECEIPT_DIR: 'owned',
+                        SDK_ATTACHMENT_PHASE_DETAIL: value,
+                    },
+                }
+            ),
+            {}
+        );
+    assert.deepEqual(
+        port(null, {
+            env: {
+                SDK_ATTACHMENT_PHASE_RECEIPT_DIR: 'owned',
+                SDK_ATTACHMENT_PHASE_DETAIL: '1',
+            },
+        }),
+        {}
+    );
+    assert.deepEqual(
+        port({ mark }, { env: { SDK_ATTACHMENT_PHASE_DETAIL: '1' } }),
+        {}
+    );
+    assert.deepEqual(
+        port(
+            { mark },
+            {
+                env: {
+                    SDK_ATTACHMENT_PHASE_RECEIPT_DIR: 'owned',
+                    SDK_ATTACHMENT_PHASE_DETAIL: '1',
+                },
+            }
+        ),
+        { onScenarioPhase: mark }
+    );
+});
+
+test('root-load points instrument only unique starter anchors', async () => {
+    const source = await readFile(
+        new URL('../examples/browser/src/main.ts', import.meta.url),
+        'utf8'
+    );
+    const result = addAttachmentRootLoadCheckpoints(source);
+    const names = [
+        'response-consumed',
+        'root-accept-start',
+        'root-render-start',
+        'root-render-end',
+    ];
+    const capture =
+        'const __sdkAttachmentPhasePoint = globalThis.__sdkAttachmentPhasePoint;\n';
+    assert(result.startsWith(capture));
+    const body = result.slice(capture.length);
+    const points = [
+        ...body.matchAll(/__sdkAttachmentPhasePoint\?\.\('([^']+)'\);/g),
+    ].map((match) => match[1]);
+    assert.deepEqual(points, names);
+    assert.equal(
+        body
+            .split('\n')
+            .filter((line) => !line.includes('__sdkAttachmentPhasePoint?.('))
+            .join('\n'),
+        source
+    );
+    const calls = [];
+    const owner = { __sdkAttachmentPhasePoint: (phase) => calls.push(phase) };
+    const invokeCaptured = new Function(
+        'globalThis',
+        `${capture}return () => __sdkAttachmentPhasePoint?.('response-consumed');`
+    )(owner);
+    owner.__sdkAttachmentPhasePoint = () => calls.push('later-owner');
+    invokeCaptured();
+    assert.deepEqual(calls, ['response-consumed']);
+    assert.throws(
+        () =>
+            addAttachmentRootLoadCheckpoints(
+                `${source}\n__sdkAttachmentPhasePoint`
+            ),
+        /checkpoint name must be unused/
+    );
+    const anchors = [
+        '            let result = await client.loadExtension(connection.input, {\n                signal,\n            });',
+        '            acceptRootLoad(visitor, result, query);\n            render();\n            const loadedMessage =',
+    ];
+    for (const anchor of anchors) {
+        assert.equal(source.indexOf(anchor), source.lastIndexOf(anchor));
+        assert.notEqual(source.indexOf(anchor), -1);
+        assert.throws(
+            () => addAttachmentRootLoadCheckpoints(source.replace(anchor, '')),
+            /root-load anchor must be unique/
+        );
+        assert.throws(
+            () => addAttachmentRootLoadCheckpoints(`${source}\n${anchor}`),
+            /root-load anchor must be unique/
+        );
+    }
+    const recipe = await readFile(
+        new URL('./attachment-review-recipe-checks.mjs', import.meta.url),
+        'utf8'
+    );
+    assert.match(
+        recipe,
+        /const source = onScenarioPhase\s*\?\s*addAttachmentRootLoadCheckpoints\(originalSource\)\s*:\s*originalSource/
+    );
+});
+
+test('local points bracket submit, synthetic response, and readiness', async () => {
+    const source = await readFile(
+        new URL('./attachment-review-recipe-checks.mjs', import.meta.url),
+        'utf8'
+    );
+    const position = (text) => {
+        const index = source.indexOf(text);
+        assert.notEqual(index, -1, `Missing checkpoint boundary: ${text}`);
+        assert.equal(index, source.lastIndexOf(text));
+        return index;
+    };
+    const responseStart = position("markPoint('synthetic-response-start')");
+    const responseReady = position("markPoint('synthetic-response-ready')");
+    const response = source.indexOf(
+        'const response = new Response(JSON.stringify(page))',
+        responseStart
+    );
+    assert(responseStart < response && response < responseReady);
+    assert.match(
+        source.slice(
+            source.lastIndexOf(
+                "if (route === 'fetchExtensionForEndUser')",
+                responseStart
+            ),
+            responseStart
+        ),
+        /if \(!markPoint \|\| !initialResponsePending\)/
+    );
+    const submitStart = position("markPoint?.('connect-submit-start')");
+    const submitEnd = position("markPoint?.('connect-submit-end')");
+    const submit = source.indexOf(
+        "document.getElementById('connection-form').dispatchEvent(",
+        submitStart
+    );
+    assert(submitStart < submit && submit < submitEnd);
+    const pollStart = position("markPoint?.('readiness-poll-start')");
+    const observed = position("markPoint?.('readiness-observed')");
+    const poll = source.indexOf('await waitFor(', pollStart);
+    assert(submitEnd < pollStart && pollStart < poll && poll < observed);
+    const stopped = source.indexOf(
+        'recordingInitialization = false;',
+        observed
+    );
+    const initializationComplete = source.indexOf(
+        "'initialization',",
+        observed
+    );
+    assert(observed < stopped && stopped < initializationComplete);
+    assert.match(
+        source,
+        /\.\.\.\(markPoint \? \{ __sdkAttachmentPhasePoint: markPoint \} : \{\}\)/
+    );
+});
+
+test('captured point callback stops after readiness or cleanup', async () => {
+    const source = await readFile(
+        new URL('./attachment-review-recipe-checks.mjs', import.meta.url),
+        'utf8'
+    );
+    const ast = ts.createSourceFile(
+        'recipe.mjs',
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.JS
+    );
+    const declarations = [];
+    const visit = (node) => {
+        if (
+            ts.isVariableDeclaration(node) &&
+            node.name.getText(ast) === 'markPoint'
+        )
+            declarations.push(node);
+        ts.forEachChild(node, visit);
+    };
+    visit(ast);
+    assert.equal(declarations.length, 1);
+    const initializer = declarations[0].initializer.getText(ast);
+    const make = new Function(
+        'markScenario',
+        `let recordingInitialization = true; const index = 72; const scenarios = Array(90); const marker = (${initializer}); return { marker, stop: () => { recordingInitialization = false; } };`
+    );
+    const calls = [];
+    const enabled = make((...args) => calls.push(args));
+    enabled.marker('synthetic-response-start');
+    enabled.stop();
+    enabled.marker('root-render-end');
+    assert.deepEqual(calls, [[73, 90, 'synthetic-response-start', 'point']]);
+    assert.equal(make(null).marker, null);
+    const safe = make(
+        safeAttachmentPhaseMarker(() => {
+            throw Error(sentinel);
+        })
+    );
+    assert.doesNotThrow(() => safe.marker('root-render-start'));
+});
+
+test('detailed markers bracket the actual scenario boundaries', async () => {
+    const source = await readFile(
+        new URL('./attachment-review-recipe-checks.mjs', import.meta.url),
+        'utf8'
+    );
+    const ast = ts.createSourceFile(
+        'attachment.mjs',
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.JS
+    );
+    const markers = [];
+    const loops = [];
+    const guarded = [];
+    const visit = (node) => {
+        if (
+            ts.isForOfStatement(node) &&
+            node.expression.getText(ast) === 'scenarios.entries()'
+        )
+            loops.push(node);
+        if (
+            ts.isTryStatement(node) &&
+            node.finallyBlock
+                ?.getText(ast)
+                .includes('await window.happyDOM.close()')
+        )
+            guarded.push(node);
+        if (
+            ts.isCallExpression(node) &&
+            node.expression.getText(ast) === 'markScenario' &&
+            node.questionDotToken != null
+        )
+            markers.push(node);
+        ts.forEachChild(node, visit);
+    };
+    visit(ast);
+    assert.equal(loops.length, 1);
+    assert.equal(guarded.length, 1);
+    assert.equal(markers.length, 9);
+    assert.deepEqual(
+        markers.map((node) => {
+            assert.equal(node.arguments.length, 4);
+            assert.equal(
+                node.arguments[0].getText(ast).replaceAll(' ', ''),
+                'index+1'
+            );
+            assert.equal(node.arguments[1].getText(ast), 'scenarios.length');
+            assert(ts.isStringLiteral(node.arguments[2]));
+            assert(ts.isStringLiteral(node.arguments[3]));
+            return [node.arguments[2].text, node.arguments[3].text];
+        }),
+        [
+            ...scenarioPhaseNames.flatMap((phase) => [
+                [phase, 'start'],
+                [phase, 'complete'],
+            ]),
+            ['scenario-assertions', 'complete'],
+        ]
+    );
+    for (const marker of markers)
+        assert(
+            marker.getStart(ast) > loops[0].getStart(ast) &&
+                marker.end < loops[0].end
+        );
+    const positions = markers.map((node) => node.getStart(ast));
+    const between = (text, from, to) => {
+        const index = source.indexOf(text, from);
+        assert(index > from && index < to, `Expected boundary: ${text}`);
+    };
+    between(
+        "const fixture = createReviewFixture('review-answers')",
+        positions[0],
+        positions[1]
+    );
+    between('const window = new Window(', positions[0], positions[1]);
+    between('Object.assign(globalThis, globals)', positions[0], positions[1]);
+    assert(positions[1] < guarded[0].getStart(ast));
+    between('const probe = await import(', positions[2], positions[3]);
+    between('const document = window.document', positions[4], positions[5]);
+    between('await waitFor(', positions[4], positions[5]);
+    between('const file = document.querySelector(', positions[6], positions[7]);
+    between('await settled()', positions[6], positions[8]);
+    assert(positions[2] > guarded[0].tryBlock.getStart(ast));
+    assert(positions[8] < guarded[0].tryBlock.end);
+    assert(
+        markers.every(
+            (node) =>
+                node.getStart(ast) < guarded[0].finallyBlock.getStart(ast) ||
+                node.end > guarded[0].finallyBlock.end
+        )
+    );
+    const continues = [];
+    const findContinues = (node) => {
+        if (ts.isContinueStatement(node)) continues.push(node);
+        ts.forEachChild(node, findContinues);
+    };
+    findContinues(guarded[0].tryBlock);
+    assert.equal(continues.length, 1);
+    const uploadBlock = continues[0].parent;
+    assert(ts.isBlock(uploadBlock));
+    const continueIndex = uploadBlock.statements.indexOf(continues[0]);
+    assert(continueIndex >= 2);
+    const uploadMarker = uploadBlock.statements[continueIndex - 2];
+    const uploadLog = uploadBlock.statements[continueIndex - 1];
+    assert(ts.isExpressionStatement(uploadMarker));
+    assert.equal(uploadMarker.expression, markers[7]);
+    assert.match(uploadLog.getText(ast), /Packed attachment upload:/);
+    const reviewBlock = markers[8].parent.parent;
+    assert(ts.isBlock(reviewBlock));
+    const reviewIndex = reviewBlock.statements.indexOf(markers[8].parent);
+    assert(reviewIndex >= 0);
+    assert.match(
+        reviewBlock.statements[reviewIndex + 1].getText(ast),
+        /Packed attachment Review:/
+    );
 });
 
 async function timeoutFixture(t, phase, fault = 'none') {

@@ -82,6 +82,11 @@ try {
         consumerDirectory: args[1],
         happyDomModulePath: args[2],
         ...(teardownReceipt ? { onTeardownPhase: teardownReceipt.mark } : {}),
+        ...(teardownReceipt &&
+        process.env.SDK_ATTACHMENT_PHASE_RECEIPT_DIR &&
+        process.env.SDK_ATTACHMENT_PHASE_DETAIL === '1'
+            ? { onScenarioPhase: teardownReceipt.mark }
+            : {}),
     });
 } catch (error) {
     console.error(error);

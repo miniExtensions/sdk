@@ -504,13 +504,56 @@ const settled = async () => {
         await new Promise((resolve) => setImmediate(resolve));
 };
 
+// Used only for the opt-in diagnostic bundle. The original starter source and
+// ordinary package-check bundle remain unchanged.
+export function addAttachmentRootLoadCheckpoints(source) {
+    assert(
+        !source.includes('__sdkAttachmentPhasePoint'),
+        'Attachment diagnostic checkpoint name must be unused'
+    );
+    const anchors = [
+        [
+            '            let result = await client.loadExtension(connection.input, {\n                signal,\n            });',
+            "\n            __sdkAttachmentPhasePoint?.('response-consumed');",
+        ],
+        [
+            '            acceptRootLoad(visitor, result, query);\n            render();\n            const loadedMessage =',
+            null,
+        ],
+    ];
+    for (const [anchor] of anchors) {
+        const first = source.indexOf(anchor);
+        assert(
+            first !== -1 && source.indexOf(anchor, first + 1) === -1,
+            'Attachment diagnostic root-load anchor must be unique'
+        );
+    }
+    source = source.replace(anchors[0][0], anchors[0][0] + anchors[0][1]);
+    return (
+        'const __sdkAttachmentPhasePoint = globalThis.__sdkAttachmentPhasePoint;\n' +
+        source.replace(
+            anchors[1][0],
+            "            __sdkAttachmentPhasePoint?.('root-accept-start');\n" +
+                '            acceptRootLoad(visitor, result, query);\n' +
+                "            __sdkAttachmentPhasePoint?.('root-render-start');\n" +
+                '            render();\n' +
+                "            __sdkAttachmentPhasePoint?.('root-render-end');\n" +
+                '            const loadedMessage ='
+        )
+    );
+}
+
 /** Installed recipe and entire copied starter; synthetic requests only. */
 export async function checkAttachmentReviewRecipe({
     consumerDirectory: consumer,
     happyDomModulePath,
     onTeardownPhase,
+    onScenarioPhase,
 }) {
     const markTeardown = safeAttachmentPhaseMarker(onTeardownPhase);
+    const markScenario = onScenarioPhase
+        ? safeAttachmentPhaseMarker(onScenarioPhase)
+        : null;
     for (const name of [
         'main.ts',
         'review.ts',
@@ -579,15 +622,21 @@ export async function checkAttachmentReviewRecipe({
             {
                 name: 'accepted-scope-observer',
                 setup(build) {
-                    build.onLoad({ filter: /\/src\/main\.ts$/ }, (args) => ({
-                        loader: 'ts',
-                        contents:
-                            readFileSync(args.path, 'utf8').replace(
-                                '    const readFilterMetadata = (context:',
-                                '    attachmentUploadProbe = { snapshot: () => visitor.drafts.snapshot(draft), revision: () => visitor.drafts.revision(draft), write: (id: string, value: AirtableValue) => visitor.drafts.write(draft, id, value), attempts: () => (recovery as unknown as {attempts: RecoveryAttempt[]}).attempts, session: (value: RuntimeSession) => formClient!.setSession(value), context: (value: SaveFormInput["context"]) => {visitor.formContext = value;}, malformedReturn: (value: unknown) => {const upload = formClient!.attachments.uploadFile; formClient!.attachments.uploadFile = async (...args) => {await upload(...args); return value as never;};}, presentationThrow: () => {controls.get("fld_review_files")!.write = () => {throw new Error("Synthetic presentation failure");};}, rejectWrite: () => {visitor.drafts.write = () => false;}, replaceMount: () => {render(); setBusy(false); status("Accepted replacement UI.");}, clearDraft: () => {visitor.drafts.discard(draft);}, replaceLoad: () => {visitor.formLoadVersion++; render(); setBusy(false); status("Accepted replacement load.");}, activeRequest: () => {request = new AbortController();}, active: () => activeUpload };\n    attachmentObserveForTest = () => updateFormActivity();\n    attachmentRetainedForTest = () => recovery.unknown(scope.owner).map(a => a.retainedInput);\n    const readFilterMetadata = (context:'
-                            ) +
-                            '\nlet attachmentUploadProbe: unknown;\nexport const uploadProbeForTest = () => attachmentUploadProbe;\nlet attachmentObserveForTest: () => void;\nexport const observeAttachmentConfigurationForTest = () => attachmentObserveForTest();\nexport const attachmentPageForTest = () => visitors[activeVisitor].screen;\nlet attachmentRetainedForTest: () => unknown;\nexport const attachmentAttemptsForTest = () => attachmentRetainedForTest();\n',
-                    }));
+                    build.onLoad({ filter: /\/src\/main\.ts$/ }, (args) => {
+                        const originalSource = readFileSync(args.path, 'utf8');
+                        const source = onScenarioPhase
+                            ? addAttachmentRootLoadCheckpoints(originalSource)
+                            : originalSource;
+                        return {
+                            loader: 'ts',
+                            contents:
+                                source.replace(
+                                    '    const readFilterMetadata = (context:',
+                                    '    attachmentUploadProbe = { snapshot: () => visitor.drafts.snapshot(draft), revision: () => visitor.drafts.revision(draft), write: (id: string, value: AirtableValue) => visitor.drafts.write(draft, id, value), attempts: () => (recovery as unknown as {attempts: RecoveryAttempt[]}).attempts, session: (value: RuntimeSession) => formClient!.setSession(value), context: (value: SaveFormInput["context"]) => {visitor.formContext = value;}, malformedReturn: (value: unknown) => {const upload = formClient!.attachments.uploadFile; formClient!.attachments.uploadFile = async (...args) => {await upload(...args); return value as never;};}, presentationThrow: () => {controls.get("fld_review_files")!.write = () => {throw new Error("Synthetic presentation failure");};}, rejectWrite: () => {visitor.drafts.write = () => false;}, replaceMount: () => {render(); setBusy(false); status("Accepted replacement UI.");}, clearDraft: () => {visitor.drafts.discard(draft);}, replaceLoad: () => {visitor.formLoadVersion++; render(); setBusy(false); status("Accepted replacement load.");}, activeRequest: () => {request = new AbortController();}, active: () => activeUpload };\n    attachmentObserveForTest = () => updateFormActivity();\n    attachmentRetainedForTest = () => recovery.unknown(scope.owner).map(a => a.retainedInput);\n    const readFilterMetadata = (context:'
+                                ) +
+                                '\nlet attachmentUploadProbe: unknown;\nexport const uploadProbeForTest = () => attachmentUploadProbe;\nlet attachmentObserveForTest: () => void;\nexport const observeAttachmentConfigurationForTest = () => attachmentObserveForTest();\nexport const attachmentPageForTest = () => visitors[activeVisitor].screen;\nlet attachmentRetainedForTest: () => unknown;\nexport const attachmentAttemptsForTest = () => attachmentRetainedForTest();\n',
+                        };
+                    });
                 },
             },
         ],
@@ -636,6 +685,19 @@ export async function checkAttachmentReviewRecipe({
         ].map((name) => `matrix-${name}`),
     ];
     for (const [index, scenario] of scenarios.entries()) {
+        let recordingInitialization = true;
+        const markPoint = markScenario
+            ? (phase) => {
+                  if (recordingInitialization)
+                      markScenario(index + 1, scenarios.length, phase, 'point');
+              }
+            : null;
+        markScenario?.(
+            index + 1,
+            scenarios.length,
+            'fixture-window-setup',
+            'start'
+        );
         const fixture = createReviewFixture('review-answers');
         const page = fixture.page();
         addSelectReviewAnswers(page);
@@ -712,7 +774,9 @@ export async function checkAttachmentReviewRecipe({
         const uploadGate = new Promise((resolve) => {
             releaseUpload = resolve;
         });
+        let initialResponsePending = true;
         const globals = {
+            ...(markPoint ? { __sdkAttachmentPhasePoint: markPoint } : {}),
             document: window.document,
             location: window.location,
             HTMLElement: window.HTMLElement,
@@ -735,8 +799,15 @@ export async function checkAttachmentReviewRecipe({
                             ? JSON.parse(init.body)
                             : null,
                 });
-                if (route === 'fetchExtensionForEndUser')
-                    return new Response(JSON.stringify(page));
+                if (route === 'fetchExtensionForEndUser') {
+                    if (!markPoint || !initialResponsePending)
+                        return new Response(JSON.stringify(page));
+                    markPoint('synthetic-response-start');
+                    const response = new Response(JSON.stringify(page));
+                    markPoint('synthetic-response-ready');
+                    initialResponsePending = false;
+                    return response;
+                }
                 if (route === 'createPublicUploadLink')
                     return new Response(
                         JSON.stringify({
@@ -780,9 +851,33 @@ export async function checkAttachmentReviewRecipe({
             Object.getOwnPropertyDescriptor(globalThis, key),
         ]);
         Object.assign(globalThis, globals);
+        markScenario?.(
+            index + 1,
+            scenarios.length,
+            'fixture-window-setup',
+            'complete'
+        );
         try {
+            markScenario?.(
+                index + 1,
+                scenarios.length,
+                'unique-import',
+                'start'
+            );
             const probe = await import(
                 `${pathToFileURL(main).href}?attachment=${index}`
+            );
+            markScenario?.(
+                index + 1,
+                scenarios.length,
+                'unique-import',
+                'complete'
+            );
+            markScenario?.(
+                index + 1,
+                scenarios.length,
+                'initialization',
+                'start'
             );
             const document = window.document;
             const button = (label, within = document) => {
@@ -795,17 +890,34 @@ export async function checkAttachmentReviewRecipe({
             document.getElementById('api-origin').value =
                 'https://synthetic-sdk.invalid';
             document.getElementById('share-id').value = 'attachment_synthetic';
+            markPoint?.('connect-submit-start');
             document.getElementById('connection-form').dispatchEvent(
                 new window.Event('submit', {
                     bubbles: true,
                     cancelable: true,
                 })
             );
+            markPoint?.('connect-submit-end');
+            markPoint?.('readiness-poll-start');
             await waitFor(
                 () =>
                     document.querySelector(
                         'input[data-pending-field-id="fld_review_files"]'
                     ) != null
+            );
+            markPoint?.('readiness-observed');
+            recordingInitialization = false;
+            markScenario?.(
+                index + 1,
+                scenarios.length,
+                'initialization',
+                'complete'
+            );
+            markScenario?.(
+                index + 1,
+                scenarios.length,
+                'scenario-assertions',
+                'start'
             );
             const file = document.querySelector(
                 'input[data-pending-field-id="fld_review_files"]'
@@ -1152,6 +1264,12 @@ export async function checkAttachmentReviewRecipe({
                         }
                     }
                 }
+                markScenario?.(
+                    index + 1,
+                    scenarios.length,
+                    'scenario-assertions',
+                    'complete'
+                );
                 console.log(`Packed attachment upload: ${scenario} passed`);
                 continue;
             }
@@ -1653,8 +1771,15 @@ export async function checkAttachmentReviewRecipe({
                 }
             }
             await settled();
+            markScenario?.(
+                index + 1,
+                scenarios.length,
+                'scenario-assertions',
+                'complete'
+            );
             console.log(`Packed attachment Review: ${scenario} passed`);
         } finally {
+            recordingInitialization = false;
             markTeardown(
                 index + 1,
                 scenarios.length,

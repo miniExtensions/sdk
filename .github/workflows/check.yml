@@ -19,7 +19,32 @@ jobs:
                   node-version: 24
             - run: npm install --global pnpm@10.28.2
             - run: pnpm install --frozen-lockfile
-            - run: pnpm check
+            # Run source checks in a separate checkout so their coverage and
+            # compiled files cannot race package generation. Both must pass
+            # before any browser proof or customer artifact is published.
+            - name: Run isolated source and package checks
+              run: |
+                  set -euo pipefail
+                  source_dir="$RUNNER_TEMP/sdk-source-check"
+                  mkdir -p "$source_dir"
+                  tar --exclude='./.git' --exclude='./node_modules' --exclude='./dist' --exclude='./coverage' -cf - . | tar -xf - -C "$source_dir"
+                  cp -a node_modules "$source_dir/node_modules"
+                  (cd "$source_dir" && pnpm format:check && pnpm typecheck && pnpm test) > "$RUNNER_TEMP/sdk-source-check.log" 2>&1 &
+                  source_pid=$!
+                  set +e
+                  pnpm check:package
+                  package_status=$?
+                  wait "$source_pid"
+                  source_status=$?
+                  set -e
+                  cat "$RUNNER_TEMP/sdk-source-check.log"
+                  if [ -d "$source_dir/coverage" ]; then
+                      cp -a "$source_dir/coverage" ./coverage
+                  fi
+                  echo "Source checks: $source_status; package checks: $package_status"
+                  if [ "$source_status" -ne 0 ] || [ "$package_status" -ne 0 ]; then
+                      exit 1
+                  fi
               env:
                   SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
                   SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof

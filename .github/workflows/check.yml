@@ -35,8 +35,8 @@ jobs:
                       coverage/*/lcov-report/
                   if-no-files-found: error
                   retention-days: 7
-    check:
-        name: check (24)
+    package:
+        name: package (24)
         permissions:
             contents: read
             actions: read
@@ -138,3 +138,15 @@ jobs:
                   SDK_NATIVE_RESULT_DIR: ${{ runner.temp }}/sdk-native-browser-results
               run: |
                   node -e "const fs = require('node:fs'); for (const key of ['SDK_CHECKED_ARTIFACT_DIR', 'SDK_BROWSER_PROOF_ARTIFACT_DIR', 'SDK_NATIVE_RESULT_DIR']) { fs.rmSync(process.env[key], { recursive: true, force: true }); if (fs.existsSync(process.env[key])) process.exit(1); } console.log('Customer delivery and synthetic browser fixture outputs removed');"
+    check:
+        name: check (24)
+        needs: [source, package]
+        if: always()
+        runs-on: ubuntu-latest
+        steps:
+            - name: Require both jobs to succeed
+              env:
+                  SOURCE_RESULT: ${{ needs.source.result }}
+                  PACKAGE_RESULT: ${{ needs.package.result }}
+              run: |
+                  test "$SOURCE_RESULT" = success && test "$PACKAGE_RESULT" = success

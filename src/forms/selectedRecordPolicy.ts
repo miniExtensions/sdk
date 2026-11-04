@@ -1,5 +1,6 @@
 import FormulaRunner from '../formulas/runner.js';
 import { convertAirtableValueToPrimitive } from '../formulas/valueConversion.js';
+import moment from 'moment-timezone';
 import type {
     AirtableRecord,
     RuntimeAirtableField,
@@ -51,6 +52,61 @@ const compareText = new Intl.Collator('en-US', {
     sensitivity: 'base',
 }).compare;
 type Primitive = string | number | (string | number)[] | null | undefined;
+
+// Explicit offsets make the instant independent of the host timezone. Other
+// date strings remain unsupported rather than guessing the frontend locale.
+const calendarInstant = (value: string): number | null => {
+    const match = value.match(
+        /^\d{4}-\d{2}-\d{2}T(\d{2}):\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|([+-])(\d{2}):(\d{2}))$/
+    );
+    if (
+        !match ||
+        +match[1]! > 23 ||
+        (match[2] && (+match[3]! > 23 || +match[4]! > 59))
+    )
+        return null;
+    const parsed = moment.parseZone(value, moment.ISO_8601, true);
+    const instant = parsed.valueOf();
+    return parsed.isValid() && Number.isFinite(instant) ? instant : null;
+};
+
+const validCalendarField = (field: RuntimeAirtableField): boolean => {
+    if (field.isComputed !== false || field.config.type !== 'dateTime')
+        return false;
+    const options = field.config.options;
+    if (
+        !object(options) ||
+        !object(options.dateFormat) ||
+        !object(options.timeFormat) ||
+        typeof options.dateFormat.name !== 'string' ||
+        typeof options.timeFormat.name !== 'string' ||
+        typeof options.timeZone !== 'string'
+    )
+        return false;
+    const dateFormats: Record<string, string> = {
+        local: 'l',
+        friendly: 'LL',
+        us: 'M/D/YYYY',
+        european: 'D/M/YYYY',
+        iso: 'YYYY-MM-DD',
+    };
+    const timeFormats: Record<string, string> = {
+        '12hour': 'h:mma',
+        '24hour': 'HH:mm',
+    };
+    return (
+        Object.hasOwn(dateFormats, options.dateFormat.name) &&
+        dateFormats[options.dateFormat.name] === options.dateFormat.format &&
+        Object.hasOwn(timeFormats, options.timeFormat.name) &&
+        timeFormats[options.timeFormat.name] === options.timeFormat.format &&
+        (options.timeZone === 'utc' ||
+            options.timeZone === 'client' ||
+            moment.tz.zone(options.timeZone) !== null) &&
+        (options.timeZoneFormatting === undefined ||
+            options.timeZoneFormatting === 'intl')
+    );
+};
+
 function compare(a: Primitive, b: Primitive, field: RuntimeAirtableField) {
     if (
         a != null &&
@@ -118,6 +174,12 @@ export function projectSelectedRecordsPolicy(input: {
                 ? null
                 : config.filterLinkedRecordsConditionFields;
         const filtering = conditions != null;
+        if (
+            config.recordFinderMode === 'calendar' &&
+            config.readOnly !== undefined &&
+            typeof config.readOnly !== 'boolean'
+        )
+            return refuse('invalid-value');
         const calendar =
             config.readOnly !== true && config.recordFinderMode === 'calendar';
         const sorting =
@@ -129,7 +191,14 @@ export function projectSelectedRecordsPolicy(input: {
         if (sorting) reasons.push('selected-sort');
         if (!filtering && !sorting)
             return result('not-configured', input.records);
-        if (calendar) return refuse('unsupported-sort');
+        if (
+            calendar &&
+            (typeof config.calendarModeStartDate !== 'string' ||
+                !config.calendarModeStartDate ||
+                typeof config.calendarModeEndDate !== 'string' ||
+                !config.calendarModeEndDate)
+        )
+            return refuse('unsupported-sort');
         if (!input.airtableFields)
             return input.waitingData
                 ? result('waiting-data')
@@ -230,7 +299,22 @@ export function projectSelectedRecordsPolicy(input: {
         }
         const sorts: { field: RuntimeAirtableField; descending: boolean }[] =
             [];
-        if (sorting) {
+        let calendarStart: RuntimeAirtableField | null = null;
+        if (calendar) {
+            const start = byId.get(config.calendarModeStartDate as string);
+            const end = byId.get(config.calendarModeEndDate as string);
+            for (const [id, field] of [
+                [config.calendarModeStartDate as string, start],
+                [config.calendarModeEndDate as string, end],
+            ] as const) {
+                if (!field) return refuse('missing-dependency', id);
+                if (!validCalendarField(field))
+                    return refuse('unsupported-sort', id);
+            }
+            calendarStart = start!;
+            dependencies.set(calendarStart.id, calendarStart);
+            sorts.push({ field: calendarStart, descending: false });
+        } else if (sorting) {
             if (!dense(config.sortFields)) return refuse('unsupported-sort');
             for (const sort of config.sortFields) {
                 if (
@@ -286,6 +370,22 @@ export function projectSelectedRecordsPolicy(input: {
                 )
                     return refuse('invalid-value', field.id);
                 const value = record.fields[field.id];
+                if (
+                    calendarStart?.id === field.id &&
+                    Object.hasOwn(record.fields, field.id) &&
+                    value === undefined
+                )
+                    return refuse('invalid-value', field.id);
+                if (calendarStart?.id === field.id && value != null) {
+                    const instant =
+                        typeof value === 'string'
+                            ? calendarInstant(value)
+                            : null;
+                    if (instant === null)
+                        return refuse('invalid-value', field.id);
+                    values.set(field.id, instant);
+                    continue;
+                }
                 if (value != null) {
                     const type = field.config.type;
                     if (

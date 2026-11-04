@@ -678,7 +678,32 @@ export function createFormLinkedRecordsOwner(options: {
                             return valid;
                         };
                         supported &&= dependencies(conditions);
-                        if (policy?.sortFields != null) {
+                        const calendar =
+                            policy?.recordFinderMode === 'calendar' &&
+                            policy.readOnly !== true;
+                        const calendarMetadata = new Set<string>();
+                        if (calendar) {
+                            const start = policy.calendarModeStartDate;
+                            const end = policy.calendarModeEndDate;
+                            if (
+                                typeof start !== 'string' ||
+                                !start ||
+                                typeof end !== 'string' ||
+                                !end ||
+                                !detailFields.some(
+                                    (detail) =>
+                                        detail.fieldId === start &&
+                                        detail.isHidden !== true
+                                ) ||
+                                !Object.hasOwn(record.fields, start) ||
+                                record.fields[start] === undefined
+                            )
+                                supported = false;
+                            else {
+                                calendarMetadata.add(start);
+                                calendarMetadata.add(end);
+                            }
+                        } else if (policy?.sortFields != null) {
                             supported &&=
                                 Array.isArray(policy.sortFields) &&
                                 policy.sortFields.every(
@@ -686,7 +711,9 @@ export function createFormLinkedRecordsOwner(options: {
                                         object(sort) && resolve(sort.idOrName)
                                 );
                         }
-                        supported &&= [...allowed].every((id) => {
+                        supported &&= [
+                            ...new Set([...allowed, ...calendarMetadata]),
+                        ].every((id) => {
                             const parentField = parent.airtableFields.filter(
                                 (field) => field.id === id
                             );

@@ -1,0 +1,33 @@
+name: Rerun gate validation (temporary)
+on:
+    pull_request:
+permissions:
+    contents: read
+jobs:
+    source:
+        name: source (24)
+        runs-on: ubuntu-latest
+        steps:
+            - run: |
+                  if [ "$GITHUB_RUN_ATTEMPT" -gt 1 ]; then
+                      echo 'Intentional source failure on rerun'
+                      exit 1
+                  fi
+    package:
+        name: package (24)
+        runs-on: ubuntu-latest
+        steps:
+            - run: echo 'Synthetic package success'
+    check:
+        name: check (24)
+        needs: [source, package]
+        if: always()
+        runs-on: ubuntu-latest
+        steps:
+            - name: Require both jobs to succeed
+              env:
+                  SOURCE_RESULT: ${{ needs.source.result }}
+                  PACKAGE_RESULT: ${{ needs.package.result }}
+              run: |
+                  echo "source=$SOURCE_RESULT package=$PACKAGE_RESULT"
+                  test "$SOURCE_RESULT" = success && test "$PACKAGE_RESULT" = success

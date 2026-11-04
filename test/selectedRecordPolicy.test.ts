@@ -373,9 +373,91 @@ const calendarFields = [
     field('start', 'dateTime', calendarOptions),
     field('end', 'dateTime', calendarOptions),
 ];
+const formulaCalendarField = (id: string): RuntimeAirtableField => ({
+    ...field(id, 'formula', {
+        isValid: true,
+        result: {
+            type: 'date',
+            options: { dateFormat: { name: 'iso', format: 'YYYY-MM-DD' } },
+        },
+    }),
+    isComputed: true,
+});
 const calendarRow = (id: string, start?: unknown): AirtableRecord => ({
     id,
     fields: start === undefined ? {} : { start },
+});
+
+it('calendar accepts valid formula date metadata while retaining stable instant ordering', () => {
+    const records = [
+        calendarRow('late', '2027-01-01T00:00:01Z'),
+        calendarRow('equal-a', '2026-12-31T19:00:00-05:00'),
+        calendarRow('missing'),
+        calendarRow('equal-b', '2027-01-01T01:00:00+01:00'),
+        calendarRow('null', null),
+    ];
+    for (const fields of [
+        [formulaCalendarField('start'), calendarFields[1]],
+        [calendarFields[0], formulaCalendarField('end')],
+        [formulaCalendarField('start'), formulaCalendarField('end')],
+    ]) {
+        const result = project(calendarConfig, records, fields);
+        assert.equal(result.policy.state, 'applied');
+        assert.deepEqual(
+            result.records.map((record) => record.id),
+            ['missing', 'null', 'equal-a', 'equal-b', 'late']
+        );
+    }
+});
+
+it('formula calendar refuses malformed metadata and error, array or offsetless values', () => {
+    const good = formulaCalendarField('start');
+    for (const bad of [
+        { ...good, isComputed: false },
+        field('start', 'formula', { isValid: false, result: null }),
+        {
+            ...good,
+            config: {
+                type: 'formula',
+                options: { isValid: true, result: { type: 'date' } },
+            },
+        },
+        {
+            ...good,
+            config: {
+                type: 'formula',
+                options: {
+                    isValid: true,
+                    result: { type: 'dateTime', options: calendarOptions },
+                },
+            },
+        },
+    ] as unknown as RuntimeAirtableField[]) {
+        const result = project(
+            calendarConfig,
+            [calendarRow('one', '2027-01-01T00:00:00Z')],
+            [bad, calendarFields[1]]
+        );
+        assert.equal(result.policy.state, 'unsupported');
+        assert.deepEqual(result.records, []);
+    }
+    for (const value of [
+        { error: '#ERROR!' },
+        ['2027-01-01T00:00:00Z'],
+        '2027-01-01',
+        '2027-01-01T00:00:00',
+    ]) {
+        const result = project(
+            calendarConfig,
+            [calendarRow('bad', value)],
+            [good, calendarFields[1]]
+        );
+        assert.equal(result.policy.state, 'unsupported');
+        assert.deepEqual(result.policy.diagnostics, [
+            { code: 'invalid-value', fieldId: 'start' },
+        ]);
+        assert.deepEqual(result.records, []);
+    }
 });
 
 it('editable calendar selected records sort by start instant, with stable duplicates and empty values', () => {

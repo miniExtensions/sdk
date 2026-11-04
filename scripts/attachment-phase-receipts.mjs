@@ -28,6 +28,19 @@ const checkpoints = new Set([
     'readiness-observed',
 ]);
 const events = new Set(['start', 'complete']);
+// The labels and endpoints are fixed here, never supplied by a caller. These
+// intervals overlap and include the cost of recording intermediate markers.
+const checkpointIntervals = [
+    ['connect-submit', 'connect-submit-start', 'connect-submit-end'],
+    [
+        'synthetic-response',
+        'synthetic-response-start',
+        'synthetic-response-ready',
+    ],
+    ['root-accept-to-render', 'root-accept-start', 'root-render-start'],
+    ['root-render', 'root-render-start', 'root-render-end'],
+    ['readiness-poll', 'readiness-poll-start', 'readiness-observed'],
+];
 
 export function safeAttachmentPhaseMarker(sink) {
     return (caseIndex, total, phase, event) => {
@@ -50,6 +63,8 @@ export function createAttachmentPhaseReceipt({
     if (!Number.isSafeInteger(pid) || pid <= 1)
         throw new TypeError('A numeric worker identity is required');
     const records = [];
+    const pending = new Map();
+    const aggregates = Object.create(null);
     let active = null;
     let sequence = 0;
     let evicted = 0;
@@ -58,7 +73,7 @@ export function createAttachmentPhaseReceipt({
     let disabled = !outputDirectory && !persist;
     const snapshot = () =>
         structuredClone({
-            schemaVersion: 1,
+            schemaVersion: 2,
             suite: 'attachment',
             pid,
             capacity: attachmentPhaseCapacity,
@@ -68,7 +83,38 @@ export function createAttachmentPhaseReceipt({
             writeFailures,
             active,
             records,
+            aggregates,
         });
+    const updateInterval = (label, start, record) => {
+        if (start) {
+            pending.set(label, record);
+            return;
+        }
+        const previous = pending.get(label);
+        pending.delete(label);
+        if (
+            !previous ||
+            previous.caseIndex !== record.caseIndex ||
+            previous.total !== record.total ||
+            record.atMs < previous.atMs
+        )
+            return;
+        const duration = record.atMs - previous.atMs;
+        const stats = aggregates[label];
+        if (!stats) {
+            aggregates[label] = {
+                count: 1,
+                minMs: duration,
+                maxMs: duration,
+                meanMs: duration,
+            };
+        } else if (stats.count < Number.MAX_SAFE_INTEGER) {
+            stats.count++;
+            stats.minMs = Math.min(stats.minMs, duration);
+            stats.maxMs = Math.max(stats.maxMs, duration);
+            stats.meanMs += (duration - stats.meanMs) / stats.count;
+        }
+    };
     const failStorage = () => {
         disabled = true; // Do not retry a failed/denied output operation.
         writeFailures++;
@@ -125,6 +171,12 @@ export function createAttachmentPhaseReceipt({
             event,
             atMs: Math.round(time * 1000) / 1000,
         };
+        if (events.has(event)) updateInterval(phase, event === 'start', record);
+        else
+            for (const [label, start, end] of checkpointIntervals) {
+                if (phase === start) updateInterval(label, true, record);
+                if (phase === end) updateInterval(label, false, record);
+            }
         if (event === 'start') active = record;
         else if (event === 'complete') active = null;
         if (records.length === attachmentPhaseCapacity) {

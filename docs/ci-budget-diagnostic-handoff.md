@@ -12,6 +12,16 @@ before its existing continue. Initialization checkpoints are disabled after
 readiness or on error, so subsequent reloads cannot be attributed to the first
 load. The intervals overlap and include synchronous receipt-writing overhead.
 
+Receipt schema 2 also includes fixed-label aggregate counts, minimums, maximums,
+and means in milliseconds. These survive ring eviction, so completed intervals
+from all 90 cases can contribute. Phase intervals require matching start and
+completion markers for the same case and total. The checkpoint intervals cover
+connect submission, synthetic response, acceptance to render, root render, and
+readiness polling. Missing, mismatched, and backwards intervals do not contribute;
+counts make missing observations visible. Aggregates contain no case or fixture
+values. The 64-event ring and 16 KiB receipt cap are unchanged. These are
+diagnostic timings, not isolated CPU timings or a basis for weakening tests.
+
 On 2026-10-30, one local normal `check:package` run with Node 24.21.0 and pnpm
 10.28.2 exited 0 after 764.515 seconds. Its preliminary checks passed 238/238;
 the supervised tail reported 90/90 attachment and 51/51 Review cases. The full

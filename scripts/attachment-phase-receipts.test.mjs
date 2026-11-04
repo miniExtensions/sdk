@@ -47,6 +47,7 @@ function assertValueFree(receipt) {
         Object.keys(receipt).sort(),
         [
             'active',
+            'aggregates',
             'capacity',
             'evicted',
             'pid',
@@ -59,8 +60,29 @@ function assertValueFree(receipt) {
         ].sort()
     );
     assert.equal(JSON.stringify(receipt).includes(sentinel), false);
-    assert.equal(receipt.schemaVersion, 1);
+    assert.equal(receipt.schemaVersion, 2);
     assert.equal(receipt.suite, 'attachment');
+    for (const [label, stats] of Object.entries(receipt.aggregates)) {
+        assert(
+            [
+                ...phaseNames,
+                ...scenarioPhaseNames,
+                'connect-submit',
+                'synthetic-response',
+                'root-accept-to-render',
+                'root-render',
+                'readiness-poll',
+            ].includes(label)
+        );
+        assert.deepEqual(Object.keys(stats).sort(), [
+            'count',
+            'maxMs',
+            'meanMs',
+            'minMs',
+        ]);
+        for (const value of Object.values(stats))
+            assert(Number.isFinite(value));
+    }
     for (const record of [
         ...receipt.records,
         ...(receipt.active ? [receipt.active] : []),
@@ -400,6 +422,104 @@ test('bounded ring retains two complete checkpointed cases and loses earlier eve
                 .map(({ phase, event }) => [phase, event]),
             events
         );
+});
+
+test('aggregate intervals retain all 90 cases after detailed events are evicted', () => {
+    let clock = 0;
+    let latest;
+    const receipt = createAttachmentPhaseReceipt({
+        now: () => clock,
+        persist: (text) => {
+            latest = text;
+        },
+    });
+    for (let index = 1; index <= 90; index++) {
+        receipt.mark(index, 90, 'initialization', 'start');
+        receipt.mark(index, 90, 'root-accept-start', 'point');
+        clock += 1;
+        receipt.mark(index, 90, 'root-render-start', 'point');
+        clock += index;
+        receipt.mark(index, 90, 'root-render-end', 'point');
+        receipt.mark(index, 90, 'initialization', 'complete');
+    }
+    const snapshot = receipt.snapshot();
+    assertValueFree(snapshot);
+    assert.equal(snapshot.records.length, attachmentPhaseCapacity);
+    assert(snapshot.evicted > 0);
+    assert.deepEqual(snapshot.aggregates['root-render'], {
+        count: 90,
+        minMs: 1,
+        maxMs: 90,
+        meanMs: 45.5,
+    });
+    assert.deepEqual(snapshot.aggregates.initialization, {
+        count: 90,
+        minMs: 2,
+        maxMs: 91,
+        meanMs: 46.5,
+    });
+    assert.deepEqual(snapshot.aggregates['root-accept-to-render'], {
+        count: 90,
+        minMs: 1,
+        maxMs: 1,
+        meanMs: 1,
+    });
+    assert(Buffer.byteLength(latest) <= attachmentPhaseMaxBytes);
+});
+
+test('aggregates ignore unmatched, cross-case and reversed intervals', () => {
+    let clock = 10;
+    const receipt = createAttachmentPhaseReceipt({
+        now: () => clock,
+        persist: () => {},
+    });
+    receipt.mark(1, 90, 'settlement', 'complete');
+    receipt.mark(1, 90, 'settlement', 'start');
+    receipt.mark(2, 90, 'settlement', 'complete');
+    receipt.mark(1, 90, 'settlement', 'complete');
+    receipt.mark(1, 90, 'root-render-start', 'point');
+    receipt.mark(1, 91, 'root-render-end', 'point');
+    receipt.mark(1, 90, 'root-render-end', 'point');
+    receipt.mark(1, 90, 'settlement', 'start');
+    clock = 9;
+    receipt.mark(1, 90, 'settlement', 'complete');
+    assert.deepEqual(receipt.snapshot().aggregates, {});
+    clock = 10;
+    receipt.mark(1, 90, 'settlement', 'start');
+    clock = 11;
+    receipt.mark(1, 90, 'settlement', 'start'); // newer start replaces older
+    clock = 13;
+    receipt.mark(1, 90, 'settlement', 'complete');
+    assert.deepEqual(receipt.snapshot().aggregates.settlement, {
+        count: 1,
+        minMs: 2,
+        maxMs: 2,
+        meanMs: 2,
+    });
+});
+
+test('all aggregate labels and worst-width ring remain under the receipt cap', () => {
+    let latest;
+    let clock = 999999999900;
+    const receipt = createAttachmentPhaseReceipt({
+        pid: Number.MAX_SAFE_INTEGER,
+        now: () => clock++,
+        persist: (text) => {
+            latest = text;
+        },
+    });
+    for (const phase of [...phaseNames, ...scenarioPhaseNames]) {
+        receipt.mark(10000, 10000, phase, 'start');
+        receipt.mark(10000, 10000, phase, 'complete');
+    }
+    for (const phase of pointPhaseNames)
+        receipt.mark(10000, 10000, phase, 'point');
+    for (let i = 0; i < 80; i++)
+        receipt.mark(10000, 10000, 'readiness-observed', 'point');
+    assertValueFree(receipt.snapshot());
+    assert.equal(Object.keys(receipt.snapshot().aggregates).length, 13);
+    assert.equal(receipt.snapshot().writeFailures, 0);
+    assert(Buffer.byteLength(latest) <= attachmentPhaseMaxBytes);
 });
 
 test('disabled detailed recording avoids clock and storage work', () => {

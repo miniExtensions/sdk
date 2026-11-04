@@ -1,4 +1,4 @@
-name: Rerun gate validation (temporary)
+name: Source failure gate validation (temporary)
 on:
     pull_request:
 permissions:
@@ -8,16 +8,27 @@ jobs:
         name: source (24)
         runs-on: ubuntu-latest
         steps:
-            - run: |
-                  if [ "$GITHUB_RUN_ATTEMPT" -gt 1 ]; then
-                      echo 'Intentional source failure on rerun'
-                      exit 1
-                  fi
+            - run: echo 'Intentional source failure' && exit 1
     package:
         name: package (24)
+        permissions:
+            contents: read
+            actions: read
         runs-on: ubuntu-latest
         steps:
-            - run: echo 'Synthetic package success'
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.sha }}
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+            - name: Run actual source gate against failed job
+              run: node scripts/wait-for-source-ci.mjs
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            - name: This must not execute
+              run: echo 'UNEXPECTED publication step'
     check:
         name: check (24)
         needs: [source, package]

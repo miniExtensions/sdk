@@ -2946,8 +2946,9 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
             selectedPolicyProof.lifecycleGroups
     );
     assert.equal(selectedPolicyProof.aliasChecks, 14);
+    assert.equal(selectedPolicyProof.calendarChecks, 4);
     console.log(
-        `Installed selected-record policy: ${selectedPolicyProof.checks} ESM/CJS fixture and lifecycle groups plus ${selectedPolicyProof.aliasChecks} dependency-alias checks passed; synthetic transport only.`
+        `Installed selected-record policy: ${selectedPolicyProof.checks} ESM/CJS fixture and lifecycle groups plus ${selectedPolicyProof.aliasChecks} dependency-alias and ${selectedPolicyProof.calendarChecks} calendar checks passed; synthetic transport only.`
     );
     const rendererProof = await checkRendererConsumer({
         consumerDirectory: temporaryDirectory,

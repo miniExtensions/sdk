@@ -358,3 +358,250 @@ it('editable calendar ordering remains explicitly unsupported without configured
         'not-configured'
     );
 });
+
+const calendarConfig = {
+    recordFinderMode: 'calendar',
+    calendarModeStartDate: 'start',
+    calendarModeEndDate: 'end',
+};
+const calendarOptions = {
+    dateFormat: { name: 'iso', format: 'YYYY-MM-DD' },
+    timeFormat: { name: '24hour', format: 'HH:mm' },
+    timeZone: 'utc',
+};
+const calendarFields = [
+    field('start', 'dateTime', calendarOptions),
+    field('end', 'dateTime', calendarOptions),
+];
+const calendarRow = (id: string, start?: unknown): AirtableRecord => ({
+    id,
+    fields: start === undefined ? {} : { start },
+});
+
+it('editable calendar selected records sort by start instant, with stable duplicates and empty values', () => {
+    const records = [
+        calendarRow('late', '2027-01-01T00:00:01.000Z'),
+        calendarRow('equal', '2026-12-31T19:00:00-05:00'),
+        calendarRow('missing'),
+        calendarRow('early', '1969-12-31T23:59:59Z'),
+        calendarRow('equal', '2027-01-01T01:00:00+01:00'),
+        calendarRow('null', null),
+    ];
+    const config = { ...calendarConfig, sortFields: [{ malformed: true }] };
+    const before = structuredClone({ records, config });
+    const result = project(config, records, calendarFields);
+    assert.equal(result.policy.state, 'applied');
+    assert.deepEqual(
+        result.records.map((record) => record.id),
+        ['missing', 'null', 'early', 'equal', 'equal', 'late']
+    );
+    assert.deepEqual({ records, config }, before);
+    result.records[0].fields.start = 'changed';
+    assert.deepEqual({ records, config }, before);
+});
+
+it('calendar filtering precedes sorting and leaves native records untouched', () => {
+    const records = [
+        {
+            id: 'drop',
+            fields: { value: 'drop', start: '2026-01-01T00:00:00Z' },
+        },
+        {
+            id: 'late',
+            fields: { value: 'keep', start: '2027-01-01T00:00:00Z' },
+        },
+        {
+            id: 'early',
+            fields: { value: 'keep', start: '2026-01-01T00:00:00Z' },
+        },
+    ];
+    const before = structuredClone(records);
+    const result = project(
+        { ...calendarConfig, filterLinkedRecordsConditionFields: condition() },
+        records,
+        [...calendarFields, field('value')]
+    );
+    assert.equal(result.policy.state, 'applied');
+    assert.deepEqual(
+        result.records.map((record) => record.id),
+        ['early', 'late']
+    );
+    assert.deepEqual(records, before);
+});
+
+it('calendar requires both settings and accepted unambiguous direct date-time metadata', () => {
+    for (const config of [
+        { ...calendarConfig, calendarModeStartDate: '' },
+        { ...calendarConfig, calendarModeEndDate: null },
+        { ...calendarConfig, readOnly: 'false' },
+    ])
+        assert.equal(
+            project(config, [], calendarFields).policy.state,
+            'unsupported'
+        );
+    assert.equal(
+        project(calendarConfig, [], null, true).policy.state,
+        'waiting-data'
+    );
+    for (const fields of [
+        [calendarFields[0]],
+        [calendarFields[1]],
+        [...calendarFields, calendarFields[0]],
+        [
+            field('start', 'formula', {
+                isValid: true,
+                result: { type: 'date' },
+            }),
+            calendarFields[1],
+        ],
+        [{ ...calendarFields[0], isComputed: true }, calendarFields[1]],
+        [calendarFields[0], field('end', 'date')],
+        [field('start', 'dateTime', null), calendarFields[1]],
+        [
+            calendarFields[0],
+            field('end', 'dateTime', {
+                ...calendarOptions,
+                timeZone: 'not/a-zone',
+            }),
+        ],
+        [
+            field('start', 'dateTime', {
+                ...calendarOptions,
+                dateFormat: { name: 'iso', format: 'wrong' },
+            }),
+            calendarFields[1],
+        ],
+    ]) {
+        const result = project(
+            calendarConfig,
+            [calendarRow('one', '2026-01-01T00:00:00Z')],
+            fields
+        );
+        assert.equal(result.policy.state, 'unsupported');
+        assert.deepEqual(result.records, []);
+    }
+});
+
+it('calendar rejects malformed or offsetless date-time values without partial presentation', () => {
+    for (const value of [
+        'bad',
+        '2026-02-30T00:00:00Z',
+        '2026-01-01T24:00:00Z',
+        '2026-01-01T00:00:00',
+        '2026-01-01T00:00:00+24:99',
+        42,
+        ['2026-01-01T00:00:00Z'],
+    ]) {
+        const result = project(
+            calendarConfig,
+            [
+                calendarRow('valid', '2026-01-01T00:00:00Z'),
+                calendarRow('bad', value),
+            ],
+            calendarFields
+        );
+        assert.equal(result.policy.state, 'unsupported');
+        assert.deepEqual(result.policy.diagnostics, [
+            { code: 'invalid-value', fieldId: 'start' },
+        ]);
+        assert.deepEqual(result.records, []);
+    }
+    const explicitUndefined = {
+        id: 'bad',
+        fields: { start: undefined } as unknown as AirtableRecord['fields'],
+    };
+    const result = project(calendarConfig, [explicitUndefined], calendarFields);
+    assert.equal(result.policy.state, 'unsupported');
+    assert.deepEqual(result.policy.diagnostics, [
+        { code: 'invalid-value', fieldId: 'start' },
+    ]);
+});
+
+it('read-only calendar keeps ordinary sort behavior and general date sorts remain unsupported', () => {
+    const result = project(
+        { ...calendarConfig, readOnly: true, sortFields: [sort()] },
+        [row('z', 'z'), row('a', 'a')]
+    );
+    assert.equal(result.policy.state, 'applied');
+    assert.deepEqual(
+        result.records.map((record) => record.id),
+        ['a', 'z']
+    );
+    assert.equal(
+        project(
+            {
+                sortFields: [
+                    { idOrName: { type: 'id', id: 'start' }, type: 'asc' },
+                ],
+            },
+            [calendarRow('one', '2026-01-01T00:00:00Z')],
+            calendarFields
+        ).policy.state,
+        'unsupported'
+    );
+});
+
+it('calendar sorts explicit offsets consistently across a non-UTC DST transition', () => {
+    const previous = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+        const result = project(
+            calendarConfig,
+            [
+                calendarRow('later', '2026-11-01T01:30:00-08:00'),
+                calendarRow('earlier', '2026-11-01T01:30:00-07:00'),
+                calendarRow('same', '2026-11-01T08:30:00Z'),
+            ],
+            calendarFields
+        );
+        assert.equal(result.policy.state, 'applied');
+        assert.deepEqual(
+            result.records.map((record) => record.id),
+            ['earlier', 'same', 'later']
+        );
+        assert.equal(
+            project(
+                calendarConfig,
+                [calendarRow('ambiguous', '2026-11-01T01:30:00')],
+                calendarFields
+            ).policy.state,
+            'unsupported'
+        );
+    } finally {
+        if (previous === undefined) delete process.env.TZ;
+        else process.env.TZ = previous;
+    }
+});
+
+it('calendar keeps created-record filter exemption before ordering', () => {
+    const config = {
+        ...calendarConfig,
+        filterLinkedRecordsConditionFields: condition(),
+    };
+    const records = [
+        {
+            id: 'created',
+            fields: { value: 'drop', start: '2026-01-01T00:00:00Z' },
+        },
+        {
+            id: 'keep',
+            fields: { value: 'keep', start: '2027-01-01T00:00:00Z' },
+        },
+        {
+            id: 'drop',
+            fields: { value: 'drop', start: '2025-01-01T00:00:00Z' },
+        },
+    ];
+    const result = projectSelectedRecordsPolicy({
+        config,
+        records,
+        airtableFields: [...calendarFields, field('value')],
+        waitingData: false,
+        createdRecordIds: new Set(['created']),
+    });
+    assert.equal(result.policy.state, 'applied');
+    assert.deepEqual(
+        result.records.map((record) => record.id),
+        ['created', 'keep']
+    );
+});

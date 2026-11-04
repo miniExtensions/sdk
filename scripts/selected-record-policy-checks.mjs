@@ -98,6 +98,7 @@ export async function checkSelectedRecordPolicyConsumer({ consumerDirectory }) {
     );
     let checks = 0;
     let aliasChecks = 0;
+    let calendarChecks = 0;
     for (const api of [esm, cjs]) {
         for (const test of canonical.cases) {
             const { input, expected } = test;
@@ -351,6 +352,104 @@ export async function checkSelectedRecordPolicyConsumer({ consumerDirectory }) {
                 owner.destroy();
             }
         }
+        for (const malformed of [false, true]) {
+            const options = {
+                dateFormat: { name: 'iso', format: 'YYYY-MM-DD' },
+                timeFormat: { name: '24hour', format: 'HH:mm' },
+                timeZone: 'utc',
+            };
+            const calendarField = (id) => ({
+                id,
+                name: id,
+                description: null,
+                isComputed: false,
+                isPrimaryField: false,
+                config: { type: 'dateTime', options },
+            });
+            const input = {
+                fields: [calendarField('fld_start'), calendarField('fld_end')],
+                records: [
+                    {
+                        id: 'rec_late',
+                        fields: { fld_start: '2027-01-01T00:00:01Z' },
+                    },
+                    {
+                        id: 'rec_early',
+                        fields: {
+                            fld_start: malformed
+                                ? 'invalid'
+                                : '2026-12-31T19:00:00-05:00',
+                        },
+                    },
+                ],
+                recordIds: ['rec_late', 'rec_early', 'rec_early'],
+                config: {
+                    recordFinderMode: 'calendar',
+                    calendarModeStartDate: 'fld_start',
+                    calendarModeEndDate: 'fld_end',
+                },
+            };
+            let calls = 0;
+            const loaded = loadedForm(input);
+            const owner = api.forms.createFormFieldBindings({
+                loaded,
+                client: {
+                    getSession: () => ({ visitor: 'calendar-policy' }),
+                    linkedRecords: {
+                        loadSelectedRecords: async () => {
+                            calls++;
+                            return { tbl_children: table(input) };
+                        },
+                    },
+                },
+                getScope: () => ({ ownerId: 'calendar-policy', revision: 0 }),
+                isCurrent: () => true,
+                configurationRevision: () => 0,
+                saveOptions,
+            });
+            try {
+                const draft = structuredClone(
+                    owner.controller.getState().draft
+                );
+                const save = api.forms.createFormSaveInput({
+                    loaded,
+                    draft,
+                    options: saveOptions,
+                });
+                const facet = owner.linkedRecords('fld_parent');
+                assert.equal(calls, 0);
+                assert.equal(await facet.readSelected(), true);
+                const snapshot = facet.getSnapshot();
+                assert.equal(
+                    snapshot.selectedPolicy.state,
+                    malformed ? 'unsupported' : 'applied'
+                );
+                assert.deepEqual(
+                    ids(snapshot),
+                    malformed ? [] : ['rec_early', 'rec_early', 'rec_late']
+                );
+                if (malformed)
+                    assert.deepEqual(snapshot.selectedPolicy.diagnostics, [
+                        { code: 'invalid-value', fieldId: 'fld_start' },
+                    ]);
+                assert.deepEqual(
+                    owner.field('fld_parent').getSnapshot().value,
+                    input.recordIds
+                );
+                assert.deepEqual(owner.controller.getState().draft, draft);
+                assert.deepEqual(
+                    api.forms.createFormSaveInput({
+                        loaded,
+                        draft: owner.controller.getState().draft,
+                        options: saveOptions,
+                    }),
+                    save
+                );
+                calendarChecks++;
+            } finally {
+                owner.destroy();
+            }
+        }
         const sourceCase = canonical.cases.find(
             (test) => test.input.config?.sortFields?.length > 0
         );
@@ -537,6 +636,7 @@ export async function checkSelectedRecordPolicyConsumer({ consumerDirectory }) {
         checks,
         fixtureCases: canonical.cases.length,
         aliasChecks,
+        calendarChecks,
         lifecycleGroups: 12,
     };
 }

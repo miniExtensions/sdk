@@ -9,23 +9,19 @@ permissions:
     contents: read
 
 jobs:
-    check:
-        name: check (24)
+    source:
+        name: source (24)
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.sha }}
             - uses: actions/setup-node@v4
               with:
                   node-version: 24
             - run: npm install --global pnpm@10.28.2
             - run: pnpm install --frozen-lockfile
-            - run: pnpm check
-              env:
-                  SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
-                  SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
-                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-            - name: Verify runner-provided Chrome
-              run: google-chrome --version
+            - run: pnpm format:check && pnpm typecheck && pnpm test && node --test scripts/wait-for-source-ci.test.mjs
             - name: Retain unit, component, and combined source coverage
               if: always()
               uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -39,6 +35,36 @@ jobs:
                       coverage/*/lcov-report/
                   if-no-files-found: error
                   retention-days: 7
+    check:
+        name: check (24)
+        permissions:
+            contents: read
+            actions: read
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ github.sha }}
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+            - run: npm install --global pnpm@10.28.2
+            - run: pnpm install --frozen-lockfile
+            - run: pnpm check:package
+              env:
+                  SDK_CHECKED_ARTIFACT_DIR: ${{ runner.temp }}/sdk-tested-customer-kit
+                  SDK_BROWSER_PROOF_ARTIFACT_DIR: ${{ runner.temp }}/sdk-synthetic-browser-proof
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            # Do not publish a customer artifact or begin browser proofs until
+            # source checks for this exact run attempt and revision succeed.
+            - name: Wait for source checks
+              timeout-minutes: 16
+              run: node scripts/wait-for-source-ci.mjs
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  SDK_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+            - name: Verify runner-provided Chrome
+              run: google-chrome --version
             - name: Execute packed native Chromium proof
               timeout-minutes: 10
               run: pnpm check:browser

@@ -1,8 +1,8 @@
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
-// Fail closed: a package is publishable only after the source job for this
-// exact workflow attempt and revision has completed successfully.
+// Fail closed: the source result listed for this run attempt and revision
+// must succeed. GitHub may carry a prior successful job into a partial rerun.
 export async function waitForSourceCheck({
     query,
     runId,
@@ -99,7 +99,7 @@ async function main() {
             return response.json();
         },
     });
-    console.log('Source checks passed for this workflow attempt.');
+    console.log('Effective source result for this run attempt passed.');
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)

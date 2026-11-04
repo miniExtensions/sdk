@@ -31,7 +31,7 @@ function fixture(responses) {
     };
 }
 
-test('waits for this attempt source job to succeed', async () => {
+test('waits for the effective source result to succeed', async () => {
     const f = fixture([
         response(),
         response(source('queued')),
@@ -40,6 +40,15 @@ test('waits for this attempt source job to succeed', async () => {
     ]);
     await waitForSourceCheck(f.args);
     assert.equal(f.calls(), 4);
+});
+
+test('accepts a carried-forward successful source result for the same run and revision', async () => {
+    const prior = {
+        ...source('completed', 'success'),
+        started_at: '2026-11-04T01:00:00Z',
+        completed_at: '2026-11-04T01:04:00Z',
+    };
+    await waitForSourceCheck(fixture([response(prior)]).args);
 });
 
 test('fails closed on failure, cancellation, skipped and unknown status', async () => {

@@ -1,0 +1,50 @@
+name: Diagnostic validation (temporary)
+on:
+    pull_request:
+permissions:
+    contents: read
+jobs:
+    diagnostic:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 24
+            - run: npm install --global pnpm@10.28.2
+            - run: pnpm install --frozen-lockfile
+            - name: Run supervised package check with detailed diagnostics
+              run: pnpm check:package
+              env:
+                  SDK_ATTACHMENT_PHASE_RECEIPT_DIR: ${{ runner.temp }}/attachment-diagnostic
+                  SDK_ATTACHMENT_PHASE_DETAIL: '1'
+            - name: Verify bounded aggregate receipt
+              run: |
+                  node --input-type=module <<'JS'
+                  import assert from 'node:assert/strict';
+                  import { readFileSync, readdirSync } from 'node:fs';
+                  import { join } from 'node:path';
+                  const dir = process.env.RECEIPT_DIR;
+                  const files = readdirSync(dir).filter((name) => /^attachment-phase-\d+\.json$/.test(name));
+                  assert.equal(files.length, 1);
+                  const data = readFileSync(join(dir, files[0]));
+                  assert(data.length <= 16384);
+                  const receipt = JSON.parse(data);
+                  assert.equal(receipt.schemaVersion, 2);
+                  assert.equal(receipt.capacity, 64);
+                  assert.equal(receipt.records.length, 64);
+                  assert.equal(receipt.writeFailures, 0);
+                  assert.equal(receipt.aggregates.initialization.count, 90);
+                  console.log(JSON.stringify({bytes: data.length, evicted: receipt.evicted, aggregates: receipt.aggregates}));
+                  JS
+              env:
+                  RECEIPT_DIR: ${{ runner.temp }}/attachment-diagnostic
+            - name: Retain bounded diagnostic receipt
+              if: always()
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+              with:
+                  name: attachment-diagnostic-${{ github.run_attempt }}
+                  path: ${{ runner.temp }}/attachment-diagnostic/
+                  if-no-files-found: warn
+                  retention-days: 1

@@ -70,33 +70,48 @@ const calendarInstant = (value: string): number | null => {
     return parsed.isValid() && Number.isFinite(instant) ? instant : null;
 };
 
+const dateFormats: Record<string, string> = {
+    local: 'l',
+    friendly: 'LL',
+    us: 'M/D/YYYY',
+    european: 'D/M/YYYY',
+    iso: 'YYYY-MM-DD',
+};
+const validCalendarDateFormat = (options: unknown): boolean =>
+    object(options) &&
+    object(options.dateFormat) &&
+    typeof options.dateFormat.name === 'string' &&
+    Object.hasOwn(dateFormats, options.dateFormat.name) &&
+    dateFormats[options.dateFormat.name] === options.dateFormat.format;
+
 const validCalendarField = (field: RuntimeAirtableField): boolean => {
+    if (field.config.type === 'formula') {
+        const options = field.config.options;
+        return (
+            field.isComputed === true &&
+            object(options) &&
+            options.isValid === true &&
+            object(options.result) &&
+            options.result.type === 'date' &&
+            validCalendarDateFormat(options.result.options)
+        );
+    }
     if (field.isComputed !== false || field.config.type !== 'dateTime')
         return false;
     const options = field.config.options;
     if (
         !object(options) ||
-        !object(options.dateFormat) ||
+        !validCalendarDateFormat(options) ||
         !object(options.timeFormat) ||
-        typeof options.dateFormat.name !== 'string' ||
         typeof options.timeFormat.name !== 'string' ||
         typeof options.timeZone !== 'string'
     )
         return false;
-    const dateFormats: Record<string, string> = {
-        local: 'l',
-        friendly: 'LL',
-        us: 'M/D/YYYY',
-        european: 'D/M/YYYY',
-        iso: 'YYYY-MM-DD',
-    };
     const timeFormats: Record<string, string> = {
         '12hour': 'h:mma',
         '24hour': 'HH:mm',
     };
     return (
-        Object.hasOwn(dateFormats, options.dateFormat.name) &&
-        dateFormats[options.dateFormat.name] === options.dateFormat.format &&
         Object.hasOwn(timeFormats, options.timeFormat.name) &&
         timeFormats[options.timeFormat.name] === options.timeFormat.format &&
         (options.timeZone === 'utc' ||

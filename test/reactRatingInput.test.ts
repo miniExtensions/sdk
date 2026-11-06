@@ -26,7 +26,8 @@ import { loadedForm, formSaveOptions } from './formsFixtures.js';
 async function fixture(
     t: TestContext,
     config: FieldConfig<'rating'> = {},
-    initial: number | null | undefined = undefined
+    initial: number | null | undefined = undefined,
+    maximum = 5
 ) {
     const window = new Window();
     for (const key of ['AbortController', 'AbortSignal'] as const)
@@ -68,7 +69,7 @@ async function fixture(
             isPrimaryField: false,
             config: {
                 type: 'rating',
-                options: { max: 5, icon: 'star', color: 'yellowBright' },
+                options: { max: maximum, icon: 'star', color: 'yellowBright' },
             },
         },
         miniExtConfig: config,
@@ -812,3 +813,187 @@ it('retains native absence until explicit intent and carries accepted required p
     assert.equal(f.binding.getSnapshot().value, 1);
     assert.equal(f.binding.getSnapshot().dirty, true);
 });
+
+it('selects an initial Rating with unmodified navigation while preserving native selected-value handling', async (t) => {
+    const f = await fixture(t);
+    const values: (number | null)[] = [];
+    const view = (value: number | null, max: number) =>
+        h(RatingInput, {
+            value,
+            max,
+            onChange: (next) => values.push(next),
+        });
+    for (const initial of [null, 0]) {
+        for (const max of [1, 5, 10]) {
+            for (const key of [
+                'Home',
+                'End',
+                'ArrowLeft',
+                'ArrowRight',
+                'ArrowUp',
+                'ArrowDown',
+            ]) {
+                values.length = 0;
+                await f.render(view(initial, max));
+                await act(async () => f.input().focus());
+                const event = new f.window.KeyboardEvent('keydown', {
+                    key,
+                    bubbles: true,
+                    cancelable: true,
+                });
+                await act(async () => f.input().dispatchEvent(event));
+                assert.deepEqual(
+                    values,
+                    [key === 'End' ? max : 1],
+                    `initial=${initial}, max=${max}, key=${key}`
+                );
+                assert.equal(event.defaultPrevented, true);
+                assert.equal(f.window.document.activeElement, f.input());
+                assert.equal(f.input().getAttribute('min'), '1');
+            }
+        }
+    }
+    values.length = 0;
+    await f.render(view(2, 5));
+    const event = new f.window.KeyboardEvent('keydown', {
+        key: 'ArrowRight',
+        bubbles: true,
+        cancelable: true,
+    });
+    await act(async () => f.input().dispatchEvent(event));
+    assert.deepEqual(values, []);
+    assert.equal(event.defaultPrevented, false);
+});
+
+for (const initial of [null, 0]) {
+    it(`selects the only allowed Rating from ${initial} through the real Form binding without an implicit Save`, async (t) => {
+        const f = await fixture(t, {}, initial, 1);
+        let submits = 0;
+        await f.render(
+            h(
+                'form',
+                {
+                    onSubmit: (event: import('react').FormEvent) => {
+                        event.preventDefault();
+                        submits++;
+                    },
+                },
+                h(RatingField, {
+                    binding: f.binding,
+                    iconInput: { renderIcon: icon },
+                })
+            )
+        );
+        assert.equal(f.binding.getSnapshot().value, initial);
+        assert.equal(f.binding.getSnapshot().dirty, false);
+        await act(async () =>
+            f.input().dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key: 'Home',
+                    bubbles: true,
+                    cancelable: true,
+                })
+            )
+        );
+        assert.equal(f.binding.getSnapshot().value, 1);
+        assert.equal(f.binding.getSnapshot().dirty, true);
+        assert.equal(submits, 0);
+    });
+}
+
+it('does not propose an initial Rating after cancellation, composition, policy refusal, modifiers or presentation retirement', async (t) => {
+    const f = await fixture(t);
+    const { flushSync } = await import('react-dom');
+    const values: (number | null)[] = [];
+    for (const mode of [
+        'cancel',
+        'disabled',
+        'compose',
+        'alt',
+        'control',
+        'meta',
+        'shift',
+        'replace',
+        'retire',
+    ]) {
+        await f.render(
+            h(RatingInput, {
+                value: null,
+                max: 1,
+                disabled: mode === 'disabled',
+                onChange: (next) => values.push(next),
+                inputProps: {
+                    onKeyDown: (event) => {
+                        if (mode === 'cancel') event.preventDefault();
+                        if (mode === 'replace')
+                            flushSync(() =>
+                                f.replace(
+                                    h(RatingInput, {
+                                        value: null,
+                                        max: 5,
+                                        onChange: (next) => values.push(next),
+                                    })
+                                )
+                            );
+                        if (mode === 'retire') flushSync(() => f.replace(null));
+                    },
+                },
+            })
+        );
+        const input = f.input();
+        const event = new f.window.KeyboardEvent('keydown', {
+            key: 'Home',
+            bubbles: true,
+            cancelable: true,
+            isComposing: mode === 'compose',
+            altKey: mode === 'alt',
+            ctrlKey: mode === 'control',
+            metaKey: mode === 'meta',
+            shiftKey: mode === 'shift',
+        });
+        await act(async () => input.dispatchEvent(event));
+        assert.deepEqual(values, [], mode);
+    }
+});
+
+for (const initial of [null, 0]) {
+    for (const policy of ['writable', 'visible'] as const) {
+        it(`refuses initial ${initial} selection after live ${policy} revocation`, async (t) => {
+            const f = await fixture(t, {}, initial, 1);
+            await f.render(
+                h(RatingField, {
+                    binding: f.binding,
+                    iconInput: { renderIcon: icon },
+                })
+            );
+            const input = f.input();
+            assert.equal(input.disabled, false);
+            assert.equal(f.binding.getSnapshot().value, initial);
+            assert.equal(f.binding.getSnapshot().dirty, false);
+            f.scope[policy] = false;
+            await act(async () =>
+                input.dispatchEvent(
+                    new f.window.KeyboardEvent('keydown', {
+                        key: 'Home',
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
+            );
+            assert.equal(f.binding.getSnapshot().value, initial);
+            assert.equal(f.binding.getSnapshot().dirty, false);
+            f.scope[policy] = true;
+            await act(async () =>
+                input.dispatchEvent(
+                    new f.window.KeyboardEvent('keydown', {
+                        key: 'Home',
+                        bubbles: true,
+                        cancelable: true,
+                    })
+                )
+            );
+            assert.equal(f.binding.getSnapshot().value, 1);
+            assert.equal(f.binding.getSnapshot().dirty, true);
+        });
+    }
+}

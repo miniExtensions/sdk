@@ -3912,6 +3912,10 @@ explicit maximum repair. Its controlled `value` is a native number or `null`;
 The caller retains record identity, write policy, metadata, styles and persistence.
 A loaded value above `max` stays unchanged until an explicit repair.
 
+For an empty value (`null` or native `0`), an unmodified Home or Arrow key proposes the first rating
+(`1`); End proposes `max`. The caller accepts the value through its controlled
+`value` prop, after which ordinary native range navigation applies.
+
 The input ref is the actual `HTMLInputElement` (or `null` in grid mode). Use
 `inputProps` for native form/label/ARIA associations and focus callbacks. `max`,
 range type, controlled value and disabled policy are owned by the control.

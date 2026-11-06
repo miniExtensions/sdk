@@ -134,9 +134,36 @@ export const RatingInput = forwardRef<HTMLInputElement, RatingInputProps>(
                           if (
                               !current() ||
                               disabled ||
-                              props.value === null ||
                               event.defaultPrevented ||
-                              event.nativeEvent.isComposing ||
+                              event.nativeEvent.isComposing
+                          )
+                              return;
+                          // Native ranges clamp blank zero to min=1, so the
+                          // first navigation key may produce no change event.
+                          if (
+                              (props.value == null || props.value === 0) &&
+                              Number.isInteger(props.max) &&
+                              props.max >= 1 &&
+                              !event.altKey &&
+                              !event.ctrlKey &&
+                              !event.metaKey &&
+                              !event.shiftKey &&
+                              [
+                                  'Home',
+                                  'End',
+                                  'ArrowLeft',
+                                  'ArrowRight',
+                                  'ArrowUp',
+                                  'ArrowDown',
+                              ].includes(event.key)
+                          ) {
+                              event.preventDefault();
+                              setFocused(true);
+                              commit(event.key === 'End' ? props.max : 1);
+                              return;
+                          }
+                          if (
+                              props.value === null ||
                               (event.key !== 'Backspace' &&
                                   event.key !== 'Delete')
                           )

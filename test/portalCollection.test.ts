@@ -1228,6 +1228,129 @@ describe('optional Portal collections', () => {
         await read;
     });
 
+    it('keeps facade single-flight while an accepted snapshot is observable before the first promise settles', async () => {
+        const pending = deferredPortal<ListPortalLinkedRecordsResult>();
+        const observed = deferredPortal<void>();
+        let calls = 0;
+        const s = setup(async () =>
+            ++calls === 1 ? pending.promise : rows(['record_second'])
+        );
+        const first = s.collection.readFirst(readOptions);
+        let settled = false;
+        void first.then(
+            () => {
+                settled = true;
+            },
+            () => {
+                settled = true;
+            }
+        );
+        let queued: Promise<PortalReadOutcome> | undefined;
+        let observedBeforeSettlement = false;
+        let observedRecordIds: string[] | undefined;
+        let childError: unknown;
+        let turns = 0;
+        const observeAcceptedSnapshot = () => {
+            const snapshot = s.collection.getSnapshot();
+            if (snapshot === null) {
+                if (++turns >= 100) {
+                    observed.reject(
+                        new Error(
+                            'Fixture did not observe an accepted snapshot'
+                        )
+                    );
+                    return;
+                }
+                queueMicrotask(observeAcceptedSnapshot);
+                return;
+            }
+            observedBeforeSettlement = !settled;
+            observedRecordIds = snapshot.recordIds;
+            try {
+                s.collection.childFormRequest(editRequest('record_first'));
+            } catch (error) {
+                childError = error;
+            }
+            queued = s.collection.readFirst(readOptions);
+            void queued.catch(() => undefined);
+            observed.resolve(undefined);
+        };
+        pending.resolve(rows(['record_first']));
+        queueMicrotask(observeAcceptedSnapshot);
+        await observed.promise;
+        assert.equal(observedBeforeSettlement, true);
+        assert.deepEqual(observedRecordIds, ['record_first']);
+        assert.ok(childError instanceof PortalCollectionError);
+        assert.equal(childError.code, 'read-in-progress');
+        await assert.rejects(
+            queued!,
+            (error) =>
+                error instanceof PortalCollectionError &&
+                error.code === 'read-in-progress'
+        );
+        assert.deepEqual(loaded(await first).recordIds, ['record_first']);
+        assert.equal(s.calls.length, 1);
+        assert.equal(
+            s.collection
+                .childFormRequest(editRequest('record_first'))
+                .isCurrent(),
+            true
+        );
+        assert.deepEqual(
+            loaded(await s.collection.readFirst(readOptions)).recordIds,
+            ['record_second']
+        );
+        assert.equal(s.calls.length, 2);
+    });
+
+    it('preserves the committed outcome when queued owner retirement runs after acceptance and transport detachment', async () => {
+        const pending = deferredPortal<ListPortalLinkedRecordsResult>();
+        const s = setup(async () => pending.promise);
+        const readSession = s.client.getSession;
+        let armed = false;
+        let queued = false;
+        let signalWasLiveAtRetirement = false;
+        s.client.getSession = () => {
+            if (armed && !queued) {
+                queued = true;
+                queueMicrotask(() => {
+                    signalWasLiveAtRetirement =
+                        s.calls[0].options?.signal?.aborted === false;
+                    s.scope.revision++;
+                    s.collection.destroy();
+                });
+            }
+            return readSession();
+        };
+        const read = s.collection.readFirst(readOptions);
+        const raw = rows(['record_first']);
+        let projectionReads = 0;
+        Object.defineProperty(raw, 'customViewDetailFields', {
+            enumerable: true,
+            get() {
+                projectionReads++;
+                armed = true;
+                return null;
+            },
+        });
+        pending.resolve(raw);
+        assert.deepEqual(loaded(await read).recordIds, ['record_first']);
+        assert.equal(queued, true);
+        assert.equal(projectionReads, 1);
+        assert.equal(signalWasLiveAtRetirement, true);
+        assert.equal(s.calls[0].options?.signal?.aborted, false);
+        assert.equal(s.collection.isCurrent(), false);
+        assert.equal(s.collection.getSnapshot(), null);
+        assert.throws(
+            () => s.collection.childFormRequest(editRequest('record_first')),
+            (error) =>
+                error instanceof PortalCollectionError &&
+                error.code === 'disposed'
+        );
+        assert.equal(s.calls.length, 1);
+        assert.equal(s.fixture.mutations, 0);
+    });
+
     it('discards a dispatched cancelled first response even when transport ignores abort', async () => {
         const pending = deferredPortal<ListPortalLinkedRecordsResult>();
         const s = setup(async () => pending.promise);
@@ -1285,6 +1408,54 @@ describe('optional Portal collections', () => {
             loaded(await s.collection.readFirst(readOptions)).recordIds,
             ['fresh_record']
         );
+    });
+
+    it('keeps a cancelled abort-ignoring read single-flight until it settles', async () => {
+        const pending = deferredPortal<ListPortalLinkedRecordsResult>();
+        let calls = 0;
+        const s = setup(async () =>
+            ++calls === 1 ? pending.promise : rows(['fresh_record'])
+        );
+        const controller = new AbortController();
+        const reason = new Error('Cancelled fixture');
+        const read = s.collection.readFirst({
+            ...readOptions,
+            signal: controller.signal,
+        });
+        controller.abort(reason);
+        await assert.rejects(
+            s.collection.readFirst(readOptions),
+            (error) =>
+                error instanceof PortalCollectionError &&
+                error.code === 'read-in-progress'
+        );
+        assert.equal(s.calls.length, 1);
+        pending.resolve(rows(['late_record']));
+        await assert.rejects(read, (error) => error === reason);
+        assert.equal(s.collection.getSnapshot(), null);
+        assert.deepEqual(
+            loaded(await s.collection.readFirst(readOptions)).recordIds,
+            ['fresh_record']
+        );
+        assert.equal(s.calls.length, 2);
+        assert.equal(s.fixture.mutations, 0);
+    });
+
+    it('surfaces the retired collection error rather than a late transport failure after owner ABA', async () => {
+        const pending = deferredPortal<ListPortalLinkedRecordsResult>();
+        const s = setup(async () => pending.promise);
+        const read = s.collection.readFirst(readOptions);
+        s.scope.revision += 2;
+        pending.reject(new Error('Synthetic old visitor transport failure'));
+        await assert.rejects(
+            read,
+            (error) =>
+                error instanceof PortalCollectionError &&
+                error.code === 'scope-changed'
+        );
+        assert.equal(s.collection.getSnapshot(), null);
+        assert.equal(s.calls.length, 1);
+        assert.equal(s.fixture.mutations, 0);
     });
 
     for (const transition of ['owner', 'session'] as const) {

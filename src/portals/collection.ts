@@ -1,6 +1,7 @@
 import type {
     LinkedRecordPrefill,
     ListPortalLinkedRecordsInput,
+    ListPortalLinkedRecordsResult,
     RuntimeSession,
 } from '../runtime/types.js';
 import {
@@ -21,28 +22,16 @@ import {
 import type {
     PortalChildFormRequest,
     PortalCollection,
-    PortalCollectionErrorCode,
     PortalCollectionOptions,
     PortalCollectionSnapshot,
     PortalReadOptions,
     PortalReadOutcome,
 } from './types.js';
 
-export class PortalCollectionError extends Error {
-    readonly code: PortalCollectionErrorCode;
-
-    constructor(code: PortalCollectionErrorCode, message: string) {
-        super(message);
-        this.name = 'PortalCollectionError';
-        this.code = code;
-    }
-}
-
-type Attempt = {
-    controller: AbortController;
-    generation: number;
-    dispatched: boolean;
-};
+import { PortalCollectionError } from './error.js';
+import { createPortalReadCoordinator } from './readCoordinator.js';
+import type { PortalReadCoordinator } from './readCoordinator.js';
+export { PortalCollectionError } from './error.js';
 
 /** One loaded Portal field and immutable set of criteria; rendering belongs to the app. */
 export const createPortalCollection = (
@@ -75,7 +64,11 @@ export const createPortalCollection = (
         );
     let phase: 'active' | 'stale' | 'disposed' = 'active';
     let generation = 0;
-    let active: Attempt | null = null;
+    let coordinator: PortalReadCoordinator<
+        ListPortalLinkedRecordsInput,
+        ListPortalLinkedRecordsResult
+    > | null = null;
+    let pendingRead = false;
     let snapshot: PortalCollectionSnapshot | null = null;
     let cleanupRequired = false;
     let recoveryRequired = false;
@@ -92,16 +85,14 @@ export const createPortalCollection = (
                   'The Portal owner or session changed. Create a fresh collection.'
               );
     const retire = (next: 'stale' | 'disposed') => {
-        const previous = active;
         generation += 1;
-        active = null;
         phase = next;
         snapshot = null;
         cleanupRequired = false;
         recoveryRequired = true;
         session = null;
         // Detach and retire before application-owned abort callbacks can reenter.
-        previous?.controller.abort(lifecycleError());
+        coordinator?.destroy(lifecycleError());
     };
     const isCurrent = (): boolean => {
         if (phase !== 'active' || session === null || checkingFreshness)
@@ -147,7 +138,7 @@ export const createPortalCollection = (
     };
     const requireAvailable = () => {
         if (phase !== 'active') throw lifecycleError();
-        if (active !== null)
+        if (pendingRead || coordinator?.hasPendingRead())
             throw new PortalCollectionError(
                 'read-in-progress',
                 'A Portal read is already in progress.'
@@ -159,17 +150,23 @@ export const createPortalCollection = (
                 'Accept the returned criteria cleanup and create a fresh collection.'
             );
     };
-    const requireAttempt = (attempt: Attempt) => {
-        attempt.controller.signal.throwIfAborted();
-        requireCurrent(attempt.generation);
-        if (active !== attempt) throw lifecycleError();
-    };
     const freshReadError = () =>
         new PortalCollectionError(
             'read-required',
             'A successful fresh first read is required.'
         );
 
+    coordinator = createPortalReadCoordinator({
+        load: (input, { signal }) =>
+            client.portals.listLinkedRecords(input, {
+                signal,
+                session: { ...session! },
+            }),
+        getScope: () => owner,
+        isContextCurrent: isCurrent,
+        concurrency: 'reject',
+    });
+    const reads = coordinator;
     const read = async (
         more: boolean,
         supplied: PortalReadOptions
@@ -177,101 +174,99 @@ export const createPortalCollection = (
         const readOptions = captureReadOptions(supplied);
         requireAvailable();
         readOptions.signal?.throwIfAborted();
-        const attempt: Attempt = {
-            controller: new AbortController(),
-            generation,
-            dispatched: false,
+        if (more && (recoveryRequired || snapshot === null))
+            throw freshReadError();
+        if (more && snapshot!.airtableOffset === null) return null;
+        const previous = more ? snapshot : null;
+        const input: ListPortalLinkedRecordsInput = {
+            ...structuredClone(criteria),
+            extensionAccessToken: metadata.token,
+            portalFieldId: metadata.portalFieldId,
+            alreadyLoadedRecordIds:
+                previous === null ? [] : [...previous.recordIds],
+            airtableOffset: previous === null ? null : previous.airtableOffset,
+            pagesToFetch: readOptions.pagesToFetch,
+            refreshLoggedInPortalRecord:
+                readOptions.refreshLoggedInPortalRecord,
         };
-        active = attempt;
-        const externalSignal = readOptions.signal;
-        const forwardAbort = () => {
-            if (active !== attempt) return;
-            if (attempt.dispatched) {
-                generation += 1;
-                recoveryRequired = true;
-            }
-            // Keep single-flight ownership until an abort-ignoring operation settles.
-            attempt.controller.abort(externalSignal?.reason);
-        };
-        externalSignal?.addEventListener('abort', forwardAbort, { once: true });
+        let dispatched = false;
+        let expected = generation;
+        let outcome: PortalReadOutcome | undefined;
+        // The facade has an extra await after transport acceptance. Keep its
+        // single-flight lease until this outer read returns, as before SDK reuse.
+        pendingRead = true;
         try {
-            if (externalSignal?.aborted) forwardAbort();
-            requireAttempt(attempt);
-            if (more && (recoveryRequired || snapshot === null))
-                throw freshReadError();
-            if (more && snapshot!.airtableOffset === null) return null;
-            const previous = more ? snapshot : null;
-            const input: ListPortalLinkedRecordsInput = {
-                ...structuredClone(criteria),
-                extensionAccessToken: metadata.token,
-                portalFieldId: metadata.portalFieldId,
-                alreadyLoadedRecordIds:
-                    previous === null ? [] : [...previous.recordIds],
-                airtableOffset:
-                    previous === null ? null : previous.airtableOffset,
-                pagesToFetch: readOptions.pagesToFetch,
-                refreshLoggedInPortalRecord:
-                    readOptions.refreshLoggedInPortalRecord,
-            };
-            requireAttempt(attempt);
-            generation += 1;
-            attempt.generation = generation;
-            recoveryRequired = true;
-            if (!more) snapshot = null;
-            attempt.dispatched = true;
-            const raw = await client.portals.listLinkedRecords(input, {
-                signal: attempt.controller.signal,
-                session: { ...session! },
+            requireCurrent(expected);
+            const receipt = await reads.read(input, {
+                signal: readOptions.signal,
+                onDispatch: () => {
+                    requireCurrent(expected);
+                    generation++;
+                    expected = generation;
+                    recoveryRequired = true;
+                    if (!more) snapshot = null;
+                    dispatched = true;
+                },
+                onCancelledAfterDispatch: () => {
+                    generation++;
+                    recoveryRequired = true;
+                },
+                onAccepted: (accepted) => {
+                    const requireReceipt = () => {
+                        requireCurrent(expected);
+                        if (!accepted.isCurrent()) throw lifecycleError();
+                    };
+                    requireReceipt();
+                    const page = capturePage(accepted.raw);
+                    requireReceipt();
+                    if (
+                        page.endUserSortCleanup !== undefined ||
+                        page.endUserFilterCleanup !== undefined
+                    ) {
+                        snapshot = null;
+                        cleanupRequired = true;
+                        recoveryRequired = true;
+                        outcome = {
+                            type: 'criteria-cleanup-required',
+                            raw: structuredClone(page),
+                        };
+                    } else {
+                        const combined = mergePage(previous, page);
+                        const next: PortalCollectionSnapshot = {
+                            ...combined,
+                            criteriaKey,
+                            detailFields: visibleDetails(metadata, combined),
+                            layoutSettings: structuredClone(
+                                metadata.layoutSettings
+                            ),
+                        };
+                        requireReceipt();
+                        snapshot = structuredClone(next);
+                        recoveryRequired = false;
+                        outcome = {
+                            type: 'loaded',
+                            raw: structuredClone(page),
+                            snapshot: structuredClone(next),
+                        };
+                    }
+                    requireReceipt();
+                },
             });
-            requireAttempt(attempt);
-            const page = capturePage(raw);
-            requireAttempt(attempt);
-            if (
-                page.endUserSortCleanup !== undefined ||
-                page.endUserFilterCleanup !== undefined
-            ) {
-                snapshot = null;
-                cleanupRequired = true;
-                recoveryRequired = true;
-                const outcome: PortalReadOutcome = {
-                    type: 'criteria-cleanup-required',
-                    raw: structuredClone(page),
-                };
-                requireAttempt(attempt);
-                return outcome;
-            }
-            const combined = mergePage(previous, page);
-            const next: PortalCollectionSnapshot = {
-                ...combined,
-                criteriaKey,
-                detailFields: visibleDetails(metadata, combined),
-                layoutSettings: structuredClone(metadata.layoutSettings),
-            };
-            requireAttempt(attempt);
-            snapshot = structuredClone(next);
-            recoveryRequired = false;
-            const outcome: PortalReadOutcome = {
-                type: 'loaded',
-                raw: structuredClone(page),
-                snapshot: structuredClone(next),
-            };
-            requireAttempt(attempt);
+            if (receipt.type === 'retired' || outcome === undefined)
+                throw lifecycleError();
+            // Acceptance committed synchronously while the transport lease was
+            // held. A queued context change after detachment retires this owner,
+            // but must not turn that already-settled outcome into a new failure.
+            // The application still checks owner freshness before publication.
             return outcome;
         } catch (error) {
-            if (attempt.controller.signal.aborted)
-                throw attempt.controller.signal.reason ?? error;
-            if (
-                phase !== 'active' ||
-                active !== attempt ||
-                generation !== attempt.generation
-            )
-                throw lifecycleError();
-            requireAttempt(attempt);
-            if (attempt.dispatched) recoveryRequired = true;
+            if (readOptions.signal?.aborted)
+                throw readOptions.signal.reason ?? error;
+            requireCurrent(expected);
+            if (dispatched) recoveryRequired = true;
             throw error;
         } finally {
-            externalSignal?.removeEventListener('abort', forwardAbort);
-            if (active === attempt) active = null;
+            pendingRead = false;
         }
     };
 
@@ -347,7 +342,8 @@ export const createPortalCollection = (
                 if (
                     !isCurrent() ||
                     generation !== observed ||
-                    active !== null ||
+                    pendingRead ||
+                    reads.hasPendingRead() ||
                     cleanupRequired ||
                     recoveryRequired
                 )

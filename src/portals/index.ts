@@ -1,4 +1,11 @@
 export { createPortalCollection, PortalCollectionError } from './collection.js';
+export { createPortalReadCoordinator } from './readCoordinator.js';
+export type {
+    PortalReadCoordinator,
+    PortalReadCoordinatorOptions,
+    PortalCoordinatedReadOptions,
+    PortalReadReceipt,
+} from './readCoordinator.js';
 export { getPortalLinkedRecordFieldConfig } from './helpers.js';
 export { evaluatePortalViewAvailability } from './viewAvailability.js';
 export type {

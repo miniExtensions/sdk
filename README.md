@@ -512,8 +512,9 @@ customer application.
 This preview does not promise complete Form/Portal UI parity. The starter's
 prepared Review supports one-page and manual multipage Forms, with bounded
 scalar/select/linked/attachment answers and a strict supported date/dateTime
-contract. Computed fields still block final Review. Linked-child coordination
-requires an explicit Review adapter; the browser starter does not supply one.
+contract. Computed fields still block final Review. The standalone direct-URL
+Form browser starter supplies a [configured linked-child Review adapter](docs/forms.md#configured-linked-child-review)
+for supported child Create and Edit on one-page and manual multipage Forms.
 Rich condition drivers, automatic/compute
 workflows and other configurations listed in the
 [compatibility checklist](docs/ui.md#review-configuration-compatibility-checklist)
@@ -595,9 +596,16 @@ The packaged browser starter supplies manual multipage navigation from enabled
 frontend section headers, with Back/Next, current-page validation, conditional
 page skipping and final all-page validation. Navigation performs no Save.
 [Linked-child Create and Edit](docs/forms.md#configured-linked-child-create-and-edit)
-also support one-page and manual multipage Forms. Custom applications may supply
-the existing page-owner Review adapter to the linked-child owner; without it,
-including in the browser starter, configured child Review remains refused.
+also support one-page and manual multipage Forms. The standalone direct-URL Form
+starter supplies [configured child Review](docs/forms.md#configured-linked-child-review)
+on the final visible page. **Edit** or Escape returns to the current child
+answers without Save; a fresh explicit Review is required before confirmation.
+One deliberate **Confirm** validates all pages and saves once through the
+existing child owner. Saving the parent remains a separate action. Custom
+applications must supply the existing page-owner Review adapter to the
+linked-child owner; configured child Review without an adapter remains refused.
+Computed-field Review, automatic workflows, Compute and CAPTCHA remain
+unsupported. Portal-parent and nested child actions remain outside this adapter.
 
 The packaged browser starter also supplies a
 [bounded Review/Edit/Confirm recipe](examples/browser/README.md#form-workflow)

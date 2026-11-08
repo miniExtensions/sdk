@@ -410,16 +410,25 @@ or full. Mounting the controls never reads or saves a record.
 
 The child pane borrows the SDK owner's bindings and page owner. It retains
 mounted inputs while typing and supports one-page and manual multipage child
-Forms through **Child Back**, **Child Next**, and **Save child**. Save validates
-and submits the child once through the existing owner, then reconciles the
-current parent native draft. Save the parent separately to persist its linked
-selection. **Cancel child** closes only that intent. Child validation keeps
+Forms through **Child Back** and **Child Next**. Without configured Review,
+**Save child** validates and submits the child once through the existing owner,
+then reconciles the current parent native draft. Save the parent separately to
+persist its linked selection. **Cancel child** closes only that intent. Child validation keeps
 the current inputs; unknown and saved-but-not-reconciled outcomes remain
 blocked with explicit inspection guidance, including after Cancel. Parent
 Save, Discard, Delete and page navigation wait for the active child.
 
+For supported [configured child Review](../../docs/forms.md#configured-linked-child-review),
+**Review child** opens a plain-text dialog on the final visible page of a
+one-page or manual multipage child. **Edit** or Escape returns to the current
+child answers without Save; a fresh explicit Review opens the dialog again.
+One deliberate **Confirm** validates all pages and delegates one Save through
+the existing child owner, retaining its recovery and parent reconciliation path.
+Saving the parent remains a separate action.
+
 Portal-parent and nested child actions are outside this adapter. The SDK still
-refuses unsupported child Review, Compute, captcha and linked-filter settings.
+refuses computed-field Review, automatic workflows, Compute, captcha and
+unsupported linked-filter settings.
 Child linked fields use their existing native controls without nested child
 actions or finder UI. Attachments use the conservative readonly label
 presentation; this pane adds no upload action. No child action automatically

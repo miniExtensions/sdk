@@ -882,8 +882,30 @@ for (const [input, expected] of [
 for (const [input, expected] of [
     ['', ''], ['**Hello** [world](https://example.com)', 'Hello [world](https://example.com)'],
     ['**Hello** [world](https://example.com)', 'Hello [world](https://example.com)'],
+    ['\nFirst\n\n\nSecond\n \nThird\nFourth\nFifth\nSixth\n', 'First\n\nSecond\n\nThird\n\nFourth\n\nFifth\n\nSixth'],
+    ['Before\n~~~\n**literal**\n<code>literal</code>\n~~~\nAfter\nLast\nTail', 'Before\n\n**literal**\n\n<code>literal</code>\n\nAfter\n\nLast\n\nTail'],
+    ['# Title\n**bold** and _italic_\n[link](https://example.com)\n![image](https://example.com/image.png)\n<b>HTML</b>\n~~Last~~', 'Title\n\nbold and italic\n\n[link](https://example.com)\n\n![image](https://example.com/image.png)\n\nHTML\n\nLast'],
 ]) {
-    if (removeMarkdown(input) !== expected) throw new Error('Markdown display formatting failed');
+    for (let call = 0; call < 2; call++) {
+        if (removeMarkdown(input) !== expected) throw new Error('Markdown display formatting failed');
+    }
+}
+for (const count of [1, 2, 3, 4, 5, 6, 7, 10, 11]) {
+    const paragraphs = Array.from({length: count}, (_, i) => 'Paragraph '+(i+1));
+    const input = paragraphs.join('\n');
+    const expected = paragraphs.join('\n\n');
+    const richTextArgs = {
+        airtableFieldConfig: {type: AirtableFieldType.RICH_TEXT},
+        value: input, source: {type:'airtableMock',linkedTableStates:{}}, fieldName: 'Markdown display',
+    };
+    for (let call = 0; call < 2; call++) {
+        if (removeMarkdown(input) !== expected) throw new Error('Installed Markdown lost line '+count);
+        if (convertAirtableValueToPrimitive(richTextArgs) !== expected) throw new Error('Installed rich-text conversion lost line '+count);
+    }
+    const formatted = '\n  **'+input+'**\r\n\n';
+    if (convertAirtableValueToPrimitive({...richTextArgs,value:formatted,doNotRemoveMarkdownFormatting:true}) !== formatted) {
+        throw new Error('Installed rich-text formatting passthrough changed');
+    }
 }
 for (const [format, expected] of [
     ['h:mm', '-1:01'], ['h:mm:ss', '-1:01:20'],
@@ -929,7 +951,7 @@ const originCheckTimer = setTimeout(() => {console.error('Installed origin check
         'Installed runtime origin defaults: default/override v1+tRPC and no-fallback checks passed on ' +
         process.version;
     const consumer = `
-import { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
+import { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType, convertAirtableValueToPrimitive, formatMultiSelectValue, removeMarkdown, getFormattedDuration } from '@miniextensions/sdk/formulas';
 import { AirtableFieldType as PublicFieldType } from '@miniextensions/sdk/field-types';
 if (PublicFieldType !== AirtableFieldType) throw new Error('ESM field enum identity changed');
 import { createMiniExtensionsClient, DEFAULT_API_ORIGIN, generateLoginCredentialKey, withExtensionPassword, withLoginToken } from '@miniextensions/sdk';
@@ -976,7 +998,7 @@ export const display: string = formatMultiSelectValue(removeMarkdown('**Alpha**'
 const { AirtableFieldType } = require('@miniextensions/sdk/field-types');
 const loaded = Object.keys(require.cache).filter(path => !before.has(path));
 if (!loaded.every(path => path.endsWith('/dist/cjs/field-types.js') || path.endsWith('/dist/cjs/formulas/types.js'))) throw new Error('Field kinds CommonJS entry loaded the formula runtime');
-const { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType: FormulaFieldType, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
+const { FormulaRunner, Lexer, Parser, extractIdentifiersFromExpr, AirtableFieldType: FormulaFieldType, convertAirtableValueToPrimitive, formatMultiSelectValue, removeMarkdown, getFormattedDuration } = require('@miniextensions/sdk/formulas');
 if (AirtableFieldType !== FormulaFieldType) throw new Error('CommonJS field enum identity changed');
 const { createMiniExtensionsClient, DEFAULT_API_ORIGIN, generateLoginCredentialKey } = require('@miniextensions/sdk');
 if (generateLoginCredentialKey({extensionId:'extOne',tableId:'tblOne',loginFieldNames:['\\uffff']}) !== '77%2B%2FdGJsT25lZXh0T25l') throw new Error('CommonJS credential key compatibility changed');

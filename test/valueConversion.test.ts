@@ -160,6 +160,37 @@ describe('field value conversion', () => {
         assert.throws(() => primitive(config, 42), Error);
     });
 
+    for (const count of [6, 11]) {
+        it(`preserves all ${count} rich-text paragraphs in readable values`, () => {
+            const config: FieldConfig = { type: AirtableFieldType.RICH_TEXT };
+            const paragraphs = Array.from(
+                { length: count },
+                (_, i) => `Paragraph ${i + 1}`
+            );
+            const input = paragraphs
+                .map((line) => `**${line}**`)
+                .join('\n\n\n');
+            const expected = paragraphs.join('\n\n');
+            assert.equal(primitive(config, input), expected);
+            assert.equal(readable(config, input), expected);
+            assert.equal(primitive(config, input), expected);
+        });
+    }
+
+    it('preserves exact multiline rich-text formatting when requested', () => {
+        const input =
+            '\n  # Title\r\n\n**bold**\n\nthird\nfourth\nfifth\nsixth  \n';
+        const args = {
+            airtableFieldConfig: { type: AirtableFieldType.RICH_TEXT },
+            value: input,
+            source: emptySource,
+            fieldName: 'Example field',
+            doNotRemoveMarkdownFormatting: true,
+        } as const;
+        assert.equal(convertAirtableValueToPrimitive(args), input);
+        assert.equal(convertAirtableValueToPrimitive(args), input);
+    });
+
     it('converts dates in UTC and preserves absolute datetime offsets', () => {
         assert.deepEqual(
             primitive(dateField.config, '2040-06-15'),

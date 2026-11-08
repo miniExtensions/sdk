@@ -100,13 +100,9 @@ export const removeMarkdown = (markdown: string): string => {
     }
 
     // Join processed lines with double newlines for consistency
-    const MAX_NEWLINES = 10; // Safeguard against excessive newlines
     const res = processedLines
         .join('\n\n')
         .replace(/\n{3,}/g, '\n\n') // Limit consecutive newlines
-        .split('\n')
-        .slice(0, MAX_NEWLINES)
-        .join('\n')
         .trim();
 
     cache.set(markdown, res);

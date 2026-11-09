@@ -17,6 +17,9 @@ importers:
       email-validator:
         specifier: 2.0.4
         version: 2.0.4
+      linkifyjs:
+        specifier: 3.0.5
+        version: 3.0.5
       moment:
         specifier: 2.31.0
         version: 2.31.0
@@ -26,6 +29,9 @@ importers:
       moment-timezone:
         specifier: 0.5.45
         version: 0.5.45
+      ua-parser-js:
+        specifier: 1.0.39
+        version: 1.0.39
     devDependencies:
       '@types/moment-duration-format':
         specifier: 2.2.6
@@ -39,6 +45,9 @@ importers:
       '@types/react-dom':
         specifier: 18.3.1
         version: 18.3.1
+      '@types/ua-parser-js':
+        specifier: 0.7.39
+        version: 0.7.39
       c8:
         specifier: 11.0.0
         version: 11.0.0
@@ -269,6 +278,9 @@ packages:
   '@types/react@18.3.12':
     resolution: {integrity: sha512-D2wOSq/d6Agt28q7rSI3jhU7G6aiuzljDGZ2hTZHIkrTLUI+AF3WMeKkEZ9nN2fkBAlcktT6vcZjDFiIhMYEQw==}
 
+  '@types/ua-parser-js@0.7.39':
+    resolution: {integrity: sha512-P/oDfpofrdtF5xw433SPALpdSchtJmY7nsJItf8h3KXqOslkbySh8zq4dSWXH2oTjRvJ5PczVEoCZPow6GicLg==}
+
   '@types/whatwg-mimetype@3.0.2':
     resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
 
@@ -383,6 +395,9 @@ packages:
 
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
+
+  linkifyjs@3.0.5:
+    resolution: {integrity: sha512-1Y9XQH65eQKA9p2xtk+zxvnTeQBG7rdAXSkUG97DmuI/Xhji9uaUzaWxRj6rf9YC0v8KKHkxav7tnLX82Sz5Fg==}
 
   locate-path@6.0.0:
     resolution: {integrity: sha512-iPZK6eYjbxRu3uB4/WZ3EsEIMJFMqAoopl3R+zuq0UjcAm/MO6KCweDgPfP3elTztoKP3KtnVHxTn2NHBSDVUw==}
@@ -504,6 +519,10 @@ packages:
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
+    hasBin: true
+
+  ua-parser-js@1.0.39:
+    resolution: {integrity: sha512-k24RCVWlEcjkdOxYmVJgeD/0a1TiSpqLg+ZalVGV9lsnr4yqu0w7tX/x2xX6G4zpkgQnRf89lxuZ1wsbjXM8lw==}
     hasBin: true
 
   undici-types@6.21.0:
@@ -666,6 +685,8 @@ snapshots:
       '@types/prop-types': 15.7.15
       csstype: 3.2.3
 
+  '@types/ua-parser-js@0.7.39': {}
+
   '@types/whatwg-mimetype@3.0.2': {}
 
   ansi-regex@5.0.1: {}
@@ -798,6 +819,8 @@ snapshots:
 
   js-tokens@4.0.0: {}
 
+  linkifyjs@3.0.5: {}
+
   locate-path@6.0.0:
     dependencies:
       p-locate: 5.0.0
@@ -898,6 +921,8 @@ snapshots:
       minimatch: 10.2.6
 
   typescript@5.9.3: {}
+
+  ua-parser-js@1.0.39: {}
 
   undici-types@6.21.0: {}
 

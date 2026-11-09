@@ -128,6 +128,7 @@ for (const format of ['esm', 'cjs']) {
         'checkbox',
         'text',
         'number',
+        'localized-numeric',
         'date',
         'datetime',
         'duration',

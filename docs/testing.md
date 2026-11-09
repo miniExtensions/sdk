@@ -598,3 +598,37 @@ All storage and locks are synthetic, in-memory adapters. Throwing storage cases
 fail before mutation; they do not establish the outcome of a host that mutates
 and then throws. These checks do not certify real browser Web Locks, cross-tab
 coordination, hosted persistence, restoration authority or Save behavior.
+
+## Complete localized numeric presentation
+
+`test/reactCompleteLocalizedNumeric.test.ts` mounts the actual complete field
+with a controlled public renderer contract. Its finite matrix covers the three
+physical kinds, four separators, grouping and precision0/2. Distinguishing cases
+cover native canonical values, partial drafts, negative-comma and nonfinite
+refusal, focused echoes/caret, deferred no-op blur/Enter/unmount, owner/config
+ABA, mobile Clear, read-only output, literal symbols and SSR. Public callback
+and DOM observations do not establish real Form ownership or backend Save.
+`test/localizedNumericInput.test.ts` covers the portable adapter;
+`test/reactLocalizedNumericInputAdapter.test.ts` covers its committed hook and
+current-writer/owner transitions. Existing raw numeric suites remain enabled.
+
+`scripts/complete-localized-numeric-consumer-checks.mjs` is registered in normal
+package checks. It installs the actual archive with React18.3.1 and19.2.0 in a
+temporary consumer, uses fresh processes for each version, and checks public
+ESM/CommonJS components, strict positive/negative declarations, stylesheet
+resolution, SSR/hydration and canonical callbacks. No private registry import,
+fabricated Form binding or native renderer injection is used.
+
+Deferred Percent retains the native blur/overlay presentation boundary; overlay
+restoration after deferred blur is not established by the immediate-mode proof.
+Standalone component and package checks are separate from actual monorepo
+Form/Redux, inline-owner, live backend and independent browser qualification.
+
+The ordinary `pnpm check:browser` also runs
+`scripts/browser-complete-localized-numeric-checks.mjs` on the installed package.
+Its isolated synthetic host checks trusted selection replacement, locale focus
+and canonical echoes, fraction/progress units, deferred Enter and owner
+replacement, literal Currency symbols, disabled/empty display and mobile Clear.
+The receipt records archive bundle/CSS hashes, public callback counts, DOM and
+accessibility observations, screenshots, network errors and owned cleanup.
+Keyboard selection replacement is not clipboard-paste or native Form evidence.

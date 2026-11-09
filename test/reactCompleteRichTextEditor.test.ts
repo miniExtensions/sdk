@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
+import type { Window } from 'happy-dom';
 import { act, createElement as h, createRef } from 'react';
 import {
     CompleteRichTextEditor,
@@ -679,7 +680,8 @@ it('refuses a captured paste handler after its document owner retires', async (t
         );
     await render('first');
     const old = (await f.editor(ref)).view;
-    const event = new f.window.Event('paste', { cancelable: true });
+    const browserWindow: Window = f.window;
+    const event = new browserWindow.Event('paste', { cancelable: true });
     Object.defineProperty(event, 'clipboardData', {
         value: {
             types: ['text/plain'],

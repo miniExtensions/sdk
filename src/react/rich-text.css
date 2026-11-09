@@ -16,7 +16,7 @@
     border-color: var(--me-rich-text-accent, #6366f1);
     box-shadow: 0 0 0 1px var(--me-rich-text-accent, #6366f1);
 }
-.me-rich-text .heading-actions {
+.me-rich-text .me-rich-text-editor .heading-actions {
     display: none;
 }
 .me-rich-text h1 {

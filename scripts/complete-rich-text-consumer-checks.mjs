@@ -195,6 +195,88 @@ async function exerciseEngine({
         );
         const finalView = ref.current.view;
 
+        // A real React image NodeView exercises the packed portal owner in each
+        // React/format profile. The data URI requires no external fixture; image
+        // decoding, zoom geometry and native browser acceptance are separate.
+        const imageIdentity = 'record-image:rich';
+        const imageSource = 'data:image/png;base64,AA==';
+        stored = `![Consumer image](${imageSource})`;
+        await render({ identity: imageIdentity });
+        const imageEditor = ref.current;
+        assert(
+            imageEditor?.view,
+            'The image document must use the real engine'
+        );
+        const imageView = imageEditor.view;
+        for (
+            let attempt = 0;
+            (!imageView.dom.querySelector('img[alt="Consumer image"]') ||
+                !imageView.dom.querySelector('.caption[role="textbox"]')) &&
+            attempt < 100;
+            attempt++
+        )
+            await renderCommit(tick);
+        const image = imageView.dom.querySelector('img[alt="Consumer image"]');
+        const caption = imageView.dom.querySelector('.caption[role="textbox"]');
+        assert(image, 'The actual image NodeView must render its React portal');
+        assert(
+            caption,
+            'The actual image caption must render through that portal'
+        );
+        assert.equal(image.getAttribute('src'), imageSource);
+        assert.equal(caption.textContent, 'Consumer image');
+        assert.equal(caption.getAttribute('contenteditable'), 'true');
+        assert.equal(
+            container.querySelectorAll('img[alt="Consumer image"]').length,
+            1
+        );
+        assert.equal(finalView.isDestroyed, true);
+        const beforeImagePolicy = writes.length;
+
+        await render({ identity: imageIdentity, readOnly: true });
+        assert.equal(ref.current, imageEditor);
+        assert.equal(ref.current.view, imageView);
+        assert.equal(imageView.editable, false);
+        assert.equal(
+            imageView.dom.querySelector('img[alt="Consumer image"]'),
+            image
+        );
+        assert.equal(
+            imageView.dom.querySelector('.caption[role="textbox"]'),
+            caption
+        );
+        assert.equal(caption.getAttribute('contenteditable'), 'false');
+        assert.equal(image.isConnected, true);
+        assert.equal(writes.length, beforeImagePolicy);
+
+        await render({ identity: imageIdentity, readOnly: false });
+        assert.equal(ref.current, imageEditor);
+        assert.equal(ref.current.view, imageView);
+        assert.equal(imageView.editable, true);
+        assert.equal(caption.getAttribute('contenteditable'), 'true');
+        assert.equal(writes.length, beforeImagePolicy);
+        await renderCommit(() => root.render(null));
+        assert.equal(ref.current, null);
+        assert.equal(imageView.isDestroyed, true);
+        assert.equal(image.isConnected, false);
+        assert.equal(caption.isConnected, false);
+        assert.equal(container.querySelector('.ProseMirror'), null);
+        assert.equal(
+            window.document.querySelector('img[alt="Consumer image"]'),
+            null
+        );
+        assert.equal(container.querySelector('.caption[role="textbox"]'), null);
+        assert.equal(writes.length, beforeImagePolicy);
+
+        stored = '**After image**';
+        await render({ identity: 'record-after-image:rich' });
+        assert(ref.current?.view);
+        assert.equal(
+            ref.current.view.dom.querySelector('strong')?.textContent,
+            'After image'
+        );
+        const postImageView = ref.current.view;
+
         // React19 callback refs may supply cleanup instead of receiving null.
         // The SDK's React18-compatible ownership layer honors that convention too.
         const callbackAttachments = [];
@@ -254,6 +336,10 @@ async function exerciseEngine({
         mounted = false;
         assert.equal(ref.current, null);
         assert.equal(finalView.isDestroyed, true);
+        assert.equal(postImageView.isDestroyed, true);
+        assert.equal(imageView.isDestroyed, true);
+        assert.equal(image.isConnected, false);
+        assert.equal(caption.isConnected, false);
         assert.equal(container.querySelector('.ProseMirror'), null);
         assert.equal(
             writes.length,
@@ -269,6 +355,9 @@ async function exerciseEngine({
             checkbox: true,
             metadata: true,
             readOnly: true,
+            imageNodeView: true,
+            imageReadOnlyTransition: true,
+            imagePortalUnmount: true,
             callbackCleanupRetirement: true,
             ownerRetirement: true,
             unmount: true,

@@ -71,3 +71,7 @@ files are likewise excluded from the customer runtime.
 
 The author performed source editing only. Root owns combined build, typing,
 React 18/19, installed-package, browser and acceptance qualification.
+
+The immutable styled-components contributor README remains in the source snapshot;
+the customer runtime excludes that developer document and retains its full MIT
+license, original README hash, runtime provenance and owned adaptation notes.

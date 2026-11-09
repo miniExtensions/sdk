@@ -3,6 +3,14 @@ import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+/** Keep upstream contributor docs in source, outside the customer runtime kit. */
+export const richTextRuntimeFilter = (source) =>
+    !source.endsWith('.map') &&
+    !source.endsWith('.stories.js') &&
+    !source
+        .replaceAll('\\', '/')
+        .endsWith('/dependencies/styled-components/README.md');
+
 /** Verify the immutable input and the explicitly recorded SDK compatibility patches. */
 export function assertRichTextVendor(root = process.cwd()) {
     const directory = join(root, 'vendor/rich-markdown-editor');

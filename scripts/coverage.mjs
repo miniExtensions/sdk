@@ -4,7 +4,10 @@ import { readdir, readFile, rm, mkdir, copyFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkCoverage } from './coverage-policy.mjs';
-import { assertRichTextVendor } from './rich-text-vendor-checks.mjs';
+import {
+    assertRichTextVendor,
+    richTextRuntimeFilter,
+} from './rich-text-vendor-checks.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
@@ -39,8 +42,7 @@ run(require.resolve('typescript/bin/tsc'), [
 // Match source-relative private engine imports in the isolated test output.
 await cp(path.join(root, 'vendor'), path.join(root, output, 'vendor'), {
     recursive: true,
-    filter: (source) =>
-        !source.endsWith('.map') && !source.endsWith('.stories.js'),
+    filter: richTextRuntimeFilter,
 });
 const groups = { unit: [], component: [] };
 async function tests(directory, prefix = '') {

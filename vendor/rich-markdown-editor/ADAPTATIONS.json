@@ -4,7 +4,8 @@
     "scope": "SDK-owned private rich Markdown editor runtime",
     "runtimeExclusions": [
         "**/*.map",
-        "**/*.stories.js"
+        "**/*.stories.js",
+        "dependencies/styled-components/README.md"
     ],
     "changedUpstreamFiles": [
         {
@@ -347,7 +348,7 @@
     "newOwnedFiles": [
         {
             "path": "ADAPTATIONS.md",
-            "sha256": "6e2c47c4e0cc247ee3789c002bc39802fae8fef3ccd87f9073126b200b883b96"
+            "sha256": "73ee9ce3aebdc0992db4d4671ea28a24c1e35988878ae541a84b22f738d29e21"
         },
         {
             "path": "THIRD_PARTY_NOTICES.md",

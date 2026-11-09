@@ -17,7 +17,10 @@ import {
     assertModuleFormats,
     moduleFormatReceiptPath,
 } from './module-format-checks.mjs';
-import { assertRichTextVendor } from './rich-text-vendor-checks.mjs';
+import {
+    assertRichTextVendor,
+    richTextRuntimeFilter,
+} from './rich-text-vendor-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
@@ -30,8 +33,7 @@ for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
 // One private CommonJS engine shared by both formats. Never distribute source maps.
 cpSync('vendor', 'dist/vendor', {
     recursive: true,
-    filter: (source) =>
-        !source.endsWith('.map') && !source.endsWith('.stories.js'),
+    filter: richTextRuntimeFilter,
 });
 
 for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {

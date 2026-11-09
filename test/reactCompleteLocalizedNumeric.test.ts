@@ -57,6 +57,8 @@ async function fixture(
     container.id = 'standalone-numeric';
     window.document.body.append(container);
     const root = createRoot(container as unknown as HTMLElement);
+    const writeConfig: { readOnly?: boolean; allowNegativeNumbers?: boolean } =
+        {};
     const state = {
         value: args.value ?? null,
         kind: args.kind ?? 'number',
@@ -70,6 +72,9 @@ async function fixture(
         owner: {},
         current: true,
         symbol: args.symbol ?? '$',
+        writeConfig,
+        capabilityReadonly: false,
+        pending: false,
     };
     const writes: (number | null)[] = [];
     let submits = 0;
@@ -117,31 +122,38 @@ async function fixture(
                     ? { showAsProgressBar: state.progress }
                     : {}),
             },
+            writeConfig: state.writeConfig,
             value: state.value,
             context: 'form',
             computed: false,
             dirty: false,
-            pending: false,
+            pending: state.pending,
             validation: [],
             error: state.error,
-            capability: {
-                type: 'editable',
-                setValue(value) {
-                    if (!state.current || state.owner !== capturedOwner)
-                        return { accepted: false, reason: 'retired' };
-                    if (state.readonly)
-                        return { accepted: false, reason: 'readonly' };
-                    if (
-                        value !== null &&
-                        (typeof value !== 'number' || !Number.isFinite(value))
-                    )
-                        return { accepted: false, reason: 'invalid-value' };
-                    state.value = value;
-                    writes.push(value);
-                    publish();
-                    return { accepted: true };
-                },
-            },
+            capability: state.capabilityReadonly
+                ? { type: 'readonly' }
+                : {
+                      type: 'editable',
+                      setValue(value) {
+                          if (!state.current || state.owner !== capturedOwner)
+                              return { accepted: false, reason: 'retired' };
+                          if (state.readonly)
+                              return { accepted: false, reason: 'readonly' };
+                          if (
+                              value !== null &&
+                              (typeof value !== 'number' ||
+                                  !Number.isFinite(value))
+                          )
+                              return {
+                                  accepted: false,
+                                  reason: 'invalid-value',
+                              };
+                          state.value = value;
+                          writes.push(value);
+                          publish();
+                          return { accepted: true };
+                      },
+                  },
         });
         assert.ok(
             result &&
@@ -448,6 +460,54 @@ it('uses current owner authority before any edit and keeps read-only mobile clea
     await f.focus();
     await f.edit('4');
     assert.deepEqual(f.writes, [4]);
+});
+
+it('keeps readonly capabilities authoritative despite editable-looking display settings', async (t) => {
+    const f = await fixture(t, { value: 2, mobile: true, allowNegative: true });
+    f.state.capabilityReadonly = true;
+    await f.render();
+    assert.equal(f.state.readonly, false);
+    assert.equal(f.input().disabled, true);
+    assert.equal(f.input().value, '2.00');
+    const clear = f.container.querySelector('button');
+    assert.ok(clear);
+    assert.equal(clear.disabled, true);
+    await act(async () => clear.click());
+    assert.deepEqual(f.writes, []);
+    f.state.capabilityReadonly = false;
+    await f.render();
+    await f.focus();
+    await f.edit('3');
+    assert.deepEqual(f.writes, [3]);
+});
+
+it('applies write-policy negative and readonly overrides and keeps pending policy distinct from native Save', async (t) => {
+    const f = await fixture(t, {
+        value: 2,
+        separator: 'period-comma',
+        allowNegative: true,
+    });
+    f.state.writeConfig.allowNegativeNumbers = false;
+    await f.render();
+    await f.focus();
+    await f.edit('-0,5');
+    assert.equal(f.input().value, '2,00');
+    assert.deepEqual(f.writes, []);
+    await f.edit('1,5');
+    assert.deepEqual(f.writes, [1.5]);
+    f.state.writeConfig.readOnly = true;
+    await f.render();
+    assert.equal(f.input().disabled, true);
+    assert.deepEqual(f.writes, [1.5]);
+    f.state.writeConfig.readOnly = false;
+    f.state.pending = true;
+    await f.render();
+    assert.equal(f.input().disabled, true);
+    f.state.pending = false;
+    await f.render();
+    await f.focus();
+    await f.edit('3');
+    assert.deepEqual(f.writes, [1.5, 3]);
 });
 
 it('keeps empty currency symbols and empty error messages associated with the actual input', async (t) => {

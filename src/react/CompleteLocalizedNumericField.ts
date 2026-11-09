@@ -26,6 +26,7 @@ import {
 import { TextInput } from './TextInput.js';
 import { InputClearButton } from './InputClearButton.js';
 
+/** Native-unit, non-login contract; legacy raw renderer policies are separate. */
 export type CompleteLocalizedNumericRendererProps =
     | FieldRendererProps<'number'>
     | FieldRendererProps<'percent'>

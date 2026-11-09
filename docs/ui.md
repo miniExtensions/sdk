@@ -4843,13 +4843,14 @@ import {
 
 Its `field` is the public discriminated `FieldRendererProps` data contract for
 `number`, `currency` or `percent`. A controlled native host may supply this data
-and a genuinely guarded `capability.setValue`; an existing SDK renderer host may
-pass the props it already owns. Constructing that data creates no Form binding,
+and a genuinely guarded `capability.setValue`. A host that explicitly chooses
+this native-unit, non-login contract may pass its existing renderer data.
+Constructing that data creates no Form binding,
 controller, permission or Save owner. The SDK's internal props constructor is
 not a public export.
 
 `renderCompleteLocalizedNumericField(field, options)` is the corresponding slot
-function. Register it for the three numeric slots, or render the component with
+function. In that qualified cohort, register it for the three numeric slots, or render the component with
 `{ field, options }`. Supply canonical `number|null` values and complete native
 display/write configuration. The component calls the guarded capability with
 canonical values and respects its `accepted` result. It never calls a transport
@@ -4901,3 +4902,9 @@ the raw scalar model. `useLocalizedNumericInputAdapter` is the controlled-host
 compatibility hook; it accepts an optional actual owner token/currentness port.
 These helpers own no canonical store. The complete component already uses the
 adapter; its callers must not parse, scale or apply the same edit a second time.
+
+This is not a drop-in replacement for raw SDK numeric contracts or a login
+credential control. Native numeric producers do not expose Text password masks;
+the application's separate login input retains its masking policy. A host with
+additional active renderer policies must qualify that cohort independently
+instead of assuming that the shared renderer-data type establishes equivalence.

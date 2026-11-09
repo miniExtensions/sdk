@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
     copyFileSync,
+    cpSync,
     mkdirSync,
     readFileSync,
     rmSync,
@@ -16,13 +17,22 @@ import {
     assertModuleFormats,
     moduleFormatReceiptPath,
 } from './module-format-checks.mjs';
+import { assertRichTextVendor } from './rich-text-vendor-checks.mjs';
 
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
+assertRichTextVendor();
 
-for (const directory of ['dist/esm', 'dist/cjs']) {
+for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
     rmSync(directory, { recursive: true, force: true });
 }
+
+// One private CommonJS engine shared by both formats. Never distribute source maps.
+cpSync('vendor', 'dist/vendor', {
+    recursive: true,
+    filter: (source) =>
+        !source.endsWith('.map') && !source.endsWith('.stories.js'),
+});
 
 for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
     const compile = (actualProject) => {
@@ -135,6 +145,7 @@ for (const format of ['esm', 'cjs']) {
         'multiple-select',
         'linked-records',
         'single-select',
+        'rich-text',
     ]) {
         copyFileSync(
             `src/react/${name}.css`,

@@ -280,3 +280,15 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
+
+## Complete Rich Text editor
+
+The complete Rich Text editor includes an SDK-owned adaptation of
+miniExtensions/rich-markdown-editor 12.26.8 at immutable revision
+`aa3bddd1d023739df9f673c22f950a67d8b6bbbf` (BSD-3-Clause). The distributed
+`dist/vendor/rich-markdown-editor/LICENSE`, `UPSTREAM.json` and
+`THIRD_PARTY_NOTICES.md` retain its full license, source hashes and adaptation
+provenance. That subtree also retains the full licenses and provenance for
+outline-icons 1.46.0 (BSD-3-Clause), react-medium-image-zoom 3.1.3 (MIT), and the
+used prosemirror-utils 0.9.6 code (Apache-2.0). These private implementations are
+distributed with the editor; they are not public SDK import surfaces.

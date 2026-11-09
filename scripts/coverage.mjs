@@ -1,14 +1,16 @@
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { readdir, readFile, rm, mkdir, copyFile } from 'node:fs/promises';
+import { readdir, readFile, rm, mkdir, copyFile, cp } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkCoverage } from './coverage-policy.mjs';
+import { assertRichTextVendor } from './rich-text-vendor-checks.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
 const output = 'dist/coverage-test';
 const mode = process.argv[2] ?? 'all';
+assertRichTextVendor(root);
 if (!['all', 'unit', 'component'].includes(mode)) {
     throw new Error('Expected all, unit, or component coverage.');
 }
@@ -34,6 +36,12 @@ run(require.resolve('typescript/bin/tsc'), [
     '--outDir',
     output,
 ]);
+// Match source-relative private engine imports in the isolated test output.
+await cp(path.join(root, 'vendor'), path.join(root, output, 'vendor'), {
+    recursive: true,
+    filter: (source) =>
+        !source.endsWith('.map') && !source.endsWith('.stories.js'),
+});
 const groups = { unit: [], component: [] };
 async function tests(directory, prefix = '') {
     const files = [];

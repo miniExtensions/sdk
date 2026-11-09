@@ -1,0 +1,45 @@
+{
+    "package": "prosemirror-utils",
+    "version": "0.9.6",
+    "license": "Apache-2.0",
+    "upstreamLicense": "UPSTREAM-LICENSE",
+    "fullLicenseText": "LICENSE",
+    "usedExports": [
+        "addRowAt",
+        "createTable",
+        "findBlockNodes",
+        "findDomRefAtPos",
+        "findParentNode",
+        "findParentNodeClosestToPos",
+        "findSelectedNodeOfType",
+        "getCellsInColumn",
+        "getCellsInRow",
+        "isColumnSelected",
+        "isRowSelected",
+        "isTableSelected",
+        "moveRow",
+        "selectColumn",
+        "selectRow",
+        "selectTable",
+        "setTextSelection"
+    ],
+    "unmodifiedSourceSha256": [
+        {
+            "path": "dist/index.js",
+            "sha256": "aa198041dc3848e911c0fb9ac49850ad795aae175014dc2daa6d984bca2d09b4"
+        },
+        {
+            "path": "dist/index.js.map",
+            "sha256": "68f444ddf279cda9e56b1889a460b18f5bee4e80bb02886d46c1067645de7825"
+        },
+        {
+            "path": "LICENSE",
+            "sha256": "822c00d3553f37e363d8cbcc801886782b32508ef7988ea68d2f1630cf27060e"
+        },
+        {
+            "path": "package.json",
+            "sha256": "1f0b15ef823302c1d5e1b5e8a48aed9bb23f7f5bcc11ef6911a2a38251719e08"
+        }
+    ],
+    "adaptation": "Private entry exposes only the existing editor-used functions, resolving the SDK ProseMirror singleton closure. No obsolete package peer declaration is installed."
+}

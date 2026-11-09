@@ -1,5 +1,9 @@
 node_modules/
 dist/
+!vendor/rich-markdown-editor/dist/
+!vendor/rich-markdown-editor/dist/**
+!vendor/rich-markdown-editor/dependencies/prosemirror-utils/dist/
+!vendor/rich-markdown-editor/dependencies/prosemirror-utils/dist/**
 coverage/
 *.tgz
 .DS_Store

@@ -1,0 +1,20 @@
+"use strict";
+// Exact editor-used exports from the unchanged Apache-2.0 runtime below.
+const upstream = require("./dist/index.js");
+exports.addRowAt = upstream.addRowAt;
+exports.createTable = upstream.createTable;
+exports.findBlockNodes = upstream.findBlockNodes;
+exports.findDomRefAtPos = upstream.findDomRefAtPos;
+exports.findParentNode = upstream.findParentNode;
+exports.findParentNodeClosestToPos = upstream.findParentNodeClosestToPos;
+exports.findSelectedNodeOfType = upstream.findSelectedNodeOfType;
+exports.getCellsInColumn = upstream.getCellsInColumn;
+exports.getCellsInRow = upstream.getCellsInRow;
+exports.isColumnSelected = upstream.isColumnSelected;
+exports.isRowSelected = upstream.isRowSelected;
+exports.isTableSelected = upstream.isTableSelected;
+exports.moveRow = upstream.moveRow;
+exports.selectColumn = upstream.selectColumn;
+exports.selectRow = upstream.selectRow;
+exports.selectTable = upstream.selectTable;
+exports.setTextSelection = upstream.setTextSelection;

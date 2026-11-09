@@ -2,3 +2,6 @@ node_modules
 dist
 .generated
 pnpm-lock.yaml
+
+# Immutable upstream snapshots and narrowly documented compatibility patches.
+vendor

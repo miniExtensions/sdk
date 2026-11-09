@@ -27,6 +27,7 @@ import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 import { checkTextareaInputBrowser } from './browser-textarea-input-checks.mjs';
 import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
+import { checkCompleteRichTextBrowser } from './browser-complete-rich-text-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1472,6 +1473,7 @@ try {
             'scripts/portal-recipe-checks.mjs',
             'scripts/browser-number-input-mask-checks.mjs',
             'scripts/browser-textarea-input-checks.mjs',
+            'scripts/browser-complete-rich-text-checks.mjs',
             'scripts/native-rating-fixture.css',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
@@ -1750,6 +1752,13 @@ try {
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
+        report.completeRichText = {};
+        await checkCompleteRichTextBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeRichText,
+            output,
+        });
         report.numberInputMask = {};
         await checkNumberInputMaskBrowser({
             browser,

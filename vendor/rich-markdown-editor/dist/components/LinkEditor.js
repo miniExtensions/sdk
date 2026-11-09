@@ -25,7 +25,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const React = __importStar(require("react"));
 const prosemirror_utils_1 = require("../../dependencies/prosemirror-utils");
 const outline_icons_1 = require("../../dependencies/outline-icons/lib");
-const styled_components_1 = __importStar(require("styled-components"));
+const styled_components_1 = __importStar(require("../../dependencies/styled-components"));
 const isUrl_1 = __importDefault(require("../lib/isUrl"));
 const Flex_1 = __importDefault(require("./Flex"));
 const Input_1 = __importDefault(require("./Input"));

@@ -24,7 +24,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const React = __importStar(require("react"));
 const smooth_scroll_into_view_if_needed_1 = __importDefault(require("smooth-scroll-into-view-if-needed"));
-const styled_components_1 = __importStar(require("styled-components"));
+const styled_components_1 = __importStar(require("../../dependencies/styled-components"));
 const theme_1 = __importDefault(require("../styles/theme"));
 function BlockMenuItem({ selected, disabled, onClick, title, shortcut, icon, containerId = "block-menu-container", }) {
     const Icon = icon;

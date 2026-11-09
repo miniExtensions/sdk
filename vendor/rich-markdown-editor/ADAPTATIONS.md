@@ -42,6 +42,16 @@ upstream files and new owned helper files to their current SHA256 content.
 ## Dependency closure and licenses
 
 - outline-icons 1.46.0: exact React icon runtime and BSD-3-Clause license.
+- styled-components 5.3.11: exact precompiled Node/browser CommonJS originals
+  under upstream/dist, original manifest/README, and the full MIT license from
+  the official v5.3.11 repository tag. Both owned runtime entries apply a fixed
+  private stylesheet marker, generated-name/hash namespace and explicit-ID
+  namespace, isolating host styled-components selectors and rehydration. Duplicate
+  detection remains within the private namespace. Exports/version markers stay
+  5.3.11. The private manifest preserves upstream browser resolution; 16 editor
+  runtime imports use this owned package root. The SDK declares only the six
+  non-React runtime dependencies; React remains its optional lazy-editor host
+  peer. Babel/plugin/native dependencies are unnecessary for this runtime.
 - react-medium-image-zoom 3.1.3: exact selected lib input plus MIT license, with
   SDK-owned portal/timer/image-load/focus lifecycle adaptations documented there.
 - prosemirror-utils 0.9.6: unchanged Apache-2.0 runtime, exact Atlassian notice and

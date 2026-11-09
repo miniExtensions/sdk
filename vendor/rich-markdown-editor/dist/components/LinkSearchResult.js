@@ -35,7 +35,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const React = __importStar(require("react"));
 const smooth_scroll_into_view_if_needed_1 = __importDefault(require("smooth-scroll-into-view-if-needed"));
-const styled_components_1 = __importDefault(require("styled-components"));
+const styled_components_1 = __importDefault(require("../../dependencies/styled-components"));
 function LinkSearchResult(_a) {
     var { title, subtitle, selected, icon } = _a, rest = __rest(_a, ["title", "subtitle", "selected", "icon"]);
     const ref = React.useCallback(node => {

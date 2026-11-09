@@ -290,5 +290,5 @@ miniExtensions/rich-markdown-editor 12.26.8 at immutable revision
 `THIRD_PARTY_NOTICES.md` retain its full license, source hashes and adaptation
 provenance. That subtree also retains the full licenses and provenance for
 outline-icons 1.46.0 (BSD-3-Clause), react-medium-image-zoom 3.1.3 (MIT), and the
-used prosemirror-utils 0.9.6 code (Apache-2.0). These private implementations are
+used prosemirror-utils 0.9.6 code (Apache-2.0), and styled-components 5.3.11 (MIT). These private implementations are
 distributed with the editor; they are not public SDK import surfaces.

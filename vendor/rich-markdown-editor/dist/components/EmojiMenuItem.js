@@ -24,7 +24,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const React = __importStar(require("react"));
 const BlockMenuItem_1 = __importDefault(require("./BlockMenuItem"));
-const styled_components_1 = __importDefault(require("styled-components"));
+const styled_components_1 = __importDefault(require("../../dependencies/styled-components"));
 const Emoji = styled_components_1.default.span `
   font-size: 16px;
 `;

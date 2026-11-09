@@ -4,6 +4,10 @@ dist/
 !vendor/rich-markdown-editor/dist/**
 !vendor/rich-markdown-editor/dependencies/prosemirror-utils/dist/
 !vendor/rich-markdown-editor/dependencies/prosemirror-utils/dist/**
+!vendor/rich-markdown-editor/dependencies/styled-components/dist/
+!vendor/rich-markdown-editor/dependencies/styled-components/dist/**
+!vendor/rich-markdown-editor/dependencies/styled-components/upstream/dist/
+!vendor/rich-markdown-editor/dependencies/styled-components/upstream/dist/**
 coverage/
 *.tgz
 .DS_Store

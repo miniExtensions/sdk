@@ -27,7 +27,7 @@ const react_portal_1 = require("../lib/SDKPortal");
 const useComponentSize_1 = __importDefault(require("../hooks/useComponentSize"));
 const useMediaQuery_1 = __importDefault(require("../hooks/useMediaQuery"));
 const useViewportHeight_1 = __importDefault(require("../hooks/useViewportHeight"));
-const styled_components_1 = __importDefault(require("styled-components"));
+const styled_components_1 = __importDefault(require("../../dependencies/styled-components"));
 const SSR = typeof window === "undefined";
 const defaultPosition = {
     left: -1000,

@@ -57,13 +57,24 @@ export function assertRichTextVendor(root = process.cwd()) {
         }
     };
     verifyInput('', upstream.unmodifiedSourceSha256);
-    for (const name of ['outline-icons', 'prosemirror-utils']) {
+    for (const name of [
+        'outline-icons',
+        'prosemirror-utils',
+        'styled-components',
+    ]) {
         const prefix = `dependencies/${name}/`;
         verifyInput(
             prefix,
             json(prefix + 'UPSTREAM.json').unmodifiedSourceSha256
         );
     }
+    const styled = 'dependencies/styled-components/';
+    for (const file of json(styled + 'UPSTREAM.json').preservedOriginalRuntime)
+        assert.equal(
+            hash(styled + file.path),
+            file.sha256,
+            `Changed original styled-components runtime: ${file.path}`
+        );
     const zoom = 'dependencies/react-medium-image-zoom/';
     verifyInput(
         zoom,

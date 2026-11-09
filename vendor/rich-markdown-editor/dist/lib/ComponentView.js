@@ -23,7 +23,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const React = __importStar(require("react"));
-const styled_components_1 = require("styled-components");
+const styled_components_1 = require("../../dependencies/styled-components");
 const theme_1 = require("../styles/theme");
 class ComponentView {
     constructor(component, { editor, extension, node, view, getPos, decorations }) {

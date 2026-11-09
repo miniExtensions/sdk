@@ -23,7 +23,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const React = __importStar(require("react"));
-const styled_components_1 = __importStar(require("styled-components"));
+const styled_components_1 = __importStar(require("../../dependencies/styled-components"));
 const ToolbarButton_1 = __importDefault(require("./ToolbarButton"));
 const ToolbarSeparator_1 = __importDefault(require("./ToolbarSeparator"));
 // These commands expose an existing formatting state. Link dialogs, insertion,

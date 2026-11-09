@@ -17,3 +17,14 @@ The unchanged prosemirror-utils 0.9.6 runtime is Apache-2.0 (not MIT). Its
 exact copyright/license notice, full Apache-2.0 license text, manifest and input
 hashes are retained in `dependencies/prosemirror-utils`; the private entry
 exposes only functions used by this editor.
+
+The exact styled-components 5.3.11 Node/browser CommonJS web runtime originals
+are retained under `dependencies/styled-components/upstream/dist`, alongside the
+original package manifest/README, full MIT license and immutable input hashes.
+Its npm archive omits LICENSE; the full license is preserved from the official
+repository's v5.3.11 tag with its source URL and SHA256 recorded in UPSTREAM.json.
+Copyright (c) 2016-present Glen Maddern and Maximilian Stoiber. The owned runtime
+entries deterministically namespace generated CSS names, component IDs, style-tag
+ownership, rehydration and duplicate detection. The private manifest and editor
+require paths adapt dependency ownership. Changes are documented there in
+ADAPTATIONS.md; exported styled-components version remains 5.3.11.

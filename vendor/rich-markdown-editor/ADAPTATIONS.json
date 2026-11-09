@@ -87,21 +87,51 @@
         },
         {
             "package": "rich-markdown-editor",
+            "path": "dist/components/BlockMenuItem.js",
+            "originalSha256": "febde6613d2252c2246bda85bec321c1cf17158c87667386c3fe49c86678c2dc",
+            "adaptedSha256": "b83c313579b70d6c374005525ec86d505584c2d032bc12f98e173add53928845"
+        },
+        {
+            "package": "rich-markdown-editor",
             "path": "dist/components/CommandMenu.js",
             "originalSha256": "ac9c5729054db221ddb388d398ce080ab7f4902e4a76327366c88c6c671d008e",
-            "adaptedSha256": "bf8e09cf4a135fc7759f6e170eb0baa7c0b71aa6a6c70e2e9f1b596fb779e9c3"
+            "adaptedSha256": "2ec6d709d15c7309ea6ea9391e967db6742f5f70fcc4c0e77160223adf5f59c4"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/EmojiMenuItem.js",
+            "originalSha256": "21abadb8288a0e23bdfb516a666ab1a499932c433707d76ae8a45bc7010e3916",
+            "adaptedSha256": "ae13f1bf8a6a3579e2a3754882471f231cf5253ccd332c3c6df63661f52a9efc"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/Flex.js",
+            "originalSha256": "b63b39e82846e8c2d86f95f8ed197a8bebe7fbf721ef62e6404809f911b7336e",
+            "adaptedSha256": "06dff0f654a5f8fec1b113eba9d1ae9b67f0493fc7f1fdcc22824a3397a70d7e"
         },
         {
             "package": "rich-markdown-editor",
             "path": "dist/components/FloatingToolbar.js",
             "originalSha256": "d17fde3201103a817f558740cb28d3337ea8ae7f278f038dec2374deb9c236eb",
-            "adaptedSha256": "581696c8c4571159212da6fcdd9aa5b5f502578eef2fc5a18943e07765b5df9e"
+            "adaptedSha256": "00c1ee04220d13afe332588f9a82f38b1f5c04731d7e46d9d273f8c48cf9853a"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/Input.js",
+            "originalSha256": "8b7b9be725b8fac19dc1db3bcd46bf570878703540740c1de6e2c96d596cbc8e",
+            "adaptedSha256": "c619c34c8344a7dafb1017d7fe5d44054ea4525bb4b961681d9edc075cddd672"
         },
         {
             "package": "rich-markdown-editor",
             "path": "dist/components/LinkEditor.js",
             "originalSha256": "c40a9a9c39688d26eb49bb6496be5cc48708e2748e1d673267163d32c405bf3b",
-            "adaptedSha256": "b708516c0dcb3a304aec05adaa1ad0c7201c2745a6ae78ab0149afd766d815eb"
+            "adaptedSha256": "1cefee1e37a800d62d2ee01381ee7562f78d787f6d5255bd5ef50f85dffc0f40"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/LinkSearchResult.js",
+            "originalSha256": "8dd08146f6325a0474583cae9b96a32c29569a20ca102214b7ea88f00e163890",
+            "adaptedSha256": "54bef5a95380fce3bf32ed5f934863695e8aba7746adf2c3e59d2dcc54902414"
         },
         {
             "package": "rich-markdown-editor",
@@ -119,13 +149,25 @@
             "package": "rich-markdown-editor",
             "path": "dist/components/ToolbarButton.js",
             "originalSha256": "5929eecc187651732d4d48e4ea1202489dd267a551e28a91b57b52d455a52ae8",
-            "adaptedSha256": "f8fd44b9b1e87a46293cc1c6a6b9efdb35af3ca7f75ab7390bb49014ebbe3f76"
+            "adaptedSha256": "53712f6ebecbf28051b57ab01302179ac72686410d0da38ba81735237ea8e674"
         },
         {
             "package": "rich-markdown-editor",
             "path": "dist/components/ToolbarMenu.js",
             "originalSha256": "0a770764288c8298884e066967a4d86cae9e1b9ba1cf607c1ce895c9e21cb199",
-            "adaptedSha256": "de49f97fd576d6d591dcc74c1e49db026dd692d6e0593ee762a5ce1ebb91e14e"
+            "adaptedSha256": "976144de723bad687c2781c4b8bd244c828915066c549f1635699b7412a17208"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/ToolbarSeparator.js",
+            "originalSha256": "1d6ab8fe4dd4afe274db9619dd55eb852724abd47ff54eeb5ca8f9a8a468392c",
+            "adaptedSha256": "e24d54ee31398104f623b3f60226e491117464a1e236a6e96ab0856bf32b44e4"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/VisuallyHidden.js",
+            "originalSha256": "0b6f2324068bda317a7ed99950f632570ad5a8322eee1dcb7c6f1d0ce3b9726d",
+            "adaptedSha256": "6205e413fd8fa59d5205a2cff6551dd9da170c65d2f7d4134432b6d24ace978d"
         },
         {
             "package": "rich-markdown-editor",
@@ -137,13 +179,13 @@
             "package": "rich-markdown-editor",
             "path": "dist/index.js",
             "originalSha256": "bb7be76dc3800c02017936143201c377410e2f50ec92251ef62d75364ac2f112",
-            "adaptedSha256": "d332fa63280caacb072dace70b55fd79afd1afcfca25036cfec8a2526b6730b2"
+            "adaptedSha256": "d3a92d496cf504a7104c0b96057f934867d5e93b14102aa6fada2550304d1cf0"
         },
         {
             "package": "rich-markdown-editor",
             "path": "dist/lib/ComponentView.js",
             "originalSha256": "a1be45941d59b6555cee5256331866da99e60042c1ee51a63db1642e86fd09ea",
-            "adaptedSha256": "1cb5d7256811b66a0ff2cd421fd90070c2a8687a0b5e412cfbe1a7f7c7676682"
+            "adaptedSha256": "686a1b8ca5a7dc521bf45356e36d66e992a5b755a54a315c08bee8db286a3f54"
         },
         {
             "package": "rich-markdown-editor",
@@ -203,7 +245,7 @@
             "package": "rich-markdown-editor",
             "path": "dist/nodes/Image.js",
             "originalSha256": "7325d8bbc47493c0cd233b4c89b8e4432ed8eb052ae4376831496dfc2cdee666",
-            "adaptedSha256": "aa58e3c1b9ea811d9b1661e8ced96367be715f6939519db3d8e1b923cd4f18cb"
+            "adaptedSha256": "e19516f6d63d1aa0d70dc487eba05e9d6a2a409d5a5678237e38e68b07b5f456"
         },
         {
             "package": "rich-markdown-editor",
@@ -273,19 +315,43 @@
         },
         {
             "package": "rich-markdown-editor",
+            "path": "dist/styles/editor.js",
+            "originalSha256": "6eb777a6165db2bc34a1de0f7f8e2d0118a223b92b66da3d67e03aae49bd26cc",
+            "adaptedSha256": "4637e2440031f19b9fc360fedaffe732e414278a6cae0bd2d5a50ea0f2c9b50f"
+        },
+        {
+            "package": "rich-markdown-editor",
             "path": "package.json",
             "originalSha256": "696448cda5126618451fd824591ed9d3f0b22542dfb289277cc17855b0f88bde",
             "adaptedSha256": "f753ad6f80122a4a825a415e85915c49d445e0f1de6396e2928ed1dc38c35b1e"
+        },
+        {
+            "package": "styled-components",
+            "path": "dependencies/styled-components/dist/styled-components.browser.cjs.js",
+            "originalSha256": "95aead27c44b9d3576c8f8d6436b973a8a16b0d5aceb6b0046f4f62f21193721",
+            "adaptedSha256": "0b2ff98ab330a47368161dd62a325e60a694eea309b00cca6360fb97bac15a37"
+        },
+        {
+            "package": "styled-components",
+            "path": "dependencies/styled-components/dist/styled-components.cjs.js",
+            "originalSha256": "d8680d824a1126dde64eeab4bae301117aca3dec4cfa8993d2e7936657a698f1",
+            "adaptedSha256": "edcf20015fd1528bcfb475699e3e5b7886c6d9c0363f3ca8c6327f6941f7a89c"
+        },
+        {
+            "package": "styled-components",
+            "path": "dependencies/styled-components/package.json",
+            "originalSha256": "188ad1a2a7c3536190b9db5271852a7c997a109f8cb5496ba1b62a3a91bdb37c",
+            "adaptedSha256": "f8b138c398f48b2480ac5f1ff79469e049cc3a979f970fb14af76a6b91c35fd0"
         }
     ],
     "newOwnedFiles": [
         {
             "path": "ADAPTATIONS.md",
-            "sha256": "efdfc231606878ea817820729b641178269a312b90fae865e5c28811416a3584"
+            "sha256": "6e2c47c4e0cc247ee3789c002bc39802fae8fef3ccd87f9073126b200b883b96"
         },
         {
             "path": "THIRD_PARTY_NOTICES.md",
-            "sha256": "8656b5d38cbec9e5e7d54b63e9d6f0130d11cf7642ebbec2c9167c4620fdf8be"
+            "sha256": "f01ccfce887cdf682573a8ecce40a8f459ab4127cb411b01aeb39b2569214f25"
         },
         {
             "path": "UPSTREAM.json",
@@ -310,6 +376,22 @@
         {
             "path": "dependencies/react-medium-image-zoom/UPSTREAM.json",
             "sha256": "e27f38a2c79b8d12324aead9a89c0040f506b7e43f5458a78fa3d2cfb70b54d9"
+        },
+        {
+            "path": "dependencies/styled-components/ADAPTATIONS.md",
+            "sha256": "25c910d950a787bd26f6d572aecd848c1d6998e43fb55a7cd5adba1debee2210"
+        },
+        {
+            "path": "dependencies/styled-components/UPSTREAM.json",
+            "sha256": "01e534117c0cc26b30cfeeb47136d0192eb226f882c354dd16a666fae6000518"
+        },
+        {
+            "path": "dependencies/styled-components/upstream/dist/styled-components.browser.cjs.js",
+            "sha256": "95aead27c44b9d3576c8f8d6436b973a8a16b0d5aceb6b0046f4f62f21193721"
+        },
+        {
+            "path": "dependencies/styled-components/upstream/dist/styled-components.cjs.js",
+            "sha256": "d8680d824a1126dde64eeab4bae301117aca3dec4cfa8993d2e7936657a698f1"
         },
         {
             "path": "dist/lib/SDKIcons.js",
@@ -362,12 +444,18 @@
             "package": "prosemirror-utils",
             "path": "dependencies/prosemirror-utils/NOTICE",
             "sha256": "822c00d3553f37e363d8cbcc801886782b32508ef7988ea68d2f1630cf27060e"
+        },
+        {
+            "package": "styled-components",
+            "path": "dependencies/styled-components/LICENSE",
+            "sha256": "5b893305a717230e5b0024ff5ca3eec1dc05ba600c9b140730488d97ce56f1e6"
         }
     ],
     "notes": [
         "All paths are relative to this vendor directory.",
         "Original input package manifests remain in upstream-package.json.",
         "Source-map references identify upstream input, not regenerated adapted mappings.",
-        "Hash inventory is source provenance, not a passing qualification claim."
+        "Hash inventory is source provenance, not a passing qualification claim.",
+        "Private styled-components runtime entries are namespaced adaptations; exact Node/browser originals remain separately under dependencies/styled-components/upstream/dist with immutable input hashes. Exported/version markers remain 5.3.11."
     ]
 }

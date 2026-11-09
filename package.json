@@ -148,14 +148,16 @@
         "test:component": "node scripts/coverage.mjs component"
     },
     "dependencies": {
-        "@babel/core": "7.24.0",
+        "@emotion/is-prop-valid": "1.4.0",
+        "@emotion/stylis": "0.8.5",
+        "@emotion/unitless": "0.7.5",
         "@trpc/client": "11.0.0-rc.382",
         "@trpc/server": "11.0.0-rc.382",
-        "babel-plugin-styled-components": "2.1.4",
         "copy-to-clipboard": "3.3.3",
         "email-validator": "2.0.4",
         "fuzzy-search": "3.2.1",
         "gemoji": "6.1.0",
+        "hoist-non-react-statics": "3.3.2",
         "lodash": "4.17.21",
         "markdown-it": "12.3.2",
         "markdown-it-container": "3.0.0",
@@ -178,11 +180,12 @@
         "prosemirror-transform": "1.8.0",
         "prosemirror-view": "1.33.1",
         "punycode": "2.3.1",
+        "react-is": "16.13.1",
         "refractor": "3.6.0",
         "resize-observer-polyfill": "1.5.1",
+        "shallowequal": "1.1.0",
         "slugify": "1.6.6",
-        "smooth-scroll-into-view-if-needed": "1.1.33",
-        "styled-components": "5.3.11"
+        "smooth-scroll-into-view-if-needed": "1.1.33"
     },
     "devDependencies": {
         "@types/moment-duration-format": "2.2.6",

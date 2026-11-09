@@ -1,0 +1,173 @@
+/* Complete localized numeric presentation; no host Tailwind setup is required. */
+.mx-sdk-localized-numeric,
+.mx-sdk-localized-numeric-display {
+    position: relative;
+    min-width: 0;
+    width: 100%;
+    font: inherit;
+}
+.mx-sdk-localized-numeric-control {
+    position: relative;
+    display: flex;
+    width: 100%;
+    gap: 0.5rem;
+}
+.mx-sdk-localized-numeric-input-wrap {
+    position: relative;
+    min-width: 0;
+    flex: 1;
+}
+.mx-sdk-localized-numeric-input {
+    box-sizing: border-box;
+    display: block;
+    min-width: 0;
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background: white;
+    color: black;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+    font: inherit;
+    transition:
+        border-color 100ms,
+        box-shadow 100ms;
+}
+.mx-sdk-localized-numeric-input:focus {
+    outline-color: var(--mx-sdk-accent, #2563eb);
+    border-color: var(--mx-sdk-accent, #2563eb);
+}
+.mx-sdk-localized-numeric-input:disabled {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+.mx-sdk-localized-numeric-input[aria-invalid='true'] {
+    border-color: #b91c1c;
+}
+.mx-sdk-localized-numeric-symbol {
+    pointer-events: none;
+    display: flex;
+    max-width: 50%;
+    align-items: center;
+    color: #6b7280;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-localized-numeric-percent-symbol {
+    order: 1;
+}
+.mx-sdk-localized-numeric-mobile {
+    padding-right: 2.5rem;
+}
+.mx-sdk-localized-numeric-covered {
+    opacity: 0;
+}
+.mx-sdk-localized-numeric-clear {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #111827;
+}
+.mx-sdk-localized-numeric-clear-indicator {
+    display: flex;
+    height: 1.25rem;
+    width: 1.25rem;
+    border-radius: 100%;
+    background: #4b5563;
+}
+.mx-sdk-localized-numeric-clear-icon {
+    margin: auto;
+    height: 0.75rem;
+    width: 0.75rem;
+    color: white;
+}
+.mx-sdk-localized-numeric-overlay {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+}
+.mx-sdk-localized-numeric-progress {
+    position: relative;
+    display: flex;
+    width: 100%;
+    gap: 0.5rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.mx-sdk-localized-numeric-track {
+    height: 1.75rem;
+    width: 100%;
+    cursor: pointer;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: #f3f4f6;
+}
+.mx-sdk-localized-numeric-fill {
+    position: relative;
+    display: flex;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    background: var(--mx-sdk-accent, #2563eb);
+}
+.mx-sdk-localized-numeric-progress-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: white;
+}
+.mx-sdk-localized-numeric-progress-outside {
+    position: absolute;
+    left: 100%;
+    margin-left: 0.5rem;
+    color: var(--mx-sdk-accent, #2563eb);
+    white-space: nowrap;
+}
+.mx-sdk-localized-numeric-display p {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.mx-sdk-localized-numeric-display a {
+    position: relative;
+    z-index: 1;
+    color: #2563eb;
+    text-decoration: underline;
+    transition: color 75ms;
+}
+.mx-sdk-localized-numeric-display a:hover {
+    color: #1d4ed8;
+}
+.mx-sdk-localized-numeric-empty {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 0.25rem;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+.mx-sdk-localized-numeric-empty-icon {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+    color: #9ca3af;
+}
+.mx-sdk-localized-numeric-feedback {
+    white-space: pre-wrap;
+}
+@media (min-width: 640px) {
+    .mx-sdk-localized-numeric-input,
+    .mx-sdk-localized-numeric-symbol {
+        font-size: 0.875rem;
+    }
+}
+@media (forced-colors: active) {
+    .mx-sdk-localized-numeric-fill,
+    .mx-sdk-localized-numeric-clear {
+        border: 1px solid ButtonText;
+    }
+}

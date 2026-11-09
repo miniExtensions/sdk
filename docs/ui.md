@@ -4825,3 +4825,79 @@ Borrowed snapshots also expose detached `columns: { fieldId, title }[]` from
 the same accepted visible detail/schema policy as cells. Headers preserve accepted
 order even with zero rows; no first-row values or cached records are consulted.
 Explicit empty, missing or null detail projections expose no columns.
+
+## Complete localized numeric fields
+
+`CompleteLocalizedNumericField` packages the Number, Currency and Percent input,
+localized display draft, focus/blur behavior, immediate/deferred commits, mobile
+Clear, symbols, progress and read-only presentation. Import its optional scoped
+stylesheet once in your application's CSS entry:
+
+```ts
+import '@miniextensions/sdk/react/localized-numeric.css';
+import {
+    CompleteLocalizedNumericField,
+    type CompleteLocalizedNumericRendererProps,
+} from '@miniextensions/sdk/react';
+```
+
+Its `field` is the public discriminated `FieldRendererProps` data contract for
+`number`, `currency` or `percent`. A controlled native host may supply this data
+and a genuinely guarded `capability.setValue`; an existing SDK renderer host may
+pass the props it already owns. Constructing that data creates no Form binding,
+controller, permission or Save owner. The SDK's internal props constructor is
+not a public export.
+
+`renderCompleteLocalizedNumericField(field, options)` is the corresponding slot
+function. Register it for the three numeric slots, or render the component with
+`{ field, options }`. Supply canonical `number|null` values and complete native
+display/write configuration. The component calls the guarded capability with
+canonical values and respects its `accepted` result. It never calls a transport
+or Save method.
+
+| Kind     | Canonical value | Localized editor, period-comma | Edited display → canonical       |
+| -------- | --------------- | ------------------------------ | -------------------------------- |
+| Number   | `1234.5`        | `1234,50`                      | `42,755` → `42.76` at precision2 |
+| Currency | `1234.5`        | symbol plus `1234,50`          | `42,755` → `42.76` at precision2 |
+| Percent  | `0.425`         | `42,50` plus `%`               | `75,25` → `0.7525`               |
+
+The four native separator modes and grouping are retained. Focus removes
+grouping; unfinished localized text stays in the transient UI draft. Ordinary
+value/writer echoes preserve a focused input and its caret. Number/Currency
+retain native precision rounding; Percent converts display units to fractions
+once and preserves fractional precision. Formatting, focus and untouched blur
+do not write. The legacy `NumberField`, `PercentField`, `CurrencyField` and their
+slot functions retain their existing raw scalar contracts, including unscaled
+Percent input.
+
+Options include:
+
+- `commit: 'immediate' | 'deferred'`; deferred writes occur on changed blur,
+  non-composing Enter or deliberate current-owner unmount. Clear writes null
+  once and cancels pending cleanup.
+- `presentation: 'editor' | 'display'`; display mode owns native numeric
+  formatting, literal Currency symbols, empty states and Percent progress.
+- `owner: { token, isCurrent }`; supply the host's actual owner/configuration
+  identity and currentness. Source retirement discards the previous UI draft;
+  committed configuration changes retire pending old actions. Ordinary value
+  echoes and callback identity changes keep the same owner. The host must still
+  check current permissions, visibility and record authority before writing.
+- `input` for existing IDs, form/label/help/error associations and ordinary
+  native attributes; `inputRef` for a native input ref. The component owns its
+  controlled value and numeric event orchestration.
+- `showLabel`, `clearLabel`, `emptyLabel`, `className`, `inputClassName`.
+  Native outer field frames may keep their labels/validation UI and supply
+  literal localized strings. Package styles require no Tailwind setup and use
+  `--mx-sdk-accent` for themed color.
+
+Host pending state remains a host policy decision. In particular, allocating an
+existing native Save must not newly block input when that host permits editing
+during the flight. This presentation does not replace already-allocated Save
+settlement or create-to-edit continuity.
+
+The public `createLocalizedNumericInputAdapter` and
+`isLocalizedNumericInputValid` helpers preserve locale-aware parsing before
+the raw scalar model. `useLocalizedNumericInputAdapter` is the controlled-host
+compatibility hook; it accepts an optional actual owner token/currentness port.
+These helpers own no canonical store. The complete component already uses the
+adapter; its callers must not parse, scale or apply the same edit a second time.

@@ -27,6 +27,7 @@ import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 import { checkTextareaInputBrowser } from './browser-textarea-input-checks.mjs';
 import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
+import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1763,6 +1764,13 @@ try {
             evidence: report.textareaInput,
         });
         report.attachmentPresentation = {};
+        report.completeLocalizedNumeric = {};
+        await checkCompleteLocalizedNumericBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeLocalizedNumeric,
+            output,
+        });
         report.radioInput = {};
         await checkRadioInputBrowser({
             browser,

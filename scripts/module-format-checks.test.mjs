@@ -637,6 +637,7 @@ for (const name of [
     'checkbox',
     'text',
     'number',
+    'localized-numeric',
     'date',
     'datetime',
     'duration',

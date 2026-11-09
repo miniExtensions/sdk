@@ -4833,7 +4833,7 @@ localized display draft, focus/blur behavior, immediate/deferred commits, mobile
 Clear, symbols, progress and read-only presentation. Import its optional scoped
 stylesheet once in your application's CSS entry:
 
-```ts
+```tsx
 import '@miniextensions/sdk/react/localized-numeric.css';
 import {
     CompleteLocalizedNumericField,

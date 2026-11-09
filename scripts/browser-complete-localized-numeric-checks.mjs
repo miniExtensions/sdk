@@ -126,7 +126,7 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
             } else if (path === '/') {
                 response.setHeader('Content-Type', 'text/html');
                 response.end(
-                    '<!doctype html><title>Complete localized numeric proof</title><link rel="stylesheet" href="/numeric.css"><main></main><script type="module" src="/proof.js"></script>'
+                    '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1"><title>Complete localized numeric proof</title><link rel="stylesheet" href="/numeric.css"><main></main><script type="module" src="/proof.js"></script>'
                 );
             } else {
                 response.statusCode = 404;
@@ -298,6 +298,7 @@ window.numericProof={snapshot:()=>({reactVersion:React.version,writes:[...writes
         await finish('currency-literal-empty-readonly');
 
         input = await open('mobile', true);
+        assert.equal(await page.evaluate(() => window.innerWidth), 390);
         const clear = page.getByRole('button', {
             name: 'Clear synthetic amount',
             exact: true,

@@ -65,6 +65,10 @@ export {
     type CompleteDeferredClearableTextInputProps,
 } from './CompleteClearableTextInput.js';
 export {
+    CompleteMultilineTextField,
+    type CompleteMultilineTextFieldProps,
+} from './CompleteMultilineTextField.js';
+export {
     CompleteDurationField,
     type CompleteDurationFieldProps,
 } from './CompleteDurationField.js';

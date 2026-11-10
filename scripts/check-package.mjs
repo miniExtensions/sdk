@@ -103,6 +103,7 @@ import { checkCompleteLocalizedNumericReactMatrix } from './complete-localized-n
 import { checkCompleteReadOnlyPhoneReactMatrix } from './complete-readonly-phone-consumer-checks.mjs';
 import { checkCompleteReadOnlyTextReactMatrix } from './complete-readonly-text-consumer-checks.mjs';
 import { checkCompleteClearableInputReactMatrix } from './complete-clearable-input-consumer-checks.mjs';
+import { checkCompleteMultilineReactMatrix } from './complete-multiline-consumer-checks.mjs';
 import { checkCompletePhoneReactMatrix } from './complete-phone-consumer-checks.mjs';
 import { checkCompleteDurationReactMatrix } from './complete-duration-consumer-checks.mjs';
 import {
@@ -566,6 +567,8 @@ try {
         'dist/cjs/react/complete-readonly-text.css',
         'dist/esm/react/complete-clearable-text-input.css',
         'dist/cjs/react/complete-clearable-text-input.css',
+        'dist/esm/react/complete-multiline.css',
+        'dist/cjs/react/complete-multiline.css',
         'dist/esm/react/date.css',
         'dist/cjs/react/date.css',
         'dist/esm/react/datetime.css',
@@ -3165,6 +3168,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(clearableInputMatrix.versions.length, 2);
     assert.equal(clearableInputMatrix.cleanup, 'completed');
+    const completeMultilineMatrix = checkCompleteMultilineReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(completeMultilineMatrix.versions.length, 2);
+    assert.equal(completeMultilineMatrix.cleanup, 'completed');
     const phoneMatrix = checkCompletePhoneReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

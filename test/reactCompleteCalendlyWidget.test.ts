@@ -401,10 +401,10 @@ it('retires session ownership through A-B-A and admits only the fresh current wr
     });
     assert.equal(f.container.querySelector('iframe'), null);
     await f.send(oldSource);
-    assert.deepEqual(writes, []);
+    assert.deepEqual([...writes], []);
     await f.click('Schedule');
     await f.send(f.source());
-    assert.deepEqual(writes, ['B']);
+    assert.deepEqual([...writes], ['B']);
     await f.update({
         ownerKey: defaults.ownerKey,
         onScheduled: () => writes.push('A-new'),
@@ -413,9 +413,9 @@ it('retires session ownership through A-B-A and admits only the fresh current wr
     const current = f.frame();
     await f.send(oldSource);
     assert.equal(f.frame(), current);
-    assert.deepEqual(writes, ['B']);
+    assert.deepEqual([...writes], ['B']);
     await f.send(f.source());
-    assert.deepEqual(writes, ['B', 'A-new']);
+    assert.deepEqual([...writes], ['B', 'A-new']);
 });
 
 it('retires active URL and prefill generations without reusing an old frame source', async (t) => {

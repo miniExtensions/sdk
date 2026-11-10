@@ -208,7 +208,8 @@ it('renders escaped literal values and nullable values without a browser', () =>
         )
     );
     assert.match(empty, /data-limit-reached="false"/);
-    assert.match(empty, /maxlength="0"/);
+    // HTML attribute names are case-insensitive; React SSR emits maxLength.
+    assert.match(empty, /\smaxlength="0"/i);
     assert.match(empty, />0\/0<\/p>/);
     const literal = renderToStaticMarkup(
         h(

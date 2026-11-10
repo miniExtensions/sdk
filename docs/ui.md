@@ -5443,7 +5443,7 @@ accessible input and a private one-entry confirmed-result cache. It never create
 an auth client, sends a code, installs a session, writes storage, logs a code or
 result, or retries an operation automatically.
 
-```ts
+```tsx
 import { createElement } from 'react';
 import {
     CompleteVerificationScreen,

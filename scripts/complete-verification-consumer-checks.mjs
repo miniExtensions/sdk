@@ -272,12 +272,23 @@ export function checkCompleteVerificationReactMatrix({
                 `@types/react@${version.types}`,
                 `@types/react-dom@${version.domTypes}`,
             ]);
+            // Compile the actual packed React guide in a consumer that has the
+            // optional React peer. The core guide compiler intentionally has none.
+            const guide = readFileSync(
+                join(directory, 'node_modules/@miniextensions/sdk/docs/ui.md'),
+                'utf8'
+            )
+                .split('## Complete verification screen\n')[1]
+                ?.match(/```tsx\n([\s\S]*?)\n```/)?.[1];
+            assert(guide, 'Missing packed complete verification React guide');
             for (const extension of ['mts', 'cts']) {
                 const name = `complete-verification.${extension}`;
                 writeFileSync(
                     join(directory, name),
                     completeVerificationTypedConsumer
                 );
+                const guideName = `complete-verification-guide.${extension}`;
+                writeFileSync(join(directory, guideName), guide);
                 run(process.execPath, [
                     typescriptBin,
                     '--noEmit',
@@ -291,6 +302,7 @@ export function checkCompleteVerificationReactMatrix({
                     '--moduleResolution',
                     'NodeNext',
                     name,
+                    guideName,
                 ]);
             }
             const result = JSON.parse(

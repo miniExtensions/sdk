@@ -311,7 +311,7 @@ SOFTWARE.
 
 ## Linkify (`linkifyjs` 3.0.5)
 
-The complete localized numeric read-only display retains native link tokenization and presentation.
+The complete localized numeric and complete readonly-text displays retain native link tokenization and presentation. Readonly-text source tests use linkify-react 3.0.4 as a development-only native oracle; runtime rendering uses the existing linkifyjs 3.0.5 dependency.
 
 ```text
 Copyright (c) 2021 SoapBox Innovations Inc.
@@ -337,7 +337,7 @@ THE SOFTWARE.
 
 ## Heroicons
 
-The numeric empty-state symbol retains the native NoSymbol icon from [Heroicons](https://github.com/tailwindlabs/heroicons).
+The numeric and complete readonly-text empty-state symbols retain the native NoSymbol icon from [Heroicons](https://github.com/tailwindlabs/heroicons).
 
 ```text
 MIT License

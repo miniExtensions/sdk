@@ -673,3 +673,10 @@ unestablished delayed vendor-class callback after a successor commit.
 These synthetic checks do not establish Android/OS IME, telephone navigation,
 visual layout, hosted authorization or native Form/Grid persistence. Android's
 existing formatter caret timer remains part of the private baseline.
+
+Complete readonly-text qualification includes real `linkify-react` 3.0.4
+differential source tests against the SDK-owned `linkifyjs` 3.0.5 renderer,
+React 18/19 packed ESM/CommonJS/type/SSR/DOM consumers and standalone Chromium
+layout/link checks. The oracle is development-only so headless consumers retain
+the existing React-optional contract. Native Form/Portal/Formula adoption and
+interactive hosted evidence remain separate from SDK package proof.

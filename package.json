@@ -99,7 +99,8 @@
         "./react/currency.css": "./dist/esm/react/currency.css",
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
         "./react/linked-records.css": "./dist/esm/react/linked-records.css",
-        "./react/single-select.css": "./dist/esm/react/single-select.css"
+        "./react/single-select.css": "./dist/esm/react/single-select.css",
+        "./react/complete-readonly-text.css": "./dist/esm/react/complete-readonly-text.css"
     },
     "files": [
         "dist/esm",
@@ -167,6 +168,7 @@
         "c8": "11.0.0",
         "esbuild": "0.25.10",
         "happy-dom": "20.0.11",
+        "linkify-react": "3.0.4",
         "playwright": "1.64.0",
         "prettier": "3.6.2",
         "react": "18.3.1",

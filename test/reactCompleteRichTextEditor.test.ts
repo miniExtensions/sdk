@@ -502,6 +502,101 @@ for (const selected of [true, false]) {
     });
 }
 
+it('declines bold-only plain clipboard text and preserves the real native literal fallback', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(ControlledCompleteEditor, {
+            editorRef: ref,
+            writes,
+            initial: '',
+        })
+    );
+    const editor = await f.editor(ref);
+    const { view } = editor;
+    await f.select(view, 1);
+    // Import only after the real lazy runtime has mounted under this fixture's
+    // browser globals, preserving the engine's platform and SSR initialization.
+    const { generalPastePluginKey } = await import(
+        '../src/react/completeRichTextPaste.js'
+    );
+    const plugin = generalPastePluginKey.get(view.state);
+    assert(plugin, 'The actual General paste plugin must be installed');
+    const handlePaste = plugin.props.handlePaste;
+    assert(handlePaste);
+    const text = '**Pasted strong**';
+    const browserWindow: Window = f.window;
+    const event = new browserWindow.Event('paste', { cancelable: true });
+    Object.defineProperty(event, 'clipboardData', {
+        value: {
+            types: ['text/plain'],
+            files: [],
+            items: [],
+            getData: (type: string) => (type === 'text/plain' ? text : ''),
+        },
+    });
+    await act(async () => {
+        assert.equal(
+            handlePaste.call(
+                plugin,
+                view,
+                event as unknown as ClipboardEvent,
+                view.state.doc.slice(0)
+            ),
+            false
+        );
+    });
+    assert.equal(event.defaultPrevented, false);
+    assert.equal(view.state.doc.textContent, '');
+    assert.deepEqual(writes, []);
+
+    // Run ProseMirror's public native paste path, including the same installed
+    // handlers and its real plain-text parser, without a replacement engine.
+    await act(async () => {
+        assert.equal(
+            view.pasteText(text, event as unknown as ClipboardEvent),
+            true
+        );
+    });
+    assert.equal(view.state.doc.textContent, text);
+    assert.equal(view.dom.textContent, text);
+    assert.equal(view.dom.querySelector('strong'), null);
+    assert.equal(view.dom.querySelector('h1'), null);
+    assert.deepEqual(writes, ['\\*\\*Pasted strong\\*\\*']);
+    assert.equal(ref.current, editor);
+});
+
+it('parses recognized plain Markdown into actual heading and strong nodes with exact canonical output', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    await f.render(
+        h(ControlledCompleteEditor, {
+            editorRef: ref,
+            writes,
+            initial: '',
+        })
+    );
+    const editor = await f.editor(ref);
+    const { view } = editor;
+    await f.select(view, 1);
+    const markdown = '# Pasted heading\n\n**Pasted strong**';
+    const event = await f.paste(view, { 'text/plain': markdown });
+    assert.equal(event.defaultPrevented, true);
+    assert.equal(view.state.doc.firstChild?.type.name, 'heading');
+    assert.equal(
+        view.dom.querySelector('h1 .heading-content')?.textContent,
+        'Pasted heading'
+    );
+    assert.equal(
+        view.dom.querySelector('strong')?.textContent,
+        'Pasted strong'
+    );
+    assert.deepEqual(writes, [markdown]);
+    assert.equal(ref.current, editor);
+});
+
 it('leaves native HTML clipboard parsing intact while explicit VSCode Markdown overrides ordinary HTML', async (t) => {
     const f = await completeRichTextFixture(t);
     const refs = [

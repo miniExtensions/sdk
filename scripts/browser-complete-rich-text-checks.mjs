@@ -57,10 +57,13 @@ import '@miniextensions/sdk/react/rich-text.css';
 const editor=createRef(),writes=[],nativeEvents=[],handles=new Map(),observedEvents=new WeakMap();let nextHandle=0,current,update,clipboardStatus={state:'idle'},mounted=true;
 const initial={value:'**Bold** and _italic_\\n\\n[ ] task',readOnly:false,owner:1,id:'rich-editor',label:'Synthetic Rich Text',ariaInvalid:false,clipboard:'**Pasted strong**'};
 function describeTarget(target){return target instanceof Element?{id:target.id||null,tag:target.tagName,contentEditable:target.getAttribute('contenteditable'),isContentEditable:target instanceof HTMLElement?target.isContentEditable:null}:null;}
+function nativeDocPosition(view,node,offset){if(!view||view.isDestroyed||!node||!view.dom.contains(node))return null;try{return view.posAtDOM(node,offset);}catch{return null;}}
+function docEndPosition(view){if(!view||view.isDestroyed)return null;const doc=view.state.doc;return doc.lastChild?.isTextblock?doc.content.size-1:null;}
+function clipboardObservation(event){const data=event.type==='paste'?event.clipboardData:null;return data?{types:Array.from(data.types),plain:data.getData('text/plain'),html:data.getData('text/html'),vscodeMetadata:data.getData('vscode-editor-data')}:null;}
 function keyboardRuntime(){const handle=editor.current,view=handle?.view,input=view?.input;return{navigatorPlatform:navigator.platform,viewEditable:view?.editable??null,composing:view?.composing??null,input:input?{composing:input.composing??null,compositionEndedAt:input.compositionEndedAt??null,lastKeyCode:input.lastKeyCode??null,lastKeyCodeTime:input.lastKeyCodeTime??null}:null,selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,enabledExtensionNames:handle?.extensions?.extensions.map(extension=>extension.name)??[],pluginCount:view?.state.plugins.length??0,handleKeyDownPluginCount:view?.state.plugins.filter(plugin=>typeof plugin.props.handleKeyDown==='function').length??0,keymapCount:handle?.keymaps?.length??0};}
 function observeEventMicrotask(event,observed){const runtime=keyboardRuntime();observed.microtasks.push({eventPhase:event.eventPhase,defaultPrevented:event.defaultPrevented,runtime});if(event.eventPhase===Event.NONE){observed.defaultPreventedAfterDispatch=event.defaultPrevented;observed.observedAfterDispatch=true;observed.runtimeAfterDispatch=runtime;}}
 for(const type of ['keydown','beforeinput','paste','click']){
- document.addEventListener(type,event=>{const observed={type,trusted:event.isTrusted,key:event.key??null,inputType:event.inputType??null,ctrlKey:event.ctrlKey??null,metaKey:event.metaKey??null,shiftKey:event.shiftKey??null,altKey:event.altKey??null,keyCode:event.keyCode??null,code:event.code??null,which:event.which??null,isComposing:event.isComposing??null,timeStamp:event.timeStamp,target:describeTarget(event.target),activeElementAtCapture:describeTarget(document.activeElement),eventPhaseAtCapture:event.eventPhase,defaultPreventedAtCapture:event.defaultPrevented,defaultPreventedAfterDispatch:null,observedAfterDispatch:false,runtimeAtCapture:keyboardRuntime(),runtimeAfterDispatch:null,bubble:null,microtasks:[]};observedEvents.set(event,observed);nativeEvents.push(observed);queueMicrotask(()=>observeEventMicrotask(event,observed));},true);
+ document.addEventListener(type,event=>{const observed={type,trusted:event.isTrusted,key:event.key??null,inputType:event.inputType??null,ctrlKey:event.ctrlKey??null,metaKey:event.metaKey??null,shiftKey:event.shiftKey??null,altKey:event.altKey??null,keyCode:event.keyCode??null,code:event.code??null,which:event.which??null,isComposing:event.isComposing??null,timeStamp:event.timeStamp,target:describeTarget(event.target),activeElementAtCapture:describeTarget(document.activeElement),clipboard:clipboardObservation(event),eventPhaseAtCapture:event.eventPhase,defaultPreventedAtCapture:event.defaultPrevented,defaultPreventedAfterDispatch:null,observedAfterDispatch:false,runtimeAtCapture:keyboardRuntime(),runtimeAfterDispatch:null,bubble:null,microtasks:[]};observedEvents.set(event,observed);nativeEvents.push(observed);queueMicrotask(()=>observeEventMicrotask(event,observed));},true);
  document.addEventListener(type,event=>{const observed=observedEvents.get(event);if(!observed)return;observed.bubble={eventPhase:event.eventPhase,defaultPrevented:event.defaultPrevented,runtime:keyboardRuntime()};queueMicrotask(()=>observeEventMicrotask(event,observed));});
 }
 function captureHandle(){const handle=editor.current;if(handle&&!handles.has(handle))handles.set(handle,++nextHandle);return handle;}
@@ -75,7 +78,7 @@ function App(){
 const app=createRoot(document.querySelector('main'));flushSync(()=>app.render(h(React.StrictMode,null,h(App))));
 window.completeRichTextProbe={
  update:next=>update(next),
- snapshot:()=>{const handle=captureHandle(),view=handle?.view,dom=view?.dom,selection=window.getSelection();return{reactVersion:React.version,state:{...current},writes:[...writes],nativeEvents:[...nativeEvents],keyboardRuntime:keyboardRuntime(),clipboard:{...clipboardStatus},handleId:handle?handles.get(handle):null,views:[...handles].map(([instance,id])=>({id,destroyed:!instance.view||instance.view.isDestroyed})),selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,nativeSelection:selection?{text:selection.toString(),anchorOffset:selection.anchorOffset,focusOffset:selection.focusOffset}:null,focused:!!dom&&(document.activeElement===dom||dom.contains(document.activeElement)),roots:document.querySelectorAll('.ProseMirror').length,dom:dom?{id:dom.id,html:dom.innerHTML,text:dom.textContent,editable:dom.contentEditable,label:dom.getAttribute('aria-labelledby'),description:dom.getAttribute('aria-describedby'),invalid:dom.getAttribute('aria-invalid')}:null,bodyPortals:[...document.body.children].filter(node=>node.tagName==='DIV').length};},
+ snapshot:()=>{const handle=captureHandle(),view=handle?.view,dom=view?.dom,selection=window.getSelection();return{reactVersion:React.version,state:{...current},writes:[...writes],nativeEvents:[...nativeEvents],keyboardRuntime:keyboardRuntime(),clipboard:{...clipboardStatus},handleId:handle?handles.get(handle):null,views:[...handles].map(([instance,id])=>({id,destroyed:!instance.view||instance.view.isDestroyed})),docEnd:docEndPosition(view),selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,nativeSelection:selection?{text:selection.toString(),collapsed:selection.isCollapsed,anchorOffset:selection.anchorOffset,focusOffset:selection.focusOffset,anchorDocPosition:nativeDocPosition(view,selection.anchorNode,selection.anchorOffset),focusDocPosition:nativeDocPosition(view,selection.focusNode,selection.focusOffset)}:null,focused:!!dom&&(document.activeElement===dom||dom.contains(document.activeElement)),roots:document.querySelectorAll('.ProseMirror').length,dom:dom?{id:dom.id,html:dom.innerHTML,text:dom.textContent,editable:dom.contentEditable,label:dom.getAttribute('aria-labelledby'),description:dom.getAttribute('aria-describedby'),invalid:dom.getAttribute('aria-invalid')}:null,bodyPortals:[...document.body.children].filter(node=>node.tagName==='DIV').length};},
  unmount:()=>{if(mounted){captureHandle();mounted=false;flushSync(()=>app.unmount());}}
 };
 `;
@@ -249,6 +252,30 @@ window.completeRichTextProbe={
             );
             assert.equal(copied.value, text);
             await focus();
+            await page.waitForFunction(() => {
+                const state = window.completeRichTextProbe.snapshot();
+                const native = state.nativeSelection;
+                const selection = state.selection;
+                if (
+                    !state.focused ||
+                    !native ||
+                    !selection ||
+                    native.anchorDocPosition === null ||
+                    native.focusDocPosition === null
+                )
+                    return false;
+                return (
+                    Math.min(
+                        native.anchorDocPosition,
+                        native.focusDocPosition
+                    ) === selection.from &&
+                    Math.max(
+                        native.anchorDocPosition,
+                        native.focusDocPosition
+                    ) === selection.to &&
+                    native.collapsed === (selection.from === selection.to)
+                );
+            });
             const previousPastes = (await snapshot()).nativeEvents.filter(
                 (event) => event.type === 'paste'
             ).length;
@@ -287,11 +314,37 @@ window.completeRichTextProbe={
         assert.deepEqual(state.writes, []);
         await editor.focus();
         await page.keyboard.press('ControlOrMeta+End');
+        await page.waitForFunction(() => {
+            const state = window.completeRichTextProbe.snapshot();
+            return (
+                state.focused &&
+                state.docEnd !== null &&
+                state.selection?.from === state.docEnd &&
+                state.selection.to === state.docEnd &&
+                state.nativeSelection?.collapsed === true &&
+                state.nativeSelection.anchorDocPosition === state.docEnd &&
+                state.nativeSelection.focusDocPosition === state.docEnd
+            );
+        });
+        const beforeEnd = await snapshot();
+        evidence.beforeEnd = {
+            handleId: beforeEnd.handleId,
+            docEnd: beforeEnd.docEnd,
+            nativeSelection: beforeEnd.nativeSelection,
+            selection: beforeEnd.selection,
+            focused: beforeEnd.focused,
+            keyboardRuntime: beforeEnd.keyboardRuntime,
+        };
         await page.keyboard.insertText(' tail');
         await page.waitForFunction(() =>
             window.completeRichTextProbe.snapshot().state.value.includes('tail')
         );
         const beforeMetadata = await snapshot();
+        assert.equal(
+            beforeMetadata.state.value,
+            '**Bold** and *italic*\n\n[ ] task\n\n tail'
+        );
+        assert.equal(await editor.locator('p').last().textContent(), ' tail');
         await update({
             id: 'rich-editor-renamed',
             label: 'Renamed Synthetic Rich Text',
@@ -310,6 +363,14 @@ window.completeRichTextProbe={
                 .snapshot()
                 .state.value.includes('tail continued')
         );
+        assert.equal(
+            (await snapshot()).state.value,
+            '**Bold** and *italic*\n\n[ ] task\n\n tail continued'
+        );
+        assert.equal(
+            await editor.locator('p').last().textContent(),
+            ' tail continued'
+        );
         await finish('formatted-editable-metadata');
 
         evidence.phase = 'keyboard-and-toolbar';
@@ -318,8 +379,20 @@ window.completeRichTextProbe={
         await page.keyboard.press('ControlOrMeta+Home');
         for (let index = 0; index < 5; index++)
             await page.keyboard.press('Shift+ArrowRight');
+        await page.waitForFunction(() => {
+            const state = window.completeRichTextProbe.snapshot();
+            return (
+                state.focused &&
+                state.nativeSelection?.text === 'Alpha' &&
+                state.selection?.from === 1 &&
+                state.selection.to === 6 &&
+                state.nativeSelection.anchorDocPosition === 1 &&
+                state.nativeSelection.focusDocPosition === 6
+            );
+        });
         const beforeBold = await snapshot();
         assert.equal(beforeBold.nativeSelection.text, 'Alpha');
+        assert.deepEqual(beforeBold.selection, { from: 1, to: 6 });
         evidence.beforeBold = {
             handleId: beforeBold.handleId,
             nativeSelection: beforeBold.nativeSelection,
@@ -359,6 +432,21 @@ window.completeRichTextProbe={
         evidence.phase = 'native-paste';
         await reset('');
         await nativePaste('**Pasted strong**', () => editor.click());
+        await page.waitForFunction(
+            () =>
+                window.completeRichTextProbe.snapshot().state.value ===
+                '\\*\\*Pasted strong\\*\\*'
+        );
+        assert.equal(
+            (await snapshot()).state.value,
+            '\\*\\*Pasted strong\\*\\*'
+        );
+        assert.equal(await editor.textContent(), '**Pasted strong**');
+        assert.equal(await editor.locator('strong').count(), 0);
+        await reset('');
+        await nativePaste('# Pasted heading\n\n**Pasted strong**', () =>
+            editor.click()
+        );
         await page.waitForFunction(() =>
             window.completeRichTextProbe
                 .snapshot()
@@ -367,6 +455,14 @@ window.completeRichTextProbe={
         assert.equal(
             await editor.locator('strong').textContent(),
             'Pasted strong'
+        );
+        assert.equal(
+            await editor.locator('h1 .heading-content').textContent(),
+            'Pasted heading'
+        );
+        assert.equal(
+            (await snapshot()).state.value,
+            '# Pasted heading\n\n**Pasted strong**'
         );
         await reset('```\ncode\n```');
         const code = editor.locator('pre code');

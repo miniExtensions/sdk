@@ -296,3 +296,9 @@ export type {
     BorrowedFormRenderPort,
     BorrowedFormRenderScope,
 } from './borrowedFormRenderScope.js';
+
+export {
+    classifyAttachmentPreview,
+    isAttachmentPreviewImage,
+    type AttachmentPreviewSource,
+} from './attachmentPreview.js';

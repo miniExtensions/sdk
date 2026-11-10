@@ -1,3 +1,4 @@
+import { build as bundle } from 'esbuild';
 import assert from 'node:assert/strict';
 import { bundlePortalChart } from './portal-chart-vendor-checks.mjs';
 import { createHash } from 'node:crypto';
@@ -90,6 +91,41 @@ for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
     }
 }
 
+// This vendor release has an ESM-only explicit entry. Produce a genuine
+// CommonJS closure rather than relying on require(esm), unavailable on early
+// Node 22 hosts admitted by the package's existing engines contract.
+const wordEntry = require.resolve('docx-preview/dist/docx-preview.mjs');
+assert.equal(
+    JSON.parse(readFileSync(require.resolve('docx-preview/package.json')))
+        .version,
+    '0.3.0'
+);
+await bundle({
+    entryPoints: [wordEntry],
+    bundle: true,
+    platform: 'neutral',
+    format: 'cjs',
+    target: 'es2022',
+    external: ['jszip'],
+    minifyWhitespace: true,
+    legalComments: 'inline',
+    outfile: 'dist/cjs/react/attachmentPreviewVendor.js',
+});
+const previewPath = 'dist/cjs/react/AttachmentPreview.js';
+const preview = readFileSync(previewPath, 'utf8');
+assert(preview.includes('docx-preview/dist/docx-preview.mjs'));
+writeFileSync(
+    previewPath,
+    preview.replace(
+        'docx-preview/dist/docx-preview.mjs',
+        './attachmentPreviewVendor.js'
+    )
+);
+copyFileSync(
+    require.resolve('docx-preview/LICENSE'),
+    'dist/cjs/react/docx-preview.LICENSE.txt'
+);
+
 // Both compilers have finished; bundle only the Chart adapter closure.
 await bundlePortalChart();
 
@@ -165,6 +201,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-calendly',
         'complete-verification',
         'complete-portal-chart',
+        'attachment-preview',
         'date',
         'datetime',
         'duration',

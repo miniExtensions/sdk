@@ -1,3 +1,4 @@
+import { checkAttachmentPreviewReactMatrix } from './attachment-preview-consumer-checks.mjs';
 import { assertPhoneVendor } from './phone-vendor-checks.mjs';
 import {
     checkNativeFormProgressConsumer,
@@ -575,6 +576,8 @@ try {
         'dist/cjs/react/complete-duration.css',
         'dist/esm/react/search-gate.css',
         'dist/cjs/react/search-gate.css',
+        'dist/esm/react/attachment-preview.css',
+        'dist/cjs/react/attachment-preview.css',
         'dist/esm/react/complete-portal-chart.css',
         'dist/cjs/react/complete-portal-chart.css',
         'dist/esm/react/complete-calendly.css',
@@ -3202,6 +3205,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(completeMultilineMatrix.versions.length, 2);
     assert.equal(completeMultilineMatrix.cleanup, 'completed');
+    const attachmentPreviewMatrix = checkAttachmentPreviewReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(attachmentPreviewMatrix.profiles.length, 4);
+    assert.equal(attachmentPreviewMatrix.cleanup, 'completed');
     const portalChartMatrix = checkCompletePortalChartReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

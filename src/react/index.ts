@@ -2422,3 +2422,10 @@ export {
     type PortalChartData,
     type PortalChartRow,
 } from './CompletePortalChart.js';
+
+export {
+    AttachmentPreview,
+    type AttachmentPreviewProps,
+    type AttachmentPreviewLabels,
+} from './AttachmentPreview.js';
+export type { AttachmentPreviewSource } from '../ui/attachmentPreview.js';

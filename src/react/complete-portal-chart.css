@@ -1,0 +1,12 @@
+/* Equivalent to the native sr-only data list; no app Tailwind is required. */
+.mx-sdk-portal-chart__data {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}

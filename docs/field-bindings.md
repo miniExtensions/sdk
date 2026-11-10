@@ -1473,3 +1473,45 @@ For standalone `renderMultipleSelectsField(props)` calls outside those wrappers,
 the incoming props object is the conservative source: local input rerenders
 retain text, but a new props object clears it. Refreshed standalone snapshots do
 not guarantee retention. This internal identity is never an owner or write lease.
+
+## Complete Portal Chart
+
+`CompletePortalChart` from `@miniextensions/sdk/react` owns the complete native-compatible vertical Bar renderer, stable incoming-row projection and matching accessible data list. Import `@miniextensions/sdk/react/complete-portal-chart.css` once; the textual fallback is visually hidden using this scoped stylesheet, without application Tailwind.
+
+```tsx
+import {
+    CompletePortalChart,
+    type PortalChartRow,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-portal-chart.css';
+
+const rows: readonly PortalChartRow[] = [
+    {
+        data: {
+            type: 'loaded',
+            data: { viewType: 'chart', xAxisValue: 'First', yAxisValue: 0 },
+        },
+    },
+    { data: { type: 'loading' } },
+    {
+        data: {
+            type: 'loaded',
+            data: { viewType: 'chart', xAxisValue: 'First', yAxisValue: -2.75 },
+        },
+    },
+];
+<CompletePortalChart
+    rows={rows}
+    title=""
+    fieldName="Requests"
+    xAxisFieldName="Name"
+    yAxisFieldName="Amount"
+    backgroundColor="rgb(37 99 235)"
+/>;
+```
+
+Only loaded `viewType: 'chart'` values contribute, in input order. Duplicate labels and zero, negative and fractional numeric values remain literal. Already-loaded data stays visible during caller-owned pagination/reload feedback. The caller validates fields, derives readable X/numeric Y values, retains record identity and authorized reads, and supplies one portable CSS color from its existing theme. The component adds no client, state store, mutation, provider access, sorting or aggregation. An omitted/null title falls back to the field name; an explicit empty title stays empty.
+
+The canvas is `aria-hidden`; corresponding `dt`/`dd` pairs provide its textual data. Chart.js owns actual canvas painting and responsive observers through the verified official adapter. Updates retain the mounted Chart instance; unmount destroys only its owned instance. Native React development StrictMode remounts are covered by the packed-browser check. Import/server rendering does not initialize a canvas.
+
+Distribution keeps exact Chart.js 4.4.2 as a runtime dependency. The MIT `react-chartjs-2` 5.3.1 adapter, whose peer contract includes React18/19, is verified and bundled into this component's two emitted modules after TypeScript compilation. React and Chart.js remain external; the SDK's React peer remains optional for headless consumers. No adapter dev dependency or native alias is required by a packed customer. The adapter's notice ships in `THIRD_PARTY_NOTICES.md`.

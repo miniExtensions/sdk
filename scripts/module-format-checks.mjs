@@ -185,6 +185,7 @@ export function assertModuleFormats(root) {
                 './react/search-gate.css',
                 './react/complete-calendly.css',
                 './react/complete-verification.css',
+                './react/complete-portal-chart.css',
                 './react/date.css',
                 './react/datetime.css',
                 './react/duration.css',

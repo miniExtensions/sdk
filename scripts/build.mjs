@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { bundlePortalChart } from './portal-chart-vendor-checks.mjs';
 import { createHash } from 'node:crypto';
 import {
     copyFileSync,
@@ -89,6 +90,9 @@ for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
     }
 }
 
+// Both compilers have finished; bundle only the Chart adapter closure.
+await bundlePortalChart();
+
 mkdirSync('dist/cjs', { recursive: true });
 writeFileSync('dist/cjs/package.json', '{"type":"commonjs"}\n');
 
@@ -160,6 +164,7 @@ for (const format of ['esm', 'cjs']) {
         'search-gate',
         'complete-calendly',
         'complete-verification',
+        'complete-portal-chart',
         'date',
         'datetime',
         'duration',

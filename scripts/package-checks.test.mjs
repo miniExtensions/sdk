@@ -26,6 +26,7 @@ import './process-group-observer.test.mjs';
 import './attachment-phase-receipts.test.mjs';
 import './browser-rich-text-zoom.test.mjs';
 import './browser-rich-text-focus.test.mjs';
+import './portal-chart-inputs.test.mjs';
 import {
     assertPrivacyProofInventory,
     privacyScenarioInventory,

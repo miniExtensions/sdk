@@ -2,6 +2,7 @@ import {
     createElement as h,
     useEffect,
     useId,
+    useLayoutEffect,
     useRef,
     type CSSProperties,
     type FormEvent,
@@ -113,11 +114,15 @@ export function PortalSearchGate(props: PortalSearchGateProps) {
     const errorId = `${generatedId}-error`;
     const dialog = useRef<HTMLDialogElement>(null);
     const input = useRef<HTMLInputElement>(null);
-    useEffect(() => {
+    const useCommitEffect =
+        typeof document === 'undefined' ? useEffect : useLayoutEffect;
+    useCommitEffect(() => {
         const node = dialog.current;
         if (node == null) return;
         node.showModal();
         input.current?.focus();
+        // Close while connected: removal first clears the browser's modal
+        // lifetime, so a later passive close cannot restore its opener focus.
         return () => node.close();
     }, []);
     const style: GateStyle = {

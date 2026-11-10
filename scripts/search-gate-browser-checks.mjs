@@ -26,6 +26,7 @@ export async function checkSearchGateBrowser({
         pageErrors: [],
         unexpectedRequests: [],
         focusChecks: [],
+        lifecycleChecks: [],
         uiTransitions: [],
         cleanup: {},
     });
@@ -55,7 +56,7 @@ import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {PortalSearchGate} from '@miniextensions/sdk/react';
 import {hasSearchPageQueryParam} from '@miniextensions/sdk/portals';
-let navigations=[],clears=0,urlReads=0;
+let navigations=[],clears=0,urlReads=0,openers=[];
 function App(){
  const [mounted,setMounted]=useState(false),[noResults,setNoResults]=useState(false),[field,setField]=useState({fieldId:'fld_name',fieldName:'Name 東京'}),[second,setSecond]=useState(false);
  const actions=h('span',null,
@@ -64,13 +65,13 @@ function App(){
   h('button',{type:'button',onClick:()=>setSecond(true)},'Open second gate'),
   h('button',{type:'button',onClick:()=>setMounted(false)},'Unmount gate'));
  return h(React.Fragment,null,
-  h('button',{type:'button','data-search-proof-control':'open-gate',onClick:()=>setMounted(true)},'Open gate'),
+  h('button',{type:'button','data-search-proof-control':'open-gate',onClick:event=>{openers.push(event.currentTarget===document.activeElement);setMounted(true);}},'Open gate'),
   h('button',{type:'button','data-search-proof-control':'outside-control'},'Outside control'),
   mounted?h(PortalSearchGate,{searchPageField:field,title:'Search one',hasNoResults:noResults,getCurrentUrl(){urlReads++;return 'https://example.test/portal?keep=yes&search_fld_name=old#fragment';},onNavigate(url){navigations.push({url,recognized:hasSearchPageQueryParam({searchParams:new URL(url).searchParams,searchPageField:field})});},onClearSearch(){clears++;},headerActions:actions,accentColor:'#4f46e5',focusColor:'#6366f1'}):null,
-  second?h(PortalSearchGate,{searchPageField:{fieldId:'fld_second',fieldName:'Second'},title:'Search two',getCurrentUrl:()=> 'https://example.test',onNavigate(url){navigations.push({url});},headerActions:h('button',{type:'button',onClick:()=>setSecond(false)},'Unmount second gate')}):null);
+  second?h(PortalSearchGate,{searchPageField:{fieldId:'fld_second',fieldName:'Second'},title:'Search two',getCurrentUrl:()=> 'https://example.test',onNavigate(url){navigations.push({url});},headerActions:h('span',null,h('button',{type:'button',onClick:()=>setSecond(false)},'Unmount second gate'),h('button',{type:'button',onClick:()=>setMounted(false)},'Unmount first gate'))}):null);
 }
 createRoot(document.querySelector('main')).render(h(React.StrictMode,null,h(App)));
-window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navigations],clears,urlReads})};
+window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navigations],clears,urlReads,openers:[...openers]})};
 `;
         writeFileSync(join(directory, 'host.mjs'), source);
         const bundle = await build({
@@ -166,6 +167,28 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 name: 'Open gate',
                 exact: true,
             });
+            const focusIs = async (expected, phase) => {
+                const fact = await expected.evaluate((node) => {
+                    const document = node.ownerDocument;
+                    const active = document.activeElement;
+                    const matches = active === node;
+                    return {
+                        matches,
+                        expectedConnected: node.isConnected,
+                        activeTag: active?.tagName ?? null,
+                        activeIsBody: active === document.body,
+                        activeIsDocumentElement:
+                            active === document.documentElement,
+                        activeInDialog:
+                            active?.closest('dialog,[role="dialog"]') != null,
+                        documentHasFocus: document.hasFocus(),
+                        openDialogCount:
+                            document.querySelectorAll('dialog[open]').length,
+                    };
+                });
+                evidence.lifecycleChecks.push({ mobile, phase, ...fact });
+                return fact.matches;
+            };
             await open.click();
             const dialog = page.getByRole('dialog', {
                 name: 'Search one',
@@ -190,6 +213,7 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             );
             assert.equal(initial.urlReads, 0);
             assert.deepEqual(initial.navigations, []);
+            assert.deepEqual(initial.openers, [true]);
             await input.fill(' \t ');
             await input.press('Enter');
             assert.equal(
@@ -405,6 +429,7 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                     );
                 }
             }
+            evidence.phase = 'second-gate-unmount';
             await second
                 .getByRole('button', {
                     name: 'Unmount second gate',
@@ -413,14 +438,24 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 .click();
             assert.equal(await second.count(), 0);
             assert.equal(await dialog.isVisible(), true);
+            assert.equal(
+                await focusIs(
+                    dialog.getByRole('button', {
+                        name: 'Open second gate',
+                        exact: true,
+                    }),
+                    'second-opener-restored'
+                ),
+                true,
+                'the second gate restores its opener in the remaining gate'
+            );
+            evidence.phase = 'first-gate-unmount';
             await dialog
                 .getByRole('button', { name: 'Unmount gate', exact: true })
                 .click();
             assert.equal(await dialog.count(), 0);
             assert.equal(
-                await open.evaluate(
-                    (node) => node.ownerDocument.activeElement === node
-                ),
+                await focusIs(open, 'first-opener-restored'),
                 true,
                 'unmount restores the opener focus'
             );
@@ -430,6 +465,53 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
                 '',
                 'new mount has its own empty draft'
             );
+            evidence.phase = 'successor-gate-lifetime';
+            await dialog
+                .getByRole('button', { name: 'Open second gate', exact: true })
+                .click();
+            await second.getByLabel('Second', { exact: true }).waitFor({
+                state: 'visible',
+            });
+            const retireFirst = second.getByRole('button', {
+                name: 'Unmount first gate',
+                exact: true,
+            });
+            await retireFirst.click();
+            assert.equal(await dialog.count(), 0);
+            assert.equal(await second.isVisible(), true);
+            assert.equal(
+                await focusIs(
+                    retireFirst,
+                    'retired-first-keeps-successor-focus'
+                ),
+                true,
+                'retiring the first gate must not steal successor focus'
+            );
+            await second
+                .getByRole('button', {
+                    name: 'Unmount second gate',
+                    exact: true,
+                })
+                .click();
+            assert.equal(await second.count(), 0);
+            assert.equal(await dialog.count(), 0);
+            await open.click();
+            assert.equal(
+                await focusIs(
+                    dialog.getByLabel('Other', { exact: true }),
+                    'fresh-lifetime-focus'
+                ),
+                true,
+                'a fresh gate owns focus after both older lifetimes retire'
+            );
+            const afterLifetimes = await page.evaluate(() =>
+                window.searchGateProof.snapshot()
+            );
+            assert.equal(afterLifetimes.urlReads, 1);
+            assert.equal(afterLifetimes.navigations.length, 1);
+            assert.equal(afterLifetimes.clears, 1);
+            assert.deepEqual(afterLifetimes.openers, [true, true, true]);
+            evidence.phase = 'interaction';
             await page.screenshot({
                 path: join(
                     output,

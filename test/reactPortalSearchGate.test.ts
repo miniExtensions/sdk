@@ -40,7 +40,11 @@ it('SSR imports/renders escaped complete markup without CSS, DOM or URL/navigati
     assert.equal(typeof document, 'undefined');
 });
 
-async function fixture(t: TestContext, patch: Partial<Props> = {}) {
+async function fixture(
+    t: TestContext,
+    patch: Partial<Props> = {},
+    setup?: (window: Window) => () => void
+) {
     const window = new Window();
     const keys = [
         'window',
@@ -66,6 +70,7 @@ async function fixture(t: TestContext, patch: Partial<Props> = {}) {
     const { createRoot } = await import('react-dom/client');
     const container = window.document.createElement('div');
     window.document.body.append(container);
+    const disposeSetup = setup?.(window);
     const root = createRoot(container as unknown as HTMLElement);
     const navigations: string[] = [];
     let reads = 0;
@@ -97,6 +102,7 @@ async function fixture(t: TestContext, patch: Partial<Props> = {}) {
     };
     t.after(async () => {
         await unmount();
+        disposeSetup?.();
         keys.forEach((key, index) => {
             const old = originals[index];
             if (old) Object.defineProperty(globalThis, key, old);
@@ -182,6 +188,36 @@ it('mounts a real non-dismissible dialog with independent label/description and 
     await f.submit();
     assert.deepEqual(f.navigations, []);
     assert.equal(f.reads, 0);
+});
+
+it('closes the real dialog before removal across StrictMode cleanup and unmount', async (t) => {
+    const closes: { connected: boolean; open: boolean }[] = [];
+    const f = await fixture(t, {}, (window) => {
+        const prototype = window.HTMLDialogElement.prototype;
+        const close = prototype.close;
+        prototype.close = function (
+            this: typeof prototype,
+            ...args: Parameters<typeof close>
+        ) {
+            closes.push({ connected: this.isConnected, open: this.open });
+            return close.apply(this, args);
+        };
+        return () => {
+            prototype.close = close;
+        };
+    });
+    assert.equal(closes.length, 1, 'StrictMode cleans up its first setup');
+    assert.deepEqual(closes[0], { connected: true, open: true });
+    assert.equal(f.container.querySelector('dialog')?.open, true);
+    await f.unmount();
+    assert.equal(closes.length, 2, 'the accepted mount is closed once');
+    assert.deepEqual(closes[1], { connected: true, open: true });
+    assert.equal(f.container.querySelector('dialog'), null);
+    assert.equal(f.reads, 0);
+    assert.deepEqual(f.navigations, []);
+    assert.equal(f.clears, 0);
+    // HappyDOM does not implement opener restoration. The packed Chromium
+    // proof retains that real-browser requirement, including multiple gates.
 });
 
 it('uses actual raw input until explicit submit, then navigates once to the canonical encoded URL', async (t) => {

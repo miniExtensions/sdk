@@ -1,0 +1,1055 @@
+{
+    "package": "outline-icons",
+    "version": "1.46.0",
+    "license": "BSD-3-Clause",
+    "unmodifiedSourceSha256": [
+        {
+            "path": "lib/components/AcademicCapIcon.d.ts",
+            "sha256": "ec50e6176326b734c28dff27e4665e9ee5d9d936afd76ebe8a5000bea499618f"
+        },
+        {
+            "path": "lib/components/AcademicCapIcon.js",
+            "sha256": "b22d9a44bf2a08a723f010fa14f0ed341acc0c7c8ea3398f00e7935eb3598789"
+        },
+        {
+            "path": "lib/components/AlignCenterIcon.d.ts",
+            "sha256": "dd0174570b2266e60c59ae8b119e96c1ac57daea3ff8ed5dcaa9cb8185f489f1"
+        },
+        {
+            "path": "lib/components/AlignCenterIcon.js",
+            "sha256": "dbdea5207b869ffcda8ba6ddd5c516f448393516de993a4ce6f33745a757b84e"
+        },
+        {
+            "path": "lib/components/AlignFullWidthIcon.d.ts",
+            "sha256": "8f0fad8679ac6bf288c47ca202dc338c0806c5bd156627a54281d691bbc2da74"
+        },
+        {
+            "path": "lib/components/AlignFullWidthIcon.js",
+            "sha256": "90dba5bd912814b673ff5ee487458245f0d112befdd4d170f6b7e4dc91fd0508"
+        },
+        {
+            "path": "lib/components/AlignImageCenterIcon.d.ts",
+            "sha256": "21048f7f0fc138e1d3be0e11d3155300ecfc2546729bf4b56b660cbe93159675"
+        },
+        {
+            "path": "lib/components/AlignImageCenterIcon.js",
+            "sha256": "2b1c97220a97f07e62141528c7875a05619cacd1db9b4c23e812a045f00d6d4c"
+        },
+        {
+            "path": "lib/components/AlignImageLeftIcon.d.ts",
+            "sha256": "34a44f1cdd22204d5159841d1b105b3cbf1744a383e31bb353f7ff704874d982"
+        },
+        {
+            "path": "lib/components/AlignImageLeftIcon.js",
+            "sha256": "742ba300296b020422c25556a8de8199511e4f568e99bc7ca6a59488a3b959c7"
+        },
+        {
+            "path": "lib/components/AlignImageRightIcon.d.ts",
+            "sha256": "36aa50565440cb3fbcf3a0a3fb79745e95b1bae468f5b7c115972c57040ed4df"
+        },
+        {
+            "path": "lib/components/AlignImageRightIcon.js",
+            "sha256": "32d021d5604d1706a0411378d3d81454b70b1ab40a2c86f88ac41f9e427af34d"
+        },
+        {
+            "path": "lib/components/AlignLeftIcon.d.ts",
+            "sha256": "927453feecc8a1e186f03284993df85976915a0050f1408884393df5d7571e19"
+        },
+        {
+            "path": "lib/components/AlignLeftIcon.js",
+            "sha256": "9a4fb66160e2c918b2395347fbf3b94f1c396abba6f929f0433d656dd07492f6"
+        },
+        {
+            "path": "lib/components/AlignRightIcon.d.ts",
+            "sha256": "c45562febbe6830306222fa0458f676223b9e11fafa78f505f6bec65220bc8d2"
+        },
+        {
+            "path": "lib/components/AlignRightIcon.js",
+            "sha256": "1ed40245b95836a060581bd31e1dcf984ddc0e027638a36a8c5c176ef957dad2"
+        },
+        {
+            "path": "lib/components/AlphabeticalSortIcon.d.ts",
+            "sha256": "67be3f8120a5d7fd5c288e750ca71c02dc8cf3cdf1d32181c93d23a23cdd7256"
+        },
+        {
+            "path": "lib/components/AlphabeticalSortIcon.js",
+            "sha256": "44dc2cf30875dc562faf221fc9bd256980d20dcce126ecb5ba0d35913cbdd572"
+        },
+        {
+            "path": "lib/components/ArchiveIcon.d.ts",
+            "sha256": "6fbe06a6346a068e8190ad73aef23a89dd5af580be161d99c33cef2a21a8d2e2"
+        },
+        {
+            "path": "lib/components/ArchiveIcon.js",
+            "sha256": "3a73c24d171c6fccec362501ee22e8b5b4c283651463f04f492165cebfa5c70f"
+        },
+        {
+            "path": "lib/components/ArrowIcon.d.ts",
+            "sha256": "faf872cb48d08429673dd32d3fb7e140c6c75472738d4d4358dd04ba2cf36a9f"
+        },
+        {
+            "path": "lib/components/ArrowIcon.js",
+            "sha256": "09a31bdc57e991204b280bf8e7c5cab4c47bbc1e2cc0131f25a4b3ee65ef3353"
+        },
+        {
+            "path": "lib/components/AttachmentIcon.d.ts",
+            "sha256": "34c26e2f519f674c144a433e36b8dd6dea873cfd7b5188ca88f5348965d69e8e"
+        },
+        {
+            "path": "lib/components/AttachmentIcon.js",
+            "sha256": "432155ba479e45dda429cc9ac0a3b7e69bb72553df3ee149df3a8d0933b03112"
+        },
+        {
+            "path": "lib/components/BackIcon.d.ts",
+            "sha256": "56306dcb46684bc97e8587ed39fee9809925835920aeb12ccfdf0dac151cb08c"
+        },
+        {
+            "path": "lib/components/BackIcon.js",
+            "sha256": "f8eedb84f77ec1925ad07d82c7633503bea49004c1794997d971131e3174b198"
+        },
+        {
+            "path": "lib/components/BeakerIcon.d.ts",
+            "sha256": "90536c9f44f2ba679c054b9a959b36e3840c7e72145fc4f3aab7d89a5cc20c76"
+        },
+        {
+            "path": "lib/components/BeakerIcon.js",
+            "sha256": "5ce3e549b7d3dad8f600322b251cd10e4fdbd892c96ef2be86df0e04eac010e3"
+        },
+        {
+            "path": "lib/components/BicycleIcon.d.ts",
+            "sha256": "33496b3086861ee6f901959112e7c3f9e9bbbbed22d74944f55fd6d672746560"
+        },
+        {
+            "path": "lib/components/BicycleIcon.js",
+            "sha256": "2b40e87f50dd6f3a5ab5c614cfc17182dcc91b04cda4543b53cbd84bb18c43d5"
+        },
+        {
+            "path": "lib/components/BillingIcon.d.ts",
+            "sha256": "13c48fc9f27143ce4f2cc4cabb6af3c182dd10932b2f563467cf60e2314f3ddc"
+        },
+        {
+            "path": "lib/components/BillingIcon.js",
+            "sha256": "a71a4c2e3330f6b30a11a924acbb37891744f5e3c60e9cef5c8f394d1ee654ea"
+        },
+        {
+            "path": "lib/components/BlockQuoteIcon.d.ts",
+            "sha256": "cf92577969c5df4f773f0c2a1fd354f81594b37dbcd7ed7c6005daa9dbd91a1d"
+        },
+        {
+            "path": "lib/components/BlockQuoteIcon.js",
+            "sha256": "978b0bd686979ac07a001fbbec7c7b417d9163603ee216418e30abb5e8d38e30"
+        },
+        {
+            "path": "lib/components/BoldIcon.d.ts",
+            "sha256": "037950ec01a77a90a5a30942d59d501271481705a0c03e526f2a6e34f9842821"
+        },
+        {
+            "path": "lib/components/BoldIcon.js",
+            "sha256": "33832197671a07f1268e643bcc8f31850df6813d67bd9097a9c062a02328e80d"
+        },
+        {
+            "path": "lib/components/BookmarkIcon.d.ts",
+            "sha256": "bf4fefe5d65090046503cca11b7accf702cc77008094ad5eb981e8a42ffd2a7f"
+        },
+        {
+            "path": "lib/components/BookmarkIcon.js",
+            "sha256": "a3d1638b1ed05db824dd3e4705c161a3276b2f2ed0300e731011cbbdc29a55f5"
+        },
+        {
+            "path": "lib/components/BookmarkedIcon.d.ts",
+            "sha256": "bb4520cb9e45107a021ee5ae8af1a81cbf85a0cf6baa7e052f7388f1a38be51c"
+        },
+        {
+            "path": "lib/components/BookmarkedIcon.js",
+            "sha256": "31677a5f6458978748ba34069093a5b77eed110a3c1c9aab08ade2022776f943"
+        },
+        {
+            "path": "lib/components/BrowserIcon.d.ts",
+            "sha256": "44312ef6c92ad1f53f4018bc9f6454d9d5358873cbfd9632dcc208c91b7afd25"
+        },
+        {
+            "path": "lib/components/BrowserIcon.js",
+            "sha256": "500433c6fab08e8c1290f17201f68103f921db3c1e6eee2c8c999c22ea29d21d"
+        },
+        {
+            "path": "lib/components/BugIcon.d.ts",
+            "sha256": "6aceeffddacb935b90c78b5a4a430e9a56e60aebeb8978f28e46acc7fe1b83b5"
+        },
+        {
+            "path": "lib/components/BugIcon.js",
+            "sha256": "079b5b109cf3008d9aeb6a36afe8f28d158af544f5afa4f81aaf2adfefe3bfb3"
+        },
+        {
+            "path": "lib/components/BuildingBlocksIcon.d.ts",
+            "sha256": "d8699747edee9ec742cc3f3596095bf3e5cc96b6af65a237a59a18cf6d322f12"
+        },
+        {
+            "path": "lib/components/BuildingBlocksIcon.js",
+            "sha256": "dc4436f4c4fcaafe96f7197b3136657628a3877a2bcc08ac930106be199a305d"
+        },
+        {
+            "path": "lib/components/BulletedListIcon.d.ts",
+            "sha256": "2b18864e04f2a10c48013b6483f3c4c105edf0c48f6378905933ddeed900f5aa"
+        },
+        {
+            "path": "lib/components/BulletedListIcon.js",
+            "sha256": "6567567a9e87033db91ebb442b227350208cbeb4f64d7365a88453bd36e13a8b"
+        },
+        {
+            "path": "lib/components/CalendarIcon.d.ts",
+            "sha256": "b27a0cdde0c29ec29ac4b1972282892fd9415a8a7239bfa3503e937249cfa1ff"
+        },
+        {
+            "path": "lib/components/CalendarIcon.js",
+            "sha256": "4f952e7d6ee8ef18db244e3159f69da92cc21882e0c91378ed789663b1422854"
+        },
+        {
+            "path": "lib/components/CameraIcon.d.ts",
+            "sha256": "5c2944d08941066653e5726b2736bc5d2a9b5d9a7b50dd183234fc21b1a0fefd"
+        },
+        {
+            "path": "lib/components/CameraIcon.js",
+            "sha256": "4e18ddd9ff953448a2ed94c76fd03e8a4c5a2ff5459f2a20602e4bae6e8e1781"
+        },
+        {
+            "path": "lib/components/CheckboxIcon.d.ts",
+            "sha256": "eb2150531a44ce9b4f98c03787161921e34465d34a1bfebf12c9dc5fe2cbe032"
+        },
+        {
+            "path": "lib/components/CheckboxIcon.js",
+            "sha256": "c8849ba6d1c37756b3fa3382293ba7c2b29e4a17893d869abda296b6894d0caf"
+        },
+        {
+            "path": "lib/components/CheckmarkIcon.d.ts",
+            "sha256": "8080a5df775629962e0a1faf380d1af03f70fc5ed544487e3aeb549ddcb1655e"
+        },
+        {
+            "path": "lib/components/CheckmarkIcon.js",
+            "sha256": "1a16486b4e5e682dc0e5823294701b74ee699d6ad461eeac5e7e839e0c0e389d"
+        },
+        {
+            "path": "lib/components/ClockIcon.d.ts",
+            "sha256": "e789c24bb02e59320c2f4e2930c43459b86082a51a05f6865f7a329f2020d37f"
+        },
+        {
+            "path": "lib/components/ClockIcon.js",
+            "sha256": "5523d9a45a60b506c8c8a120137e74654e4b4d7dd8c58f30af2aedafc01e39ad"
+        },
+        {
+            "path": "lib/components/CloseIcon.d.ts",
+            "sha256": "00e904448ab6056dce0deac83f73455d9b2e1d3b73ac98cee88bb4e634db74bb"
+        },
+        {
+            "path": "lib/components/CloseIcon.js",
+            "sha256": "874a1d46813100fadb50728f1e32d67c0cc345a4cd5db3767fecce5885dc1065"
+        },
+        {
+            "path": "lib/components/CloudIcon.d.ts",
+            "sha256": "18034a96f4029385ac70b2407f89259821967c261b8fe5cbba03e0923e003636"
+        },
+        {
+            "path": "lib/components/CloudIcon.js",
+            "sha256": "75fde75409d8d3e0f0a8bd84dba71d1517df4255982c1638271924541b6e8e85"
+        },
+        {
+            "path": "lib/components/CodeIcon.d.ts",
+            "sha256": "421ab10bcd645e4f77c2c7cfeee29eb3971e5187884945b25a6612d3ef5c894b"
+        },
+        {
+            "path": "lib/components/CodeIcon.js",
+            "sha256": "f2c596d90c4ef1b69afdd8bc61a0189efdfa153d5dfd9fa2cd7599102b80f2ee"
+        },
+        {
+            "path": "lib/components/CoinsIcon.d.ts",
+            "sha256": "a2724d2cdae35df296786791e6c624b972dd8adf71d9591f8a6acaeb87132f1f"
+        },
+        {
+            "path": "lib/components/CoinsIcon.js",
+            "sha256": "8f06556b29414ce01b0dc70683aa7e308c0f7196b2cdb36ed531f257f86ddb54"
+        },
+        {
+            "path": "lib/components/CollapsedIcon.d.ts",
+            "sha256": "ce2ebfb3cbd080bda79c5c8d40c62a27bf0370cd4e3649c1f203b93dab0e65c7"
+        },
+        {
+            "path": "lib/components/CollapsedIcon.js",
+            "sha256": "f3534a34305abd498d0cb94ecd7ee7c594cf2ee4e1f39b039dcfbefe3a5d1d9c"
+        },
+        {
+            "path": "lib/components/CollectionIcon.d.ts",
+            "sha256": "0081ed78be87c76df8e34bf12db3b0388929c4483ca9e9e27709789eb9752c9e"
+        },
+        {
+            "path": "lib/components/CollectionIcon.js",
+            "sha256": "d27ee32730192f24f3cd083fe703602292358dd181f60e8722af47d0d883e35e"
+        },
+        {
+            "path": "lib/components/CommentIcon.d.ts",
+            "sha256": "595f3fa1ebf8289bf0276c3a72f008d27d13d47ebf01af14a5dca13c8b1ae0cb"
+        },
+        {
+            "path": "lib/components/CommentIcon.js",
+            "sha256": "58a12ec9ab4d760af92e968bda74695c5b7b5bee0f53ef6d8af7702b7fcb726d"
+        },
+        {
+            "path": "lib/components/CopyIcon.d.ts",
+            "sha256": "f69417e752c95b77ae6c05e0d6d19903c2ac25adc7984c4c0b8a42e209e3eef1"
+        },
+        {
+            "path": "lib/components/CopyIcon.js",
+            "sha256": "fb612dbd02d4376a48f45243bb918acbfeed79d0554aac7de8579db338013796"
+        },
+        {
+            "path": "lib/components/CrossIcon.d.ts",
+            "sha256": "a0b59b2f340813c0a173904604920d7662dc14f800c0d25a4299f1bb7c2ff9a1"
+        },
+        {
+            "path": "lib/components/CrossIcon.js",
+            "sha256": "e28ca128cb91e16bc88372b06cc98f8762db6663d512aa036a4e3d38ee620f0b"
+        },
+        {
+            "path": "lib/components/DatabaseIcon.d.ts",
+            "sha256": "609f8fd8a7332322200a108c30461f207caa0551e1f5a23c1452d15b53e459fd"
+        },
+        {
+            "path": "lib/components/DatabaseIcon.js",
+            "sha256": "7c4d98bc156aaf44ce9dbf72438f4c5c27d84a2aff0cff0a6bec24e193aee235"
+        },
+        {
+            "path": "lib/components/DisconnectedIcon.d.ts",
+            "sha256": "3d08bb6c9ba1111e36c3cd0167141501f4cc9ec44ca3e1abe3584b916d3601c4"
+        },
+        {
+            "path": "lib/components/DisconnectedIcon.js",
+            "sha256": "1d1c33c9d3663b6cdcaccaf6837adcfc30c33e590a98d1b976242b64c825f0e7"
+        },
+        {
+            "path": "lib/components/DocumentIcon.d.ts",
+            "sha256": "7aff3bfb6d5bcd81e70af8c00f181993521917726f10c20227e128a37c1220c2"
+        },
+        {
+            "path": "lib/components/DocumentIcon.js",
+            "sha256": "12a9455c5a63544534b019c5523f253baa53e0e6b7419705f3a082e449d1b163"
+        },
+        {
+            "path": "lib/components/DoneIcon.d.ts",
+            "sha256": "fe0cefbfb1af187025f2846aabd4b96aa3242c2e1308f243a5871109e22a25e9"
+        },
+        {
+            "path": "lib/components/DoneIcon.js",
+            "sha256": "5a736a537416d0418815a0588dc7c8e598467092ab3d9f6014317cb0683b956a"
+        },
+        {
+            "path": "lib/components/DownloadIcon.d.ts",
+            "sha256": "f64a9ef1620d9b0c08eda17ce859563e9183759f6401aeafd413745a82cd5da2"
+        },
+        {
+            "path": "lib/components/DownloadIcon.js",
+            "sha256": "2791e9f3feb90f185d4a3fb6b33d9befb2d4714832d7e46c628ba1af47494d5d"
+        },
+        {
+            "path": "lib/components/DuplicateIcon.d.ts",
+            "sha256": "6c0b67b1f8101c6038c818029fce0284df8b3c88eb73f5ee5b34c57583fa22a4"
+        },
+        {
+            "path": "lib/components/DuplicateIcon.js",
+            "sha256": "e61819027c270ad2a39fcdfcdb266c84301c1b2fe5341a013e2686b315eb1175"
+        },
+        {
+            "path": "lib/components/EditIcon.d.ts",
+            "sha256": "210d6f760b4ca9113f5434d77ff6a6315adb0a89d6190451c328b7e053011987"
+        },
+        {
+            "path": "lib/components/EditIcon.js",
+            "sha256": "8527b67da44168d7e4cb24af5129d81754048de2c131edfeaac1ad5964d067db"
+        },
+        {
+            "path": "lib/components/EmailIcon.d.ts",
+            "sha256": "29fe4415184f5fee56118bfdf970beec111f590b6d81ffd0a73cd24e03b8fdec"
+        },
+        {
+            "path": "lib/components/EmailIcon.js",
+            "sha256": "96faeeae8f20951b6d8c1bc21d7b2e5bc2d837facf4871ea214160fb4b6a60fd"
+        },
+        {
+            "path": "lib/components/ExpandedIcon.d.ts",
+            "sha256": "a43bdc64d43e63c2ed26bd609858e76971441c2072e7d947188881ffaf30e475"
+        },
+        {
+            "path": "lib/components/ExpandedIcon.js",
+            "sha256": "c06c24323ca6d3e1c13ad7d1ff9d08317683fba37fc0b4cf8c3f06b8fdf4c5e1"
+        },
+        {
+            "path": "lib/components/ExportIcon.d.ts",
+            "sha256": "954a811ca41d2b9645179c6452b1ff66555a0a72a8b0eaa3d584af958d6595d6"
+        },
+        {
+            "path": "lib/components/ExportIcon.js",
+            "sha256": "7df629228da128981b25225b9c92a4106620b1cf7e648cb7e4bd0ba9e8d1d141"
+        },
+        {
+            "path": "lib/components/EyeIcon.d.ts",
+            "sha256": "3ca09f9fd8e8807e96c9aead9f2c04b092dc0ce82522036aafe3700d742c6666"
+        },
+        {
+            "path": "lib/components/EyeIcon.js",
+            "sha256": "7b5f1a2d4c5940aa5b71b4060447a2d8f55c2beeb5c236de2f38008a5598e038"
+        },
+        {
+            "path": "lib/components/FeedbackIcon.d.ts",
+            "sha256": "f27cfd73418782f3431e4981159844deaee6bd78d2f5b167b5ba086bcef3eb59"
+        },
+        {
+            "path": "lib/components/FeedbackIcon.js",
+            "sha256": "98f6454ea26f9d6cd8f8ead8b5e345d58d71758911903016d0e8b9fde85c8e24"
+        },
+        {
+            "path": "lib/components/GlobeIcon.d.ts",
+            "sha256": "7c3c275291e512917f0eea59ad4813adc97fddb4969038e4b0d4ef58af1d54d7"
+        },
+        {
+            "path": "lib/components/GlobeIcon.js",
+            "sha256": "3f643d4d9f86df77551d7704c8a57d4db1aa53b04d8f6e7926a01aa349ef6ef1"
+        },
+        {
+            "path": "lib/components/GoToIcon.d.ts",
+            "sha256": "af992fff66a9348a1bc1fb889c89698f625d60019f67ea316b4720f35abe5849"
+        },
+        {
+            "path": "lib/components/GoToIcon.js",
+            "sha256": "2d56c53b9fcd995ef44d3e7aea349baadccc434886a07f2a0578f4c209b7b4de"
+        },
+        {
+            "path": "lib/components/GroupIcon.d.ts",
+            "sha256": "baa0ca03e8d23557c3d2642fd31740091cf23b12142f4fe7050e065512f17239"
+        },
+        {
+            "path": "lib/components/GroupIcon.js",
+            "sha256": "a7b3cdf9caf7cdd5728a146ab66fe9bd753fc4df15c8ad9adc0795bf9c206d87"
+        },
+        {
+            "path": "lib/components/HashtagIcon.d.ts",
+            "sha256": "d80bc9a4d4c7fe61894728a308f8c1725511deb9da86139bc27e32ccc3a9d814"
+        },
+        {
+            "path": "lib/components/HashtagIcon.js",
+            "sha256": "c0bc24235f31624ac5bf2ad05af2e1c1f095a43b4ddc2aea9e92fe8363619c73"
+        },
+        {
+            "path": "lib/components/Heading1Icon.d.ts",
+            "sha256": "76b898299df907617609e5be1b0d02f762e81e75b99d74efc4cadd44c3ff819c"
+        },
+        {
+            "path": "lib/components/Heading1Icon.js",
+            "sha256": "8c6889a8bd16ed31e693043bd53817b8a4c6eabe847c811f2c52583f59366711"
+        },
+        {
+            "path": "lib/components/Heading2Icon.d.ts",
+            "sha256": "2ed45e0526eb0f741950b8118b8720c42c116d9e34e929822cbc276a8bba5816"
+        },
+        {
+            "path": "lib/components/Heading2Icon.js",
+            "sha256": "cab53306a7bf59809fa6c634d28d8b7de3222db71822961f85399a43fccd4027"
+        },
+        {
+            "path": "lib/components/Heading3Icon.d.ts",
+            "sha256": "76497e513d0f195d8215b31e448e1b903c83e057df371e896632a6c06874eac9"
+        },
+        {
+            "path": "lib/components/Heading3Icon.js",
+            "sha256": "abd9b2c9c60dcb48456b49c7dd169bab3dc5644613748fac5a089c6da939c221"
+        },
+        {
+            "path": "lib/components/HighlightIcon.d.ts",
+            "sha256": "fe480c8e72fb24cd6d97391a261b460eb13dd5e353ce09d719619a162de5bfc0"
+        },
+        {
+            "path": "lib/components/HighlightIcon.js",
+            "sha256": "938a82b27e07e1b04dfda79a03296693b6ab462a9b0db364c4789d3100d5e545"
+        },
+        {
+            "path": "lib/components/HistoryIcon.d.ts",
+            "sha256": "247d35986b83751e6e0e91ec9ef2f2cb38b6b588d0065f9656fc8298f1d895e0"
+        },
+        {
+            "path": "lib/components/HistoryIcon.js",
+            "sha256": "2b04a1623fd9e2b8b63cfbe3af31bc117e7d129c3dec44146c0b599ac54d8c27"
+        },
+        {
+            "path": "lib/components/HomeIcon.d.ts",
+            "sha256": "ac4065dc4f276f7aaa93427b92b6b418a159339ff1583e021a7a834bc15298bb"
+        },
+        {
+            "path": "lib/components/HomeIcon.js",
+            "sha256": "8e5d2da0df7b7acdc1c94161709280b37213426567035f63d383fcd79afd4f77"
+        },
+        {
+            "path": "lib/components/HorizontalRuleIcon.d.ts",
+            "sha256": "6b02279d3ddbcd68d3c33c9af6382593ba2956d5a9f61f50249ff8746d4a5554"
+        },
+        {
+            "path": "lib/components/HorizontalRuleIcon.js",
+            "sha256": "8450e0a1b35d0ce1b7836430a6c5d63908375d9c8a7f3ece2b34a5dfb306c10c"
+        },
+        {
+            "path": "lib/components/Icon.d.ts",
+            "sha256": "641bf3f0f17952e9439420aea60fb8485c283c23f3eb7aa3b9d6931075432f5c"
+        },
+        {
+            "path": "lib/components/Icon.js",
+            "sha256": "56b918775361cbe895054a2457bedb5b9437a12000816775b7b32bcccf2d40d8"
+        },
+        {
+            "path": "lib/components/ImageIcon.d.ts",
+            "sha256": "87f577128e68bbfb2aae7366552645e1098fa72b2874ac748479932ac71b1e4f"
+        },
+        {
+            "path": "lib/components/ImageIcon.js",
+            "sha256": "a53b0b6dceab3cf2e3965be97e18ebbed8665c6b298210119778183386998eb6"
+        },
+        {
+            "path": "lib/components/ImportIcon.d.ts",
+            "sha256": "6ae29d9c106480931d3dffb60a543b8636a6cbf8b9b0622e0992af7f21ce284d"
+        },
+        {
+            "path": "lib/components/ImportIcon.js",
+            "sha256": "285fb5022b75a53910e3ad118925132f88fb847e132d9b1e80d0e8932ac6bf61"
+        },
+        {
+            "path": "lib/components/InfoIcon.d.ts",
+            "sha256": "4859ffe34ee09bf4bac33d4e228bb4bf98e7fe109dd29eeb6341c40fbf27cabd"
+        },
+        {
+            "path": "lib/components/InfoIcon.js",
+            "sha256": "54d46435d9ebbd6bb9ba533ccf2f032c9aef7c97c8056af90caa662490f837d8"
+        },
+        {
+            "path": "lib/components/InputIcon.d.ts",
+            "sha256": "9c20ea38e71347074128b133b6ea00494202731e8208b183bd99dd12e6002171"
+        },
+        {
+            "path": "lib/components/InputIcon.js",
+            "sha256": "3f58f110071c274b9730b2cf1fee9f999e3026f51e3dfd8500c2bb7b006e4793"
+        },
+        {
+            "path": "lib/components/InsertAboveIcon.d.ts",
+            "sha256": "6553cdd7d250e34136ea294c1f5d88a9aa0665d27401af5687819e2a6ede62ed"
+        },
+        {
+            "path": "lib/components/InsertAboveIcon.js",
+            "sha256": "0bd0a22569158e44654246294142992521503c571a23f53a19065929d976aa3d"
+        },
+        {
+            "path": "lib/components/InsertBelowIcon.d.ts",
+            "sha256": "b345e3257ef442fbc95f565b64d31a7e7080fd77640c4fe76eeb37341daf6d24"
+        },
+        {
+            "path": "lib/components/InsertBelowIcon.js",
+            "sha256": "99b0595b3dbbd397284e57d67308c39498d55e5e71b518e062d0d943cf793a36"
+        },
+        {
+            "path": "lib/components/InsertLeftIcon.d.ts",
+            "sha256": "927453feecc8a1e186f03284993df85976915a0050f1408884393df5d7571e19"
+        },
+        {
+            "path": "lib/components/InsertLeftIcon.js",
+            "sha256": "f2536b854985de055e94b62249d3f494a268fc83c40af4e8526ec7c453fa92d8"
+        },
+        {
+            "path": "lib/components/InsertRightIcon.d.ts",
+            "sha256": "c45562febbe6830306222fa0458f676223b9e11fafa78f505f6bec65220bc8d2"
+        },
+        {
+            "path": "lib/components/InsertRightIcon.js",
+            "sha256": "c68d38efd6924e8cbd5a9fa689363cfd4ac48b7c49c222c8029735e3402cc2a9"
+        },
+        {
+            "path": "lib/components/ItalicIcon.d.ts",
+            "sha256": "287f191d862cc2fbf94392b00696c8053e02f3862122b8e4ca2e0a84e08e55bf"
+        },
+        {
+            "path": "lib/components/ItalicIcon.js",
+            "sha256": "ad749fe29498776662d152e0c610d2480cbc933e4bfc9bef6b54aee0ac011b99"
+        },
+        {
+            "path": "lib/components/JournalIcon.d.ts",
+            "sha256": "bf583080e81afd71ae05d7c73e5877a57b698ae88bb0c9f72ab9aece477c9f42"
+        },
+        {
+            "path": "lib/components/JournalIcon.js",
+            "sha256": "bc1bbb0d359d443f72ac99a6a15f648646b4bfee0b6a7698235e14e1830c3464"
+        },
+        {
+            "path": "lib/components/KeyboardIcon.d.ts",
+            "sha256": "603fc0f16a8a2c6f831e52fd34e7a0cdde018ee85ee97bd54d0d480370766263"
+        },
+        {
+            "path": "lib/components/KeyboardIcon.js",
+            "sha256": "ec211917eb6a6e9004079786d65a9429b642965bcdbf8066445644281d4a278e"
+        },
+        {
+            "path": "lib/components/LeafIcon.d.ts",
+            "sha256": "76093efa751ffa70b1720df14b6fafcea38d09033efdaa2e7fb2007e206e95f6"
+        },
+        {
+            "path": "lib/components/LeafIcon.js",
+            "sha256": "9e8cc5df8a8d7b4037d6f33ae60d5dc2b4059273094a49ed6bc6093daeb88e03"
+        },
+        {
+            "path": "lib/components/LightBulbIcon.d.ts",
+            "sha256": "22b3a4abce9d15c17651f20072855df65f37ffd8c02c38ef636384b919a63c4a"
+        },
+        {
+            "path": "lib/components/LightBulbIcon.js",
+            "sha256": "82daae782a3da4d9b6ac1c1e21591ae814d16222f3e697ceea0e734e295097ca"
+        },
+        {
+            "path": "lib/components/LightningIcon.d.ts",
+            "sha256": "0cd84785dc3bfd7c96bca3f3992d7067427e65a8163472fae0c620bd61476d99"
+        },
+        {
+            "path": "lib/components/LightningIcon.js",
+            "sha256": "fba65ccaa82ce0bc83f095538581012bdde56f02be5c2399e67bba46bbc6be32"
+        },
+        {
+            "path": "lib/components/LinkIcon.d.ts",
+            "sha256": "ad2b966bf4e6571dcf40549ca8e59ffdf711a61d1dab548080f3fd96d4ce5724"
+        },
+        {
+            "path": "lib/components/LinkIcon.js",
+            "sha256": "6a59c72ff59c5f683f61c6d41a0f63a279ceb7f4ef946fb4411c33642f9151c7"
+        },
+        {
+            "path": "lib/components/LogoutIcon.d.ts",
+            "sha256": "b0f3d06f3f463236fd97a81367e16e1d927d25f7f1cb2c086fcb6921a3015aa0"
+        },
+        {
+            "path": "lib/components/LogoutIcon.js",
+            "sha256": "6c654fe57d9dfc392181cf6d5b3dd6bad814f9dc86be0e5d45977c4aaef083b5"
+        },
+        {
+            "path": "lib/components/ManualSortIcon.d.ts",
+            "sha256": "1c4820d355f12a791ab5b40b354a65ebe07361e25ba5886c06fec5fee736e5fa"
+        },
+        {
+            "path": "lib/components/ManualSortIcon.js",
+            "sha256": "2334a7fe901209b0dc65e60eefb9077eaf41925c20af77d70eb0130b30f54554"
+        },
+        {
+            "path": "lib/components/MathIcon.d.ts",
+            "sha256": "aeaec7f1ec20a2f7b3a5cbad5a65610540122eaee2ff392d593aad51b688ba0a"
+        },
+        {
+            "path": "lib/components/MathIcon.js",
+            "sha256": "6e60c9421c00a84edab0b7d7f26b6c4747557e2b82868ecfa8a8091ac71878b0"
+        },
+        {
+            "path": "lib/components/MenuIcon.d.ts",
+            "sha256": "248e5465df2ae8090ebf02c131a16364c0c944ea7ed87a0ebf34e31fd4de4a8f"
+        },
+        {
+            "path": "lib/components/MenuIcon.js",
+            "sha256": "d4b0a2b71bc62befee8c22540de5120317c7c7367f3dc7b85d811f6441b83acb"
+        },
+        {
+            "path": "lib/components/MoonIcon.d.ts",
+            "sha256": "1b536aec507ca38010cdf78b7ec37256faa48563bb287cad00471ae0e3ab464d"
+        },
+        {
+            "path": "lib/components/MoonIcon.js",
+            "sha256": "af7fb053165ef8323fc309beecf2ed8e7a6860799097b6063dbb6786f3303bd9"
+        },
+        {
+            "path": "lib/components/MoreIcon.d.ts",
+            "sha256": "098464b816598c32e5def45cc80036424ad9049ac310f31b81fcc757971f64d4"
+        },
+        {
+            "path": "lib/components/MoreIcon.js",
+            "sha256": "a4b11d24103dcded945467dd351bf591f0a008568d10f4de03fb52ad62b1bce6"
+        },
+        {
+            "path": "lib/components/MoveIcon.d.ts",
+            "sha256": "bdcb704c45c23976ffd4ace73f754a5bb5765e58e6ffbb628ae2a4cebdbe55a7"
+        },
+        {
+            "path": "lib/components/MoveIcon.js",
+            "sha256": "54b5e3d4f5e5851960d95f602536bc807b3a7eec98c200c1e642121bc7200d18"
+        },
+        {
+            "path": "lib/components/NewDocumentIcon.d.ts",
+            "sha256": "021ed17aeff64b5a8ea7daf2e0bb9c5fa41dedcea35e7703603a0f2480961e47"
+        },
+        {
+            "path": "lib/components/NewDocumentIcon.js",
+            "sha256": "f0edca4011000ca5804bfefe13c5ffb3df4499db8d62b9513f4fedf40b31e449"
+        },
+        {
+            "path": "lib/components/NextIcon.d.ts",
+            "sha256": "3e36f93949a51af6acdbc9984604350ce2b1d278b4c672687cb78755d0517a6b"
+        },
+        {
+            "path": "lib/components/NextIcon.js",
+            "sha256": "4d604a4a3a19b351f3d250af13e497af6cf971e35d6a08a2c21cab4f507f958d"
+        },
+        {
+            "path": "lib/components/NotepadIcon.d.ts",
+            "sha256": "ade33157eb170c05015e87906bc9bf6d2a6d56207bd39f3abe5ff80d4be1c555"
+        },
+        {
+            "path": "lib/components/NotepadIcon.js",
+            "sha256": "059f7fa006930e2a40511225bf0f64297d2c54112a8c861abfc93c27efb408e2"
+        },
+        {
+            "path": "lib/components/OpenIcon.d.ts",
+            "sha256": "0c6da27e19367232a913c0b6554dec2742fd9de29045142da0739c23f6f22d18"
+        },
+        {
+            "path": "lib/components/OpenIcon.js",
+            "sha256": "91a1ef2f3a6fed876241bcd718f2f67d8eedfb38303c659e2aaee2d08d82a8b6"
+        },
+        {
+            "path": "lib/components/OrderedListIcon.d.ts",
+            "sha256": "b9140622da32b8cbec98d46a8b7d2bd64f5b9670376848617c81845a5f6b1c22"
+        },
+        {
+            "path": "lib/components/OrderedListIcon.js",
+            "sha256": "7fc8f97228160a66e09e4b0cbdc9f9722fdffd345a825b4cd43f53b3c040dc95"
+        },
+        {
+            "path": "lib/components/PadlockIcon.d.ts",
+            "sha256": "d380039b8dde458439ed2c050fc42b5f0c2484ebecdc938376671c056806895d"
+        },
+        {
+            "path": "lib/components/PadlockIcon.js",
+            "sha256": "4fc272f55991b161a3ddafa6e8d580059cd204e4fabcb86a3488e8da32177a08"
+        },
+        {
+            "path": "lib/components/PageBreakIcon.d.ts",
+            "sha256": "ae543ed96cbee917834bdf83ad09df4d308f02f2df46bb6313ea5c2ae7bed1b6"
+        },
+        {
+            "path": "lib/components/PageBreakIcon.js",
+            "sha256": "6eaf965263c4e8e2114b220e9f50f17f0f5187b035e9f86bc62e065f2dbad6e6"
+        },
+        {
+            "path": "lib/components/PaletteIcon.d.ts",
+            "sha256": "640687d9bdec0ff1f49b556aef9d1413eebfcaf99b3bdba8d7cf354918b9a3c0"
+        },
+        {
+            "path": "lib/components/PaletteIcon.js",
+            "sha256": "2cb826651471705084ec9021f4917ff3ea86ee3339ca4f09a6fde59d711014bf"
+        },
+        {
+            "path": "lib/components/PinIcon.d.ts",
+            "sha256": "2932f66cb0f8070b8085fc277cdfa5ee0089c40c2bfbdea8f380e8b5ce40aa5e"
+        },
+        {
+            "path": "lib/components/PinIcon.js",
+            "sha256": "315052b6d36e999ea2d4ffbe89e193b2d19241c0d3e718e2c7d0cc65f53c4bd6"
+        },
+        {
+            "path": "lib/components/PlusIcon.d.ts",
+            "sha256": "1eb1792ed0c390deb73158c81dd00a7701cbf209f75dcb8c397ffbc5d7582515"
+        },
+        {
+            "path": "lib/components/PlusIcon.js",
+            "sha256": "5d8d4d4f128e47116cf34188cfa5d5914ffa9ec477f7f27fed2a3e12d8082e03"
+        },
+        {
+            "path": "lib/components/PrintIcon.d.ts",
+            "sha256": "6133a4ca5d25871dfab4268ea423157f62e0e309b65f17b72c29610d4fde1799"
+        },
+        {
+            "path": "lib/components/PrintIcon.js",
+            "sha256": "3e9bbf2616b9291b34b37f17cf1767bedd8c0d2d2acfffb38616da17279aa307"
+        },
+        {
+            "path": "lib/components/PrivateCollectionIcon.d.ts",
+            "sha256": "11a25599b1f3640701930b85e62ee2918c4fcd53f817a60fb1a130b81e527da7"
+        },
+        {
+            "path": "lib/components/PrivateCollectionIcon.js",
+            "sha256": "a341fa1944fc1b073578cc049ac8b3edfbd97dc59f2c79269063ec7e26aa4d5a"
+        },
+        {
+            "path": "lib/components/ProfileIcon.d.ts",
+            "sha256": "36d6f9ddced7744d50fa36122cf388969a32e120a299b59cfb6b38af3cb73851"
+        },
+        {
+            "path": "lib/components/ProfileIcon.js",
+            "sha256": "f1aeabdf43781aff1ac7d863697e7a0886e74e1ff2ce6e02cfd97b0c6ef5b666"
+        },
+        {
+            "path": "lib/components/PromoteIcon.d.ts",
+            "sha256": "4c6085a4faaeda4e97ee430662d08d2e8b79997242a3b7b4cb120f0df4421995"
+        },
+        {
+            "path": "lib/components/PromoteIcon.js",
+            "sha256": "bdace6aa78189a98b31dbd3754755721ff3b068e8d62ecd49947a8387b9088e7"
+        },
+        {
+            "path": "lib/components/PublishIcon.d.ts",
+            "sha256": "2fa7aa5f0d31a9625391b5d444f9b7676520f5f8871ff70f6509bf3b3198ed0b"
+        },
+        {
+            "path": "lib/components/PublishIcon.js",
+            "sha256": "af56cf27fc2d6fc6fbf5a57a636fdca80e130130430acae103d441d181d16678"
+        },
+        {
+            "path": "lib/components/QuestionMarkIcon.d.ts",
+            "sha256": "d4f9e922d1bb4816aae2b810f108dd64d29294699816c2f602dd96552c4dbf69"
+        },
+        {
+            "path": "lib/components/QuestionMarkIcon.js",
+            "sha256": "7d877807b2709f1b954f081da5869b96c671a77aba39d60047674101714e5e30"
+        },
+        {
+            "path": "lib/components/ReplaceIcon.d.ts",
+            "sha256": "11624be15bd5fb7e3948dac846eb52aa0578fe72daddc734fc1ed33007e2031b"
+        },
+        {
+            "path": "lib/components/ReplaceIcon.js",
+            "sha256": "73137da417575dfccdbf6acdea1dc7f474cfd195c9debc6a65c2d6331d627418"
+        },
+        {
+            "path": "lib/components/RestoreIcon.d.ts",
+            "sha256": "4ec22902ccce66f02cead6a3164f660e8f109b9746d07b0bc3c0b303831a1fe9"
+        },
+        {
+            "path": "lib/components/RestoreIcon.js",
+            "sha256": "57869bd7c0c676533e5b4ec113e93b0ca64c9fd420d4eae4c3ccd10a2d8e8341"
+        },
+        {
+            "path": "lib/components/SearchIcon.d.ts",
+            "sha256": "1e1b95757e2f0169bc2f83743af61513a3ed6fd15ae400640c07e9333e7eb751"
+        },
+        {
+            "path": "lib/components/SearchIcon.js",
+            "sha256": "58880ccc922dcdd9f2ea6648acff4887c93f8558f06a44b63179cafd1f6a2463"
+        },
+        {
+            "path": "lib/components/ServerRackIcon.d.ts",
+            "sha256": "357d4b518c2da9471fe4ee5afae7c71ec94153625008db21653c9e58b32873da"
+        },
+        {
+            "path": "lib/components/ServerRackIcon.js",
+            "sha256": "44d7197ec20b5e1c08ffdb55c0ae40eda30ab7e9953442dedfcbb016e5c63d23"
+        },
+        {
+            "path": "lib/components/SettingsIcon.d.ts",
+            "sha256": "0d8482eb94db6abe0a080f727bd20c461420392d0c1cc18a957c079961777e99"
+        },
+        {
+            "path": "lib/components/SettingsIcon.js",
+            "sha256": "dd6be36e5e09b5c044dc205b06614b12dd05108dcebcfb4ed658baabb30942a7"
+        },
+        {
+            "path": "lib/components/ShapesIcon.d.ts",
+            "sha256": "339833793ac94630a3ec9de211093392badd85f9582266ff5c3f5b5e90885817"
+        },
+        {
+            "path": "lib/components/ShapesIcon.js",
+            "sha256": "e536af7e6594bc1b70e24dd4ffc0f5fdb5f1e4053d7a5e5e75f29a3ef3b7a8cb"
+        },
+        {
+            "path": "lib/components/ShuffleIcon.d.ts",
+            "sha256": "6e8a8c49ec8f678b4bd6bb8c8d9d2c648772de3dd77b9a5fc2cb94e9bafbd440"
+        },
+        {
+            "path": "lib/components/ShuffleIcon.js",
+            "sha256": "0fa246abe891cdcc7207843c484c5f03d57ee2870eadc7085dc5d631f6e57cfe"
+        },
+        {
+            "path": "lib/components/SmileyIcon.d.ts",
+            "sha256": "1688d7d8cb513e0b61adc297c64db6a5f4f1d7800f437ddc74fe2f1052bcadef"
+        },
+        {
+            "path": "lib/components/SmileyIcon.js",
+            "sha256": "99109cecdb8ec0672a93e3ced3d54fc6d42546cdd5ea49bf19631c27cf80d5e4"
+        },
+        {
+            "path": "lib/components/SportIcon.d.ts",
+            "sha256": "5ff1b2a7128ef03b49450c0290bb6b5db4217e5f5c31a7800eb1bef31ce21ada"
+        },
+        {
+            "path": "lib/components/SportIcon.js",
+            "sha256": "ab43c4a56feedf35b7b424c73f5c69c24d44b8602069aaf07e630080f5b1cf1c"
+        },
+        {
+            "path": "lib/components/StarredIcon.d.ts",
+            "sha256": "be7551e1717df1abfb4a918b471c54613961c7fad14747c32196eef34871fdf5"
+        },
+        {
+            "path": "lib/components/StarredIcon.js",
+            "sha256": "facc24b3271c9bec34466c7758f4d86b1c1d91ddfee5cf80243dabc2ec188064"
+        },
+        {
+            "path": "lib/components/StrikethroughIcon.d.ts",
+            "sha256": "7a8deb04b3bc460d4078deed0ae376ac9fd26911aa8267e1237c17ba0647c6bd"
+        },
+        {
+            "path": "lib/components/StrikethroughIcon.js",
+            "sha256": "2302ea7a5465e2b66822b2eb45105076ed5ee40f58b71ceb1ec6744a1c19cf39"
+        },
+        {
+            "path": "lib/components/SubscribeIcon.d.ts",
+            "sha256": "255f9ee1ab0a38a2df044eec218f42df1b91d88f4f2e3d6c24931295d9fb7a27"
+        },
+        {
+            "path": "lib/components/SubscribeIcon.js",
+            "sha256": "a5037f593b24e86648d1eb87c6250857a2d8a3f78027714c31ac0ed09e87c5fe"
+        },
+        {
+            "path": "lib/components/SunIcon.d.ts",
+            "sha256": "27d1631e079b91cb6c69ee40999032e35a31d7582a0d1240899660b5ea4b1f77"
+        },
+        {
+            "path": "lib/components/SunIcon.js",
+            "sha256": "d7d0f032e67f4fc8ca9eb722e3281be3bde7158801d395178c58d0b05e18e6e5"
+        },
+        {
+            "path": "lib/components/TableIcon.d.ts",
+            "sha256": "aa1b6a01007d4020c2b34e8dd8f09cf8669c255006ff262c8eb18ef299b5df20"
+        },
+        {
+            "path": "lib/components/TableIcon.js",
+            "sha256": "05d700558b0532c273c928dfa588fb600fc2a83b2ab04e6b4bfd791659b6056c"
+        },
+        {
+            "path": "lib/components/TableOfContentsIcon.d.ts",
+            "sha256": "bfc618be95ba645da4137123071848f6fa1930c72081a7f957628c6fd4548657"
+        },
+        {
+            "path": "lib/components/TableOfContentsIcon.js",
+            "sha256": "07f1c40291c8d87b70fdd6ab4115a9a32c6dbaa262fba3500cdcfb3ad3deb15a"
+        },
+        {
+            "path": "lib/components/TargetIcon.d.ts",
+            "sha256": "76d854e6bb8df492175bde7cfec2152a97e0ff0889e3bc46bbe72de3ae887523"
+        },
+        {
+            "path": "lib/components/TargetIcon.js",
+            "sha256": "cab6b74ec6b25d6809076fe011ba9ad124f20a76aae139b964b9adc8a6270891"
+        },
+        {
+            "path": "lib/components/TeamIcon.d.ts",
+            "sha256": "13b1f479ae1ca026a3f7fd8c0b58b1a3c0fed48accc2eec664e50e794309808d"
+        },
+        {
+            "path": "lib/components/TeamIcon.js",
+            "sha256": "0e803d1f10a47290998181738acfeaa028d0a37758f0540b61a9b6af43e11963"
+        },
+        {
+            "path": "lib/components/TerminalIcon.d.ts",
+            "sha256": "760df1d863435ee1646782d66044390318dc65c2528259159b457d1ba088ba1e"
+        },
+        {
+            "path": "lib/components/TerminalIcon.js",
+            "sha256": "43eae84d5a037e028f4ff3f68fae138760dba700d6b13aff38ca050748981cc9"
+        },
+        {
+            "path": "lib/components/TodoListIcon.d.ts",
+            "sha256": "09cd9dc2cf5a9733c4e28913472a0c1b30ae3c1eadaeeb0ff7edeaf7757229b2"
+        },
+        {
+            "path": "lib/components/TodoListIcon.js",
+            "sha256": "d7fcff79efa31ce3fd0f2663681f92e2697116afdccdab04c253a34bb78aa42f"
+        },
+        {
+            "path": "lib/components/ToolsIcon.d.ts",
+            "sha256": "55d1347b64bb7aefa5e443114b26e0fb04e213a6f7dbfc66c6f7364fd481f3e1"
+        },
+        {
+            "path": "lib/components/ToolsIcon.js",
+            "sha256": "2f08215ae28239e52626ae5d10be382290e7295123159d10743e6cb7a590c9df"
+        },
+        {
+            "path": "lib/components/TrashIcon.d.ts",
+            "sha256": "971d2b052cfb037f0a57a63323f7ce826f8c41d737de84d328cb7a7ed37d95d7"
+        },
+        {
+            "path": "lib/components/TrashIcon.js",
+            "sha256": "aecf9e000d455895f272d640b905fcbbd78b7f834becf3a815bce14c7ef2102e"
+        },
+        {
+            "path": "lib/components/UnpublishIcon.d.ts",
+            "sha256": "dc70ceeeeebd23c1f246f32a70a7228a85d51095f2e805265074c4a87292371a"
+        },
+        {
+            "path": "lib/components/UnpublishIcon.js",
+            "sha256": "7261a972b62a53e792a1c60fd86f48bbf0d66787b8b9a5a3271f4967ca8dd44f"
+        },
+        {
+            "path": "lib/components/UnstarredIcon.d.ts",
+            "sha256": "ede56dbeff856add8ad2ccba6d48db35330c390a378efa30d6e40168827e9ccd"
+        },
+        {
+            "path": "lib/components/UnstarredIcon.js",
+            "sha256": "5b52d3207bfe4924b24d50cae0a90a5dd3d0bcce902e54dd58badae2a2cbef52"
+        },
+        {
+            "path": "lib/components/UnsubscribeIcon.d.ts",
+            "sha256": "fd3e55e19b0ae5dba3890b36adbc1a2b8b8b286b201934f3fda2b6eb70c451d9"
+        },
+        {
+            "path": "lib/components/UnsubscribeIcon.js",
+            "sha256": "a00cdb34da435d2800a4cabcb8be9ee92ded4b84cdd4719691bd6c7812f4ee47"
+        },
+        {
+            "path": "lib/components/UserIcon.d.ts",
+            "sha256": "97c27c5f09da33eb1094ed2e1d25985033525f4d29fda4e73fa4807a714a68c2"
+        },
+        {
+            "path": "lib/components/UserIcon.js",
+            "sha256": "bd798ac1510130f0d0e45ee4ed05222584a6fbb866c31b003de175717315d562"
+        },
+        {
+            "path": "lib/components/VehicleIcon.d.ts",
+            "sha256": "47d3ac6329559aca9c740d397dc83796837c0a55de76e95e127057cafd92ff6e"
+        },
+        {
+            "path": "lib/components/VehicleIcon.js",
+            "sha256": "0c0892bf1fecb02a88904701130a505fb1161150e951df8bc623aa85fc34dbdd"
+        },
+        {
+            "path": "lib/components/WarningIcon.d.ts",
+            "sha256": "6a5fd701ddcd0261d114e4ca2b438d0153d6c1d0ce56ab30c03b078120dc7807"
+        },
+        {
+            "path": "lib/components/WarningIcon.js",
+            "sha256": "711b2e8063014a4b17d25f2815a44c6f6c4017ba2c6887705c379764c63fcafd"
+        },
+        {
+            "path": "lib/components/WebhooksIcon.d.ts",
+            "sha256": "5ac1f5b4f6f33f65552a167a2e031c378a6479e21627f769df7c824b32f0d67d"
+        },
+        {
+            "path": "lib/components/WebhooksIcon.js",
+            "sha256": "5f9ef01a499d195e5087c74b3f4a27dd8f5926af7c3f548010880dfbcb6e2f49"
+        },
+        {
+            "path": "lib/index.d.ts",
+            "sha256": "9b169e499b15527b756a25d1ccb5a362d5f076dcee2820793d87ef5a8a21b8b3"
+        },
+        {
+            "path": "lib/index.js",
+            "sha256": "acf9340f31a3e29b34e7e5d83139e26b53cd4b084cf9de0614e2fc8581e53e43"
+        },
+        {
+            "path": "lib/stories/index.stories.d.ts",
+            "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+            "path": "lib/stories/index.stories.js",
+            "sha256": "8d5013082d8d74a42c4da4d37a2b8537614e5adb63948462e0bc37d1fdd6658b"
+        },
+        {
+            "path": "LICENSE",
+            "sha256": "57065b34317b6cdd63d5b8c38cbfcfe75b26da9f5e1bdc687647b26535da1b53"
+        },
+        {
+            "path": "package.json",
+            "sha256": "6038869f3f71b20875768258651c9533041e7406f30240b1c67f64a452b28653"
+        }
+    ]
+}

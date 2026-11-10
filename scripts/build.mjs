@@ -18,6 +18,10 @@ import {
     assertModuleFormats,
     moduleFormatReceiptPath,
 } from './module-format-checks.mjs';
+import {
+    assertRichTextVendor,
+    richTextRuntimeFilter,
+} from './rich-text-vendor-checks.mjs';
 
 import {
     assertPhoneVendor,
@@ -26,17 +30,19 @@ import {
 
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
+assertRichTextVendor();
 assertPhoneVendor();
 
-for (const directory of [
-    'dist/esm',
-    'dist/cjs',
-    'dist/vendor/phone-number-input',
-]) {
+for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
     rmSync(directory, { recursive: true, force: true });
 }
 
-// One frozen private CommonJS Phone closure is shared by both output formats.
+// Each private CommonJS closure is shared by both output formats. Keep its
+// owning filter so one vendor's excluded files cannot enter through the other.
+cpSync('vendor/rich-markdown-editor', 'dist/vendor/rich-markdown-editor', {
+    recursive: true,
+    filter: richTextRuntimeFilter,
+});
 cpSync('vendor/phone-number-input', 'dist/vendor/phone-number-input', {
     recursive: true,
     filter: phoneRuntimeFilter,
@@ -166,6 +172,7 @@ for (const format of ['esm', 'cjs']) {
         'multiple-select',
         'linked-records',
         'single-select',
+        'rich-text',
     ]) {
         copyFileSync(
             `src/react/${name}.css`,

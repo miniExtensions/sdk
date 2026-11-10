@@ -1,0 +1,462 @@
+{
+    "schemaVersion": 1,
+    "upstreamRevision": "aa3bddd1d023739df9f673c22f950a67d8b6bbbf",
+    "scope": "SDK-owned private rich Markdown editor runtime",
+    "runtimeExclusions": [
+        "**/*.map",
+        "**/*.stories.js",
+        "dependencies/styled-components/README.md"
+    ],
+    "changedUpstreamFiles": [
+        {
+            "package": "outline-icons",
+            "path": "dependencies/outline-icons/package.json",
+            "originalSha256": "6038869f3f71b20875768258651c9533041e7406f30240b1c67f64a452b28653",
+            "adaptedSha256": "584fd1e6c9fffa828af8cf73887603dbe86c5a915a56b59a9c68ae2d3b270740"
+        },
+        {
+            "package": "prosemirror-utils",
+            "path": "dependencies/prosemirror-utils/LICENSE",
+            "originalSha256": "822c00d3553f37e363d8cbcc801886782b32508ef7988ea68d2f1630cf27060e",
+            "adaptedSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+            "package": "prosemirror-utils",
+            "path": "dependencies/prosemirror-utils/package.json",
+            "originalSha256": "1f0b15ef823302c1d5e1b5e8a48aed9bb23f7f5bcc11ef6911a2a38251719e08",
+            "adaptedSha256": "a8b1665b9a127245102004bae3cfe224b22edf290d02921839b588615bce9661"
+        },
+        {
+            "package": "react-medium-image-zoom",
+            "path": "dependencies/react-medium-image-zoom/lib/EventsWrapper.js",
+            "originalSha256": "319cd2377c5d486c45f382c592cde0948e877724a581408bef00b6cecad192b8",
+            "adaptedSha256": "c703d2f6cb56471f1bf139414993f502e62d2702fbd4e08a3d6cf5e8165c62b7"
+        },
+        {
+            "package": "react-medium-image-zoom",
+            "path": "dependencies/react-medium-image-zoom/lib/ImageZoom.js",
+            "originalSha256": "ad13c949eaef4d103dd48414a2382060551caedc13c653a8aecfab9f78ca92e4",
+            "adaptedSha256": "4127e59967093e8c0285a295d6e067e4813063df4879ee5ec9fd67e533c95f6a"
+        },
+        {
+            "package": "react-medium-image-zoom",
+            "path": "dependencies/react-medium-image-zoom/lib/Zoom.js",
+            "originalSha256": "bfcfa5a04b288983195f8d6afbc2becfc275ae6fa3c74e67120b863782f3b95d",
+            "adaptedSha256": "fbf5fa5a40fcf6322e18feaa8d7ab312b28b6deed5ff5e4429bc2813a705ac35"
+        },
+        {
+            "package": "react-medium-image-zoom",
+            "path": "dependencies/react-medium-image-zoom/lib/helpers.js",
+            "originalSha256": "859e946243320137ed53436116cc1c81ea0dc8ab5c1b011a4ed78c91b12b6964",
+            "adaptedSha256": "62360fe69fa0b83c3b54473d4d2f1d7d98b2ab250d6698a53793133a2dd9b515"
+        },
+        {
+            "package": "react-medium-image-zoom",
+            "path": "dependencies/react-medium-image-zoom/package.json",
+            "originalSha256": "c816a153350f6199f95e067b48985c498d2fbfca7ffe3c2959f72e6e5be549dd",
+            "adaptedSha256": "053161e54a11299a4b9921b318568b365883ef0173f64a882ff9d2039f6c9cac"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/commands/createAndInsertLink.js",
+            "originalSha256": "9ef1562aad454811ede87660c576dea14b0f99e3068a9148811dbc256ee9896e",
+            "adaptedSha256": "c581f40d7d1d73fb7bac0367312229923fbb669621d2b13303436ee5449730e7"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/commands/insertFiles.js",
+            "originalSha256": "76f666ec4866250500e14c31f5a2bac3b5af53ca89c7688f7142997bea6fe21a",
+            "adaptedSha256": "a2f387dce97025514951c365f821df46d98da40062388941a729a34031567b55"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/commands/splitHeading.js",
+            "originalSha256": "64a37b412b019e8fe13e562e3581c83fa203b48a40986aebd6740e8f442c5762",
+            "adaptedSha256": "6ca41e22161e9572c7057313d9974920297fbdaab18270bb8d66fa4a5d18ed39"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/commands/toggleList.js",
+            "originalSha256": "fb6bb19a674659b6e200c765e58e3bfe18d5943ff37b9b40d692cd099b36d822",
+            "adaptedSha256": "13f8e2b3837195809498c61a63c79c7143773ab4b8fff5179114cea8498740da"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/BlockMenu.js",
+            "originalSha256": "3ac3094449743a7b499fdef40234d4fa8db145b08b95a7dae4e573a9e17915a0",
+            "adaptedSha256": "2e77344c728b1e177cefc189722103619c1188e25111d628f5b631c49987a215"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/BlockMenuItem.js",
+            "originalSha256": "febde6613d2252c2246bda85bec321c1cf17158c87667386c3fe49c86678c2dc",
+            "adaptedSha256": "b83c313579b70d6c374005525ec86d505584c2d032bc12f98e173add53928845"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/CommandMenu.js",
+            "originalSha256": "ac9c5729054db221ddb388d398ce080ab7f4902e4a76327366c88c6c671d008e",
+            "adaptedSha256": "2ec6d709d15c7309ea6ea9391e967db6742f5f70fcc4c0e77160223adf5f59c4"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/EmojiMenuItem.js",
+            "originalSha256": "21abadb8288a0e23bdfb516a666ab1a499932c433707d76ae8a45bc7010e3916",
+            "adaptedSha256": "ae13f1bf8a6a3579e2a3754882471f231cf5253ccd332c3c6df63661f52a9efc"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/Flex.js",
+            "originalSha256": "b63b39e82846e8c2d86f95f8ed197a8bebe7fbf721ef62e6404809f911b7336e",
+            "adaptedSha256": "06dff0f654a5f8fec1b113eba9d1ae9b67f0493fc7f1fdcc22824a3397a70d7e"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/FloatingToolbar.js",
+            "originalSha256": "d17fde3201103a817f558740cb28d3337ea8ae7f278f038dec2374deb9c236eb",
+            "adaptedSha256": "00c1ee04220d13afe332588f9a82f38b1f5c04731d7e46d9d273f8c48cf9853a"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/Input.js",
+            "originalSha256": "8b7b9be725b8fac19dc1db3bcd46bf570878703540740c1de6e2c96d596cbc8e",
+            "adaptedSha256": "c619c34c8344a7dafb1017d7fe5d44054ea4525bb4b961681d9edc075cddd672"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/LinkEditor.js",
+            "originalSha256": "c40a9a9c39688d26eb49bb6496be5cc48708e2748e1d673267163d32c405bf3b",
+            "adaptedSha256": "1cefee1e37a800d62d2ee01381ee7562f78d787f6d5255bd5ef50f85dffc0f40"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/LinkSearchResult.js",
+            "originalSha256": "8dd08146f6325a0474583cae9b96a32c29569a20ca102214b7ea88f00e163890",
+            "adaptedSha256": "54bef5a95380fce3bf32ed5f934863695e8aba7746adf2c3e59d2dcc54902414"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/LinkToolbar.js",
+            "originalSha256": "7b9d255e8b6731fe56833badea05ca2d923dd16ebe388e0caff8a6f49f263763",
+            "adaptedSha256": "bec1d8554d37640705ae1f371d644f602fc6f25b4d9cdfc9d54500b30dae6739"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/SelectionToolbar.js",
+            "originalSha256": "d18175eee4b69542f0901f8d8faba41a26aa9b586c1d5bd35e4f07e82ccb1e21",
+            "adaptedSha256": "59d828f0a55c147a9e8fd8e35e605c9ae72193b37552888fb73f237fd49781c0"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/ToolbarButton.js",
+            "originalSha256": "5929eecc187651732d4d48e4ea1202489dd267a551e28a91b57b52d455a52ae8",
+            "adaptedSha256": "53712f6ebecbf28051b57ab01302179ac72686410d0da38ba81735237ea8e674"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/ToolbarMenu.js",
+            "originalSha256": "0a770764288c8298884e066967a4d86cae9e1b9ba1cf607c1ce895c9e21cb199",
+            "adaptedSha256": "976144de723bad687c2781c4b8bd244c828915066c549f1635699b7412a17208"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/ToolbarSeparator.js",
+            "originalSha256": "1d6ab8fe4dd4afe274db9619dd55eb852724abd47ff54eeb5ca8f9a8a468392c",
+            "adaptedSha256": "e24d54ee31398104f623b3f60226e491117464a1e236a6e96ab0856bf32b44e4"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/components/VisuallyHidden.js",
+            "originalSha256": "0b6f2324068bda317a7ed99950f632570ad5a8322eee1dcb7c6f1d0ce3b9726d",
+            "adaptedSha256": "6205e413fd8fa59d5205a2cff6551dd9da170c65d2f7d4134432b6d24ace978d"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/index.d.ts",
+            "originalSha256": "83ef3a1d62c30dc2d9efc72d626838b5027fb0adbb37a1245bf3ea3992c57413",
+            "adaptedSha256": "3c006a782949f95d2f82ee8e7ca8bb229bdfa21a3e39ce01fe4bac5a936c7893"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/index.js",
+            "originalSha256": "bb7be76dc3800c02017936143201c377410e2f50ec92251ef62d75364ac2f112",
+            "adaptedSha256": "d3a92d496cf504a7104c0b96057f934867d5e93b14102aa6fada2550304d1cf0"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/lib/ComponentView.js",
+            "originalSha256": "a1be45941d59b6555cee5256331866da99e60042c1ee51a63db1642e86fd09ea",
+            "adaptedSha256": "686a1b8ca5a7dc521bf45356e36d66e992a5b755a54a315c08bee8db286a3f54"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/lib/ExtensionManager.js",
+            "originalSha256": "24fa9ba90aed09340fe94ec8c582571da5b24f1903dd338917a3d296c0da7ab1",
+            "adaptedSha256": "5284c097c75c2396a4635499d0c1c510ae9a7849bec4010354c47510da8f673d"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/lib/uploadPlaceholder.js",
+            "originalSha256": "6106a30ccd9f967cbc4a2ef51df9b760619e1ed1b3ab5bca39274b53f015b1aa",
+            "adaptedSha256": "59b8b333866d273c0f9f97b04ac1b6df4caba028def69d533067b1d91f045942"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/menus/block.js",
+            "originalSha256": "c8589e27c56e2020a84252460230dbf18f7d45e49c251ea10250a32a127eed5c",
+            "adaptedSha256": "a3d9a185b77a1f8b91d41069d8f576581a1054cb1e8b84ca0649419fac2e2587"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/menus/divider.js",
+            "originalSha256": "9bf02a877cbb9697e85edeb23d0f58e0972660c5a1307d63878373dc32ce68ca",
+            "adaptedSha256": "11362f3f71eb8926fdacab7a341207e788a5d716e8c6e74ead3dcb651b0ea805"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/menus/formatting.js",
+            "originalSha256": "ed255401b52006ffce62bd579eb953b19a4e79d773f5ef3a056cbb54cfc6e802",
+            "adaptedSha256": "be350a696b0058cc45d5e7cff386295176484c35dd1bde07929961d5e26462b6"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/menus/image.js",
+            "originalSha256": "1e3931882727f6dd210cc1c5bcaca385dfdf041de5bd0f28483295ba06af9cf8",
+            "adaptedSha256": "0f7c48818a9bec77ea77e6dc7d114becfe97a941154727ca6c572de785375ef2"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/menus/table.js",
+            "originalSha256": "40a5b963c1f9be07a77295eccc71fd0517ed403c23b0e68de2375f993d360e78",
+            "adaptedSha256": "88654b5b5a40fd3b23bdd1276dffc800228823569d0de35520b9befb7edac501"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/menus/tableCol.js",
+            "originalSha256": "85b1c286176336fbcdbba6f1538a86a969a952f81ffa66c50908184f77775648",
+            "adaptedSha256": "4eb79f55ba46e0b1e1ff2d2aaaca7343558b05238d82108074591dd4ab16606d"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/menus/tableRow.js",
+            "originalSha256": "1934f1e359abfc82174a32582e1d048e27d61bacb36bd520572c0d8da1737c17",
+            "adaptedSha256": "48d484937f6e439c9f69ef2875427285250e8fe48ba358f6a6cc05fbc3417c37"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/nodes/Image.js",
+            "originalSha256": "7325d8bbc47493c0cd233b4c89b8e4432ed8eb052ae4376831496dfc2cdee666",
+            "adaptedSha256": "e19516f6d63d1aa0d70dc487eba05e9d6a2a409d5a5678237e38e68b07b5f456"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/nodes/ListItem.js",
+            "originalSha256": "dcfb77b2a0766aef1f8485ad08cd60bc807089f2e37615e1c48732b0548123ca",
+            "adaptedSha256": "11e41198d6ef7971771692275bb46157bfeb811a65198d16199376099d46629c"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/nodes/Notice.js",
+            "originalSha256": "6d2271f49124bb253c1e60523aef00e49a50c48088a034032ada24c2efb4d989",
+            "adaptedSha256": "1320bd693a4bc96c840ae3348b460d29941f623215cc79cef56f7350fe515019"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/nodes/Table.js",
+            "originalSha256": "add1ad13792b8cce08fef62dcd1b7e2c0b39e76315cc32ec4b196236dfc60523",
+            "adaptedSha256": "1f3c98dba4c81ec64da5005de50bdacee639a567e5b548beb161a44cd380d1a6"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/nodes/TableCell.js",
+            "originalSha256": "967083e026fadcbb1c288c067e144bc3cdc4eedfa65cacc7e9afa6fb012728b9",
+            "adaptedSha256": "273db22e0f4f27efc3782da56bc4779a6219515760c0fa63d283fe3c0c07cd50"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/nodes/TableHeadCell.js",
+            "originalSha256": "97b34823234ad240e645a1aab835e1a2f7d787ffd83dca8ef5e4d5867f2909f2",
+            "adaptedSha256": "b672017d63f796a9a9e8445d75fc85b74dede981a0eacf4560efd3278042756b"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/plugins/BlockMenuTrigger.js",
+            "originalSha256": "76cb78a5b3a6ffe6b6c53c8b49cfb2af238a30482ab47a06366b9dd1b8cc3482",
+            "adaptedSha256": "9ae6f20054edee977411315cd15f646d6d739283eefe2a8f6e67c69affae0b8b"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/plugins/EmojiTrigger.js",
+            "originalSha256": "7e273ace89fa5d93a88d8035ab37234480b21404f87223736f2ea892e39a6cb2",
+            "adaptedSha256": "62b24439f01af24cf4d8fd8c0f891df6cedd3b025a215f3156faf347371d4174"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/plugins/Folding.js",
+            "originalSha256": "d84b8d322ea8af79aa7e43f71ff2b5d05adde02bf356945b866f0dac49504ef0",
+            "adaptedSha256": "12e5f833f843afb912cd7b85aef923a742c1abe578e5d4d0760a1fc445d1e41a"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/plugins/Prism.js",
+            "originalSha256": "e035ed334d919dad0fbbe81a9d8c663aec22cb7254fed2df86fff1ca70782675",
+            "adaptedSha256": "1aeef1d6772b95f9d19f469cbd5115260ff12502edc57b3d0b9fd3f0e2d2e41b"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/queries/findCollapsedNodes.js",
+            "originalSha256": "9d96ad648c8133817ce108e0e76cadcf8e1cc41ac18bf69e63e08a54ac9e57c6",
+            "adaptedSha256": "5ecd944d75d6a22bdc8a322347374a6f40b254a616ceb230062f3d4854ebdd37"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/queries/isNodeActive.js",
+            "originalSha256": "fff8429c076905cf0414dce1bd93f8f726fd919878629faa343f44e7b0f5f5f7",
+            "adaptedSha256": "771056e340f2e804f67a931d52e4a6e8589c4772802b78923d011010dddb4701"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "dist/styles/editor.js",
+            "originalSha256": "6eb777a6165db2bc34a1de0f7f8e2d0118a223b92b66da3d67e03aae49bd26cc",
+            "adaptedSha256": "4637e2440031f19b9fc360fedaffe732e414278a6cae0bd2d5a50ea0f2c9b50f"
+        },
+        {
+            "package": "rich-markdown-editor",
+            "path": "package.json",
+            "originalSha256": "696448cda5126618451fd824591ed9d3f0b22542dfb289277cc17855b0f88bde",
+            "adaptedSha256": "f753ad6f80122a4a825a415e85915c49d445e0f1de6396e2928ed1dc38c35b1e"
+        },
+        {
+            "package": "styled-components",
+            "path": "dependencies/styled-components/dist/styled-components.browser.cjs.js",
+            "originalSha256": "95aead27c44b9d3576c8f8d6436b973a8a16b0d5aceb6b0046f4f62f21193721",
+            "adaptedSha256": "0b2ff98ab330a47368161dd62a325e60a694eea309b00cca6360fb97bac15a37"
+        },
+        {
+            "package": "styled-components",
+            "path": "dependencies/styled-components/dist/styled-components.cjs.js",
+            "originalSha256": "d8680d824a1126dde64eeab4bae301117aca3dec4cfa8993d2e7936657a698f1",
+            "adaptedSha256": "edcf20015fd1528bcfb475699e3e5b7886c6d9c0363f3ca8c6327f6941f7a89c"
+        },
+        {
+            "package": "styled-components",
+            "path": "dependencies/styled-components/package.json",
+            "originalSha256": "188ad1a2a7c3536190b9db5271852a7c997a109f8cb5496ba1b62a3a91bdb37c",
+            "adaptedSha256": "f8b138c398f48b2480ac5f1ff79469e049cc3a979f970fb14af76a6b91c35fd0"
+        }
+    ],
+    "newOwnedFiles": [
+        {
+            "path": "ADAPTATIONS.md",
+            "sha256": "73ee9ce3aebdc0992db4d4671ea28a24c1e35988878ae541a84b22f738d29e21"
+        },
+        {
+            "path": "THIRD_PARTY_NOTICES.md",
+            "sha256": "f01ccfce887cdf682573a8ecce40a8f459ab4127cb411b01aeb39b2569214f25"
+        },
+        {
+            "path": "UPSTREAM.json",
+            "sha256": "1f5e39189bf856ae0b1f7d5e4b718ba9244fcf681fa9dff0d07f332c557e0edb"
+        },
+        {
+            "path": "dependencies/outline-icons/UPSTREAM.json",
+            "sha256": "243d13c9710e7b5108756a2bf878d21db6f06c211266653b78f261234ca264bb"
+        },
+        {
+            "path": "dependencies/prosemirror-utils/UPSTREAM.json",
+            "sha256": "85a2f82d5144fe5cc9e07d2540def7c9d2c3b43ffe093dcbffbc465935be18bb"
+        },
+        {
+            "path": "dependencies/prosemirror-utils/index.js",
+            "sha256": "e85066daec45cce90b8e9bf1f6d8812eb3a9e64303ba2c0f04768be6bedd7810"
+        },
+        {
+            "path": "dependencies/react-medium-image-zoom/ADAPTATIONS.md",
+            "sha256": "08d77994073ef32d00ff1fa948065c3310bb5b64d8f91da9b185908f97c15608"
+        },
+        {
+            "path": "dependencies/react-medium-image-zoom/UPSTREAM.json",
+            "sha256": "e27f38a2c79b8d12324aead9a89c0040f506b7e43f5458a78fa3d2cfb70b54d9"
+        },
+        {
+            "path": "dependencies/styled-components/ADAPTATIONS.md",
+            "sha256": "25c910d950a787bd26f6d572aecd848c1d6998e43fb55a7cd5adba1debee2210"
+        },
+        {
+            "path": "dependencies/styled-components/UPSTREAM.json",
+            "sha256": "01e534117c0cc26b30cfeeb47136d0192eb226f882c354dd16a666fae6000518"
+        },
+        {
+            "path": "dependencies/styled-components/upstream/dist/styled-components.browser.cjs.js",
+            "sha256": "95aead27c44b9d3576c8f8d6436b973a8a16b0d5aceb6b0046f4f62f21193721"
+        },
+        {
+            "path": "dependencies/styled-components/upstream/dist/styled-components.cjs.js",
+            "sha256": "d8680d824a1126dde64eeab4bae301117aca3dec4cfa8993d2e7936657a698f1"
+        },
+        {
+            "path": "dist/lib/SDKIcons.js",
+            "sha256": "f4eddfb757b6ac00af5eab7327372f1e5a2b4edb2849905db05e4c930ae25fa6"
+        },
+        {
+            "path": "dist/lib/SDKLifecycle.js",
+            "sha256": "521c8cd8d5f04de4b6b8932037e90232719b59a31197e196b03117594b531d9a"
+        },
+        {
+            "path": "dist/lib/SDKPortal.js",
+            "sha256": "75982a94c384fe36469eef2148b4607e88d7107e6d00b4ef567bc00bc1836fa1"
+        },
+        {
+            "path": "sdk-runtime.d.ts",
+            "sha256": "fde6e12c88c4dbc1b47144d539383e9b42d75cdd6d3f7713bd57f1a090d34e4b"
+        },
+        {
+            "path": "sdk-runtime.js",
+            "sha256": "b2bef10e67b3f192a14afb904ebe4f58db2d0fc738a373200b8da220218fd298"
+        }
+    ],
+    "licenses": [
+        {
+            "package": "rich-markdown-editor",
+            "path": "LICENSE",
+            "sha256": "8fd8b0665b4c5be36b96355e4e3faa4bb2de514ea2bf6c61db738f80868a59a9"
+        },
+        {
+            "package": "outline-icons",
+            "path": "dependencies/outline-icons/LICENSE",
+            "sha256": "57065b34317b6cdd63d5b8c38cbfcfe75b26da9f5e1bdc687647b26535da1b53"
+        },
+        {
+            "package": "react-medium-image-zoom",
+            "path": "dependencies/react-medium-image-zoom/LICENSE",
+            "sha256": "21fbf6e3af097d8d518dda5c2c93d017ef706c5e51b0e4a2a679c0c3b6d9c554"
+        },
+        {
+            "package": "prosemirror-utils",
+            "path": "dependencies/prosemirror-utils/LICENSE",
+            "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+            "package": "prosemirror-utils",
+            "path": "dependencies/prosemirror-utils/UPSTREAM-LICENSE",
+            "sha256": "822c00d3553f37e363d8cbcc801886782b32508ef7988ea68d2f1630cf27060e"
+        },
+        {
+            "package": "prosemirror-utils",
+            "path": "dependencies/prosemirror-utils/NOTICE",
+            "sha256": "822c00d3553f37e363d8cbcc801886782b32508ef7988ea68d2f1630cf27060e"
+        },
+        {
+            "package": "styled-components",
+            "path": "dependencies/styled-components/LICENSE",
+            "sha256": "5b893305a717230e5b0024ff5ca3eec1dc05ba600c9b140730488d97ce56f1e6"
+        }
+    ],
+    "notes": [
+        "All paths are relative to this vendor directory.",
+        "Original input package manifests remain in upstream-package.json.",
+        "Source-map references identify upstream input, not regenerated adapted mappings.",
+        "Hash inventory is source provenance, not a passing qualification claim.",
+        "Private styled-components runtime entries are namespaced adaptations; exact Node/browser originals remain separately under dependencies/styled-components/upstream/dist with immutable input hashes. Exported/version markers remain 5.3.11."
+    ]
+}

@@ -30,6 +30,10 @@ export {
     type NativeRichTextEditorRenderProps,
     type NativeRichTextEditorProps,
 } from './NativeRichTextEditor.js';
+export {
+    CompleteRichTextEditor,
+    type CompleteRichTextEditorProps,
+} from './CompleteRichTextEditor.js';
 export { PersonBadge, type PersonBadgeProps } from './PersonBadge.js';
 export {
     composeCalendlyUrl,

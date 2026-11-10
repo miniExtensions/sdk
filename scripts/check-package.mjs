@@ -99,6 +99,7 @@ import {
     recoverableImageJsxConsumer,
 } from './recoverable-image-consumer-checks.mjs';
 import { checkNativeEditorReactMatrix } from './native-rich-text-editor-consumer-checks.mjs';
+import { checkCompleteRichTextReactMatrix } from './complete-rich-text-consumer-checks.mjs';
 import { checkCompleteLocalizedNumericReactMatrix } from './complete-localized-numeric-consumer-checks.mjs';
 import { checkCompleteReadOnlyPhoneReactMatrix } from './complete-readonly-phone-consumer-checks.mjs';
 import { checkCompleteReadOnlyTextReactMatrix } from './complete-readonly-text-consumer-checks.mjs';
@@ -544,9 +545,11 @@ try {
                 path === 'docs/auth.md' ||
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
+                path === 'docs/complete-rich-text.md' ||
                 browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/') ||
+                path.startsWith('dist/vendor/rich-markdown-editor/') ||
                 path.startsWith('dist/vendor/phone-number-input/'),
             `Unexpected packed file: ${path}`
         );
@@ -560,6 +563,8 @@ try {
         'dist/cjs/react/checkbox.css',
         'dist/esm/react/single-select.css',
         'dist/cjs/react/single-select.css',
+        'dist/esm/react/rich-text.css',
+        'dist/cjs/react/rich-text.css',
         'dist/esm/react/text.css',
         'dist/cjs/react/text.css',
         'dist/esm/react/number.css',
@@ -3155,6 +3160,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(nativeEditorMatrix.versions.length, 2);
     assert.equal(nativeEditorMatrix.cleanup, 'completed');
+    const completeEditorMatrix = checkCompleteRichTextReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(completeEditorMatrix.versions.length, 2);
+    assert.equal(completeEditorMatrix.cleanup, 'completed');
     const numericMatrix = checkCompleteLocalizedNumericReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

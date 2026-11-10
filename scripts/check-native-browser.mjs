@@ -28,6 +28,7 @@ import { portalRecipeFixtures as fixtures } from './portal-recipe-checks.mjs';
 import { checkTextareaInputBrowser } from './browser-textarea-input-checks.mjs';
 import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
+import { checkCompleteRichTextBrowser } from './browser-complete-rich-text-checks.mjs';
 import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
 import { checkCompleteDurationBrowser } from './complete-duration-browser-checks.mjs';
 import { checkSearchGateBrowser } from './search-gate-browser-checks.mjs';
@@ -1504,6 +1505,8 @@ try {
             'scripts/portal-recipe-checks.mjs',
             'scripts/browser-number-input-mask-checks.mjs',
             'scripts/browser-textarea-input-checks.mjs',
+            'scripts/browser-complete-rich-text-checks.mjs',
+            'scripts/browser-complete-localized-numeric-checks.mjs',
             'scripts/native-rating-fixture.css',
             'scripts/complete-readonly-text-consumer-checks.mjs',
             'scripts/complete-clearable-input-consumer-checks.mjs',
@@ -2067,6 +2070,13 @@ try {
             chromiumSandbox: true,
         });
         report.chromium = browser.version();
+        report.completeRichText = {};
+        await checkCompleteRichTextBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeRichText,
+            output,
+        });
         report.numberInputMask = {};
         await checkNumberInputMaskBrowser({
             browser,

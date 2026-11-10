@@ -193,6 +193,7 @@ export function assertModuleFormats(root) {
                 './react/multiple-select.css',
                 './react/linked-records.css',
                 './react/single-select.css',
+                './react/rich-text.css',
             ].includes(subpath)
         ) {
             assert.equal(mapping, `./dist/esm/${subpath.slice(2)}`);

@@ -314,6 +314,13 @@ string. Masking precedes value access. This is a safe plain-text display stage;
 formatted Rich Text parity, parsing, links, resource loading and editing are not
 included.
 
+[Complete Rich Text editor](docs/complete-rich-text.md) exports
+`CompleteRichTextEditor` for formatted editing and read-only Markdown, with its
+owned engine, toolbar, paste handling, checkbox serialization and opt-in CSS.
+The host supplies stored values, semantic document identity and the canonical
+write callback. The existing literal display and native editor-slot APIs retain
+their contracts.
+
 [AI Text presentation](docs/ui.md#react-ai-text-presentation) exports `AiTextField`,
 `AiTextFieldProps`, `AiTextFieldOptions` and `renderAiTextField` for the existing
 computed, read-only slot. It displays the supplied native object's `value` as

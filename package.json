@@ -91,7 +91,6 @@
         "./react/checkbox.css": "./dist/esm/react/checkbox.css",
         "./react/text.css": "./dist/esm/react/text.css",
         "./react/number.css": "./dist/esm/react/number.css",
-        "./react/localized-numeric.css": "./dist/esm/react/localized-numeric.css",
         "./react/date.css": "./dist/esm/react/date.css",
         "./react/datetime.css": "./dist/esm/react/datetime.css",
         "./react/duration.css": "./dist/esm/react/duration.css",
@@ -103,6 +102,8 @@
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
         "./react/linked-records.css": "./dist/esm/react/linked-records.css",
         "./react/single-select.css": "./dist/esm/react/single-select.css",
+        "./react/rich-text.css": "./dist/esm/react/rich-text.css",
+        "./react/localized-numeric.css": "./dist/esm/react/localized-numeric.css",
         "./react/complete-readonly-text.css": "./dist/esm/react/complete-readonly-text.css",
         "./react/complete-clearable-text-input.css": "./dist/esm/react/complete-clearable-text-input.css",
         "./react/complete-multiline.css": "./dist/esm/react/complete-multiline.css",
@@ -122,7 +123,7 @@
     "files": [
         "dist/esm",
         "dist/cjs",
-        "dist/vendor/phone-number-input",
+        "dist/vendor",
         "docs/formulas.md",
         "docs/runtime.md",
         "docs/ui.md",
@@ -143,7 +144,8 @@
         "examples/browser/src",
         "README.md",
         "LICENSE",
-        "THIRD_PARTY_NOTICES.md"
+        "THIRD_PARTY_NOTICES.md",
+        "docs/complete-rich-text.md"
     ],
     "engines": {
         "node": ">=22"
@@ -167,15 +169,47 @@
         "test:component": "node scripts/coverage.mjs component"
     },
     "dependencies": {
+        "@emotion/is-prop-valid": "1.4.0",
+        "@emotion/stylis": "0.8.5",
+        "@emotion/unitless": "0.7.5",
         "@trpc/client": "11.0.0-rc.382",
         "@trpc/server": "11.0.0-rc.382",
+        "copy-to-clipboard": "3.3.3",
         "dompurify": "2.4.7",
         "email-validator": "2.0.4",
+        "fuzzy-search": "3.2.1",
+        "gemoji": "6.1.0",
+        "hoist-non-react-statics": "3.3.2",
         "jsdom": "20.0.3",
         "linkifyjs": "3.0.5",
+        "lodash": "4.17.21",
+        "markdown-it": "12.3.2",
+        "markdown-it-container": "3.0.0",
+        "markdown-it-emoji": "2.0.2",
         "moment": "2.31.0",
         "moment-duration-format": "2.3.2",
         "moment-timezone": "0.5.45",
+        "prop-types": "15.8.1",
+        "prosemirror-commands": "1.5.2",
+        "prosemirror-dropcursor": "1.8.1",
+        "prosemirror-gapcursor": "1.3.2",
+        "prosemirror-history": "1.3.2",
+        "prosemirror-inputrules": "1.4.0",
+        "prosemirror-keymap": "1.2.2",
+        "prosemirror-markdown": "1.12.0",
+        "prosemirror-model": "1.25.4",
+        "prosemirror-schema-list": "1.3.0",
+        "prosemirror-state": "1.4.3",
+        "prosemirror-tables": "1.3.7",
+        "prosemirror-transform": "1.8.0",
+        "prosemirror-view": "1.33.1",
+        "punycode": "2.3.1",
+        "react-is": "16.13.1",
+        "refractor": "3.6.0",
+        "resize-observer-polyfill": "1.5.1",
+        "shallowequal": "1.1.0",
+        "slugify": "1.6.6",
+        "smooth-scroll-into-view-if-needed": "1.1.33",
         "ua-parser-js": "1.0.39",
         "chart.js": "4.4.2"
     },
@@ -199,10 +233,14 @@
         "react-chartjs-2": "5.3.1"
     },
     "peerDependencies": {
-        "react": "^18.3.1 || ^19.0.0"
+        "react": "^18.3.1 || ^19.0.0",
+        "react-dom": "^18.3.1 || ^19.0.0"
     },
     "peerDependenciesMeta": {
         "react": {
+            "optional": true
+        },
+        "react-dom": {
             "optional": true
         }
     },

@@ -242,7 +242,7 @@ void publish();
     );
 }
 
-function recordInputs({
+export function recordPortalChartInputs({
     metafile,
     temporary,
     installed,
@@ -268,12 +268,16 @@ function recordInputs({
         };
         if (within(installed, path)) {
             // The ordinary React barrel also reaches the existing private
-            // Phone closure, shared by ESM/CJS. Bind those shipped bytes too;
-            // do not mistake them for a public opposite-format entry.
+            // Phone and Rich Text closures, shared by ESM/CJS. Bind those
+            // exact shipped subtrees too; no other vendor or format is allowed.
             assert(
                 within(join(installed, 'dist', format), path) ||
                     within(
                         join(installed, 'dist/vendor/phone-number-input'),
+                        path
+                    ) ||
+                    within(
+                        join(installed, 'dist/vendor/rich-markdown-editor'),
                         path
                     ),
                 'Chart browser imported a source alias or wrong SDK format'
@@ -404,7 +408,7 @@ export async function prepareCompletePortalChartFixtures({
             define: { 'process.env.NODE_ENV': '"development"' },
         });
         await assertBrowserInputs(bundled.metafile, temporary);
-        const inputs = recordInputs({
+        const inputs = recordPortalChartInputs({
             metafile: bundled.metafile,
             temporary,
             installed,

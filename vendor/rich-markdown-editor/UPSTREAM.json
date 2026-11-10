@@ -1,0 +1,2018 @@
+{
+    "repository": "https://github.com/miniExtensions/rich-markdown-editor",
+    "revision": "aa3bddd1d023739df9f673c22f950a67d8b6bbbf",
+    "version": "12.26.8",
+    "license": "BSD-3-Clause",
+    "upstreamManifest": "upstream-package.json",
+    "unmodifiedSourceSha256": [
+        {
+            "path": "dist/commands/backspaceToParagraph.d.ts",
+            "sha256": "4e38b8683f792b17a241dd78633269c7e3e391656bc018ed38e0cfee870f7cd7"
+        },
+        {
+            "path": "dist/commands/backspaceToParagraph.d.ts.map",
+            "sha256": "8f68dd1673f3f18440cdd798247613e8ebac611336a308fa77477a3622f9f4c3"
+        },
+        {
+            "path": "dist/commands/backspaceToParagraph.js",
+            "sha256": "78e0bd042366ba47e61beadcedf3427a74ee27484868f6918b6db8c606d49eb7"
+        },
+        {
+            "path": "dist/commands/backspaceToParagraph.js.map",
+            "sha256": "37f802edd5c058edbf4c23cf6155df9748613ff7b6e295b5b4524b0deb07ed9c"
+        },
+        {
+            "path": "dist/commands/createAndInsertLink.d.ts",
+            "sha256": "57f744db90a7c202f3d8e6ebdca46c66de91c6aad1011e6b9630471d3d57f69b"
+        },
+        {
+            "path": "dist/commands/createAndInsertLink.d.ts.map",
+            "sha256": "b09f820483cb6d8eb0e254d14e463f70e300268ef14afc774603bfd39b33da63"
+        },
+        {
+            "path": "dist/commands/createAndInsertLink.js",
+            "sha256": "9ef1562aad454811ede87660c576dea14b0f99e3068a9148811dbc256ee9896e"
+        },
+        {
+            "path": "dist/commands/createAndInsertLink.js.map",
+            "sha256": "7ec374ac509cff8779a690bc0a0d90f9e82d94730c3f3d3b238735a6c77ff2c2"
+        },
+        {
+            "path": "dist/commands/insertFiles.d.ts",
+            "sha256": "a75d857414035a8c793967ce67cdd34d083a509b392d9d7ea4d5e8726ce64b84"
+        },
+        {
+            "path": "dist/commands/insertFiles.d.ts.map",
+            "sha256": "cef56f1e0c2cfc0a8c338c227050238359cc0e4f892f716803735cbf72bde31e"
+        },
+        {
+            "path": "dist/commands/insertFiles.js",
+            "sha256": "76f666ec4866250500e14c31f5a2bac3b5af53ca89c7688f7142997bea6fe21a"
+        },
+        {
+            "path": "dist/commands/insertFiles.js.map",
+            "sha256": "9349c0c01c03497c8b2c8b72ff3dd8f6180181aca610428785ff55c6d235f302"
+        },
+        {
+            "path": "dist/commands/moveLeft.d.ts",
+            "sha256": "980d3b3b1c27e012c27a5d5419049d92e2e8322639836b47501bfd529996bf72"
+        },
+        {
+            "path": "dist/commands/moveLeft.d.ts.map",
+            "sha256": "66867a14638527d4de903dc47ff8f680e99d5ddffcb3c6121f13a4007f51897d"
+        },
+        {
+            "path": "dist/commands/moveLeft.js",
+            "sha256": "32482de153be3ab28975152386a0010788e096cd526dbc6d74577b36d2d9f57d"
+        },
+        {
+            "path": "dist/commands/moveLeft.js.map",
+            "sha256": "fc9f0d7db0242d0c16415f018c4d7aa9c14248d80d115654f09fcae4e17c98c1"
+        },
+        {
+            "path": "dist/commands/moveRight.d.ts",
+            "sha256": "d4ef227c41ce454436a4cb7471ebd95b86bb5835d3d938afda49a44eee00a311"
+        },
+        {
+            "path": "dist/commands/moveRight.d.ts.map",
+            "sha256": "de015ab1c83d183b464d0f5f1d6215d4b68b1aac660564b5c0299b6bfb1a0fbc"
+        },
+        {
+            "path": "dist/commands/moveRight.js",
+            "sha256": "5f57f078475543dabd2599b08d8bf4ee92e06277a119208fff6720d7f8282c5c"
+        },
+        {
+            "path": "dist/commands/moveRight.js.map",
+            "sha256": "5d2fe207a8afa8e751d128d63631e2d7edad4547634623801557849656e42287"
+        },
+        {
+            "path": "dist/commands/splitHeading.d.ts",
+            "sha256": "d5b3fe60fabb93743d473ac9a72b5a4d4bd046890fe48110cd61edbaf7ef8622"
+        },
+        {
+            "path": "dist/commands/splitHeading.d.ts.map",
+            "sha256": "56dda950906e5d02fef35b29d7851c59423539465a90416b1bc3984cd36a5078"
+        },
+        {
+            "path": "dist/commands/splitHeading.js",
+            "sha256": "64a37b412b019e8fe13e562e3581c83fa203b48a40986aebd6740e8f442c5762"
+        },
+        {
+            "path": "dist/commands/splitHeading.js.map",
+            "sha256": "700cb3a34d6fa0a3b14e51dc4832dda8f3835d05be39d3f8a2a018005a4e9312"
+        },
+        {
+            "path": "dist/commands/toggleBlockType.d.ts",
+            "sha256": "ee55d7aef8fe9eed03b7236f44ba42454376b0edf6ad437a280613e493408d8e"
+        },
+        {
+            "path": "dist/commands/toggleBlockType.d.ts.map",
+            "sha256": "0d0c235a78eeae38cacb1b98c46ce696ff570ed8c4cf1afe79b79088a00e9bf2"
+        },
+        {
+            "path": "dist/commands/toggleBlockType.js",
+            "sha256": "a500985ebd9f56c27c91d66ca082403023709f4bcef14067e845a31fb121be19"
+        },
+        {
+            "path": "dist/commands/toggleBlockType.js.map",
+            "sha256": "fb48506738e64c19ce23b216e4ad217b8c361568f33527c6c2bdeb3dd2ed51e5"
+        },
+        {
+            "path": "dist/commands/toggleList.d.ts",
+            "sha256": "30293afdd476473ff9ec4acd5e13a9094b8f714a72a71c376287f68f8a97392e"
+        },
+        {
+            "path": "dist/commands/toggleList.d.ts.map",
+            "sha256": "96684142e3b3c79ebe9d8bf85324964dbeaf2d59e2432b3e2d1c830ab3411ca4"
+        },
+        {
+            "path": "dist/commands/toggleList.js",
+            "sha256": "fb6bb19a674659b6e200c765e58e3bfe18d5943ff37b9b40d692cd099b36d822"
+        },
+        {
+            "path": "dist/commands/toggleList.js.map",
+            "sha256": "6fa24a07f7a849c0a9d09f2e54c70b941f71ec87ad7932adb0ffb78fb89bb5b3"
+        },
+        {
+            "path": "dist/commands/toggleWrap.d.ts",
+            "sha256": "6d2ab957490875fc45b6c2e489acfe3e52657aabae1efd1eae7deb04eac890a3"
+        },
+        {
+            "path": "dist/commands/toggleWrap.d.ts.map",
+            "sha256": "0bdaabac21c060244973871f59420bdd1bf7738ce8fc5bfa47058d7c5771bc0b"
+        },
+        {
+            "path": "dist/commands/toggleWrap.js",
+            "sha256": "3aa6fb33067b5de16a3d0f33a4e7c34252be6d148caf385005f2404bdab15351"
+        },
+        {
+            "path": "dist/commands/toggleWrap.js.map",
+            "sha256": "81b86c55ac0f078d92b0fa6ab3c5f7a7bcc49dc57e7d0206d6a699d7fbd5f527"
+        },
+        {
+            "path": "dist/components/BlockMenu.d.ts",
+            "sha256": "a47cddd1821472a752fff99a6370c125966b51aa4a4c7f1f7c613475c9e2dbcc"
+        },
+        {
+            "path": "dist/components/BlockMenu.d.ts.map",
+            "sha256": "34cfcbc663e49e0a8fc6e434892caf8909d68acbbf82d28baa3c46df7bca2418"
+        },
+        {
+            "path": "dist/components/BlockMenu.js",
+            "sha256": "3ac3094449743a7b499fdef40234d4fa8db145b08b95a7dae4e573a9e17915a0"
+        },
+        {
+            "path": "dist/components/BlockMenu.js.map",
+            "sha256": "47c2e0233394edc0931826b53b600a2004363b47821ec1c46f7becf1004fcfc5"
+        },
+        {
+            "path": "dist/components/BlockMenuItem.d.ts",
+            "sha256": "da6bad72653d291fdd70f6629d3fc5ade3add05bdad4680385fc613126f455c7"
+        },
+        {
+            "path": "dist/components/BlockMenuItem.d.ts.map",
+            "sha256": "945746b051b740164ef116fcac724c124411560048350d7d6593102910f5cd92"
+        },
+        {
+            "path": "dist/components/BlockMenuItem.js",
+            "sha256": "febde6613d2252c2246bda85bec321c1cf17158c87667386c3fe49c86678c2dc"
+        },
+        {
+            "path": "dist/components/BlockMenuItem.js.map",
+            "sha256": "3eb8b9c6218737f27e72f222be247cf759336a4d24d407de2038306507b2c87b"
+        },
+        {
+            "path": "dist/components/CommandMenu.d.ts",
+            "sha256": "2f25180c5be0fbae359929092d39a3868aff8b83e20a7fd5545658bec4a26925"
+        },
+        {
+            "path": "dist/components/CommandMenu.d.ts.map",
+            "sha256": "382585c0a3722a624b294997ed6a11d9dca7dcfc0dc903ba9ab606e9d38e9d76"
+        },
+        {
+            "path": "dist/components/CommandMenu.js",
+            "sha256": "ac9c5729054db221ddb388d398ce080ab7f4902e4a76327366c88c6c671d008e"
+        },
+        {
+            "path": "dist/components/CommandMenu.js.map",
+            "sha256": "16d2f873d29a7bd1bf25c7780767448fe51329bca897ca85a59b904af635749e"
+        },
+        {
+            "path": "dist/components/EmojiMenu.d.ts",
+            "sha256": "f05782fd64776f5dc9bbbbc07d6f3150a3efc747c0c84542418f9bef5ad2495b"
+        },
+        {
+            "path": "dist/components/EmojiMenu.d.ts.map",
+            "sha256": "346d5aaf051934430878161ff5d63fcf57eb1264f28208f23194b81dd5b76e8a"
+        },
+        {
+            "path": "dist/components/EmojiMenu.js",
+            "sha256": "416f6a6467ac1c728d414a6ae62cace7c9d711e5d4463b75a25e76052637e660"
+        },
+        {
+            "path": "dist/components/EmojiMenu.js.map",
+            "sha256": "e700241555a6a09d42e8f00558b90838609696c7d61a58dc26a3f4312f266a72"
+        },
+        {
+            "path": "dist/components/EmojiMenuItem.d.ts",
+            "sha256": "866327b3f3a967fa488a0f904e1e62ec8d342f90915a064d6defe5233a46f036"
+        },
+        {
+            "path": "dist/components/EmojiMenuItem.d.ts.map",
+            "sha256": "e8d90bfe446f36e9d89b9c57c57870abbb3efc82fe9afe12db80722e4e0fbd14"
+        },
+        {
+            "path": "dist/components/EmojiMenuItem.js",
+            "sha256": "21abadb8288a0e23bdfb516a666ab1a499932c433707d76ae8a45bc7010e3916"
+        },
+        {
+            "path": "dist/components/EmojiMenuItem.js.map",
+            "sha256": "8b6d6d7e80f435a794a8f733bb894ea0b5b93c0ba504be592bf30341001d2824"
+        },
+        {
+            "path": "dist/components/Flex.d.ts",
+            "sha256": "08bbe80d5307ec3fe59290a6ff4a9858767d33c6781cb0f5ed812f9735ec9eb1"
+        },
+        {
+            "path": "dist/components/Flex.d.ts.map",
+            "sha256": "5379a9104297f7bfc3d333359f4f4c72a658569c8d9eff4499711d00381a39fe"
+        },
+        {
+            "path": "dist/components/Flex.js",
+            "sha256": "b63b39e82846e8c2d86f95f8ed197a8bebe7fbf721ef62e6404809f911b7336e"
+        },
+        {
+            "path": "dist/components/Flex.js.map",
+            "sha256": "8b412dbf0dfaf88733acb662ba65d20fc5a0b61ceff64610237fb6462492d449"
+        },
+        {
+            "path": "dist/components/FloatingToolbar.d.ts",
+            "sha256": "9b5b70d327291e84558c4c5d9982a69115286d4f06c1d9ed351f5ffe3b16769b"
+        },
+        {
+            "path": "dist/components/FloatingToolbar.d.ts.map",
+            "sha256": "ea736293a905f80bd9f58f402554446b26475ea9d32044f63f8f97d3b3e83fb7"
+        },
+        {
+            "path": "dist/components/FloatingToolbar.js",
+            "sha256": "d17fde3201103a817f558740cb28d3337ea8ae7f278f038dec2374deb9c236eb"
+        },
+        {
+            "path": "dist/components/FloatingToolbar.js.map",
+            "sha256": "891317c68bfce6ba8337e9684299f909329519e8dcc4c92b9c9b92aedc71c910"
+        },
+        {
+            "path": "dist/components/Input.d.ts",
+            "sha256": "824e6b8bebb313b59e4c9d334b0f18d288c7e2540d48756abc1452166eedb8c0"
+        },
+        {
+            "path": "dist/components/Input.d.ts.map",
+            "sha256": "c9dfef51aa621b9f707a7a2f5c2b753c7155c8bde1bc8aabcf43cf0faee91830"
+        },
+        {
+            "path": "dist/components/Input.js",
+            "sha256": "8b7b9be725b8fac19dc1db3bcd46bf570878703540740c1de6e2c96d596cbc8e"
+        },
+        {
+            "path": "dist/components/Input.js.map",
+            "sha256": "71bb79d5d8f3003c51bd3be9319f177790db4be877f10e97ee97bc0e02ca0015"
+        },
+        {
+            "path": "dist/components/LinkEditor.d.ts",
+            "sha256": "3130427bf33db115d9fa2b429bd804b6542b8caa4dd1feb04e301a886666af1d"
+        },
+        {
+            "path": "dist/components/LinkEditor.d.ts.map",
+            "sha256": "b7697e58bdeb338fbd0923abdb2f6491863d8710d2352d28d38e89c82f96f887"
+        },
+        {
+            "path": "dist/components/LinkEditor.js",
+            "sha256": "c40a9a9c39688d26eb49bb6496be5cc48708e2748e1d673267163d32c405bf3b"
+        },
+        {
+            "path": "dist/components/LinkEditor.js.map",
+            "sha256": "fb465abd0003b90e5c386374a7a14cb11ba57939f35137ad2859c9bd43487c7e"
+        },
+        {
+            "path": "dist/components/LinkSearchResult.d.ts",
+            "sha256": "c523c7d201fa76d018853b570e6665bc8824370d54ca5c16c43cb0c694f73dbd"
+        },
+        {
+            "path": "dist/components/LinkSearchResult.d.ts.map",
+            "sha256": "585eee98cec026e6e4c283838d425659ca08ca48885951a07e70296d673b135b"
+        },
+        {
+            "path": "dist/components/LinkSearchResult.js",
+            "sha256": "8dd08146f6325a0474583cae9b96a32c29569a20ca102214b7ea88f00e163890"
+        },
+        {
+            "path": "dist/components/LinkSearchResult.js.map",
+            "sha256": "7b173b3d0084a69502ba613026dc5fd49c0d7133508b7a58023c85f501c26146"
+        },
+        {
+            "path": "dist/components/LinkToolbar.d.ts",
+            "sha256": "09f24171ac3771e484adcfd812090e43cbe8520383e6d0816a19757ed4f13b8c"
+        },
+        {
+            "path": "dist/components/LinkToolbar.d.ts.map",
+            "sha256": "dea7267314cdc14463e5ebc9fd7c9d28940fda59755a2ba061083512301cea18"
+        },
+        {
+            "path": "dist/components/LinkToolbar.js",
+            "sha256": "7b9d255e8b6731fe56833badea05ca2d923dd16ebe388e0caff8a6f49f263763"
+        },
+        {
+            "path": "dist/components/LinkToolbar.js.map",
+            "sha256": "2a37d7262fd90ada9651b0d58a5517df842e090ce8425203fbec23b8a32b4d15"
+        },
+        {
+            "path": "dist/components/SelectionToolbar.d.ts",
+            "sha256": "00ac7c059eb0eadd61785f306e0f574c81f57b61182a7d4c492aa745221dea53"
+        },
+        {
+            "path": "dist/components/SelectionToolbar.d.ts.map",
+            "sha256": "40746a3f3bbb771549d66fc7c731b25a26cbd089c674dbfd7b086fb9e533e977"
+        },
+        {
+            "path": "dist/components/SelectionToolbar.js",
+            "sha256": "d18175eee4b69542f0901f8d8faba41a26aa9b586c1d5bd35e4f07e82ccb1e21"
+        },
+        {
+            "path": "dist/components/SelectionToolbar.js.map",
+            "sha256": "afbc50a55a17599ae3c2667d8b631f3abc4663b5c1c52c4027a0a18320157226"
+        },
+        {
+            "path": "dist/components/ToolbarButton.d.ts",
+            "sha256": "6a90698d50ba80535f11d0b256650a14e8f480a8d26d6483bf41e6a06a28db44"
+        },
+        {
+            "path": "dist/components/ToolbarButton.d.ts.map",
+            "sha256": "4dcb91d6f2673d7d7b21be4082c137fb74f2fbf6ddc03cbc72c989225bf0d72d"
+        },
+        {
+            "path": "dist/components/ToolbarButton.js",
+            "sha256": "5929eecc187651732d4d48e4ea1202489dd267a551e28a91b57b52d455a52ae8"
+        },
+        {
+            "path": "dist/components/ToolbarButton.js.map",
+            "sha256": "109196cd34e62854eef2e64011937e80b9376fc84d2ab34d1e09c8ec5bc46825"
+        },
+        {
+            "path": "dist/components/ToolbarMenu.d.ts",
+            "sha256": "20ac55c2e6270141908164bc175248246bd56704cfd31993148a2a1072d7a057"
+        },
+        {
+            "path": "dist/components/ToolbarMenu.d.ts.map",
+            "sha256": "d8d7d250197c9cbcb5764f3590ec38b4c7cd7e9c9307b64dcf90da1032e054a7"
+        },
+        {
+            "path": "dist/components/ToolbarMenu.js",
+            "sha256": "0a770764288c8298884e066967a4d86cae9e1b9ba1cf607c1ce895c9e21cb199"
+        },
+        {
+            "path": "dist/components/ToolbarMenu.js.map",
+            "sha256": "bd01ed7a401e576b89bacbbfd37710bc5132eb7f1ad381822eab7e33cab7817f"
+        },
+        {
+            "path": "dist/components/ToolbarSeparator.d.ts",
+            "sha256": "19c649390a08dba8a4d90e2f591e8cd1839f70f51203a00ead581442e2709485"
+        },
+        {
+            "path": "dist/components/ToolbarSeparator.d.ts.map",
+            "sha256": "37bfe61601db21bda8296a784b447e59df988a4f6167dd3e4bc8bb0ab2c92721"
+        },
+        {
+            "path": "dist/components/ToolbarSeparator.js",
+            "sha256": "1d6ab8fe4dd4afe274db9619dd55eb852724abd47ff54eeb5ca8f9a8a468392c"
+        },
+        {
+            "path": "dist/components/ToolbarSeparator.js.map",
+            "sha256": "6c67ed65444a7e231bcff810037f92d9c42f41e282ff88e56f0315f5bfa4d7b9"
+        },
+        {
+            "path": "dist/components/Tooltip.d.ts",
+            "sha256": "deb27453d24572aeac2c5300fa1faf99d02da42618cf8046c730b908d51647a8"
+        },
+        {
+            "path": "dist/components/Tooltip.d.ts.map",
+            "sha256": "4c127cfac36082dec4aa5067961265247f0e6be83877fc883971c41c435fde68"
+        },
+        {
+            "path": "dist/components/Tooltip.js",
+            "sha256": "eb2c8c599d36adac8741470c328d1f7820c9e6d7ad9f0b87309fe00187efe6fb"
+        },
+        {
+            "path": "dist/components/Tooltip.js.map",
+            "sha256": "e4404c855358850e9c70f2f8e2fae589fdd651ae4486d61bfd579b6dfa6f53d6"
+        },
+        {
+            "path": "dist/components/VisuallyHidden.d.ts",
+            "sha256": "620eac50757175eeb24e5b64f2d3cc1e640718d964c22a2c91bd0b5d662087c1"
+        },
+        {
+            "path": "dist/components/VisuallyHidden.d.ts.map",
+            "sha256": "7fc42cb3f936f744745d41fb5ce60f17d4b563bcb5de9e02605d3b8be80bfc50"
+        },
+        {
+            "path": "dist/components/VisuallyHidden.js",
+            "sha256": "0b6f2324068bda317a7ed99950f632570ad5a8322eee1dcb7c6f1d0ce3b9726d"
+        },
+        {
+            "path": "dist/components/VisuallyHidden.js.map",
+            "sha256": "d176f8a2343635289dc56ed39d4e95d1a3d3d79c5cd74442e8d3f0eb5406f5e2"
+        },
+        {
+            "path": "dist/dictionary.d.ts",
+            "sha256": "a671eb0ed658c8cd51e70ec47ea64f60fcfc0c4fbfc920f8e726113610e085ef"
+        },
+        {
+            "path": "dist/dictionary.d.ts.map",
+            "sha256": "99cc75306918dfd7d315c47aae535d374bf30e6c06cfc8f324523e3e9c1c1430"
+        },
+        {
+            "path": "dist/dictionary.js",
+            "sha256": "cbb5a6c2c7b6a51369d0699b40fcb2a851e69ba64cf204283077b59283964926"
+        },
+        {
+            "path": "dist/dictionary.js.map",
+            "sha256": "548349c8ce5cc3f784de0badc0c7ad370a3a9e602ee688b56d9bacc0fbc3c727"
+        },
+        {
+            "path": "dist/hooks/useComponentSize.d.ts",
+            "sha256": "56db311b9c5b8c0ace679b94ec6f687084cdd0f98674affa883619b15241bb1c"
+        },
+        {
+            "path": "dist/hooks/useComponentSize.d.ts.map",
+            "sha256": "22366780fb41e87a6ad0ba51eca3ab53ebb2a3d81b512f785065ade8ce5298f6"
+        },
+        {
+            "path": "dist/hooks/useComponentSize.js",
+            "sha256": "565c366b421615d17329b7ae04fbea3a10a87f61fd32812ef04d1b3535005a16"
+        },
+        {
+            "path": "dist/hooks/useComponentSize.js.map",
+            "sha256": "fa337381adba018214d285c6a4a4a8c130d9df76f248c8d0a2ae73735f5d4f54"
+        },
+        {
+            "path": "dist/hooks/useMediaQuery.d.ts",
+            "sha256": "d968290aac8695561d37f876ac08f8b9a96a8c0a5b99462be1136806f8c0f1c5"
+        },
+        {
+            "path": "dist/hooks/useMediaQuery.d.ts.map",
+            "sha256": "6a684be51f71b622dd490c628ce632b544886b5a1e77d318ee03983270f163ca"
+        },
+        {
+            "path": "dist/hooks/useMediaQuery.js",
+            "sha256": "f2aadb47cb81442507303581f6735ce7dddbef9dff02c90dfdc8d238c3f28754"
+        },
+        {
+            "path": "dist/hooks/useMediaQuery.js.map",
+            "sha256": "e34ed08c22a5088843dbc2416cf22208bc90467a285f8479ebfc73e08476eb5e"
+        },
+        {
+            "path": "dist/hooks/useViewportHeight.d.ts",
+            "sha256": "956c48f62f288b4531a74105a422650ddd32121fdf34986ed762a356d124e4a5"
+        },
+        {
+            "path": "dist/hooks/useViewportHeight.d.ts.map",
+            "sha256": "499176cba8ff199c2ad6d0b7b2a99d0b4da509415364162690fa214246b7f2f5"
+        },
+        {
+            "path": "dist/hooks/useViewportHeight.js",
+            "sha256": "6cd45f3d0142805c5b1510fec7ee597d62c7c9ae8cf041d84ebe49a39dc7f27b"
+        },
+        {
+            "path": "dist/hooks/useViewportHeight.js.map",
+            "sha256": "9d5790d7ca0c009db25a27ceba99c1eef6ad8bd8febc47fa4d8de724387aaac3"
+        },
+        {
+            "path": "dist/index.d.ts",
+            "sha256": "83ef3a1d62c30dc2d9efc72d626838b5027fb0adbb37a1245bf3ea3992c57413"
+        },
+        {
+            "path": "dist/index.d.ts.map",
+            "sha256": "dda1ffabb69af8e89d89c4c499292a1170bc04a71d8cb1b7f4fa691e916808af"
+        },
+        {
+            "path": "dist/index.js",
+            "sha256": "bb7be76dc3800c02017936143201c377410e2f50ec92251ef62d75364ac2f112"
+        },
+        {
+            "path": "dist/index.js.map",
+            "sha256": "0a930b37d710b3776d891f8cf61d435181f308e660ddddd44e66186b9c814c60"
+        },
+        {
+            "path": "dist/lib/ComponentView.d.ts",
+            "sha256": "4f91d36a08d2e6efd7233d83b10e08bb97dd1dc904889f562bad00711596ccfc"
+        },
+        {
+            "path": "dist/lib/ComponentView.d.ts.map",
+            "sha256": "64c77c325c75b7dda363f60171fefa3ff26f09ff879de0e3c789a89bf77b0197"
+        },
+        {
+            "path": "dist/lib/ComponentView.js",
+            "sha256": "a1be45941d59b6555cee5256331866da99e60042c1ee51a63db1642e86fd09ea"
+        },
+        {
+            "path": "dist/lib/ComponentView.js.map",
+            "sha256": "392bef10f077801106a1f6f1d812493117ac2a6cda7b72d663acb3820039c66b"
+        },
+        {
+            "path": "dist/lib/Extension.d.ts",
+            "sha256": "8da3e1b02c3f6b65e7a27a94c399ab0c6abe0a10b07003d39c4d924d78ede0ec"
+        },
+        {
+            "path": "dist/lib/Extension.d.ts.map",
+            "sha256": "cb9a73d94c007e3f9bff8bee6d5af11c5c9834a9462271c26369c0446d47074a"
+        },
+        {
+            "path": "dist/lib/Extension.js",
+            "sha256": "1141a50185e56e9a51c29423f3d10c60a57e65dec2a513557a2df09f8a6fe11b"
+        },
+        {
+            "path": "dist/lib/Extension.js.map",
+            "sha256": "f8944a5f28d86720fddb1768488f71b1082ca3eb902e1b5fe25336ca31365df2"
+        },
+        {
+            "path": "dist/lib/ExtensionManager.d.ts",
+            "sha256": "f8d17a43515a12efdc4adf3d5de9367e98d2d9f43f1c92f678942a04439ccb79"
+        },
+        {
+            "path": "dist/lib/ExtensionManager.d.ts.map",
+            "sha256": "a75fb4d60250c35fc13a31b347405e3b7d0d0d8dd4f48c0bfe0da02ed4443358"
+        },
+        {
+            "path": "dist/lib/ExtensionManager.js",
+            "sha256": "24fa9ba90aed09340fe94ec8c582571da5b24f1903dd338917a3d296c0da7ab1"
+        },
+        {
+            "path": "dist/lib/ExtensionManager.js.map",
+            "sha256": "d1c5d3abf4d68a7c7f20add6b0f3db88a396cca90ac95b7fb1fc3bff3c3a1375"
+        },
+        {
+            "path": "dist/lib/filterExcessSeparators.d.ts",
+            "sha256": "5d33631e3148de3f9ac1edd66d1e7e34a3859916df290da1ec1e34e0baabbe99"
+        },
+        {
+            "path": "dist/lib/filterExcessSeparators.d.ts.map",
+            "sha256": "ca41e33dfa7efcd727166622a2ceeb5b89f4770c8ff3216d645cda3bdf9c827d"
+        },
+        {
+            "path": "dist/lib/filterExcessSeparators.js",
+            "sha256": "4f9ff91830f2ab6847f3b38bbf0bfc6b39d90ea7267878bce733d95fdfc3855c"
+        },
+        {
+            "path": "dist/lib/filterExcessSeparators.js.map",
+            "sha256": "a3fdc5079da07ac4cded351767d9995d8b01f09231f1ae50b5b823c9ad0c1675"
+        },
+        {
+            "path": "dist/lib/getDataTransferFiles.d.ts",
+            "sha256": "43c8d5cb6e9cc2fa89db21ff0586286bda623142642260fc84c97bd957b6f295"
+        },
+        {
+            "path": "dist/lib/getDataTransferFiles.d.ts.map",
+            "sha256": "2e077443335c5edc48a0f5f23e14973a4e4bdaf67b8b9de117c147d860ca2cc7"
+        },
+        {
+            "path": "dist/lib/getDataTransferFiles.js",
+            "sha256": "c60e828b7559f57987743384f60fbe300f6e7e2584b62df105fea91e8ef97474"
+        },
+        {
+            "path": "dist/lib/getDataTransferFiles.js.map",
+            "sha256": "52f7797a9afde135d15d486c8643d7d7dda8c30d0a9fc55e34ee2e4a268316bc"
+        },
+        {
+            "path": "dist/lib/getHeadings.d.ts",
+            "sha256": "d9b0e918809fec145df5790f64b7833e0023e0839d1986840f93dc41ae998ab5"
+        },
+        {
+            "path": "dist/lib/getHeadings.d.ts.map",
+            "sha256": "6c571062965432cfce57702368f42c9a7ae39709743f8bdaa52c0ef98006891e"
+        },
+        {
+            "path": "dist/lib/getHeadings.js",
+            "sha256": "77c358a6d94dcf31531734646db59fa67a07f7902e166d5ac973ca0b5b887508"
+        },
+        {
+            "path": "dist/lib/getHeadings.js.map",
+            "sha256": "5e49d4e726087b77231de0a3e9918cb0b48e10475ac8b596a1edd8750958145f"
+        },
+        {
+            "path": "dist/lib/getMarkAttrs.d.ts",
+            "sha256": "9b118571c38e0884796f196fedb21a7d2f802cd32dfd9739db66a576bfe32366"
+        },
+        {
+            "path": "dist/lib/getMarkAttrs.d.ts.map",
+            "sha256": "22f7b1ad438ed14a886b1277ba5d476155ae4ddf63ca358c7e5c317a06a96231"
+        },
+        {
+            "path": "dist/lib/getMarkAttrs.js",
+            "sha256": "bdf99a747bc95af4ef703f93c9df2f45895bff6904db3c77996cdd21106264cd"
+        },
+        {
+            "path": "dist/lib/getMarkAttrs.js.map",
+            "sha256": "1b14676c383f294d54a735952f5cb1eed4d77158ff6994e3515cbd0ec9da592a"
+        },
+        {
+            "path": "dist/lib/headingToSlug.d.ts",
+            "sha256": "5f3bd796c5fda2dac95ca5f05143706e2d85467b9c9bbf7f537de83f7a54454e"
+        },
+        {
+            "path": "dist/lib/headingToSlug.d.ts.map",
+            "sha256": "c4f9f22778d5cae85651e624edfc695cb37e802e50422acb1ed038e98eb133b5"
+        },
+        {
+            "path": "dist/lib/headingToSlug.js",
+            "sha256": "2f0a812229b40d1e64d718e5ac28afbb41507f50067475870762fa9cd030905d"
+        },
+        {
+            "path": "dist/lib/headingToSlug.js.map",
+            "sha256": "4048c494029f8ef408adfd193d7988c0879b4dddba884f4d6050352a0babcd9a"
+        },
+        {
+            "path": "dist/lib/isMarkdown.d.ts",
+            "sha256": "55c8bb95886a7dc4bf935e6933e913bc88be0a7ca505be92d67fc08308d5b531"
+        },
+        {
+            "path": "dist/lib/isMarkdown.d.ts.map",
+            "sha256": "2fa015f352cb216cfa246676f77928b92322e00d9958299202369a83b14c03af"
+        },
+        {
+            "path": "dist/lib/isMarkdown.js",
+            "sha256": "d2baf6362ccdb64e189226943449f2c46adeceb3743b1d1e8501e019be3aef26"
+        },
+        {
+            "path": "dist/lib/isMarkdown.js.map",
+            "sha256": "4a58ef7cae4103d4b85fe281e7b287b671dbd084147d5dbef8f9696093d74ee3"
+        },
+        {
+            "path": "dist/lib/isMarkdown.test.d.ts",
+            "sha256": "dc3b8cca9cf547853594db3731c0d14f0a5237e7ee0aaee6132d2b4dea389a74"
+        },
+        {
+            "path": "dist/lib/isMarkdown.test.d.ts.map",
+            "sha256": "d25e6b1d11810ba28671e96a53bca87e061381e2b26902fd993c45ed8e88bcd1"
+        },
+        {
+            "path": "dist/lib/isMarkdown.test.js",
+            "sha256": "47624c876ab161803f3e3861433a233e9df9bf08df3437296ec5e44a6e3c5695"
+        },
+        {
+            "path": "dist/lib/isMarkdown.test.js.map",
+            "sha256": "6c3b6372f0a0e8b8d079a81863a8bf1614c98ddb09dcadaf0fd45b2c566c2880"
+        },
+        {
+            "path": "dist/lib/isModKey.d.ts",
+            "sha256": "3a5871a8b9c87839383e08d009dc141b156a5477b2adcf69c09e2c98407eae23"
+        },
+        {
+            "path": "dist/lib/isModKey.d.ts.map",
+            "sha256": "416666b6e4bb73035dfe9907d7b8d4d9192713242c9ca2c93b6acc0c47fb6836"
+        },
+        {
+            "path": "dist/lib/isModKey.js",
+            "sha256": "284de8914b35ccfcf9ae2fe7a640756382551cc8bde5b3d41a27176d218fce11"
+        },
+        {
+            "path": "dist/lib/isModKey.js.map",
+            "sha256": "8b3e8c71c094b527ebb59e9462a3c4732c645d374caa5966223c8fba3328b1d1"
+        },
+        {
+            "path": "dist/lib/isUrl.d.ts",
+            "sha256": "7b48f09c882c0faea5868b41cfabf4cb6165552705d0f5032af587ff3e39a8c1"
+        },
+        {
+            "path": "dist/lib/isUrl.d.ts.map",
+            "sha256": "02a3573c250bde77cbb05b9df22fa211c80a95a60844123f440e269aa678774c"
+        },
+        {
+            "path": "dist/lib/isUrl.js",
+            "sha256": "b13a997f6bc90f25dd13bcbc51313a46d078e87d1c2dd4c6fe98545cf70c1815"
+        },
+        {
+            "path": "dist/lib/isUrl.js.map",
+            "sha256": "47efe57d0a5ade25ae11ec4cc823bc76ac2123742156613f76399fdb6562db8f"
+        },
+        {
+            "path": "dist/lib/markInputRule.d.ts",
+            "sha256": "87ad92ebea17645c0ba2e85416e7e09fa8e3010b1b2272f3c2ef086d554d9d30"
+        },
+        {
+            "path": "dist/lib/markInputRule.d.ts.map",
+            "sha256": "17fcc1087505467230b06d04b3d48de0b11a4771ec27916795a8418d1c8ab194"
+        },
+        {
+            "path": "dist/lib/markInputRule.js",
+            "sha256": "5f1fb633150dedcc7b5ae7041bea825cf9d90f5b6ba4b2f5b95aa28003cba409"
+        },
+        {
+            "path": "dist/lib/markInputRule.js.map",
+            "sha256": "b158b1a71a645ac84a5ae3008316a3156aea0fe52364bc4e178550a3de6b1f9e"
+        },
+        {
+            "path": "dist/lib/markdown/rules.d.ts",
+            "sha256": "2a0e08257fdd80296c1022055641b96af2015347bd53862b1816143cd000d7bf"
+        },
+        {
+            "path": "dist/lib/markdown/rules.d.ts.map",
+            "sha256": "cb2d079c11519f852ea45b97076399d0514cfcfca05af10a3eda763c8636d387"
+        },
+        {
+            "path": "dist/lib/markdown/rules.js",
+            "sha256": "0f5959d9cc67546dccf982b1cea994dcdcf5028825518d4b7168eeaaacea2f24"
+        },
+        {
+            "path": "dist/lib/markdown/rules.js.map",
+            "sha256": "a1318af8244e3263efa0b34c2873fd6a65ae45151ee5e5bdcf762be940933695"
+        },
+        {
+            "path": "dist/lib/markdown/serializer.d.ts",
+            "sha256": "228a3918b5cd7aeea2e222761fabd781f23dd6c50000cff8f2a0e66b16f0fc43"
+        },
+        {
+            "path": "dist/lib/markdown/serializer.d.ts.map",
+            "sha256": "865c84736f392a9940ed65db37ad012166651d942c1c722771e3272192f6808a"
+        },
+        {
+            "path": "dist/lib/markdown/serializer.js",
+            "sha256": "ee80cce8ea41924e8f9e3661a9c6ebf4f6c642c8423b49767c4844bc15d5fbbd"
+        },
+        {
+            "path": "dist/lib/markdown/serializer.js.map",
+            "sha256": "74b117de17de47cc6977073a8ee4cf97765f847ac0a1b2ecba615149b1b18abd"
+        },
+        {
+            "path": "dist/lib/renderToHtml.d.ts",
+            "sha256": "2e586baeeeacff709a779ba273e76ad0f3b08e1b0e05a54e41bb08486695cddf"
+        },
+        {
+            "path": "dist/lib/renderToHtml.d.ts.map",
+            "sha256": "f314cc2a4be6cf5fb797f5690dae88f336739ca594253f08bd20614c360b8a6a"
+        },
+        {
+            "path": "dist/lib/renderToHtml.js",
+            "sha256": "11d7e0c9866666ed12816c58a0260aff8c50732d1177ac5431ee1777faa4f90a"
+        },
+        {
+            "path": "dist/lib/renderToHtml.js.map",
+            "sha256": "73808d97163ab689e76d3a2ba1fc66d323ae151c7e516f187b100cf935c65352"
+        },
+        {
+            "path": "dist/lib/renderToHtml.test.d.ts",
+            "sha256": "9b72394e747cf90cda96052c2169ab94b55e8d2ba9e9d603921e67b5c9ff9902"
+        },
+        {
+            "path": "dist/lib/renderToHtml.test.d.ts.map",
+            "sha256": "6a0fdec0cfbad4ba2a3356691921a95738a44dd375987faf6d7fa09ae1268756"
+        },
+        {
+            "path": "dist/lib/renderToHtml.test.js",
+            "sha256": "365addd44a87ccd1d8a0f900c9c8a733f9af7c2ea621072aa09f2d6c9326cd7e"
+        },
+        {
+            "path": "dist/lib/renderToHtml.test.js.map",
+            "sha256": "ae511fdca66cbbe74df35c6804f6fad39b83516fa75f2204c20561f5969bbe68"
+        },
+        {
+            "path": "dist/lib/uploadPlaceholder.d.ts",
+            "sha256": "5084bad22d07eb5e719f0a05a562dc6072d644423f4fbea788f5681bbca29187"
+        },
+        {
+            "path": "dist/lib/uploadPlaceholder.d.ts.map",
+            "sha256": "204df39f273e286a9072ece9e5d9eccb12df4db02163fc3cbc9a6a1578b9d197"
+        },
+        {
+            "path": "dist/lib/uploadPlaceholder.js",
+            "sha256": "6106a30ccd9f967cbc4a2ef51df9b760619e1ed1b3ab5bca39274b53f015b1aa"
+        },
+        {
+            "path": "dist/lib/uploadPlaceholder.js.map",
+            "sha256": "ae2b2c630420a9b7873183cacf4b288309e78396bba0bec8414e7913104225dd"
+        },
+        {
+            "path": "dist/marks/Bold.d.ts",
+            "sha256": "6a757902fac6903102fe2abbd4d049c05dd44d3cfa13a48f3d9555e7d38f1175"
+        },
+        {
+            "path": "dist/marks/Bold.d.ts.map",
+            "sha256": "9e82348aab8b02c8d87f416f8f0020e1cb5ad069830aa76eac2c859670fc8e93"
+        },
+        {
+            "path": "dist/marks/Bold.js",
+            "sha256": "9f57ee096f332a39d2d8fa554c7a180bf26e8ff70ab3767c4ed5ab93b594cb1b"
+        },
+        {
+            "path": "dist/marks/Bold.js.map",
+            "sha256": "8be95db10c3afaf71105846625f493f64739b460954f2c37dd666328297b5242"
+        },
+        {
+            "path": "dist/marks/Code.d.ts",
+            "sha256": "b3110583d015ef9fb66d05a1a51e7865f1c9a8fe52febbd150b4a1bee2931000"
+        },
+        {
+            "path": "dist/marks/Code.d.ts.map",
+            "sha256": "57c06461ba07a617f1e7c99ec9eaf5f5254e8fbf25b8df12120b3d095450b95a"
+        },
+        {
+            "path": "dist/marks/Code.js",
+            "sha256": "f1ca37c8cd9d4a57b042d4c8b87e34803ee16cd7c3948c943e35394349bd1781"
+        },
+        {
+            "path": "dist/marks/Code.js.map",
+            "sha256": "617069ddacb8e1e53343a053e0a7fcbf5d8d16b174e461edd560d0198285e3bb"
+        },
+        {
+            "path": "dist/marks/Highlight.d.ts",
+            "sha256": "3835ff7a934fcd1f23a8fe535ce0710425958c32c74061099b552a3e73f4d3da"
+        },
+        {
+            "path": "dist/marks/Highlight.d.ts.map",
+            "sha256": "8cc51102b7d0fa069342cbc9ee60da4a9574db14af676b7c734258370452ebf6"
+        },
+        {
+            "path": "dist/marks/Highlight.js",
+            "sha256": "0389249c96c213cc1d86247ea80a0a37d41698c3a021a002fc2fd638c0ff543b"
+        },
+        {
+            "path": "dist/marks/Highlight.js.map",
+            "sha256": "edea78f15d3091faa96c67ef36d686e854772e72e5a5b3a3dc6d4fdb2c0164ec"
+        },
+        {
+            "path": "dist/marks/Italic.d.ts",
+            "sha256": "041b8110a895c8ae5adfc8aa3860e4cdc19845e1ce7590f67e27a77fda0c3b4b"
+        },
+        {
+            "path": "dist/marks/Italic.d.ts.map",
+            "sha256": "7c6734a6f92666974d2d5eb80bc136885626318d301e1060b57a2a81654ffd14"
+        },
+        {
+            "path": "dist/marks/Italic.js",
+            "sha256": "d0e0f2608b045960170d1880eb4dca9058f10f0d7fd5454ff13faa0d4dad2f1e"
+        },
+        {
+            "path": "dist/marks/Italic.js.map",
+            "sha256": "eb403311147829b19197739c2dd7144b437e1b67e45a34e4765bb2056d68cf65"
+        },
+        {
+            "path": "dist/marks/Link.d.ts",
+            "sha256": "98184bde43cb6f9ab1edad0ceeded5aecdd7935145af0a89a45f8afdda324134"
+        },
+        {
+            "path": "dist/marks/Link.d.ts.map",
+            "sha256": "ba10bb756c25ddfc89ce2681b038d778c2214ae68b7f434f969491b4bb354726"
+        },
+        {
+            "path": "dist/marks/Link.js",
+            "sha256": "2f106659153a6a48b73b50fca7b7888dcbb3ac4c89ce4b8fa25cec71a84eeecb"
+        },
+        {
+            "path": "dist/marks/Link.js.map",
+            "sha256": "47d6ee12587f0a258c2b65d1f7dc301a3229d752c6b4af081c9afbc5cc24390a"
+        },
+        {
+            "path": "dist/marks/Mark.d.ts",
+            "sha256": "804642afb712aa41ff3dc7ed1f8c805a9064a90e99b8ca2a96b77eec69e4536a"
+        },
+        {
+            "path": "dist/marks/Mark.d.ts.map",
+            "sha256": "83e15cd6d72a94a13c55068f2f9c49ee8453e6e5c7a0419f25775a493df75fbf"
+        },
+        {
+            "path": "dist/marks/Mark.js",
+            "sha256": "7c96d5a3e781d6e9e7777dbb8afe4d2cf53764498cebfaea12c483917ce226d8"
+        },
+        {
+            "path": "dist/marks/Mark.js.map",
+            "sha256": "4cdb6e94f4b086b7de1b805b059604862134676cd159a60f254be534ec10d74e"
+        },
+        {
+            "path": "dist/marks/Placeholder.d.ts",
+            "sha256": "36939cf2b033b0039f22c87e65b867341336697ce9b7ab9c65ed1e0d150dd155"
+        },
+        {
+            "path": "dist/marks/Placeholder.d.ts.map",
+            "sha256": "06b0f9a137d53508161f4349f82e9fbdec0f364be541177911dddf42690e3cc0"
+        },
+        {
+            "path": "dist/marks/Placeholder.js",
+            "sha256": "ba87cba663d9e873670a5a68aa237d672bbfa9c7e8d514c6ca20697e0084a8df"
+        },
+        {
+            "path": "dist/marks/Placeholder.js.map",
+            "sha256": "e92156a58548cc042413c76b1bf2431a4cbc335b57613a0c0ea0017f48be46bd"
+        },
+        {
+            "path": "dist/marks/Strikethrough.d.ts",
+            "sha256": "24b09a7288619b96d99e72c60fbef6b22f0f0eb587b38f3048e6e0d866e64e7a"
+        },
+        {
+            "path": "dist/marks/Strikethrough.d.ts.map",
+            "sha256": "98606d08b1962e4046c79481aabf63aa16b9df760a81f1eec0f87b9b924ea000"
+        },
+        {
+            "path": "dist/marks/Strikethrough.js",
+            "sha256": "3e4c87662e70b306166231869012601695513e19f195673521e60c34d937df98"
+        },
+        {
+            "path": "dist/marks/Strikethrough.js.map",
+            "sha256": "1e5e2e276d12903abfeb81f2557573dc6c93db17f8e550cc79fee4b82effa925"
+        },
+        {
+            "path": "dist/marks/Underline.d.ts",
+            "sha256": "9327e951cb6e011ea994dddc98b47f051b36d0d51cbf17499b7a63bff8dde8c7"
+        },
+        {
+            "path": "dist/marks/Underline.d.ts.map",
+            "sha256": "8a182c7d6de3486a9905f7562dc08b2136053f1756d9f0458547f423d462a073"
+        },
+        {
+            "path": "dist/marks/Underline.js",
+            "sha256": "91b72962015d292b5b155b27142bb1f953b4082c5e776c26653fa00656eb7d9d"
+        },
+        {
+            "path": "dist/marks/Underline.js.map",
+            "sha256": "bf221b41aecb7adffb2f3fc4a0528e84e00365cc5d5d274307c68eb22ee012c2"
+        },
+        {
+            "path": "dist/menus/block.d.ts",
+            "sha256": "e4cbae2e9257b6419ee709fb503112c15285e8b3e834a620d50336e85e8415c5"
+        },
+        {
+            "path": "dist/menus/block.d.ts.map",
+            "sha256": "2229fe14406769928adeb7b9fbfbd7e5a9f0611a0d2a3b3d65d4f2ee53842a74"
+        },
+        {
+            "path": "dist/menus/block.js",
+            "sha256": "c8589e27c56e2020a84252460230dbf18f7d45e49c251ea10250a32a127eed5c"
+        },
+        {
+            "path": "dist/menus/block.js.map",
+            "sha256": "4affa002c704b1618b7196cf8f01f9374092ea030972e93ed6f5909153e4472b"
+        },
+        {
+            "path": "dist/menus/divider.d.ts",
+            "sha256": "4908eebe2a23fea4722ae39ea64574281773d24cfedc30399f01ad22eef7de32"
+        },
+        {
+            "path": "dist/menus/divider.d.ts.map",
+            "sha256": "66e4cfd4c34012e8521a75e4a58b723072ee72f68abd15e7b8cdd4529bf72af0"
+        },
+        {
+            "path": "dist/menus/divider.js",
+            "sha256": "9bf02a877cbb9697e85edeb23d0f58e0972660c5a1307d63878373dc32ce68ca"
+        },
+        {
+            "path": "dist/menus/divider.js.map",
+            "sha256": "c1f232ba83f88b761dc589ffd8988dd99853247e3857edd9d29fcd5072789d3b"
+        },
+        {
+            "path": "dist/menus/formatting.d.ts",
+            "sha256": "0ae18ef7ac9a6f541f21299f7466b20c51efe70f55e6b6c56e931526438ef04c"
+        },
+        {
+            "path": "dist/menus/formatting.d.ts.map",
+            "sha256": "4321cb3ccffe896a13465b3e24bd070fd3f3ce346c21b283669b1faed628c54b"
+        },
+        {
+            "path": "dist/menus/formatting.js",
+            "sha256": "ed255401b52006ffce62bd579eb953b19a4e79d773f5ef3a056cbb54cfc6e802"
+        },
+        {
+            "path": "dist/menus/formatting.js.map",
+            "sha256": "fad523772b159684f592286d9a18f40b63992c9069093dadac4aef439f7c6463"
+        },
+        {
+            "path": "dist/menus/image.d.ts",
+            "sha256": "356fe36d7a605a829a45770a174406929055f11d2ba79db79e8be4b09966864e"
+        },
+        {
+            "path": "dist/menus/image.d.ts.map",
+            "sha256": "66e5dc4f6e59fec09b7e40ec2f3d3efc56c9022e5530586099eb9d3cce96c905"
+        },
+        {
+            "path": "dist/menus/image.js",
+            "sha256": "1e3931882727f6dd210cc1c5bcaca385dfdf041de5bd0f28483295ba06af9cf8"
+        },
+        {
+            "path": "dist/menus/image.js.map",
+            "sha256": "9121173b4157f408ee38440021c5b859444908ed3552ee3437f3f18b54be3b54"
+        },
+        {
+            "path": "dist/menus/table.d.ts",
+            "sha256": "947bf588c08358c41ad501a2e607320b264189847c90069beb67bf4f1ead148c"
+        },
+        {
+            "path": "dist/menus/table.d.ts.map",
+            "sha256": "a369d67904053e026b540b49123c40c76de7ab0e428b5d88b564134c0ffd8b69"
+        },
+        {
+            "path": "dist/menus/table.js",
+            "sha256": "40a5b963c1f9be07a77295eccc71fd0517ed403c23b0e68de2375f993d360e78"
+        },
+        {
+            "path": "dist/menus/table.js.map",
+            "sha256": "7bef077310fa87294c312efff2ebf9876256999a5d9c06ee28b9e00a32fcb6b7"
+        },
+        {
+            "path": "dist/menus/tableCol.d.ts",
+            "sha256": "dff2cd02def96c3e6471a3f1933167eb93ce2048558ae452d12538eb13beed06"
+        },
+        {
+            "path": "dist/menus/tableCol.d.ts.map",
+            "sha256": "43c60b6b2dc480c99ece790d5b0c4de8cf55694c761ecbc0e083a09b08e5b12d"
+        },
+        {
+            "path": "dist/menus/tableCol.js",
+            "sha256": "85b1c286176336fbcdbba6f1538a86a969a952f81ffa66c50908184f77775648"
+        },
+        {
+            "path": "dist/menus/tableCol.js.map",
+            "sha256": "f6d5f398cd194ef26a3570c2bc40dc83d57e2c20369f13d61e5a3b2e8e2c92c6"
+        },
+        {
+            "path": "dist/menus/tableRow.d.ts",
+            "sha256": "2f72c9452b1ff7906631f632edbe1938968ea9f83d35dd76d7921b2af32a3675"
+        },
+        {
+            "path": "dist/menus/tableRow.d.ts.map",
+            "sha256": "9d852ddc8ea6520170191d0724596fb056b49a2f479c747a6dc1510fcf204368"
+        },
+        {
+            "path": "dist/menus/tableRow.js",
+            "sha256": "1934f1e359abfc82174a32582e1d048e27d61bacb36bd520572c0d8da1737c17"
+        },
+        {
+            "path": "dist/menus/tableRow.js.map",
+            "sha256": "e59c897ea2a1b55c500c4d2e10ef4d10d9280a1300141a1bb6ccf4a6a1b42140"
+        },
+        {
+            "path": "dist/nodes/Blockquote.d.ts",
+            "sha256": "655dd18a04b80f4a9d12318e3edc581a5db2820cd212ff0824afd7918a99c79c"
+        },
+        {
+            "path": "dist/nodes/Blockquote.d.ts.map",
+            "sha256": "8ad45803e396045b9211c6a3ee2cc76db74c8ba03c14ab3f93bf6ed4c8dab544"
+        },
+        {
+            "path": "dist/nodes/Blockquote.js",
+            "sha256": "89a7d6f68be508ac282cafd84b7b35e46e78f365fe0db8f07ee576d609159613"
+        },
+        {
+            "path": "dist/nodes/Blockquote.js.map",
+            "sha256": "f938a18a081b77cb44813dfb55c68885f041e49e9ff05e90e6ea2ae4e4a33f33"
+        },
+        {
+            "path": "dist/nodes/BulletList.d.ts",
+            "sha256": "3cddedb7d2a97a8050f9c7fb144fceba4a015eb927a3524afe6bfd783826674d"
+        },
+        {
+            "path": "dist/nodes/BulletList.d.ts.map",
+            "sha256": "a141950fd3790daf52009bc34337d999a01ea86b3b0054d67829222fa2141401"
+        },
+        {
+            "path": "dist/nodes/BulletList.js",
+            "sha256": "db067758daed3b610efb76ec1e913af0a99f0408e9c8e55003475bbaef3eeaf5"
+        },
+        {
+            "path": "dist/nodes/BulletList.js.map",
+            "sha256": "c22c9f73643ed4e6abb9afce8536344d59de91c7436f8eca0e6eb4a6c14a1c5b"
+        },
+        {
+            "path": "dist/nodes/CheckboxItem.d.ts",
+            "sha256": "8c2b13ad26f010d5147bdc0baac98fc922c3d8701c7b7400771eabfc135101e8"
+        },
+        {
+            "path": "dist/nodes/CheckboxItem.d.ts.map",
+            "sha256": "15f42ffb22d1b135fc1bfa2d8e71c36c017d41226a3472b2f0959f65028a3a30"
+        },
+        {
+            "path": "dist/nodes/CheckboxItem.js",
+            "sha256": "7eb4a77962ff3cecfe3c469b46932bbf69a8196b0a10c4a350a07d9ba65cbbc6"
+        },
+        {
+            "path": "dist/nodes/CheckboxItem.js.map",
+            "sha256": "e0ea93332495415eff609d899516cc041719caec5777bfee7cd4addfe0e8c145"
+        },
+        {
+            "path": "dist/nodes/CheckboxList.d.ts",
+            "sha256": "fe4a1c8ff6643a03aa3d29cbbc84b3337f0f945587cd3f262c91a97a1b3813d5"
+        },
+        {
+            "path": "dist/nodes/CheckboxList.d.ts.map",
+            "sha256": "2862c48ef3232c455f7f7089cf166a06905d26687e928fb824ddc036cf8bfea3"
+        },
+        {
+            "path": "dist/nodes/CheckboxList.js",
+            "sha256": "eee1758759d10cc5a32ba38d540fff5d8ad2229fdc5b686d3d0d137b9e7510d2"
+        },
+        {
+            "path": "dist/nodes/CheckboxList.js.map",
+            "sha256": "d144f34d60bcb2b450ec38ec2096fa2a2842630513865352ac77005685fa77bc"
+        },
+        {
+            "path": "dist/nodes/CodeBlock.d.ts",
+            "sha256": "ca40f7ef738219e5cdb77dfd4a94dde51d25a64cf328f46e9ca46da76156b09c"
+        },
+        {
+            "path": "dist/nodes/CodeBlock.d.ts.map",
+            "sha256": "409e2fcf70ec79f4c4d172bb39120987e816e19ec042b079ba2a54c574113b6a"
+        },
+        {
+            "path": "dist/nodes/CodeBlock.js",
+            "sha256": "9c02cf34825e40beef2987d5fe97fee54baaeb56559870dd4458ff8aad7a9bb4"
+        },
+        {
+            "path": "dist/nodes/CodeBlock.js.map",
+            "sha256": "32d47edaaf56c7d8188dee28e631755cc012076fc90cfd4d3f8854fb3e009ac5"
+        },
+        {
+            "path": "dist/nodes/CodeFence.d.ts",
+            "sha256": "806b93c01e1ff87c218ede2f5c0f255e15d341498441e4808dc57ccc83bb408c"
+        },
+        {
+            "path": "dist/nodes/CodeFence.d.ts.map",
+            "sha256": "8a4b4a2b2869223918d703b04f11401be795adc89a48ff62b90a17a387930330"
+        },
+        {
+            "path": "dist/nodes/CodeFence.js",
+            "sha256": "32534baa4766ca819a602327d060b2af03621ae968232f171f5cdcbfdcaa9566"
+        },
+        {
+            "path": "dist/nodes/CodeFence.js.map",
+            "sha256": "307ebd57fa761b61651df67fa78c9a416f225c3e680e66a39a1d5d153154af3b"
+        },
+        {
+            "path": "dist/nodes/Doc.d.ts",
+            "sha256": "acead921b9d2c549765acd3a8ee621b50ec1bd2896c21578ffa03ef3a5d214c7"
+        },
+        {
+            "path": "dist/nodes/Doc.d.ts.map",
+            "sha256": "2ded1f8ebd45644b7d02533e3efc086a4763818d5ae2621494045a7b78af2f3a"
+        },
+        {
+            "path": "dist/nodes/Doc.js",
+            "sha256": "71254d0eaae5b5ffaa73e0e27970511e7f55f58eeb190b11e16487aa5266413d"
+        },
+        {
+            "path": "dist/nodes/Doc.js.map",
+            "sha256": "7d11d577b32b185ea9fa37233b4fdcaaa839015ec9eaf681f98e5ac12ee07ea0"
+        },
+        {
+            "path": "dist/nodes/Embed.d.ts",
+            "sha256": "62f2482ba4faa92cc1738a45f645a1b6b82d59e2eb7126998f180a3b093b7993"
+        },
+        {
+            "path": "dist/nodes/Embed.d.ts.map",
+            "sha256": "396a429e694a94a7b23bdf259a2deddfee89fb519560fade890d422871a7577c"
+        },
+        {
+            "path": "dist/nodes/Embed.js",
+            "sha256": "50c3154b50d92d19b71c2f0775da50bc963a64476af6e02003208d1c2ce81b95"
+        },
+        {
+            "path": "dist/nodes/Embed.js.map",
+            "sha256": "ab9f9d411cba0d2196b057df862fcb7bebc3465dfe643a8353a9089abd6ac45b"
+        },
+        {
+            "path": "dist/nodes/Emoji.d.ts",
+            "sha256": "c9e4dd0aeceeff1f0705c905938e2c106046707dd77336a89980531b59930ffe"
+        },
+        {
+            "path": "dist/nodes/Emoji.d.ts.map",
+            "sha256": "cb0ccb6d772d77ed24663938011af12b764260589adadf3ccdf6d5e3c955adee"
+        },
+        {
+            "path": "dist/nodes/Emoji.js",
+            "sha256": "5119c9a891b93b8b4b283828f14a3c286a28f350f973ca41cd08989eea5e482e"
+        },
+        {
+            "path": "dist/nodes/Emoji.js.map",
+            "sha256": "cbde9bf0f19b5cf1c2190a9204a4080aafb9f8107c5af8754e7b8cae2bcbdaec"
+        },
+        {
+            "path": "dist/nodes/HardBreak.d.ts",
+            "sha256": "390f0a65ef7380de167979c458988dacdae3e62110e59ba7a42b81e4d597ff44"
+        },
+        {
+            "path": "dist/nodes/HardBreak.d.ts.map",
+            "sha256": "f7d31ee0b8705f31290e13998c924d34aee70d56f7027a94a8dcc436f881ea72"
+        },
+        {
+            "path": "dist/nodes/HardBreak.js",
+            "sha256": "9272a02ff8d007abd2e663cb1b91dbd8edf30a05b02197b879cd243bcf45c030"
+        },
+        {
+            "path": "dist/nodes/HardBreak.js.map",
+            "sha256": "86f9e1b1d1e1af3cb6d1ff469729f3de4feb0b1a6c91a179d45f3f80bb0b92dd"
+        },
+        {
+            "path": "dist/nodes/Heading.d.ts",
+            "sha256": "ad687e5dc7432b79d9debc39a3b0fd1f368f6740cde6342332fe58566cf3cb4e"
+        },
+        {
+            "path": "dist/nodes/Heading.d.ts.map",
+            "sha256": "4e11638c513a0cd58615ebc98c5a47fec3030a3592e8d44fa5223002427ecffe"
+        },
+        {
+            "path": "dist/nodes/Heading.js",
+            "sha256": "fa3ccf2fb7c9e1b4f3d7cb2db49e9612bce1da56e7416239fccf6b8868ac83ee"
+        },
+        {
+            "path": "dist/nodes/Heading.js.map",
+            "sha256": "91cadf9cb3b7f68b522a69d7112efaec2625ab478445d37fac01c96192ba58d5"
+        },
+        {
+            "path": "dist/nodes/HorizontalRule.d.ts",
+            "sha256": "a5cd9a21e38c4572f0804f231f6e6cf205151529bb27b204301e0779da14eb22"
+        },
+        {
+            "path": "dist/nodes/HorizontalRule.d.ts.map",
+            "sha256": "b8a96a6fc510a07ea13d2d2ae0aa9f477686890df8b31c87cc14131df18f8067"
+        },
+        {
+            "path": "dist/nodes/HorizontalRule.js",
+            "sha256": "f6ec516b108982dee77a1e6d69ca31ef1f24eeb1e2cf966d3837c49a0cf15847"
+        },
+        {
+            "path": "dist/nodes/HorizontalRule.js.map",
+            "sha256": "802407a7a63deaa89ab9e22ef394b237f21a99deb944b6cd9d1c86984d6fbbb6"
+        },
+        {
+            "path": "dist/nodes/Image.d.ts",
+            "sha256": "d884eeaead0e3e461a73a321fcd6db06da5c4b22e86ffdead43c0229f52e3336"
+        },
+        {
+            "path": "dist/nodes/Image.d.ts.map",
+            "sha256": "a3447b8f2f3f1b1bee8b4ca00c4deb132bed5619b1b331ad597314a63bb4ba34"
+        },
+        {
+            "path": "dist/nodes/Image.js",
+            "sha256": "7325d8bbc47493c0cd233b4c89b8e4432ed8eb052ae4376831496dfc2cdee666"
+        },
+        {
+            "path": "dist/nodes/Image.js.map",
+            "sha256": "725a269388538a7a29e75cb07b8ebfb607cf84e6296ead99532a85ef1126efb0"
+        },
+        {
+            "path": "dist/nodes/ListItem.d.ts",
+            "sha256": "f1644cc881c45544bd5a0c806fb7ae8dd4fdcf42fdd11ec85ca06e169b43caaf"
+        },
+        {
+            "path": "dist/nodes/ListItem.d.ts.map",
+            "sha256": "f432014525b61d7231c0849bc9b989dc0f83577b72ee9727a543cc88a3c7172f"
+        },
+        {
+            "path": "dist/nodes/ListItem.js",
+            "sha256": "dcfb77b2a0766aef1f8485ad08cd60bc807089f2e37615e1c48732b0548123ca"
+        },
+        {
+            "path": "dist/nodes/ListItem.js.map",
+            "sha256": "178de19784e3e656183229137235d347fb10428d0fe08ac67c8b272f622e0dc2"
+        },
+        {
+            "path": "dist/nodes/Node.d.ts",
+            "sha256": "c30044cd13c6ae9b991d1faa32d43a8444b2dcb7f302358d8e6abd297fbaf7ef"
+        },
+        {
+            "path": "dist/nodes/Node.d.ts.map",
+            "sha256": "1afb7b619bac77cb559094ccac532ce03498c89b7876e223ffc2603d77583b33"
+        },
+        {
+            "path": "dist/nodes/Node.js",
+            "sha256": "9e2353e6a35943814e2a8a8f686ed751f6dad002acacd00bfd7e5e6163e1041d"
+        },
+        {
+            "path": "dist/nodes/Node.js.map",
+            "sha256": "6769bb9c45dfbd4764a3328837145e1c4b53cc1188c9559840360ba5fb50c1c3"
+        },
+        {
+            "path": "dist/nodes/Notice.d.ts",
+            "sha256": "0dd5a13f42c18f5ed8a6935ab3cc54dfd5a1805930f7b53c2b7774b61d483a8e"
+        },
+        {
+            "path": "dist/nodes/Notice.d.ts.map",
+            "sha256": "911c070ca5455cd812dfe389ea1e629c952dd686dfc70c4b5f2e1e23e795762c"
+        },
+        {
+            "path": "dist/nodes/Notice.js",
+            "sha256": "6d2271f49124bb253c1e60523aef00e49a50c48088a034032ada24c2efb4d989"
+        },
+        {
+            "path": "dist/nodes/Notice.js.map",
+            "sha256": "6924bee0ef75890203d8c52235dc97d4c8e8b02d624e45c772da7cbcea8ff4d9"
+        },
+        {
+            "path": "dist/nodes/OrderedList.d.ts",
+            "sha256": "9fb665c33a547593567058be836fa18accd4a44d92bd20cf0a58d084887c60e1"
+        },
+        {
+            "path": "dist/nodes/OrderedList.d.ts.map",
+            "sha256": "95dd3996fa498a76d96ad0c75f9539fa45c18853fa050de541013af2540e961b"
+        },
+        {
+            "path": "dist/nodes/OrderedList.js",
+            "sha256": "afc560364d681621eef3d315c64482026e444bbee1c4eef3d1bd3f84f679aa48"
+        },
+        {
+            "path": "dist/nodes/OrderedList.js.map",
+            "sha256": "1071cbf8613b40746e82473cdd3dc725ae8b38670ff795200aa9cf9536d8b4fb"
+        },
+        {
+            "path": "dist/nodes/Paragraph.d.ts",
+            "sha256": "7b80a2c67b81ae3b5864e3559beab09dc5f2db598cd0ce9f117b1f18ca41fe9d"
+        },
+        {
+            "path": "dist/nodes/Paragraph.d.ts.map",
+            "sha256": "557486e09698b92e67064fac96d081c8ed4526ca130ff56cbaf3ec96d4432f0c"
+        },
+        {
+            "path": "dist/nodes/Paragraph.js",
+            "sha256": "9b9cfac799608d7e0101a69d6aab376d8ca577346e2efc333c90d9fa2d5c5594"
+        },
+        {
+            "path": "dist/nodes/Paragraph.js.map",
+            "sha256": "0a36c3df4c46e0c52af2990ad44bf864923cde80cdec253b0cf40dd508fc5d32"
+        },
+        {
+            "path": "dist/nodes/ReactNode.d.ts",
+            "sha256": "bff882ea54eb3a14c0f8bd76460f9d1057ae720050178b9c29f31c428ef9e4bc"
+        },
+        {
+            "path": "dist/nodes/ReactNode.d.ts.map",
+            "sha256": "f9b20584a25f56eb85b3661be026506343030bc9fda368067353038944cf4b55"
+        },
+        {
+            "path": "dist/nodes/ReactNode.js",
+            "sha256": "b54543236b2720f586bc7496f7e6d0506b5705c0a98f684a3a2afcf610077a97"
+        },
+        {
+            "path": "dist/nodes/ReactNode.js.map",
+            "sha256": "144570481d3ddbc3d6b42ad658da5725aa2e12cd871227b2df083399632b9348"
+        },
+        {
+            "path": "dist/nodes/Table.d.ts",
+            "sha256": "adea83019816e0cc727562294fd2899b795df4961cd5a2c4275212a21cdf9f57"
+        },
+        {
+            "path": "dist/nodes/Table.d.ts.map",
+            "sha256": "8d576f2070ea2ac5edf0487f0b0f124e84addd1cd02840de7fe2febceb3e4a70"
+        },
+        {
+            "path": "dist/nodes/Table.js",
+            "sha256": "add1ad13792b8cce08fef62dcd1b7e2c0b39e76315cc32ec4b196236dfc60523"
+        },
+        {
+            "path": "dist/nodes/Table.js.map",
+            "sha256": "5ca15eddd8f23080a808ee4c329b12a0f09dc26441bf929b03108a0fc79d94a0"
+        },
+        {
+            "path": "dist/nodes/TableCell.d.ts",
+            "sha256": "00099fc3dbc87877842b5f46717ce1615042af21fa4e682c908ccce3330620df"
+        },
+        {
+            "path": "dist/nodes/TableCell.d.ts.map",
+            "sha256": "5b45b1296e0b85aeada171ab6fe019651a03fa794b087dd5951c550027ee642f"
+        },
+        {
+            "path": "dist/nodes/TableCell.js",
+            "sha256": "967083e026fadcbb1c288c067e144bc3cdc4eedfa65cacc7e9afa6fb012728b9"
+        },
+        {
+            "path": "dist/nodes/TableCell.js.map",
+            "sha256": "668d6d34b6f85f796919bac5efd6571f0cc2c5bc4fd590efe9c365e76de7705b"
+        },
+        {
+            "path": "dist/nodes/TableHeadCell.d.ts",
+            "sha256": "b93576196ccf945a4b97bb70485cc8bf2a414094d05fe432691c656392481c85"
+        },
+        {
+            "path": "dist/nodes/TableHeadCell.d.ts.map",
+            "sha256": "80d4ade4488bb09bc483ca13fb808c04fd97911eab7ad27a84a9489e2e218416"
+        },
+        {
+            "path": "dist/nodes/TableHeadCell.js",
+            "sha256": "97b34823234ad240e645a1aab835e1a2f7d787ffd83dca8ef5e4d5867f2909f2"
+        },
+        {
+            "path": "dist/nodes/TableHeadCell.js.map",
+            "sha256": "3037144510a86b7725ea93ce1211d3cbacdf8cce34cc28e8c10bf298a7f10d91"
+        },
+        {
+            "path": "dist/nodes/TableRow.d.ts",
+            "sha256": "6121bbf8cdc9337b1e81c6698233c13e4584d418fcefad2e4aaf1ea8610c0932"
+        },
+        {
+            "path": "dist/nodes/TableRow.d.ts.map",
+            "sha256": "6931c28e9c4a298d6db2a05b5c2e62fd3a5f41583a672bbb8b0c71b9f54b8c5d"
+        },
+        {
+            "path": "dist/nodes/TableRow.js",
+            "sha256": "ff2d9282bf823320a2dc818fc16a078e438b569f34d138defec1d19386b910dd"
+        },
+        {
+            "path": "dist/nodes/TableRow.js.map",
+            "sha256": "42e378fa0307b74621ba5798536d859f12bdad36a0543c6380bd61e0ec05d162"
+        },
+        {
+            "path": "dist/nodes/Text.d.ts",
+            "sha256": "f39fd98ca773613e6b7a0ead9bd01d92d7d6e99de50f8ede07acf834f8d9d587"
+        },
+        {
+            "path": "dist/nodes/Text.d.ts.map",
+            "sha256": "c56b17c753e0f161de4f9e479502df49f71c72247109e463a86ed2cc12f00d1a"
+        },
+        {
+            "path": "dist/nodes/Text.js",
+            "sha256": "f7e5ae5d40003e6d7fd01a9bcfba37a3f2d8989dba0b91b551ca0537e331ced8"
+        },
+        {
+            "path": "dist/nodes/Text.js.map",
+            "sha256": "1a6bbda57b60fe9622c8ac1cc05bcfef0aef55b363eaffb65a708a01573e09a0"
+        },
+        {
+            "path": "dist/plugins/BlockMenuTrigger.d.ts",
+            "sha256": "4e8455fe2f99162f39d59cc4cdd02d14c7326638f77702fcdd3cd7a8a489dee6"
+        },
+        {
+            "path": "dist/plugins/BlockMenuTrigger.d.ts.map",
+            "sha256": "83c58b940ad43920c7d675f480cad50833015a7570d468e45c1d142393264102"
+        },
+        {
+            "path": "dist/plugins/BlockMenuTrigger.js",
+            "sha256": "76cb78a5b3a6ffe6b6c53c8b49cfb2af238a30482ab47a06366b9dd1b8cc3482"
+        },
+        {
+            "path": "dist/plugins/BlockMenuTrigger.js.map",
+            "sha256": "dcae715626576a4658edb341560204c492fe73f3a956c1f85ed172087c4e3121"
+        },
+        {
+            "path": "dist/plugins/EmojiTrigger.d.ts",
+            "sha256": "67e21eefa97690f3f0c4d398fe4e53b468a19b6630e917e5065fe6c669a003d5"
+        },
+        {
+            "path": "dist/plugins/EmojiTrigger.d.ts.map",
+            "sha256": "e3c0f78621a07fb75c0522e4c6ea97a872867f97ae23233cfcac750f0a47e2ed"
+        },
+        {
+            "path": "dist/plugins/EmojiTrigger.js",
+            "sha256": "7e273ace89fa5d93a88d8035ab37234480b21404f87223736f2ea892e39a6cb2"
+        },
+        {
+            "path": "dist/plugins/EmojiTrigger.js.map",
+            "sha256": "023e67b142cb5df03c9c0347f9eba10dffb10c9664d9f93bc4d96d75320ab119"
+        },
+        {
+            "path": "dist/plugins/Folding.d.ts",
+            "sha256": "32cbe596db7bdbb39b4c6a63786a94741b500260afb68970b995429c49bcc200"
+        },
+        {
+            "path": "dist/plugins/Folding.d.ts.map",
+            "sha256": "d1bb798e1b0ff776fc17985c7853638e0146870ea753421978270e2c920da157"
+        },
+        {
+            "path": "dist/plugins/Folding.js",
+            "sha256": "d84b8d322ea8af79aa7e43f71ff2b5d05adde02bf356945b866f0dac49504ef0"
+        },
+        {
+            "path": "dist/plugins/Folding.js.map",
+            "sha256": "05125d80ed679f1c53a8f1d5018cd049977db20d773ccca73ea2e889559c9a17"
+        },
+        {
+            "path": "dist/plugins/History.d.ts",
+            "sha256": "1f7b7f7f13f23125979354b025a055c887c59d3662d95acd5c3f493e69469f95"
+        },
+        {
+            "path": "dist/plugins/History.d.ts.map",
+            "sha256": "7a32a51899832fefb464d4a2acd977df1e0ecfd2dca5f052d572760c22b86bcc"
+        },
+        {
+            "path": "dist/plugins/History.js",
+            "sha256": "6ef0914a7e6fae91d46831e01bd91f286ddb660a823971721864da657c9db495"
+        },
+        {
+            "path": "dist/plugins/History.js.map",
+            "sha256": "60c28b2f894720cfacade2ea07ed90400f9c687e5cea816f2389164dbb826545"
+        },
+        {
+            "path": "dist/plugins/Keys.d.ts",
+            "sha256": "1980bb2d4bff35dc59a9309fc6e596cf6641895a8e78e24dbe2e0609ae0d2180"
+        },
+        {
+            "path": "dist/plugins/Keys.d.ts.map",
+            "sha256": "2310321ea10a200070d949a79af1f1fca73effcfe30ce7d2dea72f5ea1d920e1"
+        },
+        {
+            "path": "dist/plugins/Keys.js",
+            "sha256": "5482d74ece420eaf8463e163155144f4da99ff7a24a43539d5f6743f44076982"
+        },
+        {
+            "path": "dist/plugins/Keys.js.map",
+            "sha256": "28a88b575932782448f10251c80d9b13bbb05d4575eff3811dacb7f999e5eea0"
+        },
+        {
+            "path": "dist/plugins/MaxLength.d.ts",
+            "sha256": "51f50160cb5587265fa57323d45d4d3942b0c10fcaacf4c0cd3e379d198ae51f"
+        },
+        {
+            "path": "dist/plugins/MaxLength.d.ts.map",
+            "sha256": "9236df995808b686dc133f8b87de616ba8592fa4c2f38aa36e0f3c435308e8e6"
+        },
+        {
+            "path": "dist/plugins/MaxLength.js",
+            "sha256": "d94fe5163d28938889948598055c920b2d9814d4730460b71c43d49c16b9aab4"
+        },
+        {
+            "path": "dist/plugins/MaxLength.js.map",
+            "sha256": "22cf501170bb4355e88a587b28802602c98556bbe25198ad78efc990523fa7d3"
+        },
+        {
+            "path": "dist/plugins/PasteHandler.d.ts",
+            "sha256": "7e01532abd162d15607548154bcfef49dccbe1effe5ece3f3ce617af52eb9dc4"
+        },
+        {
+            "path": "dist/plugins/PasteHandler.d.ts.map",
+            "sha256": "c4fbc1d10facd7aeac63476c902bb9f20587522060e72ddd6f34b57d1087dedb"
+        },
+        {
+            "path": "dist/plugins/PasteHandler.js",
+            "sha256": "3005aca2a759635d18904ab4ab447397ace3c534c20e8adfa426b8878cf98ed8"
+        },
+        {
+            "path": "dist/plugins/PasteHandler.js.map",
+            "sha256": "bbd8be490c476115eb9b13c0181626f38c29751541b8ab055cc1ec45775ac8eb"
+        },
+        {
+            "path": "dist/plugins/Placeholder.d.ts",
+            "sha256": "124c518a6e11a524d588623ffc30bc15e91db493308ea32bcfd47c185afa0643"
+        },
+        {
+            "path": "dist/plugins/Placeholder.d.ts.map",
+            "sha256": "541a3cad97d8f5b768af90db44923f0683f905f46eebf6244c518b5ef0584ac4"
+        },
+        {
+            "path": "dist/plugins/Placeholder.js",
+            "sha256": "de26eff6b274a8e7d5517fd329dfe9910ce2f31dccf1a4aa848f71efbeaa3d2e"
+        },
+        {
+            "path": "dist/plugins/Placeholder.js.map",
+            "sha256": "fd39db8b70cd20361e88ffd77588f256be7ed6d64a0d4bab03ce895b4012069d"
+        },
+        {
+            "path": "dist/plugins/Prism.d.ts",
+            "sha256": "998adc4552a9fdd445e2e6582655234b1aa017dd1b8ea45ec47fe8f89750af38"
+        },
+        {
+            "path": "dist/plugins/Prism.d.ts.map",
+            "sha256": "3094bc389d8244979b40a4e208a31fd9ff11ec457133c81564bca1e19347c47d"
+        },
+        {
+            "path": "dist/plugins/Prism.js",
+            "sha256": "e035ed334d919dad0fbbe81a9d8c663aec22cb7254fed2df86fff1ca70782675"
+        },
+        {
+            "path": "dist/plugins/Prism.js.map",
+            "sha256": "87d2bab1da19b738bd6932ca27763afceed232d6e8542f3ca5cc5c9ef6c8ce11"
+        },
+        {
+            "path": "dist/plugins/SmartText.d.ts",
+            "sha256": "1603d11a8dfb169c2167672ccf3348d700905e2a00aa3384d3e8c5549320d761"
+        },
+        {
+            "path": "dist/plugins/SmartText.d.ts.map",
+            "sha256": "fe22963f581b38efefaa529f1047c64fcae22567c6493e8d260c859167c3a83f"
+        },
+        {
+            "path": "dist/plugins/SmartText.js",
+            "sha256": "0b2cf673423a5914c1cca34097b7c30d00fcb5f4be01c56b290447969ed58a40"
+        },
+        {
+            "path": "dist/plugins/SmartText.js.map",
+            "sha256": "7c909ed91ef99a1459f6a06cc71bebdedf4d010e9e1449a01ec56d4ebd4f137c"
+        },
+        {
+            "path": "dist/plugins/TrailingNode.d.ts",
+            "sha256": "42e4a46be3cd3805a7643ffcc7fb5e6898f1792d2e954303b684286c234518ed"
+        },
+        {
+            "path": "dist/plugins/TrailingNode.d.ts.map",
+            "sha256": "33163c1d6f186872a895382c898884d1d534a43cfafcfe20f0d7509c161bf4fb"
+        },
+        {
+            "path": "dist/plugins/TrailingNode.js",
+            "sha256": "098442beb45d823d81f251a483bea5a8e059ad4cfee5481cfa8e6c68143ef43d"
+        },
+        {
+            "path": "dist/plugins/TrailingNode.js.map",
+            "sha256": "862b229663b80467e041aa3f0faa989b49dd60a9e70774dc22d43901a3e8ec49"
+        },
+        {
+            "path": "dist/queries/findCollapsedNodes.d.ts",
+            "sha256": "bf80f314f4fccc8dd87454d7fc2a483cd588b070dc25d2e33ffa04ec869eca34"
+        },
+        {
+            "path": "dist/queries/findCollapsedNodes.d.ts.map",
+            "sha256": "8e05894b9e210d4ba934522772ee5102c449d868bab1b4284e0bac44347b68ba"
+        },
+        {
+            "path": "dist/queries/findCollapsedNodes.js",
+            "sha256": "9d96ad648c8133817ce108e0e76cadcf8e1cc41ac18bf69e63e08a54ac9e57c6"
+        },
+        {
+            "path": "dist/queries/findCollapsedNodes.js.map",
+            "sha256": "a286a113dbd31720b377e0de9964f50ef37dd69cb2a7aecc47ee99ff66b5f49f"
+        },
+        {
+            "path": "dist/queries/getColumnIndex.d.ts",
+            "sha256": "e22a3125be22cbe89efaa97e3625b756cc2c07de5e78f689bf061c661201c67e"
+        },
+        {
+            "path": "dist/queries/getColumnIndex.d.ts.map",
+            "sha256": "674f17068eb9d994e1a91b032c94ad6b67553696e83ec976cea21c3c1655398d"
+        },
+        {
+            "path": "dist/queries/getColumnIndex.js",
+            "sha256": "c9b9cfc9b2a65fa98dfb20c120f58bd813933087b08a89a37994e5b4af749652"
+        },
+        {
+            "path": "dist/queries/getColumnIndex.js.map",
+            "sha256": "1ea9513c58c03496a41fce712a069436472dafb232ab38885deff6b87e170b87"
+        },
+        {
+            "path": "dist/queries/getMarkRange.d.ts",
+            "sha256": "dcd8c444b4e04d8e0f9e2277ef83c20ca6762bc9ba726fa2dc0a5ba4c67698e0"
+        },
+        {
+            "path": "dist/queries/getMarkRange.d.ts.map",
+            "sha256": "269678fc3976edd5f73d99a37177f2227efdd8f86059e60bdec34dd03c0cc30d"
+        },
+        {
+            "path": "dist/queries/getMarkRange.js",
+            "sha256": "2eb52892ae1f9ef410873c72ff9fe16443520ecb2e5f2ed6bc2c751fe3cbaa21"
+        },
+        {
+            "path": "dist/queries/getMarkRange.js.map",
+            "sha256": "dc3526a3d783dc23a62c7aa18928916e57542979f5fcefe05e9e568cd62a12a6"
+        },
+        {
+            "path": "dist/queries/getParentListItem.d.ts",
+            "sha256": "bb7ba40204f7cec5640d8ea126b4698aa6910de761ec5a1f680b01108861c61a"
+        },
+        {
+            "path": "dist/queries/getParentListItem.d.ts.map",
+            "sha256": "3243e9608d9314fd140816ab024b9da3c8d70d0ed166583f4cc6fe9af6357876"
+        },
+        {
+            "path": "dist/queries/getParentListItem.js",
+            "sha256": "a932e725123352758ed56917354fc2f302e108be006b8148f476a2a2bd401937"
+        },
+        {
+            "path": "dist/queries/getParentListItem.js.map",
+            "sha256": "b4288a4a3bd0d28abe6e44a144fc7bb41a209c21c36f4b6a1ae1b8955ec23ba9"
+        },
+        {
+            "path": "dist/queries/getRowIndex.d.ts",
+            "sha256": "c3cefe5f4aed07489aa854f7fc91c0b3f1cea082e0770d25950280c65d682ee5"
+        },
+        {
+            "path": "dist/queries/getRowIndex.d.ts.map",
+            "sha256": "bc9cceecef019f4e311bfff0c7e54493a8d9aac30e2a001e3ffca51ea7b1b605"
+        },
+        {
+            "path": "dist/queries/getRowIndex.js",
+            "sha256": "cb5cf3668589ab4103949c10f36a3ac5623f2ae95abfb3115e084f8b5337aa85"
+        },
+        {
+            "path": "dist/queries/getRowIndex.js.map",
+            "sha256": "a8f266e0967f73913786df77565d3e0b4bd93c1705617e83820ab662ba42ff66"
+        },
+        {
+            "path": "dist/queries/isInCode.d.ts",
+            "sha256": "3c841341478d1f2d3e81b9c71aa5dc99c74f7838edcc25494239c42ce46009fd"
+        },
+        {
+            "path": "dist/queries/isInCode.d.ts.map",
+            "sha256": "7f73fe6bd9e5aa68526d3766938474a67e13bc2d8dd6e4489ca723116086c097"
+        },
+        {
+            "path": "dist/queries/isInCode.js",
+            "sha256": "8e93129a6be060f125a7a15612d96db9e398a4de553c9ca6acb45da09cff77a2"
+        },
+        {
+            "path": "dist/queries/isInCode.js.map",
+            "sha256": "0be50280abf117d18bef83099a2c89040fef82f59c7eb63a8c6efb3b9d918745"
+        },
+        {
+            "path": "dist/queries/isInList.d.ts",
+            "sha256": "70283d5d442b7bbd58d836f13e1077a25362413f20e8b224cf4c4249ab84cf8a"
+        },
+        {
+            "path": "dist/queries/isInList.d.ts.map",
+            "sha256": "8d5330e8d057afa3b1fc83094f72c422d5c4c02d045a2eda923eb664d17c83a9"
+        },
+        {
+            "path": "dist/queries/isInList.js",
+            "sha256": "36e55bcc611a7f1e35012ddb8f6b1e35767b7262bbc05ff95549c7e40cac99c4"
+        },
+        {
+            "path": "dist/queries/isInList.js.map",
+            "sha256": "6b58b6c0ebb03b7e9835033fc0d5a06081b923b7e79421ddacdcab1c41e9adaa"
+        },
+        {
+            "path": "dist/queries/isList.d.ts",
+            "sha256": "7537dcf820856e5ed059a8365258fb2a788112730849d2fcba29ff53c65ef655"
+        },
+        {
+            "path": "dist/queries/isList.d.ts.map",
+            "sha256": "b4518a7a5456b7e2bf99c41c27fe7492c231839ef9fc638622503707cf0254bb"
+        },
+        {
+            "path": "dist/queries/isList.js",
+            "sha256": "85ecd92a53c2be2a89d9e57f04abf9e1061f74d5d95809f6fd1e8805daf90577"
+        },
+        {
+            "path": "dist/queries/isList.js.map",
+            "sha256": "5cc5c7ba65aff17a3c315657e83577f89d848c9406c86f118d5f6832c8ff5ef2"
+        },
+        {
+            "path": "dist/queries/isMarkActive.d.ts",
+            "sha256": "918a4bec7b794faa4495458e669aff5aa40d4500a64bb51d7409fdaa6f7270e1"
+        },
+        {
+            "path": "dist/queries/isMarkActive.d.ts.map",
+            "sha256": "ab96affc504a7d91a59283e79cf7863257022c3025669cd73a5219c665169aa9"
+        },
+        {
+            "path": "dist/queries/isMarkActive.js",
+            "sha256": "bc9479732255ba24c65e143688f5856b875411d64239ea2d2161fb6734814a8e"
+        },
+        {
+            "path": "dist/queries/isMarkActive.js.map",
+            "sha256": "4cfc36cfb89c276d610a051fa2f1331dd2444b4194ff6cd017fa499ec7fdf5d9"
+        },
+        {
+            "path": "dist/queries/isNodeActive.d.ts",
+            "sha256": "e09f89aad2f448853f3775c658a309d2303c968eb2d2d73f9ee2d6acf069cba3"
+        },
+        {
+            "path": "dist/queries/isNodeActive.d.ts.map",
+            "sha256": "5f19ce94ffd99996b510814f5eb5e388855730624d8a8f7367c2d354d04bce9f"
+        },
+        {
+            "path": "dist/queries/isNodeActive.js",
+            "sha256": "fff8429c076905cf0414dce1bd93f8f726fd919878629faa343f44e7b0f5f5f7"
+        },
+        {
+            "path": "dist/queries/isNodeActive.js.map",
+            "sha256": "17eab97b2e17f14d3ad6af85833a035c47a5e11c2918fcb26ab0591e81a34dd1"
+        },
+        {
+            "path": "dist/rules/breaks.d.ts",
+            "sha256": "3c7fc22188d960e04b867b4fac506f3a9879273b957aae6314e9b5d7ce8c9090"
+        },
+        {
+            "path": "dist/rules/breaks.d.ts.map",
+            "sha256": "a523d2f72f95940132473c8f369a3ac6499a33b9b131cfe2fa83b09faeaaae52"
+        },
+        {
+            "path": "dist/rules/breaks.js",
+            "sha256": "7124f6639607cc8cce157557ca6d169928e80047bc024cbf5bc97b6c1cc5b803"
+        },
+        {
+            "path": "dist/rules/breaks.js.map",
+            "sha256": "adb11ee57d072362bc6411dcdad3113148973d6df411c855165eb46b2ffa3feb"
+        },
+        {
+            "path": "dist/rules/checkboxes.d.ts",
+            "sha256": "f5e58225bd66d6a1a4e7d87621e8cef746e4e0f6904820399a2aad261f7ce56c"
+        },
+        {
+            "path": "dist/rules/checkboxes.d.ts.map",
+            "sha256": "b7bbc95a24ef04ad0dab171b56bc576dfe4c59010a3dd7194cdb027d0da96a70"
+        },
+        {
+            "path": "dist/rules/checkboxes.js",
+            "sha256": "1acebc49525679604aa11df66eb8511862618b18aa5b61a73bc93aeaa6a1264a"
+        },
+        {
+            "path": "dist/rules/checkboxes.js.map",
+            "sha256": "49cb1815b56086ea06bea3ed397080ff048b604681207c725032c166ee753452"
+        },
+        {
+            "path": "dist/rules/embeds.d.ts",
+            "sha256": "fb5a94c8096506febff4e2f11490b8e597647e044dfbb1b911eca4af92a39fd6"
+        },
+        {
+            "path": "dist/rules/embeds.d.ts.map",
+            "sha256": "53f997f49f25e8a3ebcb5f65dd4c1bc4f84fbba18488fcac1fe3e7e759797ec2"
+        },
+        {
+            "path": "dist/rules/embeds.js",
+            "sha256": "9f87c34f084e1af8836f27fd0d9a7bd4cbd44d15daaccdff8544742c58bec373"
+        },
+        {
+            "path": "dist/rules/embeds.js.map",
+            "sha256": "401da2eea72022d3116665fbb4bf733fae4059274389b2b5a74338be06a151e5"
+        },
+        {
+            "path": "dist/rules/emoji.d.ts",
+            "sha256": "d386cf97f028616f68920d739b5e40c208d1ce869ff5efe3f44f4ba82348d7e9"
+        },
+        {
+            "path": "dist/rules/emoji.d.ts.map",
+            "sha256": "597e12997403f705c1261461bb0a21bee5b8e2056e95bb97e97e85a75588c55d"
+        },
+        {
+            "path": "dist/rules/emoji.js",
+            "sha256": "432be216ff33bdf01339b9afc8a8233c498292a263a9b510520533d4639db4d8"
+        },
+        {
+            "path": "dist/rules/emoji.js.map",
+            "sha256": "1948c68f6dac8605abddc6ffdb68cbdbd08a762192b4a5fe276a818a18db5a26"
+        },
+        {
+            "path": "dist/rules/mark.d.ts",
+            "sha256": "b3f0986a5bc20dd38e1884251ee8ac9e03413c95e9cc17567ab636bce3d2e7ad"
+        },
+        {
+            "path": "dist/rules/mark.d.ts.map",
+            "sha256": "42de9b221dbaa3739a908d58ab32c5feb78eed1aeca1ce90909e3c27198ce93f"
+        },
+        {
+            "path": "dist/rules/mark.js",
+            "sha256": "51b20d2efd505b9025d03794b91da2b9ab49265effbc0ade7d2b8622faf81b9d"
+        },
+        {
+            "path": "dist/rules/mark.js.map",
+            "sha256": "0d18f108b7cf5255855b08c1dd2e071a815651ad8aa3c7df56ed8a55981e18b5"
+        },
+        {
+            "path": "dist/rules/notices.d.ts",
+            "sha256": "626bdeec2cd28074128cd0798534f5b489fefd37ed9c69747ec4ee338559a3bc"
+        },
+        {
+            "path": "dist/rules/notices.d.ts.map",
+            "sha256": "f39b7c64d9957404badf2a5902d7b319c57d630246335425a8632d0d5759d053"
+        },
+        {
+            "path": "dist/rules/notices.js",
+            "sha256": "1ae967228f02b42f1ed83c4beff4dfce1a6ab27a26ce099d8a4e16f2b4d7d416"
+        },
+        {
+            "path": "dist/rules/notices.js.map",
+            "sha256": "68dba3e222754016d6f83e7d21c440f96c25835425075955dc677ea2b962e177"
+        },
+        {
+            "path": "dist/rules/tables.d.ts",
+            "sha256": "82d8e1f4ddcbb34ecb60621a16ec8aeacae9543cd8b1fce569580c177ac12c2a"
+        },
+        {
+            "path": "dist/rules/tables.d.ts.map",
+            "sha256": "d6f05917b3bd8ba249d85df80767d6b1003d9054b9784a104a788519f54b6c0e"
+        },
+        {
+            "path": "dist/rules/tables.js",
+            "sha256": "2990dd71625506d6525fb274cf7ec3cde6872958de56caa29b46430d46e5b863"
+        },
+        {
+            "path": "dist/rules/tables.js.map",
+            "sha256": "f13d2178e0d99a7cc4d45e4dd2407e2b97a9e16dc5a6d6a45744cea0ef0994c1"
+        },
+        {
+            "path": "dist/rules/underlines.d.ts",
+            "sha256": "ba8ae9929b3c6d0d1a7a4f175dab53d6ee8ee8d0817c21f6db8e11230b720a71"
+        },
+        {
+            "path": "dist/rules/underlines.d.ts.map",
+            "sha256": "b8eb80b3318a0cf6eb045816c5169770a5c5533770a5da5713ab157ec17d89bd"
+        },
+        {
+            "path": "dist/rules/underlines.js",
+            "sha256": "6651552a232e8fafc6f4d619d7160385cff06abbee09890e9af02847b84bca35"
+        },
+        {
+            "path": "dist/rules/underlines.js.map",
+            "sha256": "a7593a79a79160fa34d023181449cf9026b6ac5f189a5dbb5772a5a1db841018"
+        },
+        {
+            "path": "dist/server.d.ts",
+            "sha256": "b11d060ccd46045e7819ddfbd6c1393663da89505e39222918b71cd4f8471433"
+        },
+        {
+            "path": "dist/server.d.ts.map",
+            "sha256": "28665ed700aa8a2212b608c798e0e9be9425300ac34fe727cbc8a87f58d849a0"
+        },
+        {
+            "path": "dist/server.js",
+            "sha256": "4ea80971e8d7ef3977a81e49932c16fd0c72cf5e6599ea28bcfd687e9d359f53"
+        },
+        {
+            "path": "dist/server.js.map",
+            "sha256": "55f467b15f8df62fe5805021279e06c7d6e1d7f523d5705d12624201ff7f4485"
+        },
+        {
+            "path": "dist/server.test.d.ts",
+            "sha256": "a0a9f08a77e50933ab01ab7204aefdc833ef7cc1dd1762752c5550fde3c6e854"
+        },
+        {
+            "path": "dist/server.test.d.ts.map",
+            "sha256": "71ab5a67df0b00678c3b3d958e67aac084af1cb7d00fcd7c46d9fb262b33ee7a"
+        },
+        {
+            "path": "dist/server.test.js",
+            "sha256": "c370db19f90bcedc8f1732bf9c0fef077f9bb0d1cb79a9d498deeed27b3ac482"
+        },
+        {
+            "path": "dist/server.test.js.map",
+            "sha256": "cb20421918fdac81ad4acd2ee865eb4d34ab1ce3f701356634c758361032beb4"
+        },
+        {
+            "path": "dist/stories/index.d.ts",
+            "sha256": "d868f1cbe91f0b38702bbb0f74bfb46f1a2a12a0e867b929f68f6b777cd69412"
+        },
+        {
+            "path": "dist/stories/index.d.ts.map",
+            "sha256": "6c01c24af6cdd92fdef5b5b69bdca1ed376e1980eb101fb451c7065aba908192"
+        },
+        {
+            "path": "dist/stories/index.js",
+            "sha256": "19e7aa42161af4a9975bcf7bbd8be66be708bdbebbb47c2658071c75cae0291c"
+        },
+        {
+            "path": "dist/stories/index.js.map",
+            "sha256": "c415a2b3cd7b5eb654061db36bee71c5916839bef47799bdab6c803b1bc39cf3"
+        },
+        {
+            "path": "dist/stories/index.stories.d.ts",
+            "sha256": "0d4679009ff016bda44b129c55820aa380a12411cbf4d67dc56a82f687ba7af2"
+        },
+        {
+            "path": "dist/stories/index.stories.d.ts.map",
+            "sha256": "6d8eb184679a378ff4de13762b4d97fd669b40dd858c9f65ae149a8792047858"
+        },
+        {
+            "path": "dist/stories/index.stories.js",
+            "sha256": "781c974c8c6d34264382964fbc24b3aa0087e36eb8719e15e81bd4ed83aa3dbb"
+        },
+        {
+            "path": "dist/stories/index.stories.js.map",
+            "sha256": "a2f279240bb87a2104f80224e239b1d61f0324db8d1cab700a7dde9daf36bfa8"
+        },
+        {
+            "path": "dist/styles/editor.d.ts",
+            "sha256": "c9974aba04bcab431551179f14539acb88fb0292106fcc98e0b1399e84c51ca0"
+        },
+        {
+            "path": "dist/styles/editor.d.ts.map",
+            "sha256": "34dfb4b07fe31c2fdefeebbf4f63603f272867e475aea1ae95bb308a9c32f439"
+        },
+        {
+            "path": "dist/styles/editor.js",
+            "sha256": "6eb777a6165db2bc34a1de0f7f8e2d0118a223b92b66da3d67e03aae49bd26cc"
+        },
+        {
+            "path": "dist/styles/editor.js.map",
+            "sha256": "1e910091f831af7466966ba616b7b5f57156b5237f9f2b66ef9b6717a200cc18"
+        },
+        {
+            "path": "dist/styles/theme.d.ts",
+            "sha256": "d1e1cbbe1b11c3faf51c27de82e634f63cbf84d075f8df94b9ef7091244c85bc"
+        },
+        {
+            "path": "dist/styles/theme.d.ts.map",
+            "sha256": "019046e483a1d99d6a386e90e015ae9fddbe7084742079af26fc34b7133487cc"
+        },
+        {
+            "path": "dist/styles/theme.js",
+            "sha256": "cdeba430153b328c7148dacca53298ca57d50eac7009648d174372b6c1e864a4"
+        },
+        {
+            "path": "dist/styles/theme.js.map",
+            "sha256": "17b237c85175e12d0c6426bbb12aaf2686f0f87358ee85784abc012a511f00b2"
+        },
+        {
+            "path": "dist/types/index.d.ts",
+            "sha256": "ed467a0c200ddd2c9a5b19197c43a1141bc88c8431b8e69fa6571053a5584107"
+        },
+        {
+            "path": "dist/types/index.d.ts.map",
+            "sha256": "07a1f8cc3800efc26ccb701ebac5d122b8afbe691066e2197fb709e1c973ca5e"
+        },
+        {
+            "path": "dist/types/index.js",
+            "sha256": "3aa69734a04701d66de42fbbc4ba4e3e3c282c114d706228a8d6cb4a18e0282b"
+        },
+        {
+            "path": "dist/types/index.js.map",
+            "sha256": "a3ea85f3be232e88b5dc0b8a27f97c9dbb3362356d2fe11a849818fc6d8ded1b"
+        },
+        {
+            "path": "LICENSE",
+            "sha256": "8fd8b0665b4c5be36b96355e4e3faa4bb2de514ea2bf6c61db738f80868a59a9"
+        },
+        {
+            "path": "package.json",
+            "sha256": "696448cda5126618451fd824591ed9d3f0b22542dfb289277cc17855b0f88bde"
+        }
+    ],
+    "adaptation": "SDK-owned React 18/19 integration. UPSTREAM hashes identify the immutable input; adapted files intentionally differ."
+}

@@ -1,0 +1,87 @@
+{
+    "package": "styled-components",
+    "version": "5.3.11",
+    "license": "MIT",
+    "repository": "https://github.com/styled-components/styled-components",
+    "upstreamRelease": "v5.3.11",
+    "npmArchiveIntegrity": "sha512-uuzIIfnVkagcVHv9nE0VPlHPSCmXIUGKfJ42LNjxCCTDTL5sgnJ8Z7GZBq0EnLYGln77tPpEpExt2+qa+cZqSw==",
+    "unmodifiedSourceSha256": [
+        {
+            "path": "dist/styled-components.cjs.js",
+            "sha256": "d8680d824a1126dde64eeab4bae301117aca3dec4cfa8993d2e7936657a698f1"
+        },
+        {
+            "path": "dist/styled-components.browser.cjs.js",
+            "sha256": "95aead27c44b9d3576c8f8d6436b973a8a16b0d5aceb6b0046f4f62f21193721"
+        },
+        {
+            "path": "README.md",
+            "sha256": "1d97724e079fc561607dddb8645e816e8f676f4f1da837654b2ab759d70e6af2"
+        },
+        {
+            "path": "package.json",
+            "sha256": "188ad1a2a7c3536190b9db5271852a7c997a109f8cb5496ba1b62a3a91bdb37c"
+        },
+        {
+            "path": "LICENSE",
+            "sha256": "5b893305a717230e5b0024ff5ca3eec1dc05ba600c9b140730488d97ce56f1e6"
+        }
+    ],
+    "externalRuntimeRequires": {
+        "dist/styled-components.cjs.js": [
+            "@emotion/is-prop-valid",
+            "@emotion/stylis",
+            "@emotion/unitless",
+            "hoist-non-react-statics",
+            "react",
+            "react-is",
+            "shallowequal",
+            "stream"
+        ],
+        "dist/styled-components.browser.cjs.js": [
+            "@emotion/is-prop-valid",
+            "@emotion/stylis",
+            "@emotion/unitless",
+            "hoist-non-react-statics",
+            "react",
+            "react-is",
+            "shallowequal"
+        ]
+    },
+    "hostRuntimeDependencies": {
+        "@emotion/is-prop-valid": "1.4.0",
+        "@emotion/stylis": "0.8.5",
+        "@emotion/unitless": "0.7.5",
+        "hoist-non-react-statics": "3.3.2",
+        "react-is": "16.13.1",
+        "shallowequal": "1.1.0"
+    },
+    "hostReact": "Resolved from the SDK optional root React peer only when the lazy complete editor loads.",
+    "adaptation": "Private package ownership plus deterministic runtime isolation. The exact upstream Node/browser CJS bytes are preserved separately under upstream/dist. Adapted dist bundles use a fixed private stylesheet attribute, namespace every generated name and internal hash seed, namespace explicit component IDs, and scope the unchanged duplicate-runtime warning to its private diagnostic counter. Exported version and data-styled-version remain 5.3.11.",
+    "licenseSource": {
+        "url": "https://raw.githubusercontent.com/styled-components/styled-components/v5.3.11/LICENSE",
+        "repositoryRelease": "v5.3.11",
+        "sha256": "5b893305a717230e5b0024ff5ca3eec1dc05ba600c9b140730488d97ce56f1e6",
+        "note": "The exact npm 5.3.11 archive omits LICENSE. Full release-tag MIT text was retrieved separately; README.md is the byte-exact archive copyright notice."
+    },
+    "runtimeNamespace": {
+        "stylesheetAttribute": "data-me-sdk-rich-text",
+        "generatedNamePrefix": "me-sdk-rich-text-",
+        "hashInputPrefix": "me-sdk-rich-text:",
+        "explicitComponentIdPrefix": "me-sdk-rich-text-",
+        "diagnosticCounter": "__me-sdk-rich-text-styled-components-init__",
+        "scope": "Private editor runtime only; no process environment mutation and no host stylesheet/runtime state reused."
+    },
+    "preservedOriginalRuntime": [
+        {
+            "path": "upstream/dist/styled-components.cjs.js",
+            "originalPath": "dist/styled-components.cjs.js",
+            "sha256": "d8680d824a1126dde64eeab4bae301117aca3dec4cfa8993d2e7936657a698f1"
+        },
+        {
+            "path": "upstream/dist/styled-components.browser.cjs.js",
+            "originalPath": "dist/styled-components.browser.cjs.js",
+            "sha256": "95aead27c44b9d3576c8f8d6436b973a8a16b0d5aceb6b0046f4f62f21193721"
+        }
+    ]
+}

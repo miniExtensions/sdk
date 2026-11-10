@@ -97,6 +97,7 @@
         "./react/complete-duration.css": "./dist/esm/react/complete-duration.css",
         "./react/search-gate.css": "./dist/esm/react/search-gate.css",
         "./react/complete-calendly.css": "./dist/esm/react/complete-calendly.css",
+        "./react/complete-verification.css": "./dist/esm/react/complete-verification.css",
         "./react/currency.css": "./dist/esm/react/currency.css",
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
         "./react/linked-records.css": "./dist/esm/react/linked-records.css",

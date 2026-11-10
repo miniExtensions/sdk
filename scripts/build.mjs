@@ -129,6 +129,7 @@ for (const format of ['esm', 'cjs']) {
         'text',
         'number',
         'localized-numeric',
+        'complete-duration',
         'date',
         'datetime',
         'duration',

@@ -370,6 +370,7 @@ import { checkFieldBindingRecipe } from './field-binding-recipe-checks.mjs';
 import { checkSelectConditions } from './select-condition-checks.mjs';
 import { checkBrowserChildQueryExample } from './browser-child-query-example-checks.mjs';
 import assert from 'node:assert/strict';
+import { checkCompletePortalChartReactMatrix } from './complete-portal-chart-consumer-checks.mjs';
 import { execFileSync } from 'node:child_process';
 import {
     cpSync,
@@ -568,6 +569,8 @@ try {
         'dist/cjs/react/complete-duration.css',
         'dist/esm/react/search-gate.css',
         'dist/cjs/react/search-gate.css',
+        'dist/esm/react/complete-portal-chart.css',
+        'dist/cjs/react/complete-portal-chart.css',
         'dist/esm/react/complete-calendly.css',
         'dist/cjs/react/complete-calendly.css',
         'dist/esm/react/complete-readonly-text.css',
@@ -3184,6 +3187,12 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(completeMultilineMatrix.versions.length, 2);
     assert.equal(completeMultilineMatrix.cleanup, 'completed');
+    const portalChartMatrix = checkCompletePortalChartReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+    });
+    assert.equal(portalChartMatrix.profiles.length, 4);
+    assert.equal(portalChartMatrix.cleanup, 'completed');
     const htmlDescriptionMatrix = checkHTMLDescriptionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

@@ -54,6 +54,10 @@ import {
     checkHTMLDescriptionEditorStyleCoexistence,
 } from './html-description-consumer-checks.mjs';
 import { prepareHTMLDescriptionNativeFixtures } from './html-description-native-fixture.mjs';
+import {
+    prepareCompletePortalChartFixtures,
+    checkCompletePortalChartBrowser,
+} from './complete-portal-chart-browser-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1505,6 +1509,7 @@ try {
             'scripts/complete-multiline-consumer-checks.mjs',
             'scripts/html-description-consumer-checks.mjs',
             'scripts/html-description-native-fixture.mjs',
+            'scripts/complete-portal-chart-browser-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -1903,6 +1908,17 @@ try {
                 regular,
                 hash,
             });
+        const portalChartFixtures = await prepareCompletePortalChartFixtures({
+            temporary,
+            archive,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
         const multilineEntry = join(temporary, 'complete-multiline.mjs');
         writeFileSync(multilineEntry, completeMultilineBrowserSource);
         const multilineBundle = await build({
@@ -2681,6 +2697,21 @@ try {
                 evidence: report.completeMultiline,
             });
         });
+        for (const format of portalChartFixtures.formats) {
+            await run(
+                'complete-portal-chart-' + format,
+                async (page, origin) => {
+                    await page.goto(
+                        origin + portalChartFixtures.routes[format]
+                    );
+                    await checkCompletePortalChartBrowser({
+                        page,
+                        evidence: report.completePortalChart[format],
+                        format,
+                    });
+                }
+            );
+        }
         await run('html-descriptions', async (page, origin) => {
             await page.goto(origin + '/html-description.html');
             await checkHTMLDescriptionBrowser({
@@ -3627,6 +3658,7 @@ try {
         assert.equal(
             results.length,
             24 +
+                portalChartFixtures.formats.length +
                 storageEventCases.length +
                 Number(htmlDescriptionNative.referenceEnabled)
         );

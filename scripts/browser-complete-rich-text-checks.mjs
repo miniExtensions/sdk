@@ -54,9 +54,15 @@ import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
 import {CompleteRichTextEditor} from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/rich-text.css';
-const editor=createRef(),writes=[],nativeEvents=[],handles=new Map();let nextHandle=0,current,update,clipboardStatus={state:'idle'},mounted=true;
+const editor=createRef(),writes=[],nativeEvents=[],handles=new Map(),observedEvents=new WeakMap();let nextHandle=0,current,update,clipboardStatus={state:'idle'},mounted=true;
 const initial={value:'**Bold** and _italic_\\n\\n[ ] task',readOnly:false,owner:1,id:'rich-editor',label:'Synthetic Rich Text',ariaInvalid:false,clipboard:'**Pasted strong**'};
-for(const type of ['keydown','beforeinput','paste','click'])document.addEventListener(type,event=>{nativeEvents.push({type,trusted:event.isTrusted,key:event.key??null,inputType:event.inputType??null});},true);
+function describeTarget(target){return target instanceof Element?{id:target.id||null,tag:target.tagName,contentEditable:target.getAttribute('contenteditable'),isContentEditable:target instanceof HTMLElement?target.isContentEditable:null}:null;}
+function keyboardRuntime(){const handle=editor.current,view=handle?.view,input=view?.input;return{navigatorPlatform:navigator.platform,viewEditable:view?.editable??null,composing:view?.composing??null,input:input?{composing:input.composing??null,compositionEndedAt:input.compositionEndedAt??null,lastKeyCode:input.lastKeyCode??null,lastKeyCodeTime:input.lastKeyCodeTime??null}:null,selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,enabledExtensionNames:handle?.extensions?.extensions.map(extension=>extension.name)??[],pluginCount:view?.state.plugins.length??0,handleKeyDownPluginCount:view?.state.plugins.filter(plugin=>typeof plugin.props.handleKeyDown==='function').length??0,keymapCount:handle?.keymaps?.length??0};}
+function observeEventMicrotask(event,observed){const runtime=keyboardRuntime();observed.microtasks.push({eventPhase:event.eventPhase,defaultPrevented:event.defaultPrevented,runtime});if(event.eventPhase===Event.NONE){observed.defaultPreventedAfterDispatch=event.defaultPrevented;observed.observedAfterDispatch=true;observed.runtimeAfterDispatch=runtime;}}
+for(const type of ['keydown','beforeinput','paste','click']){
+ document.addEventListener(type,event=>{const observed={type,trusted:event.isTrusted,key:event.key??null,inputType:event.inputType??null,ctrlKey:event.ctrlKey??null,metaKey:event.metaKey??null,shiftKey:event.shiftKey??null,altKey:event.altKey??null,keyCode:event.keyCode??null,code:event.code??null,which:event.which??null,isComposing:event.isComposing??null,timeStamp:event.timeStamp,target:describeTarget(event.target),activeElementAtCapture:describeTarget(document.activeElement),eventPhaseAtCapture:event.eventPhase,defaultPreventedAtCapture:event.defaultPrevented,defaultPreventedAfterDispatch:null,observedAfterDispatch:false,runtimeAtCapture:keyboardRuntime(),runtimeAfterDispatch:null,bubble:null,microtasks:[]};observedEvents.set(event,observed);nativeEvents.push(observed);queueMicrotask(()=>observeEventMicrotask(event,observed));},true);
+ document.addEventListener(type,event=>{const observed=observedEvents.get(event);if(!observed)return;observed.bubble={eventPhase:event.eventPhase,defaultPrevented:event.defaultPrevented,runtime:keyboardRuntime()};queueMicrotask(()=>observeEventMicrotask(event,observed));});
+}
 function captureHandle(){const handle=editor.current;if(handle&&!handles.has(handle))handles.set(handle,++nextHandle);return handle;}
 function App(){
  const [state,setState]=useState(initial);current=state;update=next=>flushSync(()=>setState(old=>({...old,...next})));
@@ -69,7 +75,7 @@ function App(){
 const app=createRoot(document.querySelector('main'));flushSync(()=>app.render(h(React.StrictMode,null,h(App))));
 window.completeRichTextProbe={
  update:next=>update(next),
- snapshot:()=>{const handle=captureHandle(),view=handle?.view,dom=view?.dom,selection=window.getSelection();return{reactVersion:React.version,state:{...current},writes:[...writes],nativeEvents:[...nativeEvents],clipboard:{...clipboardStatus},handleId:handle?handles.get(handle):null,views:[...handles].map(([instance,id])=>({id,destroyed:!instance.view||instance.view.isDestroyed})),selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,nativeSelection:selection?{text:selection.toString(),anchorOffset:selection.anchorOffset,focusOffset:selection.focusOffset}:null,focused:!!dom&&(document.activeElement===dom||dom.contains(document.activeElement)),roots:document.querySelectorAll('.ProseMirror').length,dom:dom?{id:dom.id,html:dom.innerHTML,text:dom.textContent,editable:dom.contentEditable,label:dom.getAttribute('aria-labelledby'),description:dom.getAttribute('aria-describedby'),invalid:dom.getAttribute('aria-invalid')}:null,bodyPortals:[...document.body.children].filter(node=>node.tagName==='DIV').length};},
+ snapshot:()=>{const handle=captureHandle(),view=handle?.view,dom=view?.dom,selection=window.getSelection();return{reactVersion:React.version,state:{...current},writes:[...writes],nativeEvents:[...nativeEvents],keyboardRuntime:keyboardRuntime(),clipboard:{...clipboardStatus},handleId:handle?handles.get(handle):null,views:[...handles].map(([instance,id])=>({id,destroyed:!instance.view||instance.view.isDestroyed})),selection:view?{from:view.state.selection.from,to:view.state.selection.to}:null,nativeSelection:selection?{text:selection.toString(),anchorOffset:selection.anchorOffset,focusOffset:selection.focusOffset}:null,focused:!!dom&&(document.activeElement===dom||dom.contains(document.activeElement)),roots:document.querySelectorAll('.ProseMirror').length,dom:dom?{id:dom.id,html:dom.innerHTML,text:dom.textContent,editable:dom.contentEditable,label:dom.getAttribute('aria-labelledby'),description:dom.getAttribute('aria-describedby'),invalid:dom.getAttribute('aria-invalid')}:null,bodyPortals:[...document.body.children].filter(node=>node.tagName==='DIV').length};},
  unmount:()=>{if(mounted){captureHandle();mounted=false;flushSync(()=>app.unmount());}}
 };
 `;
@@ -312,7 +318,15 @@ window.completeRichTextProbe={
         await page.keyboard.press('ControlOrMeta+Home');
         for (let index = 0; index < 5; index++)
             await page.keyboard.press('Shift+ArrowRight');
-        assert.equal((await snapshot()).nativeSelection.text, 'Alpha');
+        const beforeBold = await snapshot();
+        assert.equal(beforeBold.nativeSelection.text, 'Alpha');
+        evidence.beforeBold = {
+            handleId: beforeBold.handleId,
+            nativeSelection: beforeBold.nativeSelection,
+            selection: beforeBold.selection,
+            focused: beforeBold.focused,
+            keyboardRuntime: beforeBold.keyboardRuntime,
+        };
         await page.keyboard.press('ControlOrMeta+B');
         await page.waitForFunction(() =>
             window.completeRichTextProbe

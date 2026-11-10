@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { it } from 'node:test';
 import type { Window } from 'happy-dom';
-import { act, createElement as h, createRef } from 'react';
+import { act, createElement as h, createRef, useState } from 'react';
 import {
     CompleteRichTextEditor,
     type CompleteRichTextEditorProps,
@@ -82,6 +82,100 @@ it('keeps the actual empty editor and native caret through canonical controlled 
     assert.equal(view.state.selection.head, 4);
     assert.equal(ref.current, editor);
     assert.equal(f.container.querySelector('[role="textbox"]'), input);
+});
+
+it('routes real DOM Mod-b and Mod-B through the replacement owner to formatting and canonical writes', async (t) => {
+    const f = await completeRichTextFixture(t);
+    const ref = createRef<NativeRichTextEditorHandle>();
+    const writes: string[] = [];
+    let replaceOwner: (() => void) | undefined;
+    function OwnedEditor() {
+        const [state, setState] = useState({
+            value: 'Previous owner',
+            identity: 'record-one',
+        });
+        replaceOwner = () =>
+            setState({ value: 'Alpha word', identity: 'record-two' });
+        return h(CompleteRichTextEditor, {
+            ref,
+            value: state.value,
+            identity: state.identity,
+            id: 'rich-editor-renamed',
+            ariaInvalid: true,
+            onValueChange: (value) => {
+                writes.push(value);
+                setState((previous) => ({ ...previous, value }));
+            },
+        });
+    }
+    await f.render(h(OwnedEditor));
+    const previous = (await f.editor(ref)).view;
+    const replace = replaceOwner;
+    assert(replace);
+    await act(async () => replace());
+    const editor = await f.editor(ref);
+    const { view } = editor;
+    assert.notEqual(view, previous);
+    assert.equal(previous.isDestroyed, true);
+    assert.equal(view.dom.getAttribute('id'), 'rich-editor-renamed');
+    assert.deepEqual(writes, []);
+
+    // Match prosemirror-keymap's actual Mod normalization; the fixture does not
+    // choose a platform or invoke the editor's formatting command directly.
+    const mac = /Mac|iP(hone|[oa]d)/.test(f.window.navigator.platform);
+    const press = async (key: 'b' | 'B') => {
+        const keyboard = {
+            key,
+            code: 'KeyB',
+            keyCode: 66,
+            bubbles: true,
+            cancelable: true,
+            ctrlKey: !mac,
+            metaKey: mac,
+            altKey: false,
+            shiftKey: false,
+        };
+        const down = new f.window.KeyboardEvent('keydown', keyboard);
+        await act(async () => {
+            view.dom.dispatchEvent(down as unknown as Event);
+            view.dom.dispatchEvent(
+                new f.window.KeyboardEvent(
+                    'keyup',
+                    keyboard
+                ) as unknown as Event
+            );
+        });
+        assert.equal(
+            down.defaultPrevented,
+            true,
+            `${key}: Mod-b was not handled`
+        );
+    };
+    const expectedWrites: string[] = [];
+    for (const key of ['b', 'B'] as const) {
+        await f.select(view, 1, 6);
+        assert.equal(f.window.getSelection()?.toString(), 'Alpha');
+        assert.equal(view.state.selection.from, 1);
+        assert.equal(view.state.selection.to, 6);
+        assert.equal(view.state.doc.textBetween(1, 6), 'Alpha');
+        assert.equal(view.hasFocus(), true);
+        assert.equal(view.composing, false);
+        await press(key);
+        expectedWrites.push('**Alpha** word');
+        assert.equal(view.dom.querySelector('strong')?.textContent, 'Alpha');
+        assert.deepEqual(writes, expectedWrites);
+        assert.equal(ref.current, editor);
+        assert.equal(editor.view, view);
+        assert.equal(view.state.selection.from, 1);
+        assert.equal(view.state.selection.to, 6);
+
+        await press(key);
+        expectedWrites.push('Alpha word');
+        assert.equal(view.dom.querySelector('strong'), null);
+        assert.deepEqual(writes, expectedWrites);
+        assert.equal(ref.current, editor);
+        assert.equal(editor.view, view);
+    }
 });
 
 it('serializes a real checkbox transaction to the canonical stored checkbox syntax', async (t) => {

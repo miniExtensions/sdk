@@ -873,3 +873,32 @@ These authored proofs are not executed evidence until exact-head CI passes. No r
 credential, OTP, provider, account, storage/session installation or native Form/Portal
 acceptance is part of these SDK proofs. Native thin-wrapper request/continuation,
 full existing host tests and supported composition/host acceptance remain later work.
+
+## Complete Address qualification
+
+`reactCompleteAddressAutocomplete.test.ts` exercises the real component and
+public lifecycle hook: raw debounce, exact/forged/stale options, selection/detail
+order, committed writers and capped unchanged echoes, external replacement,
+session/field/read-scope A→B→A, stale Retry, cancellation, StrictMode/unmount, synchronous abort-listener owner/unmount/edit reentrancy,
+discarded render callbacks, disabled/readOnly retirement,
+controlled null/text, actual refs, keyboard selection, mobile Clear, ARIA/form,
+portable attribution and supplied Spanish/Japanese status/retry labels. The
+existing request engine and DOM control suites retain their independent policy.
+
+The mandatory package check registers `complete-address-consumer-checks.mjs`
+for cold installed React 18/19 ESM/CommonJS, strict positive/negative types,
+SSR/hydration, DOM editing, read cancellation, Clear/ref and stylesheet exports.
+The native Chromium owner registers `complete-address-browser-checks.mjs` for
+trusted keyboard/Tab/Clear, standalone option/attribution geometry, narrow
+editing, owner replacement and explicit prediction/detail retries with localized
+UI. It records installed input/bundle/CSS hashes and owned cleanup. All reads
+are synthetic callback adapters; external network is refused. These registered
+assertions do not themselves claim executed proof or native Form/Save/provider
+persistence, fixture acceptance, OS IME or a screen-reader pass.
+
+Headless UI 1.7.2 is a build-only dependency. The frozen private Combobox and
+Transition closure uses the same consumer-React binding as the existing Phone
+vendor. The build/source gate regenerates its unchanged upstream closure and
+permits only the documented React-peer substitution; it never imports the
+unrelated Portal/ReactDOM initialization graph into generic React source tests.
+The full license and Google attribution policy remain in third-party notices.

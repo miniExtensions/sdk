@@ -1,3 +1,4 @@
+import { checkCompleteAddressBrowser } from './complete-address-browser-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -2116,6 +2117,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeCalendly,
+            output,
+        });
+        report.completeAddress = {};
+        await checkCompleteAddressBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeAddress,
             output,
         });
         report.completeVerification = {};

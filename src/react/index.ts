@@ -1,4 +1,14 @@
 export {
+    CompleteAddressAutocomplete,
+    type CompleteAddressAutocompleteProps,
+    type AddressAutocompleteLabels,
+} from './CompleteAddressAutocomplete.js';
+export {
+    useAddressAutocomplete,
+    type AddressAutocompleteIdentity,
+    type AddressAutocompleteLifecycleProps,
+} from './useAddressAutocomplete.js';
+export {
     CompleteReadOnlyTextField,
     type CompleteReadOnlyTextFieldProps,
     type CompleteReadOnlyTextLanguage,

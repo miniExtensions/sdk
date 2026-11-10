@@ -23,12 +23,12 @@ importers:
       '@trpc/server':
         specifier: 11.0.0-rc.382
         version: 11.0.0-rc.382
-      copy-to-clipboard:
-        specifier: 3.3.3
-        version: 3.3.3
       chart.js:
         specifier: 4.4.2
         version: 4.4.2
+      copy-to-clipboard:
+        specifier: 3.3.3
+        version: 3.3.3
       dompurify:
         specifier: 2.4.7
         version: 2.4.7
@@ -138,6 +138,9 @@ importers:
         specifier: 1.0.39
         version: 1.0.39
     devDependencies:
+      '@headlessui/react':
+        specifier: 1.7.2
+        version: 1.7.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@types/dompurify':
         specifier: 2.4.0
         version: 2.4.0
@@ -364,6 +367,13 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@headlessui/react@1.7.2':
+    resolution: {integrity: sha512-snLv2lxwsf2HNTOBNgHYdvoYZ3ChJE8QszPi1d/hl9js8KrFrUulTaQBfSyPbJP5BybVreWh9DxCgz9S0Z6hKQ==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: ^16 || ^17 || ^18
+      react-dom: ^16 || ^17 || ^18
+
   '@istanbuljs/schema@0.1.6':
     resolution: {integrity: sha512-+Sg6GCR/wy1oSmQDFq4LQDAhm3ETKnorxN+y5nbLULOR3P0c14f2Wurzj3/xqPXtasLFfHd5iRFQ7AJt4KH2cw==}
     engines: {node: '>=8'}
@@ -502,6 +512,7 @@ packages:
 
   character-reference-invalid@1.1.4:
     resolution: {integrity: sha512-mKKUkUbhPpQlCOfIuZkvSEgktjPFIsZKRRbC6KWVEMvlzblj3i3asQv5ODsrwt0N3pHAEvjP8KTQPHkp0+6jOg==}
+
   chart.js@4.4.2:
     resolution: {integrity: sha512-6GD7iKwFpP5kbSD4MeRRRlTnQvxfQREy36uEtm1hzHzcOqwWx0YEHuspuoNlslu+nciLIB7fjjsHkUv/FzFcOg==}
     engines: {pnpm: '>=8'}
@@ -1282,6 +1293,11 @@ snapshots:
   '@esbuild/win32-x64@0.25.10':
     optional: true
 
+  '@headlessui/react@1.7.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
+
   '@istanbuljs/schema@0.1.6': {}
 
   '@jridgewell/resolve-uri@3.1.2': {}
@@ -1411,6 +1427,7 @@ snapshots:
   character-entities@1.2.4: {}
 
   character-reference-invalid@1.1.4: {}
+
   chart.js@4.4.2:
     dependencies:
       '@kurkle/color': 0.3.4

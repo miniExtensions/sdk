@@ -1,0 +1,5 @@
+{
+    "source": "@headlessui/react@1.7.2",
+    "sha256": "baf568b087b520bf85e746cb60be1f7afd6b91b094fbdb01bd6eee01be572538",
+    "adaptation": "Replace external React require with the already-bound consumer peer; no vendor behavior changes."
+}

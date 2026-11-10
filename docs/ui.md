@@ -4838,6 +4838,17 @@ access, change a session or submit a Form.
 import { PortalSearchGate } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/search-gate.css';
 
+// Application-owned navigation, matching the native Clear policy.
+function clearSearchParameters() {
+    const url = new URL(window.location.href);
+    const keys: string[] = [];
+    url.searchParams.forEach((_value, key) => keys.push(key));
+    for (const key of keys) {
+        if (key.startsWith('search_')) url.searchParams.delete(key);
+    }
+    window.location.href = url.toString();
+}
+
 // The application has already decided that its qualified Portal needs the gate.
 <PortalSearchGate
     searchPageField={{ fieldId: 'fld_name', fieldName: 'Customer name' }}
@@ -4848,7 +4859,7 @@ import '@miniextensions/sdk/react/search-gate.css';
     onNavigate={(url) => {
         window.location.href = url;
     }}
-    onClearSearch={clearNativeSearchParameters}
+    onClearSearch={clearSearchParameters}
 />;
 ```
 

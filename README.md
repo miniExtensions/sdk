@@ -306,6 +306,14 @@ order, duplicates, blank names, whitespace and native arrays and objects. Maskin
 precedes value access; no identity lookup, email/ID fallback, avatar, picker or
 editing is added.
 
+[Complete Collaborator fields](docs/complete-collaborators.md) export
+`CompleteSingleCollaboratorField` and `CompleteMultipleCollaboratorsField` with
+the actual searchable picker, native object proposals, badges, explicit avatar
+policy, keyboard/pointer interaction, readonly UI and packaged CSS. Supplied
+offered choices remain separate from stored values; the current owner and
+canonical writer remain caller-owned. These APIs do not create identities or
+replace the display-only collaborator APIs above.
+
 [Rich Text presentation](docs/ui.md#react-rich-text-presentation) exports
 `RichTextField`, `RichTextFieldProps`, `RichTextFieldOptions` and
 `renderRichTextField` for the existing physical slot. It displays supplied Markdown

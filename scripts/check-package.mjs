@@ -373,6 +373,7 @@ import { checkSelectConditions } from './select-condition-checks.mjs';
 import { checkBrowserChildQueryExample } from './browser-child-query-example-checks.mjs';
 import assert from 'node:assert/strict';
 import { checkCompletePortalChartReactMatrix } from './complete-portal-chart-consumer-checks.mjs';
+import { checkCompleteCollaboratorReactMatrix } from './complete-collaborator-consumer-checks.mjs';
 import { execFileSync } from 'node:child_process';
 import {
     cpSync,
@@ -546,6 +547,7 @@ try {
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
                 path === 'docs/complete-rich-text.md' ||
+                path === 'docs/complete-collaborators.md' ||
                 browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/') ||
@@ -577,6 +579,8 @@ try {
         'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-portal-chart.css',
         'dist/cjs/react/complete-portal-chart.css',
+        'dist/esm/react/complete-collaborators.css',
+        'dist/cjs/react/complete-collaborators.css',
         'dist/esm/react/complete-calendly.css',
         'dist/cjs/react/complete-calendly.css',
         'dist/esm/react/complete-verification.css',
@@ -3208,6 +3212,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(portalChartMatrix.profiles.length, 4);
     assert.equal(portalChartMatrix.cleanup, 'completed');
+    const collaboratorMatrix = checkCompleteCollaboratorReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(collaboratorMatrix.profiles.length, 4);
+    assert.equal(collaboratorMatrix.cleanup, 'completed');
     const htmlDescriptionMatrix = checkHTMLDescriptionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),

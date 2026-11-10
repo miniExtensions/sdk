@@ -76,7 +76,7 @@ for (const api of [esm, cjs]) {
     let mountedRoot;
     let recoverableErrors = [];
     try {
-        let value = '  +233 20 <em>not markup</em> & "desk"  ';
+        let value = '  +233 20 123 4567 & "desk"  ';
         let emptyLabel = 'لا توجد قيمة';
         let parentClicks = 0;
         const node = () => React.createElement('div', { onClick: () => parentClicks++ },
@@ -84,6 +84,12 @@ for (const api of [esm, cjs]) {
                 className: 'consumer-phone', linkClassName: 'consumer-link' }),
             React.createElement('input', { 'aria-label': 'Adjacent', defaultValue: 'Keep adjacent' }));
         const html = renderToString(node());
+        // Parsed attributes in Happy DOM 20 leave angle entities encoded.
+        // Check SSR bytes independently; raw CSR hrefs are asserted below.
+        const escaped = renderToString(React.createElement(Component, {
+            value: '<em>not markup</em> & "desk"', emptyLabel,
+        }));
+        assert(escaped.includes('href="tel:&lt;em&gt;not markup&lt;/em&gt; &amp; &quot;desk&quot;"'));
         const container = window.document.createElement('div');
         container.innerHTML = html;
         window.document.body.append(container);
@@ -115,7 +121,7 @@ for (const api of [esm, cjs]) {
             assert.equal(adjacent.value, 'Retain neighboring draft');
             assert.equal(requests, 0);
         };
-        for (value of ['  +44 (20) 7946-0958  ', 'not a phone', 'tel:+14155552671', '+233201234567']) {
+        for (value of ['  +44 (20) 7946-0958  ', 'not a phone', 'tel:+14155552671', '<em>not markup</em> & "desk"', '+233201234567']) {
             await publish();
             const link = container.querySelector('a');
             assert.equal(link, originalAnchor);
@@ -123,6 +129,7 @@ for (const api of [esm, cjs]) {
             assert.equal(link.getAttribute('href'), 'tel:' + value);
             assert.equal(link.getAttribute('target'), '_blank');
             assert.equal(link.getAttribute('rel'), 'noreferrer');
+            assert.equal(container.querySelector('em,script,img,iframe'), null);
         }
         let observedDefaultPrevented;
         let hostClicks = 0;

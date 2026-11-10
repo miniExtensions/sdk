@@ -4925,8 +4925,8 @@ import { CompleteReadOnlyPhoneNumberField } from '@miniextensions/sdk/react';
 import '@miniextensions/sdk/react/complete-phone.css';
 
 <CompleteReadOnlyPhoneNumberField
-    value={savedPhone}
-    emptyLabel={localizedNoValue}
+    value="+233 20 123 4567"
+    emptyLabel="No saved phone"
 />;
 ```
 

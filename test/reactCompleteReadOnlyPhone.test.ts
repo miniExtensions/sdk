@@ -81,7 +81,13 @@ it('server-renders the saved telephone text and href literally without markup in
         const link = window.document.querySelector('a');
         assert.ok(link);
         assert.equal(link.textContent, value);
-        assert.equal(link.getAttribute('href'), `tel:${value}`);
+        // Happy DOM 20 only decodes quote/amp entities in parsed attributes.
+        // Assert the actual SSR serialization here; CSR below asserts raw DOM.
+        assert.ok(
+            html.includes(
+                'href="tel:  +1 (202) 555-0100 &lt;em&gt;extension&lt;/em&gt; &amp; &quot;desk&quot;  "'
+            )
+        );
         assert.equal(link.getAttribute('target'), '_blank');
         assert.equal(link.getAttribute('rel'), 'noreferrer');
         assert.equal(
@@ -129,7 +135,12 @@ it('uses the localized empty message only for null, undefined or the empty strin
         assert.equal(f.container.textContent, emptyLabel);
         assert.equal(f.container.querySelector('a'), null);
     }
-    for (const value of ['   ', 'not a phone', '0044 020-0000 ext. 42']) {
+    for (const value of [
+        '   ',
+        'not a phone',
+        '0044 020-0000 ext. 42',
+        '<em>not markup</em> & "desk"',
+    ]) {
         await f.render(
             h(CompleteReadOnlyPhoneNumberField, { value, emptyLabel })
         );
@@ -138,6 +149,7 @@ it('uses the localized empty message only for null, undefined or the empty strin
         assert.equal(link.textContent, value);
         assert.equal(link.getAttribute('href'), `tel:${value}`);
         assert.equal(f.container.querySelector('input,select,button'), null);
+        assert.equal(f.container.querySelector('em,script,img,iframe'), null);
     }
     await f.render(
         h(CompleteReadOnlyPhoneNumberField, {

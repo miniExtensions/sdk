@@ -8,12 +8,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const searchGateTypedConsumer = `
 import {createElement,type ComponentProps} from 'react';
-import {PortalSearchGate,usePortalSearchGate} from '@miniextensions/sdk/react';
+import {PortalSearchGate,usePortalSearchGate,type PortalSearchGateDialogProps} from '@miniextensions/sdk/react';
 import {getSearchPageQueryKeys,getSearchPageSubmissionUrl,hasSearchPageQueryParam,type PortalSearchGateField} from '@miniextensions/sdk/portals';
 const field:PortalSearchGateField={fieldId:'fld_name',fieldName:'Customer name'};
 type Props=ComponentProps<typeof PortalSearchGate>;
 const props:Props={searchPageField:field,title:null,description:'Find {fieldName}',noResultsMessage:'',hasNoResults:true,getCurrentUrl:()=> 'https://example.test/?keep=yes#fragment',onNavigate(url){const next:string=url;void next;},onClearSearch(){},accentColor:'#4f46e5',focusColor:'#6366f1',reservedInlineEndWidth:'440px',headerActions:createElement('button',{type:'button'},'Settings')};
 createElement(PortalSearchGate,props);
+function shell({children,ariaLabel,descriptionId,initialFocus,description}:PortalSearchGateDialogProps){
+ const current:HTMLInputElement|null=initialFocus.current;
+ void current;void description;
+ return createElement('section',{role:'dialog','aria-label':ariaLabel,'aria-describedby':descriptionId},children);
+}
+createElement(PortalSearchGate,{...props,renderDialog:shell});
 function hook(){const state=usePortalSearchGate(props);const submitted:boolean=state.submit();state.clear();return submitted;}
 const keys=getSearchPageQueryKeys(field);
 const url:string=getSearchPageSubmissionUrl({currentUrl:'https://example.test',searchPageField:field,searchTerm:' value '});
@@ -199,10 +205,49 @@ async function checkInstalled(directory, happyDomModulePath) {
                 host.querySelector('button[type=submit]').textContent,
                 'Search Again'
             );
+            props = {
+                ...props,
+                renderDialog({ children, ariaLabel, descriptionId }) {
+                    return React.createElement(
+                        'section',
+                        {
+                            role: 'dialog',
+                            'aria-label': ariaLabel,
+                            'aria-describedby': descriptionId,
+                        },
+                        children
+                    );
+                },
+            };
+            await act(async () => root.render(element()));
+            assert.equal(host.querySelector('dialog'), null);
+            assert.equal(host.querySelectorAll('form').length, 1);
+            assert.equal(host.querySelectorAll('input').length, 1);
+            assert.equal(
+                host.querySelector('[role=dialog]').getAttribute('aria-label'),
+                'Search'
+            );
+            const shellInput = host.querySelector('input');
+            await act(async () => {
+                Object.getOwnPropertyDescriptor(
+                    window.HTMLInputElement.prototype,
+                    'value'
+                ).set.call(shellInput, '  shell value  ');
+                shellInput.dispatchEvent(
+                    new window.Event('input', { bubbles: true })
+                );
+            });
+            await submit();
+            assert.equal(navigations.length, 2);
+            assert.equal(
+                new URL(navigations[1]).searchParams.get('search_Other'),
+                'shell value'
+            );
+            assert.equal(reads, 2);
             await act(async () => root.unmount());
             root = undefined;
             assert.equal(host.querySelector('dialog'), null);
-            assert.equal(reads, 1);
+            assert.equal(reads, 2);
             assert.equal(clears, 1);
             groups++;
         } finally {

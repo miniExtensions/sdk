@@ -1216,10 +1216,15 @@ import {CompleteRichTextEditor} from '@miniextensions/sdk-rich-text-reference/re
 import {CompleteHTMLRenderer,CompleteQuillHTMLRenderer,CompleteTruncatedDescription} from '@miniextensions/sdk/react/html';
 const markdown = '# Style heading\n\n**Strong** *Emphasis*\n\n- Ordinary list\n\n1. Ordered list\n\n[Owned link](#owned)\n\n- [x] Checked item';
 const editorRef = React.createRef();
-const state = {value:markdown,writes:[],generation:0,errors:[],requests:0,submits:0};
+const state = {value:markdown,writes:[],generation:0,errors:[],requests:0,submits:0,cspViolations:[]};
+const styleNonce = __webpack_nonce__;
 let root,savedDOM;
 window.addEventListener('error',(event) => state.errors.push(String(event.error || event.message)));
 window.addEventListener('unhandledrejection',(event) => state.errors.push(String(event.reason)));
+window.addEventListener('securitypolicyviolation',(event) => state.cspViolations.push({
+    effectiveDirective:event.effectiveDirective,blockedURI:event.blockedURI,
+    disposition:event.disposition,sourceFile:event.sourceFile,lineNumber:event.lineNumber,
+}));
 window.fetch = async () => {state.requests++;throw Error('No reference fixture fetch');};
 XMLHttpRequest.prototype.open = function () {state.requests++;throw Error('No reference fixture XHR');};
 function attached() {
@@ -1255,8 +1260,13 @@ function metrics() {
 }
 function snapshot() {
     const dom = editorRef.current?.view?.dom;
+    const styleSheets = [...document.querySelectorAll('style[data-me-sdk-rich-text][data-styled-version="5.3.11"]')].map((node) => ({
+        nonceMatches:node.nonce === styleNonce,hasSheet:!!node.sheet,
+        ruleCount:node.sheet?.cssRules.length ?? null,
+    }));
     return {...state,writes:[...state.writes],errors:[...state.errors],reactVersion:React.version,
-        attached:attached(),sameDOM:savedDOM === dom,text:dom?.textContent ?? null,metrics:metrics()};
+        attached:attached(),sameDOM:savedDOM === dom,text:dom?.textContent ?? null,metrics:metrics(),
+        styleSheets,cspViolations:[...state.cspViolations]};
 }
 window.__nativeProbe = {snapshot};
 function EditorHolder() {
@@ -1294,6 +1304,14 @@ export async function checkHTMLDescriptionEditorStyleCoexistence({
 }) {
     await page.waitForFunction(() => {
         const value = window.__nativeProbe?.snapshot();
+        if (value?.errors.length || value?.cspViolations.length)
+            throw new Error(
+                'Reference editor initialization failed: ' +
+                    JSON.stringify({
+                        errors: value.errors,
+                        cspViolations: value.cspViolations,
+                    })
+            );
         return (
             value?.attached === true &&
             value.metrics &&
@@ -1308,6 +1326,14 @@ export async function checkHTMLDescriptionEditorStyleCoexistence({
     assert.equal(before.reactVersion, htmlDescriptionRichTextReference.react);
     assert.equal(before.attached, true);
     assert.deepEqual(before.writes, []);
+    assert.deepEqual(before.cspViolations, []);
+    assert(before.styleSheets.length > 0);
+    assert(
+        before.styleSheets.every(
+            (style) => style.nonceMatches && style.hasSheet
+        )
+    );
+    assert(before.styleSheets.some((style) => style.ruleCount > 0));
     for (const [name, value] of Object.entries(before.metrics))
         assert(value, 'Actual editor node missing: ' + name);
     assert.equal(before.metrics.link.color, 'rgb(18, 52, 86)');
@@ -1348,6 +1374,10 @@ export async function checkHTMLDescriptionEditorStyleCoexistence({
         'HTML stylesheet/controls must not restyle real sibling editor nodes'
     );
     assert.deepEqual(after.errors, []);
+    assert.deepEqual(after.cspViolations, []);
+    assert(
+        after.styleSheets.every((style) => style.nonceMatches && style.hasSheet)
+    );
     assert.equal(after.requests, 0);
     assert.equal(after.submits, 0);
     await page.evaluate(() => window.__htmlEditorReference.resetEditor());

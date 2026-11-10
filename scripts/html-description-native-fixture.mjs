@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -212,6 +213,10 @@ export async function prepareHTMLDescriptionNativeFixtures({
             css,
             'Reference consumer must use the same tested candidate stylesheet'
         );
+        // The actual reference editor uses styled-components. Admit only its
+        // owned per-fixture style nonce; other documents and network guards
+        // retain their existing policy. Never enable unsafe-inline/bypassCSP.
+        const styleNonce = randomBytes(18).toString('base64');
         const referenceEntry = join(directory, 'html-editor-reference.mjs');
         writeFileSync(
             referenceEntry,
@@ -229,7 +234,10 @@ export async function prepareHTMLDescriptionNativeFixtures({
             outfile: join(directory, 'html-editor-reference.js'),
             metafile: true,
             legalComments: 'none',
-            define: { 'process.env.NODE_ENV': '"production"' },
+            define: {
+                'process.env.NODE_ENV': '"production"',
+                __webpack_nonce__: JSON.stringify(styleNonce),
+            },
         });
         const referenceInputs = recordInputs({
             metafile: referenceBundle.metafile,
@@ -257,6 +265,8 @@ export async function prepareHTMLDescriptionNativeFixtures({
             candidateCssSha256: hash(css),
             bundleSha256: hash(referenceCode),
             bundleInputs: referenceInputs,
+            stylePolicy:
+                'Dedicated reference-only style-src self plus random nonce; no unsafe-inline or browser CSP bypass; candidate HTML and all other fixture policies unchanged',
             scope: 'Real immutable public sibling editor plus candidate HTML; stylesheet coexistence, not a combined SDK or One product qualification',
         };
         allowed.set('/html-editor-reference.js', referenceCode);
@@ -268,7 +278,7 @@ export async function prepareHTMLDescriptionNativeFixtures({
         allowed.set(
             '/html-editor-reference.html',
             Buffer.from(
-                `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Real editor and HTML stylesheet coexistence</title><link rel="stylesheet" href="/html-editor-reference.css"><link rel="stylesheet" href="/html-editor-reference-fixture.css"></head><body><div id="root"></div><script type="module" src="/html-editor-reference.js"></script></body></html>`
+                `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'nonce-${styleNonce}'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Real editor and HTML stylesheet coexistence</title><link rel="stylesheet" href="/html-editor-reference.css"><link rel="stylesheet" href="/html-editor-reference-fixture.css"></head><body><div id="root"></div><script type="module" src="/html-editor-reference.js"></script></body></html>`
             )
         );
     }

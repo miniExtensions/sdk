@@ -4826,6 +4826,86 @@ the same accepted visible detail/schema policy as cells. Headers preserve accept
 order even with zero rows; no first-row values or cached records are consulted.
 Explicit empty, missing or null detail projections expose no columns.
 
+## Complete native-compatible Duration field
+
+`CompleteDurationField` from `@miniextensions/sdk/react` is the complete
+controlled clock editor, including its draft/focus/blur behavior, clock icon,
+labels, feedback and optional scoped stylesheet. It requires neither native
+application JSX nor Tailwind. Canonical data, authorization, visibility and Save
+remain with the caller. Importing the React entry does not import CSS or access
+the DOM; the component also supports server rendering.
+
+```tsx
+import {
+    CompleteDurationField,
+    type CompleteDurationFieldProps,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-duration.css';
+
+export function ElapsedTime(props: CompleteDurationFieldProps) {
+    return (
+        <CompleteDurationField
+            {...props}
+            title="Elapsed time"
+            format="h:mm:ss.SSS"
+            clearLabel="Clear elapsed time"
+        />
+    );
+}
+```
+
+Supply `fieldId`, `sessionId`, canonical `value: number | null`, authorized
+`onChange(seconds)` and the actual `owner: { token, isCurrent }`. The token is a
+committed owner/configuration generation, not a reversible value hash. Preserve
+it across value echoes; replace it for actual record, policy or visibility
+retirement. The host's callback must still perform its own final authorization
+check. Returning `false` refuses an edit. No client, second canonical draft,
+subscription or Save writer is constructed by the field.
+
+`inputId` defaults to a React-generated ID; `formId` defaults to
+`form-${sessionId}`. `showLabel: false` lets an existing enclosing native label
+own the association. `description`, `error`, `invalid` and `describedBy` retain
+accessible feedback, including external description/error IDs. The placeholder
+defaults to the format; `readOnly` disables the input as in the native field.
+The native clock has no dedicated Clear button. The optional `clearLabel` adds
+a localized, non-submit button; keyboard deletion always commits `null`.
+
+This API deliberately differs from existing `DurationField`,
+`renderDurationField`, `createDurationFieldModel` and their strict Tables
+grammar. Those controls and exports are unchanged. The complete field reuses
+the public formula helpers `isDurationInputText`, `parseDurationInputSeconds`
+and `getFormattedDuration`, then passes only finite canonical seconds to the
+Number scalar action. It supports `h:mm`, `h:mm:ss`, `.S`, `.SS` and `.SSS`:
+
+| Input                                    | Native-compatible meaning                                             |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| Empty / `0`                              | `null` / numeric zero                                                 |
+| Bare `7`                                 | 420 seconds in `h:mm`; 7 seconds otherwise                            |
+| `-1:01:20.125`                           | -3680.125 seconds                                                     |
+| `25:72`                                  | Overflow normalization: 94320 seconds in `h:mm`, 1572 otherwise       |
+| `-` or `1:`                              | Accepted partial text commits zero while preserving the focused draft |
+| Malformed characters or nonfinite result | Refused, no canonical write                                           |
+
+The `1:` behavior follows the native helper and pinned Moment normalization;
+it is not the strict Duration parser's refusal contract. Focused text/caret
+survive canonical echoes and equivalent metadata. A changed format refreshes
+from canonical seconds. Blur reformats without a second canonical write.
+Field/session/format/owner replacement retires old callbacks; unmount performs
+no commit. Inputs remain editable during an already-allocated native Save if
+the current owner and `readOnly` policy permit it.
+
+For custom presentation, public `useDurationInputAdapter` from `/react` and
+`createDurationInputAdapter` from `/ui` expose the same canonical admission.
+The complete component already owns its field-local draft and lease; a native
+thin wrapper must not retain another copy. The headless adapter's `read` and
+`isCurrent` ports must describe the captured lifetime, including observed ABA;
+they cannot create access rights.
+
+Source tests and normal installed ESM/CommonJS/React 18/19 consumers cover this
+separate contract. Packed native Chromium proof exercises the actual optional
+CSS and field interactions. These synthetic checks are not native Form/Portal
+child adoption, stored-record/reopen acceptance or live authorization evidence.
+
 ## Complete localized numeric fields
 
 `CompleteLocalizedNumericField` packages the Number, Currency and Percent input,
@@ -4908,3 +4988,95 @@ credential control. Native numeric producers do not expose Text password masks;
 the application's separate login input retains its masking policy. A host with
 additional active renderer policies must qualify that cohort independently
 instead of assuming that the shared renderer-data type establishes equivalence.
+
+## Complete editable Phone field
+
+`CompletePhoneNumberField` is the complete native-compatible Phone editor in
+`@miniextensions/sdk/react`. It owns plain literal input and the actual country
+picker, international formatter, Unicode flags, mobile Clear and transient edit
+lifetime. Import `@miniextensions/sdk/react/complete-phone.css`; no application
+CSS, native renderer slot, client or second canonical store is required.
+
+```tsx
+import { useState } from 'react';
+import { CompletePhoneNumberField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-phone.css';
+
+export function StandalonePhone() {
+    const [phone, setPhone] = useState<string | undefined>('+233201234567');
+    return (
+        <CompletePhoneNumberField
+            value={phone}
+            showCountryCodes
+            defaultCountry="GH"
+            clearLabel="Clear phone"
+            input={{ 'aria-label': 'Phone' }}
+            onValueChange={(next) => setPhone(next)}
+        />
+    );
+}
+```
+
+Country mode emits the frozen native vendor's canonical string or undefined;
+plain mode preserves literal strings, including ''. Defaults, hints and mounting
+do not normalize existing saved values. Readonly/disabled mode disables both the
+input and country selector. `input` supplies the actual textbox's id, name, form,
+placeholder and accessibility metadata; `inputRef` forwards its real DOM ref.
+The SDK accepts host-localized `clearLabel` while native country labels remain
+English. Unicode flags do not introduce remote flag-image requests.
+
+Use `commit="deferred"` only with a `CompletePhoneEditOwner` supplied by the host
+that owns the real session, field, record, table and policy. Its opaque token must
+renew for a target/policy generation, including A→B→A; `isCurrent()` checks the
+original authority. Typing stays local until blur, non-IME Enter or an explicitly
+admitted unmount. Country selection remains immediate. `settleOnUnmount={false}`
+discards pending work. The host still owns canonical Save and persistence.
+
+Clear intentionally retains the native vendor behavior: its button can re-emit
+the existing canonical country number while the deferred display becomes blank.
+Plain mode clears to ''. It neither submits a form nor refocuses/remounts the
+textbox. This compatibility behavior is separate from deliberately replacing a
+saved number with an empty value. Stale continuations cannot adopt a successor
+owner. Hint, ARIA and callback rerenders do not define a new input lifetime.
+
+The private runtime freezes react-phone-number-input3.3.9,
+libphonenumber-js1.10.57 and input-format0.3.9, their metadata and license closure.
+Both module formats use that same private runtime; consumer parser overrides do
+not select different parsing code. No private vendor import is a customer API.
+The existing literal-draft `PhoneNumberField` contract remains unchanged.
+
+## Complete read-only Phone presentation
+
+The optional `@miniextensions/sdk/react` entry exports
+`CompleteReadOnlyPhoneNumberField` and
+`CompleteReadOnlyPhoneNumberFieldProps`. This complete presentation renders an
+existing saved telephone string as native link text and an unchanged `tel:`
+href, with `target="_blank"`, `rel="noreferrer"` and stopped parent click
+propagation. It does not parse, normalize, validate or resolve the value. The
+host supplies the localized empty message for null, undefined and empty string.
+Whitespace-only and malformed saved strings remain literal nonempty values.
+
+```tsx
+import { CompleteReadOnlyPhoneNumberField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-phone.css';
+
+<CompleteReadOnlyPhoneNumberField
+    value="+233 20 123 4567"
+    emptyLabel="No saved phone"
+/>;
+```
+
+Optional `className` applies to the wrapper or empty-state paragraph, and
+`linkClassName` applies to the anchor. Hosts may retain existing cell/list layout classes;
+those layout-specific line clamps remain outside this standalone component.
+The SDK stylesheet supplies base wrapping and overflow behavior on its own.
+
+The stylesheet supplies the link and empty-state presentation without Tailwind,
+application aliases, injected native controls or another package dependency.
+The component owns no client, store, writer or network operation. It is SSR-safe;
+the browser or operating system owns the eventual telephone action.
+
+This export is separate from the existing literal-draft `PhoneNumberField`.
+It adds no country picker, phone formatting, editing, Clear or deferred commit
+behavior, and does not change those legacy APIs. Native Form/Grid ownership and
+backend persistence remain separate application responsibilities.

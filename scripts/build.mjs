@@ -22,18 +22,29 @@ import {
     richTextRuntimeFilter,
 } from './rich-text-vendor-checks.mjs';
 
+import {
+    assertPhoneVendor,
+    phoneRuntimeFilter,
+} from './phone-vendor-checks.mjs';
+
 const require = createRequire(import.meta.url);
 const compiler = require.resolve('typescript/bin/tsc');
 assertRichTextVendor();
+assertPhoneVendor();
 
 for (const directory of ['dist/esm', 'dist/cjs', 'dist/vendor']) {
     rmSync(directory, { recursive: true, force: true });
 }
 
-// One private CommonJS engine shared by both formats. Never distribute source maps.
-cpSync('vendor', 'dist/vendor', {
+// Each private CommonJS closure is shared by both output formats. Keep its
+// owning filter so one vendor's excluded files cannot enter through the other.
+cpSync('vendor/rich-markdown-editor', 'dist/vendor/rich-markdown-editor', {
     recursive: true,
     filter: richTextRuntimeFilter,
+});
+cpSync('vendor/phone-number-input', 'dist/vendor/phone-number-input', {
+    recursive: true,
+    filter: phoneRuntimeFilter,
 });
 
 for (const project of ['tsconfig.json', 'tsconfig.cjs.json']) {
@@ -141,6 +152,8 @@ for (const format of ['esm', 'cjs']) {
         'text',
         'number',
         'localized-numeric',
+        'complete-phone',
+        'complete-duration',
         'date',
         'datetime',
         'duration',

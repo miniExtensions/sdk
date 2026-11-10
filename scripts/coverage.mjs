@@ -8,12 +8,17 @@ import {
     assertRichTextVendor,
     richTextRuntimeFilter,
 } from './rich-text-vendor-checks.mjs';
+import {
+    assertPhoneVendor,
+    phoneRuntimeFilter,
+} from './phone-vendor-checks.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
 const output = 'dist/coverage-test';
 const mode = process.argv[2] ?? 'all';
 assertRichTextVendor(root);
+assertPhoneVendor(path.join(root, 'vendor/phone-number-input'));
 if (!['all', 'unit', 'component'].includes(mode)) {
     throw new Error('Expected all, unit, or component coverage.');
 }
@@ -39,11 +44,17 @@ run(require.resolve('typescript/bin/tsc'), [
     '--outDir',
     output,
 ]);
-// Match source-relative private engine imports in the isolated test output.
-await cp(path.join(root, 'vendor'), path.join(root, output, 'vendor'), {
-    recursive: true,
-    filter: richTextRuntimeFilter,
-});
+// Match both source-relative private closures without broadening either filter.
+await cp(
+    path.join(root, 'vendor/rich-markdown-editor'),
+    path.join(root, output, 'vendor/rich-markdown-editor'),
+    { recursive: true, filter: richTextRuntimeFilter }
+);
+await cp(
+    path.join(root, 'vendor/phone-number-input'),
+    path.join(root, output, 'vendor/phone-number-input'),
+    { recursive: true, filter: phoneRuntimeFilter }
+);
 const groups = { unit: [], component: [] };
 async function tests(directory, prefix = '') {
     const files = [];

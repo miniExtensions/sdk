@@ -43,6 +43,11 @@ import {
     completeClearableInputBrowserStyle,
     checkCompleteClearableInputBrowser,
 } from './complete-clearable-input-consumer-checks.mjs';
+import {
+    completeMultilineBrowserSource,
+    completeMultilineBrowserStyle,
+    checkCompleteMultilineBrowser,
+} from './complete-multiline-consumer-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1491,6 +1496,7 @@ try {
             'scripts/native-rating-fixture.css',
             'scripts/complete-readonly-text-consumer-checks.mjs',
             'scripts/complete-clearable-input-consumer-checks.mjs',
+            'scripts/complete-multiline-consumer-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -1873,6 +1879,87 @@ try {
             '/complete-clearable-input.html',
             Buffer.from(
                 `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Standalone complete clearable input</title><link rel="stylesheet" href="/complete-clearable-input.css"><link rel="stylesheet" href="/complete-clearable-input-fixture.css"></head><body><div id="root"></div><script type="module" src="/complete-clearable-input.js"></script></body></html>`
+            )
+        );
+        const multilineEntry = join(temporary, 'complete-multiline.mjs');
+        writeFileSync(multilineEntry, completeMultilineBrowserSource);
+        const multilineBundle = await build({
+            absWorkingDir: temporary,
+            entryPoints: [multilineEntry],
+            bundle: true,
+            platform: 'browser',
+            format: 'esm',
+            target: 'es2022',
+            outfile: join(temporary, 'complete-multiline.js'),
+            write: false,
+            metafile: true,
+            legalComments: 'none',
+            define: { 'process.env.NODE_ENV': '"production"' },
+        });
+        await assertBrowserInputs(multilineBundle.metafile, temporary);
+        const multilineInputs = Object.keys(multilineBundle.metafile.inputs);
+        assert(
+            multilineInputs.some((name) =>
+                name.endsWith('/react/CompleteMultilineTextField.js')
+            )
+        );
+        const multilineProofInputs = [];
+        for (const name of multilineInputs) {
+            const path = realpathSync(resolve(temporary, name));
+            const bytes = regular(path);
+            const item = {
+                path: relative(temporary, path),
+                sha256: hash(bytes),
+                bytes: bytes.length,
+            };
+            if (path.startsWith(installed + '/')) {
+                const member =
+                    'package/' +
+                    relative(installed, path).replaceAll('\\', '/');
+                assert.deepEqual(
+                    bytes,
+                    execFileSync('tar', ['-xOf', archive, member])
+                );
+                item.archiveMember = member;
+            }
+            multilineProofInputs.push(item);
+        }
+        const multilineConsumerRequire = createRequire(
+            join(temporary, 'package.json')
+        );
+        const multilineCssPath = realpathSync(
+            multilineConsumerRequire.resolve(
+                '@miniextensions/sdk/react/complete-multiline.css'
+            )
+        );
+        assert(multilineCssPath.startsWith(installed + '/'));
+        const multilineCss = regular(multilineCssPath);
+        const multilineCssMember =
+            'package/' +
+            relative(installed, multilineCssPath).replaceAll('\\', '/');
+        assert.deepEqual(
+            multilineCss,
+            execFileSync('tar', ['-xOf', archive, multilineCssMember])
+        );
+        const multilineCode = multilineBundle.outputFiles[0].contents;
+        report.completeMultiline = {
+            sourceSha256: hash(completeMultilineBrowserSource),
+            fixtureCssSha256: hash(completeMultilineBrowserStyle),
+            packagedCssSha256: hash(multilineCss),
+            packagedCssMember: multilineCssMember,
+            bundleSha256: hash(multilineCode),
+            bundleInputs: multilineProofInputs,
+        };
+        allowed.set('/complete-multiline.js', multilineCode);
+        allowed.set('/complete-multiline.css', multilineCss);
+        allowed.set(
+            '/complete-multiline-fixture.css',
+            Buffer.from(completeMultilineBrowserStyle)
+        );
+        allowed.set(
+            '/complete-multiline.html',
+            Buffer.from(
+                `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Standalone complete multiline</title><link rel="stylesheet" href="/complete-multiline.css"><link rel="stylesheet" href="/complete-multiline-fixture.css"></head><body><div id="root"></div><script type="module" src="/complete-multiline.js"></script></body></html>`
             )
         );
         allowed.set(
@@ -2556,6 +2643,13 @@ try {
             await checkCompleteClearableInputBrowser({
                 page,
                 evidence: report.completeClearableInput,
+            });
+        });
+        await run('complete-multiline', async (page, origin) => {
+            await page.goto(origin + '/complete-multiline.html');
+            await checkCompleteMultilineBrowser({
+                page,
+                evidence: report.completeMultiline,
             });
         });
         await run('literal-text-display', async (page, origin) => {
@@ -3481,7 +3575,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 22 + storageEventCases.length);
+        assert.equal(results.length, 23 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

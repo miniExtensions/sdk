@@ -732,3 +732,25 @@ queue/current-owner, Email and URL/overlay assembly remain separate host
 checks. Neither a frozen oracle nor a synthetic Save response establishes
 provider persistence, and extraction must not repair a pre-existing owner
 lifecycle by silently changing cleanup or Clear semantics.
+
+## Complete plain multiline qualification
+
+Keep the complete native-compatible multiline field separate from the legacy
+strict SDK multiline controller. Source comparisons use a frozen mechanical
+native presentation with the actual `TextareaInput` primitive, preserving
+selection-effect timing, raw limits, literal intermediate React changes and
+string clearing. Simulated composition and user-event UTF-16 paste observations
+are not OS IME or provider-persistence evidence.
+
+Cold installed-package checks exercise the actual public ESM/CommonJS exports,
+strict React 18/19 declarations, scoped CSS and SSR/hydration. The existing
+packed Chromium owner supplies real focus, selection, text/paste/resize and
+three-to-thirty-row geometry evidence with its unchanged archive/input checks,
+CSP, no-network policy and cleanup. Synthetic composition events remain labeled
+as such. Preserve the original strict controller and textarea suites unchanged.
+
+Native integration must retain the actual Form callback owner fence and qualify
+real Form and Portal-child callers with exact canonical strings, adjacent-field
+non-effects and explicit Save transport assertions. A frozen leaf oracle does
+not establish retained callback authority, authentication, backend handling or
+hosted persistence. Outstanding held hosted witnesses remain separate.

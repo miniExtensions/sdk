@@ -149,6 +149,7 @@ for (const format of ['esm', 'cjs']) {
         'complete-phone',
         'complete-readonly-text',
         'complete-clearable-text-input',
+        'complete-multiline',
         'complete-duration',
         'search-gate',
         'date',

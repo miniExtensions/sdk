@@ -349,6 +349,10 @@ import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkFormSaveIdentityConsumer } from './form-save-identity-consumer-checks.mjs';
+import {
+    checkFormSaveCoordinatorConsumer,
+    formSaveCoordinatorTypedConsumer,
+} from './form-save-coordinator-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import {
     checkPortalViewAvailabilityConsumer,
@@ -1341,6 +1345,7 @@ export function checkUiTypes(field: RuntimeFieldSchema, host: HTMLElement, clien
     model.reset({loadOptions: portalLoader});
     linked.destroy(); model.destroy(); native.destroy();
 }
+${formSaveCoordinatorTypedConsumer}
 import type { FormLoadedResult, RuntimeFieldSchema } from '@miniextensions/sdk';
 import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController, checkIfFormUrlIsValid, type FormSaveOptions, type FormOwnerScope } from '@miniextensions/sdk/forms';
 const formUrlValid: boolean = checkIfFormUrlIsValid('example.test');
@@ -3623,6 +3628,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     consumerDirectory: temporaryDirectory,
                 }),
                 19
+            );
+            assert.equal(
+                await checkFormSaveCoordinatorConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    run,
+                }),
+                2
             );
             const formSaveIdentityProof = await checkFormSaveIdentityConsumer({
                 consumerDirectory: temporaryDirectory,

@@ -99,6 +99,7 @@ import {
 } from './recoverable-image-consumer-checks.mjs';
 import { checkNativeEditorReactMatrix } from './native-rich-text-editor-consumer-checks.mjs';
 import { checkCompleteRichTextReactMatrix } from './complete-rich-text-consumer-checks.mjs';
+import { checkCompleteLocalizedNumericReactMatrix } from './complete-localized-numeric-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
     richTextSerializationTypedConsumer,
@@ -555,6 +556,8 @@ try {
         'dist/cjs/react/text.css',
         'dist/esm/react/number.css',
         'dist/cjs/react/number.css',
+        'dist/esm/react/localized-numeric.css',
+        'dist/cjs/react/localized-numeric.css',
         'dist/esm/react/date.css',
         'dist/cjs/react/date.css',
         'dist/esm/react/datetime.css',
@@ -3126,6 +3129,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(completeEditorMatrix.versions.length, 2);
     assert.equal(completeEditorMatrix.cleanup, 'completed');
+    const numericMatrix = checkCompleteLocalizedNumericReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(numericMatrix.versions.length, 2);
+    assert.equal(numericMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
             consumerDirectory: temporaryDirectory,

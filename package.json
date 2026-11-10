@@ -97,7 +97,8 @@
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
         "./react/linked-records.css": "./dist/esm/react/linked-records.css",
         "./react/single-select.css": "./dist/esm/react/single-select.css",
-        "./react/rich-text.css": "./dist/esm/react/rich-text.css"
+        "./react/rich-text.css": "./dist/esm/react/rich-text.css",
+        "./react/localized-numeric.css": "./dist/esm/react/localized-numeric.css"
     },
     "files": [
         "dist/esm",
@@ -158,6 +159,7 @@
         "fuzzy-search": "3.2.1",
         "gemoji": "6.1.0",
         "hoist-non-react-statics": "3.3.2",
+        "linkifyjs": "3.0.5",
         "lodash": "4.17.21",
         "markdown-it": "12.3.2",
         "markdown-it-container": "3.0.0",
@@ -185,13 +187,15 @@
         "resize-observer-polyfill": "1.5.1",
         "shallowequal": "1.1.0",
         "slugify": "1.6.6",
-        "smooth-scroll-into-view-if-needed": "1.1.33"
+        "smooth-scroll-into-view-if-needed": "1.1.33",
+        "ua-parser-js": "1.0.39"
     },
     "devDependencies": {
         "@types/moment-duration-format": "2.2.6",
         "@types/node": "22.20.5",
         "@types/react": "18.3.12",
         "@types/react-dom": "18.3.1",
+        "@types/ua-parser-js": "0.7.39",
         "c8": "11.0.0",
         "esbuild": "0.25.10",
         "happy-dom": "20.0.11",

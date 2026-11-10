@@ -28,6 +28,7 @@ import { checkTextareaInputBrowser } from './browser-textarea-input-checks.mjs';
 import { checkNumberInputMaskBrowser } from './browser-number-input-mask-checks.mjs';
 import { checkRadioInputBrowser } from './browser-radio-input-checks.mjs';
 import { checkCompleteRichTextBrowser } from './browser-complete-rich-text-checks.mjs';
+import { checkCompleteLocalizedNumericBrowser } from './browser-complete-localized-numeric-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1474,6 +1475,7 @@ try {
             'scripts/browser-number-input-mask-checks.mjs',
             'scripts/browser-textarea-input-checks.mjs',
             'scripts/browser-complete-rich-text-checks.mjs',
+            'scripts/browser-complete-localized-numeric-checks.mjs',
             'scripts/native-rating-fixture.css',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
@@ -1772,6 +1774,13 @@ try {
             evidence: report.textareaInput,
         });
         report.attachmentPresentation = {};
+        report.completeLocalizedNumeric = {};
+        await checkCompleteLocalizedNumericBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.completeLocalizedNumeric,
+            output,
+        });
         report.radioInput = {};
         await checkRadioInputBrowser({
             browser,

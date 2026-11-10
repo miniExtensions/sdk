@@ -6,9 +6,33 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 
 /** Freeze native 1.7.2 with the established consumer React binding. */
-export async function assertAddressCombobox() {
+export async function buildAddressCombobox(sourceRoot) {
+    const rebuilt = await build({
+        stdin: {
+            contents: `export {Combobox,Transition} from ${JSON.stringify(join(sourceRoot, 'dist/headlessui.esm.js'))};`,
+            resolveDir: process.cwd(),
+        },
+        bundle: true,
+        platform: 'neutral',
+        format: 'cjs',
+        target: 'es2022',
+        external: ['react', 'react-dom'],
+        write: false,
+        // Source-label comments depend on pnpm's symlink versus prepare layout.
+        // Whitespace-only minification retains identifiers and program behavior.
+        minifyWhitespace: true,
+        legalComments: 'none',
+    });
+    return rebuilt.outputFiles[0].text.replaceAll(
+        'require("react")',
+        'require("./react-peer.js").getReact()'
+    );
+}
+
+export async function assertAddressCombobox(sourceRoot) {
     const require = createRequire(import.meta.url);
-    const root = dirname(dirname(require.resolve('@headlessui/react')));
+    const root =
+        sourceRoot ?? dirname(dirname(require.resolve('@headlessui/react')));
     const metadata = JSON.parse(readFileSync(join(root, 'package.json')));
     assert.equal(metadata.version, '1.7.2');
     assert.equal(metadata.license, 'MIT');
@@ -31,24 +55,9 @@ export async function assertAddressCombobox() {
         createHash('sha256').update(bytes).digest('hex'),
         provenance.sha256
     );
-    const rebuilt = await build({
-        stdin: {
-            contents: "export {Combobox,Transition} from '@headlessui/react';",
-            resolveDir: process.cwd(),
-        },
-        bundle: true,
-        platform: 'neutral',
-        format: 'cjs',
-        target: 'es2022',
-        external: ['react', 'react-dom'],
-        write: false,
-    });
     assert.equal(
         bytes.toString(),
-        rebuilt.outputFiles[0].text.replaceAll(
-            'require("react")',
-            'require("./react-peer.js").getReact()'
-        ),
+        await buildAddressCombobox(root),
         'Address vendor must remain a mechanical native closure'
     );
     assert(!bytes.includes('require("react")'));

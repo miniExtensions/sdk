@@ -551,7 +551,15 @@ try {
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/') ||
                 path.startsWith('dist/vendor/rich-markdown-editor/') ||
-                path.startsWith('dist/vendor/phone-number-input/'),
+                path.startsWith('dist/vendor/phone-number-input/') ||
+                [
+                    'dist/vendor/headlessui-address/combobox.js',
+                    'dist/vendor/headlessui-address/package.json',
+                    'dist/vendor/headlessui-address/provenance.json',
+                    'dist/vendor/headlessui-address/react-peer.js',
+                    'dist/vendor/headlessui-address/sdk-runtime.d.ts',
+                    'dist/vendor/headlessui-address/sdk-runtime.js',
+                ].includes(path),
             `Unexpected packed file: ${path}`
         );
     }

@@ -902,3 +902,8 @@ vendor. The build/source gate regenerates its unchanged upstream closure and
 permits only the documented React-peer substitution; it never imports the
 unrelated Portal/ReactDOM initialization graph into generic React source tests.
 The full license and Google attribution policy remain in third-party notices.
+
+The Address vendor reproduction compares whitespace-only compiler output, with
+identifiers and code retained, so esbuild's dependency-path comments cannot tie
+a package to pnpm's symlink layout. A flat Git-prepare layout regression checks
+identical output and retains rejection of a modified upstream source file.

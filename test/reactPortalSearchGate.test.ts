@@ -571,7 +571,7 @@ it('delegates only the shell while retaining the real SDK prompt, draft, error a
                 'aria-modal': true,
                 'aria-label': ariaLabel,
                 'aria-describedby': descriptionId,
-                ref: (node: HTMLDivElement | null) => {
+                ref: (node: HTMLDivElement | null): void => {
                     if (node) initialFocus.current?.focus();
                 },
             },
@@ -638,7 +638,9 @@ it('delegates only the shell while retaining the real SDK prompt, draft, error a
     assert.equal(url.searchParams.get('keep'), 'yes');
     assert.equal(url.hash, '#fragment');
     assert.equal(f.container.querySelector('.mx-sdk-search-gate-error'), null);
-    const clear = f.container.querySelector('button[type="button"]');
+    const clear = [...f.container.querySelectorAll('button')].find(
+        (node) => node.type === 'button'
+    );
     assert.ok(clear);
     await act(async () => clear.click());
     assert.equal(f.input().value, '');

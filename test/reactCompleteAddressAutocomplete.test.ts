@@ -814,14 +814,17 @@ for (const locale of [
         retry: 'もう一度試す',
     },
 ]) {
-    it(`renders keyboard selection, attributed predictions and localized detail/retry UI (${locale.clear})`, async (t) => {
+    it(`renders two-option keyboard selection, attributed predictions and localized detail/retry UI (${locale.clear})`, async (t) => {
         const detail = deferred<string>();
         let attempts = 0;
         const f = await fixture(t, {
             labels: locale,
             reads: {
                 async listPredictions() {
-                    return [prediction];
+                    return [
+                        prediction,
+                        { placeId: 'p2', description: 'Second address' },
+                    ];
                 },
                 getFormattedAddress() {
                     if (++attempts === 1) return detail.promise;
@@ -833,6 +836,11 @@ for (const locale of [
         await f.tick();
         assert.deepEqual(f.writes, ['Query']);
         const input = f.container.querySelector('input')!;
+        const activeText = () =>
+            f.window.document.getElementById(
+                input.getAttribute('aria-activedescendant') ?? ''
+            )?.textContent;
+        assert.equal(activeText(), 'Selected address');
         await act(async () => {
             input.dispatchEvent(
                 new f.window.KeyboardEvent('keydown', {
@@ -841,6 +849,16 @@ for (const locale of [
                 })
             );
         });
+        assert.equal(activeText(), 'Second address');
+        await act(async () => {
+            input.dispatchEvent(
+                new f.window.KeyboardEvent('keydown', {
+                    key: 'ArrowUp',
+                    bubbles: true,
+                })
+            );
+        });
+        assert.equal(activeText(), 'Selected address');
         const option = f.container.querySelector('[role=option]');
         assert.ok(option);
         assert.equal(option.textContent, 'Selected address');

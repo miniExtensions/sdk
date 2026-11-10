@@ -18,13 +18,17 @@ export async function checkCompleteAddressBrowser({
     consumer,
     evidence,
     output,
+    format = 'esm',
 }) {
+    assert(['esm', 'cjs'].includes(format));
     Object.assign(evidence, {
+        format,
         status: 'running',
         results: [],
         pageErrors: [],
         unexpectedRequests: [],
         cleanup: {},
+        keyboard: [],
     });
     let directory, server, context, page, failure;
     const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -47,11 +51,21 @@ export async function checkCompleteAddressBrowser({
     try {
         const root = realpathSync(consumer);
         directory = mkdtempSync(join(root, '.complete-address-browser-'));
-        const source = String.raw`
-import React,{createElement as h,useState} from 'react';
+        const imports =
+            format === 'esm'
+                ? `import React,{createElement as h,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {flushSync} from 'react-dom';
 import {CompleteAddressAutocomplete} from '@miniextensions/sdk/react';
+`
+                : `const React=require('react'),{createElement:h,useState}=React;
+const {createRoot}=require('react-dom/client');
+const {flushSync}=require('react-dom');
+const {CompleteAddressAutocomplete}=require('@miniextensions/sdk/react');
+`;
+        const source =
+            imports +
+            String.raw`
 const mode=new URLSearchParams(location.search).get('mode')||'normal';
 const en={clear:'Clear',loadingPredictions:'Loading address suggestions',loadingDetails:'Loading selected address',failed:'Address suggestions could not be loaded. Keep typing or retry.',retry:'Try again'};
 const es={clear:'Borrar',loadingPredictions:'Cargando sugerencias de direcciones',loadingDetails:'Cargando la dirección seleccionada',failed:'No se pudieron cargar las sugerencias de direcciones.',retry:'Intentar de nuevo'};
@@ -66,10 +80,14 @@ h('input',{'aria-label':'Adjacent draft',defaultValue:'Unchanged adjacent draft'
 const root=createRoot(document.querySelector('main'));root.render(h(React.StrictMode,null,h(App)));
 window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.queries],details:[...stats.details],writes:[...stats.writes],submits:stats.submits,aborted:stats.signals.map(s=>s.aborted),trusted:[...stats.trusted],refStable}),patch,update:next=>patch(next),resolveDetail:value=>heldDetail(value),resolvePredictions:()=>heldPrediction(),destroy:()=>root.unmount()};
 `;
-        writeFileSync(join(directory, 'host.mjs'), source);
+        const entry = join(
+            directory,
+            format === 'esm' ? 'host.mjs' : 'host.cjs'
+        );
+        writeFileSync(entry, source);
         const bundle = await build({
             absWorkingDir: root,
-            entryPoints: [join(directory, 'host.mjs')],
+            entryPoints: [entry],
             bundle: true,
             platform: 'browser',
             format: 'esm',
@@ -85,7 +103,9 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         );
         assert(
             inputs.some((path) =>
-                path.endsWith('/react/CompleteAddressAutocomplete.js')
+                path.endsWith(
+                    `/dist/${format}/react/CompleteAddressAutocomplete.js`
+                )
             )
         );
         for (const input of inputs)
@@ -135,6 +155,35 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         const origin = `http://127.0.0.1:${server.address().port}`;
         const snapshot = () =>
             page.evaluate(() => window.addressProof.snapshot());
+        const selectFirstPrediction = async (input) => {
+            const first = page.getByRole('option', {
+                name: 'Selected address',
+                exact: true,
+            });
+            const second = page.getByRole('option', {
+                name: 'Second address',
+                exact: true,
+            });
+            await first.waitFor();
+            await second.waitFor();
+            const firstId = await first.getAttribute('id');
+            const secondId = await second.getAttribute('id');
+            assert(firstId && secondId && firstId !== secondId);
+            const step = {
+                initial: await input.getAttribute('aria-activedescendant'),
+            };
+            evidence.keyboard.push(step);
+            // Native 1.7.2 opens with the first offered option active. Down
+            // advances to the second; Up returns to the intended first choice.
+            assert.equal(step.initial, firstId);
+            await input.press('ArrowDown');
+            step.next = await input.getAttribute('aria-activedescendant');
+            assert.equal(step.next, secondId);
+            await input.press('ArrowUp');
+            step.previous = await input.getAttribute('aria-activedescendant');
+            assert.equal(step.previous, firstId);
+            await input.press('Enter');
+        };
         const open = async (mode, narrow = false) => {
             if (context) await context.close();
             context = await browser.newContext({
@@ -201,8 +250,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         assert(Math.abs(geometry.input[0] - geometry.options[0]) < 1);
         assert(Math.abs(geometry.input[2] - geometry.options[2]) < 1);
         assert(geometry.options[1] >= geometry.input[1] + geometry.input[3]);
-        await input.press('ArrowDown');
-        await input.press('Enter');
+        await selectFirstPrediction(input);
         await page.getByRole('status').waitFor();
         assert.equal(await input.inputValue(), 'Selected address');
         assert.deepEqual((await snapshot()).details[0].prior, [
@@ -237,8 +285,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         input = await open('normal', true);
         await input.fill('First');
         await page.getByRole('option').first().waitFor();
-        await input.press('ArrowDown');
-        await input.press('Enter');
+        await selectFirstPrediction(input);
         await page.getByRole('status').waitFor();
         await input.fill('Manual correction');
         await page.evaluate(() =>
@@ -247,14 +294,13 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         assert.equal(await input.inputValue(), 'Manual correction');
         assert((await snapshot()).aborted.some(Boolean));
         await page.screenshot({
-            path: join(output, 'complete-address-mobile.png'),
+            path: join(output, `complete-address-${format}-mobile.png`),
         });
         await finish('narrow mobile manual edit retires pending detail');
         input = await open('normal');
         await input.fill('Query');
         await page.getByRole('option').first().waitFor();
-        await input.press('ArrowDown');
-        await input.press('Enter');
+        await selectFirstPrediction(input);
         await page.evaluate(() =>
             window.addressProof.update({
                 readScope: 'B',
@@ -274,9 +320,15 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         await input.fill('Query');
         await page.getByRole('alert').waitFor();
         await page.getByRole('button', { name: 'Try again' }).click();
+        assert.equal(await input.inputValue(), 'Query');
+        // Retry is outside the native popup's input/options focus boundary.
+        // Reopen the completed results explicitly, without allocating a read.
+        await input.press('ArrowDown');
         await page.getByRole('option').first().waitFor();
         assert.deepEqual((await snapshot()).queries, ['Query', 'Query']);
-        await finish('explicit prediction retry with editable canonical input');
+        await finish(
+            'explicit prediction retry and keyboard reopening with editable canonical input'
+        );
         for (const [mode, retry] of [
             ['retry', 'Try again'],
             ['es', 'Intentar de nuevo'],
@@ -285,8 +337,7 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
             input = await open(mode, mode === 'ja');
             await input.fill('Query');
             await page.getByRole('option').first().waitFor();
-            await input.press('ArrowDown');
-            await input.press('Enter');
+            await selectFirstPrediction(input);
             await page.getByRole('alert').waitFor();
             assert(
                 !(await page
@@ -320,8 +371,25 @@ window.addressProof={snapshot:()=>({react:React.version,queries:[...stats.querie
         evidence.status = 'failed';
         if (page)
             try {
+                evidence.failureState = await page.evaluate(() => {
+                    const input = document.querySelector('[role=combobox]');
+                    return {
+                        ...window.addressProof?.snapshot(),
+                        expanded: input?.getAttribute('aria-expanded'),
+                        active: document.getElementById(
+                            input?.getAttribute('aria-activedescendant')
+                        )?.textContent,
+                        options: Array.from(
+                            document.querySelectorAll('[role=option]'),
+                            (option) => option.textContent
+                        ),
+                    };
+                });
                 await page.screenshot({
-                    path: join(output, 'complete-address-failure.png'),
+                    path: join(
+                        output,
+                        `complete-address-${format}-failure.png`
+                    ),
                 });
             } catch {}
     } finally {

@@ -44,7 +44,7 @@ let groups=0;
 for(const api of [esm,cjs]){
  let writes=[],queries=[],details=[],network=0,submits=0,resolveDetail,root;
  const ref=React.createRef();let model={value:'',identity:{session:'s',field:'f',readScope:'A'},mounted:true};
- const props=()=>({identity:model.identity,value:model.value,onChange(value){writes.push(value);model.value=value;root.render(view());},reads:{async listPredictions(query,{signal}){queries.push({query,signal});return [{placeId:'p',description:'Selected address'}];},getFormattedAddress(placeId,{signal}){details.push({placeId,signal,prior:[...writes]});return new Promise(resolve=>resolveDetail=resolve);}},labels,initialMobile:true,id:'address',form:'address-form','aria-label':'Address','aria-describedby':'hint',maxLength:60,ref});
+ const props=()=>({identity:model.identity,value:model.value,onChange(value){writes.push(value);model.value=value;root.render(view());},reads:{async listPredictions(query,{signal}){queries.push({query,signal});return [{placeId:'p',description:'Selected address'},{placeId:'p2',description:'Second address'}];},getFormattedAddress(placeId,{signal}){details.push({placeId,signal,prior:[...writes]});return new Promise(resolve=>resolveDetail=resolve);}},labels,initialMobile:true,id:'address',form:'address-form','aria-label':'Address','aria-describedby':'hint',maxLength:60,ref});
  const view=()=>React.createElement(React.StrictMode,null,model.mounted?React.createElement(api.CompleteAddressAutocomplete,props()):null);
  assert.equal(typeof document,'undefined');const html=renderToString(view());assert(html.includes('value=""'));assert.equal(queries.length,0);
  const window=new Window({url:'https://address.example.test'});
@@ -61,7 +61,12 @@ for(const api of [esm,cjs]){
   await React.act(async()=>{const input=ref.current;input.focus();Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(input,'  Raw query  ');input.dispatchEvent(new window.Event('input',{bubbles:true}));});
   assert.deepEqual(writes,['  Raw query  ']);assert.equal(queries.length,0);
   await React.act(async()=>mock.timers.tick(800));assert.equal(queries[0].query,'  Raw query  ');
+  const activeText=()=>document.getElementById(ref.current.getAttribute('aria-activedescendant'))?.textContent;
+  assert.equal(activeText(),'Selected address');
   await React.act(async()=>ref.current.dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true})));
+  assert.equal(activeText(),'Second address');
+  await React.act(async()=>ref.current.dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true})));
+  assert.equal(activeText(),'Selected address');
   assert(container.querySelector('[role=option]'));assert(container.querySelector('img').src.startsWith('data:image/png;base64,'));
   await React.act(async()=>ref.current.dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})));
   assert.equal(model.value,'Selected address');assert.deepEqual(details[0].prior,['  Raw query  ','Selected address']);assert.equal(container.querySelector('[role=status]').textContent,labels.loadingDetails);

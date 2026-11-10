@@ -885,6 +885,18 @@ controlled null/text, actual refs, keyboard selection, mobile Clear, ARIA/form,
 portable attribution and supplied Spanish/Japanese status/retry labels. The
 existing request engine and DOM control suites retain their independent policy.
 
+In these unselected fixtures, native Headless UI 1.7.2 activates the first
+available suggestion when typing opens the list. With two suggestions, ArrowDown advances to the second;
+ArrowUp returns to the first before Enter. Source, packed and trusted browser
+proofs keep two choices so a single-option fixture cannot hide this distinction.
+The native browser owner executes both ESM and CommonJS Address consumers for
+each configured React version; successful fixture preparation alone is not a
+keyboard or browser acceptance result.
+
+The prediction Retry button completes a read outside the native popup's focus
+boundary. The browser proof explicitly reopens those results with ArrowDown
+and asserts that this keyboard intent allocates no additional read or Save.
+
 The mandatory package check registers `complete-address-consumer-checks.mjs`
 for cold installed React 18/19 ESM/CommonJS, strict positive/negative types,
 SSR/hydration, DOM editing, read cancellation, Clear/ref and stylesheet exports.

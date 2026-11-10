@@ -2134,13 +2134,20 @@ try {
             evidence: report.completeCalendly,
             output,
         });
-        report.completeAddress = {};
-        await checkCompleteAddressBrowser({
-            browser,
-            consumer: temporary,
-            evidence: report.completeAddress,
-            output,
-        });
+        for (const format of ['esm', 'cjs']) {
+            const key =
+                format === 'esm'
+                    ? 'completeAddress'
+                    : 'completeAddressCommonJS';
+            report[key] = {};
+            await checkCompleteAddressBrowser({
+                browser,
+                consumer: temporary,
+                evidence: report[key],
+                output,
+                format,
+            });
+        }
         report.completeVerification = {};
         await checkCompleteVerificationBrowser({
             browser,

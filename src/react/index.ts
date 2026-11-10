@@ -39,6 +39,11 @@ export {
     type CalendlyBookingSession,
     type CalendlyBooking,
 } from './CalendlyBooking.js';
+export {
+    CompleteCalendlyWidget,
+    type CompleteCalendlyWidgetProps,
+    type CompleteCalendlyWidgetLabels,
+} from './CompleteCalendlyWidget.js';
 export { ActionButton, type ActionButtonProps } from './ActionButton.js';
 export { LiteralText, type LiteralTextProps } from './LiteralText.js';
 export {

@@ -182,6 +182,7 @@ export function assertModuleFormats(root) {
                 './react/complete-multiline.css',
                 './react/complete-duration.css',
                 './react/search-gate.css',
+                './react/complete-calendly.css',
                 './react/date.css',
                 './react/datetime.css',
                 './react/duration.css',

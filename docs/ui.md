@@ -5114,3 +5114,71 @@ Links retain the native Linkify recognition and `_blank` policy. Only link
 clicks stop propagation; ordinary text still activates its containing row.
 The component never interprets HTML, mutates Linkify globals or performs I/O.
 Callers retain conversion, masking, access decisions and canonical values.
+
+## Complete shared clearable input
+
+`CompleteClearableTextInput` and `CompleteDeferredClearableTextInput` own the
+shared text-input/Clear presentation and the existing immediate/deferred draft
+lifecycle. They reuse the public `TextInput` and `InputClearButton` primitives;
+they do not parse Email/URL/Text values, own a field queue, authorize a write,
+scan a value, or create a Form store. Import the optional scoped stylesheet
+`@miniextensions/sdk/react/complete-clearable-text-input.css`; its fallback
+styles do not require Tailwind or reset unrelated inputs and buttons.
+
+```tsx
+import { useState } from 'react';
+import { CompleteClearableTextInput } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-clearable-text-input.css';
+
+export function SharedInputExample() {
+    const [value, setValue] = useState('Literal draft');
+    return (
+        <CompleteClearableTextInput
+            value={value}
+            onChange={setValue}
+            onClear={() => setValue('')}
+            clearLabel="Clear answer"
+            initialMobile={false}
+            enableInlineEdit
+            aria-label="Answer"
+            name="answer"
+            autoComplete="off"
+        />
+    );
+}
+```
+
+The required `initialMobile` is an explicit resolved device snapshot, captured
+for each component mount. Supply the same snapshot during server render and
+initial client hydration. `resolveCurrentClearableInputMobile()` is the
+browser bridge for the existing UAParser current-device policy; it returns
+false when there is no window, which alone is not mobile hydration parity.
+Do not replace that policy with a viewport/touch heuristic or call it during
+hydration to change the agreed initial value. It reads only the existing
+bounded current-device inputs and performs no request. A newly mounted
+deferred mode captures its new supplied snapshot; the coordinator's retained
+immediate classification does not replace it.
+
+Immediate mode reports literal typing through `onChange`; Clear invokes only
+`onClear`. Omitted immediate autocomplete becomes `on`. Deferred mode leaves
+omitted autocomplete absent, validates only typing, retains a dirty local draft
+through external echoes and reconciles settled values while clean. Ordinary
+blur commits a changed local value through the current callback. Pending
+unmount settlement deliberately uses the original mounted callback and latest
+passive-effect draft, leaving the consumer's existing writer/ownership guard
+authoritative.
+
+Deferred mode overrides supplied input blur/key-down handlers rather than
+chaining them. Enter prevents implicit Form submission; composing Enter does
+not blur. Clear cancels pending unmount cleanup, clears its local draft and
+invokes `onClear` once. The Clear button does not suppress pointer focus
+transfer: a dirty focused input can commit through blur before the subsequent
+Clear click. Preserve that native event order rather than merging these two
+callbacks into a new write policy. Unmount after blur/Clear must not introduce
+another pending commit.
+
+Mobile Clear uses the actual nonempty displayed draft, a localized accessible
+label and `type=button`; disabled/read-only controls deny its click. The
+forwarded ref and native name/type/form/ARIA, placeholder and input styling
+remain with the consumer. Desktop and tablet do not become mobile because a
+viewport is narrow.

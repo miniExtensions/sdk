@@ -58,6 +58,13 @@ export {
 } from './InputClearButton.js';
 export { TextInput, type TextInputProps } from './TextInput.js';
 export {
+    CompleteClearableTextInput,
+    CompleteDeferredClearableTextInput,
+    resolveCurrentClearableInputMobile,
+    type CompleteClearableTextInputProps,
+    type CompleteDeferredClearableTextInputProps,
+} from './CompleteClearableTextInput.js';
+export {
     CompleteDurationField,
     type CompleteDurationFieldProps,
 } from './CompleteDurationField.js';

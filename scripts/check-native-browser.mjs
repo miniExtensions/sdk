@@ -37,6 +37,11 @@ import {
     completeReadOnlyTextBrowserTargetPath,
     checkCompleteReadOnlyTextBrowser,
 } from './complete-readonly-text-consumer-checks.mjs';
+import {
+    completeClearableInputBrowserSource,
+    completeClearableInputBrowserStyle,
+    checkCompleteClearableInputBrowser,
+} from './complete-clearable-input-consumer-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1484,6 +1489,7 @@ try {
             'scripts/browser-textarea-input-checks.mjs',
             'scripts/native-rating-fixture.css',
             'scripts/complete-readonly-text-consumer-checks.mjs',
+            'scripts/complete-clearable-input-consumer-checks.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -1780,6 +1786,92 @@ try {
             '/complete-readonly-text.html',
             Buffer.from(
                 `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Standalone complete readonly text</title><link rel="stylesheet" href="/complete-readonly-text.css"><link rel="stylesheet" href="/complete-readonly-text-fixture.css"></head><body><div id="root"></div><script type="module" src="/complete-readonly-text.js"></script></body></html>`
+            )
+        );
+        const clearableInputEntry = join(
+            temporary,
+            'complete-clearable-input.mjs'
+        );
+        writeFileSync(clearableInputEntry, completeClearableInputBrowserSource);
+        const clearableInputBundle = await build({
+            absWorkingDir: temporary,
+            entryPoints: [clearableInputEntry],
+            bundle: true,
+            platform: 'browser',
+            format: 'esm',
+            target: 'es2022',
+            outfile: join(temporary, 'complete-clearable-input.js'),
+            write: false,
+            metafile: true,
+            legalComments: 'none',
+            define: { 'process.env.NODE_ENV': '"production"' },
+        });
+        await assertBrowserInputs(clearableInputBundle.metafile, temporary);
+        const clearableInputInputs = Object.keys(
+            clearableInputBundle.metafile.inputs
+        );
+        assert(
+            clearableInputInputs.some((name) =>
+                name.endsWith('/react/CompleteClearableTextInput.js')
+            )
+        );
+        const clearableInputProofInputs = [];
+        for (const name of clearableInputInputs) {
+            const path = realpathSync(resolve(temporary, name));
+            const bytes = regular(path);
+            const item = {
+                path: relative(temporary, path),
+                sha256: hash(bytes),
+                bytes: bytes.length,
+            };
+            if (path.startsWith(installed + '/')) {
+                const member =
+                    'package/' +
+                    relative(installed, path).replaceAll('\\', '/');
+                assert.deepEqual(
+                    bytes,
+                    execFileSync('tar', ['-xOf', archive, member])
+                );
+                item.archiveMember = member;
+            }
+            clearableInputProofInputs.push(item);
+        }
+        const clearableConsumerRequire = createRequire(
+            join(temporary, 'package.json')
+        );
+        const clearableInputCssPath = realpathSync(
+            clearableConsumerRequire.resolve(
+                '@miniextensions/sdk/react/complete-clearable-text-input.css'
+            )
+        );
+        assert(clearableInputCssPath.startsWith(installed + '/'));
+        const clearableInputCss = regular(clearableInputCssPath);
+        const clearableInputCssMember =
+            'package/' +
+            relative(installed, clearableInputCssPath).replaceAll('\\', '/');
+        assert.deepEqual(
+            clearableInputCss,
+            execFileSync('tar', ['-xOf', archive, clearableInputCssMember])
+        );
+        const clearableInputCode = clearableInputBundle.outputFiles[0].contents;
+        report.completeClearableInput = {
+            sourceSha256: hash(completeClearableInputBrowserSource),
+            fixtureCssSha256: hash(completeClearableInputBrowserStyle),
+            packagedCssSha256: hash(clearableInputCss),
+            packagedCssMember: clearableInputCssMember,
+            bundleSha256: hash(clearableInputCode),
+            bundleInputs: clearableInputProofInputs,
+        };
+        allowed.set('/complete-clearable-input.js', clearableInputCode);
+        allowed.set('/complete-clearable-input.css', clearableInputCss);
+        allowed.set(
+            '/complete-clearable-input-fixture.css',
+            Buffer.from(completeClearableInputBrowserStyle)
+        );
+        allowed.set(
+            '/complete-clearable-input.html',
+            Buffer.from(
+                `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Standalone complete clearable input</title><link rel="stylesheet" href="/complete-clearable-input.css"><link rel="stylesheet" href="/complete-clearable-input-fixture.css"></head><body><div id="root"></div><script type="module" src="/complete-clearable-input.js"></script></body></html>`
             )
         );
         allowed.set(
@@ -2449,6 +2541,13 @@ try {
             await checkCompleteReadOnlyTextBrowser({
                 page,
                 evidence: report.completeReadOnlyText,
+            });
+        });
+        await run('complete-clearable-input', async (page, origin) => {
+            await page.goto(origin + '/complete-clearable-input.html');
+            await checkCompleteClearableInputBrowser({
+                page,
+                evidence: report.completeClearableInput,
             });
         });
         await run('literal-text-display', async (page, origin) => {
@@ -3374,7 +3473,7 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 21 + storageEventCases.length);
+        assert.equal(results.length, 22 + storageEventCases.length);
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

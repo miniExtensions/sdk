@@ -100,7 +100,8 @@
         "./react/multiple-select.css": "./dist/esm/react/multiple-select.css",
         "./react/linked-records.css": "./dist/esm/react/linked-records.css",
         "./react/single-select.css": "./dist/esm/react/single-select.css",
-        "./react/complete-readonly-text.css": "./dist/esm/react/complete-readonly-text.css"
+        "./react/complete-readonly-text.css": "./dist/esm/react/complete-readonly-text.css",
+        "./react/complete-clearable-text-input.css": "./dist/esm/react/complete-clearable-text-input.css"
     },
     "files": [
         "dist/esm",

@@ -1,3 +1,4 @@
+import { checkFormTrackingBrowser } from './form-tracking-browser-checks.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -2131,6 +2132,13 @@ try {
             browser,
             consumer: temporary,
             evidence: report.completeCalendly,
+            output,
+        });
+        report.formTracking = {};
+        await checkFormTrackingBrowser({
+            browser,
+            consumer: temporary,
+            evidence: report.formTracking,
             output,
         });
         report.completeVerification = {};

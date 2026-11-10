@@ -655,3 +655,16 @@ real telephone navigation, browser layout or screen readers, country-code
 editing, mobile Clear, deferred native Form/Grid ownership, backend Save or
 hosted persistence. The existing CI native-browser suite remains enabled and is
 not represented as coverage of this new component.
+
+## Complete Phone qualification boundaries
+
+The normal source component group discovers reactCompletePhone.test.ts and uses
+the actual frozen Phone vendor. The normal package check registers the complete
+Phone installed-TGZ matrix beside the retained read-only and legacy Phone groups.
+React18.3.1 and19.2.0 run in fresh processes for ESM/CommonJS, strict declarations,
+CSS, SSR/hydration, real editing, Clear, retirement and admitted unmount.
+The vendor guard verifies original/adapted hashes, closed relative runtime edges,
+metadata, licenses and the installed archive; third-party bytes remain frozen.
+These synthetic checks do not establish Android/OS IME, telephone navigation,
+visual layout, hosted authorization or native Form/Grid persistence. Android's
+existing formatter caret timer remains part of the private baseline.

@@ -1,3 +1,5 @@
+@import '../../vendor/phone-number-input/style.css';
+
 .mx-sdk-complete-phone-readonly {
     position: relative;
 }
@@ -33,4 +35,106 @@
     height: 1rem;
     margin-right: 0.25rem;
     color: #9ca3af;
+}
+
+.mx-sdk-complete-phone {
+    position: relative;
+    width: 100%;
+}
+.mx-sdk-phone-text-wrap {
+    position: relative;
+    flex: 1 1 0%;
+    min-width: 0;
+}
+.mx-sdk-phone-input {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    background: white;
+    color: #000;
+    padding: 0.5rem 0.75rem;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+}
+.mx-sdk-phone-input::placeholder {
+    color: #9ca3af;
+    opacity: 1;
+}
+.mx-sdk-phone-input:focus {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-color: var(--mx-sdk-phone-focus-color, #2563eb);
+    box-shadow: 0 0 0 1px var(--mx-sdk-phone-focus-color, #2563eb);
+}
+.mx-sdk-phone-input:disabled {
+    cursor: default;
+    background: #f3f4f6;
+    color: #6b7280;
+}
+.mx-sdk-phone-mobile {
+    padding-right: 2.5rem;
+}
+.mx-sdk-phone-clear {
+    position: absolute;
+    inset-block: 0;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #111827;
+    cursor: pointer;
+}
+.mx-sdk-phone-clear:disabled {
+    cursor: default;
+}
+.mx-sdk-phone-clear-indicator {
+    display: flex;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    background: #4b5563;
+}
+.mx-sdk-phone-clear-icon {
+    margin: auto;
+    width: 0.75rem;
+    height: 0.75rem;
+    color: white;
+}
+.mx-sdk-phone-plain {
+    position: relative;
+    width: 100%;
+    color: #9ca3af;
+}
+.mx-sdk-phone-plain .mx-sdk-phone-input {
+    padding-left: 2.5rem;
+}
+.mx-sdk-phone-icon {
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    padding-left: 0.75rem;
+    pointer-events: none;
+}
+.mx-sdk-phone-icon svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+.mx-sdk-complete-phone .PhoneInputCountry {
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    padding: 0 0.5rem;
+}
+.mx-sdk-phone-country-arrow {
+    margin-left: 0.25rem;
+    width: 0.75rem;
+    height: 0.75rem;
 }

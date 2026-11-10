@@ -3,6 +3,12 @@ import type {
     PortalPresentationSource,
 } from '../ui/borrowedPortalRenderScope.js';
 export {
+    CompletePhoneNumberField,
+    type CompletePhoneNumberFieldProps,
+    type CompletePhoneEditOwner,
+    type CompletePhoneCommit,
+} from './CompletePhoneNumberField.js';
+export {
     CompleteReadOnlyPhoneNumberField,
     type CompleteReadOnlyPhoneNumberFieldProps,
 } from './CompleteReadOnlyPhoneNumberField.js';

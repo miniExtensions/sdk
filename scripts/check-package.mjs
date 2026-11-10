@@ -1,3 +1,4 @@
+import { assertPhoneVendor } from './phone-vendor-checks.mjs';
 import {
     checkNativeFormProgressConsumer,
     nativeFormProgressTypedConsumer,
@@ -100,6 +101,7 @@ import {
 import { checkNativeEditorReactMatrix } from './native-rich-text-editor-consumer-checks.mjs';
 import { checkCompleteLocalizedNumericReactMatrix } from './complete-localized-numeric-consumer-checks.mjs';
 import { checkCompleteReadOnlyPhoneReactMatrix } from './complete-readonly-phone-consumer-checks.mjs';
+import { checkCompletePhoneReactMatrix } from './complete-phone-consumer-checks.mjs';
 import {
     checkRichTextSerializationConsumer,
     richTextSerializationTypedConsumer,
@@ -535,7 +537,8 @@ try {
                 path === 'docs/testing.md' ||
                 browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
-                path.startsWith('dist/cjs/'),
+                path.startsWith('dist/cjs/') ||
+                path.startsWith('dist/vendor/phone-number-input/'),
             `Unexpected packed file: ${path}`
         );
     }
@@ -596,6 +599,13 @@ try {
         packed
     );
     assertModuleFormatReceipt(installedPackage);
+    const installedPhone = assertPhoneVendor(
+        join(installedPackage, 'dist/vendor/phone-number-input')
+    );
+    assert.equal(installedPhone.packages, 8);
+    assert.equal(installedPhone.runtimeFiles, 111);
+    assert.equal(installedPhone.privateFiles, 145);
+    assert.equal(installedPhone.rewrites, 34);
     await assertPublicDistribution(
         installedPackage,
         packed.files.map(({ path }) => path),
@@ -3132,6 +3142,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(readOnlyPhoneMatrix.versions.length, 2);
     assert.equal(readOnlyPhoneMatrix.cleanup, 'completed');
+    const phoneMatrix = checkCompletePhoneReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+    });
+    assert.equal(phoneMatrix.versions.length, 2);
+    assert.equal(phoneMatrix.cleanup, 'completed');
     assert.equal(
         await checkSelectPresentationConsumer({
             consumerDirectory: temporaryDirectory,

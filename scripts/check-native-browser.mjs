@@ -50,6 +50,11 @@ import {
     completeMultilineBrowserStyle,
     checkCompleteMultilineBrowser,
 } from './complete-multiline-consumer-checks.mjs';
+import {
+    checkHTMLDescriptionBrowser,
+    checkHTMLDescriptionEditorStyleCoexistence,
+} from './html-description-consumer-checks.mjs';
+import { prepareHTMLDescriptionNativeFixtures } from './html-description-native-fixture.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1499,6 +1504,8 @@ try {
             'scripts/complete-readonly-text-consumer-checks.mjs',
             'scripts/complete-clearable-input-consumer-checks.mjs',
             'scripts/complete-multiline-consumer-checks.mjs',
+            'scripts/html-description-consumer-checks.mjs',
+            'scripts/html-description-native-fixture.mjs',
         ].map((path) => ({ path, sha256: hash(regular(path)) })),
         channel: 'chrome',
         chromiumSandbox: true,
@@ -1883,6 +1890,20 @@ try {
                 `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>Standalone complete clearable input</title><link rel="stylesheet" href="/complete-clearable-input.css"><link rel="stylesheet" href="/complete-clearable-input-fixture.css"></head><body><div id="root"></div><script type="module" src="/complete-clearable-input.js"></script></body></html>`
             )
         );
+        const htmlDescriptionNative =
+            await prepareHTMLDescriptionNativeFixtures({
+                temporary,
+                output,
+                archive,
+                installed,
+                allowed,
+                report,
+                nativeReactVersion,
+                build,
+                assertBrowserInputs,
+                regular,
+                hash,
+            });
         const multilineEntry = join(temporary, 'complete-multiline.mjs');
         writeFileSync(multilineEntry, completeMultilineBrowserSource);
         const multilineBundle = await build({
@@ -2668,6 +2689,26 @@ try {
                 evidence: report.completeMultiline,
             });
         });
+        await run('html-descriptions', async (page, origin) => {
+            await page.goto(origin + '/html-description.html');
+            await checkHTMLDescriptionBrowser({
+                page,
+                evidence: report.htmlDescription,
+            });
+        });
+        if (htmlDescriptionNative.referenceEnabled) {
+            await run(
+                'html-description-editor-coexistence',
+                async (page, origin) => {
+                    await page.goto(origin + '/html-editor-reference.html');
+                    await checkHTMLDescriptionEditorStyleCoexistence({
+                        page,
+                        evidence: report.htmlEditorReference,
+                    });
+                    report.htmlEditorReference.status = 'passed';
+                }
+            );
+        }
         await run('literal-text-display', async (page, origin) => {
             await page.goto(`${origin}/native.html?mode=literal-text`);
             const display = page.locator('.literal-display');
@@ -3591,7 +3632,12 @@ try {
                 if (!retires)
                     assert.equal(state.calls[0].credentialMatched, true);
             });
-        assert.equal(results.length, 23 + storageEventCases.length);
+        assert.equal(
+            results.length,
+            24 +
+                storageEventCases.length +
+                Number(htmlDescriptionNative.referenceEnabled)
+        );
         assert.deepEqual(network, []);
         report.status = 'passed';
     } catch (error) {

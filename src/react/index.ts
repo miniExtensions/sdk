@@ -283,6 +283,15 @@ import type {
     FormAttachmentSnapshot,
 } from '../forms/attachmentController.js';
 
+export {
+    PortalSearchGate,
+    type PortalSearchGateProps,
+} from './PortalSearchGate.js';
+export {
+    usePortalSearchGate,
+    type PortalSearchGateOptions,
+} from './usePortalSearchGate.js';
+
 /** A file chooser's bubbling cancel is not cancellation of its surrounding dialog. */
 export function isDialogCancellation(event: {
     target: unknown;

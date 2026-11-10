@@ -4826,6 +4826,104 @@ the same accepted visible detail/schema policy as cells. Headers preserve accept
 order even with zero rows; no first-row values or cached records are consulted.
 Explicit empty, missing or null detail projections expose no columns.
 
+## Complete Portal search gate
+
+`PortalSearchGate` from `@miniextensions/sdk/react` renders the complete blocking
+search prompt, not a Portal list-search textbox or a renderer slot. It owns the
+dialog, input, description, local raw draft/error state and Continue/Search Again/
+Clear controls. It does not load records, qualify configured metadata, grant
+access, change a session or submit a Form.
+
+```tsx
+import { PortalSearchGate } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/search-gate.css';
+
+// The application has already decided that its qualified Portal needs the gate.
+<PortalSearchGate
+    searchPageField={{ fieldId: 'fld_name', fieldName: 'Customer name' }}
+    title="Find your records"
+    description="Enter {fieldName} to continue."
+    hasNoResults={false}
+    getCurrentUrl={() => window.location.href}
+    onNavigate={(url) => {
+        window.location.href = url;
+    }}
+    onClearSearch={clearNativeSearchParameters}
+/>;
+```
+
+`getCurrentUrl` and `onNavigate` run only on explicit valid submission, in that
+order; neither is called by import, render, mount, metadata changes or unmount.
+The example deliberately preserves full navigation. External consumers may
+capture the URL instead. The component never assigns location or fetches a
+candidate. `onClearSearch` is a host effect, not navigation inside the SDK. The
+native Portal callback removes all `search_*` parameters; this remains native
+because it also owns screen selection and URL policy outside this field.
+
+The exact pure helpers are public from `@miniextensions/sdk/portals`:
+`getSearchPageQueryKeys`, `hasSearchPageQueryParam`,
+`getSearchPageSubmissionUrl`, and `PortalSearchGateField`. Recognition accepts
+either nonblank `search_<fieldName>` or `search_<fieldId>`. Submission deletes
+the configured-ID alias and writes the trimmed term to the exact field-name
+key, preserving other parameters, path and fragment through URL/URLSearchParams.
+An invalid absolute URL still throws, like the native helper; no fallback or
+retry is introduced. Helpers do not establish metadata validity or access.
+
+| Native-compatible input/transition | Complete SDK behavior                                          |
+| ---------------------------------- | -------------------------------------------------------------- |
+| Description truthy                 | Replace every literal `{fieldName}` occurrence.                |
+| Description absent/empty           | Use the existing English default prompt.                       |
+| Error/title nullish                | Existing default; configured empty text remains empty.         |
+| New mount                          | Empty raw draft, never a URL prefill.                          |
+| Field/copy/hasNoResults rerender   | Preserve raw draft, including whitespace.                      |
+| Blank/whitespace submit            | Disabled/refused; no URL read or callback.                     |
+| Explicit valid submit              | Hide local error, trim only for URL, call navigation once.     |
+| `hasNoResults` becomes true        | Show error; typing does not hide it.                           |
+| Submit/Clear while flag stays true | Hide local error; Search Again/Clear labels remain.            |
+| Clear                              | Empty draft/error, then call host callback once; never submit. |
+| Unmount                            | Close local dialog; no navigation, Clear or record effect.     |
+
+`usePortalSearchGate` and `PortalSearchGateOptions` expose the same local state
+coordination for an explicitly custom presentation. The complete component
+already uses that hook: a native wrapper must not keep another draft/error copy.
+The labels retain the current native English defaults; configured description,
+title and no-results message are plain escaped text, not HTML or a new language
+engine.
+
+The browser shell uses `HTMLDialogElement.showModal`, as the SDK's existing
+attachment shell does, with no Close control and cancellation prevented. It
+requires modern native-dialog support. The browser owns modal focus/inertness;
+CSS is not the access gate. Import and SSR never access DOM or mutate browser
+globals. The stylesheet is optional and scoped; without it the native dialog
+and real form remain usable. `inputId` is optional; generated IDs isolate
+simultaneous instances. `ariaLabel` can supply a dialog name. A visually blank
+configured title keeps its empty heading but gets a fallback accessible Search
+name; described input errors and generated IDs are explicit accessibility
+additions, not a claim about the old native markup.
+
+`accentColor`/`focusColor` and `reservedInlineEndWidth` are container-local
+theme/layout inputs. A future native wrapper can pass `var(--theme-600)` and
+`var(--theme-500)`, plus its Intercom reserved width, without importing application
+contexts. `headerActions` is optional decoration, not a prompt renderer or read
+authority. `panelTestId`/`overlayTestId` permit existing native test associations.
+
+**Native adoption remains separate.** Native `SearchPage` must retain Next title,
+admin/settings integration, current location assignment and Clear; `PortalView`
+retains metadata qualification and no-query/zero-result gate admission. Its
+compatibility helper exports can re-export these SDK helpers. Do not change
+PortalView or shared Modal merely to install the new UI. Native Headless UI
+currently composes document-level toolbar/settings/Intercom portals; a native
+`showModal` top layer cannot preserve those exceptions through `zIndex` alone.
+Controls passed in `headerActions` and their popup destinations need an actual
+native composition decision and browser proof before adoption. The SDK's
+`zIndex` styles its element, not an escape from browser modal/inert semantics.
+
+Source tests, packed React18/19 ESM/CJS/types/SSR/hydration consumers and installed
+styled Chromium proofs are authored/registered separately. They are synthetic
+SDK checks, not executed evidence or native Portal/record/hosted acceptance.
+Native thin-wrapper and configured parent admission tests, plus the existing
+five search-page E2E flows, remain required after safe host integration.
+
 ## Complete native-compatible Duration field
 
 `CompleteDurationField` from `@miniextensions/sdk/react` is the complete

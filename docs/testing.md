@@ -1,5 +1,33 @@
 # Source test coverage
 
+## Complete Portal search gate
+
+The additive Search gate source is covered by `test/portalSearchGate.test.ts`
+and `test/reactPortalSearchGate.test.ts`: exact name/ID URL aliases, encoding and
+fragments; empty/custom/default copy; raw drafts; no-results/error transitions;
+valid and refused submit; non-submit Clear; metadata replacement; unique
+associations; StrictMode, SSR and unmount. They use the real public helpers,
+component and TextInput, not mocked SDK output. Happy-dom cancellation/DOM checks
+do not prove browser focus trapping or native maker composition.
+
+`scripts/search-gate-consumer-checks.mjs` is registered in the normal package
+check. It installs the packed artifact with React18.3.1 and19.2.0, checks ESM/CJS
+and positive/negative declarations, no-CSS SSR, actual hydration/DOM behavior,
+CSS resolution and controlled URL callbacks. `scripts/search-gate-browser-checks.mjs`
+is registered in the existing native-browser path: styled public SDK import,
+trusted Enter/Tab/Shift+Tab/Escape/backdrop/clear, initial/restored focus,
+simultaneous dialogs, rerender/unmount and wide/narrow geometry. It blocks
+non-fixture requests and retains synthetic screenshots/hashes/cleanup receipts.
+No source/package/browser execution is implied merely by this registration.
+
+Later native adoption requires the actual SearchPage wrapper/PortalView assembly
+to preserve no-query and loaded-zero-result gating, configured metadata refusal,
+and toolbar/settings/Intercom portal composition. Parent view/header/settings
+and shared Modal owners remain independent. Existing five `search-page-*`
+hosted scenarios are affected-flow inputs, not passes from component tests.
+During source preparation's process hold, all these tests remain UNRUN; no
+profile, resource, coverage or CI gate is weakened.
+
 ## Form Save response identity
 
 `test/formSaveIdentity.test.ts` exercises the actual client and Form controller

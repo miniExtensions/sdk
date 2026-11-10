@@ -1,0 +1,173 @@
+import {
+    createElement as h,
+    useEffect,
+    useId,
+    useRef,
+    type CSSProperties,
+    type ReactNode,
+} from 'react';
+import { TextInput } from './TextInput.js';
+import {
+    usePortalSearchGate,
+    type PortalSearchGateOptions,
+} from './usePortalSearchGate.js';
+
+export type PortalSearchGateProps = PortalSearchGateOptions & {
+    inputId?: string;
+    ariaLabel?: string;
+    className?: string;
+    /** Optional native maker decoration; never the prompt or its state owner. */
+    headerActions?: ReactNode;
+    /** Portable container-local theme/layout values, with no app-context import. */
+    accentColor?: string;
+    focusColor?: string;
+    reservedInlineEndWidth?: string;
+    zIndex?: number;
+    panelTestId?: string;
+    overlayTestId?: string;
+};
+
+type GateStyle = CSSProperties & {
+    '--mx-sdk-search-accent'?: string;
+    '--mx-sdk-search-focus'?: string;
+    '--mx-sdk-search-reserved-inline-end'?: string;
+};
+
+/**
+ * Complete blocking prompt. The native dialog owns modal focus/inertness; the
+ * caller still owns gate admission, record access, navigation and unmounting.
+ * Requires HTMLDialogElement.showModal in the browser; import/SSR do not use DOM.
+ */
+export function PortalSearchGate(props: PortalSearchGateProps) {
+    const state = usePortalSearchGate(props);
+    const generatedId = useId();
+    const inputId = props.inputId ?? `${generatedId}-search`;
+    const titleId = `${generatedId}-title`;
+    const descriptionId = `${generatedId}-description`;
+    const errorId = `${generatedId}-error`;
+    const dialog = useRef<HTMLDialogElement>(null);
+    const input = useRef<HTMLInputElement>(null);
+    useEffect(() => {
+        const node = dialog.current;
+        if (node == null) return;
+        node.showModal();
+        input.current?.focus();
+        return () => node.close();
+    }, []);
+    const style: GateStyle = {
+        '--mx-sdk-search-accent': props.accentColor,
+        '--mx-sdk-search-focus': props.focusColor,
+        '--mx-sdk-search-reserved-inline-end': props.reservedInlineEndWidth,
+        zIndex: props.zIndex,
+    };
+    return h(
+        'dialog',
+        {
+            ref: dialog,
+            className: ['mx-sdk-search-gate', props.className]
+                .filter(Boolean)
+                .join(' '),
+            style,
+            'aria-labelledby':
+                props.ariaLabel == null && state.title ? titleId : undefined,
+            'aria-label':
+                props.ariaLabel ?? (state.title ? undefined : 'Search'),
+            'aria-describedby': descriptionId,
+            onCancel: (event) => event.preventDefault(),
+        },
+        h('div', {
+            className: 'mx-sdk-search-gate-overlay',
+            'aria-hidden': true,
+            'data-testid': props.overlayTestId,
+        }),
+        h(
+            'section',
+            {
+                className: 'mx-sdk-search-gate-panel',
+                'data-testid': props.panelTestId,
+            },
+            h(
+                'header',
+                { className: 'mx-sdk-search-gate-header' },
+                h('h2', { id: titleId }, state.title),
+                props.headerActions
+            ),
+            h(
+                'div',
+                { className: 'mx-sdk-search-gate-body' },
+                h('p', { id: descriptionId }, state.description),
+                state.showError
+                    ? h(
+                          'div',
+                          {
+                              className: 'mx-sdk-search-gate-error',
+                              id: errorId,
+                          },
+                          h(
+                              'svg',
+                              {
+                                  viewBox: '0 0 20 20',
+                                  'aria-hidden': true,
+                                  focusable: 'false',
+                              },
+                              h('circle', { cx: 10, cy: 10, r: 9 }),
+                              h('path', { d: 'M7 7l6 6m0-6-6 6' })
+                          ),
+                          h('p', null, state.noResultsMessage)
+                      )
+                    : null,
+                h(
+                    'form',
+                    {
+                        onSubmit: (event) => {
+                            event.preventDefault();
+                            state.submit();
+                        },
+                    },
+                    h(
+                        'div',
+                        { className: 'mx-sdk-search-gate-field' },
+                        h(
+                            'label',
+                            { htmlFor: inputId },
+                            props.searchPageField.fieldName
+                        ),
+                        h(TextInput, {
+                            ref: input,
+                            id: inputId,
+                            type: 'text',
+                            value: state.searchTerm,
+                            placeholder: state.placeholder,
+                            'aria-describedby': state.showError
+                                ? `${descriptionId} ${errorId}`
+                                : descriptionId,
+                            'aria-invalid': state.showError,
+                            onChange: (event) =>
+                                state.setSearchTerm(event.target.value),
+                        })
+                    ),
+                    h(
+                        'div',
+                        { className: 'mx-sdk-search-gate-actions' },
+                        h(
+                            'button',
+                            { type: 'submit', disabled: state.disabled },
+                            props.hasNoResults ? 'Search Again' : 'Continue'
+                        ),
+                        props.hasNoResults
+                            ? h(
+                                  'button',
+                                  {
+                                      type: 'button',
+                                      className: 'mx-sdk-search-gate-clear',
+                                      onClick: state.clear,
+                                  },
+                                  'Clear'
+                              )
+                            : null
+                    )
+                )
+            )
+        )
+    );
+}

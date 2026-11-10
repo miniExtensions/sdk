@@ -130,6 +130,7 @@ for (const format of ['esm', 'cjs']) {
         'number',
         'localized-numeric',
         'complete-duration',
+        'search-gate',
         'date',
         'datetime',
         'duration',

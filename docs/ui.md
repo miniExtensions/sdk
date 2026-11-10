@@ -5182,3 +5182,63 @@ label and `type=button`; disabled/read-only controls deny its click. The
 forwarded ref and native name/type/form/ARIA, placeholder and input styling
 remain with the consumer. Desktop and tablet do not become mobile because a
 viewport is narrow.
+
+## Complete native-compatible plain multiline field
+
+`CompleteMultilineTextField` owns the complete plain textarea presentation,
+native selection capture/restoration, fixed three-to-thirty-row autosizing,
+vertical resizing, character-limit counter and disabled read-only state. It uses
+the same public `TextareaInput` primitive. Import its scoped stylesheet; no
+Tailwind setup, native renderer slot, Form store or service client is required.
+
+```tsx
+import { useState } from 'react';
+import { CompleteMultilineTextField } from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-multiline.css';
+
+export function NotesExample() {
+    const [value, setValue] = useState<string | null>(null);
+    return (
+        <>
+            <label htmlFor="notes">Notes</label>
+            <CompleteMultilineTextField
+                id="notes"
+                value={value}
+                onChange={setValue}
+                placeholder="Add context"
+                characterLimit={120}
+                hasDescription
+            />
+            <p id="notes-description">
+                Literal text and line breaks are retained.
+            </p>
+        </>
+    );
+}
+```
+
+The consumer retains the canonical string/null value and writer authority.
+`null` displays an empty textarea; ordinary edits and clearing emit strings,
+including `''`. Every delivered React change is forwarded literally, including
+intermediate composition values. Composition-end and blur do not introduce a
+second commit. The component does not buffer IME input, normalize whitespace,
+truncate a delivered value or convert empty text to null. Native DOM maxlength
+editing constraints remain separate from forwarding an already-delivered value.
+
+`characterLimit` is projected without normalization to native `maxLength` and
+the counter. The counter uses UTF-16 string length and warns at or above the
+raw bound. Read-only presentation disables the textarea and removes the
+editable bound/counter without changing the value or emitting edits. Default
+autocomplete is always `off`. `id` and optional `form` retain native association;
+`hasErrorMessage` and `hasDescription` reference `${id}-error` then
+`${id}-description`. Render those elements outside the field when requested.
+A forwarded ref exposes the actual textarea. The optional CSS custom property
+`--mx-sdk-multiline-focus-color` customizes the standalone normal focus color;
+consumer utility styles retain precedence over scoped fallback selectors.
+
+This API deliberately coexists with the public `MultilineTextField` binding
+and `renderMultilineTextField`. Their internal `MultilineTextControl` retains
+the separate four-row default, strict composition buffer and empty-to-null
+commit contract.
+Native-compatible extraction does not silently alter those consumers or adopt
+Form/Portal Save, ownership, masking, append-only or attachment policies.

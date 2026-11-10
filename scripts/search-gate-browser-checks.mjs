@@ -26,6 +26,7 @@ export async function checkSearchGateBrowser({
         pageErrors: [],
         unexpectedRequests: [],
         focusChecks: [],
+        uiTransitions: [],
         cleanup: {},
     });
     let directory, server, context, failure;
@@ -296,18 +297,46 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             assert(geometry.width <= 512 && geometry.width > 250);
             assert.equal(geometry.backdrop, 'rgb(17, 24, 39)');
             assert.equal(geometry.button, 'rgb(79, 70, 229)');
+            evidence.phase = 'no-results-prop';
             await dialog
                 .getByRole('button', { name: 'Show no results', exact: true })
                 .click();
+            // The host first commits hasNoResults; the native-compatible hook
+            // then commits showError in its effect. Observe both public phases,
+            // with the existing default timeout, rather than sample mid-commit.
+            await dialog
+                .getByRole('button', { name: 'Search Again', exact: true })
+                .waitFor({ state: 'visible' });
+            evidence.uiTransitions.push({
+                mobile,
+                phase: 'no-results-prop',
+                visible: true,
+            });
+            evidence.phase = 'no-results-error';
+            await dialog
+                .locator('.mx-sdk-search-gate-error')
+                .waitFor({ state: 'visible' });
             assert.equal(
                 await dialog.locator('.mx-sdk-search-gate-error').isVisible(),
                 true
             );
+            evidence.uiTransitions.push({
+                mobile,
+                phase: 'no-results-error',
+                visible: true,
+            });
+            evidence.phase = 'no-results-edit-persistence';
             await input.fill('retry');
             assert.equal(
                 await dialog.locator('.mx-sdk-search-gate-error').isVisible(),
                 true
             );
+            evidence.uiTransitions.push({
+                mobile,
+                phase: 'error-after-edit',
+                visible: true,
+            });
+            evidence.phase = 'no-results-clear';
             await dialog
                 .getByRole('button', { name: 'Clear', exact: true })
                 .click();
@@ -327,6 +356,14 @@ window.searchGateProof={snapshot:()=>({react:React.version,navigations:[...navig
             );
             assert.equal(afterClear.clears, 1);
             assert.equal(afterClear.navigations.length, 1);
+            evidence.uiTransitions.push({
+                mobile,
+                phase: 'clear',
+                errorCount: 0,
+                navigations: 1,
+                clears: 1,
+            });
+            evidence.phase = 'interaction';
             await input.fill('retained draft');
             await dialog
                 .getByRole('button', { name: 'Replace field', exact: true })

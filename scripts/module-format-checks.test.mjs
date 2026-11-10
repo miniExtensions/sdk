@@ -643,6 +643,7 @@ for (const name of [
     'complete-duration',
     'search-gate',
     'complete-calendly',
+    'complete-verification',
     'date',
     'datetime',
     'duration',

@@ -5433,3 +5433,100 @@ the separate four-row default, strict composition buffer and empty-to-null
 commit contract.
 Native-compatible extraction does not silently alter those consumers or adopt
 Form/Portal Save, ownership, masking, append-only or attachment policies.
+
+## Complete verification screen
+
+`CompleteVerificationScreen<Result>` is an additive React-only, host-compatible
+email/phone confirmation screen. It is separate from the SDK auth flow and its
+one-use grants. It owns the actual form, raw code draft, pending/error/Reload UI,
+accessible input and a private one-entry confirmed-result cache. It never creates
+an auth client, sends a code, installs a session, writes storage, logs a code or
+result, or retries an operation automatically.
+
+```ts
+import { createElement } from 'react';
+import {
+    CompleteVerificationScreen,
+    type CompleteVerificationScreenProps,
+} from '@miniextensions/sdk/react';
+import '@miniextensions/sdk/react/complete-verification.css';
+
+type Confirmed = Readonly<{ applicationHandle: object }>;
+declare const confirm: CompleteVerificationScreenProps<Confirmed>['confirm'];
+declare const continueWithResult: (result: Confirmed) => Promise<void>;
+declare const reload: () => void;
+
+createElement(CompleteVerificationScreen<Confirmed>, {
+    verificationId: 'synthetic-challenge',
+    maskedDestination: '***42', // masking belongs to the accepted host parent
+    labels: {
+        sentCodeTo: 'Code sent to',
+        enterCode: 'Verification code',
+        continue: 'Continue',
+        reload: 'Reload',
+        attemptsExhausted: 'Attempts exhausted',
+        loading: 'Loading',
+    },
+    confirm,
+    continueWithResult,
+    reload,
+});
+```
+
+The host supplies transport, language, normalized service failure, continuation,
+error observation and Reload. `onError` must be nonthrowing and must not include
+codes or private results in telemetry. `formatErrorMessage` is an optional pure
+presentation adapter; exhaustion classification still compares the original
+error with the **current** localized `attemptsExhausted` string. Destination,
+labels and errors are escaped text, not HTML. An optional `pendingDetails` node
+can preserve app-level timeout/help decoration without copying pending state or
+replacing the SDK's form/spinner. The native shared Refresh/Logout timeout and
+rich error/help presentation are host composition concerns, not SDK auth policy.
+
+### Compatibility and lifecycle
+
+- Initially empty code disables the real `type=submit` button. The input remains
+  `type=text`, pattern `\d*`, with no trimming or OTP filtering. Trusted Enter and
+  normal browser pattern validation are preserved. A programmatically dispatched
+  submit is not the same as browser constraint validation; no extra handler-only
+  empty/pattern admission rule is introduced.
+- Confirmation and continuation both replace the form with pending UI. Cache the
+  successful opaque result **before** awaiting continuation. Continuation failure
+  restores the same draft and exact error; a later explicit submit for that
+  verification ID retries continuation with the identical result, not confirmation.
+  The result never appears in public state, DOM, logs, storage or serialization.
+- Failure does not clear the code or previous confirmed result. Input editing and
+  a new attempt do not clear the error. Success remains pending until host
+  replacement/unmount. Exhausted-attempt text changes the next explicit submit to
+  Reload, with no new confirmation or continuation.
+- Cache lookup uses only verification-ID equality, matching native behavior. A
+  settled A→B→A sequence with successful confirmations replaces the one-entry
+  cache and confirms A again. Changing destination, locale or callbacks alone
+  does not clear it. The parent retains its existing session-keyed lifetime.
+- An already admitted attempt uses its captured challenge, confirmation,
+  continuation and error observer. Prop replacement/unmount does **not** cancel
+  transport or undo continuation. A later explicit retry uses that render's
+  current callback with the cached result. There is no invented revision fence,
+  abort, rollback, latest-callback ref or synchronous programmatic singleflight
+  contract. Pending UI removes ordinary user submit controls.
+
+Optional scoped CSS requires no Tailwind/native aliases and has no global import
+side effect. `accentColor` maps locally to `--mx-sdk-verification-accent` (fallback
+`--mx-sdk-accent`, then indigo); `inputId` is optional and default IDs are unique
+across simultaneous roots/SSR hydration. React 18 and 19 use the same contract.
+Without CSS the native form/label/input/button and pending accessible status still
+work. Reduced-motion and forced-color styling are included.
+
+### Native handoff (not implemented by SDK extraction)
+
+Native `EmailOrPhoneNumberVerificationView.tsx` can map `confirm` to its existing
+website request using exactly `{verificationId, verificationCode, language}` and
+return the existing opaque result. Its captured continuation translates to
+`loginWithEncryptedLoginToken`, error observer retains extension context, and
+Reload retains `window.location.reload`. The parent keeps masked destination,
+modal/session identity and installation/storage/URL side effects. Preserve the
+shared timeout/error decorators through the explicit presentation seams; do not
+copy the code/loading/cache/error state into the wrapper. Do not change
+`LoginPageExtensionView`, `loginIntoExtensionUsingLoginPage`, SDK auth safety or
+backend policy. This SDK stage is not native adoption, actual code delivery,
+credential-storage qualification or hosted authentication acceptance.

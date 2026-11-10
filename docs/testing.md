@@ -783,3 +783,37 @@ real Form and Portal-child callers with exact canonical strings, adjacent-field
 non-effects and explicit Save transport assertions. A frozen leaf oracle does
 not establish retained callback authority, authentication, backend handling or
 hosted persistence. Outstanding held hosted witnesses remain separate.
+
+### Complete verification screen proof
+
+`reactCompleteVerificationScreen.test.ts` ports the four native protocol cases
+and compares SDK behavior to a documented frozen native protocol oracle (host
+source blob `a107ee7efb9dd911835f41035469ab77f4257300`). Only transport,
+localization/log/reload and UI-library dependencies are mechanically bridged.
+The oracle is not native styled assembly or native request-shape acceptance.
+Comparisons cover cached continuation retry, changed challenge, invalid-code
+correction, actual Reload adapter activation, pending confirmation and continuation
+callback replacement, late unmount, locale/exhaustion equality and one-entry ABA.
+The original four host tests remain untouched and must pass at native adoption.
+
+The mandatory package check adds `complete-verification-consumer-checks.mjs`:
+independent installed React18.3.1/19.2.0, ESM/CJS/declarations, negative typed props,
+React-free core exclusion, exported dual-build optional CSS, SSR/no-CSS and real
+hydration/DOM use. An opaque synthetic result is checked by identity at explicit
+continuation retry. No SDK auth page/grant is constructed or consumed.
+
+The existing mandatory native browser path calls
+`complete-verification-browser-checks.mjs` for both existing React versions. It
+bundles the **installed** public component, verifies package provenance/hashes,
+serves only local synthetic assets and aborts every external request. Real keyboard
+and native validation cover Enter, invalid pattern zero-confirm, failure/edit/error
+persistence, cached retry/current callback, corrected code, actual click/Enter Reload,
+localized/narrow styles, deferred captured callbacks, unmount and independent
+instances. Evidence contains finite counts/identity booleans and synthetic UI only;
+private result objects and code values are never serialized in receipts. Cleanup
+and assertions fail closed; no sleeps, retries or alternate acceptance predicate.
+
+These authored proofs are not executed evidence until exact-head CI passes. No real
+credential, OTP, provider, account, storage/session installation or native Form/Portal
+acceptance is part of these SDK proofs. Native thin-wrapper request/continuation,
+full existing host tests and supported composition/host acceptance remain later work.

@@ -44,6 +44,11 @@ export {
     type CompleteCalendlyWidgetProps,
     type CompleteCalendlyWidgetLabels,
 } from './CompleteCalendlyWidget.js';
+export {
+    CompleteVerificationScreen,
+    type CompleteVerificationScreenProps,
+    type CompleteVerificationScreenLabels,
+} from './CompleteVerificationScreen.js';
 export { ActionButton, type ActionButtonProps } from './ActionButton.js';
 export { LiteralText, type LiteralTextProps } from './LiteralText.js';
 export {

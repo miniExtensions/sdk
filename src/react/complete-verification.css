@@ -1,0 +1,98 @@
+.mx-sdk-verification {
+    color: #111827;
+    font:
+        400 14px/1.5 system-ui,
+        sans-serif;
+}
+.mx-sdk-verification > * + * {
+    margin-top: 1rem;
+}
+.mx-sdk-verification-destination {
+    color: #6b7280;
+    text-align: center;
+}
+.mx-sdk-verification-input {
+    box-sizing: border-box;
+    display: block;
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    padding: 8px 12px;
+    background: white;
+    color: inherit;
+    font: inherit;
+    box-shadow: 0 1px 2px #0000000d;
+}
+.mx-sdk-verification-input:focus-visible,
+.mx-sdk-verification-submit:focus-visible {
+    outline: 2px solid
+        var(--mx-sdk-verification-accent, var(--mx-sdk-accent, #4f46e5));
+    outline-offset: 2px;
+}
+.mx-sdk-verification-submit {
+    display: block;
+    width: 100%;
+    border: 0;
+    border-radius: 6px;
+    padding: 8px 12px;
+    background: var(
+        --mx-sdk-verification-accent,
+        var(--mx-sdk-accent, #4f46e5)
+    );
+    color: white;
+    font:
+        600 14px/1.5 system-ui,
+        sans-serif;
+    cursor: pointer;
+}
+.mx-sdk-verification-submit:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+.mx-sdk-verification-error {
+    color: #991b1b;
+    white-space: pre-wrap;
+}
+.mx-sdk-verification-loading {
+    display: flex;
+    justify-content: center;
+    padding: 1rem;
+}
+.mx-sdk-verification-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid #e5e7eb;
+    border-top-color: var(
+        --mx-sdk-verification-accent,
+        var(--mx-sdk-accent, #4f46e5)
+    );
+    border-radius: 50%;
+    animation: mx-sdk-verification-spin 1s linear infinite;
+}
+.mx-sdk-verification-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+@keyframes mx-sdk-verification-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mx-sdk-verification-spinner {
+        animation: none;
+    }
+}
+@media (forced-colors: active) {
+    .mx-sdk-verification-input,
+    .mx-sdk-verification-submit {
+        border: 1px solid ButtonText;
+    }
+}

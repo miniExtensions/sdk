@@ -103,7 +103,18 @@
         "./react/single-select.css": "./dist/esm/react/single-select.css",
         "./react/complete-readonly-text.css": "./dist/esm/react/complete-readonly-text.css",
         "./react/complete-clearable-text-input.css": "./dist/esm/react/complete-clearable-text-input.css",
-        "./react/complete-multiline.css": "./dist/esm/react/complete-multiline.css"
+        "./react/complete-multiline.css": "./dist/esm/react/complete-multiline.css",
+        "./react/html": {
+            "import": {
+                "types": "./dist/esm/react/html/index.d.ts",
+                "default": "./dist/esm/react/html/index.js"
+            },
+            "require": {
+                "types": "./dist/cjs/react/html/index.d.ts",
+                "default": "./dist/cjs/react/html/index.js"
+            }
+        },
+        "./react/html-description.css": "./dist/esm/react/html-description.css"
     },
     "files": [
         "dist/esm",
@@ -155,7 +166,9 @@
     "dependencies": {
         "@trpc/client": "11.0.0-rc.382",
         "@trpc/server": "11.0.0-rc.382",
+        "dompurify": "2.4.7",
         "email-validator": "2.0.4",
+        "jsdom": "20.0.3",
         "linkifyjs": "3.0.5",
         "moment": "2.31.0",
         "moment-duration-format": "2.3.2",
@@ -163,6 +176,8 @@
         "ua-parser-js": "1.0.39"
     },
     "devDependencies": {
+        "@types/dompurify": "2.4.0",
+        "@types/jsdom": "20.0.1",
         "@types/moment-duration-format": "2.2.6",
         "@types/node": "22.20.5",
         "@types/react": "18.3.12",
@@ -185,5 +200,9 @@
         "react": {
             "optional": true
         }
+    },
+    "browser": {
+        "./dist/esm/react/html/htmlPurifier.js": "./dist/esm/react/html/htmlPurifier.browser.js",
+        "./dist/cjs/react/html/htmlPurifier.js": "./dist/cjs/react/html/htmlPurifier.browser.js"
     }
 }

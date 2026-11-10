@@ -754,3 +754,55 @@ real Form and Portal-child callers with exact canonical strings, adjacent-field
 non-effects and explicit Save transport assertions. A frozen leaf oracle does
 not establish retained callback authority, authentication, backend handling or
 hosted persistence. Outstanding held hosted witnesses remain separate.
+
+## Complete HTML description qualification
+
+The source suites `reactCompleteHTMLRenderer.test.ts`,
+`reactCompleteQuillHTMLRenderer.test.ts` and
+`reactCompleteTruncatedDescription.test.ts` use the real opt-in public HTML
+entry. They retain the native sanitizer, iframe and Form-control policy,
+literal Markdown-like HTML text, actual div refs, containment/style precedence,
+Quill link effects, localized disclosure, content/identity resets and exact
+clipped-attribute restoration. SDK components and sanitization remain real;
+geometry and observer notifications are controlled at the external DOM
+boundary. The source fixture disables CSS/JavaScript-file and iframe loading
+and rejects fetch. Listener-removal checks observe actual DOM registrations;
+simulated layout does not establish browser paint, trusted Tab traversal or
+image-network behavior.
+
+`test/fixtures/nativeHTMLPolicyBaseline.json` records nine exact sanitizer outputs
+and six renderability decisions captured from the actual unchanged native
+helpers with DOMPurify 2.4.7 and jsdom 20.0.3. The source comparison preserves
+every recorded string, including attribute order. A separate renderability
+matrix covers empty, entity/zero-width, literal and media content. Real foreign
+DOMPurify hooks and configuration provide isolation controls; an SDK-generated
+expected value is not a native compatibility oracle.
+
+The registered installed-package matrix uses the actual archive in two
+independent package copies. Eight fresh profiles combine React 18.3.1/19.2.0,
+ESM/CommonJS and application-first/SDK-first import order. Assertions cover
+strict declarations, stylesheet/public-entry resolution, private factory and
+global-hook isolation, document-free SSR, hydration identity, callback-ref
+retirement and browser-map bundles that exclude jsdom and Node built-ins. The
+generic React entry is checked separately for accidental parser loading.
+
+The existing native Chromium owner registers twelve HTML description groups
+for actual public components and packaged CSS: sanitizer isolation, native
+props/refs, containment, literal/link effects, scoped block/Snow styles,
+4.5rem geometry, responsive expansion, localized/reset disclosures, trusted
+Tab clipping/restoration, fitting content, image remeasurement and cleanup.
+The fixed same-origin owned image is the explicit resource exception; other
+unexpected network remains refused. Existing CSP, archive-member byte checks,
+bundle-input provenance and page/context/browser/server cleanup remain active.
+
+A separate CI-only React 18.3.1 check installs an immutable public
+`CompleteRichTextEditor` reference. It observes the attached real editor's
+metrics, value and writes before and after adding the HTML stylesheet and
+toggling descriptions, then checks an ordinary fresh editor change. This is
+stylesheet/runtime coexistence evidence for that composition, not full editor,
+combined SDK or native Form/Portal qualification.
+
+These sections describe registered assertions. The new HTML source, package
+and browser runtime checks remain pending qualification; native baseline
+execution alone is not an SDK pass. Hosted authorization, provider frames,
+backend persistence and independent host workflow acceptance remain separate.

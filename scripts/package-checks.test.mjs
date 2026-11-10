@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { transformSync } from 'esbuild';
 import {
     assertBrowserInputs,
     assertInstalledArchive,
@@ -21,6 +22,10 @@ import {
 import { retainCheckedPackage } from './retain-checked-package.mjs';
 import { assertPublicDistribution } from './distribution-checks.mjs';
 import { runPackedTailChecks } from './packed-tail-checks.mjs';
+import {
+    assertCollaboratorNeighborTarget,
+    completeCollaboratorBrowserSource,
+} from './complete-collaborator-browser-checks.mjs';
 import { createProcessGroupObserver } from './process-group-observer.mjs';
 import './process-group-observer.test.mjs';
 import './attachment-phase-receipts.test.mjs';
@@ -44,6 +49,101 @@ async function write(root, path, content) {
     await mkdir(join(target, '..'), { recursive: true });
     await writeFile(target, content);
 }
+
+test('collaborator native fixture emits valid ESM and CommonJS browser JavaScript', () => {
+    // The React page is generated inside a raw string, beyond this module's
+    // own syntax check. Parse both real outputs without launching a browser.
+    for (const format of ['esm', 'cjs'])
+        assert.doesNotThrow(() =>
+            transformSync(completeCollaboratorBrowserSource(format), {
+                loader: 'js',
+                format: 'esm',
+                target: 'es2022',
+            })
+        );
+});
+
+test('collaborator native neighbor geometry distinguishes overlap, modality and occlusion', async (t) => {
+    // Measured in the retained React 19.2.0 native failure receipt. The
+    // negative control below puts a synthetic target inside that real popup;
+    // the native fixture separately measures its original-layout target.
+    const popupRect = { left: 17, right: 495, top: 159, bottom: 249 };
+    const clearTarget = {
+        targetRect: { left: 520, right: 690, top: 190, bottom: 214 },
+        popupRect,
+        visible: true,
+        disabled: false,
+        inert: false,
+        ariaHidden: false,
+        hitTarget: true,
+        hitPopup: false,
+    };
+    await t.test(
+        'rejects a target covered by the retained popup bounds',
+        () => {
+            assert.throws(
+                () =>
+                    assertCollaboratorNeighborTarget({
+                        ...clearTarget,
+                        targetRect: {
+                            left: 16,
+                            right: 150,
+                            top: 210,
+                            bottom: 234,
+                        },
+                        hitTarget: false,
+                        hitPopup: true,
+                    }),
+                /popup/i
+            );
+        }
+    );
+    await t.test('accepts an independently reachable sibling control', () => {
+        assert.doesNotThrow(() =>
+            assertCollaboratorNeighborTarget(clearTarget)
+        );
+    });
+    await t.test(
+        'rejects inert or hidden siblings even outside the popup',
+        () => {
+            for (const policy of [{ inert: true }, { ariaHidden: true }])
+                assert.throws(
+                    () =>
+                        assertCollaboratorNeighborTarget({
+                            ...clearTarget,
+                            ...policy,
+                        }),
+                    /inert|hidden/i
+                );
+        }
+    );
+    await t.test(
+        'rejects a separate overlay at an otherwise clear point',
+        () => {
+            assert.throws(
+                () =>
+                    assertCollaboratorNeighborTarget({
+                        ...clearTarget,
+                        hitTarget: false,
+                    }),
+                /hit|occlu|pointer/i
+            );
+        }
+    );
+    await t.test('rejects absent or invalid geometry', () => {
+        for (const targetRect of [
+            null,
+            { left: 520, right: 520, top: 190, bottom: 214 },
+            { left: NaN, right: 690, top: 190, bottom: 214 },
+        ])
+            assert.throws(() =>
+                assertCollaboratorNeighborTarget({
+                    ...clearTarget,
+                    targetRect,
+                })
+            );
+    });
+});
 
 test('documented source starter install refreshes a same-version archive lock', async (t) => {
     const root = await temporaryRoot(t);

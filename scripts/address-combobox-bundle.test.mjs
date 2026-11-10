@@ -18,7 +18,22 @@ import {
 
 test('frozen Address code is identical in pnpm symlink and flat Git-prepare layouts', async (t) => {
     const require = createRequire(import.meta.url);
-    const installed = dirname(dirname(require.resolve('@headlessui/react')));
+    const installed = dirname(
+        dirname(require.resolve('headlessui-address-source'))
+    );
+    // Exercise the default build resolution with both reviewed versions installed.
+    assert.equal(
+        JSON.parse(
+            readFileSync(
+                join(
+                    dirname(dirname(require.resolve('@headlessui/react'))),
+                    'package.json'
+                )
+            )
+        ).version,
+        '2.2.9'
+    );
+    await assertAddressCombobox();
     const temporary = mkdtempSync(join(tmpdir(), 'address-prepare-'));
     t.after(() => rmSync(temporary, { recursive: true, force: true }));
     const flat = join(temporary, 'node_modules/@headlessui/react');

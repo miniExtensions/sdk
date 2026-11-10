@@ -140,6 +140,21 @@ export {
     type SingleCollaboratorFieldOptions,
 } from './SingleCollaboratorField.js';
 export {
+    CompleteSingleCollaboratorField,
+    CompleteMultipleCollaboratorsField,
+    CollaboratorBadge,
+    CollaboratorAvatar,
+    type CompleteCollaborator,
+    type CompleteCollaboratorEditOwner,
+    type CompleteSingleCollaboratorFieldProps,
+    type CompleteMultipleCollaboratorsFieldProps,
+    type CompleteCollaboratorLabels,
+    type CollaboratorAvatarPolicy,
+    type CollaboratorImageSource,
+    type CollaboratorBadgeProps,
+    type CollaboratorAvatarProps,
+} from './CompleteCollaboratorField.js';
+export {
     MultipleCollaboratorsField,
     renderMultipleCollaboratorsField,
     type MultipleCollaboratorsFieldProps,

@@ -350,6 +350,10 @@ import { checkDateBindingConsumer } from './date-binding-consumer-checks.mjs';
 import { checkDateRangeConsumer } from './date-range-consumer-checks.mjs';
 import { checkFormDispositionConsumer } from './form-disposition-consumer-checks.mjs';
 import { checkFormSaveIdentityConsumer } from './form-save-identity-consumer-checks.mjs';
+import {
+    checkFormSaveCoordinatorConsumer,
+    formSaveCoordinatorTypedConsumer,
+} from './form-save-coordinator-consumer-checks.mjs';
 import { checkPortalOwnerConsumer } from './portal-owner-consumer-checks.mjs';
 import {
     checkPortalViewAvailabilityConsumer,
@@ -374,6 +378,7 @@ import { checkSelectConditions } from './select-condition-checks.mjs';
 import { checkBrowserChildQueryExample } from './browser-child-query-example-checks.mjs';
 import assert from 'node:assert/strict';
 import { checkCompletePortalChartReactMatrix } from './complete-portal-chart-consumer-checks.mjs';
+import { checkCompleteCollaboratorReactMatrix } from './complete-collaborator-consumer-checks.mjs';
 import { execFileSync } from 'node:child_process';
 import {
     cpSync,
@@ -547,6 +552,7 @@ try {
                 path === 'docs/browser-lifecycle.md' ||
                 path === 'docs/testing.md' ||
                 path === 'docs/complete-rich-text.md' ||
+                path === 'docs/complete-collaborators.md' ||
                 browserStarterFiles.includes(path) ||
                 path.startsWith('dist/esm/') ||
                 path.startsWith('dist/cjs/') ||
@@ -586,6 +592,8 @@ try {
         'dist/cjs/react/search-gate.css',
         'dist/esm/react/complete-portal-chart.css',
         'dist/cjs/react/complete-portal-chart.css',
+        'dist/esm/react/complete-collaborators.css',
+        'dist/cjs/react/complete-collaborators.css',
         'dist/esm/react/complete-calendly.css',
         'dist/cjs/react/complete-calendly.css',
         'dist/esm/react/complete-verification.css',
@@ -1348,6 +1356,7 @@ export function checkUiTypes(field: RuntimeFieldSchema, host: HTMLElement, clien
     model.reset({loadOptions: portalLoader});
     linked.destroy(); model.destroy(); native.destroy();
 }
+${formSaveCoordinatorTypedConsumer}
 import type { FormLoadedResult, RuntimeFieldSchema } from '@miniextensions/sdk';
 import { FormDraftStore, openLoadedFormDraft, createFormSaveInput, normalizeFormSaveResult, describeLoadedFormFields, createFormController, checkIfFormUrlIsValid, type FormSaveOptions, type FormOwnerScope } from '@miniextensions/sdk/forms';
 const formUrlValid: boolean = checkIfFormUrlIsValid('example.test');
@@ -3219,6 +3228,14 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
     });
     assert.equal(portalChartMatrix.profiles.length, 4);
     assert.equal(portalChartMatrix.cleanup, 'completed');
+    const collaboratorMatrix = checkCompleteCollaboratorReactMatrix({
+        archivePath: join(temporaryDirectory, packed.filename),
+        typescriptBin: require.resolve('typescript/bin/tsc'),
+        happyDomModulePath: require.resolve('happy-dom'),
+        esbuildModulePath: require.resolve('esbuild'),
+    });
+    assert.equal(collaboratorMatrix.profiles.length, 4);
+    assert.equal(collaboratorMatrix.cleanup, 'completed');
     const htmlDescriptionMatrix = checkHTMLDescriptionReactMatrix({
         archivePath: join(temporaryDirectory, packed.filename),
         typescriptBin: require.resolve('typescript/bin/tsc'),
@@ -3629,6 +3646,13 @@ export function Fields({binding, attachment}: {binding: FormFieldBinding; attach
                     consumerDirectory: temporaryDirectory,
                 }),
                 19
+            );
+            assert.equal(
+                await checkFormSaveCoordinatorConsumer({
+                    consumerDirectory: temporaryDirectory,
+                    run,
+                }),
+                2
             );
             const formSaveIdentityProof = await checkFormSaveIdentityConsumer({
                 consumerDirectory: temporaryDirectory,

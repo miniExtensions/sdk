@@ -1101,3 +1101,25 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Complete collaborator picker
+
+`CompleteSingleCollaboratorField` and `CompleteMultipleCollaboratorsField`
+load an SDK-owned client picker runtime containing the dependency closure of
+`@headlessui/react` 2.2.9 (MIT). The public field shell and read-only badges do
+not eagerly import the picker or React DOM. The ESM build adapts only bare
+CommonJS React/ReactDOM peer requires to explicit external ESM namespaces;
+it adds no global require, Node polyfill or consumer-side patch.
+React and React DOM remain external optional peers; native application picker
+packages are not required by installed SDK consumers. Fuzzy search uses the
+declared production dependency `fuse.js` 6.6.2 (Apache-2.0), without identity
+services or backend requests.
+
+The distributed `dist/esm/react/complete-collaborators.LICENSES.txt` and
+`dist/cjs/react/complete-collaborators.LICENSES.txt` retain the full original
+license and copyright texts for the reviewed closure, including Apache-2.0,
+MIT and tslib's 0BSD notices. The corresponding
+`complete-collaborators.provenance.json` records the actual bundled package
+versions, registry integrity values, source URLs and individual input hashes.
+The build checks those inputs against the reviewed version/license inventory;
+it does not broaden the consumer's React, image-source or identity authority.

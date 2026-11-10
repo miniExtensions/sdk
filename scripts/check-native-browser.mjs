@@ -61,6 +61,10 @@ import {
     prepareCompletePortalChartFixtures,
     checkCompletePortalChartBrowser,
 } from './complete-portal-chart-browser-checks.mjs';
+import {
+    prepareCompleteCollaboratorFixtures,
+    checkCompleteCollaboratorBrowser,
+} from './complete-collaborator-browser-checks.mjs';
 
 // One public CDP interception owner. Playwright filechooser subscriptions have
 // their own asynchronous enable/disable path and must not share this lease.
@@ -1924,6 +1928,17 @@ try {
             regular,
             hash,
         });
+        const collaboratorFixtures = await prepareCompleteCollaboratorFixtures({
+            temporary,
+            archive,
+            installed,
+            allowed,
+            report,
+            build,
+            assertBrowserInputs,
+            regular,
+            hash,
+        });
         const multilineEntry = join(temporary, 'complete-multiline.mjs');
         writeFileSync(multilineEntry, completeMultilineBrowserSource);
         const multilineBundle = await build({
@@ -2734,6 +2749,22 @@ try {
                         page,
                         evidence: report.completePortalChart[format],
                         format,
+                    });
+                }
+            );
+        }
+        for (const format of collaboratorFixtures.formats) {
+            await run(
+                'complete-collaborators-' + format,
+                async (page, origin) => {
+                    await page.goto(
+                        origin + collaboratorFixtures.routes[format]
+                    );
+                    await checkCompleteCollaboratorBrowser({
+                        page,
+                        evidence: report.completeCollaborators[format],
+                        format,
+                        output,
                     });
                 }
             );
@@ -3685,6 +3716,7 @@ try {
             results.length,
             24 +
                 portalChartFixtures.formats.length +
+                collaboratorFixtures.formats.length +
                 storageEventCases.length +
                 Number(htmlDescriptionNative.referenceEnabled)
         );

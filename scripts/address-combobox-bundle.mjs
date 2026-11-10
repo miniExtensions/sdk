@@ -31,9 +31,13 @@ export async function buildAddressCombobox(sourceRoot) {
 
 export async function assertAddressCombobox(sourceRoot) {
     const require = createRequire(import.meta.url);
+    // Collaborator's build uses Headless UI 2. Address preserves native 1.7.2
+    // through a separate dev-only alias; neither package becomes a runtime peer.
     const root =
-        sourceRoot ?? dirname(dirname(require.resolve('@headlessui/react')));
+        sourceRoot ??
+        dirname(dirname(require.resolve('headlessui-address-source')));
     const metadata = JSON.parse(readFileSync(join(root, 'package.json')));
+    assert.equal(metadata.name, '@headlessui/react');
     assert.equal(metadata.version, '1.7.2');
     assert.equal(metadata.license, 'MIT');
     const inputs = JSON.parse(

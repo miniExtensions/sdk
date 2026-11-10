@@ -896,7 +896,11 @@ are synthetic callback adapters; external network is refused. These registered
 assertions do not themselves claim executed proof or native Form/Save/provider
 persistence, fixture acceptance, OS IME or a screen-reader pass.
 
-Headless UI 1.7.2 is a build-only dependency. The frozen private Combobox and
+Headless UI 1.7.2 is a build-only dependency under the `headlessui-address-source`
+alias, separate from Collaborator's Headless UI 2.2.9 build. The Address source
+guard still verifies the original package identity, all source hashes and exact
+regenerated output; both picker versions remain absent from runtime dependencies.
+The frozen private Combobox and
 Transition closure uses the same consumer-React binding as the existing Phone
 vendor. The build/source gate regenerates its unchanged upstream closure and
 permits only the documented React-peer substitution; it never imports the

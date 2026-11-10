@@ -24,6 +24,59 @@ For subscribed stock or app-supplied text/select/linked rendering, see the
 [headless field-binding usage guide](field-bindings.md). Renderer unmount preserves
 the native draft; owner replacement retires actions and requests.
 
+## Native-compatible Save coordination
+
+`createFormSaveCoordinator<Key, Snapshot>({ isEqual })` coordinates explicit
+Save invocations without a Form client, Redux, React or browser globals. Reuse
+one instance for callers sharing session keys; different instances and keys are
+independent. Existing FormController and borrowed Submit contracts are separate.
+
+```ts
+import { createFormSaveCoordinator } from '@miniextensions/sdk/forms';
+
+type MySnapshot = { record: Record<string, unknown>; dirty: readonly string[] };
+// Supplied by the host that owns the canonical draft and actual Save operation.
+declare const sessionKey: string;
+declare function equalWholeSnapshot(
+    a: MySnapshot | null,
+    b: MySnapshot | null
+): boolean;
+declare function readCurrentSnapshot(): MySnapshot | null;
+declare function guardedNativeSave(): Promise<unknown>;
+
+const saves = createFormSaveCoordinator<string, MySnapshot | null>({
+    isEqual: equalWholeSnapshot,
+});
+await saves.run({
+    sessionKey,
+    readSnapshot: readCurrentSnapshot,
+    allocate: guardedNativeSave,
+});
+```
+
+The host supplies its exact equality (including whole record and ordered dirty
+IDs), current snapshot reader and original guarded allocation callback returning
+its operation Promise. Snapshots are retained without cloning; the host must
+preserve the snapshot values it returns. Null is an ordinary snapshot value.
+Allocation runs synchronously before active-entry registration. Synchronous
+throws reject the invocation without registering an entry; returned rejected
+Promises are registered and cleaned up using their exact identity.
+
+An equal pending invocation fulfills immediately with `void`, without joining
+the original success or failure. A changed explicit invocation waits for the
+active operation, even if it rejects, then rereads current state and reevaluates.
+Several waiters can coalesce to one latest-state allocation; captured edits are
+not a FIFO queue. The original caller retains its escaped error. No automatic
+retry occurs without an explicit invocation.
+
+The host's final allocation gate runs after waiting and may fulfill without
+allocating. Fulfilled `void` therefore is not evidence of stored success: it can
+also mean duplicate suppression, gate refusal or a normalized host failure.
+The host retains validation, error normalization, actual transport and allocated
+settlement. Retirement cannot cancel, roll back, replay or veto allocated work;
+the coordinator exposes no reset or cancellation policy. Compute scheduling and
+no-Save paths remain outside this coordinator.
+
 ## URL syntax validation
 
 `checkIfFormUrlIsValid(value: string): boolean` exposes the existing Form URL

@@ -12,6 +12,21 @@ import { join, resolve } from 'node:path';
 import { build } from 'esbuild';
 import { assertBrowserInputs } from './package-checks.mjs';
 
+// The preserved zoom listener is armed after its opening transition. A fresh,
+// window-targeted synthetic Tab only exercises its preventDefault branch: it
+// cannot traverse the editor or perform native focus navigation. This predicate
+// is specific to the isolated read-only fixture, not native Tab acceptance.
+export function completeRichTextZoomKeyboardReady() {
+    const event = new window.KeyboardEvent('keydown', {
+        key: 'Tab',
+        keyCode: 9,
+        bubbles: true,
+        cancelable: true,
+    });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+}
+
 // An owned, in-memory consumer of the installed packed public API. No saved
 // customer fixture, identity, provider, API transport or clipboard grant is used.
 export async function checkCompleteRichTextBrowser({
@@ -572,6 +587,25 @@ window.completeRichTextProbe={
             (await page.locator('body > div img').count()) > 0,
             'Actual image zoom must own a body portal'
         );
+        const beforeKeyboardReady = await snapshot();
+        await page.waitForFunction(completeRichTextZoomKeyboardReady);
+        const keyboardReady = await snapshot();
+        for (const key of [
+            'state',
+            'writes',
+            'handleId',
+            'selection',
+            'nativeSelection',
+            'focused',
+            'bodyPortals',
+        ]) {
+            assert.deepEqual(keyboardReady[key], beforeKeyboardReady[key]);
+        }
+        evidence.zoomKeyboardReadiness = {
+            method: 'synthetic window-targeted Tab cancellation',
+            nativeTabAcceptance: false,
+            editorAndFocusUnchanged: true,
+        };
         await page.keyboard.press('Escape');
         await page.waitForFunction(
             (baseline) =>
@@ -579,6 +613,14 @@ window.completeRichTextProbe={
                 baseline,
             beforeZoom
         );
+        assert.equal(await ownedImage.isVisible(), true);
+        assert.equal(await caption.textContent(), 'Edited owned caption');
+        const closedZoomState = await snapshot();
+        assert.equal(
+            closedZoomState.state.value,
+            readonlyImageState.state.value
+        );
+        assert.deepEqual(closedZoomState.writes, readonlyImageState.writes);
         await finish('image-nodeview-caption-zoom');
 
         evidence.phase = 'owner-replacement-and-unmount';
@@ -588,6 +630,7 @@ window.completeRichTextProbe={
                 window.completeRichTextProbe.snapshot().bodyPortals > baseline,
             beforeZoom
         );
+        await page.waitForFunction(completeRichTextZoomKeyboardReady);
         const oldImageOwner = (await snapshot()).handleId;
         await reset('**Fresh owner**');
         state = await snapshot();

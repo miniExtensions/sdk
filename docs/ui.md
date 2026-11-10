@@ -5089,12 +5089,16 @@ layout styles. Import `@miniextensions/sdk/react/complete-readonly-text.css`.
 The existing `LiteralText` primitive keeps its inert defaults and optional slots.
 
 ```tsx
+import { CompleteReadOnlyTextField } from '@miniextensions/sdk/react';
+
+const alreadyFormattedAndMaskedText = 'Literal text https://example.com';
+
 <CompleteReadOnlyTextField
     value={alreadyFormattedAndMaskedText}
     language="en"
     textSize="medium"
     layout="cell-medium"
-/>
+/>;
 ```
 
 The required language uses the existing public `RuntimeLanguage` values. Omitted

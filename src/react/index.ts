@@ -51,6 +51,15 @@ export {
 } from './InputClearButton.js';
 export { TextInput, type TextInputProps } from './TextInput.js';
 export {
+    CompleteDurationField,
+    type CompleteDurationFieldProps,
+} from './CompleteDurationField.js';
+export {
+    useDurationInputAdapter,
+    type DurationInputAdapterProps,
+    type DurationInputOwnership,
+} from './useDurationInputAdapter.js';
+export {
     useLocalizedNumericInputAdapter,
     type LocalizedNumericInputAdapterProps,
 } from './useLocalizedNumericInputAdapter.js';

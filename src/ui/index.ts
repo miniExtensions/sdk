@@ -157,6 +157,11 @@ export type * from './buttonHosts.js';
 
 export { FIELD_RENDERER_SLOTS, dispatchField } from './rendererRegistry.js';
 export {
+    createDurationInputAdapter,
+    type DurationInputOwner,
+    type DurationInputAdapter,
+} from './durationInputCompatibility.js';
+export {
     createLocalizedNumericInputAdapter,
     isLocalizedNumericInputValid,
     type LocalizedNumericInputOwner,

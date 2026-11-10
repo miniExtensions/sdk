@@ -639,6 +639,7 @@ for (const name of [
     'number',
     'localized-numeric',
     'complete-phone',
+    'complete-duration',
     'date',
     'datetime',
     'duration',

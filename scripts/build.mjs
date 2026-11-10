@@ -147,6 +147,7 @@ for (const format of ['esm', 'cjs']) {
         'number',
         'localized-numeric',
         'complete-phone',
+        'complete-duration',
         'date',
         'datetime',
         'duration',
